@@ -1,294 +1,368 @@
-# Pitfalls Research
+# Domain Pitfalls
 
-**Domain:** Profile & public page modernization in existing SaaS (photography platform)
+**Domain:** Public Gallery & Gallery Player Modernization for Existing Photography Platform
 **Researched:** 2026-03-19
-**Confidence:** HIGH (derived from direct codebase analysis of 30+ existing components, theme engine, preview service, and public profile views)
+**Confidence:** HIGH (based on direct codebase analysis of gallery-service, public endpoints, frontend components, shared types, and R2 integration)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Avatar/Image Loading Broken by R2 Presigned URL Expiration and CORS
+Mistakes that cause rewrites, data leakage, or major performance issues.
 
-**What goes wrong:**
-Avatar and logo images load in the editor (same origin) but break on public pages (`/u/:slug`, `/p/:slug`). The `PublicProfileView` already has a workaround pattern — checking `logo_url.startsWith('http')` and falling back to `companyProfileService.getPublicLogoUrl(slug)` — indicating this is a known, partially-patched issue. Images display as broken on first load, flash correctly on retry, or fail silently with no fallback UI.
+### Pitfall 1: Public Gallery Data Leakage Through New Layout Endpoints
 
-**Why it happens:**
-Three compounding issues: (1) R2 presigned URLs expire (typically 1-7 days) but profile data is cached longer, so stored URLs go stale. (2) R2 CORS configuration does not include the public page origins (`rawdrive.in/u/*`, `rawdrive.in/p/*`) — the existing `PublicProfileView` already works around this by proxying through a backend endpoint. (3) The `ProfileHeader` component has a fallback (initial letter avatar with `brandColor`) but no error handler on the `<img>` tag — if the image request fails after rendering starts, the user sees a broken image icon, not the fallback.
+**What goes wrong:** Adding new gallery layout endpoints (masonry, justified, filmstrip) that return asset data without going through the existing magic link validation chain. The current system routes all public access through `magic_links.py` -> `MagicLinkService.validate_magic_link()` which checks token hash, gallery publish status, expiration, and max access count. New endpoints added for layout-specific data (e.g., aspect ratios for justified layout, EXIF for filmstrip) could bypass this chain.
 
-**How to avoid:**
-- Never store presigned URLs in the database. Store the R2 object key and generate presigned URLs at request time in the API response, or use a permanent public URL pattern via Cloudflare R2 custom domain.
-- Add `onError` handler to every `<img>` that renders user-uploaded content: `onError={() => setImageFailed(true)}` with graceful fallback to initials/placeholder.
-- Create a shared `<ProfileAvatar>` component that encapsulates: loading state (skeleton), error handling (fallback to initials), size variants, and theme-aware ring/border styling. Both `/u/:slug` and `/p/:slug` pages use this one component.
-- Test image loading with expired URLs, CORS errors, 404s, and slow networks (throttled DevTools) before marking avatar work as done.
+**Why it happens:** The gallery-service has two separate auth paths: JWT-based for workspace owners (`middleware/auth.py`) and magic-link-token-based for public visitors (`api/v1/public/`). Developers adding new API routes forget to wire them through the magic link validation, especially when creating "convenience" endpoints for frontend layout calculations.
+
+**Consequences:** Private gallery data (asset URLs, EXIF metadata, visitor interactions) exposed to unauthenticated users. The `workspace_id` isolation that every query requires (per CLAUDE.md mandatory rules) gets silently bypassed on public routes that don't extract workspace_id from the validated magic link.
 
 **Warning signs:**
-Avatar works in editor preview but not on the public page. Console shows CORS errors or 403 from R2. Users report "my photo disappeared" after a few days.
+- New API routes under `/api/v1/` instead of `/api/v1/public/`
+- Endpoints that accept `gallery_id` as a URL parameter without validating it came from a valid magic link
+- Missing `workspace_id` filter in queries (the `workspace-id-guard` hook should catch this, but public routes may not trigger it if they use raw SQL)
 
-**Phase to address:**
-Phase 1 (Fix Broken Functionality) — this is the first thing users see and the first thing that looks unprofessional.
+**Prevention:**
+- All new public endpoints MUST go through `MagicLinkService.validate_magic_link()` first to get the `workspace_id` and `gallery_id`
+- Never accept `gallery_id` directly from client in public routes -- derive it from the validated magic link token
+- Add integration tests that attempt to access gallery data with invalid/expired tokens for every new endpoint
+- The existing `proofing.py` pattern is correct: it takes `gallery_id` from the URL but should be additionally validated against the magic link session
+
+**Detection:** Run security tests that call new endpoints with (a) no token, (b) expired token, (c) token for a different gallery. All three must return 401/404.
+
+**Phase:** Must be addressed in Phase 1 (foundation) before any new public endpoints are added.
 
 ---
 
-### Pitfall 2: Theme Engine Dual-System Inconsistency — Legacy vs PREBUILT_THEMES Divergence
+### Pitfall 2: Signed URL Explosion for Large Galleries (500-2000+ Photos)
 
-**What goes wrong:**
-The `ProfileThemeEngine.ts` maintains TWO separate theme systems: `LEGACY_PROFILE_THEMES` (5 themes with hardcoded Tailwind classes like `bg-gradient-to-br from-rose-50 via-purple-50 to-sky-50`) and `PREBUILT_THEMES` in `constants/themes.ts` (20 themes using CSS custom properties via `var(--theme-*)`). The `getTheme()` function checks legacy first, then PREBUILT, then falls back to `theme-clean-slate`. The `convertBuiltInThemeToProfileTheme()` function lossy-converts the rich PREBUILT_THEMES structure (variants, gradients, multiple neutrals) into the simpler `ProfileTheme` shape, discarding variant support and gradient definitions.
+**What goes wrong:** The current `R2URLService.generate_signed_urls_batch()` generates 3 signed URLs per asset (thumbnail, preview, original) using parallel `asyncio.gather()`. For a 2000-photo gallery, that is 6000 presigned URL generations hitting R2/S3 in a single request. The boto3 client runs synchronously via `run_in_executor`, consuming thread pool workers. Redis cache helps on repeat visits, but first load of a large gallery creates a thundering herd.
 
-**Why it happens:**
-The original profile system used 5 hardcoded themes with direct Tailwind classes. The new editor system introduced 20 richer themes with CSS variables. Rather than migrating, a conversion layer was added. Now the two systems coexist with different rendering approaches — legacy themes use Tailwind arbitrary values mixed with CSS vars, new themes use pure CSS vars. The `pastel` legacy theme still uses `bg-gradient-to-br from-rose-50 via-purple-50 to-sky-50` which cannot be dynamically customized.
+**Why it happens:** The existing batch URL generation was designed for workspace owners viewing their own galleries (typically paginated at 20-50 items). Public gallery views need to load all visible thumbnails for masonry/justified layouts to calculate positioning before render. The temptation is to fetch all asset URLs upfront.
 
-**How to avoid:**
-- Migrate ALL themes to the PREBUILT_THEMES format. Remove `LEGACY_PROFILE_THEMES` entirely. Map old theme IDs (`minimal`, `dark`, `pastel`, `bold`, `cinematic`) to their closest PREBUILT equivalents with a one-time migration.
-- Standardize on CSS custom properties for ALL dynamic values. No Tailwind arbitrary values for theme colors — only for structural styling (spacing, layout).
-- The `ProfileTheme` interface needs to match `Theme` from `profileEditor.ts`, not be a separate shape. One type, one source of truth.
-- Test every theme (all 20+) in both light and dark variants on the actual public page, not just in a Storybook-style preview. The `convertBuiltInThemeToProfileTheme` function currently only reads the first variant — dark mode is silently broken for all PREBUILT themes.
+**Consequences:**
+- First load of large galleries takes 10-30+ seconds
+- Thread pool exhaustion in the gallery-service container blocks other requests
+- R2 rate limiting kicks in, returning empty URLs that the frontend can't recover from
+- Redis memory bloat from caching 6000+ URLs per gallery visit
 
 **Warning signs:**
-Theme looks correct in editor preview but wrong on public page. Dark mode toggle does nothing for most themes. Some themes show raw CSS variable names instead of colors. Gradient themes render as solid colors on public pages.
+- API response times >3 seconds for gallery asset listing
+- Thread pool warnings in gallery-service logs
+- Redis memory growing faster than expected
+- Frontend showing broken image placeholders on first load
 
-**Phase to address:**
-Phase 2 (Theme Engine Consolidation) — must happen before any visual modernization work, as all component styling depends on reliable theme data.
+**Prevention:**
+- Implement cursor-based pagination for public gallery asset endpoints (not offset-based -- offset degrades with large datasets)
+- Generate signed URLs on-demand as thumbnails scroll into viewport, not all at once
+- Use IntersectionObserver on frontend to trigger URL generation in batches of 20-30
+- Add a dedicated "thumbnail manifest" endpoint that returns only thumbnail URLs (skip preview/original until lightbox opens)
+- Set `R2_SIGNED_URL_EXPIRY` to 1 hour minimum for public galleries (current 15-minute default forces too-frequent regeneration)
+- Add circuit breaker on batch URL generation: if >100 URLs requested, automatically paginate
+
+**Detection:** Load test with 1000+ asset gallery. Measure time-to-first-thumbnail and total thread pool usage.
+
+**Phase:** Must be addressed in Phase 1 (data layer) -- this is the number one performance bottleneck for large galleries.
 
 ---
 
-### Pitfall 3: Live Preview Desynchronization — Editor State Drift from Preview Render
+### Pitfall 3: Layout Style Enum Mismatch Between Frontend, Backend, and Database
 
-**What goes wrong:**
-The `PreviewService` is a singleton with a 300ms debounce and 60-second cache. When users make rapid edits (typing bio text, dragging links, switching themes), the preview falls behind, shows stale data, or displays a state that was never saved. Users see their changes in the editor form but not in the preview panel, lose trust in the editor, and either over-save or abandon editing.
+**What goes wrong:** The shared `LayoutStyle` enum currently has 4 values: `tabs`, `continuous`, `grid`, `masonry`. Adding new layouts (`justified`, `filmstrip`, `mosaic`, `slideshow`) requires synchronized changes across: `packages/shared-types/src/gallery.ts`, the generated Python types (`packages/shared-types/generated/python/types.py`), the gallery-service database schema (PostgreSQL CHECK constraint or enum type), the `GalleryUpdateRequest` schema validation, the `GalleryResponse` schema, and the `validate_magic_link` query which returns `layout_style`. Missing any one of these causes silent data loss or 422 validation errors.
 
-**Why it happens:**
-The debounce is 300ms which is reasonable for typing but too slow for discrete actions (toggle visibility, reorder links, switch theme). The cache key includes `customizationId` which is undefined for new customizations, causing cache misses that trigger unnecessary recomputations. The `processUpdates()` method clears pending updates before generating the preview — if the preview generation is slow (font loading), new updates that arrive during generation are lost. Font loading (`fontService.loadFont`) is async but the preview is generated synchronously — theme changes that require new fonts show old fonts until the next update cycle.
+**Why it happens:** The `LayoutStyle` enum is used in 6+ places across 3 layers (shared package, frontend types, backend schemas). The `pnpm generate:python` command generates Python types from TypeScript, but the database migration must be done separately via Alembic. Developers add the new value to TypeScript, forget the migration, and galleries saved with the new layout_style silently revert to `grid` on the next read because the database rejects the unknown value.
 
-**How to avoid:**
-- Use different debounce strategies for different update types: 0ms for discrete actions (theme switch, visibility toggle, link reorder), 300ms for continuous input (text fields, color pickers).
-- Replace the singleton pattern with React state management (useReducer + context or Zustand store). The singleton with manual listener management is fighting React's rendering model — components should re-render naturally when preview state changes, not via imperative listener callbacks.
-- For font loading: show the preview immediately with system font fallbacks, then swap to custom fonts when loaded (use `font-display: swap` pattern). Never block preview rendering on font loading.
-- Add an optimistic update path: update the preview DOM immediately from editor state, then reconcile with the debounced computed preview. This eliminates perceived lag.
+**Consequences:**
+- Photographers save a gallery with "justified" layout, reload the page, and it is back to "grid"
+- The `validate_magic_link` query returns `layout_style` to public visitors -- if the value is not in the frontend enum, the layout renderer crashes or falls back silently
+- The `GalleryUpdateRequest` Pydantic schema with `extra = "allow"` masks the error instead of rejecting it
 
 **Warning signs:**
-Users report "preview doesn't update" or "preview shows old data." Preview flashes incorrect content then corrects itself. Theme changes don't reflect until the user clicks elsewhere.
+- Gallery layout_style not persisting after save
+- `422 Unprocessable Entity` on gallery update
+- Frontend falling back to grid layout when another was selected
+- Mismatched values between `shared-types` package and `gallery_service` schemas
 
-**Phase to address:**
-Phase 3 (Editor Redesign) — the preview architecture must be solid before adding more editor complexity.
+**Prevention:**
+- Create a single migration checklist for adding a layout style: (1) `shared-types/gallery.ts`, (2) `pnpm generate:python`, (3) Alembic migration for CHECK/enum, (4) gallery-service `GalleryUpdateRequest` allowed values, (5) `validate_magic_link` query, (6) frontend layout renderer switch statement
+- Add an integration test that creates a gallery with each layout style and reads it back
+- Remove `extra = "allow"` from `GalleryUpdateRequest` (it currently masks validation errors)
+- Use a database migration that ALTERs the enum/CHECK constraint, not a new column
+
+**Detection:** Automated test that sets each LayoutStyle value on a gallery via API, reads it back, and asserts equality.
+
+**Phase:** Phase 1 (schema changes) -- must be the very first thing done before any layout rendering work.
 
 ---
 
-### Pitfall 4: SEO Regression When Adding Client-Side Effects to Public Pages
+### Pitfall 4: Fullscreen Gallery Player Breaks Existing Lightbox/CinematicViewer
 
-**What goes wrong:**
-Public profile pages (`/u/:slug`, `/p/:slug`) are the photographer's public-facing identity. Adding Framer Motion animations, glassmorphism effects, dynamic font loading, and client-side theme rendering means search engine crawlers see a loading spinner or empty shell instead of profile content. Largest Contentful Paint (LCP) degrades from <1s to 3-5s. Google de-indexes profiles or shows them with generic metadata.
+**What goes wrong:** The codebase already has THREE overlapping viewer components: `Lightbox.tsx` (workspace owner view with EXIF, tagging, face overlay, compare mode), `CinematicViewer.tsx` (slideshow presentation mode), and the inline lightbox in `PublicGalleryPage.tsx` (public visitor view with zoom, swipe, download). Adding a "gallery player" creates a fourth viewer component. Over time, bug fixes and features are applied to one viewer but not the others, creating divergent behavior.
 
-**Why it happens:**
-The current `PublicProfileView` already uses `react-helmet-async` for SEO and has JSON-LD structured data. But the entire profile content is client-rendered — the `useEffect` fetches profile data, then another `useEffect` loads fonts, and only then is content shown. Crawlers that don't execute JavaScript (or have a timeout) see only the loading state. Framer Motion `initial={{ opacity: 0 }}` means content is invisible for the first 100-400ms even after data loads.
+**Why it happens:** Each viewer was built for a different context (owner vs public, browsing vs presentation). The `Lightbox.tsx` component has 60+ lines of props and deeply coupled dependencies (useSignedUrl, useAuth, TagInput, CommentSection, FaceOverlay). It cannot easily be reused for public gallery viewing. Developers conclude "easier to build a new one" and create yet another viewer.
 
-**How to avoid:**
-- Implement server-side rendering (SSR) or static generation (SSG) for public profile pages. Since RawDrive uses React SPA with client-side routing, the most practical approach is: (a) Add a lightweight server-rendered HTML shell at `/u/:slug` and `/p/:slug` that includes critical meta tags, Open Graph data, and above-the-fold content pre-rendered by the backend API, OR (b) Use a prerendering service (prerender.io pattern) that serves cached HTML to crawlers.
-- Never put above-the-fold content behind `initial={{ opacity: 0 }}`. The hero (name, avatar, title) should be visible immediately. Animations should only apply to below-the-fold or supplementary content.
-- Move critical CSS inline (theme colors, font-face declarations) into the HTML head so the first paint is themed, not a flash of unstyled content.
-- Set performance budgets: LCP < 2.5s, FID < 100ms, CLS < 0.1. Test with Lighthouse on throttled 3G.
+**Consequences:**
+- 4 viewer components, each with subtly different keyboard shortcuts, gesture handling, and zoom behavior
+- Users report "zoom works in lightbox but not in gallery player" -- different implementations
+- Accessibility fixes (screen reader, keyboard nav) applied to one viewer but not others
+- Bundle size bloat from duplicate viewer code
+- The existing `useLightboxZoom`, `useLightboxNavigation`, `useLightboxGestures`, `useImagePreloader` hooks are only used by the workspace Lightbox, not shared
 
 **Warning signs:**
-Google Search Console shows "Page is not indexed." Lighthouse Performance score drops below 50. Social media link previews show generic text instead of profile info. `view-source:` on the public page shows only a `<div id="root">` with no content.
+- Creating a new file called `GalleryPlayer.tsx` or `PublicLightbox.tsx` that reimplements zoom/swipe
+- Different keyboard shortcut sets across viewers
+- Gesture handling code duplicated instead of using `useLightboxGestures` hook
+- The `lightbox/` hooks directory being unused by the new component
 
-**Phase to address:**
-Phase 2 or 3 — must be considered from the start of any public page redesign, not bolted on after visual work is done.
+**Prevention:**
+- Refactor the existing lightbox hooks (`useLightboxZoom`, `useLightboxNavigation`, `useLightboxGestures`, `useImagePreloader`) to be context-agnostic (remove useAuth dependency)
+- Build the gallery player as a composition of these shared hooks + a new UI shell, NOT as a monolithic component
+- Create a `ViewerCore` component that handles image display, zoom, pan, and navigation -- then wrap it with different chrome for workspace vs public contexts
+- Kill the inline lightbox in `PublicGalleryPage.tsx` (currently ~200 lines of inline state management for zoom, swipe, video) and replace with the shared viewer
+- Document which viewer to use when: `ViewerCore` for all, `WorkspaceLightbox` for owner features, `GalleryPlayer` for public presentation
+
+**Detection:** `grep -r "touchStartRef\|onTouchStart\|onTouchMove" frontend/src/` returns more than 2 files -- duplication has occurred.
+
+**Phase:** Phase 2 (gallery player) -- but the hook refactoring should happen in Phase 1 to avoid building on the wrong foundation.
 
 ---
 
-### Pitfall 5: Component Restructuring Breaks 25+ Existing Components Without Catching It
+### Pitfall 5: Batch Download Without Server-Side ZIP Causes Browser Crashes
 
-**What goes wrong:**
-The profile feature directory has 25+ components with complex import chains. Renaming, moving, or consolidating components (e.g., merging personal and company profile views) breaks imports across the codebase. The `index.ts` barrel file only exports `PublicProfileView` — the other 24 components are imported directly by path, making refactoring fragile. A renamed file breaks a page that isn't tested, and the bug ships silently.
+**What goes wrong:** The current download approach uses `BULK_DOWNLOAD_DELAY_MS = 300` to stagger individual file downloads. For a client selecting 200 photos for download, this means 200 separate browser download triggers over 60 seconds. Browsers throttle after ~10 concurrent downloads, and users see "multiple file download blocked" warnings. Some downloads silently fail. On mobile, this approach is completely broken.
 
-**Why it happens:**
-No comprehensive test coverage for all 25+ profile components. The existing tests (`themeWorkflow.integration.test.tsx`, `coordinateWorkflow.integration.test.tsx`, `visibilityWorkflow.integration.test.tsx`) test specific workflows but not rendering. TypeScript catches import errors at build time, but only if all pages are statically imported — lazy-loaded pages (`lazy(() => import('../pages/public/PublicProfilePage'))`) fail at runtime, not build time.
+**Why it happens:** The gallery-service has no server-side zip/archive endpoint. The R2 signed URLs are for individual file access. Building a zip endpoint requires downloading all files from R2 to the server (or a worker), compressing them, and streaming the result back -- which requires significant server resources and new infrastructure.
 
-**How to avoid:**
-- Before restructuring ANY component, run the full frontend build (`pnpm build`) and verify it succeeds with zero errors. Lazy imports that fail at runtime will NOT be caught by TypeScript alone.
-- Create a component inventory spreadsheet: list every profile component, where it's imported, and what it renders. Use this as a checklist during restructuring.
-- Add smoke tests for EVERY page route that renders profile components: mount the page component, verify it renders without throwing. This catches broken lazy imports.
-- Restructure incrementally: one component at a time, with a build + test after each move. Never batch-rename 10 files in one commit.
-- Use the barrel export pattern (`index.ts`) for all profile components. Change imports from `'./ProfileHeader'` to `'./profile'` (barrel). Future restructuring only needs to update the barrel file.
+**Consequences:**
+- "Download All" button triggers browser security warnings
+- Partial downloads (user gets 47 of 200 photos) with no way to know which ones failed
+- Mobile browsers completely block multi-file downloads
+- Clients contact photographer saying "I couldn't download my photos"
+- The `download_policy` enforcement (view_only, web_only, watermarked_only) is only checked on the frontend -- a client with the signed URL can download originals regardless
 
 **Warning signs:**
-`pnpm build` succeeds but pages crash at runtime. Navigation to a profile page shows a blank screen or React error boundary. Console shows "Cannot find module" errors.
+- Browser popup blocker warnings when testing batch download
+- Downloads working on Chrome desktop but failing on Safari/mobile
+- No progress indicator for which files have been downloaded
+- Missing download_policy enforcement on the backend
 
-**Phase to address:**
-Phase 1 (before any visual changes) — establish the component inventory and smoke tests as a safety net.
+**Prevention:**
+- Build a server-side zip endpoint in gallery-service that: (1) validates magic link + download_policy, (2) streams files from R2 into a zip archive, (3) streams the zip to the client with progress headers
+- Use a background worker (Celery) for large downloads (>50 files): create a "download job", process in background, notify via WebSocket when ready, provide a temporary download link
+- Implement download_policy enforcement on the backend -- the signed URL for "original" variant should not be generated if download_policy is `view_only` or `web_only`
+- For `watermarked_only` policy, watermark must be applied server-side before serving -- current R2 URLs serve the raw file
+- Add download tracking: the `activity_tracking.track_downloads` field exists in the schema but is not wired to any tracking logic
+
+**Detection:** Test batch download of 50+ files on Safari iOS. If any fail silently, the approach is broken.
+
+**Phase:** Phase 3 (download flows) -- but download_policy backend enforcement should be in Phase 1.
 
 ---
 
-### Pitfall 6: Animation Performance on Low-End Devices Destroys Mobile Experience
+### Pitfall 6: Open Graph Meta Tags for Dynamic Gallery URLs Break with SPA Routing
 
-**What goes wrong:**
-Profile pages use Framer Motion for entrance animations (`initial`, `animate`, `transition`), glassmorphism effects (`backdrop-blur-xl`, `backdrop-blur-md`), and CSS gradients as backgrounds. On low-end Android devices (which represent a significant portion of Indian market photographers), these effects cause: janky scrolling (sub-30fps), battery drain, visible layout shifts as animations complete, and 2-3 second delays before content is interactive.
+**What goes wrong:** RawDrive is a React SPA. Social media crawlers (Facebook, Twitter, iMessage) do NOT execute JavaScript. When a user shares a gallery URL like `/g/{token}`, the crawler receives the SPA shell HTML with generic `<meta>` tags, not the gallery-specific title, description, and cover image. The shared link preview shows "RawDrive" instead of "Sarah & John's Wedding Gallery" with a beautiful cover photo.
 
-**Why it happens:**
-`backdrop-filter: blur()` triggers GPU compositing on every frame during scroll. Multiple `motion.div` elements with staggered animations create layout thrashing. The `ProfileHeader` animates scale and opacity simultaneously. Gradient backgrounds with transparency (`bg-white/60`, `bg-[var(--theme-accent)]/10`) force alpha blending on every paint. These effects are imperceptible on a MacBook Pro but catastrophic on a Redmi Note.
+**Why it happens:** The `PublicGalleryPage` uses `react-helmet-async` to set `<Helmet>` tags, but these are only rendered after JavaScript hydration. Social crawlers fetch the raw HTML and leave. Server-side rendering (SSR) or a dedicated pre-rendering solution is needed, but the current architecture is purely client-side.
 
-**How to avoid:**
-- Use `prefers-reduced-motion` media query to disable ALL animations for users who request it. Framer Motion supports this with `<LazyMotion features={domAnimation}>` and `useReducedMotion()`.
-- Replace `backdrop-blur` with a solid semi-transparent background on mobile. The visual difference is minimal but the performance difference is massive. Use a CSS media query: `@media (max-width: 768px) { .glass { backdrop-filter: none; background: rgba(255,255,255,0.95); } }`.
-- Limit animated elements to 3-5 per page. The current `ProfileHeader` alone has 3 `motion.div` elements — each additional animated component multiplies frame budget pressure.
-- Use `will-change: transform` sparingly and only on elements that actually animate. Remove it after animation completes.
-- Test on a real low-end device or Chrome DevTools with CPU 6x slowdown + Fast 3G throttling. Never approve visual changes tested only on desktop.
+**Consequences:**
+- Shared gallery links look unprofessional on social media (no preview image, generic title)
+- Photographers lose a key marketing channel -- beautiful gallery previews drive referrals
+- iMessage/WhatsApp link previews show blank or default fallback
+- SEO for public gallery pages is non-existent
 
 **Warning signs:**
-Lighthouse Performance score < 50 on mobile. FPS counter shows < 30 during scroll on public pages. Users on mobile report "slow" or "laggy" profiles. Battery usage complaints.
+- Testing OG tags with Facebook Sharing Debugger shows fallback/empty values
+- `<Helmet>` tags render correctly in browser but not in `view-source:`
+- No SSR or pre-rendering infrastructure exists
 
-**Phase to address:**
-Phase 4 (Polish & Performance) — but the architecture must support graceful degradation from Phase 1. Never add an animation without a reduced-motion fallback.
+**Prevention:**
+- Implement a lightweight OG tag pre-rendering endpoint: when a request comes from a known crawler user-agent (facebookexternalhit, Twitterbot, WhatsApp, Slackbot, iMessageBot), return a minimal HTML page with correct `<meta og:*>` tags fetched from the gallery-service API
+- This can be done at the Traefik level (middleware) or as a small Node.js/edge function that intercepts `/g/{token}` requests from crawlers
+- Do NOT implement full SSR (Next.js migration) just for OG tags -- that is massive scope creep
+- Store a pre-generated OG image URL on the gallery (e.g., cover photo thumbnail) so the pre-renderer does not need to call R2
+- The `validate_magic_link` response already returns `gallery_title`, `primary_color`, and other branding fields -- use these for OG tags
+
+**Detection:** Run `curl -H "User-Agent: facebookexternalhit/1.1" https://app.rawdrive.in/g/{token}` and verify OG tags are present in the HTML response.
+
+**Phase:** Phase 4 (social sharing) -- but the Traefik middleware approach should be designed in Phase 1 to avoid architectural dead ends.
+
+## Moderate Pitfalls
+
+### Pitfall 7: Gallery Branding Customization Breaks Existing Theme System
+
+**What goes wrong:** The gallery-service stores branding as individual columns (`primary_color`, `font_family`, `theme`, `gradient_config`) AND has a `branding_profile_id` reference to a company profile. The 9 curated themes in `galleryThemes.ts` define complete color token sets (10 CSS variables each in light/dark mode). Adding per-gallery font/color customization on top of the theme system creates conflicts: does the photographer's custom `primary_color` override the theme's `accentPrimary`? Does a custom font override the theme's font stack?
+
+**Why it happens:** The theme system and the per-gallery branding were built at different times. Themes are frontend-only (CSS variables), while branding fields are stored in the database. There is no defined precedence: gallery.primary_color vs theme.accentPrimary vs companyProfile.brand_color.
+
+**Warning signs:**
+- Colors looking "off" with certain theme + custom color combinations
+- Dark mode rendering incorrectly when custom colors are set
+- Company profile branding overriding gallery-specific settings unexpectedly
+
+**Prevention:**
+- Define explicit precedence: gallery custom values > theme defaults > platform defaults
+- Map each database branding field to exactly one CSS variable
+- Add a `resolveGalleryTheme()` utility that merges theme tokens with gallery overrides, producing a single token set
+- Test with all 9 themes x light/dark mode x custom color overrides = 18+ visual combinations
+
+**Phase:** Phase 2 (branding customization).
 
 ---
 
-### Pitfall 7: Two Profile Systems (/u/ and /p/) Diverge During Modernization
+### Pitfall 8: Masonry/Justified Layout Requires Aspect Ratios Not Currently in API Response
 
-**What goes wrong:**
-Personal profiles (`/u/:slug` via `PublicPersonalProfilePage`) and company profiles (`/p/:slug` via `PublicProfileView`) are modernized independently. One gets the new design first, the other is left behind. They develop different component hierarchies, different theme application logic, different mobile layouts. Eventually, maintaining both is 2x the work, and users who have both a personal and company profile see inconsistent quality.
+**What goes wrong:** Masonry and justified layouts require knowing each image's aspect ratio (width/height) BEFORE rendering to calculate column heights or row composition. The current `PublicGalleryAsset` type has optional `width` and `height` fields, but these come from EXIF extraction during upload processing. If the upload worker failed to extract dimensions (common with RAW files, HEIC, or corrupted EXIF), `width` and `height` are null. The layout algorithm has no fallback and either crashes or produces ugly gaps.
 
-**Why it happens:**
-The two systems were built at different times with different component trees. Personal profiles use `ProfileHeader`, `ProfileBio`, `ProfileSocials`, `ProfileBentoGrid`, etc. Company profiles use `PublicProfileLayout` with `HeroGlassCard`, `ContactMethodsCard`, `ServicesGlassGrid`, etc. They share almost no components despite rendering conceptually identical content (name, avatar, bio, links, contact info, social links).
-
-**How to avoid:**
-- Define a shared component library BEFORE modernizing either system. The shared components are: `ProfileAvatar`, `ProfileHero` (name + title + location + badges), `ProfileLinks` (social + custom), `ProfileContact` (email, phone, address), `ProfileActions` (vCard, QR, share), `ProfileThemeProvider` (CSS vars + font loading).
-- Both `/u/:slug` and `/p/:slug` should compose from the same component library, differing only in: data source (personal API vs company API), available sections (personal has galleries, company has services), and default themes.
-- Create a shared `useProfilePageData(type, slug)` hook that normalizes both API responses into a common `ProfilePageData` shape. Components consume this normalized shape, never raw API responses.
-- Modernize both systems simultaneously, not sequentially. If a design change is made to the hero section, it applies to both systems in the same PR.
+**Why it happens:** The `AssetMetadata` schema shows `width: Optional[int] = None` and `height: Optional[int] = None`. The EXIF extraction happens in the ai-processing-service as a background task. There is no guarantee it completes before the gallery is published. The existing grid layout does not care about aspect ratios (all cells are same size via `GRID_ASPECT_RATIO = '3/2'`), so missing dimensions were never a problem.
 
 **Warning signs:**
-PRs that touch only personal OR only company profile components. Duplicated component names with slight variations (e.g., `ProfileHeader` vs `HeroGlassCard` doing the same thing). Bug fixes applied to one system but not the other.
+- Large gaps or overlapping images in masonry layout
+- Console errors about division by zero or NaN in layout calculations
+- Layout "jumping" as images load and reveal their true dimensions
 
-**Phase to address:**
-Phase 1 (Architecture) — the shared component library must be designed before any visual modernization begins.
+**Prevention:**
+- Add a migration that backfills missing width/height from the stored image files (can use a Celery task)
+- In the layout algorithm, use a default aspect ratio (3:2 for landscape, 2:3 for portrait based on EXIF orientation) when dimensions are null
+- The existing `SmartMasonryGrid.tsx` component may already handle this -- verify it works with null dimensions
+- For justified layout (Flickr-style), use a library like `justified-layout` that accepts items with missing dimensions gracefully
+- Add a frontend warning in the Design Studio when switching to masonry/justified if >10% of assets lack dimensions
+
+**Phase:** Phase 1 (data layer) -- backfill must run before layout rendering can be reliable.
 
 ---
 
-### Pitfall 8: Accessibility Regression with Fancy UI Effects
+### Pitfall 9: Proofing State (Favorites/Selections) Not Scoped to Visitor
 
-**What goes wrong:**
-Glassmorphism, gradient text, low-contrast "elegant" themes, and animated transitions all degrade accessibility. The `Champagne` theme has gold text (#A16207) on cream background (#FEFCE8) with a contrast ratio of ~3.2:1, failing WCAG AA (requires 4.5:1). Glass surfaces with `backdrop-blur` make text unreadable when background content varies. Screen readers announce nothing useful because decorative `motion.div` wrappers break semantic HTML structure.
+**What goes wrong:** The current `proofing_service.py` stores favorites and selections on the `gallery_assets` table (`is_favorited`, `is_selected` columns). These are GLOBAL flags -- when Client A favorites a photo, Client B sees it as favorited too. The `visitor_id` is passed to the proofing endpoints and published via WebSocket, but it is NOT used to scope the favorite/selection state per visitor. Multiple clients viewing the same gallery see each other's selections, which is confusing and violates client privacy.
 
-**Why it happens:**
-Visual design prioritizes aesthetics over readability. Theme color pairs are defined independently without contrast checking. The theme system has `text_primary` and `background` colors but no validation that they meet contrast requirements. Glassmorphism looks great on solid backgrounds but fails on varied backgrounds because readability depends on what's behind the glass.
-
-**How to avoid:**
-- Add a contrast ratio validator to the theme system. Every `text_primary`/`background` and `text_secondary`/`surface` pair must meet WCAG AA (4.5:1 for body text, 3:1 for large text). Run this validation at build time on all 20 themes.
-- For glassmorphism: always include a solid-enough background opacity. `rgba(255,255,255,0.6)` with blur is not enough — use `0.85` minimum for text-containing surfaces.
-- Use semantic HTML elements: `<header>`, `<main>`, `<section>`, `<nav>`, `<footer>`. Wrap Framer Motion in semantic elements, not the other way around. Current `ProfileHeader` uses generic `<div>` for everything.
-- All interactive elements (links, buttons, share actions) must have minimum 44x44px touch targets (the current `ProfileActions` uses small icons).
-- Add `aria-label` to icon-only buttons (social links, share button, QR download).
-- Test with VoiceOver/NVDA on every public page template.
+**Why it happens:** The database schema has `is_favorited` and `is_selected` as boolean columns on `gallery_assets`, not in a separate `visitor_actions` table. The `visitor_id` from the `X-Visitor-ID` header is only used for WebSocket attribution, not for storage scoping.
 
 **Warning signs:**
-Lighthouse Accessibility score < 90. axe DevTools reports contrast failures. Users complain they "can't read the text" on certain themes. Social link icons have no accessible names.
+- Client A favorites a photo, Client B refreshes and sees it favorited
+- "Favorites count" showing 1 when the current visitor hasn't favorited anything
+- Photographers confused about which client made which selections
 
-**Phase to address:**
-Phase 2 (Theme Consolidation) for contrast validation, Phase 4 (Polish) for comprehensive accessibility audit. But semantic HTML should be enforced from Phase 1.
+**Prevention:**
+- Create a `gallery_visitor_actions` table: `(visitor_id, gallery_id, asset_id, action_type, value, created_at)` with a unique constraint on `(visitor_id, gallery_id, asset_id, action_type)`
+- Keep the existing `gallery_assets.is_favorited` / `is_selected` as aggregate counts (photographer sees total favorites across all visitors)
+- The proofing API must return visitor-specific state when `X-Visitor-ID` is present
+- This is a data model change that affects the proofing service, WebSocket broadcasts, and the frontend state management -- it must be done early
 
-## Technical Debt Patterns
+**Phase:** Phase 1 (data model) -- fundamental to client interaction correctness.
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Keeping LEGACY_PROFILE_THEMES alongside PREBUILT_THEMES | Avoids migration risk | Two rendering paths to maintain, bugs in one but not the other | Never — migrate in Phase 2 |
-| Using singleton PreviewService instead of React state | Works without refactoring existing code | Fights React rendering model, causes stale state bugs, untestable | Only during Phase 1 (fix broken things); must replace in Phase 3 |
-| Storing presigned R2 URLs in database | Simpler initial implementation | URLs expire, breaking avatars/logos after days | Never — store object keys only |
-| Hardcoding fallback gradients in PublicProfileView | Prevents blank pages when theme is null | Default appearance diverges from any actual theme | Only as ultimate fallback; ensure it matches the actual default theme |
-| Lazy-loading public profile pages | Smaller initial bundle | SEO crawlers may not execute JS, public pages need fast LCP | Acceptable with prerendering strategy in place |
-| Skipping animation on server/crawler via user-agent sniffing | Quick SEO fix | Fragile, breaks with new crawlers, creates divergent render paths | Never — use progressive enhancement instead |
+---
 
-## Integration Gotchas
+### Pitfall 10: Touch Gesture Conflicts Between Layout Scroll and Player Swipe
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| R2 Storage (avatars/logos) | Storing presigned URLs that expire | Store object keys, generate URLs at API response time or use R2 public bucket with custom domain |
-| Google Fonts (theme typography) | Loading fonts synchronously blocking render | Use `font-display: swap`, preconnect hints, and render with system fallbacks while fonts load |
-| Framer Motion (animations) | Wrapping everything in `motion.div` | Use `motion` only on key elements (3-5 per page), respect `prefers-reduced-motion`, use `LazyMotion` for code splitting |
-| react-helmet-async (SEO) | Setting meta tags after client-side data fetch | Pre-render critical meta tags server-side or use a prerendering service for crawlers |
-| Cloudflare R2 CORS | Configuring CORS for the app domain only | Include all origins: main app, public pages, preview iframe (if used), and localhost for dev |
-| CSS Custom Properties (themes) | Setting vars on component root | Set CSS vars on `<html>` or page-level wrapper so all children inherit, including portals and modals |
+**What goes wrong:** Adding swipe-to-navigate in the gallery player conflicts with native browser scroll gestures. On mobile, horizontal swipe on an image should navigate to next/previous photo in the player, but horizontal swipe on the gallery grid should scroll. Vertical swipe should close the player (pull-down-to-dismiss pattern), but if the image is zoomed, vertical swipe should pan the image. The `PublicGalleryPage.tsx` already has inline touch handling (`touchStartRef`, swipe threshold of 50px), but this does not account for zoomed state or conflict with the browser's back-swipe gesture.
 
-## Performance Traps
+**Why it happens:** The existing touch handling in `PublicGalleryPage.tsx` is basic: it checks horizontal distance > 50px and triggers next/prev. It does not distinguish between intentional navigation swipes and accidental touches during zoom/pan. Safari's "swipe back" gesture on iOS further complicates this.
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| backdrop-filter: blur() on mobile | Janky scrolling, GPU memory spikes | Disable on mobile via media query, use solid backgrounds | Any device with < 4GB RAM |
-| 20+ Google Font families across themes | Slow font loading, FOUT on every theme switch | Load only the active theme's fonts, preload during theme selection, cache loaded fonts | When user has slow connection or switches themes rapidly |
-| Framer Motion bundle size (40KB+ gzipped) | Increased initial load for public pages | Use `LazyMotion` with `domAnimation` feature set (15KB), code-split heavy animations | Affects all users on first load |
-| CSS-in-JS theme computation on every render | Preview becomes sluggish during rapid edits | Memoize theme CSS vars with useMemo, only recompute when theme ID or customization changes | When editor has 10+ sections/links |
-| Large avatar images (2MB+ uploads) | Slow public page load, high bandwidth | Resize avatars to max 512x512 on upload, serve WebP format, use responsive `srcset` | Any profile page visit on mobile |
-| JSON.stringify for cache keys in PreviewService | Expensive serialization on every update | Use a simple hash of IDs instead of full JSON serialization | When preview state grows (many custom links, rich bio) |
+**Warning signs:**
+- Swiping on a zoomed image navigates to next photo instead of panning
+- Browser back navigation triggering when swiping right on the first photo
+- Vertical scroll on gallery grid occasionally triggering player dismiss
 
-## Security Mistakes
+**Prevention:**
+- Use the `useLightboxGestures` hook (already exists) instead of inline touch handling
+- Implement a gesture priority system: if zoomed, all gestures are pan/zoom; if not zoomed, horizontal = navigate, vertical down = dismiss
+- Add `touch-action: none` CSS on the player container to prevent browser default gestures
+- Use pointer events API instead of touch events for unified mouse/touch/pen support
+- Test on actual iOS devices -- Safari's gesture handling differs significantly from Chrome Android
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Public profile page exposes workspace_id in API response | Information disclosure, workspace enumeration | Strip workspace_id from public API responses; public endpoints should only accept slug, never expose internal IDs |
-| Custom links rendered as `<a href={userInput}>` without validation | XSS via `javascript:` URLs, phishing via lookalike domains | Validate URLs server-side (must start with `https://`), sanitize on render with allowlist of protocols |
-| QR code download endpoint without rate limiting | QR code generation is CPU-intensive, enables DoS | Rate-limit QR generation to 10/min per IP, cache generated QR codes |
-| Profile slug allows special characters | Path traversal, URL injection | Validate slugs: `^[a-z0-9-]{3,30}$` only, reject on creation |
-| vCard download includes all contact info regardless of visibility settings | Privacy violation — hidden fields exposed via vCard | vCard endpoint must respect the same visibility config as the public page render |
+**Phase:** Phase 2 (gallery player).
 
-## UX Pitfalls
+## Minor Pitfalls
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Theme preview thumbnail doesn't match actual render | User picks a theme based on misleading preview, publishes, sees different result | Generate theme previews from the actual rendering engine, not static images |
-| Live preview only shows desktop view in editor | User publishes, visits on phone, layout is broken | Default preview to mobile view (most visitors are mobile), add device toggle that persists preference |
-| No undo/redo in profile editor | User makes accidental changes, can't recover | Implement undo stack (5-10 states) using useReducer history pattern |
-| Save button with no autosave | User edits for 10 minutes, browser crashes, work is lost | Autosave drafts to localStorage every 30s, restore on page load with "resume editing?" prompt |
-| Theme switch resets custom colors | User customizes colors, tries a different theme to compare, loses customizations | Store customizations per-theme, or confirm before switching: "This will reset your custom colors" |
-| Editor shows all 20 themes in a flat list | Overwhelming choice, users pick the first one | Group by category (already in data), show 4-6 popular themes first, expandable "See all" |
+### Pitfall 11: LQIP Blur-Up Not Wired to Public Gallery Asset Loading
 
-## "Looks Done But Isn't" Checklist
+**What goes wrong:** The `AssetInfo` type has an `lqip` field for blur-up placeholders, and the `LightboxImage` component supports it. However, the public gallery endpoint may not return LQIP data for each asset, causing the blur-up effect to show a gray box instead of a blurred preview. The LQIP data must be generated during upload processing and included in the public assets API response.
 
-- [ ] **Avatar loading:** Verify with expired presigned URL, CORS error, 404, and slow network (3G throttled)
-- [ ] **Theme rendering:** Test ALL 20 themes (not just 3-4 popular ones) in BOTH light and dark variants on the actual public page
-- [ ] **Mobile layout:** Test on a real Android device (not just Chrome responsive mode) with 360px width
-- [ ] **SEO metadata:** Run `curl -s https://rawdrive.in/u/testslug | head -50` and verify title, description, and OG tags are present in raw HTML (not just after JS executes)
-- [ ] **Accessibility:** Run axe DevTools on every theme variant — contrast failures are per-theme, not global
-- [ ] **Preview sync:** Make 10 rapid edits in the editor (type fast, switch themes, toggle visibility) and verify preview matches final state
-- [ ] **vCard export:** Download vCard with visibility settings hiding some fields — verify hidden fields are NOT in the vCard file
-- [ ] **QR code:** Scan the generated QR code with 3 different scanner apps — some QR libraries generate codes that only work with specific readers
-- [ ] **Font loading:** Test with fonts.googleapis.com blocked (corporate firewall) — verify fallback fonts render correctly
-- [ ] **Social links:** Verify all social platform URLs open correctly (some need `https://` prefix, others work without it)
-- [ ] **Share functionality:** Test Web Share API on mobile AND clipboard fallback on desktop — both paths must work
-- [ ] **Animation performance:** Run Lighthouse on mobile with CPU 4x slowdown — Performance score must stay above 70
+**Prevention:**
+- Verify LQIP data is populated in the `gallery_assets` table (or `assets` table) during upload processing
+- Include LQIP in the public gallery assets endpoint response
+- Use CSS `background-color` from the image's dominant color as a fallback when LQIP is missing
+- Keep LQIP data small (<1KB base64) to avoid bloating the assets list response
 
-## Recovery Strategies
+**Phase:** Phase 2 (progressive loading).
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Expired R2 presigned URLs in DB | LOW | Run migration to replace URLs with object keys, add API-time URL generation |
-| Theme engine divergence (legacy vs new) | MEDIUM | Create mapping from legacy theme IDs to PREBUILT equivalents, run DB migration, remove legacy code |
-| Preview desync bugs | LOW | Replace singleton with React state management (Zustand), debounce per-field-type |
-| SEO regression on public pages | HIGH | Implement prerendering service or SSR — significant architecture change, requires server infrastructure |
-| Component restructuring breakage | MEDIUM | Add route-level smoke tests, run full build + E2E smoke before each merge |
-| Performance regression on mobile | MEDIUM | Add performance budget CI check (Lighthouse CI), disable heavy effects on mobile via media queries |
-| Accessibility failures | MEDIUM | Run automated axe-core scan in CI on all 20 theme variants, fix contrast ratios in theme definitions |
-| Dual profile system divergence | HIGH | Requires retroactive extraction of shared components, re-testing both systems — much cheaper to prevent than fix |
+---
 
-## Pitfall-to-Phase Mapping
+### Pitfall 12: Gallery Expiration Race Condition with Cached Magic Links
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| R2 avatar/logo loading (#1) | Phase 1: Fix Broken | Avatar renders on public page after 7+ days without re-uploading |
-| Theme dual-system (#2) | Phase 2: Theme Consolidation | LEGACY_PROFILE_THEMES deleted, all 20 themes render identically on editor preview and public page |
-| Preview desync (#3) | Phase 3: Editor Redesign | 10 rapid edits in editor result in correct final preview state within 500ms |
-| SEO regression (#4) | Phase 2-3: Public Page Redesign | `curl` on public page URL returns complete meta tags and structured data in raw HTML |
-| Component breakage (#5) | Phase 1: Before Restructuring | Route-level smoke tests exist for all profile pages, full build passes after each component move |
-| Mobile animation perf (#6) | Phase 4: Polish | Lighthouse mobile Performance > 70 on all theme variants |
-| Dual profile divergence (#7) | Phase 1: Architecture | Shared component library defined, both systems use same base components |
-| Accessibility (#8) | Phase 2 + Phase 4 | axe-core reports zero critical/serious issues on all 20 theme variants in both light/dark modes |
+**What goes wrong:** The `validate_magic_link` result is cached in Redis with `CACHE_TTL_MAGIC_LINK`. If a photographer sets an expiration on a gallery or unpublishes it, the cached validation may still return `valid: true` until the cache expires. Visitors can access the gallery after it should have expired.
+
+**Prevention:**
+- When a gallery is updated (expiration changed, unpublished), invalidate all magic link caches for that gallery
+- Add a Redis key pattern like `magic_link:*:gallery:{gallery_id}` that can be bulk-invalidated
+- Set cache TTL to the minimum of `CACHE_TTL_MAGIC_LINK` and `(gallery.expires_at - now)`
+
+**Phase:** Phase 1 (security hardening).
+
+---
+
+### Pitfall 13: Debug Logging in Production R2 Service
+
+**What goes wrong:** The `r2_service.py` file contains multiple `#region agent log` blocks that write to `/app/debug.log` on every signed URL generation. In production with 2000-photo galleries, this writes thousands of log entries per page load, consuming disk I/O and potentially filling the container's filesystem.
+
+**Prevention:**
+- Remove all `#region agent log` blocks from `r2_service.py` before v1.2 work begins
+- Use structured logging via the existing `logger` instance instead
+- Add a pre-flight cleanup task to the v1.2 milestone
+
+**Phase:** Phase 0 (cleanup before starting).
+
+---
+
+### Pitfall 14: Font Loading for Custom Gallery Fonts Blocks First Paint
+
+**What goes wrong:** Gallery branding allows custom `font_family`. If the font is a Google Font or custom upload, the browser blocks text rendering until the font loads (FOIT - Flash of Invisible Text). On slow connections, the entire gallery title and navigation are invisible for 1-3 seconds.
+
+**Prevention:**
+- Use `font-display: swap` for all custom fonts (show system font, swap when loaded)
+- Preload the gallery's custom font via `<link rel="preload">` in the `<Helmet>`
+- Limit custom fonts to a curated list (Google Fonts subset) rather than arbitrary uploads
+- Include font URL in the `validate_magic_link` response so it can be preloaded before gallery data loads
+
+**Phase:** Phase 3 (branding polish).
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Schema/Data Layer | Layout enum mismatch (P3), Missing aspect ratios (P8), Visitor-scoped proofing (P9) | Single migration that adds all new layout values, backfills dimensions, creates visitor_actions table |
+| Gallery Layouts | Signed URL explosion (P2), Layout crash on null dimensions (P8) | Viewport-based lazy URL generation, default aspect ratios for missing data |
+| Gallery Player | Viewer component fragmentation (P4), Touch gesture conflicts (P10) | Refactor shared hooks first, gesture priority system |
+| Download Flows | Browser crash on batch download (P5), Download policy not enforced server-side (P5) | Server-side zip worker, backend policy enforcement |
+| Social Sharing | OG tags invisible to crawlers (P6) | Traefik crawler middleware, not full SSR |
+| Branding | Theme/custom color conflict (P7), Font blocking (P14) | Explicit precedence rules, font-display: swap |
+| Security | Magic link bypass (P1), Cache race condition (P12) | All public endpoints through magic link validation, cache invalidation on gallery update |
+| Performance | R2 URL thundering herd (P2), Debug log bloat (P13) | Lazy generation, remove debug logs pre-work |
+
+## Integration Pitfalls with Existing Gallery-Service
+
+### The gallery-service is the reference microservice. Changes here ripple everywhere.
+
+1. **Singleton pattern fragility:** Services like `MagicLinkService`, `ProofingService`, `R2URLService` use module-level singletons (`_magic_link_service = None`). Adding new services that depend on these (e.g., a `DownloadService` that needs `R2URLService`) requires careful initialization order. Do NOT create circular imports between services.
+
+2. **Raw SQL in public endpoints:** The proofing and magic link services use raw SQL (`conn.fetchrow()`, `conn.execute()`) rather than SQLAlchemy models. New endpoints MUST follow this pattern for consistency, but MUST also ensure every query includes `workspace_id` filtering. The `workspace-id-guard` hook watches for Write/Edit operations but may not catch raw SQL in new files.
+
+3. **WebSocket broadcast coupling:** `ProofingService._publish_proofing_update()` publishes to `gallery:{gallery_id}:proofing` channel. New real-time features (download progress, layout change notifications) must use distinct channels to avoid message parsing errors in existing WebSocket consumers.
+
+4. **Redis cache key collisions:** The service uses multiple cache key patterns (`signed_url:{asset_id}:{variant}`, `magic_link:{token}`, proofing caches). New features must document their cache key patterns and ensure no collisions. Add cache key prefixes for new feature domains (e.g., `download_job:`, `og_meta:`).
+
+5. **Metric name conflicts:** The `metrics` singleton tracks `proofing_action`, `magic_link_validated`, etc. New metrics must follow the existing naming convention (`gallery_{feature}_{action}`) and be added to the Prometheus/Grafana dashboards, not just emitted silently.
+
+6. **PublicGalleryPage.tsx is 800+ lines:** The main public gallery page is a monolithic component with 25+ state variables, inline lightbox rendering, inline touch handling, and mixed concerns (auth gating, layout rendering, proofing, slideshow). Adding new features to this file directly will make it unmaintainable. Extract into sub-components before adding gallery player or new layout modes.
 
 ## Sources
 
-- Direct codebase analysis of `ProfileThemeEngine.ts`, `themes.ts` (20 PREBUILT + 5 LEGACY themes), `PublicProfileView.tsx`, `PreviewService.ts`, `ProfileHeader.tsx`, and 25+ profile components
-- [Cloudflare R2 presigned URL documentation](https://developers.cloudflare.com/r2/api/s3/presigned-urls/) — presigned URLs have configurable expiration, default varies
-- [Web Vitals thresholds](https://web.dev/articles/vitals) — LCP < 2.5s, FID < 100ms, CLS < 0.1 for "good" rating
-- [WCAG 2.1 AA contrast requirements](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html) — 4.5:1 for normal text, 3:1 for large text
-- [Framer Motion LazyMotion](https://www.framer.com/motion/lazy-motion/) — reduces bundle from ~40KB to ~15KB gzipped
-- [prefers-reduced-motion](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion) — respect user animation preferences
-- [backdrop-filter performance](https://web.dev/articles/css-compositing) — GPU-intensive, avoid on low-end mobile
-
----
-*Pitfalls research for: Profile & Public Page Modernization (v1.1)*
-*Researched: 2026-03-19*
+- Direct codebase analysis of gallery-service (`services/gallery-service/src/`)
+- Frontend component analysis (`frontend/src/components/features/gallery/`, `frontend/src/pages/public/`)
+- Shared types analysis (`packages/shared-types/src/gallery.ts`)
+- Schema analysis (`services/gallery-service/src/schemas/gallery.py`)
+- R2 service implementation (`services/gallery-service/src/services/r2_service.py`)
+- Magic link service (`services/gallery-service/src/services/magic_link_service.py`)
+- Proofing service (`services/gallery-service/src/services/proofing_service.py`)
+- Gallery constants (`frontend/src/constants/gallery.ts`, `frontend/src/constants/galleryThemes.ts`)
+- HIGH confidence: All findings based on direct code inspection of the existing system
