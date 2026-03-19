@@ -88,6 +88,7 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
     <div
       ref={wrapperRef}
       data-profile-renderer
+      data-color-scheme={prefersDark ? 'dark' : 'light'}
       className="min-h-screen w-full"
       style={{
         backgroundColor: 'var(--theme-bg)',

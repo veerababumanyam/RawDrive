@@ -27,10 +27,14 @@ export const AnimatedBackgroundRenderer: React.FC<AnimatedBackgroundRendererProp
 }) => {
   const prefersReducedMotion = useReducedMotion();
 
+  const effectiveType = animationType ?? 'none';
+
   // Static fallback for reduced motion
   if (prefersReducedMotion) {
     return (
       <div
+        data-animated-background
+        data-animation-type={effectiveType}
         className="relative w-full min-h-screen"
         style={{ background: themeTokens['--theme-gradient'] }}
       >
@@ -39,17 +43,23 @@ export const AnimatedBackgroundRenderer: React.FC<AnimatedBackgroundRendererProp
     );
   }
 
-  switch (animationType) {
+  const wrapWithAttrs = (inner: React.ReactNode) => (
+    <div data-animated-background data-animation-type={effectiveType}>
+      {inner}
+    </div>
+  );
+
+  switch (effectiveType) {
     case 'gradient-shift':
-      return <GradientShiftBackground>{children}</GradientShiftBackground>;
+      return wrapWithAttrs(<GradientShiftBackground>{children}</GradientShiftBackground>);
     case 'particles':
-      return <ParticleBackground>{children}</ParticleBackground>;
+      return wrapWithAttrs(<ParticleBackground>{children}</ParticleBackground>);
     case 'wave':
-      return <WaveBackground>{children}</WaveBackground>;
+      return wrapWithAttrs(<WaveBackground>{children}</WaveBackground>);
     case 'aurora':
-      return <AuroraBackground>{children}</AuroraBackground>;
+      return wrapWithAttrs(<AuroraBackground>{children}</AuroraBackground>);
     case 'none':
     default:
-      return <GlassContainer>{children}</GlassContainer>;
+      return wrapWithAttrs(<GlassContainer>{children}</GlassContainer>);
   }
 };

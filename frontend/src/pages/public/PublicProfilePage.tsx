@@ -68,16 +68,38 @@ const PublicProfilePage: React.FC = () => {
     );
   }
 
-  const displayName = profile.name || 'Company Profile';
+  const displayName = profile.name || profile.company_name || 'Company Profile';
+  const description = profile.tagline || `${displayName} business profile`;
+  const ogImageUrl = `${window.location.origin}/api/v1/p/${slug}/og-image`;
+  const canonicalUrl = `${window.location.origin}/p/${slug}`;
+  const seoTitle = profile.seo_metadata?.meta_title || `${displayName} | RawDrive`;
+  const seoDescription = profile.seo_metadata?.meta_description || description;
+  const ogImage = profile.seo_metadata?.og_image || ogImageUrl;
 
   return (
     <>
       <Helmet>
-        <title>{displayName} | Profile</title>
-        <meta name="description" content={profile.tagline || `${displayName} business profile`} />
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDescription} />
         {!profile.indexable && (
           <meta name="robots" content="noindex, nofollow" />
         )}
+        {profile.seo_metadata?.meta_keywords && (
+          <meta name="keywords" content={profile.seo_metadata.meta_keywords.join(', ')} />
+        )}
+
+        <meta property="og:type" content="profile" />
+        <meta property="og:title" content={profile.seo_metadata?.og_title || seoTitle} />
+        <meta property="og:description" content={profile.seo_metadata?.og_description || seoDescription} />
+        <meta property="og:url" content={profile.public_url || canonicalUrl} />
+        <meta property="og:image" content={ogImage} />
+
+        <meta name="twitter:card" content={profile.seo_metadata?.twitter_card || 'summary_large_image'} />
+        <meta name="twitter:title" content={profile.seo_metadata?.twitter_title || seoTitle} />
+        <meta name="twitter:description" content={profile.seo_metadata?.twitter_description || seoDescription} />
+        <meta name="twitter:image" content={profile.seo_metadata?.twitter_image || ogImage} />
+
+        <link rel="canonical" href={profile.public_url || canonicalUrl} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {profile.seo_schema && (

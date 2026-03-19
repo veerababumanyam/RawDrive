@@ -79,12 +79,14 @@ export function PublicPersonalProfilePage() {
   }
 
   // SEO metadata
-  const seoTitle = profile.seo_metadata?.meta_title || profile.display_name || 'Profile';
+  const seoTitle = profile.seo_metadata?.meta_title || `${profile.display_name || 'Profile'} | RawDrive`;
   const seoDescription =
     profile.seo_metadata?.meta_description ||
     profile.bio ||
     `${profile.display_name || 'Photographer'}'s profile`;
-  const ogImage = profile.seo_metadata?.og_image || profile.avatar_url;
+  const ogImageUrl = `${window.location.origin}/api/v1/u/${slug}/og-image`;
+  const ogImage = profile.seo_metadata?.og_image || ogImageUrl;
+  const canonicalUrl = `${window.location.origin}/u/${slug}`;
 
   return (
     <>
@@ -110,6 +112,8 @@ export function PublicPersonalProfilePage() {
         {(profile.seo_metadata?.twitter_image || ogImage) && (
           <meta name="twitter:image" content={profile.seo_metadata?.twitter_image || ogImage} />
         )}
+
+        <link rel="canonical" href={profile.public_url || canonicalUrl} />
 
         {profile.seo_schema && (
           <script type="application/ld+json">{JSON.stringify(profile.seo_schema)}</script>
