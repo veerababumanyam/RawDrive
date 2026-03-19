@@ -15,12 +15,12 @@
 
 ### Public Page
 
-- [ ] **PUBPG-01**: Public personal profile (`/u/:slug`) renders mobile-first responsive layout across all devices
-- [ ] **PUBPG-02**: Public company profile (`/p/:slug`) renders mobile-first responsive layout across all devices
-- [ ] **PUBPG-03**: User can select from animated theme backgrounds (gradients, particles, subtle motion effects)
-- [ ] **PUBPG-04**: Bento grid layout is polished with proper spacing, transitions, and responsive breakpoints
+- [x] **PUBPG-01**: Public personal profile (`/u/:slug`) renders mobile-first responsive layout across all devices
+- [x] **PUBPG-02**: Public company profile (`/p/:slug`) renders mobile-first responsive layout across all devices
+- [x] **PUBPG-03**: User can select from animated theme backgrounds (gradients, particles, subtle motion effects)
+- [x] **PUBPG-04**: Bento grid layout is polished with proper spacing, transitions, and responsive breakpoints
 - [ ] **PUBPG-05**: Public profile pages load in under 2 seconds (LCP) with lazy-loaded embeds and optimized images
-- [ ] **PUBPG-06**: Both public pages support dark mode rendering
+- [x] **PUBPG-06**: Both public pages support dark mode rendering
 
 ### Editor
 
@@ -214,12 +214,12 @@
 | FNDTN-03 | Phase 10 | Complete |
 | FNDTN-04 | Phase 10 | Complete |
 | FNDTN-05 | Phase 10 | Complete |
-| PUBPG-01 | Phase 11 | Pending |
-| PUBPG-02 | Phase 11 | Pending |
-| PUBPG-03 | Phase 11 | Pending |
-| PUBPG-04 | Phase 11 | Pending |
+| PUBPG-01 | Phase 11 | Complete |
+| PUBPG-02 | Phase 11 | Complete |
+| PUBPG-03 | Phase 11 | Complete |
+| PUBPG-04 | Phase 11 | Complete |
 | PUBPG-05 | Phase 13 | Pending |
-| PUBPG-06 | Phase 11 | Pending |
+| PUBPG-06 | Phase 11 | Complete |
 | EDITR-01 | Phase 12 | Pending |
 | EDITR-02 | Phase 12 | Pending |
 | EDITR-03 | Phase 12 | Pending |

@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Public Gallery & Gallery Player Modernization
-status: ready_to_plan
-stopped_at: Roadmap created - Phase 15 ready to plan
-last_updated: "2026-03-19T23:00:00.000Z"
+milestone: v1.1
+milestone_name: Profile & Public Page Modernization
+status: unknown
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-03-19T23:04:58.574Z"
 progress:
-  total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 12
+  completed_plans: 10
 ---
 
 # Project State
@@ -19,14 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 15 — Foundation Refactor & Data Model
+**Current focus:** Phase 11 — Public Page Redesign
 
 ## Current Position
 
-Phase: 15 of 20 (Foundation Refactor & Data Model) — first phase of v1.2
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-19 — Switched to v1.2 milestone, roadmap has 6 phases (15-20), 36 requirements
+Phase: 11 (Public Page Redesign) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -46,6 +44,7 @@ Last activity: 2026-03-19 — Switched to v1.2 milestone, roadmap has 6 phases (
 
 - PUBPG-05 (LCP <2s) placed in Phase 13 after content blocks, not Phase 11 -- adding blocks would regress perf
 - SEO requirements grouped with Phase 11 (public page redesign) not deferred -- bolting on SEO after animations is expensive
+- [Phase 11]: Stagger via FM variants (parent-driven) not individual delays; CSS vars for grid item styling; animation_type per category (minimal->gradient-shift, dark->aurora, modern->particles, bold->wave)
 - [Phase 10]: Legacy theme IDs mapped to closest PREBUILT; CSS vars scoped to wrapper div; R2 upload failure non-fatal with PG blob fallback
 - [Phase 10]: Company R2 key format: avatars/{workspace_id}/company/{profile_id}/{size}.webp; theme exports renamed with deprecated aliases
 - [Phase 14]: Public API schemas use *Public suffix pattern; consent bypass gated behind RAWDRIVE_ENV; sorted lock ordering uses str(UUID)
@@ -78,8 +77,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T22:33:00.000Z
-Stopped at: Completed 10-04-PLAN.md (Phase 10 complete)
+Last session: 2026-03-19T23:04:58.572Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones
