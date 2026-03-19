@@ -133,4 +133,77 @@ describe('PublicProfileRenderer', () => {
     unmount();
     expect(mockRemoveThemeFromRoot).toHaveBeenCalled();
   });
+
+  it('renders AnimatedBackgroundRenderer component', () => {
+    const { container } = render(
+      <PublicProfileRenderer
+        profileData={personalData}
+        profileType="personal"
+        themeId="theme-clean-slate"
+      />
+    );
+    // AnimatedBackgroundRenderer should wrap the content
+    const animatedBg = container.querySelector('[data-animated-background]');
+    expect(animatedBg).toBeTruthy();
+  });
+
+  it('passes correct animationType from theme tokens to AnimatedBackgroundRenderer', () => {
+    mockResolveThemeTokens.mockReturnValueOnce({
+      '--theme-bg': '#FFFFFF',
+      '--theme-surface': '#FAFAFA',
+      '--theme-text': '#1A1A1A',
+      '--theme-text-secondary': '#6B7280',
+      '--theme-accent': '#3B82F6',
+      '--theme-primary': '#1A1A1A',
+      '--theme-border': '#E5E5E5',
+      '--theme-font-heading': "'Inter', system-ui, sans-serif",
+      '--theme-font-body': "'Inter', system-ui, sans-serif",
+      '--theme-radius': '1rem',
+      '--theme-shadow': '0 4px 6px -1px rgba(0,0,0,0.1)',
+      '--theme-gradient': 'linear-gradient(180deg, #FFFFFF, #FAFAFA)',
+      '--theme-animation-type': 'aurora',
+    });
+
+    const { container } = render(
+      <PublicProfileRenderer
+        profileData={personalData}
+        profileType="personal"
+        themeId="theme-dark-elegance"
+      />
+    );
+    const animatedBg = container.querySelector('[data-animated-background]');
+    expect(animatedBg).toBeTruthy();
+    expect(animatedBg?.getAttribute('data-animation-type')).toBe('aurora');
+  });
+
+  it('applies dark mode class when useColorScheme returns dark', () => {
+    // Override matchMedia to return dark
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(prefers-color-scheme: dark)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    // resolveThemeTokens should be called with prefersDark=true
+    const { container } = render(
+      <PublicProfileRenderer
+        profileData={personalData}
+        profileType="personal"
+        themeId="theme-clean-slate"
+      />
+    );
+    // Verify resolveThemeTokens was called with dark=true
+    expect(mockResolveThemeTokens).toHaveBeenCalledWith('theme-clean-slate', true);
+    // The wrapper should have the dark data attribute
+    const wrapper = container.querySelector('[data-profile-renderer]');
+    expect(wrapper?.getAttribute('data-color-scheme')).toBe('dark');
+  });
 });
