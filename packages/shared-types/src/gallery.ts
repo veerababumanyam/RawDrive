@@ -38,6 +38,10 @@ export const LayoutStyle = {
   CONTINUOUS: 'continuous',
   GRID: 'grid',
   MASONRY: 'masonry',
+  JUSTIFIED: 'justified',
+  MOSAIC: 'mosaic',
+  FILMSTRIP: 'filmstrip',
+  SLIDESHOW: 'slideshow',
 } as const;
 export type LayoutStyle = typeof LayoutStyle[keyof typeof LayoutStyle];
 

@@ -61,7 +61,10 @@ class MagicLinkValidateResponse(BaseModel):
     # Branding fields
     gradient_config: Optional[dict] = None
     theme: Optional[str] = None
-    layout_style: Optional[str] = None
+    layout_style: Optional[str] = Field(
+        None,
+        description="Gallery layout style. Valid values: tabs, continuous, grid, masonry, justified, mosaic, filmstrip, slideshow",
+    )
     font_family: Optional[str] = None
     primary_color: Optional[str] = None
 

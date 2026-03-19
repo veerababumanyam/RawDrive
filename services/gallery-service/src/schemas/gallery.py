@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional, List, Any
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.schemas.common import (
     PaginationMeta,
@@ -15,6 +15,13 @@ from src.schemas.common import (
     ActivityTrackingConfig,
 )
 from src.schemas.asset_metadata import AssetFlag, ColorLabel
+
+
+# Valid layout styles - must match LayoutStyle enum in shared-types and DB CHECK constraint
+VALID_LAYOUT_STYLES = {
+    'tabs', 'continuous', 'grid', 'masonry',
+    'justified', 'mosaic', 'filmstrip', 'slideshow',
+}
 
 
 # =============================================================================
@@ -112,7 +119,10 @@ class GalleryResponse(BaseModel):
     branding_profile_id: Optional[str] = None
     company_profile: Optional[CompanyProfileResponse] = None
     portal_language: Optional[str] = None
-    layout_style: Optional[str] = None
+    layout_style: Optional[str] = Field(
+        None,
+        description="Layout style. Valid values: tabs, continuous, grid, masonry, justified, mosaic, filmstrip, slideshow",
+    )
     theme: Optional[str] = None
     download_policy: Optional[str] = None
     exif_visible: Optional[bool] = None
@@ -209,13 +219,25 @@ class GalleryUpdateRequest(BaseModel):
     client_name: Optional[str] = Field(None, max_length=200)
     client_id: Optional[str] = None
     shoot_date: Optional[str] = None
-    layout_style: Optional[str] = None
+    layout_style: Optional[str] = Field(
+        None,
+        description="Layout style for gallery. Valid values: tabs, continuous, grid, masonry, justified, mosaic, filmstrip, slideshow",
+    )
     theme: Optional[str] = None
     download_policy: Optional[str] = None
     exif_visible: Optional[bool] = None
     email_registration_required: Optional[bool] = None
     expires_at: Optional[str] = None
     branding_profile_id: Optional[str] = None
+
+    @field_validator("layout_style")
+    @classmethod
+    def validate_layout_style(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_LAYOUT_STYLES:
+            raise ValueError(
+                f"Invalid layout_style '{v}'. Must be one of: {', '.join(sorted(VALID_LAYOUT_STYLES))}"
+            )
+        return v
     cover_asset_id: Optional[str] = None
     primary_color: Optional[str] = None
     gradient_config: Optional[GradientConfiguration] = None
