@@ -998,6 +998,67 @@ class FaceGroupRepository:
             return count
 
     # =========================================================================
+    # BULK OPERATIONS
+    # =========================================================================
+
+    async def bulk_update_centroids(
+        self,
+        updates: dict[UUID, list[float]],
+        workspace_id: UUID,
+    ) -> int:
+        """Bulk update centroids for multiple face groups in a single DB call.
+
+        Uses executemany pattern for efficient batch updates.
+
+        Args:
+            updates: Mapping of group_id -> centroid vector
+            workspace_id: Workspace ID for tenant isolation
+
+        Returns:
+            Number of groups updated
+        """
+        if not updates:
+            return 0
+
+        # Validate all centroids before executing
+        for group_id, centroid in updates.items():
+            self._validate_centroid(centroid)
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            updated_count = 0
+            # Use a transaction for atomicity
+            async with conn.transaction():
+                for group_id, centroid in updates.items():
+                    result = await conn.execute(
+                        """
+                        UPDATE face_groups
+                        SET centroid = $1, updated_at = NOW()
+                        WHERE id = $2 AND workspace_id = $3
+                        """,
+                        self._centroid_to_pgvector(centroid),
+                        group_id,
+                        workspace_id,
+                    )
+                    if result and int(result.split()[-1]) > 0:
+                        updated_count += 1
+
+            if updated_count > 0:
+                # PERF-001: Invalidate cache after bulk update
+                cache = get_face_group_cache()
+                await cache.invalidate_workspace(workspace_id)
+
+                logger.info(
+                    "Bulk centroid update complete",
+                    extra={
+                        "workspace_id": str(workspace_id),
+                        "groups_updated": updated_count,
+                    },
+                )
+
+            return updated_count
+
+    # =========================================================================
     # MERGE SUGGESTIONS (Similar Group Discovery)
     # =========================================================================
 

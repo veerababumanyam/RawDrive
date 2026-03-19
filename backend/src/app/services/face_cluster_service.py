@@ -938,6 +938,60 @@ class FaceClusterService:
 
         return centroid
 
+    async def batch_recalculate_centroids(
+        self,
+        group_ids: list[UUID],
+        workspace_id: UUID,
+    ) -> dict[UUID, list[float]]:
+        """Batch recalculate centroids for multiple face groups.
+
+        Instead of N separate recalculate_centroid calls (each doing its own
+        DB query), this method processes all groups and performs a single
+        bulk update, reducing DB round-trips.
+
+        Args:
+            group_ids: List of face group IDs to recalculate
+            workspace_id: Workspace ID for tenant isolation
+
+        Returns:
+            Mapping of group_id -> new centroid vector
+        """
+        if not group_ids:
+            return {}
+
+        results: dict[UUID, list[float]] = {}
+
+        # Collect embeddings for each group
+        for group_id in group_ids:
+            faces = await self.face_repo.find_by_group_id(
+                group_id, workspace_id, limit=10000
+            )
+            embeddings = [f["embedding"] for f in faces if f.get("embedding")]
+
+            if embeddings:
+                centroid = self._calculate_centroid(embeddings)
+                results[group_id] = centroid
+
+        # Bulk update all centroids in a single transaction
+        if results:
+            await self.group_repo.bulk_update_centroids(results, workspace_id)
+
+        # Invalidate centroid cache for workspace
+        from app.repositories.face_group_repository import get_face_group_cache
+        cache = get_face_group_cache()
+        await cache.invalidate_workspace(workspace_id)
+
+        logger.info(
+            "Batch centroid recalculation complete",
+            extra={
+                "workspace_id": str(workspace_id),
+                "groups_requested": len(group_ids),
+                "groups_updated": len(results),
+            },
+        )
+
+        return results
+
     def _calculate_centroid(self, embeddings: list[list[float]]) -> list[float]:
         """Calculate the normalized mean (centroid) of embedding vectors.
         
