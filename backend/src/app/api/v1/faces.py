@@ -15,7 +15,9 @@ from pydantic import BaseModel, Field
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, get_current_user
 from app.api.face_schemas import (
     FaceResponse,
+    FaceResponsePublic,
     FaceDetailResponse,
+    FaceDetailResponsePublic,
     FaceListResponse,
     FaceListMeta,
     FaceDetectionJobResponse,
@@ -167,7 +169,7 @@ async def list_photo_faces(
 
 @router.get(
     "/faces/{face_id}",
-    response_model=FaceDetailResponse,
+    response_model=FaceDetailResponsePublic,
     summary="Get face details",
     description="Returns detailed information about a specific face.",
 )
@@ -180,7 +182,7 @@ async def get_face(
 ):
     """Get detailed information about a face."""
     workspace_id = workspace_access["workspace_id"]
-    
+
     face = await face_repo.find_by_id(face_id, workspace_id)
     if not face:
         raise HTTPException(
@@ -188,7 +190,7 @@ async def get_face(
             detail="Face not found",  # SEC-002: Generic message
         )
 
-    return FaceDetailResponse(**face, id=face["id"])
+    return FaceDetailResponsePublic(**face, id=face["id"])
 
 
 @router.post(

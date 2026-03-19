@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, get_current_user
 from app.api.face_schemas import (
     FaceGroupResponse,
+    FaceGroupResponsePublic,
     FaceGroupDetailResponse,
     FaceGroupListResponse,
     FaceGroupGalleryStats,
@@ -34,6 +35,7 @@ from app.api.face_schemas import (
     SimilarGroupsResponse,
     FacesInGroupResponse,
     FaceResponse,
+    FaceResponsePublic,
 )
 from app.services.face_cluster_service import (
     FaceClusterService,

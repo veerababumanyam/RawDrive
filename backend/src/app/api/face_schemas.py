@@ -331,9 +331,9 @@ class FaceCreate(FaceBase):
 
 class FaceResponse(FaceBase):
     """Face entity response schema."""
-    
-    model_config = ConfigDict(from_attributes=True)
-    
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
     face_id: UUID = Field(..., alias="id", description="Unique face identifier")
     workspace_id: UUID = Field(..., description="Workspace ID")
     photo_id: UUID = Field(..., description="Photo ID")
@@ -344,15 +344,39 @@ class FaceResponse(FaceBase):
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
+class FaceResponsePublic(FaceResponse):
+    """Public face response - excludes embedding for API consumers.
+
+    Use this schema for all public-facing endpoints. The full FaceResponse
+    (with embedding access) should only be used for internal service-to-service
+    communication and similarity search operations.
+    """
+
+    pass  # Inherits all fields from FaceResponse without embedding
+
+
+class FaceDetailResponsePublic(FaceResponse):
+    """Detailed face response for public API - excludes embedding."""
+
+    detection_metadata: Optional[dict[str, Any]] = Field(
+        None,
+        description="Detection metadata from provider"
+    )
+    # Related data
+    photo_filename: Optional[str] = Field(None, description="Source photo filename")
+    gallery_id: Optional[UUID] = Field(None, description="Gallery containing the photo")
+    face_group_name: Optional[str] = Field(None, description="Name of assigned face group")
+
+
 class FaceDetailResponse(FaceResponse):
-    """Detailed face response with additional fields."""
-    
+    """Detailed face response with additional fields (internal use only)."""
+
     embedding: Optional[list[float]] = Field(
-        None, 
+        None,
         description="Face embedding vector (512 dimensions)"
     )
     detection_metadata: Optional[dict[str, Any]] = Field(
-        None, 
+        None,
         description="Detection metadata from provider"
     )
     # Related data
@@ -399,7 +423,7 @@ class FaceGroupUpdate(BaseModel):
 class FaceGroupResponse(FaceGroupBase):
     """Face group response schema."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     face_group_id: UUID = Field(..., alias="id", description="Unique group identifier")
     workspace_id: UUID = Field(..., description="Workspace ID")
@@ -424,12 +448,18 @@ class FaceGroupResponse(FaceGroupBase):
     )
 
 
+class FaceGroupResponsePublic(FaceGroupResponse):
+    """Public face group response - excludes centroid embedding for API consumers."""
+
+    pass  # Inherits all fields from FaceGroupResponse without centroid
+
+
 class FaceGroupDetailResponse(FaceGroupResponse):
-    """Detailed face group response with additional data."""
+    """Detailed face group response with additional data (internal use)."""
 
     centroid: Optional[list[float]] = Field(
         None,
-        description="Group centroid embedding (512 dimensions)"
+        description="Group centroid embedding (512 dimensions) - internal only"
     )
     sample_faces: Optional[list[FaceResponse]] = Field(
         None,
