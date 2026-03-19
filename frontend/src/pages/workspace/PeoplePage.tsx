@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,6 +26,7 @@ import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmation
 import { useToast } from '../../components/ui/Toast';
 import { faceApiService, FaceApiError, FaceGroup, MergeSuggestion } from '../../services/faceApiService';
 import { FaceGroupMergeModal } from '../../components/features/gallery/FaceGroupMergeModal';
+import { FaceErrorBoundary } from '../../components/features/face/FaceErrorBoundary';
 
 /* =============================================================================
    PeoplePage Component
@@ -302,16 +303,47 @@ const PeoplePage: React.FC = () => {
     }
   };
 
-  // Keyboard handler for Escape to clear selection
+  // Grid ref for keyboard navigation
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard handler for Escape to clear selection and arrow key navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedIds.size > 0) {
-        clearSelection();
+      if (e.key === 'Escape') {
+        if (showMergeModal) return; // Let modal handle its own Escape
+        if (selectedIds.size > 0) {
+          clearSelection();
+          return;
+        }
+      }
+
+      // Arrow key navigation within grid
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+        const grid = gridRef.current;
+        if (!grid) return;
+
+        const cards = Array.from(grid.querySelectorAll<HTMLElement>('[data-face-card]'));
+        const activeEl = document.activeElement as HTMLElement;
+        const currentIndex = cards.indexOf(activeEl);
+
+        if (currentIndex === -1) return;
+
+        e.preventDefault();
+        const style = window.getComputedStyle(grid);
+        const columns = style.gridTemplateColumns.split(' ').length;
+
+        let nextIndex = currentIndex;
+        if (e.key === 'ArrowRight') nextIndex = Math.min(currentIndex + 1, cards.length - 1);
+        if (e.key === 'ArrowLeft') nextIndex = Math.max(currentIndex - 1, 0);
+        if (e.key === 'ArrowDown') nextIndex = Math.min(currentIndex + columns, cards.length - 1);
+        if (e.key === 'ArrowUp') nextIndex = Math.max(currentIndex - columns, 0);
+
+        cards[nextIndex]?.focus();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds.size, clearSelection]);
+  }, [selectedIds.size, clearSelection, showMergeModal]);
 
   return (
     <div className="min-h-full bg-background pb-24">
@@ -386,6 +418,7 @@ const PeoplePage: React.FC = () => {
       </div>
 
       {/* Content */}
+      <FaceErrorBoundary context="PeoplePage">
       <div className="p-6">
         {/* AI Merge Suggestions Strip - Always visible when suggestions exist */}
         {showSuggestions && mergeSuggestions.length > 0 && (
@@ -503,10 +536,13 @@ const PeoplePage: React.FC = () => {
           </div>
         ) : viewMode === 'grid' ? (
           <motion.div
+            ref={gridRef}
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4"
+            role="grid"
+            aria-label="Face groups"
           >
             {filteredGroups.map((group, index) => (
               <PersonCard
@@ -565,6 +601,7 @@ const PeoplePage: React.FC = () => {
           </motion.div>
         )}
       </div>
+      </FaceErrorBoundary>
 
       {/* Selection Action Bar - Fixed at bottom when items are selected */}
       <AnimatePresence>
@@ -580,7 +617,7 @@ const PeoplePage: React.FC = () => {
               <div className="pointer-events-auto bg-surface/95 backdrop-blur-md border border-border shadow-xl rounded-2xl p-4">
                 <div className="flex items-center justify-between gap-4">
                   {/* Selection info */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3" role="alert" aria-live="polite">
                     <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10">
                       <CheckSquare className="w-5 h-5 text-primary" />
                     </div>
@@ -798,11 +835,20 @@ const PersonCard: React.FC<PersonCardProps> = ({
   return (
     <motion.div
       variants={staggerItem}
-      className={`group relative flex flex-col items-center p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${isSelected
+      data-face-card
+      tabIndex={0}
+      aria-label={`${displayName}, ${group.face_count} ${group.face_count === 1 ? 'photo' : 'photos'}${isSelected ? ', selected' : ''}`}
+      className={`group relative flex flex-col items-center p-4 rounded-2xl border cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50 ${isSelected
           ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
           : 'bg-surface hover:bg-surface-hover border-border/50 hover:border-primary/30 hover:shadow-lg'
         }`}
       onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggleSelection();
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -818,6 +864,7 @@ const PersonCard: React.FC<PersonCardProps> = ({
               : 'bg-surface/90 backdrop-blur-sm border border-border hover:border-primary hover:bg-surface'
             }`}
           title={isSelected ? 'Deselect' : 'Select'}
+          aria-label={`Select ${displayName}`}
         >
           {isSelected ? <Check className="w-4 h-4" /> : <CheckSquare className="w-4 h-4 text-text-secondary" />}
         </button>

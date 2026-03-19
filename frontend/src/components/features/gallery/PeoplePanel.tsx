@@ -13,6 +13,7 @@ import { useToast } from '../../ui/Toast';
 import { faceApiService, FaceGroupWithGalleryStats, MergeSuggestion } from '../../../services/faceApiService';
 import { FaceGroupMergeModal } from './FaceGroupMergeModal';
 import { FaceGroupDetailPanel } from './FaceGroupDetailPanel';
+import { FaceErrorBoundary } from '../face/FaceErrorBoundary';
 
 // Configuration constants
 const FACE_GROUPS_LIMIT = 100;
@@ -384,6 +385,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                 </div>
 
                 {/* Content */}
+                <FaceErrorBoundary context="PeoplePanel">
                 <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 140px)' }}>
                     {loading && groups.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-text-secondary">
@@ -424,7 +426,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                             </AppButton>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" role="grid" aria-label="Face groups">
                             {filteredGroups.map((group, index) => (
                                 <PersonCard
                                     key={group.id}
@@ -452,6 +454,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                         </div>
                     )}
                 </div>
+                </FaceErrorBoundary>
 
                 {/* Footer Actions */}
                 <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-sm border-t border-border">
