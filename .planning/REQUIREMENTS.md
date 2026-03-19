@@ -9,8 +9,8 @@
 
 - [ ] **FNDTN-01**: Avatar upload displays correctly on both personal and company profiles with R2 storage pipeline
 - [ ] **FNDTN-02**: Avatar has proper fallback (initials/placeholder) when image fails to load
-- [ ] **FNDTN-03**: Theme engine consolidated into single UnifiedThemeEngine with CSS custom properties (legacy themes deleted)
-- [ ] **FNDTN-04**: Personal and company profiles share a unified PublicProfileRenderer component
+- [x] **FNDTN-03**: Theme engine consolidated into single UnifiedThemeEngine with CSS custom properties (legacy themes deleted)
+- [x] **FNDTN-04**: Personal and company profiles share a unified PublicProfileRenderer component
 - [ ] **FNDTN-05**: Smoke tests verify both profile pages load, avatar displays, and themes render correctly
 
 ### Public Page
@@ -164,8 +164,8 @@
 |-------------|-------|--------|
 | FNDTN-01 | Phase 10 | Pending |
 | FNDTN-02 | Phase 10 | Pending |
-| FNDTN-03 | Phase 10 | Pending |
-| FNDTN-04 | Phase 10 | Pending |
+| FNDTN-03 | Phase 10 | Complete |
+| FNDTN-04 | Phase 10 | Complete |
 | FNDTN-05 | Phase 10 | Pending |
 | PUBPG-01 | Phase 11 | Pending |
 | PUBPG-02 | Phase 11 | Pending |
