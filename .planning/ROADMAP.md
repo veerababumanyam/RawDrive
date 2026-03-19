@@ -150,11 +150,12 @@ Plans:
   1. PublicGalleryPage renders identically to before but is composed of PublicGalleryShell + React Contexts (GalleryThemeContext, GalleryInteractionContext, GalleryPlayerContext) -- no 800-line monolith remains
   2. Two different clients visiting the same gallery see independent favorites and selections (visitor-scoped proofing via gallery_visitor_actions table)
   3. Adding a new LayoutStyle value in shared-types automatically appears in backend models and gallery-service schemas without manual sync (enum round-trip test passes)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 15-01: TBD
-- [ ] 15-02: TBD
+- [ ] 15-01-PLAN.md -- LayoutStyle enum sync (8 values across TS/Python/DB) + gallery_visitor_actions table for per-visitor proofing
+- [ ] 15-02-PLAN.md -- Decompose PublicGalleryPage monolith into PublicGalleryShell + 3 React Contexts + TanStack Query hooks
+- [ ] 15-03-PLAN.md -- Decouple lightbox hooks from workspace auth + LayoutStyle enum round-trip tests
 
 ### Phase 16: Gallery Layout Engine & Progressive Loading
 **Goal**: Public galleries render in multiple modern layout modes with progressive image loading for fast perceived performance
@@ -310,11 +311,11 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 08. Notifications | v1.0 | 2/2 | Complete | 2026-03-19 |
 | 09. Shared Packages & Test Coverage | v1.0 | 4/4 | Complete | 2026-03-19 |
 | 10. Foundation & Fixes | v1.1 | Complete    | 2026-03-19 | 2026-03-19 |
-| 11. Public Page Redesign | v1.1 | 0/? | Not started | - |
+| 11. Public Page Redesign | v1.1 | 0/3 | Not started | - |
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
-| 15. Foundation Refactor & Data Model | v1.2 | 0/? | Not started | - |
+| 15. Foundation Refactor & Data Model | v1.2 | 0/3 | Not started | - |
 | 16. Gallery Layout Engine & Progressive Loading | v1.2 | 0/? | Not started | - |
 | 17. Gallery Player | v1.2 | 0/? | Not started | - |
 | 18. Client Interactions & Gallery UX | v1.2 | 0/? | Not started | - |
