@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: unknown
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-03-19T21:56:20.931Z"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-03-19T22:02:00Z"
 progress:
   total_phases: 5
   completed_phases: 0
@@ -19,7 +19,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 10 — foundation-fixes
+**Current focus:** Phase 14 — FaceID Deep Dive & Enhancement
 
 ## Current Position
 
@@ -52,6 +52,9 @@ Plan: 3 of 5
 - [Phase 10]: Theme CSS vars scoped to wrapper div (not documentElement) to prevent leaking between pages
 - [Phase 10]: R2 upload failure non-fatal; PG blob fallback for resilience
 - [Phase 10]: Presigned URLs with 1hr expiry for R2 avatar serving
+- [Phase 14]: Public API schemas use *Public suffix pattern to strip embeddings/centroids while preserving internal schemas
+- [Phase 14]: Consent bypass gated behind RAWDRIVE_ENV check -- production always blocks regardless of env var
+- [Phase 14]: ONNX model hash configurable via FACE_MODEL_SHA256 env var (not hardcoded) since model unavailable at dev time
 
 ### Roadmap Evolution
 
@@ -82,9 +85,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T22:00:22Z
-Stopped at: Completed 14-02-PLAN.md
-Resume file: .planning/phases/14-faceid-deep-dive-and-enhancement/14-02-SUMMARY.md
+Last session: 2026-03-19T22:02:00Z
+Stopped at: Completed 14-01-PLAN.md
+Resume file: .planning/phases/14-faceid-deep-dive-and-enhancement/14-01-SUMMARY.md
 
 ### Upcoming Milestones
 
