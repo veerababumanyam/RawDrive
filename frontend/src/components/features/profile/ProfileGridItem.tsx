@@ -9,8 +9,17 @@ export interface ProfileGridItemProps {
     colSpan?: 1 | 2 | 3 | 4 | 'full';
     rowSpan?: 1 | 2;
     className?: string;
-    delay?: number;
 }
+
+const itemVariants = {
+    hidden: { opacity: 0, y: 20, scale: 0.95 },
+    visible: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+    },
+};
 
 export const ProfileGridItem: React.FC<ProfileGridItemProps> = ({
     children,
@@ -18,16 +27,15 @@ export const ProfileGridItem: React.FC<ProfileGridItemProps> = ({
     colSpan = 1,
     rowSpan = 1,
     className = '',
-    delay = 0,
 }) => {
     // Calculate grid classes
     const getColSpanClass = () => {
         switch (colSpan) {
             case 1: return 'col-span-1';
-            case 2: return 'col-span-1 md:col-span-2';
-            case 3: return 'col-span-1 md:col-span-3';
-            case 4: return 'col-span-1 md:col-span-4';
-            case 'full': return 'col-span-1 md:col-span-full';
+            case 2: return 'col-span-1 sm:col-span-2';
+            case 3: return 'col-span-1 sm:col-span-2 lg:col-span-3';
+            case 4: return 'col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4';
+            case 'full': return 'col-span-full';
             default: return 'col-span-1';
         }
     };
@@ -35,28 +43,30 @@ export const ProfileGridItem: React.FC<ProfileGridItemProps> = ({
     const getRowSpanClass = () => {
         switch (rowSpan) {
             case 1: return 'row-span-1';
-            case 2: return 'row-span-1 md:row-span-2';
+            case 2: return 'row-span-1 sm:row-span-2';
             default: return 'row-span-1';
         }
     };
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay }}
+            variants={itemVariants}
             className={cn(
-                'relative overflow-hidden transition-all duration-300',
+                'relative overflow-hidden transition-transform duration-300',
+                'hover:scale-[1.02] hover:-translate-y-1',
+                'motion-reduce:transition-none motion-reduce:hover:transform-none',
+                'backdrop-blur-[8px] sm:backdrop-blur-[12px]',
+                'border border-white/20 dark:border-white/10',
                 getColSpanClass(),
                 getRowSpanClass(),
-                // Apply theme-specific surface styles if not overridden by className
-                !className.includes('bg-') && theme.colors.surface,
-                theme.effects.radius,
-                theme.effects.shadow,
-                theme.effects.glassmorphism && theme.effects.blur,
-                theme.effects.glassmorphism && theme.colors.border ? `border ${theme.colors.border}` : '',
                 className
             )}
+            style={{
+                backgroundColor: 'var(--theme-surface)',
+                borderColor: 'var(--theme-border)',
+                borderRadius: 'var(--theme-radius)',
+                boxShadow: 'var(--theme-shadow)',
+            }}
         >
             {children}
         </motion.div>
