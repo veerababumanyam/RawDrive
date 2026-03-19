@@ -142,7 +142,7 @@ Plans:
 - [ ] **Phase 19: Downloads & Delivery** - Batch ZIP downloads, size options, gallery expiration with reminder emails, download tracking
 - [ ] **Phase 20: Sharing, Analytics & Polish** - OG previews, QR codes, embeds, dark/light toggle, branded password page, background music, per-gallery analytics, gallery discovery
 
-#### Phase 15: Foundation Refactor & Data Model
+### Phase 15: Foundation Refactor & Data Model
 **Goal**: Gallery page architecture is decomposed into composable components and data model is hardened for visitor-scoped interactions and new layout types
 **Depends on**: v1.1 (complete) -- unified theme engine from Phase 10 carries forward
 **Requirements**: FNDN-01, FNDN-02, FNDN-03
@@ -156,7 +156,7 @@ Plans:
 - [ ] 15-01: TBD
 - [ ] 15-02: TBD
 
-#### Phase 16: Gallery Layout Engine & Progressive Loading
+### Phase 16: Gallery Layout Engine & Progressive Loading
 **Goal**: Public galleries render in multiple modern layout modes with progressive image loading for fast perceived performance
 **Depends on**: Phase 15
 **Requirements**: LYOT-01, LYOT-02, LYOT-03, LYOT-04, PROG-01
@@ -172,7 +172,7 @@ Plans:
 - [ ] 16-01: TBD
 - [ ] 16-02: TBD
 
-#### Phase 17: Gallery Player
+### Phase 17: Gallery Player
 **Goal**: Gallery visitors experience a premium fullscreen photo viewing experience with gestures, metadata, and filmstrip navigation
 **Depends on**: Phase 16 (LQIP pipeline feeds player progressive loading)
 **Requirements**: PLYR-01, PLYR-02, PLYR-03, PLYR-04
@@ -187,7 +187,7 @@ Plans:
 - [ ] 17-01: TBD
 - [ ] 17-02: TBD
 
-#### Phase 18: Client Interactions & Gallery UX
+### Phase 18: Client Interactions & Gallery UX
 **Goal**: Clients can interact with gallery photos (favorite, select, comment) and photographers have professional gallery management tools
 **Depends on**: Phase 17 (player overlay provides primary interaction surface)
 **Requirements**: INTR-01, INTR-02, INTR-03, INTR-04, GALUX-01, GALUX-02, GALUX-03, GALUX-04, GALUX-05
@@ -204,7 +204,7 @@ Plans:
 - [ ] 18-02: TBD
 - [ ] 18-03: TBD
 
-#### Phase 19: Downloads & Delivery
+### Phase 19: Downloads & Delivery
 **Goal**: Clients can download gallery photos in multiple formats with tracking, and galleries auto-expire with clear communication
 **Depends on**: Phase 18 (download favorites/selections depends on visitor-scoped selection data)
 **Requirements**: DWNL-01, DWNL-02, DWNL-03, DWNL-04
@@ -219,7 +219,7 @@ Plans:
 - [ ] 19-01: TBD
 - [ ] 19-02: TBD
 
-#### Phase 20: Sharing, Analytics & Polish
+### Phase 20: Sharing, Analytics & Polish
 **Goal**: Galleries are shareable with rich previews, photographers see per-gallery engagement data, and all gallery experiences are polished across themes and devices
 **Depends on**: Phase 19 (sharing/analytics layer sits on complete gallery feature set)
 **Requirements**: SHAR-01, SHAR-02, SHAR-03, SHAR-04, PROG-02, PROG-03, GANLT-01, GANLT-02, GANLT-03, GDISC-01, GDISC-02
@@ -248,7 +248,7 @@ Plans:
 - [ ] **Phase 23: Business Analytics & KPIs** - Conversion funnel, client lifecycle, revenue metrics, weekly digest emails
 - [ ] **Phase 24: Integration Ecosystem** - Email marketing sync, calendar booking, cloud import, Zapier/webhook triggers
 
-#### Phase 21: Onboarding & Feature Discovery
+### Phase 21: Onboarding & Feature Discovery
 **Goal**: New users reach their first "aha moment" (published gallery with photos) within 10 minutes of signup
 **Depends on**: v1.2 (complete)
 **Requirements**: ONBRD-01, ONBRD-02, ONBRD-03, ONBRD-04, FDISC-01, FDISC-02, FDISC-03
@@ -260,7 +260,7 @@ Plans:
   5. Help center search returns relevant articles for common queries (upload, share, client, billing)
 **Plans**: TBD
 
-#### Phase 22: Pricing & Monetization UX
+### Phase 22: Pricing & Monetization UX
 **Goal**: Users clearly understand plan differences and are guided toward upgrades at natural friction points
 **Depends on**: Phase 21 -- users must be activated before upgrade prompts have meaning
 **Requirements**: MONTZ-01, MONTZ-02, MONTZ-03, MONTZ-04
@@ -271,7 +271,7 @@ Plans:
   4. Upgrade flow shows clear before/after comparison between current plan and target plan
 **Plans**: TBD
 
-#### Phase 23: Business Analytics & KPIs
+### Phase 23: Business Analytics & KPIs
 **Goal**: Photographers have actionable business intelligence showing how their platform drives client engagement and revenue
 **Depends on**: Phase 22
 **Requirements**: BKPI-01, BKPI-02, BKPI-03, BKPI-04
@@ -282,7 +282,7 @@ Plans:
   4. Weekly email digest arrives with top 5 metrics, notable changes, and actionable suggestions
 **Plans**: TBD
 
-#### Phase 24: Integration Ecosystem
+### Phase 24: Integration Ecosystem
 **Goal**: RawDrive connects to photographers' existing tools, eliminating manual data entry and enabling automation
 **Depends on**: Phase 23
 **Requirements**: INTGR-01, INTGR-02, INTGR-03, INTGR-04
