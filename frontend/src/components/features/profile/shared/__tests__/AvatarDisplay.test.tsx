@@ -1,6 +1,10 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
 import { AvatarDisplay } from '../AvatarDisplay';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('AvatarDisplay', () => {
   it('renders img tag when avatarUrl is provided', () => {
@@ -43,18 +47,18 @@ describe('AvatarDisplay', () => {
   });
 
   it('size prop controls dimensions: sm=32px, md=64px, lg=128px', () => {
-    const { rerender } = render(<AvatarDisplay displayName="AB" size="sm" />);
-    let el = screen.getByText('AB');
+    const { rerender, container } = render(<AvatarDisplay displayName="AB" size="sm" />);
+    let el = container.querySelector('[data-testid="avatar-initials"]')!;
     expect(el.className).toContain('w-8');
     expect(el.className).toContain('h-8');
 
     rerender(<AvatarDisplay displayName="AB" size="md" />);
-    el = screen.getByText('AB');
+    el = container.querySelector('[data-testid="avatar-initials"]')!;
     expect(el.className).toContain('w-16');
     expect(el.className).toContain('h-16');
 
     rerender(<AvatarDisplay displayName="AB" size="lg" />);
-    el = screen.getByText('AB');
+    el = container.querySelector('[data-testid="avatar-initials"]')!;
     expect(el.className).toContain('w-32');
     expect(el.className).toContain('h-32');
   });
