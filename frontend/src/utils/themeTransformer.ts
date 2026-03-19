@@ -1,10 +1,12 @@
 /**
  * Theme Transformer Utility
  *
- * Transforms backend theme data into ProfileCard-compatible props.
- * Ensures consistent theme application between editor preview and public profile.
+ * @deprecated Legacy transformer -- public profiles now use UnifiedThemeEngine from
+ * components/features/profile/shared/UnifiedThemeEngine.ts.
+ * This file is kept as a stub for backward compatibility with editor components
+ * (CompanyProfileForm, ProfileCard, PublicProfileView) and integration tests.
  *
- * This is the single source of truth for theme data transformation.
+ * Transforms backend theme data into ProfileCard-compatible props.
  */
 
 import type { ThemeColors, ThemeTypography, ThemeLayout } from '@/components/features/profile/ProfileCard';

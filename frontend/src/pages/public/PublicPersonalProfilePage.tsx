@@ -2,7 +2,7 @@
  * PublicPersonalProfilePage
  *
  * Public page for viewing personal photographer profiles at /u/:slug.
- * NOW UPDATED to use the Bento Grid Design System.
+ * Uses the shared PublicProfileRenderer for unified rendering.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,19 +12,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 
 import { personalProfileService } from '../../services/personalProfileService';
 import type { PublicPersonalProfile } from '../../types/personalProfile';
-
-// New Design System Components
-import { getTheme } from '../../components/features/profile/ProfileThemeEngine';
-import { ProfileContainer } from '../../components/features/profile/ProfileContainer';
-import { ProfileHeader } from '../../components/features/profile/ProfileHeader';
-import { ProfileBio } from '../../components/features/profile/ProfileBio';
-import { ProfileContactGrid } from '../../components/features/profile/ProfileContactGrid';
-import { ProfileSocials } from '../../components/features/profile/ProfileSocials';
-import { ProfileGalleryPreview } from '../../components/features/profile/ProfileGalleryPreview';
-import { ProfileMediaEmbed } from '../../components/features/profile/ProfileMediaEmbed';
-import { ProfileActions } from '../../components/features/profile/ProfileActions';
-import { ProfileBentoGrid } from '../../components/features/profile/ProfileBentoGrid';
-import { ProfileGridItem } from '../../components/features/profile/ProfileGridItem';
+import { PublicProfileRenderer } from '../../components/features/profile/shared/PublicProfileRenderer';
 
 export function PublicPersonalProfilePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -66,48 +54,6 @@ export function PublicPersonalProfilePage() {
     });
   }, [slug, profile?.slug]); // Only re-track if slug changes
 
-  // Handle share
-  const handleShare = async () => {
-    if (!profile) return;
-
-    const shareData = {
-      title: profile.display_name || 'Profile',
-      text: profile.bio || `Check out ${profile.display_name}'s profile`,
-      url: profile.public_url,
-    };
-
-    if (navigator.share && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-      } catch {
-        // User cancelled or share failed
-      }
-    } else {
-      await navigator.clipboard.writeText(profile.public_url);
-      alert('Link copied to clipboard!');
-    }
-  };
-
-  const handleDownloadVCard = () => {
-    if (profile) {
-      window.location.href = personalProfileService.getVCardUrl(profile.slug);
-    }
-  };
-
-  const handleDownloadQr = () => {
-    // Logic to download as image or open modal (simplifying to new window for now or we can reimplement modal)
-    // The previous implementation had a modal. For "ProfileActions", we might want a modal handling at this level.
-    // For now, let's just open the image in new tab to force download
-    if (profile) {
-      const link = document.createElement('a');
-      link.href = personalProfileService.getQrCodeUrl(profile.slug);
-      link.download = `${profile.slug}-qr.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
   // Loading state
   if (loading) {
     return (
@@ -131,10 +77,6 @@ export function PublicPersonalProfilePage() {
       </div>
     );
   }
-
-  // ... (keeping imports and state logic same until the return)
-  const theme = getTheme(profile.background_theme);
-  const brandColor = '#3B82F6';
 
   // SEO metadata
   const seoTitle = profile.seo_metadata?.meta_title || profile.display_name || 'Profile';
@@ -174,84 +116,11 @@ export function PublicPersonalProfilePage() {
         )}
       </Helmet>
 
-      <ProfileContainer theme={theme} brandColor={brandColor}>
-
-        {/* Bento Grid Layout */}
-        <ProfileBentoGrid>
-          {/* Header: Full Width */}
-          <ProfileGridItem theme={theme} colSpan="full" className="p-0 bg-transparent shadow-none border-none">
-            <ProfileHeader
-              theme={theme}
-              displayName={profile.display_name || 'Photographer'}
-              profileTitle={profile.profile_title}
-              avatarUrl={profile.avatar_url}
-              location={profile.location}
-              isVerified={profile.is_verified}
-              badges={profile.badges}
-              brandColor={brandColor}
-            />
-          </ProfileGridItem>
-
-          {/* Main Content Row: Bio + Socials */}
-          {profile.bio && (
-            <ProfileGridItem theme={theme} colSpan={2} rowSpan={1} className="p-6 flex flex-col justify-center">
-              <ProfileBio theme={theme} bio={profile.bio} />
-            </ProfileGridItem>
-          )}
-
-          {profile.socials && Object.keys(profile.socials).length > 0 && (
-            <ProfileGridItem theme={theme} colSpan={2} className="p-6 flex items-center justify-center">
-              <ProfileSocials theme={theme} socials={profile.socials} />
-            </ProfileGridItem>
-          )}
-
-          {/* Featured Section: Gallery (Prominent) */}
-          {profile.featured_gallery && (
-            <ProfileGridItem theme={theme} colSpan={2} rowSpan={2} className="p-0 overflow-hidden relative group cursor-pointer">
-              <ProfileGalleryPreview theme={theme} gallery={profile.featured_gallery} />
-            </ProfileGridItem>
-          )}
-
-          {/* Embedded Media (TikTok/Spotify) */}
-          {profile.embedded_media && (
-            <ProfileGridItem theme={theme} colSpan={2} rowSpan={1} className="p-0 overflow-hidden">
-              <ProfileMediaEmbed theme={theme} media={profile.embedded_media} />
-            </ProfileGridItem>
-          )}
-
-          {/* Contact & Links Grid - Spanning remaining space */}
-          <ProfileGridItem theme={theme} colSpan={2} className="p-6">
-            <ProfileContactGrid
-              theme={theme}
-              email={profile.email}
-              phone={profile.phone}
-              website={profile.website}
-              bookingUrl={profile.booking_calendar_url}
-              customLinks={profile.custom_links}
-              brandColor={brandColor}
-            />
-          </ProfileGridItem>
-
-        </ProfileBentoGrid>
-
-        {/* Footer actions / Floating actions */}
-        <div className="mt-8 mb-24 flex justify-center w-full">
-          <ProfileActions
-            theme={theme}
-            slug={profile.slug}
-            showVCard={profile.show_vcard}
-            showQrCode={profile.show_qr_code}
-            onShare={handleShare}
-            onDownloadVCard={handleDownloadVCard}
-            onDownloadQr={handleDownloadQr}
-          />
-        </div>
-
-        <div className={`text-center text-xs opacity-40 pb-12 ${theme.colors.text}`}>
-          <p>Powered by RawDrive</p>
-        </div>
-
-      </ProfileContainer>
+      <PublicProfileRenderer
+        profileData={profile as unknown as Record<string, unknown>}
+        profileType="personal"
+        themeId={profile.background_theme}
+      />
     </>
   );
 }

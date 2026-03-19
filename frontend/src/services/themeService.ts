@@ -1,9 +1,12 @@
 /**
  * Theme Service
  *
- * Frontend service for managing themes in the Public Profile Editor.
- * Provides theme listing, filtering, selection, and application functionality.
+ * @deprecated Legacy service -- public profiles now use UnifiedThemeEngine from
+ * components/features/profile/shared/UnifiedThemeEngine.ts.
+ * This file is kept as a stub for backward compatibility with editor hooks
+ * (useThemePreview, useThemeEditor) and CompanyProfileForm.
  *
+ * Frontend service for managing themes in the Public Profile Editor.
  * Requirements: 3.1, 3.3, 3.4, 3.7
  */
 
