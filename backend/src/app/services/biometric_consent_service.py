@@ -208,6 +208,22 @@ class BiometricConsentService:
             and settings.consent_status == BiometricConsentStatus.GRANTED
         )
 
+    async def check_consent_status(self, workspace_id: UUID) -> BiometricConsentStatus:
+        """Return the current biometric consent status for a workspace.
+
+        This is the lightweight status-only check used by background workers
+        before processing face data. Unlike is_face_detection_allowed(), this
+        returns the raw status enum instead of a bool.
+
+        Args:
+            workspace_id: The workspace ID
+
+        Returns:
+            BiometricConsentStatus enum value
+        """
+        settings = await self.get_settings(workspace_id)
+        return settings.consent_status
+
     async def check_consent_or_raise(self, workspace_id: UUID) -> None:
         """Check consent and raise if not granted.
 

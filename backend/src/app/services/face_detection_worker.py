@@ -31,6 +31,11 @@ from app.services.face_configuration_service import (
     FaceConfigurationService,
     get_face_configuration_service,
 )
+from app.services.biometric_consent_service import (
+    BiometricConsentService,
+    get_biometric_consent_service,
+)
+from app.models.workspace_biometric_settings import BiometricConsentStatus
 from app.services.r2_storage_service import get_r2_storage_service
 from app.services.task_queue import register_task_handler
 from app.api.face_schemas import FaceDetectionJobStatus
@@ -280,14 +285,29 @@ class FaceDetectionWorker:
     
     async def _process_job(self, job: dict[str, Any]) -> None:
         """Process a single detection job.
-        
+
         Args:
             job: Job record from database
         """
         job_id = job["id"]
         photo_id = job["photo_id"]
         workspace_id = job["workspace_id"]
-        
+
+        # Check biometric consent before processing
+        consent_service = get_biometric_consent_service()
+        consent_status = await consent_service.check_consent_status(workspace_id)
+        if consent_status != BiometricConsentStatus.GRANTED:
+            logger.warning(
+                "Skipping face job — consent not granted",
+                extra={
+                    "job_id": str(job_id),
+                    "workspace_id": str(workspace_id),
+                    "consent_status": consent_status.value,
+                },
+            )
+            await self._handle_job_skipped(job, reason=f"consent_{consent_status.value}")
+            return
+
         logger.info(
             "Processing detection job",
             extra={
@@ -296,7 +316,7 @@ class FaceDetectionWorker:
                 "retry_count": job.get("retry_count", 0),
             },
         )
-        
+
         # Fetch photo to get storage key
         photo = await self._get_photo(photo_id, workspace_id)
         if not photo:
@@ -392,6 +412,40 @@ class FaceDetectionWorker:
             },
         )
     
+    async def _handle_job_skipped(
+        self,
+        job: dict[str, Any],
+        reason: str,
+    ) -> None:
+        """Handle a skipped job (e.g. consent not granted).
+
+        Sets job status to 'skipped' with reason in error_message field.
+
+        Args:
+            job: The job record
+            reason: Human-readable skip reason
+        """
+        job_id = job["id"]
+        try:
+            pool = await get_postgres_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE face_detection_jobs
+                    SET status = 'skipped',
+                        error_message = $2,
+                        completed_at = NOW()
+                    WHERE id = $1
+                    """,
+                    job_id,
+                    f"Skipped: {reason}",
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to mark job as skipped",
+                extra={"job_id": str(job_id), "error": str(e)},
+            )
+
     async def _handle_job_failure(
         self,
         job: dict[str, Any],
