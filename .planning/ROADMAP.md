@@ -315,7 +315,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
-| 15. Foundation Refactor & Data Model | 3/3 | Complete   | 2026-03-19 | - |
+| 15. Foundation Refactor & Data Model | 3/3 | Complete    | 2026-03-19 | - |
 | 16. Gallery Layout Engine & Progressive Loading | v1.2 | 0/? | Not started | - |
 | 17. Gallery Player | v1.2 | 0/? | Not started | - |
 | 18. Client Interactions & Gallery UX | v1.2 | 0/? | Not started | - |
