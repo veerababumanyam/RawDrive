@@ -29,7 +29,10 @@ export const GlassContainer: React.FC<GlassContainerProps> = ({
         transition-colors duration-300
         ${className}
       `}
-      style={themeGradient ? { background: themeGradient } : undefined}
+      style={{
+        colorScheme: 'light dark',
+        ...(themeGradient ? { background: themeGradient } : {}),
+      }}
     >
       {/* Animated Background Orbs - Theme aware with mobile optimization */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">

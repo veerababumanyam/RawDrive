@@ -6,12 +6,15 @@
  * from SectionRegistry inside a BentoGrid layout.
  */
 
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { resolveThemeTokens, applyThemeToContainer, removeThemeFromContainer } from './UnifiedThemeEngine';
+import type { ThemeTokens } from './UnifiedThemeEngine';
 import { getSectionsForProfile, type ProfileType } from './SectionRegistry';
 import { ProfileBentoGrid } from '../ProfileBentoGrid';
 import { ProfileGridItem } from '../ProfileGridItem';
 import { getTheme } from '../ProfileThemeEngine';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { AnimatedBackgroundRenderer, type AnimationType } from '../public/animations/AnimatedBackgroundRenderer';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,15 +49,20 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
     return profileData;
   }, [profileData, profileType]);
 
-  // Detect dark mode preference
-  const prefersDark = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }, []);
+  // Reactive dark mode detection
+  const colorScheme = useColorScheme();
+  const prefersDark = colorScheme === 'dark';
+
+  // Resolve theme tokens (reactive to theme + dark mode changes)
+  const tokens: ThemeTokens = useMemo(
+    () => resolveThemeTokens(themeId ?? '', prefersDark),
+    [themeId, prefersDark],
+  );
+
+  const animationType = (tokens['--theme-animation-type'] ?? 'gradient-shift') as AnimationType;
 
   // Apply theme on mount, clean up on unmount
   useEffect(() => {
-    const tokens = resolveThemeTokens(themeId ?? '', prefersDark);
     const el = wrapperRef.current;
     if (el) {
       applyThemeToContainer(tokens, el);
@@ -65,7 +73,7 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
         removeThemeFromContainer(el);
       }
     };
-  }, [themeId, prefersDark]);
+  }, [tokens]);
 
   // Get applicable sections
   const sections = useMemo(
@@ -87,27 +95,29 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
         fontFamily: 'var(--theme-font-body)',
       }}
     >
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <ProfileBentoGrid>
-          {sections.map((section) => {
-            const SectionComponent = section.component;
-            const colSpan = section.gridSpan?.cols ?? 4;
-            return (
-              <ProfileGridItem
-                key={section.id}
-                theme={legacyTheme}
-                colSpan={colSpan as 1 | 2 | 3 | 4}
-                rowSpan={(section.gridSpan?.rows ?? 1) as 1 | 2}
-              >
-                <SectionComponent
-                  profileData={normalizedData}
-                  profileType={profileType}
-                />
-              </ProfileGridItem>
-            );
-          })}
-        </ProfileBentoGrid>
-      </div>
+      <AnimatedBackgroundRenderer animationType={animationType} themeTokens={tokens}>
+        <div className="max-w-5xl mx-auto py-8 px-4">
+          <ProfileBentoGrid>
+            {sections.map((section) => {
+              const SectionComponent = section.component;
+              const colSpan = section.gridSpan?.cols ?? 4;
+              return (
+                <ProfileGridItem
+                  key={section.id}
+                  theme={legacyTheme}
+                  colSpan={colSpan as 1 | 2 | 3 | 4}
+                  rowSpan={(section.gridSpan?.rows ?? 1) as 1 | 2}
+                >
+                  <SectionComponent
+                    profileData={normalizedData}
+                    profileType={profileType}
+                  />
+                </ProfileGridItem>
+              );
+            })}
+          </ProfileBentoGrid>
+        </div>
+      </AnimatedBackgroundRenderer>
     </div>
   );
 };

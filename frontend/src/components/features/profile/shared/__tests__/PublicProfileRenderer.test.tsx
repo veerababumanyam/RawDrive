@@ -14,6 +14,7 @@ vi.mock('framer-motion', () => ({
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  useReducedMotion: () => false,
 }));
 
 // Mock UnifiedThemeEngine
@@ -32,6 +33,7 @@ const mockResolveThemeTokens = vi.fn().mockReturnValue({
   '--theme-radius': '1rem',
   '--theme-shadow': '0 4px 6px -1px rgba(0,0,0,0.1)',
   '--theme-gradient': 'linear-gradient(180deg, #FFFFFF, #FAFAFA)',
+  '--theme-animation-type': 'gradient-shift',
 });
 
 vi.mock('../UnifiedThemeEngine', () => ({

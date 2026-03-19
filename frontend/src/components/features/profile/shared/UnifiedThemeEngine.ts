@@ -29,6 +29,7 @@ export interface ThemeTokens {
   '--theme-radius': string;
   '--theme-shadow': string;
   '--theme-gradient': string;
+  '--theme-animation-type': string;
 }
 
 // All CSS variable keys used by the theme engine
@@ -45,6 +46,7 @@ const THEME_CSS_KEYS: (keyof ThemeTokens)[] = [
   '--theme-radius',
   '--theme-shadow',
   '--theme-gradient',
+  '--theme-animation-type',
 ];
 
 // ---------------------------------------------------------------------------
@@ -153,6 +155,7 @@ export function resolveThemeTokens(themeId: string, prefersDark: boolean): Theme
     '--theme-radius': radius,
     '--theme-shadow': shadow,
     '--theme-gradient': gradient,
+    '--theme-animation-type': theme.animation_type ?? 'gradient-shift',
   };
 }
 

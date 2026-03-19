@@ -24,6 +24,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-clean-slate',
     name: 'Clean Slate',
     category: 'minimal',
+    animation_type: 'gradient-shift',
     description: 'A refined, minimalist design with ample white space and subtle accents. Perfect for photographers who want their work to speak for itself.',
     preview_image_url: '/themes/previews/clean-slate.webp',
     base_colors: {
@@ -98,6 +99,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-vivid-impact',
     name: 'Vivid Impact',
     category: 'bold',
+    animation_type: 'wave',
     description: 'Make a statement with bold colors and strong typography. Ideal for creative professionals who want to stand out.',
     preview_image_url: '/themes/previews/vivid-impact.webp',
     base_colors: {
@@ -183,6 +185,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-golden-hour',
     name: 'Golden Hour',
     category: 'elegant',
+    animation_type: 'gradient-shift',
     description: 'Sophisticated design with gold accents and serif typography. Perfect for wedding and portrait photographers seeking a premium feel.',
     preview_image_url: '/themes/previews/golden-hour.webp',
     base_colors: {
@@ -269,6 +272,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-tech-forward',
     name: 'Tech Forward',
     category: 'modern',
+    animation_type: 'particles',
     description: 'A sleek, contemporary design with cool tones and geometric elements. Ideal for commercial and corporate photography.',
     preview_image_url: '/themes/previews/tech-forward.webp',
     base_colors: {
@@ -349,6 +353,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-aurora-dreams',
     name: 'Aurora Dreams',
     category: 'creative',
+    animation_type: 'aurora',
     description: 'An artistic theme with vibrant gradients and expressive typography. Perfect for avant-garde and fine art photographers.',
     preview_image_url: '/themes/previews/aurora-dreams.webp',
     base_colors: {
@@ -440,6 +445,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-monochrome',
     name: 'Monochrome',
     category: 'minimal',
+    animation_type: 'gradient-shift',
     description: 'Pure black and white design that puts all focus on your photography. Timeless and universally appealing.',
     preview_image_url: '/themes/previews/monochrome.webp',
     base_colors: {
@@ -506,6 +512,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-ocean-breeze',
     name: 'Ocean Breeze',
     category: 'gradient',
+    animation_type: 'wave',
     description: 'Calming ocean-inspired gradient with teal and blue tones. Evokes tranquility and professionalism.',
     preview_image_url: '/themes/previews/ocean-breeze.webp',
     base_colors: {
@@ -580,6 +587,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-lavender-haze',
     name: 'Lavender Haze',
     category: 'gradient',
+    animation_type: 'particles',
     description: 'Soft purple gradient with dreamy, ethereal vibes. Perfect for creative and artistic profiles.',
     preview_image_url: '/themes/previews/lavender-haze.webp',
     base_colors: {
@@ -654,6 +662,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-sunset-glow',
     name: 'Sunset Glow',
     category: 'gradient',
+    animation_type: 'gradient-shift',
     description: 'Warm sunset gradient transitioning from coral to gold. Energetic and inviting.',
     preview_image_url: '/themes/previews/sunset-glow.webp',
     base_colors: {
@@ -728,6 +737,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-forest-mist',
     name: 'Forest Mist',
     category: 'gradient',
+    animation_type: 'particles',
     description: 'Natural green gradient inspired by forest landscapes. Calming and organic.',
     preview_image_url: '/themes/previews/forest-mist.webp',
     base_colors: {
@@ -802,6 +812,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-midnight-noir',
     name: 'Midnight Noir',
     category: 'dark',
+    animation_type: 'aurora',
     description: 'Deep dark theme with subtle blue undertones. Perfect for dramatic, cinematic portfolios.',
     preview_image_url: '/themes/previews/midnight-noir.webp',
     base_colors: {
@@ -868,6 +879,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-carbon-pro',
     name: 'Carbon Pro',
     category: 'dark',
+    animation_type: 'aurora',
     description: 'Sleek carbon-inspired dark theme. High contrast for maximum readability and impact.',
     preview_image_url: '/themes/previews/carbon-pro.webp',
     base_colors: {
@@ -934,6 +946,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-earth-tones',
     name: 'Earth Tones',
     category: 'nature',
+    animation_type: 'particles',
     description: 'Warm, grounded color palette inspired by natural earth. Authentic and approachable.',
     preview_image_url: '/themes/previews/earth-tones.webp',
     base_colors: {
@@ -1000,6 +1013,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-rose-gold',
     name: 'Rose Gold',
     category: 'elegant',
+    animation_type: 'gradient-shift',
     description: 'Sophisticated rose gold accents with blush tones. Luxurious and feminine.',
     preview_image_url: '/themes/previews/rose-gold.webp',
     base_colors: {
@@ -1074,6 +1088,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-electric-pop',
     name: 'Electric Pop',
     category: 'bold',
+    animation_type: 'wave',
     description: 'High-energy electric colors that demand attention. For those who want to stand out.',
     preview_image_url: '/themes/previews/electric-pop.webp',
     base_colors: {
@@ -1148,6 +1163,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-paper-white',
     name: 'Paper White',
     category: 'minimal',
+    animation_type: 'gradient-shift',
     description: 'Ultra-clean white design with subtle shadows. Maximum focus on content.',
     preview_image_url: '/themes/previews/paper-white.webp',
     base_colors: {
@@ -1214,6 +1230,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-slate-pro',
     name: 'Slate Pro',
     category: 'modern',
+    animation_type: 'particles',
     description: 'Professional slate gray palette. Clean and corporate-friendly.',
     preview_image_url: '/themes/previews/slate-pro.webp',
     base_colors: {
@@ -1280,6 +1297,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-cosmic-purple',
     name: 'Cosmic Purple',
     category: 'creative',
+    animation_type: 'aurora',
     description: 'Deep cosmic purples with stellar accents. For creative visionaries.',
     preview_image_url: '/themes/previews/cosmic-purple.webp',
     base_colors: {
@@ -1354,6 +1372,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-champagne',
     name: 'Champagne',
     category: 'elegant',
+    animation_type: 'gradient-shift',
     description: 'Luxurious champagne and cream tones. Celebratory and refined.',
     preview_image_url: '/themes/previews/champagne.webp',
     base_colors: {
@@ -1420,6 +1439,7 @@ export const PREBUILT_THEMES: Theme[] = [
     theme_id: 'theme-sky-blue',
     name: 'Sky Blue',
     category: 'nature',
+    animation_type: 'wave',
     description: 'Clear sky blues evoking openness and trust. Fresh and optimistic.',
     preview_image_url: '/themes/previews/sky-blue.webp',
     base_colors: {

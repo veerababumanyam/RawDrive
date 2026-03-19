@@ -110,6 +110,9 @@ export interface Theme {
   supports_dark_mode: boolean;
   variants?: ThemeVariant[];
 
+  /** Background animation style for public profile page */
+  animation_type?: 'gradient-shift' | 'particles' | 'wave' | 'aurora' | 'none';
+
   created_at: string;
   updated_at: string;
 }
