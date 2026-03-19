@@ -4,8 +4,8 @@
 
 - [x] **v1.0 MVP** - Phases 01-09 (shipped 2026-03-19)
 - [ ] **v1.1 Profile & Public Page Modernization** - Phases 10-14 (in progress)
-- [ ] **v1.2 Public Gallery & Gallery Player Modernization** - Phases 15-18 (planned)
-- [ ] **v1.3 Monetization, Onboarding & Growth** - Phases 19-22 (planned)
+- [ ] **v1.2 Public Gallery & Gallery Player Modernization** - Phases 15-20 (planned)
+- [ ] **v1.3 Monetization, Onboarding & Growth** - Phases 21-24 (planned)
 
 ## Phases
 
@@ -129,79 +129,126 @@ Plans:
 
 ### v1.2 Public Gallery & Gallery Player Modernization
 
-**Milestone Goal:** Research competitor platforms and modernize the public gallery viewing experience -- layouts, lightbox, client interactions, downloads, and per-gallery analytics.
+**Milestone Goal:** Research competitor platforms and modernize the public gallery viewing experience -- layouts, lightbox, client interactions, downloads, sharing, per-gallery analytics, and gallery UX polish to match or exceed Pixieset, ShootProof, Pic-Time, SmugMug, Zenfolio, Pass, and Narrative.
 
 **Phase Numbering:**
-- Integer phases (15, 16, 17, 18): Planned v1.2 work
+- Integer phases (15, 16, 17, 18, 19, 20): Planned v1.2 work
 - Decimal phases (15.1, 16.1): Urgent insertions if needed
 
-- [ ] **Phase 15: Gallery Research & Foundation** - Benchmark against Pixieset/ShootProof/Pic-Time/SmugMug, audit current gallery code, define design system tokens for gallery views
-- [ ] **Phase 16: Gallery Layouts & Lightbox** - Modern layout engine (masonry, grid, justified, filmstrip), fullscreen lightbox with zoom/pan/EXIF, LQIP progressive loading
-- [ ] **Phase 17: Client Interaction & Delivery** - Favorites/selections workflow, download flows (single/batch/full), password protection UX, gallery comments/proofing, bulk actions toolbar (GALUX-02), settings presets (GALUX-03), sub-gallery permissions (GALUX-05)
-- [ ] **Phase 18: Gallery Analytics & Polish** - Per-gallery engagement metrics (GANLT-01/02/03), gallery discovery ranking (GDISC-01/02), AI tool tooltips (GALUX-01), AI processing status UX (GALUX-04), sharing OG previews, dark/light themes, performance budget
+- [ ] **Phase 15: Foundation Refactor & Data Model** - Decompose PublicGalleryPage monolith, visitor-scoped proofing table, LayoutStyle enum sync, shared lightbox hooks
+- [ ] **Phase 16: Gallery Layout Engine & Progressive Loading** - Justified, mosaic, enhanced masonry layouts, layout switcher, LQIP blur-up pipeline
+- [ ] **Phase 17: Gallery Player** - Fullscreen lightbox with zoom/pan/swipe, EXIF overlay, filmstrip navigation, mobile touch gestures
+- [ ] **Phase 18: Client Interactions & Gallery UX** - Favorites, selections with quotas, comments, WebSocket sync, AI tooltips, bulk actions, settings presets, sub-gallery permissions
+- [ ] **Phase 19: Downloads & Delivery** - Batch ZIP downloads, size options, gallery expiration with reminder emails, download tracking
+- [ ] **Phase 20: Sharing, Analytics & Polish** - OG previews, QR codes, embeds, dark/light toggle, branded password page, background music, per-gallery analytics, gallery discovery
 
-#### Phase 15: Gallery Research & Foundation
-**Goal**: Current gallery codebase is audited, competitor benchmarks documented, and shared design tokens established for gallery views
+#### Phase 15: Foundation Refactor & Data Model
+**Goal**: Gallery page architecture is decomposed into composable components and data model is hardened for visitor-scoped interactions and new layout types
 **Depends on**: v1.1 (complete) -- unified theme engine from Phase 10 carries forward
-**Requirements**: Research-only phase (no specific requirements -- feeds Phases 16-18)
+**Requirements**: FNDN-01, FNDN-02, FNDN-03
 **Success Criteria** (what must be TRUE):
-  1. Competitive analysis document covers all 7 target platforms with feature matrix and screenshot references
-  2. Current gallery code audit identifies all technical debt, broken features, and modernization targets
-  3. Gallery design tokens (colors, spacing, typography, animation) are defined and integrated with UnifiedThemeEngine
+  1. PublicGalleryPage renders identically to before but is composed of PublicGalleryShell + React Contexts (GalleryThemeContext, GalleryInteractionContext, GalleryPlayerContext) -- no 800-line monolith remains
+  2. Two different clients visiting the same gallery see independent favorites and selections (visitor-scoped proofing via gallery_visitor_actions table)
+  3. Adding a new LayoutStyle value in shared-types automatically appears in backend models and gallery-service schemas without manual sync (enum round-trip test passes)
 **Plans**: TBD
 
-#### Phase 16: Gallery Layouts & Lightbox
-**Goal**: Public galleries render in modern layout modes with a premium fullscreen viewing experience
+Plans:
+- [ ] 15-01: TBD
+- [ ] 15-02: TBD
+
+#### Phase 16: Gallery Layout Engine & Progressive Loading
+**Goal**: Public galleries render in multiple modern layout modes with progressive image loading for fast perceived performance
 **Depends on**: Phase 15
-**Requirements**: Gallery layouts, lightbox, LQIP (from v1.2 PROJECT.md scope)
+**Requirements**: LYOT-01, LYOT-02, LYOT-03, LYOT-04, PROG-01
 **Success Criteria** (what must be TRUE):
-  1. Gallery owner selects layout mode (masonry, grid, justified, filmstrip) and public gallery renders correctly on all devices
-  2. Visitor clicks a photo and enters fullscreen lightbox with smooth zoom, pan, swipe navigation, and EXIF display
-  3. Photos load with LQIP blur-up placeholder, replacing with full resolution progressively
-  4. Keyboard navigation (arrow keys, escape) works in lightbox across desktop browsers
+  1. Gallery owner selects justified layout and public gallery renders photos in uniform-height rows with aspect-ratio-aware balancing on all screen sizes
+  2. Gallery owner selects mosaic layout and public gallery renders photos in varied tile sizes creating a magazine-style grid
+  3. Existing masonry layout renders with improved column balancing and responsive breakpoints across mobile, tablet, and desktop
+  4. Gallery visitor can toggle between available layouts via a layout switcher UI without page reload
+  5. All gallery images load with a blurred LQIP placeholder that transitions smoothly to full resolution as the image downloads
 **Plans**: TBD
 
-#### Phase 17: Client Interaction & Delivery
-**Goal**: Clients can interact with galleries (favorites, comments, downloads) through polished, branded experiences with professional bulk workflows
-**Depends on**: Phase 16
-**Requirements**: Client favorites, downloads, password protection, comments (from v1.2 PROJECT.md scope), GALUX-02, GALUX-03, GALUX-05
+Plans:
+- [ ] 16-01: TBD
+- [ ] 16-02: TBD
+
+#### Phase 17: Gallery Player
+**Goal**: Gallery visitors experience a premium fullscreen photo viewing experience with gestures, metadata, and filmstrip navigation
+**Depends on**: Phase 16 (LQIP pipeline feeds player progressive loading)
+**Requirements**: PLYR-01, PLYR-02, PLYR-03, PLYR-04
 **Success Criteria** (what must be TRUE):
-  1. Client marks photos as favorites within a public gallery and photographer sees the selection list in their dashboard
-  2. Client downloads single photo, batch selection, or full gallery with progress indicator and completion notification
-  3. Password-protected gallery shows branded entry page with clear instructions
-  4. Gallery expiration date displays prominently with countdown and download reminder
-  5. Multi-select activates visible bulk action toolbar with batch edit, tag, download, and delete operations
-  6. Gallery settings offer one-click presets (Proofing, Delivery, Sharing, Premium Delivery) configuring access+downloads+watermark
-  7. Sub-gallery permissions show clear inheritance indicator with per-sub-gallery override option
+  1. Visitor clicks a photo in the gallery and enters a fullscreen lightbox with smooth zoom (scroll/pinch), pan (drag), and swipe-to-navigate between photos
+  2. Visitor taps an info button in the player and sees EXIF data (aperture, shutter speed, ISO, lens) overlaid on the current photo
+  3. Visitor sees a filmstrip thumbnail strip at the bottom of the player and can click any thumbnail to jump to that photo
+  4. Mobile visitor can pinch-to-zoom, swipe left/right to navigate, and double-tap to toggle zoom on any photo in the player
 **Plans**: TBD
 
-#### Phase 18: Gallery Analytics & Polish
-**Goal**: Gallery owners see per-gallery engagement metrics, AI tools are discoverable, and all galleries meet performance and SEO targets
-**Depends on**: Phase 17
-**Requirements**: GANLT-01, GANLT-02, GANLT-03, GDISC-01, GDISC-02, GALUX-01, GALUX-04
+Plans:
+- [ ] 17-01: TBD
+- [ ] 17-02: TBD
+
+#### Phase 18: Client Interactions & Gallery UX
+**Goal**: Clients can interact with gallery photos (favorite, select, comment) and photographers have professional gallery management tools
+**Depends on**: Phase 17 (player overlay provides primary interaction surface)
+**Requirements**: INTR-01, INTR-02, INTR-03, INTR-04, GALUX-01, GALUX-02, GALUX-03, GALUX-04, GALUX-05
 **Success Criteria** (what must be TRUE):
-  1. Gallery detail page shows views, unique visitors, avg. time spent, and device/geo breakdown
-  2. Download tracking shows per-photo download counts, batch vs single breakdown, and total bandwidth
-  3. Gallery list supports filtering by date range, status, client, and tags simultaneously
-  4. Gallery ranking view shows galleries ordered by engagement rate (most viewed, most downloaded)
-  5. Public gallery pages include OG meta tags and render correctly in link previews
-  6. Every AI tool in gallery toolbar shows tooltip with description on hover and link to help docs
-  7. AI processing shows progress bar with estimated completion and per-photo status (no generic "failed" messages)
+  1. Client clicks a heart icon on any photo in the public gallery and the favorite persists across page reloads (visitor-scoped)
+  2. Photographer sets a selection quota (e.g., "pick 50") and client sees a progress counter showing selected count vs allowed maximum
+  3. Client leaves a comment on a photo during proofing and photographer sees the comment in their dashboard in real-time via WebSocket
+  4. Each AI tool in the gallery toolbar shows a tooltip with 1-2 sentence description on hover explaining what it does
+  5. Multi-selecting photos activates a visible bulk action toolbar with batch edit, tag, download, and delete operations
 **Plans**: TBD
+
+Plans:
+- [ ] 18-01: TBD
+- [ ] 18-02: TBD
+- [ ] 18-03: TBD
+
+#### Phase 19: Downloads & Delivery
+**Goal**: Clients can download gallery photos in multiple formats with tracking, and galleries auto-expire with clear communication
+**Depends on**: Phase 18 (download favorites/selections depends on visitor-scoped selection data)
+**Requirements**: DWNL-01, DWNL-02, DWNL-03, DWNL-04
+**Success Criteria** (what must be TRUE):
+  1. Client clicks "Download All" or selects specific photos and downloads a ZIP file with a visible progress bar showing percentage complete
+  2. Client can choose between web, print, and original download sizes as permitted by the photographer's download policy for that gallery
+  3. Gallery with an expiration date shows a countdown to the client, and reminder emails are sent automatically before the deadline
+  4. Photographer opens gallery settings and sees a download log showing who downloaded which photos and when
+**Plans**: TBD
+
+Plans:
+- [ ] 19-01: TBD
+- [ ] 19-02: TBD
+
+#### Phase 20: Sharing, Analytics & Polish
+**Goal**: Galleries are shareable with rich previews, photographers see per-gallery engagement data, and all gallery experiences are polished across themes and devices
+**Depends on**: Phase 19 (sharing/analytics layer sits on complete gallery feature set)
+**Requirements**: SHAR-01, SHAR-02, SHAR-03, SHAR-04, PROG-02, PROG-03, GANLT-01, GANLT-02, GANLT-03, GDISC-01, GDISC-02
+**Success Criteria** (what must be TRUE):
+  1. Sharing a gallery link on social media (Facebook, Twitter, iMessage) displays a rich preview with gallery cover photo, title, and photographer name
+  2. Photographer generates a QR code for a gallery and scanning it on a phone opens the gallery directly
+  3. Photographer copies an embed code and pastes it into their website, rendering a functional gallery widget in an iframe
+  4. Gallery viewer toggles between dark and light mode and the entire gallery UI updates consistently (backgrounds, text, controls)
+  5. Password-protected gallery shows a custom-branded entry page with photographer's logo, colors, and optional message before granting access
+**Plans**: TBD
+
+Plans:
+- [ ] 20-01: TBD
+- [ ] 20-02: TBD
+- [ ] 20-03: TBD
 
 ### v1.3 Monetization, Onboarding & Growth
 
 **Milestone Goal:** Transform RawDrive from feature-complete tool into growth-ready business -- pricing transparency, guided onboarding, business analytics, third-party integrations, and feature discovery.
 
 **Phase Numbering:**
-- Integer phases (19, 20, 21, 22): Planned v1.3 work
+- Integer phases (21, 22, 23, 24): Planned v1.3 work
 
-- [ ] **Phase 19: Onboarding & Feature Discovery** - Guided wizard, adaptive next-steps dashboard, interactive tooltips, help center, video walkthroughs
-- [ ] **Phase 20: Pricing & Monetization UX** - Tier comparison page, contextual upgrade prompts, trial management, premium feature gating
-- [ ] **Phase 21: Business Analytics & KPIs** - Conversion funnel, client lifecycle, revenue metrics, weekly digest emails
-- [ ] **Phase 22: Integration Ecosystem** - Email marketing sync, calendar booking, cloud import, Zapier/webhook triggers
+- [ ] **Phase 21: Onboarding & Feature Discovery** - Guided wizard, adaptive next-steps dashboard, interactive tooltips, help center, video walkthroughs
+- [ ] **Phase 22: Pricing & Monetization UX** - Tier comparison page, contextual upgrade prompts, trial management, premium feature gating
+- [ ] **Phase 23: Business Analytics & KPIs** - Conversion funnel, client lifecycle, revenue metrics, weekly digest emails
+- [ ] **Phase 24: Integration Ecosystem** - Email marketing sync, calendar booking, cloud import, Zapier/webhook triggers
 
-#### Phase 19: Onboarding & Feature Discovery
+#### Phase 21: Onboarding & Feature Discovery
 **Goal**: New users reach their first "aha moment" (published gallery with photos) within 10 minutes of signup
 **Depends on**: v1.2 (complete)
 **Requirements**: ONBRD-01, ONBRD-02, ONBRD-03, ONBRD-04, FDISC-01, FDISC-02, FDISC-03
@@ -213,9 +260,9 @@ Plans:
   5. Help center search returns relevant articles for common queries (upload, share, client, billing)
 **Plans**: TBD
 
-#### Phase 20: Pricing & Monetization UX
+#### Phase 22: Pricing & Monetization UX
 **Goal**: Users clearly understand plan differences and are guided toward upgrades at natural friction points
-**Depends on**: Phase 19 -- users must be activated before upgrade prompts have meaning
+**Depends on**: Phase 21 -- users must be activated before upgrade prompts have meaning
 **Requirements**: MONTZ-01, MONTZ-02, MONTZ-03, MONTZ-04
 **Success Criteria** (what must be TRUE):
   1. Public pricing page displays all plan tiers with feature matrix, storage limits, AI credits, and gallery counts
@@ -224,9 +271,9 @@ Plans:
   4. Upgrade flow shows clear before/after comparison between current plan and target plan
 **Plans**: TBD
 
-#### Phase 21: Business Analytics & KPIs
+#### Phase 23: Business Analytics & KPIs
 **Goal**: Photographers have actionable business intelligence showing how their platform drives client engagement and revenue
-**Depends on**: Phase 20
+**Depends on**: Phase 22
 **Requirements**: BKPI-01, BKPI-02, BKPI-03, BKPI-04
 **Success Criteria** (what must be TRUE):
   1. Analytics dashboard shows conversion funnel from gallery view through download to inquiry with drop-off rates
@@ -235,9 +282,9 @@ Plans:
   4. Weekly email digest arrives with top 5 metrics, notable changes, and actionable suggestions
 **Plans**: TBD
 
-#### Phase 22: Integration Ecosystem
+#### Phase 24: Integration Ecosystem
 **Goal**: RawDrive connects to photographers' existing tools, eliminating manual data entry and enabling automation
-**Depends on**: Phase 21
+**Depends on**: Phase 23
 **Requirements**: INTGR-01, INTGR-02, INTGR-03, INTGR-04
 **Success Criteria** (what must be TRUE):
   1. User connects Mailchimp/ConvertKit account and client list syncs with tag mapping within 5 minutes
@@ -249,7 +296,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22
+Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23 -> 24
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -262,16 +309,18 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 07. Gallery Completion | v1.0 | 2/2 | Complete | 2026-03-18 |
 | 08. Notifications | v1.0 | 2/2 | Complete | 2026-03-19 |
 | 09. Shared Packages & Test Coverage | v1.0 | 4/4 | Complete | 2026-03-19 |
-| 10. Foundation & Fixes | v1.1 | 3/4 | Gap closure | - |
+| 10. Foundation & Fixes | 4/4 | Complete   | 2026-03-19 | - |
 | 11. Public Page Redesign | v1.1 | 0/? | Not started | - |
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 3/5 | In Progress | - |
-| 15. Gallery Research & Foundation | v1.2 | 0/? | Not started | - |
-| 16. Gallery Layouts & Lightbox | v1.2 | 0/? | Not started | - |
-| 17. Client Interaction & Delivery | v1.2 | 0/? | Not started | - |
-| 18. Gallery Analytics & Polish | v1.2 | 0/? | Not started | - |
-| 19. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |
-| 20. Pricing & Monetization UX | v1.3 | 0/? | Not started | - |
-| 21. Business Analytics & KPIs | v1.3 | 0/? | Not started | - |
-| 22. Integration Ecosystem | v1.3 | 0/? | Not started | - |
+| 15. Foundation Refactor & Data Model | v1.2 | 0/? | Not started | - |
+| 16. Gallery Layout Engine & Progressive Loading | v1.2 | 0/? | Not started | - |
+| 17. Gallery Player | v1.2 | 0/? | Not started | - |
+| 18. Client Interactions & Gallery UX | v1.2 | 0/? | Not started | - |
+| 19. Downloads & Delivery | v1.2 | 0/? | Not started | - |
+| 20. Sharing, Analytics & Polish | v1.2 | 0/? | Not started | - |
+| 21. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |
+| 22. Pricing & Monetization UX | v1.3 | 0/? | Not started | - |
+| 23. Business Analytics & KPIs | v1.3 | 0/? | Not started | - |
+| 24. Integration Ecosystem | v1.3 | 0/? | Not started | - |
