@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 10 (foundation-fixes) — EXECUTING
-Plan: 1 of 3
+Phase: 14 (FaceID Deep Dive & Enhancement) — EXECUTING
+Plan: 3 of 5
 
 ## Performance Metrics
 
@@ -46,6 +46,8 @@ Plan: 1 of 3
 - SEO requirements grouped with Phase 11 (public page redesign) not deferred -- bolting on SEO after animations is expensive
 - 4 phases derived from natural requirement clustering (foundation/public/editor/content)
 - Research completed with HIGH confidence -- one new package needed (react-best-gradient-color-picker)
+- HNSW (ef_construction=200) chosen over IVFFlat for faces.embedding index -- no training step, better recall at low volumes
+- Worker hard-fails on model load -- prevents silent degradation, lets Kubernetes restart pod
 - [Phase 10]: Legacy theme IDs mapped to closest PREBUILT: minimal->clean-slate, dark->midnight-noir, pastel->lavender-haze, bold->vivid-impact, cinematic->golden-hour
 - [Phase 10]: Theme CSS vars scoped to wrapper div (not documentElement) to prevent leaking between pages
 - [Phase 10]: R2 upload failure non-fatal; PG blob fallback for resilience
@@ -80,9 +82,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T21:56:20.929Z
-Stopped at: Completed 10-01-PLAN.md
-Resume file: None
+Last session: 2026-03-19T22:00:22Z
+Stopped at: Completed 14-02-PLAN.md
+Resume file: .planning/phases/14-faceid-deep-dive-and-enhancement/14-02-SUMMARY.md
 
 ### Upcoming Milestones
 

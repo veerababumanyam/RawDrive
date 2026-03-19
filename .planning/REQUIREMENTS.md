@@ -51,7 +51,7 @@
 - [ ] **FACE-02**: Users can view, name, merge, and split face groups through an intuitive management interface (responsive grid, context menu, confidence filter, error boundaries)
 - [ ] **FACE-03**: Face search allows finding all photos of a specific person across all galleries in a workspace
 - [ ] **FACE-04**: Face recognition works reliably across different lighting, angles, and photo qualities (consent bypass removed, deadlock prevention, cache coherence, cascade delete verified)
-- [ ] **FACE-05**: Face processing completes within acceptable time and doesn't block uploads (HNSW index, batched centroids, eager model loading, enforced worker timeouts)
+- [x] **FACE-05**: Face processing completes within acceptable time and doesn't block uploads (HNSW index, batched centroids, eager model loading, enforced worker timeouts)
 
 ## v1.2 Requirements
 
@@ -191,7 +191,7 @@
 | FACE-02 | Phase 14 | Pending |
 | FACE-03 | Phase 14 | Pending |
 | FACE-04 | Phase 14 | Pending |
-| FACE-05 | Phase 14 | Pending |
+| FACE-05 | Phase 14 | Complete |
 
 ### v1.2 Traceability
 
