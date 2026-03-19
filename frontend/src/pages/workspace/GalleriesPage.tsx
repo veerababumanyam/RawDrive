@@ -112,14 +112,6 @@ const GalleriesPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const personGroupId = searchParams.get('person');
 
-  useEffect(() => {
-    // When a person filter is in the URL, navigate to the first gallery with that filter
-    if (personGroupId && galleries && galleries.length > 0 && !loading) {
-      // Navigate to the first gallery with the person filter
-      navigate(`/workspace/galleries/${galleries[0].gallery_id}?person=${personGroupId}`, { replace: true });
-    }
-  }, [personGroupId, galleries, loading, navigate]);
-
   // Fetch galleries with server-side search and filtering
   const {
     galleries,
@@ -138,6 +130,13 @@ const GalleriesPage: React.FC = () => {
     endDate: endDate || undefined,
     autoFetch: !!workspace?.workspace_id,
   });
+
+  useEffect(() => {
+    // When a person filter is in the URL, navigate to the first gallery with that filter
+    if (personGroupId && galleries && galleries.length > 0 && !loading) {
+      navigate(`/workspace/galleries/${galleries[0].gallery_id}?person=${personGroupId}`, { replace: true });
+    }
+  }, [personGroupId, galleries, loading, navigate]);
 
   const handleCreateGallery = () => {
     navigate('/workspace/galleries/new');

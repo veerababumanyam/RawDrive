@@ -943,9 +943,7 @@ async def handle_face_cache_warm_recent(payload: dict[str, Any]) -> dict[str, An
         Dictionary with warming statistics
     """
     from uuid import UUID
-    from sqlalchemy import select
     from app.db.postgres import get_postgres_pool
-    from app.models.workspace import Workspace
     from app.services.face_cache_warmer import get_face_cache_warmer
 
     workspace_id = payload.get("workspace_id")
@@ -962,12 +960,10 @@ async def handle_face_cache_warm_recent(payload: dict[str, Any]) -> dict[str, An
         else:
             # Get all active workspaces
             async with pool.acquire() as conn:
-                result = await conn.execute(
-                    select(Workspace.workspace_id).where(
-                        Workspace.is_active == True,
-                    )
+                rows = await conn.fetch(
+                    "SELECT workspace_id FROM workspaces WHERE status = 'active'"
                 )
-                workspace_ids = [row[0] for row in result]
+                workspace_ids = [row["workspace_id"] for row in rows]
 
         # Process each workspace
         for ws_id in workspace_ids:
@@ -1016,9 +1012,7 @@ async def handle_face_cache_warm_popular(payload: dict[str, Any]) -> dict[str, A
         Dictionary with warming statistics
     """
     from uuid import UUID
-    from sqlalchemy import select
     from app.db.postgres import get_postgres_pool
-    from app.models.workspace import Workspace
     from app.services.face_cache_warmer import get_face_cache_warmer
 
     workspace_id = payload.get("workspace_id")
@@ -1035,12 +1029,10 @@ async def handle_face_cache_warm_popular(payload: dict[str, Any]) -> dict[str, A
         else:
             # Get all active workspaces
             async with pool.acquire() as conn:
-                result = await conn.execute(
-                    select(Workspace.workspace_id).where(
-                        Workspace.is_active == True,
-                    )
+                rows = await conn.fetch(
+                    "SELECT workspace_id FROM workspaces WHERE status = 'active'"
                 )
-                workspace_ids = [row[0] for row in result]
+                workspace_ids = [row["workspace_id"] for row in rows]
 
         # Process each workspace
         for ws_id in workspace_ids:

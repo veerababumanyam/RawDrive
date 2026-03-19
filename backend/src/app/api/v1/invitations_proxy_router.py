@@ -13,14 +13,16 @@ Feature: Invitations microservice migration
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 
-from app.api.dependencies import get_current_user, CurrentUser
+from app.api.dependencies import get_current_user, CurrentUser, require_workspace_access
 from app.config.settings import get_settings
+from app.db.postgres import get_postgres_pool
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +88,20 @@ async def proxy_request(
     # Forward user context for internal service calls
     if current_user:
         headers["X-User-ID"] = str(current_user.user_id)
-        headers["X-Workspace-ID"] = str(current_user.workspace_id)
+        headers["X-Workspace-ID"] = str(workspace_id)
         headers["X-User-Email"] = current_user.email
-        headers["X-User-Role"] = current_user.role
+        # Look up user's workspace role for downstream RBAC enforcement
+        try:
+            pool = await get_postgres_pool()
+            role_row = await pool.fetchrow(
+                "SELECT role FROM workspace_memberships WHERE user_id = $1 AND workspace_id = $2 AND status = 'active'",
+                current_user.user_id,
+                uuid.UUID(str(workspace_id)),
+            )
+            if role_row:
+                headers["X-User-Role"] = role_row["role"]
+        except Exception:
+            logger.warning("Failed to look up workspace role for proxy headers")
     
     # Forward other relevant headers
     for header_name in ["X-Request-ID", "X-Correlation-ID", "User-Agent", "Accept"]:
@@ -191,11 +204,11 @@ async def proxy_all_invitations(
     request: Request,
     workspace_id: str,
     path: str = "",
-    current_user: CurrentUser = Depends(get_current_user),
+    workspace_access: tuple[CurrentUser, uuid.UUID] = Depends(require_workspace_access),
 ) -> Response:
     """
     Proxy all invitation requests to the microservice.
-    
+
     This catch-all route handles:
     - "" (list/create invitations)
     - /templates
@@ -208,7 +221,8 @@ async def proxy_all_invitations(
     - /fonts
     - etc.
     """
-    return await proxy_request(request, workspace_id=workspace_id, path=path, current_user=current_user)
+    current_user, validated_workspace_id = workspace_access
+    return await proxy_request(request, workspace_id=str(validated_workspace_id), path=path, current_user=current_user)
 
 # Root path handler (for POST /digital-invitations and GET /digital-invitations)
 @router.api_route(
@@ -219,7 +233,8 @@ async def proxy_all_invitations(
 async def proxy_invitations_root(
     request: Request,
     workspace_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
+    workspace_access: tuple[CurrentUser, uuid.UUID] = Depends(require_workspace_access),
 ) -> Response:
     """Proxy root invitation endpoints (list/create)."""
-    return await proxy_request(request, workspace_id=workspace_id, path="", current_user=current_user)
+    current_user, validated_workspace_id = workspace_access
+    return await proxy_request(request, workspace_id=str(validated_workspace_id), path="", current_user=current_user)
