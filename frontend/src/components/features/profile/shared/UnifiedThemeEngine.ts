@@ -103,8 +103,8 @@ export function resolveThemeTokens(themeId: string, prefersDark: boolean): Theme
   const theme = getThemeById(resolvedId) ?? getDefaultTheme();
 
   // Pick variant based on dark-mode preference
-  const darkVariant = theme.variants.find((v) => v.name === 'Dark');
-  const lightVariant = theme.variants.find((v) => v.name === 'Light');
+  const darkVariant = theme.variants?.find((v) => v.name === 'Dark');
+  const lightVariant = theme.variants?.find((v) => v.name === 'Light');
   const variant = prefersDark ? (darkVariant ?? lightVariant) : (lightVariant ?? darkVariant);
   const colors = variant?.colors ?? {
     background: '#FFFFFF',
