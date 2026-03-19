@@ -39,17 +39,21 @@ export function isApiError(error: unknown): error is ApiError {
 // Configuration
 /**
  * Get the API base URL from environment variable
- * Only uses VITE_API_URL if it's a non-empty string
- * This prevents issues with empty string values that would break relative URLs
+ * - Dev mode: always use relative URLs (Vite proxy forwards /api → Traefik)
+ * - VITE_API_URL set: use that URL (e.g., production deployment)
+ * - Fallback: Traefik on port 80
  */
 export function getApiBaseUrl(): string {
+  // In dev mode, use relative URLs so Vite's proxy handles routing
+  // This avoids CORS issues (browser treats different ports as different origins)
+  if (import.meta.env.DEV) {
+    return '';
+  }
   const viteUrl = import.meta.env.VITE_API_URL;
-  // Only use VITE_API_URL if it's a non-empty string
   if (viteUrl && typeof viteUrl === 'string' && viteUrl.trim() !== '') {
     return viteUrl.trim();
   }
-  // Use Traefik (port 80) instead of direct backend (port 8000) to route through API gateway
-  // This ensures microservices like webhooks-service are accessible
+  // Production fallback: use Traefik (port 80) for API gateway routing
   return 'http://localhost';
 }
 

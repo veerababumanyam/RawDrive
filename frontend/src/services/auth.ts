@@ -336,10 +336,11 @@ export async function logout(): Promise<void> {
  * Get Google OAuth URL
  */
 export function getGoogleOAuthUrl(redirectTo?: string): string {
-  // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
-  const baseUrl = import.meta.env.VITE_API_URL !== undefined
-    ? import.meta.env.VITE_API_URL
-    : 'http://localhost:8000';
+  // In dev mode, use relative URLs (Vite proxy handles routing)
+  // OAuth needs an absolute URL for the redirect, so prepend window.location.origin
+  const baseUrl = import.meta.env.DEV
+    ? window.location.origin
+    : (import.meta.env.VITE_API_URL ?? 'http://localhost');
   const redirect = redirectTo || window.location.origin + '/workspace';
   return `${baseUrl}/api/v1/auth/oauth/google/start?redirect_uri=${encodeURIComponent(redirect)}`;
 }
