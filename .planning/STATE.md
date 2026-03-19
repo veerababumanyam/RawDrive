@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: phase_complete
 stopped_at: Completed 10-04-PLAN.md (Phase 10 complete)
-last_updated: "2026-03-19T22:35:00.000Z"
+last_updated: "2026-03-19T23:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 10 — Foundation & Fixes
+**Current focus:** Phase 10 -- Foundation & Fixes (COMPLETE)
 
 ## Current Position
 
-Phase: 10 (Foundation & Fixes) — COMPLETE
+Phase: 10 (Foundation & Fixes) -- COMPLETE
 Plan: 4 of 4 (all complete)
 
 ## Performance Metrics
@@ -44,42 +44,24 @@ Plan: 4 of 4 (all complete)
 
 - PUBPG-05 (LCP <2s) placed in Phase 13 after content blocks, not Phase 11 -- adding blocks would regress perf
 - SEO requirements grouped with Phase 11 (public page redesign) not deferred -- bolting on SEO after animations is expensive
-- 4 phases derived from natural requirement clustering (foundation/public/editor/content)
-- Research completed with HIGH confidence -- one new package needed (react-best-gradient-color-picker)
-- HNSW (ef_construction=200) chosen over IVFFlat for faces.embedding index -- no training step, better recall at low volumes
-- Worker hard-fails on model load -- prevents silent degradation, lets Kubernetes restart pod
-- [Phase 10]: Legacy theme IDs mapped to closest PREBUILT: minimal->clean-slate, dark->midnight-noir, pastel->lavender-haze, bold->vivid-impact, cinematic->golden-hour
-- [Phase 10]: Theme CSS vars scoped to wrapper div (not documentElement) to prevent leaking between pages
-- [Phase 10]: R2 upload failure non-fatal; PG blob fallback for resilience
-- [Phase 10]: Presigned URLs with 1hr expiry for R2 avatar serving
-- [Phase 14]: Public API schemas use *Public suffix pattern to strip embeddings/centroids while preserving internal schemas
-- [Phase 14]: Consent bypass gated behind RAWDRIVE_ENV check -- production always blocks regardless of env var
-- [Phase 14]: ONNX model hash configurable via FACE_MODEL_SHA256 env var (not hardcoded) since model unavailable at dev time
-- [Phase 10]: Legacy theme files kept as re-export stubs (not deleted) due to 15+ editor imports
-- [Phase 10]: Company R2 key format: avatars/{workspace_id}/company/{profile_id}/{size}.webp (company subdirectory distinguishes from personal)
-- [Phase 14]: normalizePaginatedResponse utility used instead of React Query invalidation -- face hooks use useState/useEffect pattern
-- [Phase 14]: Workers use check_consent_status() not is_face_detection_allowed() -- workers need raw status enum, not boolean
-- [Phase 14]: Sorted lock ordering uses str(UUID) for deterministic order across all UUID versions
-- [Phase 14]: Reused existing ContextMenu UI component for face context menu (no face-specific menu needed)
-- [Phase 14]: Toast action system used for undo merge (createUndoMergeToast factory, not custom component)
-- [Phase 14]: Undo merge uses split-based reversal -- captures face IDs pre-merge, calls splitFaceGroup on undo
-- [Phase 14]: Cross-gallery search endpoint on face_groups router (matches existing routing pattern)
+- [Phase 10]: Legacy theme IDs mapped to closest PREBUILT; CSS vars scoped to wrapper div; R2 upload failure non-fatal with PG blob fallback
+- [Phase 10]: Company R2 key format: avatars/{workspace_id}/company/{profile_id}/{size}.webp; theme exports renamed with deprecated aliases
+- [Phase 14]: Public API schemas use *Public suffix pattern; consent bypass gated behind RAWDRIVE_ENV; sorted lock ordering uses str(UUID)
+- [Phase 14]: Undo merge uses split-based reversal; cross-gallery search on face_groups router
+- [Roadmap]: v1.2 expanded from 4 phases (15-18) to 6 phases (15-20) based on research identifying 36 requirements across 6 natural delivery boundaries
+- [Roadmap]: v1.3 renumbered from Phases 19-22 to Phases 21-24 to accommodate v1.2 expansion
 
 ### Roadmap Evolution
 
-- Phase 14 added: FaceID Deep Dive & Enhancement (debug face identification, competitive research, fix broken features, enhance face management UX)
+- Phase 14 added: FaceID Deep Dive & Enhancement
 - v1.1 extended from Phases 10-13 to Phases 10-14
-- v1.2 renumbered from Phases 14-17 to Phases 15-18
-- v1.3 renumbered from Phases 18-21 to Phases 19-22
+- v1.2 expanded from Phases 15-18 to Phases 15-20 (6 phases for 36 requirements)
+- v1.3 renumbered from Phases 19-22 to Phases 21-24
 
 ### BA Review Insights (2026-03-19)
 
-- Gallery module scored 8.5/10 — weakest areas: Documentation/Support (6/10), Analytics (7/10)
-- 5 new GALUX requirements added to v1.2 (tooltips, bulk ops, presets, AI status, sub-gallery permissions)
-- 4 new v2+ backlog items (gallery templates, commerce, collaboration, AI learning)
-- Competitive edge: only platform combining gallery + CRM + AI curation
-- Competitive gaps: design flexibility (vs Showit), commerce (vs Zenfolio), print partnerships (vs SmugMug)
-- Full review archived: .planning/research/BA-GALLERY-REVIEW.md
+- Gallery module scored 8.5/10 -- weakest: Documentation/Support (6/10), Analytics (7/10)
+- 5 GALUX requirements added to v1.2; full review: .planning/research/BA-GALLERY-REVIEW.md
 
 ### Pending Todos
 
@@ -87,8 +69,8 @@ None.
 
 ### Blockers/Concerns
 
-- Avatar upload/display broken (P0 -- Phase 10 fixes this)
-- Two separate profile systems with divergent component trees (Phase 10 unifies renderer)
+- ~~Avatar upload/display broken (P0 -- Phase 10 fixes this)~~ RESOLVED: R2 pipeline for both personal and company profiles
+- ~~Two separate profile systems with divergent component trees (Phase 10 unifies renderer)~~ RESOLVED: PublicProfileRenderer shared
 - SSR/prerendering strategy for SEO needs concrete decision at Phase 11 planning
 - @dnd-kit resize handle capability needs confirmation at Phase 12 planning
 
@@ -100,5 +82,5 @@ Resume file: None
 
 ### Upcoming Milestones
 
-- **v1.2** Public Gallery & Gallery Player Modernization (Phases 15-18) — 5 new requirements (GANLT + GDISC), pending detailed research after v1.1 ships
-- **v1.3** Monetization, Onboarding & Growth (Phases 19-22) — 19 new requirements from BA review gap analysis, pending roadmap refinement after v1.2
+- **v1.2** Public Gallery & Gallery Player Modernization (Phases 15-20) -- 36 requirements, 6 phases, research complete with HIGH confidence
+- **v1.3** Monetization, Onboarding & Growth (Phases 21-24) -- 19 requirements, pending roadmap refinement after v1.2
