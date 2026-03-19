@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: unknown
-stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-03-19T22:10:50.738Z"
+stopped_at: Completed 14-03-PLAN.md
+last_updated: "2026-03-19T22:14:21.850Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -57,6 +57,8 @@ Plan: 4 of 5
 - [Phase 14]: ONNX model hash configurable via FACE_MODEL_SHA256 env var (not hardcoded) since model unavailable at dev time
 - [Phase 10]: Legacy theme files kept as re-export stubs (not deleted) due to 15+ editor imports
 - [Phase 14]: normalizePaginatedResponse utility used instead of React Query invalidation -- face hooks use useState/useEffect pattern
+- [Phase 14]: Workers use check_consent_status() not is_face_detection_allowed() -- workers need raw status enum, not boolean
+- [Phase 14]: Sorted lock ordering uses str(UUID) for deterministic order across all UUID versions
 
 ### Roadmap Evolution
 
@@ -87,8 +89,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T22:10:50.735Z
-Stopped at: Completed 14-04-PLAN.md
+Last session: 2026-03-19T22:14:21.848Z
+Stopped at: Completed 14-03-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones
