@@ -491,10 +491,15 @@ class PersonalProfileRepository:
         image_256: bytes,
         image_512: bytes,
         content_type: str = "image/webp",
+        r2_key_64: Optional[str] = None,
+        r2_key_128: Optional[str] = None,
+        r2_key_256: Optional[str] = None,
+        r2_key_512: Optional[str] = None,
     ) -> bool:
         """Save avatar images at multiple sizes.
 
         Uses UPSERT to replace existing avatar if present.
+        Optionally stores R2 object keys alongside PG blobs for lazy migration.
 
         Args:
             workspace_id: Workspace ID
@@ -504,6 +509,10 @@ class PersonalProfileRepository:
             image_256: 256x256 thumbnail bytes
             image_512: 512x512 high-res bytes
             content_type: Image MIME type
+            r2_key_64: Optional R2 object key for 64px avatar
+            r2_key_128: Optional R2 object key for 128px avatar
+            r2_key_256: Optional R2 object key for 256px avatar
+            r2_key_512: Optional R2 object key for 512px avatar
 
         Returns:
             True if saved successfully
@@ -515,9 +524,11 @@ class PersonalProfileRepository:
                 INSERT INTO personal_profile_avatars (
                     avatar_id, workspace_id, profile_id,
                     image_64, image_128, image_256, image_512,
-                    content_type
+                    content_type,
+                    r2_key_64, r2_key_128, r2_key_256, r2_key_512
                 ) VALUES (
-                    gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7
+                    gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7,
+                    $8, $9, $10, $11
                 )
                 ON CONFLICT (workspace_id, profile_id)
                 DO UPDATE SET
@@ -526,6 +537,10 @@ class PersonalProfileRepository:
                     image_256 = $5,
                     image_512 = $6,
                     content_type = $7,
+                    r2_key_64 = $8,
+                    r2_key_128 = $9,
+                    r2_key_256 = $10,
+                    r2_key_512 = $11,
                     updated_at = NOW()
                 """,
                 workspace_id,
@@ -535,6 +550,10 @@ class PersonalProfileRepository:
                 image_256,
                 image_512,
                 content_type,
+                r2_key_64,
+                r2_key_128,
+                r2_key_256,
+                r2_key_512,
             )
 
             logger.info(
@@ -542,6 +561,7 @@ class PersonalProfileRepository:
                 extra={
                     "profile_id": str(profile_id),
                     "workspace_id": str(workspace_id),
+                    "has_r2_keys": r2_key_64 is not None,
                 },
             )
 
@@ -553,6 +573,14 @@ class PersonalProfileRepository:
         128: "image_128",
         256: "image_256",
         512: "image_512",
+    }
+
+    # R2 key column mapping by size
+    R2_KEY_COLUMNS = {
+        64: "r2_key_64",
+        128: "r2_key_128",
+        256: "r2_key_256",
+        512: "r2_key_512",
     }
 
     async def get_avatar_image(
@@ -594,26 +622,30 @@ class PersonalProfileRepository:
         self,
         slug: str,
         size: int = 256,
-    ) -> Optional[tuple[bytes, str]]:
+    ) -> Optional[dict[str, Any]]:
         """Get public avatar image by profile slug.
 
         Only returns avatar if profile is public.
+        Returns a dict with image_data, content_type, and r2_key so the
+        service layer can decide whether to redirect to R2 or serve the PG blob.
 
         Args:
             slug: Profile slug
             size: Image size (64, 128, 256, or 512)
 
         Returns:
-            Tuple of (image_bytes, content_type) or None
+            Dict with image_data (bytes|None), content_type, r2_key (str|None)
+            or None if no avatar found
         """
         # Use explicit column mapping instead of f-string to prevent SQL injection
         size_column = self.AVATAR_SIZE_COLUMNS.get(size, "image_256")
+        r2_key_column = self.R2_KEY_COLUMNS.get(size, "r2_key_256")
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 f"""
-                SELECT a.{size_column}, a.content_type
+                SELECT a.{size_column}, a.content_type, a.{r2_key_column}
                 FROM personal_profile_avatars a
                 JOIN personal_profiles p ON a.profile_id = p.profile_id
                 WHERE p.slug = $1 AND p.is_public = TRUE
@@ -621,8 +653,12 @@ class PersonalProfileRepository:
                 slug.lower(),
             )
 
-            if row and row[size_column]:
-                return (row[size_column], row["content_type"])
+            if row and (row[size_column] or row[r2_key_column]):
+                return {
+                    "image_data": row[size_column],
+                    "content_type": row["content_type"],
+                    "r2_key": row[r2_key_column],
+                }
             return None
 
     async def delete_avatar(

@@ -26,6 +26,7 @@ from app.repositories.personal_profile_repository import (
     get_personal_profile_repository,
 )
 from app.config.settings import get_settings
+from app.services.r2_storage import R2Client
 
 logger = logging.getLogger(__name__)
 
@@ -486,7 +487,31 @@ class PersonalProfileService:
             for size in AVATAR_THUMBNAIL_SIZES:
                 thumbnails[size] = self._generate_thumbnail(image, size)
 
-            # Save to database
+            # Upload to R2 for each size
+            r2_keys: dict[int, str] = {}
+            try:
+                r2_client = R2Client()
+                for size in AVATAR_THUMBNAIL_SIZES:
+                    key = f"avatars/{workspace_id}/{profile_id}/{size}.webp"
+                    await r2_client.upload_bytes(key, thumbnails[size], "image/webp")
+                    r2_keys[size] = key
+                logger.info(
+                    "Avatar uploaded to R2",
+                    extra={
+                        "profile_id": str(profile_id),
+                        "workspace_id": str(workspace_id),
+                        "keys": list(r2_keys.values()),
+                    },
+                )
+            except Exception as e:
+                # R2 upload failure is non-fatal; PG blob is the fallback
+                logger.warning(
+                    "R2 avatar upload failed, falling back to PG only: %s",
+                    e,
+                    exc_info=True,
+                )
+
+            # Save to database (PG blobs + R2 keys)
             await self.repository.save_avatar_images(
                 workspace_id=workspace_id,
                 profile_id=profile_id,
@@ -495,10 +520,16 @@ class PersonalProfileService:
                 image_256=thumbnails[256],
                 image_512=thumbnails[512],
                 content_type="image/webp",
+                r2_key_64=r2_keys.get(64),
+                r2_key_128=r2_keys.get(128),
+                r2_key_256=r2_keys.get(256),
+                r2_key_512=r2_keys.get(512),
             )
 
-            # Build avatar URL using public endpoint
-            avatar_url = f"/api/v1/public/personal-profiles/{slug}/avatar/256"
+            # Build avatar URL using public endpoint with cache-busting
+            import time as _time
+            cache_buster = int(_time.time())
+            avatar_url = f"/api/v1/public/personal-profiles/{slug}/avatar/256?v={cache_buster}"
 
             # Update profile with avatar URL
             await self.repository.update(
@@ -558,17 +589,44 @@ class PersonalProfileService:
         self,
         slug: str,
         size: int = 256,
-    ) -> Optional[tuple[bytes, str]]:
+    ) -> Optional[dict | tuple[bytes, str]]:
         """Get public avatar image by slug.
+
+        If the avatar has an R2 key, returns a dict with redirect_url.
+        Otherwise falls back to PG blob as tuple(bytes, content_type).
 
         Args:
             slug: Profile slug
             size: Image size
 
         Returns:
-            Tuple of (image_bytes, content_type) or None
+            dict with redirect_url (R2 path), or
+            tuple of (image_bytes, content_type) (PG fallback), or
+            None if no avatar found
         """
-        return await self.repository.get_avatar_image_by_slug(slug, size)
+        result = await self.repository.get_avatar_image_by_slug(slug, size)
+        if result is None:
+            return None
+
+        r2_key = result.get("r2_key")
+        if r2_key:
+            # Redirect to R2 presigned URL
+            try:
+                r2_client = R2Client()
+                redirect_url = r2_client.get_public_url(r2_key)
+                return {"redirect_url": redirect_url}
+            except Exception:
+                logger.warning(
+                    "Failed to generate R2 URL for avatar, falling back to PG",
+                    exc_info=True,
+                )
+
+        # Fallback to PG blob (legacy data or R2 URL generation failure)
+        image_data = result.get("image_data")
+        content_type = result.get("content_type", "image/webp")
+        if image_data:
+            return (image_data, content_type)
+        return None
 
     # =========================================================================
     # DELETE
