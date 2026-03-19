@@ -1,7 +1,9 @@
 /**
  * useLightboxGestures Hook
- * Enhanced gesture handling using @use-gesture/react
- * Provides smooth swipe navigation and pinch-to-zoom with momentum
+ * Enhanced gesture handling using @use-gesture/react.
+ * Auth-agnostic: accepts callbacks via parameters, usable by both
+ * workspace Lightbox and public GalleryPlayer.
+ * Provides smooth swipe navigation and pinch-to-zoom with momentum.
  */
 
 import { useCallback, useRef, useState } from 'react';

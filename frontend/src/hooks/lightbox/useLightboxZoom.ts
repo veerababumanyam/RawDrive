@@ -1,7 +1,8 @@
 /**
  * useLightboxZoom Hook
- * Manages zoom, pan, and rotation state for the lightbox component
- * Extracted from Lightbox.tsx for reusability
+ * Manages zoom, pan, and rotation state for the lightbox component.
+ * Auth-agnostic: usable by both workspace Lightbox and public GalleryPlayer.
+ * Extracted from Lightbox.tsx for reusability.
  */
 
 import { useState, useCallback, useRef } from 'react';

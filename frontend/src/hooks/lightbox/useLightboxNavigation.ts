@@ -1,7 +1,9 @@
 /**
  * useLightboxNavigation Hook
- * Manages navigation state and keyboard shortcuts for the lightbox
- * Extracted from Lightbox.tsx for reusability
+ * Manages navigation state and keyboard shortcuts for the lightbox.
+ * Auth-agnostic: accepts asset data via parameters, usable by both
+ * workspace Lightbox and public GalleryPlayer.
+ * Extracted from Lightbox.tsx for reusability.
  */
 
 import { useCallback, useEffect } from 'react';

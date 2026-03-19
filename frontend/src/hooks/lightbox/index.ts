@@ -1,6 +1,7 @@
 /**
  * Lightbox Hooks
- * Reusable hooks for the lightbox component
+ * Reusable, auth-agnostic hooks for lightbox functionality.
+ * Designed for use by both workspace Lightbox and public GalleryPlayer.
  */
 
 export { useLightboxZoom, type UseLightboxZoomOptions, type UseLightboxZoomReturn, type ZoomState } from './useLightboxZoom';
