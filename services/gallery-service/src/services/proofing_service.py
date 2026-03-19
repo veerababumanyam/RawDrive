@@ -64,7 +64,12 @@ class ProofingService:
         value: bool,
         visitor_id: Optional[str] = None,
     ) -> dict:
-        """Toggle favorite status for an asset."""
+        """Toggle favorite status for an asset.
+
+        Writes to gallery_visitor_actions for per-visitor state, then
+        updates gallery_assets.is_favorited as an aggregate boolean
+        (TRUE if any visitor has favorited the asset).
+        """
         with metrics.track_proofing_duration():
             async with get_connection() as conn:
                 # Verify asset exists in gallery
@@ -81,16 +86,40 @@ class ProofingService:
                 if not ga:
                     raise AssetNotFoundError(asset_id)
 
-                # Update favorite status
+                # Use visitor_id as visitor_token (fallback to 'anonymous')
+                visitor_token = visitor_id or "anonymous"
+
+                # Upsert visitor-specific action into gallery_visitor_actions
+                await conn.execute(
+                    """
+                    INSERT INTO gallery_visitor_actions
+                        (gallery_id, visitor_token, asset_id, action_type, value)
+                    VALUES ($1, $2, $3, 'favorite', $4)
+                    ON CONFLICT (gallery_id, visitor_token, asset_id, action_type)
+                    DO UPDATE SET value = $4, updated_at = NOW()
+                    """,
+                    UUID(gallery_id),
+                    visitor_token,
+                    UUID(asset_id),
+                    value,
+                )
+
+                # Update gallery_assets aggregate: is_favorited = TRUE if any visitor favorited
                 await conn.execute(
                     """
                     UPDATE gallery_assets
-                    SET is_favorited = $1, updated_at = NOW()
-                    WHERE gallery_id = $2 AND asset_id = $3
+                    SET is_favorited = (
+                        SELECT COUNT(*) > 0
+                        FROM gallery_visitor_actions
+                        WHERE asset_id = $1
+                          AND gallery_id = $2
+                          AND action_type = 'favorite'
+                          AND value = TRUE
+                    ), updated_at = NOW()
+                    WHERE gallery_id = $2 AND asset_id = $1
                     """,
-                    value,
-                    UUID(gallery_id),
                     UUID(asset_id),
+                    UUID(gallery_id),
                 )
 
         # Track metric
@@ -112,7 +141,7 @@ class ProofingService:
             "asset_id": asset_id,
             "action": "favorite",
             "value": value,
-            "favorites_count": None,  # Could add aggregate count
+            "favorites_count": None,
             "is_selected": None,
         }
 
@@ -123,7 +152,12 @@ class ProofingService:
         value: bool,
         visitor_id: Optional[str] = None,
     ) -> dict:
-        """Toggle selection status for an asset."""
+        """Toggle selection status for an asset.
+
+        Writes to gallery_visitor_actions for per-visitor state, then
+        updates gallery_assets.is_selected as an aggregate boolean
+        (TRUE if any visitor has selected the asset).
+        """
         with metrics.track_proofing_duration():
             async with get_connection() as conn:
                 # Verify asset exists in gallery
@@ -140,16 +174,40 @@ class ProofingService:
                 if not ga:
                     raise AssetNotFoundError(asset_id)
 
-                # Update selection status
+                # Use visitor_id as visitor_token (fallback to 'anonymous')
+                visitor_token = visitor_id or "anonymous"
+
+                # Upsert visitor-specific action into gallery_visitor_actions
+                await conn.execute(
+                    """
+                    INSERT INTO gallery_visitor_actions
+                        (gallery_id, visitor_token, asset_id, action_type, value)
+                    VALUES ($1, $2, $3, 'select', $4)
+                    ON CONFLICT (gallery_id, visitor_token, asset_id, action_type)
+                    DO UPDATE SET value = $4, updated_at = NOW()
+                    """,
+                    UUID(gallery_id),
+                    visitor_token,
+                    UUID(asset_id),
+                    value,
+                )
+
+                # Update gallery_assets aggregate: is_selected = TRUE if any visitor selected
                 await conn.execute(
                     """
                     UPDATE gallery_assets
-                    SET is_selected = $1, updated_at = NOW()
-                    WHERE gallery_id = $2 AND asset_id = $3
+                    SET is_selected = (
+                        SELECT COUNT(*) > 0
+                        FROM gallery_visitor_actions
+                        WHERE asset_id = $1
+                          AND gallery_id = $2
+                          AND action_type = 'select'
+                          AND value = TRUE
+                    ), updated_at = NOW()
+                    WHERE gallery_id = $2 AND asset_id = $1
                     """,
-                    value,
-                    UUID(gallery_id),
                     UUID(asset_id),
+                    UUID(gallery_id),
                 )
 
         # Track metric
@@ -354,6 +412,47 @@ class ProofingService:
             "results": results,
             "success_count": success_count,
             "error_count": error_count,
+        }
+
+    async def get_visitor_actions(
+        self,
+        gallery_id: str,
+        visitor_token: str,
+    ) -> dict:
+        """Get all active proofing actions for a specific visitor.
+
+        Args:
+            gallery_id: Gallery UUID string
+            visitor_token: Visitor identifier token
+
+        Returns:
+            Dict with 'favorites' and 'selections' as sets of asset_id strings
+        """
+        async with get_connection(read_only=True) as conn:
+            rows = await conn.fetch(
+                """
+                SELECT asset_id, action_type, value
+                FROM gallery_visitor_actions
+                WHERE gallery_id = $1
+                  AND visitor_token = $2
+                  AND value = TRUE
+                """,
+                UUID(gallery_id),
+                visitor_token,
+            )
+
+        favorites = set()
+        selections = set()
+        for row in rows:
+            asset_id_str = str(row["asset_id"])
+            if row["action_type"] == "favorite":
+                favorites.add(asset_id_str)
+            elif row["action_type"] == "select":
+                selections.add(asset_id_str)
+
+        return {
+            "favorites": favorites,
+            "selections": selections,
         }
 
     async def _publish_proofing_update(

@@ -688,6 +688,7 @@ class GalleryService:
         selections_only: bool = False,
         emotion: Optional[str] = None,
         min_emotion_confidence: Optional[float] = None,
+        visitor_token: Optional[str] = None,
     ) -> dict:
         """List assets in a gallery with pagination.
 
@@ -701,6 +702,7 @@ class GalleryService:
             selections_only: Show only selected assets
             emotion: Filter by emotion (joy, sadness, anger, surprise, fear, disgust, contentment)
             min_emotion_confidence: Minimum confidence threshold for emotion filtering (0.0-1.0)
+            visitor_token: When provided, includes per-visitor favorite/selection state via LEFT JOIN on gallery_visitor_actions
 
         Returns:
             Paginated list of gallery assets
@@ -754,10 +756,27 @@ class GalleryService:
                 where_sql = " AND ".join(where_conditions)
 
                 # Get total count
-                # Build FROM clause with optional asset_analysis join
+                # Build FROM clause with optional joins
                 from_clause = "gallery_assets ga INNER JOIN assets a ON ga.asset_id = a.asset_id"
                 if join_asset_analysis:
                     from_clause += " LEFT JOIN asset_analysis aa ON ga.asset_id = aa.asset_id AND ga.workspace_id = aa.workspace_id"
+                if visitor_token:
+                    from_clause += (
+                        f" LEFT JOIN gallery_visitor_actions gva_fav"
+                        f" ON ga.gallery_id = gva_fav.gallery_id"
+                        f"    AND ga.asset_id = gva_fav.asset_id"
+                        f"    AND gva_fav.action_type = 'favorite'"
+                        f"    AND gva_fav.visitor_token = ${param_idx}"
+                    )
+                    from_clause += (
+                        f" LEFT JOIN gallery_visitor_actions gva_sel"
+                        f" ON ga.gallery_id = gva_sel.gallery_id"
+                        f"    AND ga.asset_id = gva_sel.asset_id"
+                        f"    AND gva_sel.action_type = 'select'"
+                        f"    AND gva_sel.visitor_token = ${param_idx}"
+                    )
+                    params.append(visitor_token)
+                    param_idx += 1
 
                 total = await conn.fetchval(
                     f"""
@@ -802,6 +821,13 @@ class GalleryService:
                         "aa.emotions",
                         "aa.dominant_emotion",
                         "aa.emotion_confidence",
+                    ])
+
+                # Include per-visitor proofing state when visitor_token is provided
+                if visitor_token:
+                    select_columns.extend([
+                        "COALESCE(gva_fav.value, FALSE) AS visitor_favorited",
+                        "COALESCE(gva_sel.value, FALSE) AS visitor_selected",
                     ])
 
                 select_sql = ", ".join(select_columns)
@@ -853,6 +879,8 @@ class GalleryService:
                     "sub_gallery_id": str(row["sub_gallery_id"]) if row["sub_gallery_id"] else None,
                     "is_favorited": row["is_favorited"],
                     "is_selected": row["is_selected"],
+                    "visitor_favorited": row.get("visitor_favorited") if visitor_token else None,
+                    "visitor_selected": row.get("visitor_selected") if visitor_token else None,
                     "favorites_count": 0,
                     "asset": {
                         "type": row["type"],

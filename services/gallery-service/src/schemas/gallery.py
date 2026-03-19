@@ -346,6 +346,14 @@ class GalleryAssetResponse(BaseModel):
     sub_gallery_id: Optional[str] = None
     is_favorited: bool = False
     is_selected: bool = False
+    visitor_favorited: Optional[bool] = Field(
+        None,
+        description="Per-visitor favorite state. Populated when X-Visitor-ID header is present, null otherwise.",
+    )
+    visitor_selected: Optional[bool] = Field(
+        None,
+        description="Per-visitor selection state. Populated when X-Visitor-ID header is present, null otherwise.",
+    )
     favorites_count: int = 0
     asset: AssetMetadata
 
