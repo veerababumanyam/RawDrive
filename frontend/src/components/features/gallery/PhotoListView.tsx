@@ -43,7 +43,7 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
   isPrivateUnlocked = false,
 }) => {
   const { workspace } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation(['gallery', 'common']);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -100,7 +100,7 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <p className="text-text-secondary">{t('gallery.list.loadingPhotos')}</p>
+            <p className="text-text-secondary">{t('gallery:list.loadingPhotos')}</p>
           </div>
         </div>
       </AppCard>
@@ -113,8 +113,8 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
       <AppCard padding="md" className={className}>
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <ImageIcon size={48} className="text-text-tertiary mb-4" />
-          <p className="text-text-secondary font-medium mb-1">{t('gallery.list.noPhotos')}</p>
-          <p className="text-text-tertiary text-sm">{t('gallery.list.uploadToGetStarted')}</p>
+          <p className="text-text-secondary font-medium mb-1">{t('gallery:list.noPhotos')}</p>
+          <p className="text-text-tertiary text-sm">{t('gallery:list.uploadToGetStarted')}</p>
         </div>
       </AppCard>
     );

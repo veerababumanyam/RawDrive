@@ -102,7 +102,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   onReviewModeClick,
   reviewModeEnabled = false,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['gallery', 'common']);
 
   const handleFilterToggle = (filterKey: 'picks' | 'favorites' | 'selections') => {
     if (onFiltersChange) {
@@ -204,7 +204,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               aria-label={`Filter by picks${activeFilters.picks ? ' - active' : ', click to toggle'}`}
             >
               <Sparkles size={14} aria-hidden="true" />
-              <span>{t('gallery.filters.picks')}</span>
+              <span>{t('gallery:filters.picks')}</span>
             </button>
 
             {/* Favorites Filter - Heart icon */}
@@ -216,7 +216,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               aria-label={`Filter by favorites${activeFilters.favorites ? ' - active' : ', click to toggle'}`}
             >
               <Heart size={14} className={activeFilters.favorites ? 'fill-current' : ''} aria-hidden="true" />
-              <span>{t('gallery.filters.favorites')}</span>
+              <span>{t('gallery:filters.favorites')}</span>
             </button>
 
             {/* Select All Filter - Check icon */}
@@ -228,8 +228,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               aria-label={`Filter by selected photos${activeFilters.selections ? ' - active' : ', click to toggle'}`}
             >
               <CheckSquare size={14} />
-              <span className="hidden sm:inline">{t('gallery.filters.selections')}</span>
-              <span className="sm:hidden">{t('gallery.filters.selections')}</span>
+              <span>{t('gallery:filters.selections')}</span>
             </button>
 
             {/* Clear Selection Button - Only if items selected */}
@@ -249,7 +248,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                   aria-label="Deselect all"
                 >
                   <X size={14} />
-                  <span>{t('gallery.filters.clearAll')}</span>
+                  <span>{t('gallery:filters.clearAll')}</span>
                </button>
             )}
           </div>
@@ -272,7 +271,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                 aria-label="Save filtered results as a new sub-gallery"
               >
                 <FolderPlus size={14} />
-                <span className="hidden sm:inline">{t('gallery.actions.addSubGallery')}</span>
+                <span className="hidden sm:inline">{t('gallery:actions.addSubGallery')}</span>
               </button>
             )}
             {aiFiltersApplied && onClearAIFilters && (
@@ -281,7 +280,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                 onClick={onClearAIFilters}
                 className="text-xs text-primary hover:underline"
               >
-                {t('gallery.filters.clearAll')}
+                {t('gallery:filters.clearAll')}
               </button>
             )}
           </div>
@@ -293,7 +292,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
             <GallerySearchBar
               galleryId={galleryId}
               onFiltersChange={onEnhancedFiltersChange}
-              placeholder={t('gallery.filters.searchPlaceholder')}
+              placeholder={t('gallery:filters.searchPlaceholder')}
               showSourceFilter
               compact
             />
@@ -303,7 +302,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
             <input
               type="text"
-              placeholder={t('gallery.filters.searchPlaceholder')}
+              placeholder={t('gallery:filters.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="
@@ -342,7 +341,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               checked={selectAll}
               onChange={(e) => onSelectAllChange(e.target.checked)}
             />
-            <span className="text-sm text-text-secondary">{t('common.actions.selectAll')}</span>
+            <span className="text-sm text-text-secondary">{t('common:actions.selectAll')}</span>
           </label>
         )}
 

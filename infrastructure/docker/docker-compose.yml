@@ -664,7 +664,7 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
 
       # CORS
-      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -779,7 +779,7 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
 
       # CORS
-      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -887,7 +887,7 @@ services:
       JWT_ALGORITHM: EdDSA
 
       # CORS
-      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -1001,7 +1001,7 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
 
       # CORS
-      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -1122,7 +1122,7 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
 
       # CORS
-      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -1232,7 +1232,7 @@ services:
       JWT_ISSUER: rawdrive
 
       # CORS (JSON array format for proper parsing)
-      CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173","http://localhost:8000","https://rawdrive.in","https://www.rawdrive.in","https://rawdrive.ai","https://www.rawdrive.ai"]'
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177,http://localhost:8000,https://rawdrive.in,https://www.rawdrive.in,https://rawdrive.ai,https://www.rawdrive.ai}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -1350,7 +1350,7 @@ services:
       JWT_ISSUER: rawdrive
 
       # CORS - Security hardening (comma-separated list)
-      ALLOWED_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8000}
+      ALLOWED_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177,http://localhost:8000}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -1432,7 +1432,7 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
 
       # CORS
-      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177}
 
       # Rate Limiting
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}

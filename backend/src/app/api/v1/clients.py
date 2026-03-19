@@ -6,7 +6,7 @@ All routes prefixed with /api/v1/workspaces/{workspace_id}/clients.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -308,18 +308,21 @@ async def get_client_analytics(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
-    end_date: Annotated[datetime | None, Query(description="End date")] = None,
+    start_date: Annotated[date | None, Query(description="Start date (YYYY-MM-DD)")] = None,
+    end_date: Annotated[date | None, Query(description="End date (YYYY-MM-DD)")] = None,
 ) -> ClientAnalyticsResponse:
     """Get client overview analytics with growth trends."""
     from app.services.analytics_service import get_analytics_service
 
     service = get_analytics_service()
     try:
+        # Convert date to datetime for service layer compatibility
+        start_dt = datetime.combine(start_date, datetime.min.time()) if start_date else None
+        end_dt = datetime.combine(end_date, datetime.max.time()) if end_date else None
         result = await service.get_client_analytics(
             workspace_id=workspace_id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_dt,
+            end_date=end_dt,
         )
         return ClientAnalyticsResponse(**result)
     except Exception as e:
@@ -340,18 +343,21 @@ async def get_engagement_metrics(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
-    end_date: Annotated[datetime | None, Query(description="End date")] = None,
+    start_date: Annotated[date | None, Query(description="Start date (YYYY-MM-DD)")] = None,
+    end_date: Annotated[date | None, Query(description="End date (YYYY-MM-DD)")] = None,
 ) -> EngagementMetricsResponse:
     """Get client engagement metrics."""
     from app.services.analytics_service import get_analytics_service
 
     service = get_analytics_service()
     try:
+        # Convert date to datetime for service layer compatibility
+        start_dt = datetime.combine(start_date, datetime.min.time()) if start_date else None
+        end_dt = datetime.combine(end_date, datetime.max.time()) if end_date else None
         result = await service.get_engagement_metrics(
             workspace_id=workspace_id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_dt,
+            end_date=end_dt,
         )
         return EngagementMetricsResponse(**result)
     except Exception as e:
@@ -398,18 +404,21 @@ async def get_revenue_per_client(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
-    end_date: Annotated[datetime | None, Query(description="End date")] = None,
+    start_date: Annotated[date | None, Query(description="Start date (YYYY-MM-DD)")] = None,
+    end_date: Annotated[date | None, Query(description="End date (YYYY-MM-DD)")] = None,
 ) -> RevenueAnalyticsResponse:
     """Get revenue metrics per client."""
     from app.services.analytics_service import get_analytics_service
 
     service = get_analytics_service()
     try:
+        # Convert date to datetime for service layer compatibility
+        start_dt = datetime.combine(start_date, datetime.min.time()) if start_date else None
+        end_dt = datetime.combine(end_date, datetime.max.time()) if end_date else None
         result = await service.get_revenue_per_client(
             workspace_id=workspace_id,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_dt,
+            end_date=end_dt,
         )
         return RevenueAnalyticsResponse(**result)
     except Exception as e:

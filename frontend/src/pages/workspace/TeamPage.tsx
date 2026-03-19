@@ -436,23 +436,55 @@ const TeamPage: React.FC = () => {
       </motion.div>
 
       {/* Error State */}
-      {error && (
-        <motion.div
-          variants={staggerItem}
-          className="card-glass rounded-2xl p-6 flex items-center gap-4 border border-error-200 dark:border-error-800"
-        >
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-error-100 dark:bg-error-900/30 flex items-center justify-center">
-            <AlertCircle size={20} className="text-error-500" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-text-primary">Error loading team</h3>
-            <p className="text-sm text-text-secondary">{error.message}</p>
-          </div>
-          <AppButton onClick={handleRefresh} variant="outline" size="sm">
-            Try Again
-          </AppButton>
-        </motion.div>
-      )}
+      {error && (() => {
+        const isPlanRestriction =
+          (error as any)?.status === 403 ||
+          error.message?.toLowerCase().includes('permission') ||
+          error.message?.toLowerCase().includes('forbidden');
+
+        return (
+          <motion.div
+            variants={staggerItem}
+            className={`card-glass rounded-2xl p-6 flex items-center gap-4 border ${
+              isPlanRestriction
+                ? 'border-warning-200 dark:border-warning-800'
+                : 'border-error-200 dark:border-error-800'
+            }`}
+          >
+            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+              isPlanRestriction
+                ? 'bg-warning-100 dark:bg-warning-900/30'
+                : 'bg-error-100 dark:bg-error-900/30'
+            }`}>
+              {isPlanRestriction ? (
+                <Users size={20} className="text-warning-500" />
+              ) : (
+                <AlertCircle size={20} className="text-error-500" />
+              )}
+            </div>
+            <div className="flex-1">
+              {isPlanRestriction ? (
+                <>
+                  <h3 className="font-medium text-text-primary">Team management is a paid feature</h3>
+                  <p className="text-sm text-text-secondary">
+                    Team management is available on Professional plans and above. Upgrade your plan to invite team members and manage roles.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-medium text-text-primary">Error loading team</h3>
+                  <p className="text-sm text-text-secondary">{error.message}</p>
+                </>
+              )}
+            </div>
+            {!isPlanRestriction && (
+              <AppButton onClick={handleRefresh} variant="outline" size="sm">
+                Try Again
+              </AppButton>
+            )}
+          </motion.div>
+        );
+      })()}
 
       {/* Loading State */}
       {isLoading && !error && (

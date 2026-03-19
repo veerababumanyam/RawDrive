@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { TrendingUp, Filter, Download, AlertCircle, CheckCircle, Info, AlertTriangle, Search } from 'lucide-react';
-import { WorkspaceLayout } from '../../../components/layout/WorkspaceLayout';
 import { AppButton } from '../../../components/ui/AppButton';
 import { useAIHighlights } from '../../../hooks/useAIHighlights';
 import type { AIHighlight } from '../../../components/features/ai/AIHighlightsPanel';
@@ -89,8 +88,7 @@ export const AIInsightsHistoryPage: React.FC = () => {
   };
 
   return (
-    <WorkspaceLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -232,8 +230,7 @@ export const AIInsightsHistoryPage: React.FC = () => {
               </div>
             ))}
         </div>
-      </div>
-    </WorkspaceLayout>
+    </div>
   );
 };
 

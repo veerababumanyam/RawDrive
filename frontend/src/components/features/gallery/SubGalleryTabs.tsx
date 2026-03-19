@@ -477,7 +477,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
         >
           <Plus size={14} className="sm:w-4 sm:h-4" />
           <span className="hidden sm:inline">New Sub-Gallery</span>
-          <span className="sm:hidden">New</span>
+          <span className="inline sm:hidden">New</span>
         </button>
       )}
     </div>

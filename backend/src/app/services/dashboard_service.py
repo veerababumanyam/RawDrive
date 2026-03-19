@@ -40,15 +40,13 @@ class DashboardService:
                 workspace_id,
             )
 
-            # Get clients count (unique client names in active galleries)
+            # Get clients count from the clients table (consistent with Clients page)
             clients_count = await conn.fetchval(
                 """
-                SELECT COUNT(DISTINCT client_name)
-                FROM galleries
-                WHERE workspace_id = $1 
-                AND deleted = FALSE 
-                AND client_name IS NOT NULL 
-                AND client_name != ''
+                SELECT COUNT(*)
+                FROM clients
+                WHERE workspace_id = $1
+                AND deleted = FALSE
                 """,
                 workspace_id,
             )

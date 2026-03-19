@@ -109,10 +109,19 @@ export function useGalleryTaggingHealth({
       }
     } catch (err: unknown) {
       if (mountedRef.current) {
-        // Handle 401 errors silently - user may need to re-login
-        const errorObj = err as { code?: string; status?: number };
-        if (errorObj?.code === 'UNAUTHORIZED' || errorObj?.status === 401) {
-          // Silent fail for auth errors - tagging health is non-critical
+        // Handle non-critical errors silently - tagging health is a UI enhancement
+        // 401 = auth expired, 404 = endpoint not found (ai-service not deployed),
+        // 502/503 = ai-service container not running
+        const errorObj = err as { code?: string; status?: number; message?: string };
+        const status = errorObj?.status;
+        const isSilent =
+          errorObj?.code === 'UNAUTHORIZED' ||
+          status === 401 ||
+          status === 404 ||
+          status === 502 ||
+          status === 503;
+        if (isSilent) {
+          // Silent fail - tagging health is non-critical
           setFullHealth(null);
           setHealth(null);
         } else {
@@ -239,11 +248,22 @@ export function useWorkspaceTaggingHealth({
       }
     } catch (err) {
       if (mountedRef.current) {
-        // Handle 401 silently (apiClient throws on 401)
-        const error = err instanceof Error ? err : new Error('Failed to fetch health');
-        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        // Handle non-critical errors silently - tagging health is a UI enhancement
+        // 401 = auth expired, 404 = ai-service not deployed, 502/503 = ai-service down
+        const errorObj = err as { status?: number; message?: string };
+        const errorMsg = err instanceof Error ? err.message : '';
+        const isSilent =
+          errorMsg.includes('401') ||
+          errorMsg.includes('Unauthorized') ||
+          errorObj?.status === 404 ||
+          errorObj?.status === 502 ||
+          errorObj?.status === 503 ||
+          errorMsg.includes('404') ||
+          errorMsg.includes('Not Found');
+        if (isSilent) {
           setHealth(null);
         } else {
+          const error = err instanceof Error ? err : new Error('Failed to fetch health');
           setError(error);
           setHealth(null);
         }

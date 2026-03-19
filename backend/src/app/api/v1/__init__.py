@@ -245,22 +245,6 @@ router.include_router(
 # Storage routes
 router.include_router(storage_router)
 
-# #region agent log
-import json
-try:
-    with open(r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log', 'a', encoding='utf-8') as f:
-        f.write(json.dumps({
-            "location": "backend/src/app/api/v1/__init__.py:189",
-            "message": "Smart tagging routes moved to ai-service - router removed from backend",
-            "data": {"smart_tagging_in": "ai-service", "routed_via_traefik": True, "hypothesisId": "A"},
-            "timestamp": int(__import__('time').time() * 1000),
-            "sessionId": "debug-session",
-            "runId": "post-fix"
-        }) + '\n')
-except Exception:
-    pass
-# #endregion agent log
-
 # Smart Tagging routes (AI-powered content analysis) - Moved to ai-service microservice
 # router.include_router(
 #     smart_tagging_router,

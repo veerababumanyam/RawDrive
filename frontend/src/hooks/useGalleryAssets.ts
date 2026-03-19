@@ -56,6 +56,7 @@ export const useGalleryAssets = ({
   autoFetch = true,
   sortBy = 'position',
   aiFilters,
+  faceGroupIds,
 }: UseGalleryAssetsOptions): UseGalleryAssetsReturn => {
   const [assets, setAssets] = useState<GalleryAssetItem[]>([]);
   const [meta, setMeta] = useState<GalleryAssetsResponse['meta'] | null>(null);

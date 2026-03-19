@@ -164,10 +164,10 @@ const BrandingPage = lazy(() => import('../pages/workspace/BrandingPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const GeminiModelsPage = lazy(() => import('../pages/admin/GeminiModelsPage'));
 
-// AI Dashboard pages - TODO: Implement these pages
-// const SmartCurateDashboardPage = lazy(() => import('../pages/workspace/ai/SmartCurateDashboardPage'));
-// const AIInsightsHistoryPage = lazy(() => import('../pages/workspace/ai/AIInsightsHistoryPage'));
-// const AIToolsHubPage = lazy(() => import('../pages/workspace/ai/AIToolsHubPage'));
+// AI Dashboard pages
+const SmartCurateDashboardPage = lazy(() => import('../pages/workspace/ai/SmartCurateDashboardPage'));
+const AIInsightsHistoryPage = lazy(() => import('../pages/workspace/ai/AIInsightsHistoryPage'));
+const AIToolsHubPage = lazy(() => import('../pages/workspace/ai/AIToolsHubPage'));
 
 // Compliance pages (audit & compliance system)
 const AuditLogsPage = lazy(() => import('../pages/admin/AuditLogsPage'));
@@ -548,19 +548,19 @@ export const workspaceRoutes: RouteObject[] = [
         path: 'churn-prevention',
         element: <CriticalLazyPage component={ChurnPreventionPage} />,
       },
-      // AI Dashboard routes - TODO: Uncomment when pages are implemented
-      // {
-      //   path: 'ai/smart-curate',
-      //   element: <CriticalLazyPage component={SmartCurateDashboardPage} />,
-      // },
-      // {
-      //   path: 'ai/insights',
-      //   element: <CriticalLazyPage component={AIInsightsHistoryPage} />,
-      // },
-      // {
-      //   path: 'ai/tools',
-      //   element: <CriticalLazyPage component={AIToolsHubPage} />,
-      // },
+      // AI Dashboard routes
+      {
+        path: 'ai/smart-curate',
+        element: <CriticalLazyPage component={SmartCurateDashboardPage} />,
+      },
+      {
+        path: 'ai/insights',
+        element: <CriticalLazyPage component={AIInsightsHistoryPage} />,
+      },
+      {
+        path: 'ai/tools',
+        element: <CriticalLazyPage component={AIToolsHubPage} />,
+      },
     ],
   },
 ];

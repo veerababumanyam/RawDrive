@@ -120,13 +120,29 @@ Backend Python equivalents: `from app.shared.types import ...`
 
 ## Skills (auto-loaded by context)
 
-26 skills in `.claude/skills/`:
+35 skills in `.claude/skills/`:
 
 **Core Architecture:** `multi-tenant-security` | `fastapi-services` | `react-frontend` | `database-migrations` | `microservice-development` | `api-design`
-**Features:** `gallery-features` | `invitations` | `client-management` | `billing-payments` | `ai-ml-integration` | `storage-uploads`
+**Features:** `gallery-features` | `invitations` | `client-management` | `billing-payments` | `ai-ml-integration` | `storage-uploads` | `album-proofing` | `notification-system` | `webhook-development`
+**Search & Discovery:** `search-discovery` | `analytics-engagement`
+**Real-Time & Offline:** `real-time-collaboration` | `pwa-offline`
+**Compliance & Onboarding:** `compliance-legal` | `onboarding-flow`
 **Quality & Ops:** `testing-patterns` | `performance-optimization` | `design-system` | `observability` | `traefik-infrastructure` | `git-workflow`
 **Workflow & Shipping:** `qa-testing` | `design-audit` | `pre-landing-review` | `ship-release` | `doc-sync` | `engineering-retro`
 **Cross-cutting:** `i18n-localization` | `shared-packages`
+
+## Hooks (auto-enforced guardrails)
+
+6 custom hooks in `.claude/hooks/`:
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `workspace-id-guard` | PreToolUse (Write/Edit) | Flags database queries missing workspace_id isolation |
+| `docker-health-check` | PreToolUse (Bash) | Verifies Docker containers are running before exec |
+| `migration-safety` | PreToolUse (Write/Edit) | Validates Alembic migrations for destructive operations |
+| `secret-detection` | PreToolUse (Write/Edit) | Blocks secrets/credentials from being written to code |
+| `test-coverage-gate` | PostToolUse (Write/Edit) | Reminds about missing test files for modified code |
+| `i18n-string-check` | PostToolUse (Write/Edit) | Flags hardcoded user-facing strings in React components |
 
 ## Gotchas
 

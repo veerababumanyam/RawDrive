@@ -41,6 +41,8 @@ export interface FilterBarProps {
   searchDebounceMs?: number;
   /** Clear all filters callback */
   onClearAll?: () => void;
+  /** Search input placeholder text */
+  searchPlaceholder?: string;
   className?: string;
 }
 
@@ -55,6 +57,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onSearchChange,
   searchDebounceMs = 300,
   onClearAll,
+  searchPlaceholder = 'Search photos...',
   className = '',
 }) => {
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
@@ -154,7 +157,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         <div className="flex-1 min-w-0 max-w-md">
           <AppInput
             type="text"
-            placeholder="Search photos..."
+            placeholder={searchPlaceholder}
             value={localSearchQuery}
             onChange={(e) => setLocalSearchQuery(e.target.value)}
             leftIcon={<Search size={16} />}

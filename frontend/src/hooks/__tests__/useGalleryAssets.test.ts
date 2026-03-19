@@ -74,4 +74,43 @@ describe('useGalleryAssets Property Tests', () => {
        )
      );
   });
+
+  it('should accept faceGroupIds without throwing ReferenceError (bug fix)', () => {
+    // This test verifies the fix for: "ReferenceError: faceGroupIds is not defined"
+    // The bug was that faceGroupIds was not destructured from options but was
+    // referenced in the useCallback dependency array.
+    (galleryService.listGalleryAssets as any).mockResolvedValue({
+      data: mockAssets,
+      meta: { total: 2, page: 1, limit: 50, hasMore: false },
+    });
+
+    // Should not throw ReferenceError on render
+    expect(() => {
+      renderHook(() =>
+        useGalleryAssets({
+          workspaceId: 'ws-1',
+          galleryId: 'gal-1',
+          autoFetch: false,
+          faceGroupIds: ['face-group-1', 'face-group-2'],
+        })
+      );
+    }).not.toThrow();
+  });
+
+  it('should accept undefined faceGroupIds without throwing', () => {
+    (galleryService.listGalleryAssets as any).mockResolvedValue({
+      data: mockAssets,
+      meta: { total: 2, page: 1, limit: 50, hasMore: false },
+    });
+
+    expect(() => {
+      renderHook(() =>
+        useGalleryAssets({
+          workspaceId: 'ws-1',
+          galleryId: 'gal-1',
+          autoFetch: false,
+        })
+      );
+    }).not.toThrow();
+  });
 });

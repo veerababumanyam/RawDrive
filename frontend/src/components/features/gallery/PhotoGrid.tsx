@@ -104,7 +104,7 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   isPrivateUnlocked,
   onUnlockPrivate,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['gallery', 'common']);
   const [items, setItems] = useState<GalleryAssetItem[]>(assets);
 
   // Update items when assets prop changes
@@ -317,7 +317,7 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
         <div className="w-16 h-16 mb-4 rounded-full bg-surface flex items-center justify-center">
           <ImageIcon size={32} className="text-text-tertiary" aria-hidden="true" />
         </div>
-        <p className="text-text-secondary">{t('gallery.list.noPhotos')}</p>
+        <p className="text-text-secondary">{t('gallery:list.noPhotos')}</p>
       </div>
     );
   }

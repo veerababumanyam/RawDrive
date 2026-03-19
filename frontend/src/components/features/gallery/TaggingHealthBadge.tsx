@@ -122,8 +122,8 @@ export const TaggingHealthBadge: React.FC<TaggingHealthBadgeProps> = ({
     );
   }
 
-  // Error state
-  if (error || !health) {
+  // Error state - only show if there was an actual error (not just service unavailable)
+  if (error) {
     return (
       <div
         className={`inline-flex items-center ${sizeConfig.gap} ${sizeConfig.padding}
@@ -136,6 +136,11 @@ export const TaggingHealthBadge: React.FC<TaggingHealthBadgeProps> = ({
         )}
       </div>
     );
+  }
+
+  // No health data available (service unavailable / not deployed) - render nothing
+  if (!health) {
+    return null;
   }
 
   const config = BADGE_CONFIG[health.badge];

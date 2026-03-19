@@ -16,7 +16,6 @@ import {
   Settings,
   BookOpen,
 } from 'lucide-react';
-import { WorkspaceLayout } from '../../../components/layout/WorkspaceLayout';
 import { AppButton } from '../../../components/ui/AppButton';
 import { useAIHighlights } from '../../../hooks/useAIHighlights';
 
@@ -178,8 +177,7 @@ export const AIToolsHubPage: React.FC = () => {
   const recentActivity = highlights.slice(0, 3);
 
   return (
-    <WorkspaceLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -306,8 +304,7 @@ export const AIToolsHubPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-    </WorkspaceLayout>
+    </div>
   );
 };
 

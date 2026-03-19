@@ -161,12 +161,53 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/workspace-id-guard.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/migration-safety.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/secret-detection.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/docker-health-check.js"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "node .claude/hooks/gsd-context-monitor.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/test-coverage-gate.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/i18n-string-check.js"
           }
         ]
       }

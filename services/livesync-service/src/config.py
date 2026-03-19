@@ -161,6 +161,10 @@ class Settings(BaseSettings):
         default_factory=lambda: [
             "http://localhost:3000",
             "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:5175",
+            "http://localhost:5176",
+            "http://localhost:5177",
             "https://rawdrive.io",
             "https://*.rawdrive.io",
         ],
@@ -175,6 +179,10 @@ class Settings(BaseSettings):
         default_origins = [
             "http://localhost:3000",
             "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:5175",
+            "http://localhost:5176",
+            "http://localhost:5177",
             "https://rawdrive.io",
             "https://*.rawdrive.io",
         ]

@@ -877,7 +877,7 @@ export class AnalyticsService {
       offset: params.offset,
     });
     const response = await apiClient.get<ActivityFeedResponse>(
-      `${this.getBaseUrl(workspaceId)}/activity${query}`
+      `${this.getBaseUrl(workspaceId)}/activity-feed${query}`
     );
 
     if (response.error) {

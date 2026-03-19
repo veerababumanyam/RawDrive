@@ -115,20 +115,9 @@ class AnalyticsService:
         )
         new_clients = new_clients_row["total"]
 
-        converted_visitors_row = await pool.fetchrow(
-            """
-            SELECT COUNT(*) AS total
-            FROM visitors
-            WHERE workspace_id = $1
-              AND converted_to_client_id IS NOT NULL
-              AND updated_at >= $2
-              AND updated_at <= $3
-            """,
-            UUID(workspace_id),
-            datetime.combine(start_date, datetime.min.time()),
-            datetime.combine(end_date, datetime.max.time()),
-        )
-        converted_visitors = converted_visitors_row["total"]
+        # converted_to_client_id column not yet in visitors schema;
+        # default to 0 until visitor-to-client conversion tracking is implemented
+        converted_visitors = 0
 
         # 2. Engagement metrics
         gallery_links_row = await pool.fetchrow(
@@ -160,8 +149,8 @@ class AnalyticsService:
             SELECT COUNT(*) AS total
             FROM client_communications
             WHERE workspace_id = $1
-              AND communication_date >= $2
-              AND communication_date <= $3
+              AND created_at >= $2
+              AND created_at <= $3
             """,
             UUID(workspace_id),
             datetime.combine(start_date, datetime.min.time()),
@@ -175,7 +164,7 @@ class AnalyticsService:
             FROM client_communications
             WHERE workspace_id = $1
               AND follow_up_required = TRUE
-              AND follow_up_completed = FALSE
+              AND follow_up_date IS NOT NULL
               AND follow_up_date < NOW()
             """,
             UUID(workspace_id),

@@ -41,7 +41,7 @@ router = APIRouter(
 # =============================================================================
 
 
-@router.get("/", response_model=WorkspaceAnalyticsSummary)
+@router.get("", response_model=WorkspaceAnalyticsSummary)
 async def get_workspace_analytics(
     workspace_id: UUID = Depends(verify_workspace_access),
     start_date: Optional[str] = Query(

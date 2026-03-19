@@ -62,7 +62,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className={`
           flex flex-col
           h-full
-          overflow-hidden
+          min-h-0
+          overflow-x-hidden
           ${glass ? 'glass-light' : ''}
           ${className}
         `}

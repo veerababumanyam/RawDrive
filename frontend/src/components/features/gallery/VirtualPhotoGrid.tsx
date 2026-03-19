@@ -268,7 +268,7 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
   onLoadMore,
   hasMore = false,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['gallery', 'common']);
   const gridRef = useRef<GridImperativeAPI>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
@@ -375,7 +375,7 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
         <div className="w-16 h-16 mb-4 rounded-full bg-surface flex items-center justify-center">
           <ImageIcon size={32} className="text-text-tertiary" aria-hidden="true" />
         </div>
-        <p className="text-text-secondary">{t('gallery.list.noPhotos')}</p>
+        <p className="text-text-secondary">{t('gallery:list.noPhotos')}</p>
       </div>
     );
   }

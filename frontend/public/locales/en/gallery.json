@@ -7,16 +7,16 @@
         "galleryCount_other": "galleries",
         "of": "of",
         "searchPlaceholder": "Search galleries...",
-        "errorLoading": "Error loading galleries"
+        "errorLoading": "Error loading galleries",
+        "noPhotos": "No photos",
+        "uploadToGetStarted": "Upload photos to get started",
+        "searchPhotosPlaceholder": "Search photos...",
+        "loadingPhotos": "Loading photos...",
+        "recentItems_one": "{{count}} item",
+        "recentItems_other": "{{count}} items"
     },
     "empty": "No galleries yet",
     "emptyDescription": "Create your first gallery to start organizing your photos.",
-    "list": {
-        "noPhotos": "No photos",
-        "uploadToGetStarted": "Upload photos to get started",
-        "searchPlaceholder": "Search photos...",
-        "loadingPhotos": "Loading photos..."
-    },
     "form": {
         "name": "Gallery Name",
         "namePlaceholder": "Enter gallery name",

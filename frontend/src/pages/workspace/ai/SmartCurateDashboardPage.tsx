@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, TrendingUp, Clock, ArrowRight, LayoutGrid } from 'lucide-react';
-import { WorkspaceLayout } from '../../../components/layout/WorkspaceLayout';
 import { AppButton } from '../../../components/ui/AppButton';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -31,8 +30,7 @@ export const SmartCurateDashboardPage: React.FC = () => {
   const sessions = []; // TODO: Replace with real data
 
   return (
-    <WorkspaceLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -143,8 +141,7 @@ export const SmartCurateDashboardPage: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
-    </WorkspaceLayout>
+    </div>
   );
 };
 

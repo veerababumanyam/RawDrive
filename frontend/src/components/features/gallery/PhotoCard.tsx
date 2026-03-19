@@ -129,7 +129,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   const isAccessCodeLocked = asset.has_access_code && !isAccessCodeVerified;
   const isLocked = isPrivateLocked || isAccessCodeLocked;
   const { workspace } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation(['gallery', 'common']);
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -431,10 +431,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           {asset.asset.status === 'processing' ? (
             <>
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
-              <div className="text-text-secondary text-xs font-medium">{t('gallery.photoCard.processing')}</div>
+              <div className="text-text-secondary text-xs font-medium">{t('gallery:photoCard.processing')}</div>
             </>
           ) : asset.asset.status === 'failed' ? (
-            <div className="text-error text-xs font-medium">{t('gallery.photoCard.uploadFailed')}</div>
+            <div className="text-error text-xs font-medium">{t('gallery:photoCard.uploadFailed')}</div>
           ) : urlLoading && !lqip ? (
             // Skeleton Loader (only if no LQIP available)
             <div className="w-full h-full absolute inset-0 bg-surface-hover animate-pulse flex items-center justify-center">
@@ -452,7 +452,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
             />
           ) : (
             <div className="text-text-tertiary text-sm">
-              {urlError ? t('gallery.photoCard.failedToLoad') : t('gallery.photoCard.noImage')}
+              {urlError ? t('gallery:photoCard.failedToLoad') : t('gallery:photoCard.noImage')}
             </div>
           )}
         </div>
@@ -464,12 +464,12 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         {isCover && (
           <div
             className="px-2 py-1 rounded-full bg-primary/90 backdrop-blur-sm flex items-center gap-1"
-            aria-label={t('gallery.photoCard.coverPhoto')}
-            title={t('gallery.photoCard.galleryCover')}
+            aria-label={t('gallery:photoCard.coverPhoto')}
+            title={t('gallery:photoCard.galleryCover')}
           >
             <Image size={12} className="text-white" aria-hidden="true" />
-            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">{t('gallery.photoCard.cover')}</span>
-            <span className="sr-only">{t('gallery.photoCard.galleryCover')}</span>
+            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">{t('gallery:photoCard.cover')}</span>
+            <span className="sr-only">{t('gallery:photoCard.galleryCover')}</span>
           </div>
         )}
 
@@ -477,11 +477,11 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         {asset.is_private && (
           <div
             className="p-1.5 rounded-full bg-warning/90 backdrop-blur-sm"
-            aria-label={t('gallery.photoCard.private')}
-            title={t('gallery.photoCard.privatePhoto')}
+            aria-label={t('gallery:photoCard.private')}
+            title={t('gallery:photoCard.privatePhoto')}
           >
             <Lock size={14} className="text-white" aria-hidden="true" />
-            <span className="sr-only">{t('gallery.photoCard.privatePhoto')}</span>
+            <span className="sr-only">{t('gallery:photoCard.privatePhoto')}</span>
           </div>
         )}
 
@@ -523,7 +523,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           }}
           role="button"
           tabIndex={0}
-          aria-label={isAccessCodeLocked ? t('gallery.accessCode.protected') : t('gallery.photoCard.privatePhoto')}
+          aria-label={isAccessCodeLocked ? t('gallery:accessCode.protected') : t('gallery:photoCard.privatePhoto')}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -552,10 +552,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
               )}
             </div>
             <span className="text-sm font-medium drop-shadow-md tracking-wide uppercase opacity-90">
-              {isAccessCodeLocked ? t('gallery.accessCode.protected') : t('gallery.photoCard.private')}
+              {isAccessCodeLocked ? t('gallery:accessCode.protected') : t('gallery:photoCard.private')}
             </span>
             <span className="text-xs text-white/70 group-hover/lock:text-white transition-colors mt-1">
-              {isAccessCodeLocked ? t('gallery.accessCode.enterCodeToView') : t('gallery.photoCard.tapToUnlock')}
+              {isAccessCodeLocked ? t('gallery:accessCode.enterCodeToView') : t('gallery:photoCard.tapToUnlock')}
             </span>
           </div>
         </div>

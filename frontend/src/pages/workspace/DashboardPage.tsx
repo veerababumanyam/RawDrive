@@ -300,7 +300,7 @@ const DashboardPage = () => {
 
                                     <div>
                                         <div className="text-2xl sm:text-3xl font-bold text-text-primary mb-1 group-hover:scale-105 transition-transform origin-left">
-                                            {stat.value}
+                                            {typeof stat.value === 'string' ? Number(stat.value) : stat.value}
                                         </div>
                                         <div className="text-xs sm:text-sm text-text-secondary font-medium">
                                             {stat.label}

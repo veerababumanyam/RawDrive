@@ -144,7 +144,7 @@ const RecentPage: React.FC = () => {
               t('list.errorLoading')
             ) : (
               <>
-                {galleries.length} items
+                {t('list.recentItems', { count: galleries.length })}
               </>
             )}
           </p>
