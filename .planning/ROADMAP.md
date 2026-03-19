@@ -69,12 +69,12 @@ Plans:
   4. Bento grid layout displays with proper spacing, transitions, and responsive breakpoints across all screen sizes
   5. Public pages render in dark mode when user system preference is dark, with correct contrast and readability
   6. Fetching a public profile URL with curl returns correct meta tags (title, description, OG image, JSON-LD structured data) in raw HTML
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
-- [ ] 11-03: TBD
+- [ ] 11-01-PLAN.md -- Responsive bento grid, stagger animations, animated theme backgrounds, dark mode
+- [ ] 11-02-PLAN.md -- SEO backend: HTML shell, OG image generation, JSON-LD structured data
+- [ ] 11-03-PLAN.md -- Wire pages to enhanced renderer, client-side meta tags, visual verification
 
 ### Phase 12: Editor Redesign
 **Goal**: Profile editors deliver a real-time, drag-and-drop editing experience consistent with the rest of RawDrive
