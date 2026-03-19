@@ -265,7 +265,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 11. Public Page Redesign | v1.1 | 0/? | Not started | - |
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
-| 14. FaceID Deep Dive & Enhancement | 5/5 | Complete   | 2026-03-19 | - |
+| 14. FaceID Deep Dive & Enhancement | 5/5 | Complete    | 2026-03-19 | - |
 | 15. Gallery Research & Foundation | v1.2 | 0/? | Not started | - |
 | 16. Gallery Layouts & Lightbox | v1.2 | 0/? | Not started | - |
 | 17. Client Interaction & Delivery | v1.2 | 0/? | Not started | - |

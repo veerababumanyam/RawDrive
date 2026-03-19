@@ -93,14 +93,35 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - Client comments and proofing interactions within galleries
 - Gallery expiration and download policies with clear client communication
 
+## Future Milestone: v1.3 Monetization, Onboarding & Growth
+
+**Goal:** Transform RawDrive from a feature-complete tool into a growth-ready business by adding pricing transparency, guided onboarding, business analytics, third-party integrations, and feature discovery — addressing the monetization (5/10) and market readiness (6/10) gaps identified in the BA review.
+
+**Target features:**
+- Public pricing page with tier comparison matrix and feature limits
+- Contextual upgrade prompts on premium features (themes, AI credits, storage)
+- Guided onboarding wizard for new user activation (upload, gallery, profile)
+- Adaptive "next steps" dashboard cards based on feature adoption
+- Conversion funnel analytics (gallery view -> download -> inquiry -> booking)
+- Client lifecycle tracking (lead, active, completed, churned)
+- Revenue metrics dashboard (MRR, plan distribution, upgrade trends)
+- Email marketing integration (Mailchimp/ConvertKit client sync)
+- Calendar integration for booking availability on public profiles
+- Cloud storage import (Google Drive/Dropbox -> galleries)
+- Zapier/webhook triggers for third-party automation
+- In-app help center with searchable knowledge base
+- Interactive feature tooltips and video walkthroughs in empty states
+
 ### Out of Scope
 
 - OAuth/social login (Google, GitHub) — defer to v2, email/password sufficient
 - Google Search Console integration — not critical for photographer workflows
-- Cloud sync (Google Drive, Dropbox) — defer to v2
 - Mobile native app — web-first, PWA covers mobile
 - Real-time collaborative editing — not needed for photography use case
 - Video upload/processing — storage/bandwidth costs, defer to v2+
+- Commerce/print sales — Stan Store territory, not core photography
+- White-label B2B — requires critical mass first
+- Community/marketplace — platform play, defer to v2+
 
 ## Context
 
@@ -135,4 +156,4 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - **Compatibility**: All services share PostgreSQL and validate JWT with shared JWT_SECRET
 
 ---
-*Last updated: 2026-03-19 after v1.2 milestone defined*
+*Last updated: 2026-03-19 after v1.3 milestone defined from BA review gap analysis*
