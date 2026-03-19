@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
-status: unknown
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-03-19T22:14:21.850Z"
+status: phase-complete
+stopped_at: Completed 14-05-PLAN.md
+last_updated: "2026-03-19T22:25:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 14 (FaceID Deep Dive & Enhancement) — EXECUTING
-Plan: 4 of 5
+Phase: 14 (FaceID Deep Dive & Enhancement) — COMPLETE
+Plan: 5 of 5 (all plans complete)
 
 ## Performance Metrics
 
@@ -59,6 +59,10 @@ Plan: 4 of 5
 - [Phase 14]: normalizePaginatedResponse utility used instead of React Query invalidation -- face hooks use useState/useEffect pattern
 - [Phase 14]: Workers use check_consent_status() not is_face_detection_allowed() -- workers need raw status enum, not boolean
 - [Phase 14]: Sorted lock ordering uses str(UUID) for deterministic order across all UUID versions
+- [Phase 14]: Reused existing ContextMenu UI component for face context menu (no face-specific menu needed)
+- [Phase 14]: Toast action system used for undo merge (createUndoMergeToast factory, not custom component)
+- [Phase 14]: Undo merge uses split-based reversal -- captures face IDs pre-merge, calls splitFaceGroup on undo
+- [Phase 14]: Cross-gallery search endpoint on face_groups router (matches existing routing pattern)
 
 ### Roadmap Evolution
 
@@ -89,8 +93,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T22:14:21.848Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-03-19T22:25:00.000Z
+Stopped at: Completed 14-05-PLAN.md (Phase 14 complete)
 Resume file: None
 
 ### Upcoming Milestones
