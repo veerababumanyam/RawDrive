@@ -58,8 +58,8 @@
 ### Foundation
 
 - [ ] **FNDN-01**: Gallery page decomposed from monolith into composable components with React Context
-- [ ] **FNDN-02**: Proofing state scoped per-visitor so multiple clients see independent favorites/selections
-- [ ] **FNDN-03**: LayoutStyle enum synchronized across frontend types, backend models, and gallery-service schemas
+- [x] **FNDN-02**: Proofing state scoped per-visitor so multiple clients see independent favorites/selections
+- [x] **FNDN-03**: LayoutStyle enum synchronized across frontend types, backend models, and gallery-service schemas
 
 ### Gallery Layouts
 
@@ -245,8 +245,8 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FNDN-01 | Phase 15 | Pending |
-| FNDN-02 | Phase 15 | Pending |
-| FNDN-03 | Phase 15 | Pending |
+| FNDN-02 | Phase 15 | Complete |
+| FNDN-03 | Phase 15 | Complete |
 | LYOT-01 | Phase 16 | Pending |
 | LYOT-02 | Phase 16 | Pending |
 | LYOT-03 | Phase 16 | Pending |
