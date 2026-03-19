@@ -298,13 +298,16 @@ async def close_postgres_pool() -> None:
 
 
 async def postgres_healthcheck(timeout: float = 1.0) -> bool:
-    """Run a lightweight health check (SELECT 1)."""
+    """Run a lightweight health check (SELECT 1).
+
+    Uses pool.acquire(timeout=...) to avoid hanging indefinitely when
+    the connection pool is exhausted or connections are stale.
+    """
 
     pool = await get_postgres_pool()
-    async with acquire_conn(pool) as conn:
-        async with normalize_async_cm(conn.transaction()):
-            result = await conn.fetchval("SELECT 1")
-            return result == 1
+    async with pool.acquire(timeout=timeout) as conn:
+        result = await conn.fetchval("SELECT 1")
+        return result == 1
 
 
 # =============================================================================

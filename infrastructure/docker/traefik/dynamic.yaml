@@ -552,7 +552,7 @@ http:
         servers:
           - url: "http://backend:8000"
         healthCheck:
-          path: /health
+          path: /live
           interval: 10s
           timeout: 3s
         sticky:
