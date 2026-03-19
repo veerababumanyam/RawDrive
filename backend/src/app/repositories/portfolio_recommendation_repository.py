@@ -765,7 +765,7 @@ class PortfolioRecommendationRepository:
                     a.filename,
                     a.r2_key,
                     a.thumbnail_r2_key,
-                    g.name as gallery_name
+                    g.title as gallery_name
                 FROM portfolio_recommendation_items pri
                 LEFT JOIN assets a ON pri.asset_id = a.asset_id
                 LEFT JOIN galleries g ON a.gallery_id = g.gallery_id

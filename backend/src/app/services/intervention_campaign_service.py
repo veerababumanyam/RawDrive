@@ -686,7 +686,7 @@ class InterventionCampaignService:
                     AND ia.workspace_id = cp.workspace_id
                 ) as last_intervention_at,
                 (
-                    SELECT g.name
+                    SELECT g.title
                     FROM galleries g
                     WHERE g.workspace_id = cp.workspace_id
                     AND EXISTS (

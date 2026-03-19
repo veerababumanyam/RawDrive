@@ -1658,7 +1658,7 @@ class AnalyticsRepository:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 f"""
-                SELECT ga.*, g.name as gallery_name
+                SELECT ga.*, g.title as gallery_name
                 FROM gallery_analytics ga
                 LEFT JOIN galleries g ON ga.gallery_id = g.gallery_id
                 WHERE ga.workspace_id = $1 AND ga.period_type = $2
@@ -2978,7 +2978,7 @@ class AnalyticsRepository:
                 """
                 SELECT
                     e.gallery_id,
-                    g.name as gallery_name,
+                    g.title as gallery_name,
                     COUNT(*) FILTER (WHERE e.event_type = 'gallery_view') as views,
                     COUNT(*) FILTER (WHERE e.event_type = 'asset_favorite') as favorites,
                     COUNT(*) FILTER (WHERE e.event_type = 'asset_comment') as comments,
@@ -2993,7 +2993,7 @@ class AnalyticsRepository:
                 WHERE e.workspace_id = $1
                     AND e.client_id = $2
                     AND e.gallery_id IS NOT NULL
-                GROUP BY e.gallery_id, g.name
+                GROUP BY e.gallery_id, g.title
                 ORDER BY (
                     COUNT(*) FILTER (WHERE e.event_type = 'gallery_view') +
                     COUNT(*) FILTER (WHERE e.event_type = 'asset_favorite') * 2 +

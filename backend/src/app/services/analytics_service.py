@@ -1908,7 +1908,7 @@ class AnalyticsService:
                 """
                 SELECT
                     g.gallery_id,
-                    g.name as gallery_name,
+                    g.title as gallery_name,
                     g.client_name,
                     COUNT(*) FILTER (WHERE ae.event_type = 'gallery_view') as views,
                     COUNT(DISTINCT COALESCE(ae.client_id::text, ae.visitor_id::text, ae.ip_address::text))
@@ -1923,7 +1923,7 @@ class AnalyticsService:
                     AND ae.occurred_at <= $3
                 WHERE g.workspace_id = $1
                 AND g.deleted = FALSE
-                GROUP BY g.gallery_id, g.name, g.client_name
+                GROUP BY g.gallery_id, g.title, g.client_name
                 ORDER BY views DESC NULLS LAST
                 LIMIT 10
                 """,
@@ -1943,7 +1943,7 @@ class AnalyticsService:
                     ae.event_type,
                     ae.event_category,
                     ae.gallery_id,
-                    g.name as gallery_name,
+                    g.title as gallery_name,
                     ae.client_id,
                     c.full_name as client_name,
                     ae.occurred_at
@@ -2428,7 +2428,7 @@ class AnalyticsService:
                     ae.event_type,
                     ae.event_category,
                     ae.gallery_id,
-                    g.name as gallery_name,
+                    g.title as gallery_name,
                     ae.asset_id,
                     a.original_filename as asset_name,
                     ae.client_id,
@@ -2608,9 +2608,9 @@ class AnalyticsService:
                 """
                 SELECT
                     g.gallery_id,
-                    g.name,
+                    g.title as name,
                     g.client_name,
-                    g.event_date,
+                    g.shoot_date as event_date,
                     g.status,
                     g.created_at,
                     (SELECT COUNT(*) FROM gallery_assets ga
@@ -5218,7 +5218,7 @@ class AnalyticsService:
             query = """
                 SELECT
                     g.gallery_id,
-                    g.name AS gallery_name,
+                    g.title AS gallery_name,
                     g.created_at AS gallery_created_at,
                     COUNT(DISTINCT e.event_id) FILTER (WHERE e.event_type = 'gallery_view') AS total_views,
                     COUNT(DISTINCT e.visitor_id) FILTER (WHERE e.event_type = 'gallery_view') AS unique_visitors,
@@ -5238,7 +5238,7 @@ class AnalyticsService:
                 params.append(gallery_ids)
 
             query += """
-                GROUP BY g.gallery_id, g.name, g.created_at
+                GROUP BY g.gallery_id, g.title, g.created_at
                 ORDER BY total_views DESC
                 LIMIT 100
             """
@@ -5454,7 +5454,7 @@ class AnalyticsService:
                     e.occurred_at,
                     e.numeric_value AS file_size,
                     e.metadata,
-                    g.name AS gallery_name,
+                    g.title AS gallery_name,
                     c.name AS client_name,
                     c.email AS client_email
                 FROM analytics_events e

@@ -934,6 +934,9 @@ async def handle_face_cache_warm_recent(payload: dict[str, Any]) -> dict[str, An
     Scheduled task to warm cache for recently uploaded assets.
     Runs every 30 minutes to keep cache warm for new content.
 
+    NOTE: Temporarily disabled — face_cache_warmer uses SQLAlchemy select()
+    with Pydantic models which causes 'Expected unicode, got Select' errors.
+
     Payload:
         - workspace_id: The workspace UUID (optional, if omitted processes all active workspaces)
         - limit: Maximum number of assets to warm (default: 100)
@@ -942,6 +945,11 @@ async def handle_face_cache_warm_recent(payload: dict[str, Any]) -> dict[str, An
     Returns:
         Dictionary with warming statistics
     """
+    # Temporarily disabled — face_cache_warmer uses SQLAlchemy select() with
+    # Pydantic models causing 'Expected unicode, got Select' errors that
+    # exhaust the connection pool via infinite retries.
+    return {"status": "skipped", "reason": "face_cache_warmer needs migration to raw SQL"}
+
     from uuid import UUID
     from app.db.postgres import get_postgres_pool
     from app.services.face_cache_warmer import get_face_cache_warmer
@@ -1011,6 +1019,11 @@ async def handle_face_cache_warm_popular(payload: dict[str, Any]) -> dict[str, A
     Returns:
         Dictionary with warming statistics
     """
+    # Temporarily disabled — face_cache_warmer uses SQLAlchemy select() with
+    # Pydantic models causing 'Expected unicode, got Select' errors that
+    # exhaust the connection pool via infinite retries.
+    return {"status": "skipped", "reason": "face_cache_warmer needs migration to raw SQL"}
+
     from uuid import UUID
     from app.db.postgres import get_postgres_pool
     from app.services.face_cache_warmer import get_face_cache_warmer

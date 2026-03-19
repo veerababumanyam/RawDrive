@@ -270,38 +270,46 @@ async def get_dashboard_metrics(
             end_date=end_date,
         )
 
+        # Service may return a dict or a list — normalize to dict
+        if not isinstance(metrics, dict):
+            metrics = {}
+
+        def _get(key: str, default=None):
+            val = metrics.get(key, default)
+            return val if isinstance(val, dict) else (default or {})
+
         # Transform to response model
         return DashboardMetricsResponse(
             overview=OverviewMetrics(
-                total_galleries=metrics.get("overview", {}).get("total_galleries", 0),
-                total_assets=metrics.get("overview", {}).get("total_assets", 0),
-                storage_used_bytes=metrics.get("overview", {}).get("storage_used_bytes", 0),
-                storage_used_formatted=metrics.get("overview", {}).get("storage_used_formatted", "0 B"),
-                total_clients=metrics.get("overview", {}).get("total_clients", 0),
-                active_clients=metrics.get("overview", {}).get("active_clients", 0),
-                total_views=metrics.get("overview", {}).get("total_views", 0),
-                total_downloads=metrics.get("overview", {}).get("total_downloads", 0),
+                total_galleries=_get("overview", {}).get("total_galleries", 0),
+                total_assets=_get("overview", {}).get("total_assets", 0),
+                storage_used_bytes=_get("overview", {}).get("storage_used_bytes", 0),
+                storage_used_formatted=_get("overview", {}).get("storage_used_formatted", "0 B"),
+                total_clients=_get("overview", {}).get("total_clients", 0),
+                active_clients=_get("overview", {}).get("active_clients", 0),
+                total_views=_get("overview", {}).get("total_views", 0),
+                total_downloads=_get("overview", {}).get("total_downloads", 0),
             ),
             quick_stats=QuickStats(
-                views=metrics.get("quick_stats", {}).get("views", 0),
-                unique_visitors=metrics.get("quick_stats", {}).get("unique_visitors", 0),
-                downloads=metrics.get("quick_stats", {}).get("downloads", 0),
-                new_clients=metrics.get("quick_stats", {}).get("new_clients", 0),
-                new_galleries=metrics.get("quick_stats", {}).get("new_galleries", 0),
+                views=_get("quick_stats", {}).get("views", 0),
+                unique_visitors=_get("quick_stats", {}).get("unique_visitors", 0),
+                downloads=_get("quick_stats", {}).get("downloads", 0),
+                new_clients=_get("quick_stats", {}).get("new_clients", 0),
+                new_galleries=_get("quick_stats", {}).get("new_galleries", 0),
             ),
             trends=TrendMetrics(
-                views_change=metrics.get("trends", {}).get("views_change", 0),
-                visitors_change=metrics.get("trends", {}).get("visitors_change", 0),
-                downloads_change=metrics.get("trends", {}).get("downloads_change", 0),
-                clients_change=metrics.get("trends", {}).get("clients_change", 0),
+                views_change=_get("trends", {}).get("views_change", 0),
+                visitors_change=_get("trends", {}).get("visitors_change", 0),
+                downloads_change=_get("trends", {}).get("downloads_change", 0),
+                clients_change=_get("trends", {}).get("clients_change", 0),
             ),
             device_breakdown=DeviceBreakdown(
-                desktop=metrics.get("device_breakdown", {}).get("desktop", 0),
-                desktop_percentage=metrics.get("device_breakdown", {}).get("desktop_percentage", 0),
-                mobile=metrics.get("device_breakdown", {}).get("mobile", 0),
-                mobile_percentage=metrics.get("device_breakdown", {}).get("mobile_percentage", 0),
-                tablet=metrics.get("device_breakdown", {}).get("tablet", 0),
-                tablet_percentage=metrics.get("device_breakdown", {}).get("tablet_percentage", 0),
+                desktop=_get("device_breakdown", {}).get("desktop", 0),
+                desktop_percentage=_get("device_breakdown", {}).get("desktop_percentage", 0),
+                mobile=_get("device_breakdown", {}).get("mobile", 0),
+                mobile_percentage=_get("device_breakdown", {}).get("mobile_percentage", 0),
+                tablet=_get("device_breakdown", {}).get("tablet", 0),
+                tablet_percentage=_get("device_breakdown", {}).get("tablet_percentage", 0),
             ),
             geographic_breakdown=[
                 GeographicEntry(
@@ -310,7 +318,7 @@ async def get_dashboard_metrics(
                     count=g.get("count", 0),
                     percentage=g.get("percentage", 0),
                 )
-                for g in metrics.get("geographic_breakdown", [])
+                for g in (metrics.get("geographic_breakdown") or []) if isinstance(g, dict)
             ],
             top_galleries=[
                 TopGalleryEntry(
@@ -322,7 +330,7 @@ async def get_dashboard_metrics(
                     engagement_score=g.get("engagement_score"),
                     trend_percentage=g.get("trend_percentage"),
                 )
-                for g in metrics.get("top_galleries", [])
+                for g in (metrics.get("top_galleries") or []) if isinstance(g, dict)
             ],
             daily_views=[
                 DailyViewsEntry(
@@ -330,10 +338,10 @@ async def get_dashboard_metrics(
                     views=d.get("views", 0),
                     unique_visitors=d.get("unique_visitors", 0),
                 )
-                for d in metrics.get("daily_views", [])
+                for d in (metrics.get("daily_views") or []) if isinstance(d, dict)
             ],
-            period=metrics.get("period", {}),
-            generated_at=metrics.get("generated_at", datetime.utcnow().isoformat()),
+            period=_get("period", {}),
+            generated_at=metrics.get("generated_at", datetime.utcnow().isoformat()) if isinstance(metrics.get("generated_at"), str) else datetime.utcnow().isoformat(),
         )
     except InvalidDateRangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -435,12 +443,16 @@ async def get_quick_stats(
             workspace_id=workspace_id,
             period=period,
         )
+        if not isinstance(stats, dict):
+            stats = {}
+        qs = stats.get("quick_stats")
+        tr = stats.get("trends")
         return QuickStatsResponse(
-            period=stats.get("period", period),
-            period_label=stats.get("period_label", period),
-            quick_stats=QuickStats(**stats.get("quick_stats", {})),
-            trends=TrendMetrics(**stats.get("trends", {})),
-            generated_at=stats.get("generated_at", datetime.utcnow().isoformat()),
+            period=stats.get("period", period) if isinstance(stats.get("period"), str) else period,
+            period_label=stats.get("period_label", period) if isinstance(stats.get("period_label"), str) else period,
+            quick_stats=QuickStats(**(qs if isinstance(qs, dict) else {})),
+            trends=TrendMetrics(**(tr if isinstance(tr, dict) else {})),
+            generated_at=stats.get("generated_at", datetime.utcnow().isoformat()) if isinstance(stats.get("generated_at"), str) else datetime.utcnow().isoformat(),
         )
     except InvalidDateRangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -601,6 +613,9 @@ async def get_top_galleries(
             sort_by=sort_by,
         )
 
+        # Service may return a list directly or a dict with "galleries" key
+        galleries_list = result if isinstance(result, list) else result.get("galleries", [])
+
         return TopGalleriesResponse(
             galleries=[
                 TopGalleryEntry(
@@ -612,11 +627,11 @@ async def get_top_galleries(
                     engagement_score=g.get("engagement_score"),
                     trend_percentage=g.get("trend_percentage"),
                 )
-                for g in result.get("galleries", [])
+                for g in galleries_list
             ],
-            period=result.get("period", period),
-            period_label=result.get("period_label", period),
-            generated_at=result.get("generated_at", datetime.utcnow().isoformat()),
+            period=result.get("period", period) if isinstance(result, dict) else period,
+            period_label=result.get("period_label", period) if isinstance(result, dict) else period,
+            generated_at=result.get("generated_at", datetime.utcnow().isoformat()) if isinstance(result, dict) else datetime.utcnow().isoformat(),
         )
     except InvalidDateRangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
