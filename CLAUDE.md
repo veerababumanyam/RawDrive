@@ -79,6 +79,26 @@ API keys, secrets, LLM provider/model names, colors (use design tokens), user-fa
 ### RBAC
 Workspace RBAC and Platform RBAC are separate systems. Download policies: `view_only|web_only|watermarked_only|original_allowed`.
 
+<important if="implementing any feature or bugfix">
+
+### Test-Driven Development (MANDATORY)
+Write tests BEFORE implementation code. Every feature and bugfix follows this cycle:
+
+1. **Red** — Write a failing test that defines the expected behavior
+2. **Green** — Write the minimum code to make the test pass
+3. **Refactor** — Clean up while keeping tests green
+
+```bash
+# Frontend (Vitest)
+cd frontend && pnpm test src/path/file.test.ts --watch
+
+# Backend (pytest inside Docker)
+docker exec rawdrive-backend pytest tests/path/test_file.py -x
+```
+
+No PR or commit should include implementation code without corresponding tests. If fixing a bug, first write a test that reproduces it.
+</important>
+
 ## File Structure
 
 ```

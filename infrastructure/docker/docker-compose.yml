@@ -471,6 +471,8 @@ services:
       DEBUG: ${DEBUG:-false}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       PORT: ${PORT_INVITATIONS}
+    volumes:
+      - ../../services/invitations-service:/app
     ports:
       # Bind to localhost only - accessible via Traefik reverse proxy
       - "127.0.0.1:${PORT_INVITATIONS}:${PORT_INVITATIONS}"

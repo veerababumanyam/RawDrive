@@ -596,7 +596,7 @@ async def get_top_galleries(
     try:
         result = await service.get_top_galleries(
             workspace_id=workspace_id,
-            period=period,
+            period_type=period,
             limit=limit,
             sort_by=sort_by,
         )

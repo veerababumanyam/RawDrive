@@ -26,28 +26,28 @@ router.include_router(
     tags=["invitation-templates"],
 )
 
-# Invitation Exports routes (must be before /{invitation_id} routes)
+# Invitation Exports routes
 router.include_router(
     invitation_exports_router,
-    prefix="/workspaces/{workspace_id}/digital-invitations",
+    prefix="/workspaces/{workspace_id}/digital-invitations/{invitation_id}/exports",
     tags=["invitation-exports"],
 )
 
-# Invitation Media routes (must be before /{invitation_id} routes)
+# Invitation Media routes (routes already include /{invitation_id}/media path)
 router.include_router(
     invitation_media_router,
     prefix="/workspaces/{workspace_id}/digital-invitations",
     tags=["invitation-media"],
 )
 
-# Invitation Sub-Events routes (must be before /{invitation_id} routes)
+# Invitation Sub-Events routes
 router.include_router(
     invitation_sub_events_router,
-    prefix="/workspaces/{workspace_id}/digital-invitations",
+    prefix="/workspaces/{workspace_id}/digital-invitations/{invitation_id}/sub-events",
     tags=["invitation-sub-events"],
 )
 
-# Invitation AI routes (must be before /{invitation_id} routes)
+# Invitation AI routes
 router.include_router(
     invitation_ai_router,
     prefix="/workspaces/{workspace_id}/digital-invitations",

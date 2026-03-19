@@ -47,7 +47,7 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - [ ] Bulk invitation emails — implement email delivery for wedding invitations
 - [ ] Account recovery emails — implement recovery email flow
 - [ ] AI/ML: CLIP model loading — replace placeholder with actual ViT-B/32 model
-- [ ] AI/ML: Batch embedding computation — implement GPU-accelerated inference
+- [ ] AI/ML: Batch embedding computation — implement LLM flash models accelerated inference
 - [ ] AI/ML: Similarity clustering — implement cosine similarity threshold-based clustering
 - [ ] AI/ML: Duplicate detection — fix image byte fetching for hash-based detection
 - [ ] Gallery export: PDF generation — implement actual PDF export

@@ -1749,7 +1749,7 @@ class AnalyticsService:
             # Storage used (sum of asset file sizes in bytes)
             storage_bytes = await conn.fetchval(
                 """
-                SELECT COALESCE(SUM(a.file_size), 0)
+                SELECT COALESCE(SUM(a.original_bytes), 0)
                 FROM assets a
                 WHERE a.workspace_id = $1
                 AND a.deleted = FALSE
@@ -2309,7 +2309,7 @@ class AnalyticsService:
             # Storage used
             storage_bytes = await conn.fetchval(
                 """
-                SELECT COALESCE(SUM(a.file_size), 0)
+                SELECT COALESCE(SUM(a.original_bytes), 0)
                 FROM assets a
                 WHERE a.workspace_id = $1
                 AND a.deleted = FALSE
