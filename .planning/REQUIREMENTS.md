@@ -53,7 +53,54 @@
 - [x] **FACE-04**: Face recognition works reliably across different lighting, angles, and photo qualities (consent bypass removed, deadlock prevention, cache coherence, cascade delete verified)
 - [x] **FACE-05**: Face processing completes within acceptable time and doesn't block uploads (HNSW index, batched centroids, eager model loading, enforced worker timeouts)
 
-## v1.2 Requirements
+## v1.2 Requirements — Public Gallery & Gallery Player Modernization
+
+### Foundation
+
+- [ ] **FNDN-01**: Gallery page decomposed from monolith into composable components with React Context
+- [ ] **FNDN-02**: Proofing state scoped per-visitor so multiple clients see independent favorites/selections
+- [ ] **FNDN-03**: LayoutStyle enum synchronized across frontend types, backend models, and gallery-service schemas
+
+### Gallery Layouts
+
+- [ ] **LYOT-01**: User can view gallery in justified/row layout with uniform row heights
+- [ ] **LYOT-02**: User can view gallery in mosaic layout with varied tile sizes
+- [ ] **LYOT-03**: Existing masonry layout enhanced with better column balancing and responsive breakpoints
+- [ ] **LYOT-04**: Gallery viewer can toggle between available layouts via layout switcher UI
+
+### Gallery Player
+
+- [ ] **PLYR-01**: User can open fullscreen lightbox with zoom, pan, and swipe navigation
+- [ ] **PLYR-02**: User can view EXIF data (aperture, shutter, ISO, lens) overlay on photos
+- [ ] **PLYR-03**: User can navigate photos via filmstrip thumbnail strip at bottom of player
+- [ ] **PLYR-04**: Mobile users can pinch-to-zoom, swipe to navigate, and double-tap to zoom
+
+### Client Interactions
+
+- [ ] **INTR-01**: Client can favorite/heart photos directly from the public gallery view
+- [ ] **INTR-02**: Photographer can set selection quotas; client sees progress toward quota
+- [ ] **INTR-03**: Client can leave per-photo comments during proofing
+- [ ] **INTR-04**: Photographer sees client selections in real-time via WebSocket sync
+
+### Downloads & Delivery
+
+- [ ] **DWNL-01**: Client can download entire gallery or selected photos as ZIP with progress indicator
+- [ ] **DWNL-02**: Client can choose download size (web/print/original) per photographer's download policy
+- [ ] **DWNL-03**: Galleries auto-expire after set date with reminder emails sent before deadline
+- [ ] **DWNL-04**: Photographer can see download tracking (who downloaded what and when)
+
+### Sharing & Polish
+
+- [ ] **SHAR-01**: Gallery links display rich Open Graph previews when shared on social media
+- [ ] **SHAR-02**: Photographer can generate QR codes for galleries
+- [ ] **SHAR-03**: Photographer can get embeddable gallery widget code for websites
+- [ ] **SHAR-04**: Gallery viewer can toggle between dark and light mode
+
+### Progressive Experience
+
+- [ ] **PROG-01**: Images load with LQIP blur-up placeholder transitioning to full resolution
+- [ ] **PROG-02**: Password-protected galleries show custom-branded entry page (logo, colors, message)
+- [ ] **PROG-03**: Photographer can add optional background music to gallery slideshows
 
 ### Gallery Analytics
 
@@ -197,16 +244,42 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| FNDN-01 | TBD | Pending |
+| FNDN-02 | TBD | Pending |
+| FNDN-03 | TBD | Pending |
+| LYOT-01 | TBD | Pending |
+| LYOT-02 | TBD | Pending |
+| LYOT-03 | TBD | Pending |
+| LYOT-04 | TBD | Pending |
+| PLYR-01 | TBD | Pending |
+| PLYR-02 | TBD | Pending |
+| PLYR-03 | TBD | Pending |
+| PLYR-04 | TBD | Pending |
+| INTR-01 | TBD | Pending |
+| INTR-02 | TBD | Pending |
+| INTR-03 | TBD | Pending |
+| INTR-04 | TBD | Pending |
+| DWNL-01 | TBD | Pending |
+| DWNL-02 | TBD | Pending |
+| DWNL-03 | TBD | Pending |
+| DWNL-04 | TBD | Pending |
+| SHAR-01 | TBD | Pending |
+| SHAR-02 | TBD | Pending |
+| SHAR-03 | TBD | Pending |
+| SHAR-04 | TBD | Pending |
+| PROG-01 | TBD | Pending |
+| PROG-02 | TBD | Pending |
+| PROG-03 | TBD | Pending |
 | GANLT-01 | TBD | Pending |
 | GANLT-02 | TBD | Pending |
 | GANLT-03 | TBD | Pending |
 | GDISC-01 | TBD | Pending |
 | GDISC-02 | TBD | Pending |
-| GALUX-01 | Phase 18 | Pending |
-| GALUX-02 | Phase 17 | Pending |
-| GALUX-03 | Phase 17 | Pending |
-| GALUX-04 | Phase 18 | Pending |
-| GALUX-05 | Phase 17 | Pending |
+| GALUX-01 | TBD | Pending |
+| GALUX-02 | TBD | Pending |
+| GALUX-03 | TBD | Pending |
+| GALUX-04 | TBD | Pending |
+| GALUX-05 | TBD | Pending |
 
 ### v1.3 Traceability
 
@@ -234,11 +307,11 @@
 
 **Coverage:**
 - v1.1 requirements: 30 total (25 original + 5 FACE), 30 mapped, 0 unmapped
-- v1.2 requirements: 10 total (5 gallery analytics/discovery + 5 gallery UX from BA review), mapped to Phases 17-18
+- v1.2 requirements: 36 total (22 new gallery/player + 5 gallery analytics/discovery + 5 gallery UX from BA review + 4 pending phase mapping), pending roadmap
 - v1.3 requirements: 19 (monetization, onboarding, KPIs, integrations, feature discovery), pending roadmap
 - v2+ backlog: 12 items (gallery templates/commerce/collaboration/AI, advanced content, analytics, platform expansion)
-- **Grand total: 71 requirements across all milestones**
+- **Grand total: 97 requirements across all milestones**
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 — FACE-01 through FACE-05 added for Phase 14*
+*Last updated: 2026-03-19 — v1.2 gallery/player modernization requirements added (22 new + existing 10)*
