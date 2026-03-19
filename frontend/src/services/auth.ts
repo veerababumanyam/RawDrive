@@ -4,7 +4,7 @@
  * Requirements 3.1, 3.2, 4.1, 13.2, 13.4, 13.5
  */
 
-import { apiClient } from './api';
+import { apiClient, getApiBaseUrl } from './api';
 import {
   getStoredTokens,
   setStoredTokens,
@@ -336,11 +336,10 @@ export async function logout(): Promise<void> {
  * Get Google OAuth URL
  */
 export function getGoogleOAuthUrl(redirectTo?: string): string {
-  // In dev mode, use relative URLs (Vite proxy handles routing)
-  // OAuth needs an absolute URL for the redirect, so prepend window.location.origin
-  const baseUrl = import.meta.env.DEV
-    ? window.location.origin
-    : (import.meta.env.VITE_API_URL ?? 'http://localhost');
+  // OAuth requires an absolute URL for browser redirect (not a relative fetch path)
+  // If API base is relative (empty string), prepend window.location.origin
+  const apiBase = getApiBaseUrl();
+  const baseUrl = apiBase || window.location.origin;
   const redirect = redirectTo || window.location.origin + '/workspace';
   return `${baseUrl}/api/v1/auth/oauth/google/start?redirect_uri=${encodeURIComponent(redirect)}`;
 }
