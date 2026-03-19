@@ -1210,6 +1210,73 @@ async def get_faces_in_group(
 
 
 # ---------------------------------------------------------------------------
+# Cross-Gallery Person Photo Search
+# ---------------------------------------------------------------------------
+
+
+class PersonPhotoSearchResult(BaseModel):
+    """A photo containing a specific person, with gallery context."""
+
+    asset_id: UUID
+    asset_thumbnail_url: str = ""
+    gallery_id: UUID
+    gallery_name: str = ""
+    face_bounding_box: dict = Field(default_factory=dict)
+    confidence: float = 0.0
+    created_at: Optional[str] = None
+
+
+class PersonPhotoSearchResponse(BaseModel):
+    """Paginated response for person photo search."""
+
+    data: list[PersonPhotoSearchResult] = []
+    meta: dict = Field(default_factory=dict)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/face-groups/{group_id}/search-photos",
+    response_model=PersonPhotoSearchResponse,
+    summary="Search photos by person across all galleries",
+    description="""
+    Find all photos containing a specific person across all galleries in the workspace.
+
+    Returns photo thumbnails with gallery context, face bounding boxes, and confidence scores.
+    Results are workspace-scoped (multi-tenant isolation enforced).
+    """,
+)
+async def search_photos_by_person(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    group_id: Annotated[UUID, Path(..., description="Face group ID representing the person")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    group_repo: GroupRepoDep,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Results per page")] = 50,
+    _: None = Depends(require_biometric_consent),
+):
+    """Search for all photos of a person across all galleries."""
+    # Verify group exists in this workspace
+    group = await group_repo.find_by_id(group_id, workspace_id)
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Face group not found",
+        )
+
+    from app.services.face_search_service import get_face_search_service
+
+    search_service = get_face_search_service()
+    result = await search_service.search_photos_by_person(
+        workspace_id=workspace_id,
+        group_id=group_id,
+        page=page,
+        per_page=per_page,
+    )
+
+    return PersonPhotoSearchResponse(**result)
+
+
+# ---------------------------------------------------------------------------
 # Face Group Faces (Legacy - keeping for backward compatibility)
 # ---------------------------------------------------------------------------
 
