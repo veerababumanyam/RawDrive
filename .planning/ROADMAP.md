@@ -53,9 +53,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — R2 avatar pipeline + AvatarDisplay component with fallback
-- [ ] 10-02-PLAN.md — UnifiedThemeEngine + SectionRegistry + PublicProfileRenderer
-- [ ] 10-03-PLAN.md — Wire pages to shared renderer, delete legacy files, smoke tests
+- [ ] 10-01-PLAN.md -- R2 avatar pipeline + AvatarDisplay component with fallback
+- [ ] 10-02-PLAN.md -- UnifiedThemeEngine + SectionRegistry + PublicProfileRenderer
+- [ ] 10-03-PLAN.md -- Wire pages to shared renderer, delete legacy files, smoke tests
 
 ### Phase 11: Public Page Redesign
 **Goal**: Both public profile pages are modern, responsive, visually premium, and discoverable by search engines
@@ -110,18 +110,21 @@ Plans:
 ### Phase 14: FaceID Deep Dive & Enhancement
 **Goal**: All face identification features work reliably, with competitive parity to Google Photos/Apple Photos face grouping, and a polished face management UX
 **Depends on**: Phase 10 (avatar/R2 pipeline, shared infrastructure)
-**Requirements**: FACE-01 through FACE-05 (to be defined during planning)
+**Requirements**: FACE-01, FACE-02, FACE-03, FACE-04, FACE-05
 **Success Criteria** (what must be TRUE):
   1. Face detection runs on uploaded photos and correctly identifies/groups faces with >90% accuracy
   2. Users can view, name, merge, and split face groups through an intuitive management interface
   3. Face search allows finding all photos of a specific person across all galleries
   4. Face recognition works reliably across different lighting, angles, and photo qualities
   5. Performance: face processing completes within acceptable time and doesn't block uploads
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 14-01: TBD
-- [ ] 14-02: TBD
+- [ ] 14-01-PLAN.md -- Backend critical bug fixes & security hardening (500 errors, embeddings in API, consent bypass, model hash, representative faces)
+- [ ] 14-02-PLAN.md -- Performance infrastructure (HNSW index, batched centroid recalculation, eager model loading, worker timeout enforcement)
+- [ ] 14-03-PLAN.md -- Worker reliability & consent enforcement (consent in workers, cascade delete, deadlock prevention, cache coherence)
+- [ ] 14-04-PLAN.md -- Frontend bug fixes & state management (API response normalization, state sync, error boundaries, responsive grid, keyboard nav)
+- [ ] 14-05-PLAN.md -- UX polish & face search (confidence filter, context menu, undo merge, cross-gallery face search, human verification)
 
 ### v1.2 Public Gallery & Gallery Player Modernization
 
@@ -258,11 +261,11 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 07. Gallery Completion | v1.0 | 2/2 | Complete | 2026-03-18 |
 | 08. Notifications | v1.0 | 2/2 | Complete | 2026-03-19 |
 | 09. Shared Packages & Test Coverage | v1.0 | 4/4 | Complete | 2026-03-19 |
-| 10. Foundation & Fixes | v1.1 | 0/? | Not started | - |
+| 10. Foundation & Fixes | v1.1 | 0/3 | Not started | - |
 | 11. Public Page Redesign | v1.1 | 0/? | Not started | - |
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
-| 14. FaceID Deep Dive & Enhancement | v1.1 | 0/? | Not started | - |
+| 14. FaceID Deep Dive & Enhancement | v1.1 | 0/5 | Not started | - |
 | 15. Gallery Research & Foundation | v1.2 | 0/? | Not started | - |
 | 16. Gallery Layouts & Lightbox | v1.2 | 0/? | Not started | - |
 | 17. Client Interaction & Delivery | v1.2 | 0/? | Not started | - |

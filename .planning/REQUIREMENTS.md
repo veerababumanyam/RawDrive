@@ -45,6 +45,14 @@
 - [ ] **SEO-03**: Public profile pages include JSON-LD Person/Organization structured data
 - [ ] **SEO-04**: Public profile pages are crawlable by search engines (not blocked by client-side rendering)
 
+### Face Identification
+
+- [ ] **FACE-01**: Face detection runs on uploaded photos and correctly identifies/groups faces with >90% accuracy (no 500 errors, consent enforced, model validated)
+- [ ] **FACE-02**: Users can view, name, merge, and split face groups through an intuitive management interface (responsive grid, context menu, confidence filter, error boundaries)
+- [ ] **FACE-03**: Face search allows finding all photos of a specific person across all galleries in a workspace
+- [ ] **FACE-04**: Face recognition works reliably across different lighting, angles, and photo qualities (consent bypass removed, deadlock prevention, cache coherence, cascade delete verified)
+- [ ] **FACE-05**: Face processing completes within acceptable time and doesn't block uploads (HNSW index, batched centroids, eager model loading, enforced worker timeouts)
+
 ## v1.2 Requirements
 
 ### Gallery Analytics
@@ -179,6 +187,11 @@
 | SEO-02 | Phase 11 | Pending |
 | SEO-03 | Phase 11 | Pending |
 | SEO-04 | Phase 11 | Pending |
+| FACE-01 | Phase 14 | Pending |
+| FACE-02 | Phase 14 | Pending |
+| FACE-03 | Phase 14 | Pending |
+| FACE-04 | Phase 14 | Pending |
+| FACE-05 | Phase 14 | Pending |
 
 ### v1.2 Traceability
 
@@ -220,12 +233,12 @@
 | FDISC-03 | TBD | Pending |
 
 **Coverage:**
-- v1.1 requirements: 25 total, 25 mapped, 0 unmapped
+- v1.1 requirements: 30 total (25 original + 5 FACE), 30 mapped, 0 unmapped
 - v1.2 requirements: 10 total (5 gallery analytics/discovery + 5 gallery UX from BA review), mapped to Phases 17-18
 - v1.3 requirements: 19 (monetization, onboarding, KPIs, integrations, feature discovery), pending roadmap
 - v2+ backlog: 12 items (gallery templates/commerce/collaboration/AI, advanced content, analytics, platform expansion)
-- **Grand total: 66 requirements across all milestones**
+- **Grand total: 71 requirements across all milestones**
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after BA review gap analysis*
+*Last updated: 2026-03-19 — FACE-01 through FACE-05 added for Phase 14*
