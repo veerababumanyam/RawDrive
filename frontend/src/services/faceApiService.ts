@@ -128,6 +128,47 @@ export class FaceApiError extends Error {
     }
 }
 
+// Normalized paginated response type
+export interface NormalizedPaginatedResponse<T> {
+    data: T[];
+    meta: { total: number; page: number; per_page: number };
+}
+
+/**
+ * Normalize API responses that may come in different formats:
+ * - { data: T[], meta: { total, page, per_page } } (standard paginated)
+ * - T[] (direct array)
+ * - { data: T[] } (data without meta)
+ * - null/undefined/empty
+ */
+export function normalizePaginatedResponse<T>(response: unknown): NormalizedPaginatedResponse<T> {
+    if (response == null) {
+        return { data: [], meta: { total: 0, page: 1, per_page: 0 } };
+    }
+
+    if (Array.isArray(response)) {
+        return {
+            data: response as T[],
+            meta: { total: response.length, page: 1, per_page: response.length },
+        };
+    }
+
+    if (typeof response === 'object' && 'data' in response) {
+        const r = response as { data: T[]; meta?: Partial<{ total: number; page: number; per_page: number }> };
+        const data = Array.isArray(r.data) ? r.data : [];
+        return {
+            data,
+            meta: {
+                total: r.meta?.total ?? data.length,
+                page: r.meta?.page ?? 1,
+                per_page: r.meta?.per_page ?? data.length,
+            },
+        };
+    }
+
+    return { data: [], meta: { total: 0, page: 1, per_page: 0 } };
+}
+
 // Helper to extract data from API response
 function extractData<T>(response: ApiResponse<T>): T {
     if (response.error) {
@@ -167,15 +208,16 @@ class FaceApiService {
         const page = options?.offset ? Math.floor(options.offset / (options.limit || 50)) + 1 : 1;
         params.set('page', String(page));
 
-        const response = await apiClient.get<{ data: FaceGroup[]; meta: { total: number } }>(
+        const response = await apiClient.get<unknown>(
             `${this.baseUrl}/workspaces/${workspaceId}/face-groups?${params}`
         );
-        const result = extractData(response);
+        const raw = extractData(response);
 
-        // Map backend format (data/meta) to frontend format (groups/total)
+        // Normalize regardless of API response format (data/meta or direct array)
+        const normalized = normalizePaginatedResponse<FaceGroup>(raw);
         return {
-            groups: result.data || [],
-            total: result.meta?.total || 0,
+            groups: normalized.data,
+            total: normalized.meta.total,
         };
     }
 
@@ -197,15 +239,17 @@ class FaceApiService {
         if (options?.limit) params.set('limit', String(options.limit));
         if (options?.page) params.set('page', String(options.page));
 
-        const response = await apiClient.get<{ data: FaceGroupWithGalleryStats[]; meta: { total: number } }>(
+        const response = await apiClient.get<unknown>(
             `${this.baseUrl}/workspaces/${workspaceId}/face-groups/gallery/${galleryId}?${params}`,
             { headers: { 'X-Workspace-ID': workspaceId } }
         );
-        const result = extractData(response);
+        const raw = extractData(response);
 
+        // Normalize regardless of API response format
+        const normalized = normalizePaginatedResponse<FaceGroupWithGalleryStats>(raw);
         return {
-            groups: result.data || [],
-            total: result.meta?.total || 0,
+            groups: normalized.data,
+            total: normalized.meta.total,
         };
     }
 
