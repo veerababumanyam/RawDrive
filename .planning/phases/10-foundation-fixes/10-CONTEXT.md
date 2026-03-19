@@ -27,7 +27,7 @@ Requirements: FNDTN-01, FNDTN-02, FNDTN-03, FNDTN-04, FNDTN-05
 - Single UnifiedThemeEngine replacing 3 fragmented files (ProfileThemeEngine.ts, themeTransformer.ts, themeService.ts) — CSS custom properties applied to root
 - Delete 5 legacy themes (minimal, dark, pastel, bold, cinematic), map to nearest PREBUILT equivalent — legacy themes are subsets of PREBUILT ones
 - Existing users with legacy theme selections: map to nearest PREBUILT equivalent during theme engine load, log unmapped themes for review
-- Apply themes via CSS custom properties on `:root` — all components read `var(--theme-*)`, no prop drilling needed
+- Apply themes via CSS custom properties on a **scoped container div** wrapping the profile renderer (NOT `:root`) — prevents theme CSS leaking to non-profile pages. All profile components read `var(--theme-*)` within the scoped container. (Updated from `:root` per research Pitfall 4: scoped approach prevents CSS leaking between profile and app pages)
 - Dark mode: respect system `prefers-color-scheme` + use theme light/dark variants — each PREBUILT theme already has both variants
 
 ### Shared Component Architecture
