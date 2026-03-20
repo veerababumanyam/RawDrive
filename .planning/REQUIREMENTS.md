@@ -110,8 +110,8 @@
 
 ### Gallery Discovery
 
-- [ ] **GDISC-01**: Gallery search supports filtering by date range, status, client, and tags simultaneously
-- [ ] **GDISC-02**: Galleries surface engagement rate ranking (most viewed, most downloaded, most shared)
+- [x] **GDISC-01**: Gallery search supports filtering by date range, status, client, and tags simultaneously
+- [x] **GDISC-02**: Galleries surface engagement rate ranking (most viewed, most downloaded, most shared)
 
 ## v1.3 Requirements
 
@@ -273,8 +273,8 @@
 | GANLT-01 | Phase 20 | Complete |
 | GANLT-02 | Phase 20 | Complete |
 | GANLT-03 | Phase 20 | Complete |
-| GDISC-01 | Phase 20 | Pending |
-| GDISC-02 | Phase 20 | Pending |
+| GDISC-01 | Phase 20 | Complete |
+| GDISC-02 | Phase 20 | Complete |
 | GALUX-01 | Phase 18 | Complete |
 | GALUX-02 | Phase 18 | Complete |
 | GALUX-03 | Phase 18 | Complete |

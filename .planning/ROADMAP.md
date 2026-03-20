@@ -141,7 +141,7 @@ Plans:
 - [x] **Phase 17: Gallery Player** - Fullscreen lightbox with zoom/pan/swipe, EXIF overlay, filmstrip navigation, mobile touch gestures (completed 2026-03-20)
 - [x] **Phase 18: Client Interactions & Gallery UX** - Favorites, selections with quotas, comments, WebSocket sync, AI tooltips, bulk actions, settings presets, sub-gallery permissions (completed 2026-03-20)
 - [x] **Phase 19: Downloads & Delivery** - Batch ZIP downloads, size options, gallery expiration with reminder emails, download tracking (completed 2026-03-20)
-- [ ] **Phase 20: Sharing, Analytics & Polish** - OG previews, QR codes, embeds, dark/light toggle, branded password page, background music, per-gallery analytics, gallery discovery
+- [x] **Phase 20: Sharing, Analytics & Polish** - OG previews, QR codes, embeds, dark/light toggle, branded password page, background music, per-gallery analytics, gallery discovery (completed 2026-03-20)
 
 ### Phase 15: Foundation Refactor & Data Model
 **Goal**: Gallery page architecture is decomposed into composable components and data model is hardened for visitor-scoped interactions and new layout types
@@ -324,7 +324,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 17. Gallery Player | v1.2 | Complete    | 2026-03-20 | 2026-03-20 |
 | 18. Client Interactions & Gallery UX | 3/3 | Complete    | 2026-03-20 | - |
 | 19. Downloads & Delivery | 3/3 | Complete    | 2026-03-20 | 2026-03-20 |
-| 20. Sharing, Analytics & Polish | 3/4 | In Progress|  | - |
+| 20. Sharing, Analytics & Polish | 4/4 | Complete   | 2026-03-20 | - |
 | 21. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |
 | 22. Pricing & Monetization UX | v1.3 | 0/? | Not started | - |
 | 23. Business Analytics & KPIs | v1.3 | 0/? | Not started | - |
