@@ -153,11 +153,11 @@
 
 ### Gallery Usability
 
-- [ ] **GALUX-01**: Each AI tool in gallery toolbar shows tooltip with 1-2 sentence description on hover
-- [ ] **GALUX-02**: Gallery provides visible bulk action toolbar when multiple photos selected (batch edit, tag, download, delete)
-- [ ] **GALUX-03**: Gallery settings offer one-click presets (Proofing, Delivery, Sharing, Premium Delivery) that configure access, downloads, and watermark together
-- [ ] **GALUX-04**: AI processing shows progress bar with estimated completion time and per-photo status (replacing "Some analyses failed" generic message)
-- [ ] **GALUX-05**: Sub-galleries show clear permission inheritance indicator and allow override per sub-gallery
+- [x] **GALUX-01**: Each AI tool in gallery toolbar shows tooltip with 1-2 sentence description on hover
+- [x] **GALUX-02**: Gallery provides visible bulk action toolbar when multiple photos selected (batch edit, tag, download, delete)
+- [x] **GALUX-03**: Gallery settings offer one-click presets (Proofing, Delivery, Sharing, Premium Delivery) that configure access, downloads, and watermark together
+- [x] **GALUX-04**: AI processing shows progress bar with estimated completion time and per-photo status (replacing "Some analyses failed" generic message)
+- [x] **GALUX-05**: Sub-galleries show clear permission inheritance indicator and allow override per sub-gallery
 
 ## v2+ Requirements (Backlog)
 
@@ -275,11 +275,11 @@
 | GANLT-03 | Phase 20 | Pending |
 | GDISC-01 | Phase 20 | Pending |
 | GDISC-02 | Phase 20 | Pending |
-| GALUX-01 | Phase 18 | Pending |
-| GALUX-02 | Phase 18 | Pending |
-| GALUX-03 | Phase 18 | Pending |
-| GALUX-04 | Phase 18 | Pending |
-| GALUX-05 | Phase 18 | Pending |
+| GALUX-01 | Phase 18 | Complete |
+| GALUX-02 | Phase 18 | Complete |
+| GALUX-03 | Phase 18 | Complete |
+| GALUX-04 | Phase 18 | Complete |
+| GALUX-05 | Phase 18 | Complete |
 
 ### v1.3 Traceability
 
