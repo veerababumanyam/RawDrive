@@ -8,3 +8,5 @@ export type { PlayerZoomContainerRef, PlayerZoomContainerProps } from './PlayerZ
 export { PlayerFilmstrip } from './PlayerFilmstrip';
 export { PlayerToolbar } from './PlayerToolbar';
 export type { PlayerToolbarProps } from './PlayerToolbar';
+export { PlayerExifPanel } from './PlayerExifPanel';
+export type { PlayerExifPanelProps } from './PlayerExifPanel';

@@ -30,7 +30,8 @@ import { Guestbook } from '../../components/features/gallery/Guestbook';
 import { BULK_DOWNLOAD_DELAY_MS, PIN_VERIFIED_KEY_PREFIX, PASSWORD_VERIFIED_KEY_PREFIX, PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
 import { useGalleryTheme } from '../../contexts/GalleryThemeContext';
 import { useGalleryInteraction } from '../../contexts/GalleryInteractionContext';
-import { PublicGalleryLightbox } from './PublicGalleryLightbox';
+import { useGalleryPlayer } from '../../contexts/GalleryPlayerContext';
+import { GalleryPlayer } from '../../components/features/gallery/player';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,10 +126,9 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
   const { addToast } = useToast();
   const { heroGradientStyle } = useGalleryTheme();
   const { favorites, selections, toggleFavorite, toggleSelection, favoriteCount, selectionCount } = useGalleryInteraction();
+  const { openPlayer } = useGalleryPlayer();
 
-  // Lightbox state
-  const [lightboxAsset, setLightboxAsset] = useState<PublicGalleryAsset | null>(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
+  // UI state
   const [isDownloading, setIsDownloading] = useState(false);
   const [showCinematicViewer, setShowCinematicViewer] = useState(false);
   const [showGuestbook, setShowGuestbook] = useState(false);
@@ -153,27 +153,13 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
     setBreadcrumbItems(items);
   }, [gallery, actualGalleryId, activeSubGallery]);
 
-  const openLightbox = useCallback((asset: PublicGalleryAsset) => {
-    const idx = displayedAssets.findIndex(a => a.asset_id === asset.asset_id);
-    setLightboxIndex(idx >= 0 ? idx : 0);
-    setLightboxAsset(asset);
-  }, [displayedAssets]);
-
   // Layout engine assets (converted from canvasAssets)
   const layoutAssets = useMemo(() => canvasAssets.map(fromGalleryAssetItem), [canvasAssets]);
 
-  // Open lightbox from layout engine click
-  const handleLayoutAssetClick = useCallback((asset: { asset_id: string }, index: number) => {
-    const pub = displayedAssets.find(x => x.asset_id === asset.asset_id);
-    if (pub) openLightbox(pub);
-  }, [displayedAssets, openLightbox]);
-
-  const navigateLightbox = useCallback((dir: 'prev' | 'next') => {
-    if (displayedAssets.length === 0) return;
-    const ni = dir === 'prev' ? (lightboxIndex > 0 ? lightboxIndex - 1 : displayedAssets.length - 1) : (lightboxIndex < displayedAssets.length - 1 ? lightboxIndex + 1 : 0);
-    setLightboxIndex(ni);
-    setLightboxAsset(displayedAssets[ni]);
-  }, [lightboxIndex, displayedAssets]);
+  // Open player from layout engine click
+  const handleLayoutAssetClick = useCallback((_asset: { asset_id: string }, index: number) => {
+    openPlayer(index);
+  }, [openPlayer]);
 
   const handleDownload = useCallback(async (asset: PublicGalleryAsset) => {
     if (gallery.download_policy === 'view_only') return;
@@ -239,8 +225,8 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
       <FaceDiscovery isOpen={showFaceDiscovery} onClose={() => setShowFaceDiscovery(false)} onFacesFound={(ids: string[], sim: number) => { setFilteredPhotoIds(ids); setMatchSimilarity(sim); }} galleryId={actualGalleryId} galleryTitle={gallery.title} />
       {gallery.show_people_filter && actualGalleryId && gallery.workspace_id && <ClientPeopleFilter galleryId={actualGalleryId} workspaceId={gallery.workspace_id} isOpen={showPeopleFilter} onClose={() => setShowPeopleFilter(false)} onFilterByPerson={handleFilterByPerson} selectedPersonId={selectedPersonId} />}
 
-      {/* Lightbox */}
-      {lightboxAsset && <PublicGalleryLightbox asset={lightboxAsset} index={lightboxIndex} total={displayedAssets.length} gallery={gallery} displayedAssets={displayedAssets} companyName={company_profile?.name} onClose={() => setLightboxAsset(null)} onNavigate={navigateLightbox} onDownload={handleDownload} isDownloading={isDownloading} />}
+      {/* Gallery Player (replaces old PublicGalleryLightbox) */}
+      <GalleryPlayer />
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
@@ -329,7 +315,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
                 onAssetClick={handleLayoutAssetClick}
               />
             ) : (
-              <GalleryCanvas assets={canvasAssets} viewMode={canvasViewMode} columns={{ sm: 1, md: 2, lg: 3, xl: 4 }} gap="md" selectedAssetIds={selections} lastSelectedId={null} managementSelectable={false} showCustomerSelection onSelectionChange={sel => { const ns = new Set(sel); [...ns].filter(x => !selections.has(x)).forEach(id => toggleSelection(id)); [...selections].filter(x => !ns.has(x)).forEach(id => toggleSelection(id)); }} onCustomerSelectionToggle={(id) => toggleSelection(id)} onAssetClick={(a) => { const p = displayedAssets.find(x => x.asset_id === a.asset_id); if (p) openLightbox(p); }} onAssetFavorite={(id) => toggleFavorite(id)} onAssetDownload={gallery.download_policy !== 'view_only' ? (id) => { const p = displayedAssets.find(x => x.asset_id === id); if (p) handleDownload(p); } : undefined} isClientView downloadPolicy={gallery.download_policy} showWatermark={gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only'} isPrivateUnlocked={isPrivateUnlocked} onUnlockPrivate={() => { if (gallery.pin_protected) { setPinModalMode('private'); setShowPinModal(true); } else addToast({ message: 'This photo is private.', variant: 'info' }); }} />
+              <GalleryCanvas assets={canvasAssets} viewMode={canvasViewMode} columns={{ sm: 1, md: 2, lg: 3, xl: 4 }} gap="md" selectedAssetIds={selections} lastSelectedId={null} managementSelectable={false} showCustomerSelection onSelectionChange={sel => { const ns = new Set(sel); [...ns].filter(x => !selections.has(x)).forEach(id => toggleSelection(id)); [...selections].filter(x => !ns.has(x)).forEach(id => toggleSelection(id)); }} onCustomerSelectionToggle={(id) => toggleSelection(id)} onAssetClick={(a) => { const idx = displayedAssets.findIndex(x => x.asset_id === a.asset_id); if (idx >= 0) openPlayer(idx); }} onAssetFavorite={(id) => toggleFavorite(id)} onAssetDownload={gallery.download_policy !== 'view_only' ? (id) => { const p = displayedAssets.find(x => x.asset_id === id); if (p) handleDownload(p); } : undefined} isClientView downloadPolicy={gallery.download_policy} showWatermark={gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only'} isPrivateUnlocked={isPrivateUnlocked} onUnlockPrivate={() => { if (gallery.pin_protected) { setPinModalMode('private'); setShowPinModal(true); } else addToast({ message: 'This photo is private.', variant: 'info' }); }} />
             )}
           </>
         )}
@@ -346,7 +332,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
       </footer>
 
       {/* Cinematic Viewer */}
-      {showCinematicViewer && <CinematicViewer isOpen onClose={() => setShowCinematicViewer(false)} assets={canvasAssets} initialIndex={lightboxIndex} onIndexChange={setLightboxIndex} getAssetUrl={(id, v) => { const a = canvasAssets.find(x => x.asset_id === id); if (!a) return undefined; return v === 'thumbnail' ? a.asset?.thumbnail_url : a.asset?.preview_url; }} settings={mapSlideshowConfigToSettings(gallery.slideshow_config)} musicUrl={gallery.slideshow_config?.audio_url} galleryTitle={gallery.title} branding={{ name: company_profile?.name, logoUrl: company_profile?.logo_url, primaryColor: gallery.primary_color }} />}
+      {showCinematicViewer && <CinematicViewer isOpen onClose={() => setShowCinematicViewer(false)} assets={canvasAssets} initialIndex={0} onIndexChange={() => {}} getAssetUrl={(id, v) => { const a = canvasAssets.find(x => x.asset_id === id); if (!a) return undefined; return v === 'thumbnail' ? a.asset?.thumbnail_url : a.asset?.preview_url; }} settings={mapSlideshowConfigToSettings(gallery.slideshow_config)} musicUrl={gallery.slideshow_config?.audio_url} galleryTitle={gallery.title} branding={{ name: company_profile?.name, logoUrl: company_profile?.logo_url, primaryColor: gallery.primary_color }} />}
 
       {/* Guestbook */}
       {showGuestbook && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"><div className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"><div className="flex items-center justify-between mb-6"><h2 className="text-xl font-semibold text-gray-900 dark:text-white">Guestbook</h2><button onClick={() => setShowGuestbook(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button></div><Guestbook galleryId={actualGalleryId} enabled galleryTitle={gallery.title} onSubmitMessage={async (d) => { console.log('Guestbook:', d); }} onHeartMessage={async (id) => { console.log('Heart:', id); }} /></div></div>}

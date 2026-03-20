@@ -18,6 +18,7 @@ import { PlayerToolbar } from './PlayerToolbar';
 import { PlayerZoomContainer } from './PlayerZoomContainer';
 import type { PlayerZoomContainerRef } from './PlayerZoomContainer';
 import { PlayerFilmstrip } from './PlayerFilmstrip';
+import { PlayerExifPanel } from './PlayerExifPanel';
 
 const SWIPE_THRESHOLD = 50;
 
@@ -203,6 +204,16 @@ export const GalleryPlayer: React.FC = () => {
               onZoomChange={handleZoomChange}
             />
           </div>
+
+          {/* EXIF metadata panel — slide-up overlay */}
+          <AnimatePresence>
+            {showExif && currentAsset && (
+              <PlayerExifPanel
+                asset={currentAsset}
+                galleryId={currentAsset.gallery_id}
+              />
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
     </AnimatePresence>
