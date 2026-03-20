@@ -320,7 +320,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 15. Foundation Refactor & Data Model | 3/3 | Complete    | 2026-03-19 | - |
 | 16. Gallery Layout Engine & Progressive Loading | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Gallery Player | v1.2 | Complete    | 2026-03-20 | 2026-03-20 |
-| 18. Client Interactions & Gallery UX | 1/3 | In Progress|  | - |
+| 18. Client Interactions & Gallery UX | 2/3 | In Progress|  | - |
 | 19. Downloads & Delivery | v1.2 | 0/? | Not started | - |
 | 20. Sharing, Analytics & Polish | v1.2 | 0/? | Not started | - |
 | 21. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |
