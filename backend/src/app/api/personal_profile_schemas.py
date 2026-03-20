@@ -127,6 +127,26 @@ def validate_url(url: Optional[str], field_name: str = "URL") -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+class Testimonial(BaseModel):
+    """A client testimonial for the photographer's profile."""
+
+    client_name: str = Field(..., min_length=1, max_length=100)
+    text: str = Field(..., min_length=1, max_length=500)
+    rating: int = Field(..., ge=1, le=5)
+
+    @field_validator("client_name")
+    @classmethod
+    def sanitize_client_name(cls, v):
+        """Sanitize client name to prevent XSS attacks."""
+        return sanitize_text_preserve_some_entities(v)
+
+    @field_validator("text")
+    @classmethod
+    def sanitize_text_field(cls, v):
+        """Sanitize testimonial text to prevent XSS attacks."""
+        return sanitize_text(v)
+
+
 class PersonalProfileAddress(BaseModel):
     """Structured address with optional GPS coordinates.
 
@@ -311,6 +331,7 @@ class PersonalVisibilityConfig(BaseModel):
     categories: bool = True
     service_areas: bool = True
     booking_calendar: bool = True
+    testimonials: bool = True
 
     # Secondary contacts
     secondary_email_1: bool = True
@@ -477,6 +498,9 @@ class CreatePersonalProfileRequest(BaseModel):
     # Calendar
     booking_calendar_url: Optional[str] = None
 
+    # Testimonials
+    testimonials: Optional[list[Testimonial]] = None
+
     # --- XSS Sanitization Validators ---
 
     @field_validator("display_name")
@@ -509,6 +533,14 @@ class CreatePersonalProfileRequest(BaseModel):
         """Sanitize service areas to prevent XSS attacks."""
         if v:
             return [sanitize_text_preserve_some_entities(area) for area in v if area]
+        return v
+
+    @field_validator("testimonials")
+    @classmethod
+    def validate_testimonials(cls, v):
+        """Validate testimonials list: max 10 items."""
+        if v and len(v) > 10:
+            raise ValueError("Maximum 10 testimonials allowed")
         return v
 
     # --- Format Validators ---
@@ -647,6 +679,9 @@ class UpdatePersonalProfileRequest(BaseModel):
     # Calendar
     booking_calendar_url: Optional[str] = None
 
+    # Testimonials
+    testimonials: Optional[list[Testimonial]] = None
+
     # Section ordering
     section_order: Optional[list[str]] = Field(
         None, description="Ordered list of section IDs for profile layout"
@@ -684,6 +719,14 @@ class UpdatePersonalProfileRequest(BaseModel):
         """Sanitize service areas to prevent XSS attacks."""
         if v:
             return [sanitize_text_preserve_some_entities(area) for area in v if area]
+        return v
+
+    @field_validator("testimonials")
+    @classmethod
+    def validate_testimonials(cls, v):
+        """Validate testimonials list: max 10 items."""
+        if v and len(v) > 10:
+            raise ValueError("Maximum 10 testimonials allowed")
         return v
 
     # --- Format Validators ---
@@ -837,6 +880,9 @@ class PersonalProfileResponse(BaseModel):
     # Calendar
     booking_calendar_url: Optional[str] = None
 
+    # Testimonials
+    testimonials: Optional[list[dict]] = Field(default_factory=list)
+
     # Section ordering
     section_order: list[str] = Field(
         default_factory=lambda: ["header", "bio", "contact", "socials"]
@@ -903,6 +949,9 @@ class PublicPersonalProfileResponse(BaseModel):
 
     # Booking calendar (based on visibility)
     booking_calendar_url: Optional[str] = None
+
+    # Testimonials (based on visibility)
+    testimonials: Optional[list[dict]] = Field(default_factory=list)
 
     # Visibility (for client to know what buttons to show)
     show_qr_code: bool = True

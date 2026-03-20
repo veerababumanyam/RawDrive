@@ -116,6 +116,7 @@ export interface PersonalVisibilityConfig {
   categories: boolean;
   service_areas: boolean;
   booking_calendar: boolean;
+  testimonials: boolean;
 
   // Secondary contacts
   secondary_email_1: boolean;
@@ -197,6 +198,16 @@ export type SocialPlatform =
   | 'whatsapp';
 
 /**
+ * A client testimonial for the photographer's profile.
+ */
+export interface Testimonial {
+  client_name: string;
+  text: string;
+  /** Star rating from 1 to 5 */
+  rating: number;
+}
+
+/**
  * Full personal profile data (returned from API).
  */
 export interface PersonalProfile {
@@ -256,6 +267,9 @@ export interface PersonalProfile {
 
   // Calendar
   booking_calendar_url?: string;
+
+  // Testimonials
+  testimonials?: Testimonial[];
 
   // Timestamps
   created_at: string;
@@ -386,6 +400,9 @@ export interface PublicPersonalProfile {
 
   // Booking calendar (based on visibility)
   booking_calendar_url?: string;
+
+  // Testimonials (based on visibility)
+  testimonials?: Testimonial[];
 
   // Visibility flags (for client to know what buttons to show)
   show_qr_code: boolean;
@@ -568,6 +585,7 @@ export const DEFAULT_VISIBILITY_CONFIG: PersonalVisibilityConfig = {
   categories: true,
   service_areas: true,
   booking_calendar: true,
+  testimonials: true,
 
   // Secondary contacts
   secondary_email_1: true,

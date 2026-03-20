@@ -237,6 +237,7 @@ class PersonalProfileRepository:
         is_public: bool = False,
         seo_metadata: Optional[dict] = None,
         booking_calendar_url: Optional[str] = None,
+        testimonials: Optional[list[dict]] = None,
     ) -> dict[str, Any]:
         """Create a new personal profile.
 
@@ -267,11 +268,12 @@ class PersonalProfileRepository:
                     featured_gallery_id, categories,
                     brand_color, background_theme,
                     visibility_config, is_public,
-                    seo_metadata, booking_calendar_url
+                    seo_metadata, booking_calendar_url,
+                    testimonials
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                     $11, $12, $13, $14, $15, $16, $17, $18, $19,
-                    $20, $21, $22, $23, $24, $25, $26, $27
+                    $20, $21, $22, $23, $24, $25, $26, $27, $28
                 )
                 RETURNING *
                 """,
@@ -302,6 +304,7 @@ class PersonalProfileRepository:
                 is_public,
                 json.dumps(seo_metadata or {}),
                 booking_calendar_url,
+                json.dumps(testimonials or []),
             )
 
             logger.info(
@@ -349,7 +352,7 @@ class PersonalProfileRepository:
             "brand_color", "background_theme",
             "visibility_config", "is_public",
             "seo_metadata", "booking_calendar_url",
-            "section_order",
+            "section_order", "testimonials",
         }
 
         # JSONB fields that need serialization
@@ -357,7 +360,7 @@ class PersonalProfileRepository:
             "secondary_emails", "secondary_phones",
             "address_structured", "socials", "custom_links",
             "embedded_media", "visibility_config", "seo_metadata",
-            "section_order",
+            "section_order", "testimonials",
         }
 
         # Build dynamic update query
@@ -736,7 +739,7 @@ class PersonalProfileRepository:
         jsonb_fields = [
             "secondary_emails", "secondary_phones", "address_structured",
             "socials", "custom_links", "embedded_media", "visibility_config",
-            "seo_metadata", "section_order"
+            "seo_metadata", "section_order", "testimonials"
         ]
         for field in jsonb_fields:
             if field in result and result[field] is not None:

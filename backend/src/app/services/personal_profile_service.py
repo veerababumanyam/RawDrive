@@ -191,6 +191,11 @@ class PersonalProfileService:
             is_public=request.is_public,
             seo_metadata=seo_metadata,
             booking_calendar_url=request.booking_calendar_url,
+            testimonials=(
+                [t.model_dump() for t in request.testimonials]
+                if request.testimonials
+                else None
+            ),
         )
 
         logger.info(
@@ -368,6 +373,9 @@ class PersonalProfileService:
             "is_public",
             "booking_calendar_url",
         ]
+        # Handle testimonials separately (list of models)
+        if request.testimonials is not None:
+            update_data["testimonials"] = [t.model_dump() for t in request.testimonials]
         for field in simple_fields:
             value = getattr(request, field, None)
             if value is not None:
@@ -791,6 +799,7 @@ class PersonalProfileService:
             "categories": "categories",
             "service_areas": "service_areas",
             "booking_calendar": "booking_calendar_url",
+            "testimonials": "testimonials",
         }
 
         for vis_key, profile_key in visibility_map.items():
