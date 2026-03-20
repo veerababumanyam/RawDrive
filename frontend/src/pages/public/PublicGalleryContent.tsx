@@ -34,6 +34,9 @@ import { useGalleryPlayer } from '../../contexts/GalleryPlayerContext';
 import { GalleryPlayer } from '../../components/features/gallery/player';
 import { FavoriteButton } from '../../components/features/gallery/public/FavoriteButton';
 import { SelectionQuotaBar } from '../../components/features/gallery/public/SelectionQuotaBar';
+import { BatchDownloadModal } from '../../components/features/gallery/public/BatchDownloadModal';
+import { ExpirationCountdown } from '../../components/features/gallery/public/ExpirationCountdown';
+import { useGalleryDownload } from '../../hooks/useGalleryDownload';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -129,6 +132,33 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
   const { heroGradientStyle } = useGalleryTheme();
   const { favorites, selections, toggleFavorite, toggleSelection, favoriteCount, selectionCount } = useGalleryInteraction();
   const { openPlayer } = useGalleryPlayer();
+
+  // Gallery service URL for download API
+  const galleryServiceUrl = useMemo(() => {
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GALLERY_SERVICE_URL) {
+      return import.meta.env.VITE_GALLERY_SERVICE_URL as string;
+    }
+    return typeof window !== 'undefined' ? window.location.origin : '';
+  }, []);
+
+  // Download hook
+  const {
+    downloadSingle: hookDownloadSingle,
+    downloadBatch: hookDownloadBatch,
+    progress: downloadProgress,
+    status: downloadStatus,
+    cancelDownload,
+  } = useGalleryDownload(actualGalleryId, galleryServiceUrl);
+
+  // Batch download modal state
+  const [showBatchDownloadModal, setShowBatchDownloadModal] = useState(false);
+
+  // Expiration info
+  const daysUntilExpiry = useMemo(() => {
+    if (!gallery.expires_at) return null;
+    const diff = new Date(gallery.expires_at).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)));
+  }, [gallery.expires_at]);
 
   // UI state
   const [isDownloading, setIsDownloading] = useState(false);
@@ -249,7 +279,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
             {gallery.pin_protected && !isPrivateUnlocked && privatePhotoCount > 0 && <AppButton variant="outline" leftIcon={<LockIcon size={16} />} size="sm" onClick={() => { setPinModalMode('private'); setShowPinModal(true); }}><span className="hidden sm:inline">Unlock {privatePhotoCount} Private</span><span className="sm:hidden">{privatePhotoCount}</span></AppButton>}
             {isVisitorAuthenticated && isPinVerified && assets.length > 0 && <AppButton variant="outline" leftIcon={<User size={16} />} size="sm" onClick={() => setShowFaceDiscovery(true)}><span className="hidden sm:inline">Find Me</span></AppButton>}
             {gallery.show_people_filter && isVisitorAuthenticated && isPinVerified && assets.length > 0 && <AppButton variant={selectedPersonId ? 'primary' : 'outline'} leftIcon={<Users size={16} />} size="sm" onClick={() => setShowPeopleFilter(true)}><span className="hidden sm:inline">{selectedPersonId ? (selectedPersonName || 'Person') : 'People'}</span></AppButton>}
-            {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && <AppButton variant="outline" leftIcon={isBulkDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} size="sm" onClick={handleBulkDownload} disabled={isBulkDownloading}><span className="hidden sm:inline">{isBulkDownloading ? `${bulkDownloadProgress}%` : activeTab === 'selections' && selectionCount > 0 ? `Download (${selectionCount})` : activeTab === 'favorites' && favoriteCount > 0 ? `Download (${favoriteCount})` : 'Download All'}</span></AppButton>}
+            {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && <AppButton variant="outline" leftIcon={<Download size={16} />} size="sm" onClick={() => setShowBatchDownloadModal(true)}><span className="hidden sm:inline">{activeTab === 'selections' && selectionCount > 0 ? `Download (${selectionCount})` : activeTab === 'favorites' && favoriteCount > 0 ? `Download (${favoriteCount})` : 'Download All'}</span></AppButton>}
             {isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && <AppButton variant="outline" leftIcon={<Film size={16} />} size="sm" onClick={() => setShowCinematicViewer(true)} title="Cinematic Mode"><span className="hidden sm:inline">Cinematic</span></AppButton>}
             {isVisitorAuthenticated && isPinVerified && <AppButton variant="outline" leftIcon={<MessageCircle size={16} />} size="sm" onClick={() => setShowGuestbook(true)} title="Leave a message"><span className="hidden sm:inline">Guestbook</span></AppButton>}
             {activeLayout && onLayoutChange && <LayoutSwitcher activeLayout={activeLayout} onLayoutChange={onLayoutChange} />}
@@ -272,6 +302,33 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
           </div>
         </div>
       </div>
+
+      {/* Expiration Countdown */}
+      {daysUntilExpiry !== null && !isExpired && (
+        <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4">
+          <ExpirationCountdown daysUntilExpiry={daysUntilExpiry} expiresAt={gallery.expires_at ?? null} />
+        </div>
+      )}
+
+      {/* Batch Download Modal */}
+      <BatchDownloadModal
+        isOpen={showBatchDownloadModal}
+        onClose={() => setShowBatchDownloadModal(false)}
+        downloadPolicy={gallery.download_policy || 'view_only'}
+        totalPhotos={displayedAssets.length}
+        favoritesCount={favoriteCount}
+        selectionsCount={selectionCount}
+        onDownload={({ size, scope }) => {
+          const options: Parameters<typeof hookDownloadBatch>[0] = { size };
+          if (scope === 'favorites') options.includeFavorites = true;
+          else if (scope === 'selections') options.includeSelections = true;
+          else options.assetIds = displayedAssets.map((a) => a.asset_id);
+          hookDownloadBatch(options);
+        }}
+        progress={downloadProgress}
+        status={downloadStatus}
+        onCancel={cancelDownload}
+      />
 
       {/* Main */}
       <main id="main-gallery-content" className="flex-1 max-w-7xl mx-auto px-4 md:px-6 py-12 w-full" tabIndex={-1}>
