@@ -493,9 +493,9 @@ class GalleryService:
                 if not row:
                     raise GalleryNotFoundError(gallery_id)
 
-                # Check expiration
-                if row["expires_at"] and row["expires_at"] < datetime.now(timezone.utc):
-                    raise GalleryNotFoundError(gallery_id)
+                # NOTE: Expiration check moved to public API endpoint layer
+                # (src/middleware/expiration.py) so it can return 410 with
+                # gallery details instead of a generic 404.
 
                 workspace_id = row["workspace_id"]
 

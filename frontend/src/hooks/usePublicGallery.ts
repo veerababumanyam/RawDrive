@@ -7,6 +7,15 @@ import type { GalleryDetailData, ValidatedMagicLink } from '../types/gallery';
 // Types
 // ---------------------------------------------------------------------------
 
+export interface GalleryExpiredInfo {
+  /** ISO string of when the gallery expired */
+  expiredAt: string | null;
+  /** Name of the gallery */
+  galleryName: string | null;
+  /** Photographer or studio name */
+  photographerName: string | null;
+}
+
 export interface UsePublicGalleryResult {
   /** The resolved gallery data (null while loading or on error) */
   gallery: GalleryDetailData | null;
@@ -26,6 +35,8 @@ export interface UsePublicGalleryResult {
   error: string | null;
   /** Whether the token appears to be a raw UUID instead of a magic link token */
   isInvalidFormat: boolean;
+  /** Set when a 410 Gone response is received — gallery has expired */
+  expired: GalleryExpiredInfo | null;
 }
 
 /**
@@ -110,6 +121,22 @@ export function usePublicGallery(token: string | undefined): UsePublicGalleryRes
     retry: false,
   });
 
+  // Detect 410 expired gallery response
+  const expired = useMemo((): GalleryExpiredInfo | null => {
+    if (!query.error) return null;
+    const err = query.error as any;
+    // Check for 410 status in the error (from API response)
+    if (err?.status === 410 || err?.response?.status === 410 || (err?.message && err.message.includes('410'))) {
+      const detail = err?.response?.data?.detail || err?.detail || {};
+      return {
+        expiredAt: detail.expired_at || null,
+        galleryName: detail.gallery_name || null,
+        photographerName: detail.photographer_name || null,
+      };
+    }
+    return null;
+  }, [query.error]);
+
   // Derive user-friendly error
   const error = useMemo(() => {
     if (isInvalidFormat) {
@@ -119,11 +146,12 @@ export function usePublicGallery(token: string | undefined): UsePublicGalleryRes
         'Direct gallery ID access is disabled for security reasons.'
       );
     }
+    if (expired) return null; // Expired galleries are handled separately
     if (!query.error) return null;
     const msg = (query.error as Error).message || '';
     if (msg.includes('404')) return 'Gallery not found or is not public.';
     return 'Failed to load gallery.';
-  }, [query.error, isInvalidFormat]);
+  }, [query.error, isInvalidFormat, expired]);
 
   return {
     gallery: query.data?.gallery ?? null,
@@ -135,5 +163,6 @@ export function usePublicGallery(token: string | undefined): UsePublicGalleryRes
     isLoading: query.isLoading,
     error,
     isInvalidFormat,
+    expired,
   };
 }

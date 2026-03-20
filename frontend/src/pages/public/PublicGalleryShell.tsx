@@ -29,6 +29,7 @@ import { GalleryThemeProvider } from '../../contexts/GalleryThemeContext';
 import { GalleryInteractionProvider } from '../../contexts/GalleryInteractionContext';
 import { GalleryPlayerProvider } from '../../contexts/GalleryPlayerContext';
 import { PublicGalleryContent } from './PublicGalleryContent';
+import { ExpiredGalleryPage } from './ExpiredGalleryPage';
 
 // Re-export for backward compat (test file imports from here)
 export { mapSlideshowConfigToSettings } from './PublicGalleryContent';
@@ -41,7 +42,7 @@ export const PublicGalleryShell: React.FC = () => {
   // Gallery data via TanStack Query
   const {
     gallery: initialGallery, actualGalleryId, companyProfile,
-    isLoading, error,
+    isLoading, error, expired,
   } = usePublicGallery(token);
 
   // Mutable gallery state (stats updated when assets load)
@@ -223,6 +224,17 @@ export const PublicGalleryShell: React.FC = () => {
   // Loading
   if (isLoading) {
     return (<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>);
+  }
+
+  // Expired gallery
+  if (expired) {
+    return (
+      <ExpiredGalleryPage
+        galleryName={expired.galleryName}
+        expiredAt={expired.expiredAt}
+        photographerName={expired.photographerName}
+      />
+    );
   }
 
   // Error

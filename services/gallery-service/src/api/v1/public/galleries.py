@@ -21,6 +21,7 @@ from src.schemas.gallery import (
     GalleryAssetsListResponse,
     BreadcrumbsResponse,
 )
+from src.middleware.expiration import check_gallery_expiration, compute_days_until_expiry
 from src.utils.security import verify_password
 from src.database import get_connection
 from src.api.v1.errors import (
@@ -150,6 +151,13 @@ async def get_public_gallery(
 
     try:
         result = await gallery_service.get_public_gallery(gallery_id=gallery_id)
+
+        # Check expiration — raises HTTPException 410 if expired
+        check_gallery_expiration(result)
+
+        # Add days_until_expiry to response
+        result["days_until_expiry"] = compute_days_until_expiry(result.get("expires_at"))
+
         return result
     except GalleryNotFoundError:
         raise_http_exception(

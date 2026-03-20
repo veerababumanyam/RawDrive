@@ -130,6 +130,7 @@ class GalleryResponse(BaseModel):
     pin_protected: bool = False
     email_registration_required: bool = False
     expires_at: Optional[str] = None
+    days_until_expiry: Optional[int] = None
     published_at: Optional[str] = None
     cover_asset_id: Optional[str] = None
     primary_color: Optional[str] = None
