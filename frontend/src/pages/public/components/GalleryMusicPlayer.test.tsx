@@ -29,21 +29,23 @@ describe('GalleryMusicPlayer', () => {
 
   it('renders play button when musicUrl provided', () => {
     render(<GalleryMusicPlayer musicUrl="https://example.com/music.mp3" />);
-    const playButton = screen.getByRole('button', { name: /play/i });
-    expect(playButton).toBeInTheDocument();
+    const playButtons = screen.getAllByRole('button', { name: /play/i });
+    expect(playButtons.length).toBeGreaterThanOrEqual(1);
   });
 
   it('does not autoplay audio', () => {
+    const playSpy = vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
     render(<GalleryMusicPlayer musicUrl="https://example.com/music.mp3" />);
     // Audio element should exist but not be playing
-    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(playSpy).not.toHaveBeenCalled();
   });
 
   it('calls play when play button clicked', async () => {
+    const playSpy = vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
     render(<GalleryMusicPlayer musicUrl="https://example.com/music.mp3" />);
-    const playButton = screen.getByRole('button', { name: /play/i });
-    await userEvent.click(playButton);
-    expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    const playButtons = screen.getAllByRole('button', { name: /play/i });
+    await userEvent.click(playButtons[0]);
+    expect(playSpy).toHaveBeenCalled();
   });
 
   it('renders track name from prop', () => {

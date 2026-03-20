@@ -30,6 +30,8 @@ import { GalleryInteractionProvider } from '../../contexts/GalleryInteractionCon
 import { GalleryPlayerProvider } from '../../contexts/GalleryPlayerContext';
 import { PublicGalleryContent } from './PublicGalleryContent';
 import { ExpiredGalleryPage } from './ExpiredGalleryPage';
+import { BrandedPasswordPage } from './components/BrandedPasswordPage';
+import { GalleryMusicPlayer } from './components/GalleryMusicPlayer';
 
 // Re-export for backward compat (test file imports from here)
 export { mapSlideshowConfigToSettings } from './PublicGalleryContent';
@@ -165,6 +167,34 @@ export const PublicGalleryShell: React.FC = () => {
     } catch { return false; }
   }, [actualGalleryId]);
 
+  // Branded password page handler
+  const [passwordError, setPasswordError] = useState('');
+  const handleBrandedPasswordSubmit = useCallback(async (password: string) => {
+    if (!actualGalleryId) return;
+    try {
+      const ok = await galleryService.verifyPassword(actualGalleryId, password);
+      if (ok) {
+        localStorage.setItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${actualGalleryId}`, 'true');
+        setShowPasswordModal(false);
+        setIsPasswordVerified(true);
+        setPasswordError('');
+        // Continue to PIN check
+        if (gallery?.pin_protected) {
+          const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`);
+          if (!pinVerified) { setPinModalMode('gallery'); setShowPinModal(true); } else {
+            setIsPinVerified(true);
+          }
+        } else {
+          setIsPinVerified(true);
+        }
+      } else {
+        setPasswordError('Incorrect password');
+      }
+    } catch {
+      setPasswordError('Incorrect password');
+    }
+  }, [actualGalleryId, gallery, setShowPasswordModal, setIsPasswordVerified, setPinModalMode, setShowPinModal, setIsPinVerified]);
+
   const handlePrivatePhotoUnlock = useCallback(async (pin: string): Promise<boolean> => {
     if (!actualGalleryId) return false;
     try {
@@ -242,6 +272,20 @@ export const PublicGalleryShell: React.FC = () => {
     return (<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950"><div className="text-center p-8 bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-md mx-4"><h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Gallery Unavailable</h1><p className="text-gray-600 dark:text-gray-400 mb-6">{error || "This gallery is not publicly accessible."}</p><AppButton variant="primary" onClick={() => window.location.href = '/'}>Go Home</AppButton></div></div>);
   }
 
+  // Branded password page gate — show instead of gallery content when password required
+  if (showPasswordModal && gallery.password_protected && !isPasswordVerified) {
+    return (
+      <BrandedPasswordPage
+        galleryTitle={gallery.album_title || gallery.title}
+        welcomeMessage={gallery.welcome_message}
+        brandingLogoUrl={gallery.branding_logo_url || companyProfile?.logo_url}
+        brandingAccentColor={gallery.branding_accent_color}
+        onPasswordSubmit={handleBrandedPasswordSubmit}
+        error={passwordError}
+      />
+    );
+  }
+
   return (
     <GalleryThemeProvider gallery={gallery}>
       <GalleryInteractionProvider
@@ -271,6 +315,10 @@ export const PublicGalleryShell: React.FC = () => {
             handleVisitorSubmit={handleVisitorSubmit} handlePinVerify={handlePinVerify} handlePrivatePhotoUnlock={handlePrivatePhotoUnlock}
             isRegistering={isRegistering}
           />
+          {/* Background music player — render when gallery has music and user is authenticated */}
+          {gallery.background_music_url && isPasswordVerified && (
+            <GalleryMusicPlayer musicUrl={gallery.background_music_url} />
+          )}
         </GalleryPlayerProvider>
       </GalleryInteractionProvider>
     </GalleryThemeProvider>
