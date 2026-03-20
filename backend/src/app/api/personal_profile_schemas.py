@@ -647,6 +647,11 @@ class UpdatePersonalProfileRequest(BaseModel):
     # Calendar
     booking_calendar_url: Optional[str] = None
 
+    # Section ordering
+    section_order: Optional[list[str]] = Field(
+        None, description="Ordered list of section IDs for profile layout"
+    )
+
     # --- XSS Sanitization Validators ---
 
     @field_validator("display_name")
@@ -831,6 +836,11 @@ class PersonalProfileResponse(BaseModel):
 
     # Calendar
     booking_calendar_url: Optional[str] = None
+
+    # Section ordering
+    section_order: list[str] = Field(
+        default_factory=lambda: ["header", "bio", "contact", "socials"]
+    )
 
     # Timestamps
     created_at: datetime

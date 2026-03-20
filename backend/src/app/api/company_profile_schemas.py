@@ -186,6 +186,10 @@ class UpdateCompanyProfileRequest(BaseModel):
     socials: Optional[dict[str, str]] = None
     custom_links: Optional[list[CustomLink]] = None
     company_visibility: Optional[dict[str, bool]] = None
+    section_order: Optional[list[str]] = Field(
+        default=None,
+        description="Ordered list of section IDs for profile layout"
+    )
 
     @validator("phone")
     def validate_phone(cls, v):
@@ -247,6 +251,9 @@ class CompanyProfileResponse(BaseModel):
     socials: dict[str, str] = Field(default_factory=dict)
     custom_links: list[CustomLink] = Field(default_factory=list)
     company_visibility: dict[str, bool] = Field(default_factory=dict)
+    section_order: list[str] = Field(
+        default_factory=lambda: ["header", "bio", "contact", "socials"]
+    )
 
     created_at: datetime
     updated_at: datetime

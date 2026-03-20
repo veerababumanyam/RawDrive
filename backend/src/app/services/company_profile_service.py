@@ -634,7 +634,12 @@ class CompanyProfileService:
                 updates.append(f"company_visibility = ${param_idx}::jsonb")
                 params.append(json.dumps(request.company_visibility))
                 param_idx += 1
-            
+
+            if request.section_order is not None:
+                updates.append(f"section_order = ${param_idx}::jsonb")
+                params.append(json.dumps(request.section_order))
+                param_idx += 1
+
             if not updates:
                 return await self.get_profile(workspace_id)
                 
@@ -683,6 +688,18 @@ class CompanyProfileService:
             return await self.get_profile(workspace_id)
         except ProfileNotFoundError:
             return None
+
+    @staticmethod
+    def _parse_jsonb(value, default=None):
+        """Parse a JSONB field that may be a string, dict, list, or None."""
+        if value is None:
+            return default
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return default
+        return value
 
     def _map_row(self, row) -> dict:
         address_data = json.loads(row["address_structured"]) if isinstance(row["address_structured"], str) else row["address_structured"]
@@ -746,6 +763,7 @@ class CompanyProfileService:
             "color_palette": color_palette if color_palette else None,
             "typography_config": typography_config if typography_config else None,
             "layout_preferences": layout_preferences if layout_preferences else None,
+            "section_order": self._parse_jsonb(row.get("section_order"), ["header", "bio", "contact", "socials"]),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"]
         }

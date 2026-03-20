@@ -349,6 +349,7 @@ class PersonalProfileRepository:
             "brand_color", "background_theme",
             "visibility_config", "is_public",
             "seo_metadata", "booking_calendar_url",
+            "section_order",
         }
 
         # JSONB fields that need serialization
@@ -356,6 +357,7 @@ class PersonalProfileRepository:
             "secondary_emails", "secondary_phones",
             "address_structured", "socials", "custom_links",
             "embedded_media", "visibility_config", "seo_metadata",
+            "section_order",
         }
 
         # Build dynamic update query
@@ -734,7 +736,7 @@ class PersonalProfileRepository:
         jsonb_fields = [
             "secondary_emails", "secondary_phones", "address_structured",
             "socials", "custom_links", "embedded_media", "visibility_config",
-            "seo_metadata"
+            "seo_metadata", "section_order"
         ]
         for field in jsonb_fields:
             if field in result and result[field] is not None:

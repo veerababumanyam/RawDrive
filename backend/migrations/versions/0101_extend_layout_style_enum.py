@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers
 revision = "0101_extend_layout_style"
-down_revision = "0199_add_company_logo_r2_keys"
+down_revision = "0199"
 branch_labels = None
 depends_on = None
 
