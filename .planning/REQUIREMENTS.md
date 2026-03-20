@@ -19,7 +19,7 @@
 - [x] **PUBPG-02**: Public company profile (`/p/:slug`) renders mobile-first responsive layout across all devices
 - [x] **PUBPG-03**: User can select from animated theme backgrounds (gradients, particles, subtle motion effects)
 - [x] **PUBPG-04**: Bento grid layout is polished with proper spacing, transitions, and responsive breakpoints
-- [ ] **PUBPG-05**: Public profile pages load in under 2 seconds (LCP) with lazy-loaded embeds and optimized images
+- [x] **PUBPG-05**: Public profile pages load in under 2 seconds (LCP) with lazy-loaded embeds and optimized images
 - [x] **PUBPG-06**: Both public pages support dark mode rendering
 
 ### Editor
@@ -218,7 +218,7 @@
 | PUBPG-02 | Phase 11 | Complete |
 | PUBPG-03 | Phase 11 | Complete |
 | PUBPG-04 | Phase 11 | Complete |
-| PUBPG-05 | Phase 13 | Pending |
+| PUBPG-05 | Phase 13 | Complete |
 | PUBPG-06 | Phase 11 | Complete |
 | EDITR-01 | Phase 12 | Complete |
 | EDITR-02 | Phase 12 | Complete |

@@ -35,7 +35,7 @@
 - [x] **Phase 10: Foundation & Fixes** - Fix avatar/R2 pipeline, consolidate theme engine, scaffold shared components, add smoke tests (completed 2026-03-19)
 - [x] **Phase 11: Public Page Redesign** - Mobile-first layouts for both profiles, animated themes, bento grid, dark mode, SEO metadata (completed 2026-03-19)
 - [x] **Phase 12: Editor Redesign** - Live preview, DnD section reordering, visual color picker, device frames, auto-save (completed 2026-03-20)
-- [ ] **Phase 13: Content Blocks & Performance** - Gallery preview, booking CTA, testimonials, social links, LCP budget enforcement
+- [x] **Phase 13: Content Blocks & Performance** - Gallery preview, booking CTA, testimonials, social links, LCP budget enforcement (completed 2026-03-20)
 - [x] **Phase 14: FaceID Deep Dive & Enhancement** - Debug face identification issues, research competitive face recognition, fix broken functionality, enhance face management UX (completed 2026-03-19)
 
 ## Phase Details
@@ -315,7 +315,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 10. Foundation & Fixes | v1.1 | Complete    | 2026-03-19 | 2026-03-19 |
 | 11. Public Page Redesign | 3/3 | Complete    | 2026-03-20 | - |
 | 12. Editor Redesign | 2/3 | Complete    | 2026-03-20 | - |
-| 13. Content Blocks & Performance | 1/2 | In Progress|  | - |
+| 13. Content Blocks & Performance | 2/2 | Complete   | 2026-03-20 | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
 | 15. Foundation Refactor & Data Model | 3/3 | Complete    | 2026-03-19 | - |
 | 16. Gallery Layout Engine & Progressive Loading | v1.2 | 0/? | Not started | - |
