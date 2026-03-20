@@ -187,8 +187,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 17-01: TBD
-- [ ] 17-02: TBD
+- [ ] 17-01-PLAN.md -- GalleryPlayer component tree: zoom/pan/pinch (react-zoom-pan-pinch), swipe gestures, filmstrip thumbnails, keyboard navigation
+- [ ] 17-02-PLAN.md -- EXIF metadata panel, wire GalleryPlayer into PublicGalleryContent replacing old lightbox, visual verification
 
 ### Phase 18: Client Interactions & Gallery UX
 **Goal**: Clients can interact with gallery photos (favorite, select, comment) and photographers have professional gallery management tools
@@ -319,7 +319,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
 | 15. Foundation Refactor & Data Model | 3/3 | Complete    | 2026-03-19 | - |
 | 16. Gallery Layout Engine & Progressive Loading | 3/3 | Complete    | 2026-03-20 | - |
-| 17. Gallery Player | v1.2 | 0/? | Not started | - |
+| 17. Gallery Player | v1.2 | 0/2 | Not started | - |
 | 18. Client Interactions & Gallery UX | v1.2 | 0/? | Not started | - |
 | 19. Downloads & Delivery | v1.2 | 0/? | Not started | - |
 | 20. Sharing, Analytics & Polish | v1.2 | 0/? | Not started | - |
