@@ -908,7 +908,7 @@ class FaceSearchRequest(BaseModel):
     limit: int = Field(
         50,
         ge=1,
-        le=200,
+        le=100,
         description="Maximum number of matching photos to return"
     )
 

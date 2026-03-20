@@ -334,11 +334,10 @@ class FaceApiService {
 
     /**
      * Delete a face group
-     * Note: Backend route is /face-groups/{group_id} (not workspace-scoped)
      */
     async deleteFaceGroup(workspaceId: string, groupId: string): Promise<void> {
         const response = await apiClient.delete(
-            `${this.baseUrl}/face-groups/${groupId}`
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}`
         );
         if (response.error) {
             throw new Error(response.error.message || 'Failed to delete face group');

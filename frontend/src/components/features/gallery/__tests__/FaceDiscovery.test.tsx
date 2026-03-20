@@ -4,9 +4,10 @@
  * Tests cover:
  * - Rendering and accessibility
  * - Camera permission handling
- * - Face detection flow
+ * - Face detection flow (client-side validation + server-side embedding)
  * - Error states
  * - WCAG 2.1 AA compliance
+ * - Image upload (not embedding) is sent to server
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,14 +15,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FaceDiscovery } from '../FaceDiscovery';
 import { faceDetectionService } from '../../../../services/faceDetectionService';
 
-// Mock face detection service
+// Mock face detection service — descriptors are no longer needed since
+// the server generates 512-dim embeddings from the uploaded face crop.
+// Client-side detection is used only for face validation (bounding box).
 vi.mock('../../../../services/faceDetectionService', () => ({
   faceDetectionService: {
     loadModels: vi.fn().mockResolvedValue(undefined),
     detectFaces: vi.fn().mockResolvedValue([
       {
-        detection: { box: { x: 0, y: 0, width: 100, height: 100 } },
-        descriptor: new Float32Array(128).fill(0.5),
+        box: { x: 10, y: 10, width: 100, height: 100 },
+        score: 0.95,
+        landmarks: null,
+        descriptor: null,
       },
     ]),
   },
@@ -52,8 +57,10 @@ describe('FaceDiscovery', () => {
     mockFaceDetectionService.loadModels.mockResolvedValue(undefined);
     mockFaceDetectionService.detectFaces.mockResolvedValue([
       {
-        detection: { box: { x: 0, y: 0, width: 100, height: 100 } },
-        descriptor: new Float32Array(128).fill(0.5),
+        box: { x: 10, y: 10, width: 100, height: 100 },
+        score: 0.95,
+        landmarks: null,
+        descriptor: null,  // No descriptor needed — server generates 512-dim embedding
       },
     ]);
     (global.fetch as any).mockResolvedValue({
@@ -89,7 +96,9 @@ describe('FaceDiscovery', () => {
         expect(screen.getByText(/Privacy/)).toBeInTheDocument();
       });
 
+      // Updated privacy notice explains the face crop upload approach
       expect(screen.getByText(/Face detection runs locally/i)).toBeInTheDocument();
+      expect(screen.getByText(/not stored/i)).toBeInTheDocument();
     });
 
     it('does not render when closed', () => {

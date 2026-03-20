@@ -2,14 +2,17 @@
  * FaceDiscovery Component
  *
  * Allows public gallery visitors to find photos of themselves using:
- * 1. Webcam/selfie capture with live face detection
- * 2. Local face embedding generation (privacy-preserving)
+ * 1. Webcam/selfie capture with live face detection (client-side validation)
+ * 2. Server-side face embedding generation (512-dim ArcFace, same model as ingestion)
  * 3. Backend similarity search against gallery faces
  *
- * Privacy-first design:
- * - Face detection runs entirely in the browser
- * - Only face embeddings (not images) are sent to the server
- * - Embeddings are hashed for logging, never stored
+ * Architecture note:
+ * - Client-side face-api.js is used ONLY for face detection/validation (bounding box)
+ * - The cropped face image is uploaded to the server where the same ArcFace model
+ *   generates a 512-dim embedding, guaranteeing embedding-space consistency with
+ *   the stored gallery embeddings. This avoids the 128-dim (face-api.js) vs
+ *   512-dim (ArcFace) mismatch that would make similarity search fail.
+ * - The uploaded face crop is never stored and is discarded after embedding generation.
  *
  * WCAG 2.1 AA compliant with proper announcements and focus management.
  */
@@ -149,6 +152,51 @@ export const FaceDiscovery: React.FC<FaceDiscoveryProps> = ({
     }
   }, []);
 
+  /**
+   * Convert a data URL to a Blob for uploading.
+   */
+  const dataURLtoBlob = useCallback((dataURL: string): Blob => {
+    const parts = dataURL.split(',');
+    const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bstr = atob(parts[1]);
+    const u8arr = new Uint8Array(bstr.length);
+    for (let i = 0; i < bstr.length; i++) {
+      u8arr[i] = bstr.charCodeAt(i);
+    }
+    return new Blob([u8arr], { type: mime });
+  }, []);
+
+  /**
+   * Extract a cropped face image from the canvas using the detected bounding box.
+   * Returns a JPEG Blob suitable for upload.
+   */
+  const extractFaceCrop = useCallback(
+    (
+      sourceCanvas: HTMLCanvasElement,
+      box: { x: number; y: number; width: number; height: number },
+    ): string => {
+      const cropCanvas = document.createElement('canvas');
+      const ctx = cropCanvas.getContext('2d');
+      if (!ctx) return sourceCanvas.toDataURL('image/jpeg', 0.9);
+
+      // Add 20% padding around the face for better embedding quality
+      const pad = 0.2;
+      const padX = box.width * pad;
+      const padY = box.height * pad;
+      const sx = Math.max(0, box.x - padX);
+      const sy = Math.max(0, box.y - padY);
+      const sw = Math.min(sourceCanvas.width - sx, box.width + 2 * padX);
+      const sh = Math.min(sourceCanvas.height - sy, box.height + 2 * padY);
+
+      cropCanvas.width = sw;
+      cropCanvas.height = sh;
+      ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      return cropCanvas.toDataURL('image/jpeg', 0.9);
+    },
+    [],
+  );
+
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -173,7 +221,7 @@ export const FaceDiscovery: React.FC<FaceDiscoveryProps> = ({
     setCapturedImage(imageData);
     stopCamera();
 
-    // Detect face
+    // Detect face locally (for UI validation only — embedding is generated server-side)
     setStep('processing');
     setIsLoading(true);
 
@@ -188,8 +236,10 @@ export const FaceDiscovery: React.FC<FaceDiscoveryProps> = ({
         img.src = imageData;
       });
 
-      // Detect faces with descriptors
-      const faces = await faceDetectionService.detectFaces(img, true, true);
+      // Detect faces (landmarks only — we skip descriptor generation since the
+      // server will generate the 512-dim embedding from the same ArcFace model
+      // used during photo ingestion, avoiding the 128-vs-512 dimension mismatch)
+      const faces = await faceDetectionService.detectFaces(img, true, false);
 
       if (faces.length === 0) {
         throw new Error('No face detected. Please try again with your face clearly visible.');
@@ -200,14 +250,14 @@ export const FaceDiscovery: React.FC<FaceDiscoveryProps> = ({
       }
 
       const face = faces[0];
-      if (!face.descriptor) {
-        throw new Error('Could not generate face signature. Please try again.');
-      }
-
       setDetectedFace(face);
 
-      // Search for matching faces in the gallery
-      await searchForFaces(face.descriptor);
+      // Extract a cropped face image and upload it to the server for
+      // server-side embedding generation (guarantees same embedding space)
+      const faceCropDataURL = extractFaceCrop(canvas, face.box);
+      const faceCropBlob = dataURLtoBlob(faceCropDataURL);
+
+      await searchForFacesByImage(faceCropBlob);
     } catch (err: any) {
       console.error('Face detection error:', err);
       setError(err.message || 'Failed to detect face');
@@ -215,29 +265,33 @@ export const FaceDiscovery: React.FC<FaceDiscoveryProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [stopCamera]);
+  }, [stopCamera, extractFaceCrop, dataURLtoBlob]);
 
-  const searchForFaces = async (descriptor: Float32Array) => {
+  /**
+   * Upload the cropped face image to the server for server-side embedding
+   * generation and similarity search. This guarantees the query embedding
+   * is in the same 512-dim ArcFace space as the stored gallery embeddings.
+   */
+  const searchForFacesByImage = async (faceBlob: Blob) => {
     try {
-      // Convert Float32Array to regular array for JSON
-      const embeddingArray = Array.from(descriptor);
+      const formData = new FormData();
+      formData.append('file', faceBlob, 'face.jpg');
 
-      // Call backend search endpoint
-      const response = await fetch(`${searchEndpoint}/${galleryId}/face-search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Call the new image-upload face search endpoint
+      const response = await fetch(
+        `${searchEndpoint}/${galleryId}/face-search-by-image?threshold=0.6&limit=50`,
+        {
+          method: 'POST',
+          body: formData,
+          // Do NOT set Content-Type — the browser sets it with the boundary
         },
-        body: JSON.stringify({
-          embedding: embeddingArray,
-          threshold: 0.6, // Similarity threshold
-          limit: 50,
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Search failed');
+        throw new Error(
+          errorData.detail?.message || errorData.message || 'Search failed',
+        );
       }
 
       const data = await response.json();
@@ -308,8 +362,8 @@ export const FaceDiscovery: React.FC<FaceDiscoveryProps> = ({
               <Info size={16} className="text-text-tertiary mt-0.5 flex-shrink-0" />
               <p className="text-xs text-text-tertiary">
                 <strong>Privacy:</strong> Face detection runs locally in your browser.
-                Your photo is never uploaded. Only a mathematical signature is used
-                for matching.
+                Only a small cropped face image is sent to the server for matching.
+                It is not stored and is discarded immediately after processing.
               </p>
             </div>
 

@@ -510,7 +510,6 @@ async def grant_biometric_consent(
         ConsentAlreadyGrantedError,
     )
     from app.api.face_schemas import (
-        FaceDetectionError,
         FaceDetectionErrorCode,
     )
 

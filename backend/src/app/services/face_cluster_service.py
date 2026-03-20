@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 # Default similarity threshold for auto-clustering
-DEFAULT_SIMILARITY_THRESHOLD = 0.7
+DEFAULT_SIMILARITY_THRESHOLD = 0.85
 
 # Default confidence threshold for auto-clustering eligibility
 # Set to 0.5 as a balance between including real faces and filtering false positives
