@@ -70,10 +70,10 @@
 
 ### Gallery Player
 
-- [ ] **PLYR-01**: User can open fullscreen lightbox with zoom, pan, and swipe navigation
+- [x] **PLYR-01**: User can open fullscreen lightbox with zoom, pan, and swipe navigation
 - [ ] **PLYR-02**: User can view EXIF data (aperture, shutter, ISO, lens) overlay on photos
-- [ ] **PLYR-03**: User can navigate photos via filmstrip thumbnail strip at bottom of player
-- [ ] **PLYR-04**: Mobile users can pinch-to-zoom, swipe to navigate, and double-tap to zoom
+- [x] **PLYR-03**: User can navigate photos via filmstrip thumbnail strip at bottom of player
+- [x] **PLYR-04**: Mobile users can pinch-to-zoom, swipe to navigate, and double-tap to zoom
 
 ### Client Interactions
 
@@ -251,10 +251,10 @@
 | LYOT-02 | Phase 16 | Complete |
 | LYOT-03 | Phase 16 | Complete |
 | LYOT-04 | Phase 16 | Complete |
-| PLYR-01 | Phase 17 | Pending |
+| PLYR-01 | Phase 17 | Complete |
 | PLYR-02 | Phase 17 | Pending |
-| PLYR-03 | Phase 17 | Pending |
-| PLYR-04 | Phase 17 | Pending |
+| PLYR-03 | Phase 17 | Complete |
+| PLYR-04 | Phase 17 | Complete |
 | INTR-01 | Phase 18 | Pending |
 | INTR-02 | Phase 18 | Pending |
 | INTR-03 | Phase 18 | Pending |
