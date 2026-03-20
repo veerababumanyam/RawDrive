@@ -4,12 +4,12 @@ milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: unknown
 stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-03-20T09:01:58.891Z"
+last_updated: "2026-03-20T09:03:33.802Z"
 progress:
-  total_phases: 11
-  completed_phases: 9
-  total_plans: 31
-  completed_plans: 29
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # Project State
@@ -71,6 +71,7 @@ Plan: 2 complete
 - [Phase 18]: Leveraged existing gallery-service websocket.py with Redis pub/sub listener; backoff resets on effect re-run not on open; photographer receives all events with null visitorToken
 - [Phase 19]: Expiration check moved from service layer (404) to API endpoint layer (410 with gallery details) for structured expired gallery response
 - [Phase 19]: ExpirationReminderWorker uses dependency injection pattern for testability; Redis dedup keys with milestone-specific TTLs (8d/2d/30d)
+- [Phase 19]: asyncio.create_task for ZIP generation (no Celery in gallery-service); 2GB memory guard on batch downloads; no-upscale guard in resize
 
 ### Roadmap Evolution
 
@@ -97,8 +98,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T08:56:00Z
-Stopped at: Completed 19-02-PLAN.md
+Last session: 2026-03-20T09:02:00Z
+Stopped at: Completed 19-01-PLAN.md (retroactive; 19-02 already done)
 Resume file: None
 
 ### Upcoming Milestones
