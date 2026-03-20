@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { ProfileTheme } from './ProfileThemeEngine';
 import {
     Instagram, Facebook, Twitter, Linkedin, Youtube,
@@ -56,7 +56,7 @@ const SocialIconButton: React.FC<SocialIconButtonProps> = ({ platform, url, inde
     const brandColor = SOCIAL_COLORS[platform];
 
     return (
-        <motion.a
+        <m.a
             key={platform}
             href={url}
             target="_blank"
@@ -84,7 +84,7 @@ const SocialIconButton: React.FC<SocialIconButtonProps> = ({ platform, url, inde
             title={platform}
         >
             <Icon className="w-5 h-5" />
-        </motion.a>
+        </m.a>
     );
 };
 

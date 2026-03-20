@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { m } from 'framer-motion';
 import { ImageIcon, ArrowRight } from 'lucide-react';
 import { ProfileTheme } from './ProfileThemeEngine';
 import { FeaturedGalleryInfo } from '../../../types/personalProfile';
@@ -8,6 +8,39 @@ interface ProfileGalleryPreviewProps {
     theme: ProfileTheme;
     galleries: FeaturedGalleryInfo[];
 }
+
+/**
+ * LQIP blur-up image component.
+ * Shows a gradient placeholder with blur filter, then fades in the actual image on load.
+ */
+const BlurUpImage: React.FC<{
+    src: string;
+    alt: string;
+    className?: string;
+}> = ({ src, alt, className }) => {
+    const [loaded, setLoaded] = useState(false);
+
+    return (
+        <div className="relative w-full h-full overflow-hidden">
+            {/* LQIP placeholder — gradient blur */}
+            <div
+                className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 ${
+                    loaded ? 'opacity-0' : 'opacity-100'
+                } transition-opacity duration-300 ease-in`}
+                aria-hidden="true"
+            />
+            {/* Actual image with lazy loading */}
+            <img
+                src={src}
+                alt={alt}
+                loading="lazy"
+                decoding="async"
+                className={`${className ?? ''} ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 ease-in`}
+                onLoad={() => setLoaded(true)}
+            />
+        </div>
+    );
+};
 
 export const ProfileGalleryPreview: React.FC<ProfileGalleryPreviewProps> = ({ theme, galleries }) => {
     const displayGalleries = galleries.slice(0, 4);
@@ -18,7 +51,7 @@ export const ProfileGalleryPreview: React.FC<ProfileGalleryPreviewProps> = ({ th
     const primaryGallery = displayGalleries[0];
 
     return (
-        <motion.div
+        <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.4 }}
@@ -27,7 +60,7 @@ export const ProfileGalleryPreview: React.FC<ProfileGalleryPreviewProps> = ({ th
             {/* 2x2 Grid of gallery covers */}
             <div className="grid grid-cols-2 gap-2 p-2">
                 {displayGalleries.map((gallery, index) => (
-                    <motion.div
+                    <m.div
                         key={gallery.gallery_id}
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -35,18 +68,17 @@ export const ProfileGalleryPreview: React.FC<ProfileGalleryPreviewProps> = ({ th
                         className={`relative aspect-square overflow-hidden ${theme.effects.radius}`}
                     >
                         {gallery.cover_image_url ? (
-                            <img
+                            <BlurUpImage
                                 src={gallery.cover_image_url}
                                 alt={gallery.name}
                                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                                loading="lazy"
                             />
                         ) : (
                             <div className={`w-full h-full flex items-center justify-center ${theme.colors.surface} bg-opacity-50`}>
                                 <ImageIcon className={`w-8 h-8 ${theme.colors.textSecondary}`} />
                             </div>
                         )}
-                    </motion.div>
+                    </m.div>
                 ))}
             </div>
 
@@ -60,6 +92,6 @@ export const ProfileGalleryPreview: React.FC<ProfileGalleryPreviewProps> = ({ th
                 <span>View Gallery</span>
                 <ArrowRight className="w-4 h-4" />
             </a>
-        </motion.div>
+        </m.div>
     );
 };

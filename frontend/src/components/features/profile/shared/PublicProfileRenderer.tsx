@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useRef, useMemo } from 'react';
+import { LazyMotion, domAnimation } from 'framer-motion';
 import { resolveThemeTokens, applyThemeToContainer, removeThemeFromContainer } from './UnifiedThemeEngine';
 import type { ThemeTokens } from './UnifiedThemeEngine';
 import { getSectionsForProfile, type ProfileType } from './SectionRegistry';
@@ -99,27 +100,29 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
       }}
     >
       <AnimatedBackgroundRenderer animationType={animationType} themeTokens={tokens}>
-        <div className="max-w-5xl mx-auto py-8 px-4">
-          <ProfileBentoGrid>
-            {sections.map((section) => {
-              const SectionComponent = section.component;
-              const colSpan = section.gridSpan?.cols ?? 4;
-              return (
-                <ProfileGridItem
-                  key={section.id}
-                  theme={legacyTheme}
-                  colSpan={colSpan as 1 | 2 | 3 | 4}
-                  rowSpan={(section.gridSpan?.rows ?? 1) as 1 | 2}
-                >
-                  <SectionComponent
-                    profileData={normalizedData}
-                    profileType={profileType}
-                  />
-                </ProfileGridItem>
-              );
-            })}
-          </ProfileBentoGrid>
-        </div>
+        <LazyMotion features={domAnimation} strict>
+          <div className="max-w-5xl mx-auto py-8 px-4">
+            <ProfileBentoGrid>
+              {sections.map((section) => {
+                const SectionComponent = section.component;
+                const colSpan = section.gridSpan?.cols ?? 4;
+                return (
+                  <ProfileGridItem
+                    key={section.id}
+                    theme={legacyTheme}
+                    colSpan={colSpan as 1 | 2 | 3 | 4}
+                    rowSpan={(section.gridSpan?.rows ?? 1) as 1 | 2}
+                  >
+                    <SectionComponent
+                      profileData={normalizedData}
+                      profileType={profileType}
+                    />
+                  </ProfileGridItem>
+                );
+              })}
+            </ProfileBentoGrid>
+          </div>
+        </LazyMotion>
       </AnimatedBackgroundRenderer>
     </div>
   );

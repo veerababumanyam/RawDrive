@@ -13,6 +13,16 @@ vi.mock('framer-motion', () => ({
       React.createElement('a', { ...props, ref }, children as React.ReactNode)
     ),
   },
+  m: {
+    div: React.forwardRef(({ children, ...props }: Record<string, unknown>, ref: React.Ref<HTMLDivElement>) =>
+      React.createElement('div', { ...props, ref }, children as React.ReactNode)
+    ),
+    a: React.forwardRef(({ children, ...props }: Record<string, unknown>, ref: React.Ref<HTMLAnchorElement>) =>
+      React.createElement('a', { ...props, ref }, children as React.ReactNode)
+    ),
+  },
+  LazyMotion: ({ children }: { children: React.ReactNode }) => React.createElement('div', { 'data-lazy-motion': true }, children),
+  domAnimation: {},
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   useReducedMotion: () => false,
 }));

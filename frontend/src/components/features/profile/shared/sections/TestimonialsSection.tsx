@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Star } from 'lucide-react';
 import { getTheme } from '../../ProfileThemeEngine';
 import type { SectionProps } from '../SectionRegistry';
@@ -39,7 +39,7 @@ export const TestimonialsSection: React.FC<SectionProps> = ({ profileData }) => 
     <div className="w-full mb-8">
       <div className="flex flex-col gap-4 md:grid md:grid-cols-3 md:gap-4">
         {displayTestimonials.map((testimonial, index) => (
-          <motion.div
+          <m.div
             key={`testimonial-${index}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -67,7 +67,7 @@ export const TestimonialsSection: React.FC<SectionProps> = ({ profileData }) => 
               </span>
               <StarRating rating={testimonial.rating} />
             </div>
-          </motion.div>
+          </m.div>
         ))}
       </div>
     </div>

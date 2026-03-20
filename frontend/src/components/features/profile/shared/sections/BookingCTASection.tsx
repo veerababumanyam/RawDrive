@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Calendar } from 'lucide-react';
 import { getTheme } from '../../ProfileThemeEngine';
 import type { SectionProps } from '../SectionRegistry';
@@ -26,7 +26,7 @@ export const BookingCTASection: React.FC<SectionProps> = ({ profileData }) => {
 
   return (
     <div className="w-full mb-8">
-      <motion.a
+      <m.a
         href={bookingUrl}
         target="_blank"
         rel="noopener noreferrer"
@@ -43,7 +43,7 @@ export const BookingCTASection: React.FC<SectionProps> = ({ profileData }) => {
       >
         <Calendar className="w-5 h-5" />
         <span>Book a Session</span>
-      </motion.a>
+      </m.a>
     </div>
   );
 };
