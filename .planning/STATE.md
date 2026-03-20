@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Public Gallery & Gallery Player Modernization
-status: in-progress
-stopped_at: Completed 20-03-PLAN.md
-last_updated: "2026-03-20T09:28:34Z"
+milestone: v1.1
+milestone_name: Profile & Public Page Modernization
+status: unknown
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-03-20T09:32:09.032Z"
 progress:
-  total_phases: 11
-  completed_phases: 10
-  total_plans: 35
-  completed_plans: 34
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # Project State
@@ -74,6 +74,8 @@ Plan: 3 of 4 complete
 - [Phase 19]: asyncio.create_task for ZIP generation (no Celery in gallery-service); 2GB memory guard on batch downloads; no-upscale guard in resize
 - [Phase 19]: BatchDownloadModal replaces old per-file bulk download with ZIP-based batch via gallery-service API; ExpirationCountdown computes days client-side; DownloadTrackingPanel in collapsible details element
 - [Phase 20]: Raw asyncpg queries for analytics (consistent with gallery-service); Redis SETNX 30-min TTL for view deduplication; download summary from existing gallery_downloads table
+- [Phase 20]: Enhanced existing ShareMenu with embed code option rather than duplicating -- avoids code duplication
+- [Phase 20]: Used gallery-theme localStorage key to avoid conflict with profile page theme system
 
 ### Roadmap Evolution
 
@@ -100,8 +102,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:28:34Z
-Stopped at: Completed 20-03-PLAN.md
+Last session: 2026-03-20T09:32:09.029Z
+Stopped at: Completed 20-01-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones

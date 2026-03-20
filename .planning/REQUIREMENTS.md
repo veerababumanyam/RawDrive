@@ -91,10 +91,10 @@
 
 ### Sharing & Polish
 
-- [ ] **SHAR-01**: Gallery links display rich Open Graph previews when shared on social media
-- [ ] **SHAR-02**: Photographer can generate QR codes for galleries
-- [ ] **SHAR-03**: Photographer can get embeddable gallery widget code for websites
-- [ ] **SHAR-04**: Gallery viewer can toggle between dark and light mode
+- [x] **SHAR-01**: Gallery links display rich Open Graph previews when shared on social media
+- [x] **SHAR-02**: Photographer can generate QR codes for galleries
+- [x] **SHAR-03**: Photographer can get embeddable gallery widget code for websites
+- [x] **SHAR-04**: Gallery viewer can toggle between dark and light mode
 
 ### Progressive Experience
 
@@ -263,10 +263,10 @@
 | DWNL-02 | Phase 19 | Complete |
 | DWNL-03 | Phase 19 | Complete |
 | DWNL-04 | Phase 19 | Complete |
-| SHAR-01 | Phase 20 | Pending |
-| SHAR-02 | Phase 20 | Pending |
-| SHAR-03 | Phase 20 | Pending |
-| SHAR-04 | Phase 20 | Pending |
+| SHAR-01 | Phase 20 | Complete |
+| SHAR-02 | Phase 20 | Complete |
+| SHAR-03 | Phase 20 | Complete |
+| SHAR-04 | Phase 20 | Complete |
 | PROG-01 | Phase 16 | Complete |
 | PROG-02 | Phase 20 | Pending |
 | PROG-03 | Phase 20 | Pending |
