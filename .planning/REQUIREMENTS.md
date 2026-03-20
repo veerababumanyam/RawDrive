@@ -98,7 +98,7 @@
 
 ### Progressive Experience
 
-- [ ] **PROG-01**: Images load with LQIP blur-up placeholder transitioning to full resolution
+- [x] **PROG-01**: Images load with LQIP blur-up placeholder transitioning to full resolution
 - [ ] **PROG-02**: Password-protected galleries show custom-branded entry page (logo, colors, message)
 - [ ] **PROG-03**: Photographer can add optional background music to gallery slideshows
 
@@ -267,7 +267,7 @@
 | SHAR-02 | Phase 20 | Pending |
 | SHAR-03 | Phase 20 | Pending |
 | SHAR-04 | Phase 20 | Pending |
-| PROG-01 | Phase 16 | Pending |
+| PROG-01 | Phase 16 | Complete |
 | PROG-02 | Phase 20 | Pending |
 | PROG-03 | Phase 20 | Pending |
 | GANLT-01 | Phase 20 | Pending |
