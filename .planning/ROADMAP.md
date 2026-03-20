@@ -69,7 +69,7 @@ Plans:
   4. Bento grid layout displays with proper spacing, transitions, and responsive breakpoints across all screen sizes
   5. Public pages render in dark mode when user system preference is dark, with correct contrast and readability
   6. Fetching a public profile URL with curl returns correct meta tags (title, description, OG image, JSON-LD structured data) in raw HTML
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 11-01-PLAN.md -- Responsive bento grid, stagger animations, animated theme backgrounds, dark mode
@@ -86,7 +86,7 @@ Plans:
   3. User picks a gradient or solid color in the visual theme picker and the preview updates immediately
   4. User toggles between mobile, tablet, and desktop device frames in the preview and sees accurate representations
   5. User stops typing mid-edit, navigates away, and returns to find all changes auto-saved
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 12-01-PLAN.md -- EditorContext, auto-save hook, npm packages, Alembic migration for section_order
@@ -103,11 +103,11 @@ Plans:
   3. User displays client testimonials on their public profile with proper formatting and attribution
   4. Social links render with correct platform icons (including Threads, Bluesky) and hover animations
   5. All public profile pages load in under 2 seconds (LCP) on a throttled 4G connection with all content blocks present
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
+- [ ] 13-01-PLAN.md -- Content block sections (gallery preview, booking CTA, testimonials, social links) + backend testimonials
+- [ ] 13-02-PLAN.md -- Performance optimization (LazyMotion, LQIP, lazy embeds, LCP budget test)
 
 ### Phase 14: FaceID Deep Dive & Enhancement
 **Goal**: All face identification features work reliably, with competitive parity to Google Photos/Apple Photos face grouping, and a polished face management UX
@@ -151,7 +151,7 @@ Plans:
   1. PublicGalleryPage renders identically to before but is composed of PublicGalleryShell + React Contexts (GalleryThemeContext, GalleryInteractionContext, GalleryPlayerContext) -- no 800-line monolith remains
   2. Two different clients visiting the same gallery see independent favorites and selections (visitor-scoped proofing via gallery_visitor_actions table)
   3. Adding a new LayoutStyle value in shared-types automatically appears in backend models and gallery-service schemas without manual sync (enum round-trip test passes)
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 15-01-PLAN.md -- LayoutStyle enum sync (8 values across TS/Python/DB) + gallery_visitor_actions table for per-visitor proofing
@@ -168,7 +168,7 @@ Plans:
   3. Existing masonry layout renders with improved column balancing and responsive breakpoints across mobile, tablet, and desktop
   4. Gallery visitor can toggle between available layouts via a layout switcher UI without page reload
   5. All gallery images load with a blurred LQIP placeholder that transitions smoothly to full resolution as the image downloads
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 16-01-PLAN.md -- Layout engine foundation: types, ProgressiveImage LQIP blur-up, GridLayout, justified-layout install
@@ -184,7 +184,7 @@ Plans:
   2. Visitor taps an info button in the player and sees EXIF data (aperture, shutter speed, ISO, lens) overlaid on the current photo
   3. Visitor sees a filmstrip thumbnail strip at the bottom of the player and can click any thumbnail to jump to that photo
   4. Mobile visitor can pinch-to-zoom, swipe left/right to navigate, and double-tap to toggle zoom on any photo in the player
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 17-01: TBD
@@ -200,7 +200,7 @@ Plans:
   3. Client leaves a comment on a photo during proofing and photographer sees the comment in their dashboard in real-time via WebSocket
   4. Each AI tool in the gallery toolbar shows a tooltip with 1-2 sentence description on hover explaining what it does
   5. Multi-selecting photos activates a visible bulk action toolbar with batch edit, tag, download, and delete operations
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 18-01: TBD
@@ -216,7 +216,7 @@ Plans:
   2. Client can choose between web, print, and original download sizes as permitted by the photographer's download policy for that gallery
   3. Gallery with an expiration date shows a countdown to the client, and reminder emails are sent automatically before the deadline
   4. Photographer opens gallery settings and sees a download log showing who downloaded which photos and when
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 19-01: TBD
@@ -232,7 +232,7 @@ Plans:
   3. Photographer copies an embed code and pastes it into their website, rendering a functional gallery widget in an iframe
   4. Gallery viewer toggles between dark and light mode and the entire gallery UI updates consistently (backgrounds, text, controls)
   5. Password-protected gallery shows a custom-branded entry page with photographer's logo, colors, and optional message before granting access
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 20-01: TBD
@@ -261,7 +261,7 @@ Plans:
   3. First visit to Galleries module shows interactive tooltip explaining key actions, dismissable and non-blocking
   4. Empty states in all major modules include video walkthrough or animated tutorial (not just text + CTA button)
   5. Help center search returns relevant articles for common queries (upload, share, client, billing)
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 ### Phase 22: Pricing & Monetization UX
 **Goal**: Users clearly understand plan differences and are guided toward upgrades at natural friction points
@@ -272,7 +272,7 @@ Plans:
   2. Free-tier user clicking a premium theme sees lock icon, feature preview, and one-click upgrade path
   3. Trial user sees days remaining, usage vs limits, and clear explanation of post-expiry behavior
   4. Upgrade flow shows clear before/after comparison between current plan and target plan
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 ### Phase 23: Business Analytics & KPIs
 **Goal**: Photographers have actionable business intelligence showing how their platform drives client engagement and revenue
@@ -283,7 +283,7 @@ Plans:
   2. Client lifecycle view shows distribution across stages (lead, active, completed, churned) with transition history
   3. Revenue panel shows MRR trend, plan distribution pie chart, and upgrade/downgrade events
   4. Weekly email digest arrives with top 5 metrics, notable changes, and actionable suggestions
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 ### Phase 24: Integration Ecosystem
 **Goal**: RawDrive connects to photographers' existing tools, eliminating manual data entry and enabling automation
@@ -294,7 +294,7 @@ Plans:
   2. User connects Google Calendar and public profile shows real booking availability with selectable time slots
   3. User imports photos from Google Drive folder into a gallery with progress indicator and completion summary
   4. User configures webhook URL and receives POST payload within 30 seconds of gallery publish event
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 ## Progress
 
