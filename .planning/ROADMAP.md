@@ -139,7 +139,7 @@ Plans:
 - [x] **Phase 15: Foundation Refactor & Data Model** - Decompose PublicGalleryPage monolith, visitor-scoped proofing table, LayoutStyle enum sync, shared lightbox hooks (completed 2026-03-19)
 - [x] **Phase 16: Gallery Layout Engine & Progressive Loading** - Justified, mosaic, enhanced masonry layouts, layout switcher, LQIP blur-up pipeline (completed 2026-03-20)
 - [x] **Phase 17: Gallery Player** - Fullscreen lightbox with zoom/pan/swipe, EXIF overlay, filmstrip navigation, mobile touch gestures (completed 2026-03-20)
-- [ ] **Phase 18: Client Interactions & Gallery UX** - Favorites, selections with quotas, comments, WebSocket sync, AI tooltips, bulk actions, settings presets, sub-gallery permissions
+- [x] **Phase 18: Client Interactions & Gallery UX** - Favorites, selections with quotas, comments, WebSocket sync, AI tooltips, bulk actions, settings presets, sub-gallery permissions (completed 2026-03-20)
 - [ ] **Phase 19: Downloads & Delivery** - Batch ZIP downloads, size options, gallery expiration with reminder emails, download tracking
 - [ ] **Phase 20: Sharing, Analytics & Polish** - OG previews, QR codes, embeds, dark/light toggle, branded password page, background music, per-gallery analytics, gallery discovery
 
@@ -320,7 +320,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 15. Foundation Refactor & Data Model | 3/3 | Complete    | 2026-03-19 | - |
 | 16. Gallery Layout Engine & Progressive Loading | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Gallery Player | v1.2 | Complete    | 2026-03-20 | 2026-03-20 |
-| 18. Client Interactions & Gallery UX | 2/3 | In Progress|  | - |
+| 18. Client Interactions & Gallery UX | 3/3 | Complete   | 2026-03-20 | - |
 | 19. Downloads & Delivery | v1.2 | 0/? | Not started | - |
 | 20. Sharing, Analytics & Polish | v1.2 | 0/? | Not started | - |
 | 21. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: unknown
-stopped_at: Completed 18-01-PLAN.md
-last_updated: "2026-03-20T08:31:22.918Z"
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-03-20T08:37:45.801Z"
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
+  total_phases: 11
+  completed_phases: 9
+  total_plans: 28
+  completed_plans: 28
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 18 (Client Interactions & Gallery UX) — IN PROGRESS
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Plan: 1 of 3 complete
 - [Phase 17]: PlayerExifPanel uses motion.div slide-up (y:20->0) with backdrop-blur-md; PublicGalleryLightbox replaced by GalleryPlayer via openPlayer(index) from GalleryPlayerContext
 - [Phase 18]: AIToolTooltip uses data-tooltip-wrapper for test targeting; BulkActionBar fixed bottom-0 with framer-motion spring animation; GallerySettingsPresets above section tabs; SubGalleryPermissionBadge confirmation before toggle
 - [Phase 18]: Added itemOverlay render prop to LayoutRendererProps and all 4 layout renderers for per-item overlays (FavoriteButton) rather than modifying each renderer individually
+- [Phase 18]: Leveraged existing gallery-service websocket.py with Redis pub/sub listener; backoff resets on effect re-run not on open; photographer receives all events with null visitorToken
 
 ### Roadmap Evolution
 
@@ -94,8 +95,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T08:31:20.506Z
-Stopped at: Completed 18-01-PLAN.md
+Last session: 2026-03-20T08:37:00Z
+Stopped at: Completed 18-02-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones

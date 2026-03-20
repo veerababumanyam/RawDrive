@@ -80,7 +80,7 @@
 - [x] **INTR-01**: Client can favorite/heart photos directly from the public gallery view
 - [x] **INTR-02**: Photographer can set selection quotas; client sees progress toward quota
 - [x] **INTR-03**: Client can leave per-photo comments during proofing
-- [ ] **INTR-04**: Photographer sees client selections in real-time via WebSocket sync
+- [x] **INTR-04**: Photographer sees client selections in real-time via WebSocket sync
 
 ### Downloads & Delivery
 
@@ -258,7 +258,7 @@
 | INTR-01 | Phase 18 | Complete |
 | INTR-02 | Phase 18 | Complete |
 | INTR-03 | Phase 18 | Complete |
-| INTR-04 | Phase 18 | Pending |
+| INTR-04 | Phase 18 | Complete |
 | DWNL-01 | Phase 19 | Pending |
 | DWNL-02 | Phase 19 | Pending |
 | DWNL-03 | Phase 19 | Pending |
