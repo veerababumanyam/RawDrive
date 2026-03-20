@@ -38,6 +38,9 @@ import { HeaderSection } from './sections/HeaderSection';
 import { BioSection } from './sections/BioSection';
 import { ContactSection } from './sections/ContactSection';
 import { SocialsSection } from './sections/SocialsSection';
+import { GalleryPreviewSection } from './sections/GalleryPreviewSection';
+import { BookingCTASection } from './sections/BookingCTASection';
+import { TestimonialsSection } from './sections/TestimonialsSection';
 
 // ---------------------------------------------------------------------------
 // Registry
@@ -76,6 +79,30 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
     gridSpan: { cols: 4, rows: 1 },
     order: 3,
   },
+  {
+    id: 'gallery-preview',
+    component: GalleryPreviewSection,
+    supportedTypes: ['personal'],
+    requiredData: ['featured_gallery'],
+    gridSpan: { cols: 4, rows: 1 },
+    order: 4,
+  },
+  {
+    id: 'booking-cta',
+    component: BookingCTASection,
+    supportedTypes: ['personal'],
+    requiredData: ['booking_url'],
+    gridSpan: { cols: 4, rows: 1 },
+    order: 5,
+  },
+  {
+    id: 'testimonials',
+    component: TestimonialsSection,
+    supportedTypes: ['personal'],
+    requiredData: ['testimonials'],
+    gridSpan: { cols: 4, rows: 1 },
+    order: 6,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -99,6 +126,8 @@ export function getSectionsForProfile(
       return entry.requiredData.every((key) => {
         const value = profileData[key];
         if (value === undefined || value === null || value === '') return false;
+        // For arrays (like testimonials), check they have at least one item
+        if (Array.isArray(value) && value.length === 0) return false;
         // For objects (like social_links), check they have at least one key
         if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) return false;
         return true;
