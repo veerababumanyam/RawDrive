@@ -13,7 +13,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Lock as LockIcon, Download, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Lock as LockIcon, Download, ChevronRight, BarChart3 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
@@ -58,6 +58,7 @@ import type { AIFeatureToggles } from '../../types/geminiSettings';
 import { ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
 import { useAIFilters } from '../../hooks/useAIFilters';
 import { DownloadTrackingPanel } from '../../components/features/gallery/DownloadTrackingPanel';
+import { GalleryAnalyticsTab } from '../../components/features/gallery/analytics/GalleryAnalyticsTab';
 
 const GalleryDetailPage: React.FC = () => {
   const { id: galleryId } = useParams<{ id: string }>();
@@ -1242,6 +1243,24 @@ const GalleryDetailPage: React.FC = () => {
               galleryId={gallery.gallery_id}
               onSetCover={handleSetGalleryCover}
             />
+          )}
+
+          {/* Analytics Section */}
+          {workspace?.workspace_id && galleryId && (
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <details className="group">
+                <summary className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-surface-hover transition-colors">
+                  <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
+                    <BarChart3 size={18} />
+                    Analytics
+                  </h3>
+                  <ChevronRight size={16} className="text-text-tertiary group-open:rotate-90 transition-transform" />
+                </summary>
+                <div className="px-6 pb-4">
+                  <GalleryAnalyticsTab galleryId={galleryId} />
+                </div>
+              </details>
+            </div>
           )}
 
           {/* Download Tracking Section */}

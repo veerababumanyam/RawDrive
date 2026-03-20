@@ -51,6 +51,7 @@
     "react-window": "^2.2.4",
     "react-window-infinite-loader": "^2.0.0",
     "react-zoom-pan-pinch": "^3.7.0",
+    "recharts": "^3.8.0",
     "workbox-window": "^7.4.0",
     "zod": "^4.3.5"
   },

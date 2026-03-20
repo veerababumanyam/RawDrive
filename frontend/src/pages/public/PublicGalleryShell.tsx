@@ -7,7 +7,7 @@
  *
  * Extracted from the 2317-line PublicGalleryPage monolith (Phase 15-02).
  */
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { galleryService } from '../../services/galleryService';
 import { faceApiService } from '../../services/faceApiService';
@@ -122,6 +122,89 @@ export const PublicGalleryShell: React.FC = () => {
       }};
     });
   }, [assets]);
+
+  // View tracking beacon — fires when gallery loads and visitor is authenticated
+  const viewIdRef = useRef<string | null>(null);
+  const viewStartRef = useRef<number>(Date.now());
+  const viewTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!actualGalleryId || !isVisitorAuthenticated || !isPasswordVerified || !isPinVerified || viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
+    viewStartRef.current = Date.now();
+
+    // Generate or reuse visitor token
+    let visitorToken = localStorage.getItem('rawdrive_visitor_token');
+    if (!visitorToken) {
+      visitorToken = crypto.randomUUID();
+      localStorage.setItem('rawdrive_visitor_token', visitorToken);
+    }
+
+    // Detect device type from User-Agent
+    const ua = navigator.userAgent;
+    let deviceType = 'desktop';
+    if (/Mobi|Android/i.test(ua)) deviceType = 'mobile';
+    else if (/Tablet|iPad/i.test(ua)) deviceType = 'tablet';
+
+    // Detect browser
+    let browser = 'unknown';
+    if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) browser = 'Chrome';
+    else if (/Firefox/i.test(ua)) browser = 'Firefox';
+    else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
+    else if (/Edg/i.test(ua)) browser = 'Edge';
+
+    // Detect OS
+    let os = 'unknown';
+    if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/Mac/i.test(ua)) os = 'macOS';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+    else if (/Android/i.test(ua)) os = 'Android';
+    else if (/iPhone|iPad/i.test(ua)) os = 'iOS';
+
+    const galleryServiceUrl = import.meta.env.VITE_GALLERY_SERVICE_URL || '/api/gallery-service';
+    fetch(`${galleryServiceUrl}/api/v1/public/galleries/${actualGalleryId}/view`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Magic-Link-Token': token } : {}),
+      },
+      body: JSON.stringify({
+        visitor_token: visitorToken,
+        device_type: deviceType,
+        browser,
+        os,
+        referrer_domain: document.referrer ? new URL(document.referrer).hostname : undefined,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.view_id) viewIdRef.current = data.view_id;
+      })
+      .catch(() => { /* Non-critical — analytics tracking */ });
+
+    // Send time-spent on unload via sendBeacon
+    const handleUnload = () => {
+      if (!viewIdRef.current) return;
+      const timeSpentSeconds = Math.round((Date.now() - viewStartRef.current) / 1000);
+      const payload = JSON.stringify({
+        view_id: viewIdRef.current,
+        time_spent_seconds: timeSpentSeconds,
+      });
+      navigator.sendBeacon(
+        `${galleryServiceUrl}/api/v1/public/galleries/${actualGalleryId}/view/time`,
+        new Blob([payload], { type: 'application/json' })
+      );
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') handleUnload();
+    });
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [actualGalleryId, token, isVisitorAuthenticated, isPasswordVerified, isPinVerified]);
 
   // Fetch person photos when filter changes
   useEffect(() => {
