@@ -59,19 +59,28 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - ✓ Test coverage: Frontend component tests (upload, auth pages) — v1.0
 - ✓ Test coverage: AI concurrency and security enforcement tests — v1.0
 
+- ✓ Avatar R2 storage pipeline with lazy migration fallback — v1.1
+- ✓ AvatarDisplay component with initials fallback — v1.1
+- ✓ UnifiedThemeEngine with CSS custom properties (legacy themes deleted) — v1.1
+- ✓ Shared PublicProfileRenderer with section registry — v1.1
+- ✓ Responsive Bento grid (1→4 column reflow) with glassmorphism — v1.1
+- ✓ 4 animated theme backgrounds (gradient shift, particles, wave, aurora) — v1.1
+- ✓ Dark mode via prefers-color-scheme + theme variants — v1.1
+- ✓ SEO HTML shell with OG images, JSON-LD, meta tags — v1.1
+- ✓ Profile editor with live preview via PublicProfileRenderer — v1.1
+- ✓ Drag-and-drop section reordering with @dnd-kit — v1.1
+- ✓ Gradient/solid color picker for theme customization — v1.1
+- ✓ Device frame preview (mobile/tablet/desktop) — v1.1
+- ✓ Auto-save with 2s debounce — v1.1
+- ✓ Gallery preview block (2x2 cover grid) — v1.1
+- ✓ Booking CTA button with calendar icon — v1.1
+- ✓ Testimonials block with star ratings — v1.1
+- ✓ Social links with Threads/Bluesky + platform hover colors — v1.1
+- ✓ LazyMotion code-splitting + LQIP blur-up + lazy embeds — v1.1
+
 ### Active
 
-## Current Milestone: v1.1 Profile & Public Page Modernization
-
-**Goal:** Fix broken functionality and redesign both personal photographer profile (`/u/:slug`) and company/branding profile (`/p/:slug`) pages — editors, live previews, and public views — to be modern, responsive, and premium (Linktree/Bento-level polish).
-
-**Target features:**
-- Fix avatar loading, broken UI/UX, and non-functional features across both profile systems
-- Modernize public pages (`/u/:slug` personal, `/p/:slug` company) with premium design
-- Redesign profile editors (`/workspace/profile`, `/workspace/branding`) with working live preview
-- Deep research into Linktree, Bento, and similar link-in-bio platforms for design inspiration
-- Responsive, elegant, attractive design across all devices
-- Consolidate and fix theme engine, social links, custom links, vCard/QR exports
+(None — next milestone requirements TBD via `/gsd:new-milestone`)
 
 ## Next Milestone: v1.2 Public Gallery & Gallery Player Modernization
 
@@ -156,4 +165,4 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - **Compatibility**: All services share PostgreSQL and validate JWT with shared JWT_SECRET
 
 ---
-*Last updated: 2026-03-19 after v1.3 milestone defined from BA review gap analysis*
+*Last updated: 2026-03-20 after v1.1 milestone complete*

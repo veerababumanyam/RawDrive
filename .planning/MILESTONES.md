@@ -1,5 +1,15 @@
 # Milestones
 
+## v1.1 Profile & Public Page Modernization (Shipped: 2026-03-20)
+
+**Phases completed:** 5 phases, 17 plans, 5 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v1.0 MVP (Shipped: 2026-03-19)
 
 **Stats:** 9 phases, 23 plans, 389 commits, 92 days (2025-12-17 → 2026-03-19)
@@ -17,6 +27,7 @@
 - Test coverage: backend integration + frontend component + AI concurrency + security enforcement tests
 
 **Archives:**
+
 - `.planning/milestones/v1.0-ROADMAP.md`
 - `.planning/milestones/v1.0-REQUIREMENTS.md`
 - `.planning/milestones/v1.0-phases/`
