@@ -171,8 +171,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 16-01: TBD
-- [ ] 16-02: TBD
+- [ ] 16-01-PLAN.md -- Layout engine foundation: types, ProgressiveImage LQIP blur-up, GridLayout, justified-layout install
+- [ ] 16-02-PLAN.md -- Three layout renderers: JustifiedLayout, MosaicLayout, EnhancedMasonryLayout
+- [ ] 16-03-PLAN.md -- LayoutSwitcher UI, wire GalleryLayoutEngine into PublicGalleryContent, visual verification
 
 ### Phase 17: Gallery Player
 **Goal**: Gallery visitors experience a premium fullscreen photo viewing experience with gestures, metadata, and filmstrip navigation
