@@ -68,6 +68,7 @@ export const EnhancedMasonryLayout: React.FC<LayoutRendererProps> = ({
   containerWidth,
   gap = 8,
   onAssetClick,
+  itemOverlay,
 }) => {
   const columns = useMemo(() => getColumns(containerWidth), [containerWidth]);
 
@@ -94,6 +95,7 @@ export const EnhancedMasonryLayout: React.FC<LayoutRendererProps> = ({
           <div
             key={asset.asset_id}
             style={{
+              position: 'relative',
               breakInside: 'avoid',
               marginBottom: gap,
             }}
@@ -111,6 +113,7 @@ export const EnhancedMasonryLayout: React.FC<LayoutRendererProps> = ({
               alt={asset.alt}
               style={{ width: '100%', height: 'auto' }}
             />
+            {itemOverlay?.(asset, originalIndex)}
           </div>
         );
       })}

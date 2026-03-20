@@ -10,6 +10,14 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+/** Comment on a photo in proofing workflow */
+export interface ProofingComment {
+  id: string;
+  visitor_name: string;
+  text: string;
+  created_at: string;
+}
+
 export interface GalleryInteractionContextValue {
   /** Set of asset IDs favorited by this visitor */
   favorites: Set<string>;
@@ -31,6 +39,12 @@ export interface GalleryInteractionContextValue {
   favoriteCount: number;
   /** Selection count */
   selectionCount: number;
+  /** Comments keyed by asset ID */
+  comments: Map<string, ProofingComment[]>;
+  /** Add a comment to an asset */
+  addComment: (assetId: string, text: string) => Promise<void>;
+  /** Load comments for an asset from the server */
+  loadComments: (assetId: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +84,7 @@ export const GalleryInteractionProvider: React.FC<GalleryInteractionProviderProp
   const { addToast } = useToast();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selections, setSelections] = useState<Set<string>>(new Set());
+  const [comments, setComments] = useState<Map<string, ProofingComment[]>>(new Map());
 
   // Visitor token from localStorage
   const [visitorToken, setVisitorToken] = useState<string | null>(() => {
@@ -186,6 +201,63 @@ export const GalleryInteractionProvider: React.FC<GalleryInteractionProviderProp
     [galleryId, visitorToken, selections, selectionLimit, addToast],
   );
 
+  // Load comments for an asset from the proofing API
+  const loadComments = useCallback(
+    async (assetId: string) => {
+      try {
+        const response = await galleryService.getProofingComments(galleryId, assetId, visitorToken || undefined);
+        setComments((prev) => {
+          const next = new Map(prev);
+          next.set(assetId, response);
+          return next;
+        });
+      } catch (err) {
+        console.error('Failed to load comments:', err);
+      }
+    },
+    [galleryId, visitorToken],
+  );
+
+  // Add a comment to an asset (optimistic update)
+  const addComment = useCallback(
+    async (assetId: string, text: string) => {
+      const optimisticComment: ProofingComment = {
+        id: `temp-${Date.now()}`,
+        visitor_name: 'You',
+        text,
+        created_at: new Date().toISOString(),
+      };
+
+      // Optimistic add
+      setComments((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(assetId) || [];
+        next.set(assetId, [...existing, optimisticComment]);
+        return next;
+      });
+
+      try {
+        await galleryService.addProofingComment(
+          galleryId,
+          assetId,
+          text,
+          visitorToken || undefined,
+        );
+      } catch (err) {
+        console.error('Failed to add comment:', err);
+        addToast({ message: 'Failed to post comment. Please try again.', variant: 'error' });
+        // Revert optimistic update
+        setComments((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(assetId) || [];
+          next.set(assetId, existing.filter((c) => c.id !== optimisticComment.id));
+          return next;
+        });
+      }
+    },
+    [galleryId, visitorToken, addToast],
+  );
+
   const value = useMemo<GalleryInteractionContextValue>(
     () => ({
       favorites,
@@ -198,6 +270,9 @@ export const GalleryInteractionProvider: React.FC<GalleryInteractionProviderProp
       isProofingEnabled,
       favoriteCount: favorites.size,
       selectionCount: selections.size,
+      comments,
+      addComment,
+      loadComments,
     }),
     [
       favorites,
@@ -208,6 +283,9 @@ export const GalleryInteractionProvider: React.FC<GalleryInteractionProviderProp
       isAtSelectionLimit,
       visitorToken,
       isProofingEnabled,
+      comments,
+      addComment,
+      loadComments,
     ],
   );
 

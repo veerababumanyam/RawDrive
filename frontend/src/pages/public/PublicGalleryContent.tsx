@@ -32,6 +32,8 @@ import { useGalleryTheme } from '../../contexts/GalleryThemeContext';
 import { useGalleryInteraction } from '../../contexts/GalleryInteractionContext';
 import { useGalleryPlayer } from '../../contexts/GalleryPlayerContext';
 import { GalleryPlayer } from '../../components/features/gallery/player';
+import { FavoriteButton } from '../../components/features/gallery/public/FavoriteButton';
+import { SelectionQuotaBar } from '../../components/features/gallery/public/SelectionQuotaBar';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -155,6 +157,13 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
 
   // Layout engine assets (converted from canvasAssets)
   const layoutAssets = useMemo(() => canvasAssets.map(fromGalleryAssetItem), [canvasAssets]);
+
+  // FavoriteButton overlay for layout engine items
+  const renderItemOverlay = useCallback((asset: { asset_id: string }) => (
+    <div className="absolute top-2 right-2 z-10">
+      <FavoriteButton assetId={asset.asset_id} size="md" />
+    </div>
+  ), []);
 
   // Open player from layout engine click
   const handleLayoutAssetClick = useCallback((_asset: { asset_id: string }, index: number) => {
@@ -282,6 +291,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
               <button role="tab" aria-selected={activeTab === 'favorites'} className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all ${activeTab === 'favorites' ? 'bg-red-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => setActiveTab('favorites')}><Heart size={16} />Favorites{favoriteCount > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">{favoriteCount}</span>}</button>
               <button role="tab" aria-selected={activeTab === 'selections'} className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all ${activeTab === 'selections' ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => setActiveTab('selections')}><Bookmark size={16} />My Picks{selectionCount > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">{selectionCount}</span>}</button>
             </div>
+            <SelectionQuotaBar className="mb-4 max-w-md mx-auto" />
             {activeSubGallery && breadcrumbItems.length > 1 && <div className="mb-6"><Breadcrumbs items={breadcrumbItems} galleryId={actualGalleryId} onNavigate={(item) => setActiveSubGallery(item.type === 'gallery' ? null : item.id)} showHomeIcon className="text-gray-600 dark:text-gray-400" /></div>}
             {gallery.sub_galleries && gallery.sub_galleries.length > 0 && (
               <div className="mb-8">
@@ -313,6 +323,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
                 assets={layoutAssets}
                 gap={8}
                 onAssetClick={handleLayoutAssetClick}
+                itemOverlay={renderItemOverlay}
               />
             ) : (
               <GalleryCanvas assets={canvasAssets} viewMode={canvasViewMode} columns={{ sm: 1, md: 2, lg: 3, xl: 4 }} gap="md" selectedAssetIds={selections} lastSelectedId={null} managementSelectable={false} showCustomerSelection onSelectionChange={sel => { const ns = new Set(sel); [...ns].filter(x => !selections.has(x)).forEach(id => toggleSelection(id)); [...selections].filter(x => !ns.has(x)).forEach(id => toggleSelection(id)); }} onCustomerSelectionToggle={(id) => toggleSelection(id)} onAssetClick={(a) => { const idx = displayedAssets.findIndex(x => x.asset_id === a.asset_id); if (idx >= 0) openPlayer(idx); }} onAssetFavorite={(id) => toggleFavorite(id)} onAssetDownload={gallery.download_policy !== 'view_only' ? (id) => { const p = displayedAssets.find(x => x.asset_id === id); if (p) handleDownload(p); } : undefined} isClientView downloadPolicy={gallery.download_policy} showWatermark={gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only'} isPrivateUnlocked={isPrivateUnlocked} onUnlockPrivate={() => { if (gallery.pin_protected) { setPinModalMode('private'); setShowPinModal(true); } else addToast({ message: 'This photo is private.', variant: 'info' }); }} />

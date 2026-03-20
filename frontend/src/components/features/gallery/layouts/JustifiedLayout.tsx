@@ -32,6 +32,7 @@ export const JustifiedLayout: React.FC<LayoutRendererProps> = ({
   containerWidth,
   gap = 8,
   onAssetClick,
+  itemOverlay,
 }) => {
   const geometry = useMemo(() => {
     if (containerWidth <= 0 || assets.length === 0) return null;
@@ -82,6 +83,7 @@ export const JustifiedLayout: React.FC<LayoutRendererProps> = ({
               alt={asset.alt}
               style={{ width: '100%', height: '100%' }}
             />
+            {itemOverlay?.(asset, i)}
           </div>
         );
       })}

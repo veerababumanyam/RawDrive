@@ -30,6 +30,8 @@ export interface GalleryLayoutEngineProps {
   gap?: number;
   /** Callback when an asset is clicked (e.g. open lightbox) */
   onAssetClick?: (asset: LayoutAsset, index: number) => void;
+  /** Optional render prop for per-item overlays (e.g. favorite button) */
+  itemOverlay?: (asset: LayoutAsset, index: number) => React.ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +65,7 @@ export const GalleryLayoutEngine: React.FC<GalleryLayoutEngineProps> = ({
   assets,
   gap = 8,
   onAssetClick,
+  itemOverlay,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -94,7 +97,7 @@ export const GalleryLayoutEngine: React.FC<GalleryLayoutEngineProps> = ({
   // -----------------------------------------------------------------------
 
   const renderLayout = () => {
-    const rendererProps = { assets, containerWidth, gap, onAssetClick };
+    const rendererProps = { assets, containerWidth, gap, onAssetClick, itemOverlay };
 
     switch (layout) {
       case 'grid':

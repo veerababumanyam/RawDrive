@@ -8,6 +8,7 @@
  * @module layouts/types
  */
 
+import type React from 'react';
 import type { GalleryAssetItem, PublicGalleryAsset } from '../../../../types/gallery';
 
 // ---------------------------------------------------------------------------
@@ -32,6 +33,8 @@ export interface LayoutRendererProps {
   containerWidth: number;
   gap?: number;
   onAssetClick?: (asset: LayoutAsset, index: number) => void;
+  /** Optional render prop for per-item overlays (e.g. favorite button) */
+  itemOverlay?: (asset: LayoutAsset, index: number) => React.ReactNode;
 }
 
 // ---------------------------------------------------------------------------

@@ -808,6 +808,46 @@ export class GalleryService {
   }
 
   /**
+   * Get comments for an asset in a public gallery (proofing)
+   */
+  async getProofingComments(
+    galleryId: string,
+    assetId: string,
+    visitorToken?: string
+  ): Promise<{ id: string; visitor_name: string; text: string; created_at: string }[]> {
+    const params = new URLSearchParams();
+    if (visitorToken) params.append('visitor_token', visitorToken);
+    const endpoint = `/api/v1/public/galleries/${galleryId}/proof/comments/${assetId}?${params.toString()}`;
+    const response = await apiClient.get<{
+      comments: { id: string; visitor_name: string; text: string; created_at: string }[];
+    }>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to load comments');
+    }
+    return response.data?.comments ?? [];
+  },
+
+  /**
+   * Add a comment to an asset in a public gallery (proofing)
+   */
+  async addProofingComment(
+    galleryId: string,
+    assetId: string,
+    commentText: string,
+    visitorToken?: string
+  ): Promise<void> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/proof/comment`;
+    const response = await apiClient.post(endpoint, {
+      asset_id: assetId,
+      comment_text: commentText,
+      visitor_token: visitorToken,
+    });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to post comment');
+    }
+  },
+
+  /**
    * Get public gallery assets with optional filtering
    * Supports workflow tabs: All, Favorites, Selections
    * Also supports emotion-based filtering

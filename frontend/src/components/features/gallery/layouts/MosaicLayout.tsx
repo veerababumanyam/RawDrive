@@ -60,6 +60,7 @@ export const MosaicLayout: React.FC<LayoutRendererProps> = ({
   containerWidth,
   gap = 8,
   onAssetClick,
+  itemOverlay,
 }) => {
   const columns = useMemo(() => getColumns(containerWidth), [containerWidth]);
 
@@ -86,6 +87,7 @@ export const MosaicLayout: React.FC<LayoutRendererProps> = ({
           <div
             key={asset.asset_id}
             style={{
+              position: 'relative',
               gridColumn: span.gridColumn,
               gridRow: span.gridRow,
               overflow: 'hidden',
@@ -104,6 +106,7 @@ export const MosaicLayout: React.FC<LayoutRendererProps> = ({
               alt={asset.alt}
               style={{ width: '100%', height: '100%' }}
             />
+            {itemOverlay?.(asset, i)}
           </div>
         );
       })}

@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDrag } from '@use-gesture/react';
 import { useGalleryPlayer } from '../../../../contexts/GalleryPlayerContext';
+import { useGalleryInteraction } from '../../../../contexts/GalleryInteractionContext';
 import { useLightboxNavigation } from '../../../../hooks/lightbox/useLightboxNavigation';
 import { useLightboxAutoHide } from '../../../../hooks/lightbox/useLightboxAutoHide';
 import { PlayerToolbar } from './PlayerToolbar';
@@ -33,6 +34,8 @@ export const GalleryPlayer: React.FC = () => {
     closePlayer,
     openPlayer,
   } = useGalleryPlayer();
+
+  const { favorites, toggleFavorite, isProofingEnabled } = useGalleryInteraction();
 
   // Zoom state — when zoomed, disable swipe navigation
   const [isZoomed, setIsZoomed] = useState(false);
@@ -152,6 +155,8 @@ export const GalleryPlayer: React.FC = () => {
                 showInfoActive={showExif}
                 onMouseEnter={handleControlsEnter}
                 onMouseLeave={handleControlsLeave}
+                isFavorited={currentAsset ? favorites.has(currentAsset.asset_id) : false}
+                onToggleFavorite={isProofingEnabled && currentAsset ? () => toggleFavorite(currentAsset.asset_id) : undefined}
               />
             </div>
 

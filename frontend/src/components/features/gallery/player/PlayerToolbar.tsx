@@ -5,7 +5,7 @@
  * Uses glassmorphism styling consistent with existing lightbox buttons.
  */
 import React from 'react';
-import { X, Info, Download } from 'lucide-react';
+import { X, Info, Download, Heart } from 'lucide-react';
 
 export interface PlayerToolbarProps {
   /** Position label e.g. "3 / 25" */
@@ -25,6 +25,16 @@ export interface PlayerToolbarProps {
   /** Auto-hide hover handlers */
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  /** Current asset ID for favorite button */
+  currentAssetId?: string;
+  /** Whether the current asset is favorited */
+  isFavorited?: boolean;
+  /** Toggle favorite handler */
+  onToggleFavorite?: () => void;
+  /** Toggle comment panel handler */
+  onToggleComments?: () => void;
+  /** Whether comment panel is open */
+  showCommentsActive?: boolean;
 }
 
 export const PlayerToolbar: React.FC<PlayerToolbarProps> = ({
@@ -37,6 +47,10 @@ export const PlayerToolbar: React.FC<PlayerToolbarProps> = ({
   isDownloading,
   onMouseEnter,
   onMouseLeave,
+  isFavorited,
+  onToggleFavorite,
+  onToggleComments,
+  showCommentsActive,
 }) => {
   const showDownload = downloadPolicy !== 'view_only' && onDownload;
 
@@ -56,6 +70,16 @@ export const PlayerToolbar: React.FC<PlayerToolbarProps> = ({
 
       {/* Action buttons */}
       <div className="relative z-10 flex items-center gap-2">
+        {onToggleFavorite && (
+          <button
+            className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20 transition-all ${isFavorited ? 'text-red-500 bg-white/20' : 'text-white/90 hover:bg-white/20'}`}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+            aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart size={18} fill={isFavorited ? 'currentColor' : 'none'} />
+          </button>
+        )}
+
         <button
           className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 hover:bg-white/20 transition-all ${showInfoActive ? 'bg-white/25 ring-1 ring-white/40' : ''}`}
           onClick={(e) => { e.stopPropagation(); onToggleInfo(); }}

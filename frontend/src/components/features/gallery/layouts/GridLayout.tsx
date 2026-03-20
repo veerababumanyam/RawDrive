@@ -31,6 +31,7 @@ export const GridLayout: React.FC<LayoutRendererProps> = ({
   containerWidth,
   gap = 8,
   onAssetClick,
+  itemOverlay,
 }) => {
   const columns = useMemo(() => getColumns(containerWidth), [containerWidth]);
 
@@ -44,20 +45,20 @@ export const GridLayout: React.FC<LayoutRendererProps> = ({
       }}
     >
       {assets.map((asset: LayoutAsset, index: number) => (
-        <ProgressiveImage
+        <div
           key={asset.asset_id}
-          src={asset.src}
-          lqip={asset.lqip}
-          width={asset.width}
-          height={asset.height}
-          alt={asset.alt}
-          onClick={
-            onAssetClick ? () => onAssetClick(asset, index) : asset.onClick
-          }
-          style={{
-            borderRadius: '4px',
-          }}
-        />
+          style={{ position: 'relative', overflow: 'hidden', borderRadius: '4px', cursor: onAssetClick ? 'pointer' : undefined }}
+          onClick={onAssetClick ? () => onAssetClick(asset, index) : undefined}
+        >
+          <ProgressiveImage
+            src={asset.src}
+            lqip={asset.lqip}
+            width={asset.width}
+            height={asset.height}
+            alt={asset.alt}
+          />
+          {itemOverlay?.(asset, index)}
+        </div>
       ))}
     </div>
   );
