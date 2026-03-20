@@ -1,11 +1,13 @@
 /**
  * BulkActionBar Component
  * Displays bulk actions when photos are selected
+ * Sticky at bottom of screen with slide-up animation
  * Property 24: Bulk Actions Bar
  */
 
 import React, { useState } from 'react';
-import { Move, Trash2, Download, X, FolderOpen } from 'lucide-react';
+import { Move, Trash2, Download, X, FolderOpen, Tag, Edit3 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppButton } from '../../ui/AppButton';
 import { AppCard } from '../../ui/AppCard';
 import { ConfirmDialog } from '../../ui/Modal';
@@ -26,6 +28,10 @@ export interface BulkActionBarProps {
   onBulkDelete?: (assetIds: string[]) => void;
   /** Callback for bulk download */
   onBulkDownload?: (assetIds: string[]) => void;
+  /** Callback for bulk tag */
+  onBulkTag?: (assetIds: string[]) => void;
+  /** Callback for bulk edit */
+  onBulkEdit?: (assetIds: string[]) => void;
   /** Whether actions are loading */
   isLoading?: boolean;
   className?: string;
@@ -38,6 +44,8 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
   onBulkMove,
   onBulkDelete,
   onBulkDownload,
+  onBulkTag,
+  onBulkEdit,
   isLoading = false,
   className = '',
 }) => {
@@ -73,75 +81,111 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
 
   return (
     <>
-      <AppCard
-        padding="md"
-        className={`
-          sticky top-0 z-10
-          bg-surface border-2 border-primary
-          shadow-lg
-          ${className}
-        `}
-      >
-        <div className="flex items-center justify-between gap-4">
-          {/* Selection Info */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-primary font-semibold text-sm">{selectedCount}</span>
-              </div>
-              <span className="text-sm font-medium text-text-primary">
-                {selectedCount === 1 ? 'photo' : 'photos'} selected
-              </span>
-            </div>
-            <AppButton
-              variant="ghost"
-              size="sm"
-              onClick={onClearSelection}
-              className="text-text-tertiary hover:text-text-primary"
+      <AnimatePresence>
+        {selectedCount > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className={`
+              fixed bottom-0 left-0 right-0 z-40
+              ${className}
+            `}
+          >
+            <AppCard
+              padding="md"
+              className="
+                mx-4 mb-4
+                bg-surface border-2 border-primary
+                shadow-2xl rounded-xl
+              "
             >
-              <X size={16} className="mr-1" />
-              Clear
-            </AppButton>
-          </div>
+              <div className="flex items-center justify-between gap-4">
+                {/* Selection Info */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-primary font-semibold text-sm">{selectedCount}</span>
+                    </div>
+                    <span className="text-sm font-medium text-text-primary">
+                      {selectedCount === 1 ? 'photo' : 'photos'} selected
+                    </span>
+                  </div>
+                  <AppButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClearSelection}
+                    className="text-text-tertiary hover:text-text-primary"
+                  >
+                    <X size={16} className="mr-1" />
+                    Clear
+                  </AppButton>
+                </div>
 
-          {/* Bulk Actions */}
-          <div className="flex items-center gap-2">
-            {onBulkMove && (
-              <AppButton
-                variant="outline"
-                size="sm"
-                leftIcon={<Move size={16} />}
-                onClick={handleBulkMove}
-                disabled={isLoading}
-              >
-                Move
-              </AppButton>
-            )}
-            {onBulkDownload && (
-              <AppButton
-                variant="outline"
-                size="sm"
-                leftIcon={<Download size={16} />}
-                onClick={handleBulkDownload}
-                disabled={isLoading}
-              >
-                Download
-              </AppButton>
-            )}
-            {onBulkDelete && (
-              <AppButton
-                variant="destructive"
-                size="sm"
-                leftIcon={<Trash2 size={16} />}
-                onClick={handleBulkDelete}
-                disabled={isLoading}
-              >
-                Delete
-              </AppButton>
-            )}
-          </div>
-        </div>
-      </AppCard>
+                {/* Bulk Actions */}
+                <div className="flex items-center gap-2">
+                  {onBulkEdit && (
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Edit3 size={16} />}
+                      onClick={() => onBulkEdit(Array.from(selectedAssetIds))}
+                      disabled={isLoading}
+                    >
+                      Edit
+                    </AppButton>
+                  )}
+                  {onBulkTag && (
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Tag size={16} />}
+                      onClick={() => onBulkTag(Array.from(selectedAssetIds))}
+                      disabled={isLoading}
+                    >
+                      Tag
+                    </AppButton>
+                  )}
+                  {onBulkMove && (
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Move size={16} />}
+                      onClick={handleBulkMove}
+                      disabled={isLoading}
+                    >
+                      Move
+                    </AppButton>
+                  )}
+                  {onBulkDownload && (
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Download size={16} />}
+                      onClick={handleBulkDownload}
+                      disabled={isLoading}
+                    >
+                      Download
+                    </AppButton>
+                  )}
+                  {onBulkDelete && (
+                    <AppButton
+                      variant="destructive"
+                      size="sm"
+                      leftIcon={<Trash2 size={16} />}
+                      onClick={handleBulkDelete}
+                      disabled={isLoading}
+                    >
+                      Delete
+                    </AppButton>
+                  )}
+                </div>
+              </div>
+            </AppCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
