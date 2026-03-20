@@ -826,3 +826,47 @@ async def update_design_config(
             details={"gallery_id": gallery_id, "exception": str(e)},
             request_id=request_id
         )
+
+
+# =============================================================================
+# Download Tracking (Authenticated)
+# =============================================================================
+
+
+@router.get(
+    "/{gallery_id}/downloads/log",
+    summary="Get download tracking log for a gallery",
+)
+async def get_download_log(
+    gallery_id: str,
+    request: Request,
+    workspace_id: str = Depends(get_workspace_id),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    per_page: int = Query(default=50, ge=1, le=200, description="Items per page"),
+):
+    """Get paginated download tracking log for a gallery.
+
+    Requires workspace authentication. All queries filter by workspace_id.
+    """
+    from src.services.download_service import DownloadService
+    from uuid import UUID as UUIDType
+
+    try:
+        download_service = DownloadService()
+        result = await download_service.get_download_log(
+            workspace_id=UUIDType(workspace_id),
+            gallery_id=UUIDType(gallery_id),
+            page=page,
+            per_page=per_page,
+        )
+        return result.model_dump()
+    except Exception as e:
+        logger.error(
+            f"Download log retrieval failed: {e}",
+            extra={"gallery_id": gallery_id, "workspace_id": workspace_id},
+        )
+        raise_http_exception(
+            ErrorCode.INTERNAL_ERROR,
+            ErrorMessage.INTERNAL_ERROR,
+            details={"gallery_id": gallery_id},
+        )
