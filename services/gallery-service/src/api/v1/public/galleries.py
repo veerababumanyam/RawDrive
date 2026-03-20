@@ -6,9 +6,11 @@ Uses read replicas for high-throughput 50K concurrent users.
 """
 
 from fastapi import APIRouter, Header, Query, Request, Body
+from fastapi.responses import JSONResponse
 from typing import Optional
 from pydantic import BaseModel
 from uuid import UUID
+import asyncio
 
 from src.services.gallery_service import (
     get_gallery_service,
@@ -16,14 +18,22 @@ from src.services.gallery_service import (
     GalleryError,
 )
 from src.services.magic_link_service import get_magic_link_service
+from src.services.analytics_service import GalleryAnalyticsService
 from src.schemas.gallery import (
     GalleryResponse,
     GalleryAssetsListResponse,
     BreadcrumbsResponse,
 )
+from src.schemas.analytics import (
+    GalleryViewCreate,
+    TrackViewRequest,
+    UpdateTimeSpentRequest,
+)
 from src.middleware.expiration import check_gallery_expiration, compute_days_until_expiry
 from src.utils.security import verify_password
 from src.database import get_connection
+import src.database as database
+from src.cache.redis_client import redis_client
 from src.api.v1.errors import (
     raise_http_exception,
     exception_to_error_response,
@@ -366,6 +376,126 @@ async def verify_gallery_password(
             return VerifyResponse(valid=True, message="Password verified successfully")
         else:
             return VerifyResponse(valid=False, message="Invalid password")
+
+
+# =============================================================================
+# View Tracking Endpoints (Public)
+# =============================================================================
+
+
+def _get_analytics_service() -> GalleryAnalyticsService:
+    """Get analytics service instance."""
+    return GalleryAnalyticsService(database, redis_client)
+
+
+@router.post("/{gallery_id}/view", status_code=201)
+async def track_gallery_view(
+    request: Request,
+    gallery_id: str,
+    body: TrackViewRequest,
+    x_magic_link_token: Optional[str] = Header(None, alias="X-Magic-Link-Token"),
+):
+    """
+    Track a gallery view (public endpoint).
+
+    Rate-limited: same visitor_token within 30 minutes is deduplicated.
+    Requires valid magic link token.
+    """
+    request_id = get_request_id(request)
+
+    if not x_magic_link_token:
+        raise_http_exception(
+            ErrorCode.UNAUTHORIZED,
+            ErrorMessage.UNAUTHORIZED,
+            request_id=request_id,
+        )
+
+    # Validate magic link
+    magic_link_service = get_magic_link_service()
+    validation = await magic_link_service.validate_magic_link(x_magic_link_token)
+
+    if not validation["valid"]:
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Invalid or expired magic link",
+            request_id=request_id,
+        )
+
+    if validation["gallery_id"] != gallery_id:
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Magic link does not match gallery",
+            request_id=request_id,
+        )
+
+    # Get gallery to find workspace_id
+    gallery_service = get_gallery_service()
+    try:
+        gallery = await gallery_service.get_public_gallery(gallery_id=gallery_id)
+    except GalleryNotFoundError:
+        raise_http_exception(
+            ErrorCode.GALLERY_NOT_FOUND,
+            ErrorMessage.GALLERY_NOT_FOUND,
+            details={"gallery_id": gallery_id},
+            request_id=request_id,
+        )
+
+    workspace_id = gallery["workspace_id"]
+
+    # Create view data
+    view_data = GalleryViewCreate(
+        visitor_token=body.visitor_token,
+        device_type=body.device_type,
+        browser=body.browser,
+        os=body.os,
+        country_code=body.country_code,
+        referrer_domain=body.referrer_domain,
+    )
+
+    analytics_service = _get_analytics_service()
+    view_id = await analytics_service.track_view(
+        gallery_id=UUID(gallery_id),
+        workspace_id=UUID(str(workspace_id)),
+        view_data=view_data,
+    )
+
+    if view_id is None:
+        return JSONResponse(
+            status_code=200,
+            content={"message": "View already tracked", "deduplicated": True},
+        )
+
+    return JSONResponse(
+        status_code=201,
+        content={"view_id": str(view_id), "deduplicated": False},
+    )
+
+
+@router.post("/{gallery_id}/view/time", status_code=200)
+async def update_view_time_spent(
+    request: Request,
+    gallery_id: str,
+    body: UpdateTimeSpentRequest,
+    x_magic_link_token: Optional[str] = Header(None, alias="X-Magic-Link-Token"),
+):
+    """
+    Update time spent on a gallery view (beacon API on unload).
+
+    Called via navigator.sendBeacon when user leaves the gallery.
+    """
+    request_id = get_request_id(request)
+
+    if not x_magic_link_token:
+        raise_http_exception(
+            ErrorCode.UNAUTHORIZED,
+            ErrorMessage.UNAUTHORIZED,
+            request_id=request_id,
+        )
+
+    analytics_service = _get_analytics_service()
+    await analytics_service.update_time_spent(body.view_id, body.time_spent_seconds)
+
+    return {"success": True}
 
 
 # =============================================================================

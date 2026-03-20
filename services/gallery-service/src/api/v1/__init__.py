@@ -9,6 +9,7 @@ from src.api.v1.agents import router as agents_router
 from src.api.v1.websocket_agents import router as websocket_agents_router
 from src.api.v1.batch import router as batch_router
 from src.api.v1.gallery_design_recommendations import router as gallery_design_recommendations_router
+from src.api.v1.gallery_analytics import router as gallery_analytics_router
 from src.api.v1.assets import router as assets_router
 # XMP sync and desktop sync endpoints
 from src.api.v1.xmp_sync import router as xmp_sync_router
@@ -78,6 +79,13 @@ router.include_router(
     gallery_design_recommendations_router,
     prefix="/design",
     tags=["design", "ai-recommendations"],
+)
+
+# Gallery analytics endpoints (authenticated)
+router.include_router(
+    gallery_analytics_router,
+    prefix="/galleries",
+    tags=["galleries", "analytics"],
 )
 
 # XMP sync endpoints (authenticated + desktop sync API key)
