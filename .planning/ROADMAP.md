@@ -86,11 +86,12 @@ Plans:
   3. User picks a gradient or solid color in the visual theme picker and the preview updates immediately
   4. User toggles between mobile, tablet, and desktop device frames in the preview and sees accurate representations
   5. User stops typing mid-edit, navigates away, and returns to find all changes auto-saved
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md -- EditorContext, auto-save hook, npm packages, Alembic migration for section_order
+- [ ] 12-02-PLAN.md -- DnD section reordering, device frame preview, gradient color picker
+- [ ] 12-03-PLAN.md -- Wire editors to new system, visual verification
 
 ### Phase 13: Content Blocks & Performance
 **Goal**: Rich content blocks are available on public profiles and all pages meet the performance budget
@@ -102,7 +103,7 @@ Plans:
   3. User displays client testimonials on their public profile with proper formatting and attribution
   4. Social links render with correct platform icons (including Threads, Bluesky) and hover animations
   5. All public profile pages load in under 2 seconds (LCP) on a throttled 4G connection with all content blocks present
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 13-01: TBD
@@ -167,7 +168,7 @@ Plans:
   3. Existing masonry layout renders with improved column balancing and responsive breakpoints across mobile, tablet, and desktop
   4. Gallery visitor can toggle between available layouts via a layout switcher UI without page reload
   5. All gallery images load with a blurred LQIP placeholder that transitions smoothly to full resolution as the image downloads
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 16-01: TBD
@@ -182,7 +183,7 @@ Plans:
   2. Visitor taps an info button in the player and sees EXIF data (aperture, shutter speed, ISO, lens) overlaid on the current photo
   3. Visitor sees a filmstrip thumbnail strip at the bottom of the player and can click any thumbnail to jump to that photo
   4. Mobile visitor can pinch-to-zoom, swipe left/right to navigate, and double-tap to toggle zoom on any photo in the player
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 17-01: TBD
@@ -198,7 +199,7 @@ Plans:
   3. Client leaves a comment on a photo during proofing and photographer sees the comment in their dashboard in real-time via WebSocket
   4. Each AI tool in the gallery toolbar shows a tooltip with 1-2 sentence description on hover explaining what it does
   5. Multi-selecting photos activates a visible bulk action toolbar with batch edit, tag, download, and delete operations
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 18-01: TBD
@@ -214,7 +215,7 @@ Plans:
   2. Client can choose between web, print, and original download sizes as permitted by the photographer's download policy for that gallery
   3. Gallery with an expiration date shows a countdown to the client, and reminder emails are sent automatically before the deadline
   4. Photographer opens gallery settings and sees a download log showing who downloaded which photos and when
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 19-01: TBD
@@ -230,7 +231,7 @@ Plans:
   3. Photographer copies an embed code and pastes it into their website, rendering a functional gallery widget in an iframe
   4. Gallery viewer toggles between dark and light mode and the entire gallery UI updates consistently (backgrounds, text, controls)
   5. Password-protected gallery shows a custom-branded entry page with photographer's logo, colors, and optional message before granting access
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 20-01: TBD
@@ -259,7 +260,7 @@ Plans:
   3. First visit to Galleries module shows interactive tooltip explaining key actions, dismissable and non-blocking
   4. Empty states in all major modules include video walkthrough or animated tutorial (not just text + CTA button)
   5. Help center search returns relevant articles for common queries (upload, share, client, billing)
-**Plans**: TBD
+**Plans**: 3 plans
 
 ### Phase 22: Pricing & Monetization UX
 **Goal**: Users clearly understand plan differences and are guided toward upgrades at natural friction points
@@ -270,7 +271,7 @@ Plans:
   2. Free-tier user clicking a premium theme sees lock icon, feature preview, and one-click upgrade path
   3. Trial user sees days remaining, usage vs limits, and clear explanation of post-expiry behavior
   4. Upgrade flow shows clear before/after comparison between current plan and target plan
-**Plans**: TBD
+**Plans**: 3 plans
 
 ### Phase 23: Business Analytics & KPIs
 **Goal**: Photographers have actionable business intelligence showing how their platform drives client engagement and revenue
@@ -281,7 +282,7 @@ Plans:
   2. Client lifecycle view shows distribution across stages (lead, active, completed, churned) with transition history
   3. Revenue panel shows MRR trend, plan distribution pie chart, and upgrade/downgrade events
   4. Weekly email digest arrives with top 5 metrics, notable changes, and actionable suggestions
-**Plans**: TBD
+**Plans**: 3 plans
 
 ### Phase 24: Integration Ecosystem
 **Goal**: RawDrive connects to photographers' existing tools, eliminating manual data entry and enabling automation
@@ -292,7 +293,7 @@ Plans:
   2. User connects Google Calendar and public profile shows real booking availability with selectable time slots
   3. User imports photos from Google Drive folder into a gallery with progress indicator and completion summary
   4. User configures webhook URL and receives POST payload within 30 seconds of gallery publish event
-**Plans**: TBD
+**Plans**: 3 plans
 
 ## Progress
 
