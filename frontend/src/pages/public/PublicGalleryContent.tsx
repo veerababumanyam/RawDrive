@@ -24,6 +24,7 @@ import { PasswordVerificationModal } from '../../components/features/gallery/Pas
 import { FaceDiscovery } from '../../components/features/gallery/FaceDiscovery';
 import { ClientPeopleFilter } from '../../components/features/gallery/ClientPeopleFilter';
 import { ShareMenu } from '../../components/features/gallery/ShareMenu';
+import { GalleryThemeToggle } from './components/GalleryThemeToggle';
 import { Breadcrumbs, BreadcrumbItem } from '../../components/features/gallery/Breadcrumbs';
 import { CinematicViewer, type CinematicTransition, type CinematicViewerSettings } from '../../components/features/gallery/presentation/CinematicViewer';
 import { Guestbook } from '../../components/features/gallery/Guestbook';
@@ -283,6 +284,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
             {isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && <AppButton variant="outline" leftIcon={<Film size={16} />} size="sm" onClick={() => setShowCinematicViewer(true)} title="Cinematic Mode"><span className="hidden sm:inline">Cinematic</span></AppButton>}
             {isVisitorAuthenticated && isPinVerified && <AppButton variant="outline" leftIcon={<MessageCircle size={16} />} size="sm" onClick={() => setShowGuestbook(true)} title="Leave a message"><span className="hidden sm:inline">Guestbook</span></AppButton>}
             {activeLayout && onLayoutChange && <LayoutSwitcher activeLayout={activeLayout} onLayoutChange={onLayoutChange} />}
+            <GalleryThemeToggle />
             <ShareMenu shareUrl={shareUrl} title={gallery.title} description={gallery.description} buttonSize="sm" />
           </div>
         </div>

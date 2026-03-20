@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Share2, Mail, Check, X, QrCode, Download } from 'lucide-react';
+import { Share2, Mail, Check, X, QrCode, Download, Code } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AppButton } from '../../ui/AppButton';
+import { EmbedCodeModal } from './sharing/EmbedCodeModal';
 
 // Constants for UX timing
 const LINK_COPIED_FEEDBACK_MS = 2000;
@@ -37,6 +38,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showEmbedModal, setShowEmbedModal] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -219,6 +221,11 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
     setShowQRModal(true);
   }, []);
 
+  const handleShowEmbedCode = useCallback(() => {
+    setIsOpen(false);
+    setShowEmbedModal(true);
+  }, []);
+
   const handleDownloadQRCode = useCallback(() => {
     if (!qrRef.current) return;
 
@@ -329,11 +336,22 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
             QR Code
           </button>
 
+          {/* Embed Code */}
+          <button
+            ref={(el) => { menuItemsRef.current[2] = el; }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
+            onClick={handleShowEmbedCode}
+            role="menuitem"
+          >
+            <Code size={18} className="text-gray-600 dark:text-gray-400" />
+            Embed Code
+          </button>
+
           <hr className="my-2 border-gray-200 dark:border-gray-700" aria-hidden="true" />
 
           {/* WhatsApp */}
           <button
-            ref={(el) => { menuItemsRef.current[2] = el; }}
+            ref={(el) => { menuItemsRef.current[3] = el; }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
             onClick={handleWhatsAppShare}
             role="menuitem"
@@ -352,7 +370,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
 
           {/* Facebook */}
           <button
-            ref={(el) => { menuItemsRef.current[3] = el; }}
+            ref={(el) => { menuItemsRef.current[4] = el; }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
             onClick={handleFacebookShare}
             role="menuitem"
@@ -372,7 +390,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
 
           {/* Twitter/X */}
           <button
-            ref={(el) => { menuItemsRef.current[4] = el; }}
+            ref={(el) => { menuItemsRef.current[5] = el; }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
             onClick={handleTwitterShare}
             role="menuitem"
@@ -392,7 +410,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
 
           {/* Pinterest - great for photo sharing */}
           <button
-            ref={(el) => { menuItemsRef.current[5] = el; }}
+            ref={(el) => { menuItemsRef.current[6] = el; }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
             onClick={handlePinterestShare}
             role="menuitem"
@@ -412,7 +430,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
 
           {/* Telegram */}
           <button
-            ref={(el) => { menuItemsRef.current[6] = el; }}
+            ref={(el) => { menuItemsRef.current[7] = el; }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
             onClick={handleTelegramShare}
             role="menuitem"
@@ -432,7 +450,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
 
           {/* Email */}
           <button
-            ref={(el) => { menuItemsRef.current[7] = el; }}
+            ref={(el) => { menuItemsRef.current[8] = el; }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
             onClick={handleEmailShare}
             role="menuitem"
@@ -446,7 +464,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
             <>
               <hr className="my-2 border-gray-200 dark:border-gray-700" aria-hidden="true" />
               <button
-                ref={(el) => { menuItemsRef.current[8] = el; }}
+                ref={(el) => { menuItemsRef.current[9] = el; }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:bg-gray-100 dark:focus:bg-gray-800 focus:outline-none"
                 onClick={handleNativeShare}
                 role="menuitem"
@@ -458,6 +476,16 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
           )}
         </div>
       )}
+
+      {/* Embed Code Modal */}
+      <EmbedCodeModal
+        galleryUrl={shareUrl}
+        isOpen={showEmbedModal}
+        onClose={() => {
+          setShowEmbedModal(false);
+          triggerRef.current?.focus();
+        }}
+      />
 
       {/* QR Code Modal */}
       {showQRModal && (
