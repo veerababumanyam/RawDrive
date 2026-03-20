@@ -9,7 +9,9 @@ import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
 import type { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem, SlideshowConfig } from '../../types/gallery';
+import type { LayoutStyle } from '@rawdrive/shared-types';
 import { GalleryCanvas } from '../../components/features/gallery/GalleryCanvas';
+import { GalleryLayoutEngine, LayoutSwitcher, fromGalleryAssetItem } from '../../components/features/gallery/layouts';
 import { AppButton } from '../../components/ui/AppButton';
 import { useToast } from '../../components/ui/Toast';
 import {
@@ -52,6 +54,8 @@ export interface PublicGalleryContentProps {
   displayedAssets: PublicGalleryAsset[];
   canvasAssets: GalleryAssetItem[];
   canvasViewMode: 'grid' | 'masonry';
+  activeLayout?: LayoutStyle;
+  onLayoutChange?: (layout: LayoutStyle) => void;
   // Auth states
   isVisitorAuthenticated: boolean;
   isPinVerified: boolean;
@@ -106,6 +110,7 @@ const EMOTIONS = [
 export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props) => {
   const {
     gallery, actualGalleryId, assets, displayedAssets, canvasAssets, canvasViewMode,
+    activeLayout, onLayoutChange,
     isVisitorAuthenticated, isPinVerified, isPrivateUnlocked, showEmailModal, privatePhotoCount,
     activeTab, setActiveTab, activeSubGallery, setActiveSubGallery, activeEmotion, setActiveEmotion,
     filteredPhotoIds, matchSimilarity, selectedPersonId, selectedPersonName, personPhotoIds,
@@ -153,6 +158,15 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
     setLightboxIndex(idx >= 0 ? idx : 0);
     setLightboxAsset(asset);
   }, [displayedAssets]);
+
+  // Layout engine assets (converted from canvasAssets)
+  const layoutAssets = useMemo(() => canvasAssets.map(fromGalleryAssetItem), [canvasAssets]);
+
+  // Open lightbox from layout engine click
+  const handleLayoutAssetClick = useCallback((asset: { asset_id: string }, index: number) => {
+    const pub = displayedAssets.find(x => x.asset_id === asset.asset_id);
+    if (pub) openLightbox(pub);
+  }, [displayedAssets, openLightbox]);
 
   const navigateLightbox = useCallback((dir: 'prev' | 'next') => {
     if (displayedAssets.length === 0) return;
@@ -243,6 +257,7 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
             {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && <AppButton variant="outline" leftIcon={isBulkDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} size="sm" onClick={handleBulkDownload} disabled={isBulkDownloading}><span className="hidden sm:inline">{isBulkDownloading ? `${bulkDownloadProgress}%` : activeTab === 'selections' && selectionCount > 0 ? `Download (${selectionCount})` : activeTab === 'favorites' && favoriteCount > 0 ? `Download (${favoriteCount})` : 'Download All'}</span></AppButton>}
             {isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && <AppButton variant="outline" leftIcon={<Film size={16} />} size="sm" onClick={() => setShowCinematicViewer(true)} title="Cinematic Mode"><span className="hidden sm:inline">Cinematic</span></AppButton>}
             {isVisitorAuthenticated && isPinVerified && <AppButton variant="outline" leftIcon={<MessageCircle size={16} />} size="sm" onClick={() => setShowGuestbook(true)} title="Leave a message"><span className="hidden sm:inline">Guestbook</span></AppButton>}
+            {activeLayout && onLayoutChange && <LayoutSwitcher activeLayout={activeLayout} onLayoutChange={onLayoutChange} />}
             <ShareMenu shareUrl={shareUrl} title={gallery.title} description={gallery.description} buttonSize="sm" />
           </div>
         </div>
@@ -306,6 +321,13 @@ export const PublicGalleryContent: React.FC<PublicGalleryContentProps> = (props)
             {selectedPersonId && personPhotoIds && <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between animate-fade-in"><div className="flex items-center gap-3"><Users size={20} className="text-primary" /><p className="font-medium text-text-primary">Showing {displayedAssets.length} photo{displayedAssets.length !== 1 ? 's' : ''} of {selectedPersonName || 'selected person'}</p></div><AppButton variant="ghost" size="sm" onClick={() => handleFilterByPerson(null)}><X size={16} className="mr-1" />Clear</AppButton></div>}
             {displayedAssets.length === 0 ? (
               <div className="text-center py-20 text-gray-500"><Grid className="w-12 h-12 mx-auto mb-4 opacity-20" /><p>{filteredPhotoIds ? 'No matching photos found.' : activeTab === 'favorites' ? 'No favorites yet.' : activeTab === 'selections' ? 'No picks yet.' : 'No photos in this gallery yet.'}</p>{(filteredPhotoIds || activeTab !== 'all') && <AppButton variant="outline" className="mt-4" onClick={() => { clearFaceFilter(); setActiveTab('all'); }}>Show All Photos</AppButton>}</div>
+            ) : activeLayout ? (
+              <GalleryLayoutEngine
+                layout={activeLayout}
+                assets={layoutAssets}
+                gap={8}
+                onAssetClick={handleLayoutAssetClick}
+              />
             ) : (
               <GalleryCanvas assets={canvasAssets} viewMode={canvasViewMode} columns={{ sm: 1, md: 2, lg: 3, xl: 4 }} gap="md" selectedAssetIds={selections} lastSelectedId={null} managementSelectable={false} showCustomerSelection onSelectionChange={sel => { const ns = new Set(sel); [...ns].filter(x => !selections.has(x)).forEach(id => toggleSelection(id)); [...selections].filter(x => !ns.has(x)).forEach(id => toggleSelection(id)); }} onCustomerSelectionToggle={(id) => toggleSelection(id)} onAssetClick={(a) => { const p = displayedAssets.find(x => x.asset_id === a.asset_id); if (p) openLightbox(p); }} onAssetFavorite={(id) => toggleFavorite(id)} onAssetDownload={gallery.download_policy !== 'view_only' ? (id) => { const p = displayedAssets.find(x => x.asset_id === id); if (p) handleDownload(p); } : undefined} isClientView downloadPolicy={gallery.download_policy} showWatermark={gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only'} isPrivateUnlocked={isPrivateUnlocked} onUnlockPrivate={() => { if (gallery.pin_protected) { setPinModalMode('private'); setShowPinModal(true); } else addToast({ message: 'This photo is private.', variant: 'info' }); }} />
             )}

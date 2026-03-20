@@ -12,6 +12,8 @@ import { useParams } from 'react-router-dom';
 import { galleryService } from '../../services/galleryService';
 import { faceApiService } from '../../services/faceApiService';
 import type { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem } from '../../types/gallery';
+import type { LayoutStyle } from '@rawdrive/shared-types';
+import { LayoutStyle as LayoutStyleEnum } from '@rawdrive/shared-types';
 import { AppButton } from '../../components/ui/AppButton';
 import {
   VISITOR_STORAGE_KEY_PREFIX,
@@ -196,10 +198,27 @@ export const PublicGalleryShell: React.FC = () => {
     },
   })), [displayedAssets, actualGalleryId]);
 
-  const canvasViewMode: 'grid' | 'masonry' = useMemo(
-    () => (gallery?.layout_style === 'continuous' || gallery?.layout_style === 'masonry') ? 'masonry' : 'grid',
-    [gallery?.layout_style],
-  );
+  // Active layout state with localStorage persistence per gallery
+  const layoutStorageKey = `gallery-layout-${actualGalleryId || gallery?.gallery_id}`;
+  const [activeLayout, setActiveLayout] = useState<LayoutStyle>(() => {
+    try {
+      const saved = localStorage.getItem(layoutStorageKey);
+      if (saved && Object.values(LayoutStyleEnum).includes(saved as LayoutStyle)) {
+        return saved as LayoutStyle;
+      }
+    } catch { /* SSR / private browsing */ }
+    return (gallery?.layout_style as LayoutStyle) || 'grid';
+  });
+
+  // Persist layout preference changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(layoutStorageKey, activeLayout);
+    } catch { /* private browsing */ }
+  }, [activeLayout, layoutStorageKey]);
+
+  // Legacy canvasViewMode for backward compatibility (GalleryCanvas still used for management views)
+  const canvasViewMode: 'grid' | 'masonry' = activeLayout === 'masonry' ? 'masonry' : 'grid';
 
   // Loading
   if (isLoading) {
@@ -222,6 +241,7 @@ export const PublicGalleryShell: React.FC = () => {
           <PublicGalleryContent
             gallery={gallery} actualGalleryId={actualGalleryId || gallery.gallery_id}
             assets={assets} displayedAssets={displayedAssets} canvasAssets={canvasAssets} canvasViewMode={canvasViewMode}
+            activeLayout={activeLayout} onLayoutChange={setActiveLayout}
             isVisitorAuthenticated={isVisitorAuthenticated} isPinVerified={isPinVerified} isPrivateUnlocked={isPrivateUnlocked}
             showEmailModal={showEmailModal} privatePhotoCount={privatePhotoCount}
             activeTab={activeTab} setActiveTab={setActiveTab}

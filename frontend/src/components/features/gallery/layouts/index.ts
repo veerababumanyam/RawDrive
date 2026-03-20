@@ -22,6 +22,9 @@ export { MosaicLayout } from './MosaicLayout';
 
 export { EnhancedMasonryLayout } from './EnhancedMasonryLayout';
 
+export { LayoutSwitcher } from './LayoutSwitcher';
+export type { LayoutSwitcherProps } from './LayoutSwitcher';
+
 export { ProgressiveImage } from './ProgressiveImage';
 export type { ProgressiveImageProps } from './ProgressiveImage';
 
