@@ -18,6 +18,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
 import { useSocket } from '../../hooks/useSocket';
+import { useProofingWebSocket } from '../../hooks/useProofingWebSocket';
+import type { ProofingWebSocketEvent } from '../../hooks/useProofingWebSocket';
 import {
   PhotoListView,
   GalleryHeader,
@@ -214,6 +216,30 @@ const GalleryDetailPage: React.FC = () => {
   const { featureToggles } = useAIFeatureToggles({ autoFetch: true });
 
   const visibleAssets = assets;
+
+  // ---------------------------------------------------------------------------
+  // Real-time proofing WebSocket — photographer sees client actions live
+  // ---------------------------------------------------------------------------
+
+  const handleProofingUpdate = useCallback(
+    (event: ProofingWebSocketEvent) => {
+      if (event.action === 'favorite') {
+        updateAsset(event.asset_id, { is_favorited: !!event.value });
+      } else if (event.action === 'select') {
+        updateAsset(event.asset_id, { is_selected: !!event.value });
+      }
+      // Comments don't map to asset fields — photographer can reload comments separately
+    },
+    [updateAsset],
+  );
+
+  useProofingWebSocket({
+    galleryId: galleryId || '',
+    visitorToken: null, // Photographer is not a visitor — receives all events
+    enabled: !!galleryId,
+    onFavoriteToggle: handleProofingUpdate,
+    onSelectionToggle: handleProofingUpdate,
+  });
 
   // Compute filtered stats from currently loaded assets
   const filteredStats = useMemo(() => {

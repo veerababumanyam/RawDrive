@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { galleryService } from '../services/galleryService';
 import { useToast } from '../components/ui/Toast';
+import { useProofingWebSocket } from '../hooks/useProofingWebSocket';
+import type { ProofingWebSocketEvent } from '../hooks/useProofingWebSocket';
 import type { PublicGalleryAsset } from '../types/gallery';
 import {
   VISITOR_ID_KEY_PREFIX,
@@ -257,6 +259,71 @@ export const GalleryInteractionProvider: React.FC<GalleryInteractionProviderProp
     },
     [galleryId, visitorToken, addToast],
   );
+
+  // ---------------------------------------------------------------------------
+  // Real-time WebSocket sync — receive proofing events from other visitors
+  // ---------------------------------------------------------------------------
+
+  const handleWsFavoriteToggle = useCallback(
+    (event: ProofingWebSocketEvent) => {
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (event.value) next.add(event.asset_id);
+        else next.delete(event.asset_id);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleWsSelectionToggle = useCallback(
+    (event: ProofingWebSocketEvent) => {
+      setSelections((prev) => {
+        const next = new Set(prev);
+        if (event.value) next.add(event.asset_id);
+        else next.delete(event.asset_id);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleWsCommentAdded = useCallback(
+    (event: ProofingWebSocketEvent) => {
+      if (!event.data) return;
+      const newComment: ProofingComment = {
+        id: (event.data.comment_id as string) || `ws-${Date.now()}`,
+        visitor_name: (event.data.visitor_name as string) || 'Someone',
+        text: (event.data.comment as string) || '',
+        created_at: event.timestamp,
+      };
+      setComments((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(event.asset_id) || [];
+        next.set(event.asset_id, [...existing, newComment]);
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Determine gallery service URL from environment
+  const galleryServiceUrl = useMemo(() => {
+    const apiUrl = typeof import.meta !== 'undefined'
+      ? import.meta.env?.VITE_GALLERY_SERVICE_URL
+      : undefined;
+    return apiUrl || undefined;
+  }, []);
+
+  useProofingWebSocket({
+    galleryId,
+    visitorToken,
+    galleryServiceUrl,
+    enabled: isProofingEnabled,
+    onFavoriteToggle: handleWsFavoriteToggle,
+    onSelectionToggle: handleWsSelectionToggle,
+    onCommentAdded: handleWsCommentAdded,
+  });
 
   const value = useMemo<GalleryInteractionContextValue>(
     () => ({
