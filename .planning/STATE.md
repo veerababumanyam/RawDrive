@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Profile & Public Page Modernization
-status: unknown
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-03-20T09:13:29.576Z"
+milestone: v1.2
+milestone_name: Public Gallery & Gallery Player Modernization
+status: in-progress
+stopped_at: Completed 20-03-PLAN.md
+last_updated: "2026-03-20T09:28:34Z"
 progress:
   total_phases: 11
   completed_phases: 10
-  total_plans: 31
-  completed_plans: 31
+  total_plans: 35
+  completed_plans: 34
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 19 — Downloads & Delivery
+**Current focus:** Phase 20 — Sharing, Analytics & Polish
 
 ## Current Position
 
-Phase: 19 (Downloads & Delivery) — COMPLETE
-Plan: 3 of 3 complete
+Phase: 20 (Sharing, Analytics & Polish) — IN PROGRESS
+Plan: 3 of 4 complete
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Plan: 3 of 3 complete
 - [Phase 19]: ExpirationReminderWorker uses dependency injection pattern for testability; Redis dedup keys with milestone-specific TTLs (8d/2d/30d)
 - [Phase 19]: asyncio.create_task for ZIP generation (no Celery in gallery-service); 2GB memory guard on batch downloads; no-upscale guard in resize
 - [Phase 19]: BatchDownloadModal replaces old per-file bulk download with ZIP-based batch via gallery-service API; ExpirationCountdown computes days client-side; DownloadTrackingPanel in collapsible details element
+- [Phase 20]: Raw asyncpg queries for analytics (consistent with gallery-service); Redis SETNX 30-min TTL for view deduplication; download summary from existing gallery_downloads table
 
 ### Roadmap Evolution
 
@@ -99,8 +100,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:11:00Z
-Stopped at: Completed 19-03-PLAN.md
+Last session: 2026-03-20T09:28:34Z
+Stopped at: Completed 20-03-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones

@@ -104,9 +104,9 @@
 
 ### Gallery Analytics
 
-- [ ] **GANLT-01**: Each gallery shows per-gallery engagement metrics (views, unique visitors, avg. time spent)
-- [ ] **GANLT-02**: Gallery dashboard shows download tracking detail (per-photo downloads, batch vs single, total bandwidth)
-- [ ] **GANLT-03**: Gallery owner can see device and geographic breakdown per gallery (not just workspace-wide)
+- [x] **GANLT-01**: Each gallery shows per-gallery engagement metrics (views, unique visitors, avg. time spent)
+- [x] **GANLT-02**: Gallery dashboard shows download tracking detail (per-photo downloads, batch vs single, total bandwidth)
+- [x] **GANLT-03**: Gallery owner can see device and geographic breakdown per gallery (not just workspace-wide)
 
 ### Gallery Discovery
 
@@ -270,9 +270,9 @@
 | PROG-01 | Phase 16 | Complete |
 | PROG-02 | Phase 20 | Pending |
 | PROG-03 | Phase 20 | Pending |
-| GANLT-01 | Phase 20 | Pending |
-| GANLT-02 | Phase 20 | Pending |
-| GANLT-03 | Phase 20 | Pending |
+| GANLT-01 | Phase 20 | Complete |
+| GANLT-02 | Phase 20 | Complete |
+| GANLT-03 | Phase 20 | Complete |
 | GDISC-01 | Phase 20 | Pending |
 | GDISC-02 | Phase 20 | Pending |
 | GALUX-01 | Phase 18 | Complete |
