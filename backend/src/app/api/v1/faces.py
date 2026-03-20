@@ -266,25 +266,42 @@ async def get_face_thumbnail(
     object_key = asset_row["original_object_key"]
     asset_id = asset_row["asset_id"]
 
-    # 3. Download the original image from R2
-    storage_service = get_r2_storage_service()
+    # 3. Download the original image (try R2, then local filesystem)
+    image_data = None
 
+    # Try R2 storage first
     try:
+        storage_service = get_r2_storage_service()
         image_data = await storage_service.download_by_object_key(object_key)
-    except StorageError:
+        # Try decryption if encrypted
+        try:
+            encryption_service = get_encryption_service()
+            image_data = await encryption_service.decrypt_file(
+                image_data, workspace_id, asset_id, variant="original"
+            )
+        except Exception:
+            pass  # File may not be encrypted
+    except Exception:
+        pass  # R2 not available or file not found
+
+    # Fallback: try local filesystem (dev environment)
+    if image_data is None:
+        import pathlib
+        filename = pathlib.PurePosixPath(object_key).name
+        local_candidates = [
+            pathlib.Path(f"/app/{filename}"),
+            pathlib.Path(f"/app/tests/photos/{filename}"),
+        ]
+        for local_path in local_candidates:
+            if local_path.exists():
+                image_data = local_path.read_bytes()
+                break
+
+    if image_data is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source image file not found in storage",
         )
-
-    # Try decryption if the file is encrypted; fall back to raw bytes
-    try:
-        encryption_service = get_encryption_service()
-        image_data = await encryption_service.decrypt_file(
-            image_data, workspace_id, asset_id, variant="original"
-        )
-    except (EncryptionError, Exception):
-        pass  # File may not be encrypted — use raw bytes
 
     # 4. Decode image and crop face region
     nparr = np.frombuffer(image_data, np.uint8)
