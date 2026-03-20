@@ -216,11 +216,12 @@ Plans:
   2. Client can choose between web, print, and original download sizes as permitted by the photographer's download policy for that gallery
   3. Gallery with an expiration date shows a countdown to the client, and reminder emails are sent automatically before the deadline
   4. Photographer opens gallery settings and sees a download log showing who downloaded which photos and when
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] 19-01: TBD
-- [ ] 19-02: TBD
+- [ ] 19-01-PLAN.md — Backend download infrastructure: DB migration, download service with policy enforcement and resize, ZIP worker, download tracking API
+- [ ] 19-02-PLAN.md — Gallery expiration: middleware, reminder email worker, expired gallery page, settings update
+- [ ] 19-03-PLAN.md — Frontend download UX: batch download modal, SSE progress bar, expiration countdown, download tracking panel
 
 ### Phase 20: Sharing, Analytics & Polish
 **Goal**: Galleries are shareable with rich previews, photographers see per-gallery engagement data, and all gallery experiences are polished across themes and devices
@@ -321,7 +322,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 16. Gallery Layout Engine & Progressive Loading | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Gallery Player | v1.2 | Complete    | 2026-03-20 | 2026-03-20 |
 | 18. Client Interactions & Gallery UX | 3/3 | Complete    | 2026-03-20 | - |
-| 19. Downloads & Delivery | v1.2 | 0/? | Not started | - |
+| 19. Downloads & Delivery | v1.2 | 0/3 | Not started | - |
 | 20. Sharing, Analytics & Polish | v1.2 | 0/? | Not started | - |
 | 21. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |
 | 22. Pricing & Monetization UX | v1.3 | 0/? | Not started | - |
