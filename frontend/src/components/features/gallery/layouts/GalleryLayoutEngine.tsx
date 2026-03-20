@@ -12,6 +12,9 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { LayoutStyle } from '@rawdrive/shared-types';
 import { GridLayout } from './GridLayout';
+import { JustifiedLayout } from './JustifiedLayout';
+import { MosaicLayout } from './MosaicLayout';
+import { EnhancedMasonryLayout } from './EnhancedMasonryLayout';
 import type { LayoutAsset } from './types';
 
 // ---------------------------------------------------------------------------
@@ -97,11 +100,11 @@ export const GalleryLayoutEngine: React.FC<GalleryLayoutEngineProps> = ({
       case 'grid':
         return <GridLayout {...rendererProps} />;
       case 'masonry':
-        return <LayoutPlaceholder label="Masonry layout coming soon" />;
+        return <EnhancedMasonryLayout {...rendererProps} />;
       case 'justified':
-        return <LayoutPlaceholder label="Justified layout coming soon" />;
+        return <JustifiedLayout {...rendererProps} />;
       case 'mosaic':
-        return <LayoutPlaceholder label="Mosaic layout coming soon" />;
+        return <MosaicLayout {...rendererProps} />;
       case 'filmstrip':
         return <LayoutPlaceholder label="Filmstrip layout" />;
       case 'slideshow':

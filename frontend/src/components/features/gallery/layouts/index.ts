@@ -16,6 +16,12 @@ export type { GalleryLayoutEngineProps } from './GalleryLayoutEngine';
 
 export { GridLayout } from './GridLayout';
 
+export { JustifiedLayout } from './JustifiedLayout';
+
+export { MosaicLayout } from './MosaicLayout';
+
+export { EnhancedMasonryLayout } from './EnhancedMasonryLayout';
+
 export { ProgressiveImage } from './ProgressiveImage';
 export type { ProgressiveImageProps } from './ProgressiveImage';
 
