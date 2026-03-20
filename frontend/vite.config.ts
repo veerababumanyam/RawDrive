@@ -180,7 +180,7 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:80', // Traefik
+        target: 'http://localhost:80', // Traefik (routes to all microservices)
         changeOrigin: true,
         secure: false,
       },
@@ -209,13 +209,11 @@ export default defineConfig({
          */
         manualChunks(id) {
           // Core React vendor libraries - rarely change, cache well
-          // Include lucide-react here since it depends on React and needs React.forwardRef
           if (id.includes('node_modules/react/') ||
               id.includes('node_modules/react-dom/') ||
               id.includes('node_modules/react-router-dom/') ||
               id.includes('node_modules/react-router/') ||
-              id.includes('node_modules/@remix-run/') ||
-              id.includes('node_modules/lucide-react/')) {
+              id.includes('node_modules/@remix-run/')) {
             return 'react-vendor';
           }
 
@@ -231,7 +229,8 @@ export default defineConfig({
 
           // UI component libraries
           if (id.includes('node_modules/@radix-ui/') ||
-              id.includes('node_modules/@headlessui/')) {
+              id.includes('node_modules/@headlessui/') ||
+              id.includes('node_modules/lucide-react/')) {
             return 'ui-vendor';
           }
 
@@ -354,7 +353,6 @@ export default defineConfig({
       'react-router-dom',
       '@tanstack/react-query',
       'framer-motion',
-      'lucide-react',
     ],
     // Exclude heavy libraries that should be lazy loaded
     exclude: [

@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import type { PublicGalleryAsset, GalleryDetailData } from '../../types/gallery';
 import { useGalleryInteraction } from '../../contexts/GalleryInteractionContext';
-import { useLightboxAutoHide } from '../../hooks/lightbox/useLightboxAutoHide';
 
 interface PublicGalleryLightboxProps {
   asset: PublicGalleryAsset;
@@ -47,15 +46,6 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
   const [isZoomed, setIsZoomed] = useState(false);
   const [zoomPosition, setZoomPosition] = useState({ x: 50, y: 50 });
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
-
-  // Auto-hide controls
-  const {
-    controlsVisible,
-    handleMouseMove: autoHideMouseMove,
-    handleControlsEnter,
-    handleControlsLeave,
-    showControls,
-  } = useLightboxAutoHide({ isOpen: true });
 
   // Reset state on asset change
   useEffect(() => {
@@ -100,15 +90,13 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
         lastTapRef.current = 0; touchStartRef.current = null; return;
       }
       lastTapRef.current = now;
-      // Single tap: toggle controls
-      showControls();
     }
     touchStartRef.current = null;
     if (isZoomed || dt > 300) return;
     const ax = Math.abs(dx), ay = Math.abs(dy);
     if (ax > 50 && ax > ay * 0.5) { onNavigate(dx > 0 ? 'prev' : 'next'); return; }
     if (ay > 50 && ay > ax * 0.5 && dy < 0) onClose();
-  }, [onNavigate, onClose, isZoomed, asset.type, showControls]);
+  }, [onNavigate, onClose, isZoomed, asset.type]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -141,25 +129,18 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
       ref={lightboxRef}
       className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center touch-none"
       onClick={onClose}
-      onMouseMove={autoHideMouseMove}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       role="dialog"
       aria-modal="true"
       aria-label="Photo viewer"
     >
-      {/* Auto-hiding controls wrapper */}
-      <div className={`lightbox-controls ${controlsVisible ? '' : 'hidden'}`}>
-        {/* Gradient scrims for guaranteed contrast */}
-        <div className="lightbox-scrim-top" />
-        <div className="lightbox-scrim-bottom" />
+      {/* Gradient scrims for guaranteed contrast */}
+      <div className="lightbox-scrim-top" />
+      <div className="lightbox-scrim-bottom" />
 
-        {/* Top bar */}
-        <div
-          className="lightbox-top-bar"
-          onMouseEnter={handleControlsEnter}
-          onMouseLeave={handleControlsLeave}
-        >
+      {/* Top bar */}
+      <div className="lightbox-top-bar">
           <div className="lightbox-info-text">
             <span>{index + 1} <span className="secondary">/ {total}</span></span>
           </div>
@@ -217,12 +198,8 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
           </>
         )}
 
-        {/* Bottom action bar */}
-        <div
-          className="lightbox-bottom-bar"
-          onMouseEnter={handleControlsEnter}
-          onMouseLeave={handleControlsLeave}
-        >
+      {/* Bottom action bar */}
+      <div className="lightbox-bottom-bar">
           {/* Left: keyboard hint (desktop only) */}
           <div className="lightbox-info-text hidden md:block">
             <span className="secondary text-xs">? Shortcuts</span>
@@ -254,7 +231,6 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
           </div>
           <div className="hidden md:block w-[80px]" /> {/* Spacer for centering */}
         </div>
-      </div>
 
       {/* Main media (NOT inside auto-hide wrapper) */}
       <div className="relative" onClick={(e) => e.stopPropagation()}>

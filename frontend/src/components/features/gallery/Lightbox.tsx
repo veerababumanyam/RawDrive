@@ -13,7 +13,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Heart, CheckSquare, Info, Trash2, Image, Film, Play, Pause, Columns } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useLightboxAutoHide } from '../../../hooks/lightbox/useLightboxAutoHide';
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import { AppButton } from '../../ui/AppButton';
@@ -192,14 +191,6 @@ export const Lightbox: React.FC<LightboxProps> = ({
       onSlideshowComplete?.();
     },
   });
-
-  // Auto-hide controls (Apple Photos-style)
-  const {
-    controlsVisible,
-    handleMouseMove: autoHideMouseMove,
-    handleControlsEnter,
-    handleControlsLeave,
-  } = useLightboxAutoHide({ isOpen });
 
   // Handle slideshow mode toggle
   const toggleSlideshow = useCallback(() => {
@@ -536,49 +527,44 @@ export const Lightbox: React.FC<LightboxProps> = ({
       aria-modal="true"
       aria-labelledby="lightbox-title"
       aria-describedby="lightbox-description"
-      onMouseMove={autoHideMouseMove}
     >
-      {/* Auto-hiding controls wrapper — everything hides together (Apple Photos) */}
-      <div className={`lightbox-controls ${controlsVisible ? '' : 'hidden'}`}>
-        {/* Gradient scrims for guaranteed contrast on any photo */}
-        <div className="lightbox-scrim-top" />
-        <div className="lightbox-scrim-bottom" />
+      {/* Gradient scrims for guaranteed contrast on any photo */}
+      <div className="lightbox-scrim-top" />
+      <div className="lightbox-scrim-bottom" />
 
-        {/* Close Button — centralized glass style */}
-        <button
-          onClick={onClose}
-          className="lightbox-glass-btn btn-close absolute top-4 right-4 z-50"
-          aria-label="Close lightbox"
-          onMouseEnter={handleControlsEnter}
-          onMouseLeave={handleControlsLeave}
-        >
-          <X size={24} />
-        </button>
+      {/* Close Button — centralized glass style */}
+      <button
+        onClick={onClose}
+        className="lightbox-glass-btn btn-close absolute top-4 right-4 z-50"
+        aria-label="Close lightbox"
+      >
+        <X size={24} />
+      </button>
 
-        {/* Navigation Arrows — centralized glass style */}
-        {!isSlideshowMode && canGoPrevious && (
-          <div className="lightbox-nav-arrow prev">
-            <button
-              onClick={handlePrevious}
-              className="lightbox-glass-btn btn-lg"
-              aria-label="Previous photo"
-            >
-              <ChevronLeft size={28} />
-            </button>
-          </div>
-        )}
+      {/* Navigation Arrows — centralized glass style */}
+      {!isSlideshowMode && canGoPrevious && (
+        <div className="lightbox-nav-arrow prev">
+          <button
+            onClick={handlePrevious}
+            className="lightbox-glass-btn btn-lg"
+            aria-label="Previous photo"
+          >
+            <ChevronLeft size={28} />
+          </button>
+        </div>
+      )}
 
-        {!isSlideshowMode && canGoNext && (
-          <div className="lightbox-nav-arrow next">
-            <button
-              onClick={handleNext}
-              className="lightbox-glass-btn btn-lg"
-              aria-label="Next photo"
-            >
-              <ChevronRight size={28} />
-            </button>
-          </div>
-        )}
+      {!isSlideshowMode && canGoNext && (
+        <div className="lightbox-nav-arrow next">
+          <button
+            onClick={handleNext}
+            className="lightbox-glass-btn btn-lg"
+            aria-label="Next photo"
+          >
+            <ChevronRight size={28} />
+          </button>
+        </div>
+      )}
 
       {/* Image Container - Hidden during slideshow (slideshow renders its own) */}
       {!isSlideshowMode && (
@@ -713,11 +699,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
 
       {/* Controls Bar — centralized glass buttons */}
       {!isSlideshowMode && !isCompareMode && (
-      <div
-        className="lightbox-bottom-bar"
-        onMouseEnter={handleControlsEnter}
-        onMouseLeave={handleControlsLeave}
-      >
+      <div className="lightbox-bottom-bar">
         {/* Left: Asset Info */}
         <div className="lightbox-info-text hidden md:flex items-center gap-3">
           <span id="lightbox-title">{currentAsset.asset.filename || `Photo ${currentIndex + 1}`}</span>
@@ -766,8 +748,6 @@ export const Lightbox: React.FC<LightboxProps> = ({
         </div>
       </div>
       )}
-
-      </div>{/* End auto-hiding controls wrapper */}
 
       {/* Metadata Panel */}
       {
