@@ -33,10 +33,10 @@
 
 ### Content
 
-- [ ] **CNTNT-01**: User can display a featured gallery preview block on public profile
-- [ ] **CNTNT-02**: User can add a prominent booking CTA button linking to calendar/booking URL
-- [ ] **CNTNT-03**: User can display client testimonials/reviews on public profile
-- [ ] **CNTNT-04**: Social links render with proper platform icons and hover animations
+- [x] **CNTNT-01**: User can display a featured gallery preview block on public profile
+- [x] **CNTNT-02**: User can add a prominent booking CTA button linking to calendar/booking URL
+- [x] **CNTNT-03**: User can display client testimonials/reviews on public profile
+- [x] **CNTNT-04**: Social links render with proper platform icons and hover animations
 
 ### SEO
 
@@ -226,10 +226,10 @@
 | EDITR-04 | Phase 12 | Complete |
 | EDITR-05 | Phase 12 | Complete |
 | EDITR-06 | Phase 12 | Complete |
-| CNTNT-01 | Phase 13 | Pending |
-| CNTNT-02 | Phase 13 | Pending |
-| CNTNT-03 | Phase 13 | Pending |
-| CNTNT-04 | Phase 13 | Pending |
+| CNTNT-01 | Phase 13 | Complete |
+| CNTNT-02 | Phase 13 | Complete |
+| CNTNT-03 | Phase 13 | Complete |
+| CNTNT-04 | Phase 13 | Complete |
 | SEO-01 | Phase 11 | Complete |
 | SEO-02 | Phase 11 | Complete |
 | SEO-03 | Phase 11 | Complete |

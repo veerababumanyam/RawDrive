@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: unknown
-stopped_at: Completed 12-03-PLAN.md
-last_updated: "2026-03-20T06:11:23.941Z"
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-03-20T06:27:22.159Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 17
+  completed_plans: 16
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 12 — Editor Redesign
+**Current focus:** Phase 13 — Content Blocks & Performance
 
 ## Current Position
 
-Phase: 12 (Editor Redesign) — COMPLETE
-Plan: 3 of 3 (all complete)
+Phase: 13 (Content Blocks & Performance) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Plan: 3 of 3 (all complete)
 - [Phase 15]: [Phase 15]: Extracted lightbox to PublicGalleryLightbox.tsx and body to PublicGalleryContent.tsx to meet 400-line constraint; GalleryPlayerContext minimal for Phase 17 extension
 - [Phase 12]: Split state/dispatch contexts for ProfileEditor; auto-save uses ref-based mutate with serialized data key; migration 0200 chains after 0102
 - [Phase 12]: Used CSS transform scale with ResizeObserver for device frame sizing; phone notch as centered dark pill for device chrome
+- [Phase 13-01]: Used booking_url as requiredData key matching ContactSection convention; BookingCTASection checks both booking_url and booking_calendar_url
 
 ### Roadmap Evolution
 
@@ -84,8 +85,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T05:58:00Z
-Stopped at: Completed 12-03-PLAN.md
+Last session: 2026-03-20T06:27:22.157Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones
