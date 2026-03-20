@@ -17,6 +17,9 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+import cv2
+import numpy as np
+
 from app.db.postgres import get_postgres_pool
 from app.api.face_schemas import (
     FaceDetectionResult,
@@ -318,7 +321,43 @@ class FaceDetectionService:
                 )
                 
                 stored_faces.append(face)
-            
+
+            # Generate and upload face thumbnails
+            try:
+                nparr = np.frombuffer(image_buffer, np.uint8)
+                decoded_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if decoded_image is not None:
+                    for face in stored_faces:
+                        try:
+                            bb = face.get("bounding_box", {})
+                            if all(k in bb for k in ("x", "y", "width", "height")):
+                                thumb_urls = await self._generate_and_upload_thumbnails(
+                                    face_id=face["id"],
+                                    workspace_id=workspace_id,
+                                    image=decoded_image,
+                                    bounding_box=bb,
+                                )
+                                if thumb_urls:
+                                    await self.face_repo.update(
+                                        face_id=face["id"],
+                                        workspace_id=workspace_id,
+                                        thumbnail_urls=thumb_urls,
+                                    )
+                                    face["thumbnail_urls"] = thumb_urls
+                        except Exception as thumb_err:
+                            logger.warning(
+                                "Failed to generate thumbnails for face",
+                                extra={
+                                    "face_id": str(face["id"]),
+                                    "error": str(thumb_err),
+                                },
+                            )
+            except Exception as e:
+                logger.warning(
+                    "Failed to decode image for thumbnail generation",
+                    extra={"photo_id": str(photo_id), "error": str(e)},
+                )
+
             # Auto-cluster faces if enabled and threshold met
             if auto_cluster:
                 clustering_threshold = await self._get_clustering_confidence_threshold()
@@ -460,6 +499,81 @@ class FaceDetectionService:
                 "Failed to generate embeddings",
                 extra={"error": str(e)},
             )
+
+    async def _generate_and_upload_thumbnails(
+        self,
+        face_id: UUID,
+        workspace_id: UUID,
+        image: "np.ndarray",
+        bounding_box: dict[str, float],
+    ) -> dict[str, str]:
+        """Generate face thumbnail crops and upload to R2.
+
+        Creates 3 sizes (64, 128, 256), uploads as JPEG, and returns
+        the R2 object keys for storage in ``faces.thumbnail_urls``.
+
+        Args:
+            face_id: Face UUID (used in the storage path)
+            workspace_id: Workspace UUID for tenant isolation
+            image: Decoded source image (BGR numpy array)
+            bounding_box: {x, y, width, height} as percentages
+
+        Returns:
+            Dict mapping size name to R2 object key,
+            e.g. {"small": "workspaces/.../64.jpg", ...}
+        """
+        from app.services.r2_storage_service import get_r2_storage_service
+
+        img_h, img_w = image.shape[:2]
+
+        # Convert percentage coords to pixels
+        x_px = int((bounding_box["x"] / 100.0) * img_w)
+        y_px = int((bounding_box["y"] / 100.0) * img_h)
+        w_px = int((bounding_box["width"] / 100.0) * img_w)
+        h_px = int((bounding_box["height"] / 100.0) * img_h)
+
+        # Add 20% padding
+        pad_x = int(w_px * 0.2)
+        pad_y = int(h_px * 0.2)
+        x1 = max(0, x_px - pad_x)
+        y1 = max(0, y_px - pad_y)
+        x2 = min(img_w, x_px + w_px + pad_x)
+        y2 = min(img_h, y_px + h_px + pad_y)
+
+        face_crop = image[y1:y2, x1:x2]
+        if face_crop.size == 0:
+            return {}
+
+        storage = get_r2_storage_service()
+        sizes = {"small": 64, "medium": 128, "large": 256}
+        thumbnail_urls: dict[str, str] = {}
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+
+        for size_name, px in sizes.items():
+            resized = cv2.resize(face_crop, (px, px), interpolation=cv2.INTER_AREA)
+            success, jpeg_buf = cv2.imencode(".jpg", resized, encode_params)
+            if not success:
+                continue
+
+            r2_key = f"workspaces/{workspace_id}/faces/{face_id}/{px}.jpg"
+            try:
+                await storage.upload_bytes(
+                    key=r2_key,
+                    data=jpeg_buf.tobytes(),
+                    content_type="image/jpeg",
+                )
+                thumbnail_urls[size_name] = r2_key
+            except Exception as upload_err:
+                logger.warning(
+                    "Failed to upload face thumbnail",
+                    extra={
+                        "face_id": str(face_id),
+                        "size": size_name,
+                        "error": str(upload_err),
+                    },
+                )
+
+        return thumbnail_urls
 
     async def reprocess_photo(
         self,

@@ -158,7 +158,7 @@ async def list_face_groups(
     response_groups = []
     for g in groups:
         representative_thumbnail_url = None
-        if g.get("rep_face_id") and g.get("rep_thumbnail_urls"):
+        if g.get("rep_face_id"):
             thumbnail_urls = g.get("rep_thumbnail_urls")
             if isinstance(thumbnail_urls, str):
                 import json
@@ -173,6 +173,9 @@ async def list_face_groups(
                     size="medium",
                 )
                 representative_thumbnail_url = url_data["url"]
+            else:
+                # Fallback: dynamic thumbnail endpoint for faces without pre-generated thumbnails
+                representative_thumbnail_url = f"/api/v1/faces/{g['rep_face_id']}/thumbnail"
         response_groups.append({
             "id": g["id"],
             "workspace_id": g["workspace_id"],
@@ -265,7 +268,7 @@ async def list_gallery_face_groups(
     response_groups = []
     for g in groups_data:
         representative_thumbnail_url = None
-        if g.get("rep_face_id") and g.get("rep_thumbnail_urls"):
+        if g.get("rep_face_id"):
             thumbnail_urls = g.get("rep_thumbnail_urls")
             # Handle both dict and double-encoded JSON string formats
             # (legacy data may have been stored as JSON strings)
@@ -282,6 +285,9 @@ async def list_gallery_face_groups(
                     size="medium",
                 )
                 representative_thumbnail_url = url_data["url"]
+            else:
+                # Fallback: dynamic thumbnail endpoint for faces without pre-generated thumbnails
+                representative_thumbnail_url = f"/api/v1/faces/{g['rep_face_id']}/thumbnail"
 
         response_groups.append(FaceGroupGalleryStats(
             id=g["id"],

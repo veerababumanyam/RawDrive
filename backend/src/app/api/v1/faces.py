@@ -5,11 +5,16 @@ All routes prefixed with /api/v1.
 
 from __future__ import annotations
 
+import asyncio
+import io
 import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
+import cv2
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, get_current_user
@@ -191,6 +196,148 @@ async def get_face(
         )
 
     return FaceDetailResponsePublic(**face, id=face["id"])
+
+
+@router.get(
+    "/faces/{face_id}/thumbnail",
+    summary="Get face thumbnail",
+    description="Dynamically crops and serves a face thumbnail from the source photo.",
+    responses={
+        200: {"content": {"image/jpeg": {}}, "description": "Face thumbnail JPEG"},
+        404: {"description": "Face or asset not found"},
+    },
+)
+async def get_face_thumbnail(
+    face_id: Annotated[UUID, Path(..., description="Face ID")],
+    current_user: CurrentUserDep,
+    face_repo: FaceRepoDep,
+    size: Annotated[int, Query(ge=32, le=512, description="Thumbnail size in pixels")] = 150,
+):
+    """Dynamically generate a face thumbnail by cropping from the source photo.
+
+    Fetches the original image from R2, crops the face region using
+    the stored bounding_box percentages (with 20% padding), resizes
+    to the requested square size, and returns as JPEG.
+
+    Uses workspace_id from JWT token (no workspace_id path parameter needed).
+    """
+    from app.db.postgres import get_postgres_pool
+    from app.services.r2_storage_service import get_r2_storage_service, StorageError
+    from app.services.encryption_service import get_encryption_service
+
+    if not current_user.workspace_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No workspace access")
+    workspace_id = current_user.workspace_ids[0]
+
+    # 1. Look up face record
+    face = await face_repo.find_by_id(face_id, workspace_id)
+    if not face:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Face not found",
+        )
+
+    photo_id = face["photo_id"]
+    bounding_box = face.get("bounding_box") or {}
+    if not all(k in bounding_box for k in ("x", "y", "width", "height")):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Face bounding box data missing",
+        )
+
+    # 2. Look up the asset to get the original_object_key and gallery_id
+    pool = await get_postgres_pool()
+    async with pool.acquire() as conn:
+        asset_row = await conn.fetchrow(
+            """
+            SELECT asset_id, original_object_key
+            FROM assets
+            WHERE asset_id = $1 AND workspace_id = $2 AND deleted = false
+            """,
+            photo_id,
+            workspace_id,
+        )
+    if not asset_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source photo not found",
+        )
+
+    object_key = asset_row["original_object_key"]
+    asset_id = asset_row["asset_id"]
+
+    # 3. Download the original image from R2
+    storage_service = get_r2_storage_service()
+
+    try:
+        image_data = await storage_service.download_by_object_key(object_key)
+    except StorageError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source image file not found in storage",
+        )
+
+    # Try decryption if the file is encrypted; fall back to raw bytes
+    try:
+        encryption_service = get_encryption_service()
+        image_data = await encryption_service.decrypt_file(
+            image_data, workspace_id, asset_id, variant="original"
+        )
+    except (EncryptionError, Exception):
+        pass  # File may not be encrypted — use raw bytes
+
+    # 4. Decode image and crop face region
+    nparr = np.frombuffer(image_data, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to decode source image",
+        )
+
+    img_h, img_w = image.shape[:2]
+
+    # Convert percentage bounding box to pixels
+    x_px = int((bounding_box["x"] / 100.0) * img_w)
+    y_px = int((bounding_box["y"] / 100.0) * img_h)
+    w_px = int((bounding_box["width"] / 100.0) * img_w)
+    h_px = int((bounding_box["height"] / 100.0) * img_h)
+
+    # Add 20% padding
+    pad_x = int(w_px * 0.2)
+    pad_y = int(h_px * 0.2)
+    x1 = max(0, x_px - pad_x)
+    y1 = max(0, y_px - pad_y)
+    x2 = min(img_w, x_px + w_px + pad_x)
+    y2 = min(img_h, y_px + h_px + pad_y)
+
+    face_crop = image[y1:y2, x1:x2]
+    if face_crop.size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to crop face region",
+        )
+
+    # 5. Resize to requested square size
+    face_resized = cv2.resize(face_crop, (size, size), interpolation=cv2.INTER_AREA)
+
+    # 6. Encode as JPEG
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+    success, jpeg_buffer = cv2.imencode(".jpg", face_resized, encode_params)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to encode face thumbnail",
+        )
+
+    return Response(
+        content=jpeg_buffer.tobytes(),
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=3600, immutable",
+            "X-Face-Id": str(face_id),
+        },
+    )
 
 
 @router.post(
