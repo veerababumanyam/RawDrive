@@ -86,7 +86,7 @@
 
 - [ ] **DWNL-01**: Client can download entire gallery or selected photos as ZIP with progress indicator
 - [ ] **DWNL-02**: Client can choose download size (web/print/original) per photographer's download policy
-- [ ] **DWNL-03**: Galleries auto-expire after set date with reminder emails sent before deadline
+- [x] **DWNL-03**: Galleries auto-expire after set date with reminder emails sent before deadline
 - [ ] **DWNL-04**: Photographer can see download tracking (who downloaded what and when)
 
 ### Sharing & Polish
@@ -261,7 +261,7 @@
 | INTR-04 | Phase 18 | Complete |
 | DWNL-01 | Phase 19 | Pending |
 | DWNL-02 | Phase 19 | Pending |
-| DWNL-03 | Phase 19 | Pending |
+| DWNL-03 | Phase 19 | Complete |
 | DWNL-04 | Phase 19 | Pending |
 | SHAR-01 | Phase 20 | Pending |
 | SHAR-02 | Phase 20 | Pending |

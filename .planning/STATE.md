@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Public Gallery & Gallery Player Modernization
+milestone: v1.1
+milestone_name: Profile & Public Page Modernization
 status: unknown
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-03-20T08:38:47.079Z"
+stopped_at: Completed 19-02-PLAN.md
+last_updated: "2026-03-20T09:01:58.891Z"
 progress:
   total_phases: 11
   completed_phases: 9
-  total_plans: 28
-  completed_plans: 28
+  total_plans: 31
+  completed_plans: 29
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 18 — Client Interactions & Gallery UX
+**Current focus:** Phase 19 — Downloads & Delivery
 
 ## Current Position
 
-Phase: 18 (Client Interactions & Gallery UX) — IN PROGRESS
-Plan: 2 of 3 complete
+Phase: 19 (Downloads & Delivery) — IN PROGRESS
+Plan: 2 complete
 
 ## Performance Metrics
 
@@ -69,6 +69,8 @@ Plan: 2 of 3 complete
 - [Phase 18]: AIToolTooltip uses data-tooltip-wrapper for test targeting; BulkActionBar fixed bottom-0 with framer-motion spring animation; GallerySettingsPresets above section tabs; SubGalleryPermissionBadge confirmation before toggle
 - [Phase 18]: Added itemOverlay render prop to LayoutRendererProps and all 4 layout renderers for per-item overlays (FavoriteButton) rather than modifying each renderer individually
 - [Phase 18]: Leveraged existing gallery-service websocket.py with Redis pub/sub listener; backoff resets on effect re-run not on open; photographer receives all events with null visitorToken
+- [Phase 19]: Expiration check moved from service layer (404) to API endpoint layer (410 with gallery details) for structured expired gallery response
+- [Phase 19]: ExpirationReminderWorker uses dependency injection pattern for testability; Redis dedup keys with milestone-specific TTLs (8d/2d/30d)
 
 ### Roadmap Evolution
 
@@ -95,8 +97,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T08:37:00Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-03-20T08:56:00Z
+Stopped at: Completed 19-02-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones
