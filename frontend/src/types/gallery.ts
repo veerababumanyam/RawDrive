@@ -241,6 +241,15 @@ export interface GalleryDetailData {
   daily_download_limit?: number | null;
   // People filter (Face Recognition - allows clients to filter by person)
   show_people_filter?: boolean;
+  // Branded password page & background music (Phase 20-02)
+  /** Welcome message shown on branded password page */
+  welcome_message?: string;
+  /** R2 URL for background music audio file */
+  background_music_url?: string;
+  /** Logo URL resolved from branding company profile */
+  branding_logo_url?: string;
+  /** Accent color resolved from branding company profile */
+  branding_accent_color?: string;
 }
 
 // Wrapper for API client response

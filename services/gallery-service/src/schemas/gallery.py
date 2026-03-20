@@ -171,6 +171,12 @@ class GalleryResponse(BaseModel):
         description="When enabled, clients can filter photos by person names detected via face recognition",
     )
 
+    # Branded password page & background music (Phase 20-02)
+    welcome_message: Optional[str] = None
+    background_music_url: Optional[str] = None
+    branding_logo_url: Optional[str] = None
+    branding_accent_color: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -276,6 +282,10 @@ class GalleryUpdateRequest(BaseModel):
         None,
         description="Enable/disable people filter for client gallery views",
     )
+
+    # Branded password page & background music (Phase 20-02)
+    welcome_message: Optional[str] = Field(None, max_length=500)
+    background_music_url: Optional[str] = None
 
     class Config:
         extra = "allow"  # Allow extra fields to prevent validation errors

@@ -190,6 +190,9 @@ def row_to_gallery_dict(row: Any, sub_galleries: List = None, stats: Any = None)
         "notify_on_download": row.get("notify_on_download", False),
         # Face recognition settings (T006)
         "show_people_filter": row.get("show_people_filter", False),
+        # Branded password page & background music (Phase 20-02)
+        "welcome_message": row.get("welcome_message"),
+        "background_music_url": row.get("background_music_url"),
         "sub_galleries": [
             {
                 "sub_gallery_id": str(sg["sub_gallery_id"]),
@@ -271,7 +274,10 @@ class GalleryService:
                             -- Denormalized stats for faster queries (no COUNT needed)
                             photo_count, video_count, total_size_bytes,
                             -- Face recognition settings (T006)
-                            show_people_filter
+                            show_people_filter,
+                            -- Branded password page & background music (Phase 20-02)
+                            welcome_message,
+                            background_music_url
                         FROM galleries
                         WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                         """,
@@ -337,7 +343,7 @@ class GalleryService:
             async with get_connection(read_only=True) as conn:
                 company_row = await conn.fetchrow(
                     """
-                    SELECT name, logo_url, website, email, phone, socials
+                    SELECT name, logo_url, website, email, phone, socials, accent_color
                     FROM company_profiles
                     WHERE profile_id = $1
                     """,
@@ -352,6 +358,9 @@ class GalleryService:
                         "phone": company_row["phone"],
                         "socials": company_row["socials"] if company_row["socials"] else {},
                     }
+                    # Resolve branding fields for password page rendering
+                    result["branding_logo_url"] = company_row["logo_url"]
+                    result["branding_accent_color"] = company_row.get("accent_color")
                 else:
                     result["company_profile"] = None
         else:
@@ -483,7 +492,10 @@ class GalleryService:
                         cover_asset_id, created_by_user_id, published_at,
                         created_at, updated_at, deleted,
                         -- Face recognition settings (T006)
-                        show_people_filter
+                        show_people_filter,
+                        -- Branded password page & background music (Phase 20-02)
+                        welcome_message,
+                        background_music_url
                     FROM galleries
                     WHERE gallery_id = $1 AND deleted = FALSE AND status = 'published'
                     """,
@@ -546,7 +558,7 @@ class GalleryService:
             async with get_connection(read_only=True) as conn:
                 company_row = await conn.fetchrow(
                     """
-                    SELECT name, logo_url, website, email, phone, socials
+                    SELECT name, logo_url, website, email, phone, socials, accent_color
                     FROM company_profiles
                     WHERE profile_id = $1
                     """,
@@ -561,6 +573,9 @@ class GalleryService:
                         "phone": company_row["phone"],
                         "socials": company_row["socials"] if company_row["socials"] else {},
                     }
+                    # Resolve branding fields for password page rendering
+                    result["branding_logo_url"] = company_row["logo_url"]
+                    result["branding_accent_color"] = company_row.get("accent_color")
                 else:
                     result["company_profile"] = None
         else:
@@ -1007,6 +1022,8 @@ class GalleryService:
                     "notify_on_comment", "notify_on_favorite", "notify_on_selection", "notify_on_download",
                     # Face recognition settings (T006)
                     "show_people_filter",
+                    # Branded password page & background music (Phase 20-02)
+                    "welcome_message", "background_music_url",
                 }
 
                 # Helper to add updating clause
