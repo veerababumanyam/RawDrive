@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Profile & Public Page Modernization
-status: unknown
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-03-20T05:30:30.501Z"
+milestone: v1.2
+milestone_name: Public Gallery & Gallery Player Modernization
+status: executing
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-03-20T05:49:30.000Z"
 progress:
-  total_phases: 11
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** Phase 15 — Foundation Refactor & Data Model
+**Current focus:** Phase 12 — Editor Redesign
 
 ## Current Position
 
-Phase: 15 (Foundation Refactor & Data Model) — EXECUTING
-Plan: 3 of 3 (COMPLETE)
+Phase: 12 (Editor Redesign) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Plan: 3 of 3 (COMPLETE)
 - [Phase 15]: Visitor-scoped proofing via gallery_visitor_actions upsert; gallery_assets.is_favorited/is_selected preserved as aggregates; visitor_token defaults to 'anonymous'
 - [Phase 15]: Lightbox hooks already auth-agnostic by design; documented intent for GalleryPlayer reuse rather than refactoring
 - [Phase 15]: [Phase 15]: Extracted lightbox to PublicGalleryLightbox.tsx and body to PublicGalleryContent.tsx to meet 400-line constraint; GalleryPlayerContext minimal for Phase 17 extension
+- [Phase 12]: Split state/dispatch contexts for ProfileEditor; auto-save uses ref-based mutate with serialized data key; migration 0200 chains after 0102
 
 ### Roadmap Evolution
 
@@ -82,8 +83,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T23:39:26.377Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-03-20T05:49:30Z
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones
