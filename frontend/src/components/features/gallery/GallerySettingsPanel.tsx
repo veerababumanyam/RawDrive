@@ -21,6 +21,8 @@ import { WatermarkSettings } from './WatermarkSettings';
 import { FindMeSettings } from './FindMeSettings';
 import { SlideshowSettings } from './SlideshowSettings';
 import { GalleryNotificationSettings } from './GalleryNotificationSettings';
+import { GallerySettingsPresets } from './GallerySettingsPresets';
+import type { PresetConfig } from './GallerySettingsPresets';
 
 export interface GallerySettingsPanelProps {
   isOpen: boolean;
@@ -155,6 +157,24 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
               {section.label}
             </button>
           ))}
+        </div>
+
+        {/* Quick Setup Presets */}
+        <div className="px-6 pt-4 pb-2 border-b border-border">
+          <GallerySettingsPresets
+            currentSettings={{
+              access_level: gallery.access_level || 'password_protected',
+              download_policy: gallery.download_policy || 'view_only',
+              watermark_enabled: gallery.watermark_enabled ?? false,
+            }}
+            onApplyPreset={(preset: PresetConfig) => {
+              handleUpdate({
+                access_level: preset.access_level as any,
+                download_policy: preset.download_policy as any,
+                watermark_enabled: preset.watermark_enabled,
+              });
+            }}
+          />
         </div>
 
         {/* Content */}
