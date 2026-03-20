@@ -63,9 +63,9 @@
 
 ### Gallery Layouts
 
-- [ ] **LYOT-01**: User can view gallery in justified/row layout with uniform row heights
-- [ ] **LYOT-02**: User can view gallery in mosaic layout with varied tile sizes
-- [ ] **LYOT-03**: Existing masonry layout enhanced with better column balancing and responsive breakpoints
+- [x] **LYOT-01**: User can view gallery in justified/row layout with uniform row heights
+- [x] **LYOT-02**: User can view gallery in mosaic layout with varied tile sizes
+- [x] **LYOT-03**: Existing masonry layout enhanced with better column balancing and responsive breakpoints
 - [ ] **LYOT-04**: Gallery viewer can toggle between available layouts via layout switcher UI
 
 ### Gallery Player
@@ -247,9 +247,9 @@
 | FNDN-01 | Phase 15 | Complete |
 | FNDN-02 | Phase 15 | Complete |
 | FNDN-03 | Phase 15 | Complete |
-| LYOT-01 | Phase 16 | Pending |
-| LYOT-02 | Phase 16 | Pending |
-| LYOT-03 | Phase 16 | Pending |
+| LYOT-01 | Phase 16 | Complete |
+| LYOT-02 | Phase 16 | Complete |
+| LYOT-03 | Phase 16 | Complete |
 | LYOT-04 | Phase 16 | Pending |
 | PLYR-01 | Phase 17 | Pending |
 | PLYR-02 | Phase 17 | Pending |

@@ -318,7 +318,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 13. Content Blocks & Performance | 2/2 | Complete    | 2026-03-20 | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
 | 15. Foundation Refactor & Data Model | 3/3 | Complete    | 2026-03-19 | - |
-| 16. Gallery Layout Engine & Progressive Loading | v1.2 | 1/3 | In progress | - |
+| 16. Gallery Layout Engine & Progressive Loading | 2/3 | In Progress|  | - |
 | 17. Gallery Player | v1.2 | 0/? | Not started | - |
 | 18. Client Interactions & Gallery UX | v1.2 | 0/? | Not started | - |
 | 19. Downloads & Delivery | v1.2 | 0/? | Not started | - |
