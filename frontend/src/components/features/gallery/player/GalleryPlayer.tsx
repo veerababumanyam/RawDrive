@@ -20,6 +20,7 @@ import { PlayerZoomContainer } from './PlayerZoomContainer';
 import type { PlayerZoomContainerRef } from './PlayerZoomContainer';
 import { PlayerFilmstrip } from './PlayerFilmstrip';
 import { PlayerExifPanel } from './PlayerExifPanel';
+import { CommentPanel } from '../public/CommentPanel';
 
 const SWIPE_THRESHOLD = 50;
 
@@ -41,6 +42,8 @@ export const GalleryPlayer: React.FC = () => {
   const [isZoomed, setIsZoomed] = useState(false);
   // EXIF panel state (toggled by toolbar info button and 'I' key)
   const [showExif, setShowExif] = useState(false);
+  // Comment panel state
+  const [showComments, setShowComments] = useState(false);
 
   const zoomContainerRef = useRef<PlayerZoomContainerRef>(null);
 
@@ -72,6 +75,7 @@ export const GalleryPlayer: React.FC = () => {
   useEffect(() => {
     setIsZoomed(false);
     setShowExif(false);
+    setShowComments(false);
     zoomContainerRef.current?.resetTransform();
   }, [currentIndex]);
 
@@ -157,6 +161,8 @@ export const GalleryPlayer: React.FC = () => {
                 onMouseLeave={handleControlsLeave}
                 isFavorited={currentAsset ? favorites.has(currentAsset.asset_id) : false}
                 onToggleFavorite={isProofingEnabled && currentAsset ? () => toggleFavorite(currentAsset.asset_id) : undefined}
+                onToggleComments={isProofingEnabled ? () => setShowComments((prev) => !prev) : undefined}
+                showCommentsActive={showComments}
               />
             </div>
 
@@ -219,6 +225,15 @@ export const GalleryPlayer: React.FC = () => {
               />
             )}
           </AnimatePresence>
+
+          {/* Comment panel — slide from right */}
+          {currentAsset && (
+            <CommentPanel
+              assetId={currentAsset.asset_id}
+              isOpen={showComments}
+              onClose={() => setShowComments(false)}
+            />
+          )}
         </motion.div>
       )}
     </AnimatePresence>

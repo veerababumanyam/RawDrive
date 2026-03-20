@@ -5,7 +5,7 @@
  * Uses glassmorphism styling consistent with existing lightbox buttons.
  */
 import React from 'react';
-import { X, Info, Download, Heart } from 'lucide-react';
+import { X, Info, Download, Heart, MessageCircle } from 'lucide-react';
 
 export interface PlayerToolbarProps {
   /** Position label e.g. "3 / 25" */
@@ -87,6 +87,16 @@ export const PlayerToolbar: React.FC<PlayerToolbarProps> = ({
         >
           <Info size={18} />
         </button>
+
+        {onToggleComments && (
+          <button
+            className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 hover:bg-white/20 transition-all ${showCommentsActive ? 'bg-white/25 ring-1 ring-white/40' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onToggleComments(); }}
+            aria-label="Toggle comments"
+          >
+            <MessageCircle size={18} />
+          </button>
+        )}
 
         {showDownload && (
           <button
