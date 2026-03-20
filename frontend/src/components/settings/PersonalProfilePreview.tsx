@@ -1,6 +1,10 @@
 /**
  * PersonalProfilePreview Component
  *
+ * @deprecated This component is replaced by PublicProfileRenderer inside DeviceFramePreview
+ * in the new editor redesign (Phase 12). Kept for backward compatibility with any
+ * remaining imports. New code should use PublicProfileRenderer + DeviceFramePreview directly.
+ *
  * Real-time preview of the personal profile using the NEW Bento Grid components.
  * Matches PublicPersonalProfilePage.tsx exactly for WYSIWYG.
  */

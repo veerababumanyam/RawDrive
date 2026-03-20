@@ -90,8 +90,9 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
 export function getSectionsForProfile(
   type: ProfileType,
   profileData: Record<string, unknown>,
+  sectionOrder?: string[],
 ): SectionRegistryEntry[] {
-  return SECTION_REGISTRY
+  const filtered = SECTION_REGISTRY
     .filter((entry) => entry.supportedTypes.includes(type))
     .filter((entry) => {
       // All requiredData keys must be present and truthy
@@ -102,6 +103,19 @@ export function getSectionsForProfile(
         if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) return false;
         return true;
       });
-    })
-    .sort((a, b) => a.order - b.order);
+    });
+
+  if (sectionOrder && sectionOrder.length > 0) {
+    // Sort by position in sectionOrder; sections not in the order go to the end
+    return filtered.sort((a, b) => {
+      const idxA = sectionOrder.indexOf(a.id);
+      const idxB = sectionOrder.indexOf(b.id);
+      const posA = idxA === -1 ? Infinity : idxA;
+      const posB = idxB === -1 ? Infinity : idxB;
+      if (posA === posB) return a.order - b.order;
+      return posA - posB;
+    });
+  }
+
+  return filtered.sort((a, b) => a.order - b.order);
 }

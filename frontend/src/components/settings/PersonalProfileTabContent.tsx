@@ -2,7 +2,8 @@
  * PersonalProfileTabContent Component
  *
  * Tab content for creating and editing Personal Profile Digital Visiting Cards.
- * Displays a form on the left and a preview on the right (stacked on mobile).
+ * Features: live preview via PublicProfileRenderer, DnD section reordering,
+ * gradient color picker, device frame toggle, and auto-save.
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
@@ -13,7 +14,6 @@ import {
   Globe,
   MapPin,
   Image,
-  Save,
   Loader2,
   Plus,
   Trash2,
@@ -27,18 +27,28 @@ import {
   Palette,
   Calendar,
   FileText,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle,
+  Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToastActions } from '../ui/Toast';
 import { AppButton } from '../ui/AppButton';
 import { AppInput, AppTextarea } from '../ui/AppInput';
 import { AvatarUploader } from './AvatarUploader';
-import { PersonalProfilePreview } from './PersonalProfilePreview';
 import { PersonalProfileAIAssistant } from './PersonalProfileAIAssistant';
 import { VisibilityToggle } from './VisibilityToggle';
 import { ThemePreviewCard } from './ThemePreviewCard';
 import { ThemeCustomization } from '../features/settings/ThemeCustomization';
 import { ProfileStatusBar } from '../profile/ProfileStatusBar';
+import { ProfileEditorProvider, useProfileEditor, useProfileEditorDispatch } from '../../contexts/ProfileEditorContext';
+import { useProfileAutoSave } from '../../hooks/useProfileAutoSave';
+import { DndSectionList } from '../features/settings/DndSectionList';
+import { DeviceFramePreview } from '../features/settings/DeviceFramePreview';
+import { GradientColorPicker } from '../features/settings/GradientColorPicker';
+import { PublicProfileRenderer } from '../features/profile/shared/PublicProfileRenderer';
 import { personalProfileService } from '../../services/personalProfileService';
 import { PREBUILT_THEMES } from '../../constants/themes';
 import type { OptimizeSEOResponse } from '../../services/personalProfileAIService';
@@ -99,15 +109,52 @@ const CATEGORY_OPTIONS = [
   'Fine Art',
 ];
 
+// ---------------------------------------------------------------------------
+// Auto-save status indicator
+// ---------------------------------------------------------------------------
 
-export function PersonalProfileTabContent({ className }: TabContentProps) {
+function AutoSaveStatus({ isSaving, lastSavedAt, isDirty }: { isSaving: boolean; lastSavedAt: string | null; isDirty: boolean }) {
+  if (isSaving) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        Saving...
+      </span>
+    );
+  }
+  if (isDirty) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <AlertCircle className="w-3 h-3" />
+        Unsaved changes
+      </span>
+    );
+  }
+  if (lastSavedAt) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+        <CheckCircle className="w-3 h-3" />
+        Saved
+      </span>
+    );
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Inner component (has access to ProfileEditorContext)
+// ---------------------------------------------------------------------------
+
+function PersonalProfileEditorInner({ className }: { className?: string }) {
   const { workspace, isLoading: isAuthLoading } = useAuth();
   const workspaceId = workspace?.workspace_id;
   const toast = useToastActions();
 
+  const editorState = useProfileEditor();
+  const dispatch = useProfileEditorDispatch();
+
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
@@ -115,46 +162,62 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
   const [profile, setProfile] = useState<PersonalProfile | null>(null);
   const [profileExists, setProfileExists] = useState(false);
 
-  // Form state
-  const [displayName, setDisplayName] = useState('');
-  const [profileTitle, setProfileTitle] = useState('');
-  const [slug, setSlug] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [website, setWebsite] = useState('');
-  const [bio, setBio] = useState('');
-  const [location, setLocation] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [socials, setSocials] = useState<Record<string, string>>({});
-  const [customLinks, setCustomLinks] = useState<CustomLink[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [serviceAreas, setServiceAreas] = useState<string[]>([]);
-  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>('theme-clean-slate');
+  // Theme state
   const [selectedTheme, setSelectedTheme] = useState(PREBUILT_THEMES.find(t => t.theme_id === 'theme-clean-slate') || null);
   const [themeCustomization, setThemeCustomization] = useState<Record<string, any> | null>(null);
   const [showCustomization, setShowCustomization] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
-  const [embeddedMedia, setEmbeddedMedia] = useState<EmbeddedMedia>({});
-  const [bookingCalendarUrl, setBookingCalendarUrl] = useState('');
-  const [visibilityConfig, setVisibilityConfig] = useState<Partial<PersonalVisibilityConfig>>({});
-  const [seoMetadata, setSeoMetadata] = useState<SEOMetadata>({});
 
-  // Secondary contacts
-  const [secondaryEmails, setSecondaryEmails] = useState<SecondaryContact[]>([]);
-  const [secondaryPhones, setSecondaryPhones] = useState<SecondaryContact[]>([]);
+  // Section order panel
+  const [showSectionOrder, setShowSectionOrder] = useState(false);
+
+  // Color picker state
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Validation
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugError, setSlugError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Helper to read fields from editor state
+  const p = editorState.profile;
+  const displayName = (p.display_name as string) || '';
+  const profileTitle = (p.profile_title as string) || '';
+  const slug = (p.slug as string) || '';
+  const email = (p.email as string) || '';
+  const phone = (p.phone as string) || '';
+  const website = (p.website as string) || '';
+  const bio = (p.bio as string) || '';
+  const location = (p.location as string) || '';
+  const avatarUrl = (p.avatar_url as string) || '';
+  const socials = (p.socials as Record<string, string>) || {};
+  const customLinks = (p.custom_links as CustomLink[]) || [];
+  const categories = (p.categories as string[]) || [];
+  const serviceAreas = (p.service_areas as string[]) || [];
+  const backgroundTheme = (p.background_theme as BackgroundTheme) || 'theme-clean-slate';
+  const isPublic = (p.is_public as boolean) || false;
+  const embeddedMedia = (p.embedded_media as EmbeddedMedia) || {};
+  const bookingCalendarUrl = (p.booking_calendar_url as string) || '';
+  const visibilityConfig = (p.visibility_config as Partial<PersonalVisibilityConfig>) || {};
+  const seoMetadata = (p.seo_metadata as SEOMetadata) || {};
+  const secondaryEmails = (p.secondary_emails as SecondaryContact[]) || [];
+  const secondaryPhones = (p.secondary_phones as SecondaryContact[]) || [];
+
+  // Dispatcher helpers
+  const setField = useCallback((field: string, value: unknown) => {
+    dispatch({ type: 'SET_FIELD', field, value });
+  }, [dispatch]);
+
+  // Auto-save integration
+  const { isSaving, lastSavedAt, saveNow } = useProfileAutoSave({
+    profileType: 'personal',
+    profileData: editorState.profile,
+    isDirty: editorState.isDirty && profileExists,
+    onSaved: () => dispatch({ type: 'MARK_SAVED' }),
+  });
+
   // Load profile on mount
   useEffect(() => {
-    // Wait for auth to finish loading before checking workspace
-    if (isAuthLoading) {
-      return;
-    }
-
+    if (isAuthLoading) return;
     if (!workspaceId) {
       setIsLoading(false);
       return;
@@ -163,28 +226,31 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
     const loadProfile = async () => {
       setIsLoading(true);
       try {
-        // Check if profile exists
         const existsResponse = await personalProfileService.checkProfileExists(workspaceId);
         setProfileExists(existsResponse.exists);
 
         if (existsResponse.exists) {
-          // Load existing profile
           const profileData = await personalProfileService.getProfile(workspaceId);
           setProfile(profileData);
-          populateFormFromProfile(profileData);
+          dispatch({ type: 'RESET', profile: profileData as unknown as Record<string, unknown> });
+
+          // Sync theme
+          const themeId = profileData.background_theme || 'theme-clean-slate';
+          const theme = PREBUILT_THEMES.find(t => t.theme_id === themeId);
+          setSelectedTheme(theme || null);
         } else {
-          // Get prefill data for new profile
           const prefill = await personalProfileService.getPrefillData(workspaceId);
-          setDisplayName(prefill.display_name || '');
-          setEmail(prefill.email || '');
-          setPhone(prefill.phone || '');
-          setBio(prefill.bio || '');
-          setAvatarUrl(prefill.avatar_url || '');
-          setLocation(prefill.location || '');
-          // Generate initial slug from name
-          if (prefill.display_name) {
-            setSlug(personalProfileService.generateSlugFromName(prefill.display_name));
-          }
+          const initialData: Record<string, unknown> = {
+            display_name: prefill.display_name || '',
+            email: prefill.email || '',
+            phone: prefill.phone || '',
+            bio: prefill.bio || '',
+            avatar_url: prefill.avatar_url || '',
+            location: prefill.location || '',
+            slug: prefill.display_name ? personalProfileService.generateSlugFromName(prefill.display_name) : '',
+            background_theme: 'theme-clean-slate',
+          };
+          dispatch({ type: 'RESET', profile: initialData });
         }
       } catch (error: any) {
         if (error.response?.status !== 404) {
@@ -198,35 +264,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
     loadProfile();
   }, [workspaceId, isAuthLoading]);
 
-  // Populate form from profile data
-  const populateFormFromProfile = (data: PersonalProfile) => {
-    setDisplayName(data.display_name || '');
-    setProfileTitle(data.profile_title || '');
-    setSlug(data.slug || '');
-    setEmail(data.email || '');
-    setPhone(data.phone || '');
-    setWebsite(data.website || '');
-    setBio(data.bio || '');
-    setLocation(data.location || '');
-    setAvatarUrl(data.avatar_url || '');
-    setSocials(data.socials || {});
-    setCustomLinks(data.custom_links || []);
-    setCategories(data.categories || []);
-    setServiceAreas(data.service_areas || []);
-    const themeId = data.background_theme || 'theme-clean-slate';
-    setBackgroundTheme(themeId);
-    // Also update selectedTheme to keep them in sync
-    const theme = PREBUILT_THEMES.find(t => t.theme_id === themeId);
-    setSelectedTheme(theme || null);
-    setIsPublic(data.is_public || false);
-    setEmbeddedMedia(data.embedded_media || {});
-    setBookingCalendarUrl(data.booking_calendar_url || '');
-    setVisibilityConfig(data.visibility_config || {});
-    setSeoMetadata(data.seo_metadata || {});
-    setSecondaryEmails(data.secondary_emails || []);
-    setSecondaryPhones(data.secondary_phones || []);
-  };
-
   // Check slug availability with debounce
   useEffect(() => {
     if (!workspaceId || !slug || slug.length < 3) {
@@ -234,21 +271,16 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
       setSlugError('');
       return;
     }
-
-    // Validate slug format
     if (!/^[a-z0-9-]+$/.test(slug)) {
       setSlugError('Only lowercase letters, numbers, and hyphens allowed');
       setSlugAvailable(false);
       return;
     }
-
-    // Skip check if slug matches current profile
     if (profile?.slug === slug) {
       setSlugAvailable(true);
       setSlugError('');
       return;
     }
-
     const timeoutId = setTimeout(async () => {
       setIsCheckingSlug(true);
       try {
@@ -261,100 +293,45 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
         setIsCheckingSlug(false);
       }
     }, 500);
-
     return () => clearTimeout(timeoutId);
   }, [slug, workspaceId, profile?.slug]);
 
-  // Validate form
-  const validateForm = useCallback(() => {
-    const errors: Record<string, string> = {};
-
-    if (displayName.length < CONSTRAINTS.displayName.min) {
-      errors.displayName = 'Display name is required';
-    } else if (displayName.length > CONSTRAINTS.displayName.max) {
-      errors.displayName = `Max ${CONSTRAINTS.displayName.max} characters`;
-    }
-
-    if (slug.length < CONSTRAINTS.slug.min) {
-      errors.slug = 'Slug must be at least 3 characters';
-    } else if (slug.length > CONSTRAINTS.slug.max) {
-      errors.slug = `Max ${CONSTRAINTS.slug.max} characters`;
-    } else if (!slugAvailable && profile?.slug !== slug) {
-      errors.slug = 'This URL is not available';
-    }
-
-    if (!email) {
-      errors.email = 'Email is required';
-    }
-
-    if (bio.length > CONSTRAINTS.bio.max) {
-      errors.bio = `Max ${CONSTRAINTS.bio.max} characters`;
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [displayName, slug, email, bio, slugAvailable, profile?.slug]);
-
-  // Handle save
-  const handleSave = async () => {
+  // Handle save (for new profiles - auto-save only works for existing profiles)
+  const handleCreateProfile = async () => {
     if (!workspaceId) return;
 
-    if (!validateForm()) {
+    const errors: Record<string, string> = {};
+    if (displayName.length < CONSTRAINTS.displayName.min) errors.displayName = 'Display name is required';
+    if (slug.length < CONSTRAINTS.slug.min) errors.slug = 'Slug must be at least 3 characters';
+    if (!email) errors.email = 'Email is required';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       toast.error('Please fix the validation errors');
       return;
     }
 
-    setIsSaving(true);
+    dispatch({ type: 'SET_SAVING', isSaving: true });
     try {
-      const data: CreatePersonalProfileRequest | UpdatePersonalProfileRequest = {
-        display_name: displayName,
-        profile_title: profileTitle || undefined,
-        slug,
-        email,
-        phone: phone || undefined,
-        website: website || undefined,
-        bio: bio || undefined,
-        location: location || undefined,
-        socials: Object.keys(socials).length > 0 ? socials : undefined,
-        custom_links: customLinks.length > 0 ? customLinks : undefined,
-        categories: categories.length > 0 ? categories : undefined,
-        service_areas: serviceAreas.length > 0 ? serviceAreas : undefined,
-        background_theme: backgroundTheme || undefined,
-        is_public: isPublic,
-        embedded_media: Object.keys(embeddedMedia).length > 0 ? embeddedMedia : undefined,
-        booking_calendar_url: bookingCalendarUrl || undefined,
-        visibility_config: Object.keys(visibilityConfig).length > 0 ? visibilityConfig : undefined,
-        seo_metadata: Object.keys(seoMetadata).length > 0 ? seoMetadata : undefined,
-        secondary_emails: secondaryEmails.length > 0 ? secondaryEmails : undefined,
-        secondary_phones: secondaryPhones.length > 0 ? secondaryPhones : undefined,
-      };
-
-      let result: PersonalProfile;
-      if (profileExists) {
-        result = await personalProfileService.updateProfile(workspaceId, data);
-        toast.success('Profile updated successfully');
-      } else {
-        result = await personalProfileService.createProfile(workspaceId, data as CreatePersonalProfileRequest);
-        setProfileExists(true);
-        toast.success('Profile created successfully');
-      }
-
+      const data: CreatePersonalProfileRequest = editorState.profile as any;
+      const result = await personalProfileService.createProfile(workspaceId, data);
+      setProfileExists(true);
       setProfile(result);
+      dispatch({ type: 'MARK_SAVED' });
+      toast.success('Profile created successfully');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save profile');
+      toast.error(error.message || 'Failed to create profile');
     } finally {
-      setIsSaving(false);
+      dispatch({ type: 'SET_SAVING', isSaving: false });
     }
   };
 
   // Handle avatar upload
   const handleAvatarUpload = async (file: File) => {
     if (!workspaceId) return;
-
     setIsUploadingAvatar(true);
     try {
       const result = await personalProfileService.uploadAvatar(workspaceId, file);
-      setAvatarUrl(result.avatar_url);
+      setField('avatar_url', result.avatar_url);
       toast.success('Avatar uploaded');
     } catch {
       toast.error('Failed to upload avatar');
@@ -366,155 +343,95 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
   // Handle avatar delete
   const handleAvatarDelete = async () => {
     if (!workspaceId) return;
-
     try {
       await personalProfileService.deleteAvatar(workspaceId);
-      setAvatarUrl('');
+      setField('avatar_url', '');
       toast.success('Avatar removed');
     } catch {
       toast.error('Failed to remove avatar');
     }
   };
 
-  // Add custom link
+  // Custom link helpers
   const addCustomLink = () => {
     if (customLinks.length >= 10) {
       toast.error('Maximum 10 custom links allowed');
       return;
     }
-    setCustomLinks([...customLinks, { label: '', url: '' }]);
+    setField('custom_links', [...customLinks, { label: '', url: '' }]);
   };
-
-  // Remove custom link
   const removeCustomLink = (index: number) => {
-    setCustomLinks(customLinks.filter((_, i) => i !== index));
+    setField('custom_links', customLinks.filter((_, i) => i !== index));
   };
-
-  // Update custom link
   const updateCustomLink = (index: number, field: keyof CustomLink, value: string) => {
     const updated = [...customLinks];
     updated[index] = { ...updated[index], [field]: value };
-    setCustomLinks(updated);
+    setField('custom_links', updated);
   };
 
   // Toggle category
   const toggleCategory = (category: string) => {
     if (categories.includes(category)) {
-      setCategories(categories.filter((c) => c !== category));
+      setField('categories', categories.filter((c) => c !== category));
     } else if (categories.length < 10) {
-      setCategories([...categories, category]);
+      setField('categories', [...categories, category]);
     } else {
       toast.error('Maximum 10 categories allowed');
     }
   };
 
-  // AI callback handlers
+  // AI callbacks
   const handleBioGenerated = useCallback((bio: string) => {
-    setBio(bio);
+    setField('bio', bio);
     toast.success('AI generated bio applied');
-  }, [toast]);
+  }, [setField, toast]);
 
   const handleTaglineGenerated = useCallback((tagline: string) => {
-    setProfileTitle(tagline);
+    setField('profile_title', tagline);
     toast.success('AI generated tagline applied to Professional Title');
-  }, [toast]);
+  }, [setField, toast]);
 
   const handleSEOGenerated = useCallback((seo: OptimizeSEOResponse) => {
-    setSeoMetadata((prev) => ({
-      ...prev,
+    setField('seo_metadata', {
+      ...(seoMetadata || {}),
       meta_title: seo.meta_title,
       meta_description: seo.meta_description,
-    }));
+    });
     toast.success('AI generated SEO metadata applied');
-  }, [toast]);
+  }, [seoMetadata, setField, toast]);
 
   const handleCategoriesSuggested = useCallback((suggested: string[]) => {
-    // Merge with existing categories, up to 10
     const merged = [...new Set([...categories, ...suggested])].slice(0, 10);
-    setCategories(merged);
+    setField('categories', merged);
     toast.success(`${suggested.length} category suggestions added`);
-  }, [categories, toast]);
+  }, [categories, setField, toast]);
 
-  // Handle visibility toggle
+  // Visibility toggle
   const handleVisibilityToggle = (key: keyof PersonalVisibilityConfig, value: boolean) => {
-    setVisibilityConfig((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setField('visibility_config', { ...visibilityConfig, [key]: value });
   };
 
-  // Handle theme selection
+  // Theme selection
   const handleThemeSelect = useCallback((themeId: string) => {
-    setBackgroundTheme(themeId as BackgroundTheme);
+    setField('background_theme', themeId);
     const theme = PREBUILT_THEMES.find(t => t.theme_id === themeId);
     setSelectedTheme(theme || null);
-    // Clear customization when switching themes
     if (themeCustomization && themeId !== backgroundTheme) {
       setThemeCustomization(null);
       setShowCustomization(false);
     }
-  }, [backgroundTheme, themeCustomization]);
+  }, [backgroundTheme, themeCustomization, setField]);
 
-  // Handle theme customization change
   const handleThemeCustomizationChange = useCallback((customization: Record<string, any>) => {
     setThemeCustomization(customization);
   }, []);
 
-  // Handle theme reset
   const handleThemeReset = useCallback(() => {
     setThemeCustomization(null);
   }, []);
 
-  // Get preview data
-  const previewData = useMemo(
-    () => ({
-      display_name: displayName,
-      profile_title: profileTitle,
-      slug,
-      email,
-      phone,
-      website,
-      bio,
-      location,
-      avatar_url: avatarUrl,
-      socials,
-      custom_links: customLinks,
-      categories,
-      service_areas: serviceAreas,
-      background_theme: backgroundTheme,
-      is_public: isPublic,
-      embedded_media: embeddedMedia,
-      booking_calendar_url: bookingCalendarUrl,
-      visibility_config: visibilityConfig,
-      secondary_emails: secondaryEmails,
-      secondary_phones: secondaryPhones,
-      is_verified: profile?.is_verified || false,
-      badges: profile?.badges || [],
-    }),
-    [
-      displayName,
-      profileTitle,
-      slug,
-      email,
-      phone,
-      website,
-      bio,
-      location,
-      avatarUrl,
-      socials,
-      customLinks,
-      categories,
-      serviceAreas,
-      backgroundTheme,
-      isPublic,
-      embeddedMedia,
-      bookingCalendarUrl,
-      visibilityConfig,
-      secondaryEmails,
-      secondaryPhones,
-      profile,
-    ]
-  );
+  // Preview data from context
+  const previewData = useMemo(() => editorState.profile, [editorState.profile]);
 
   // Loading state
   if (isLoading) {
@@ -536,9 +453,35 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
   }
 
   return (
-    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${className || ''}`}>
-      {/* Form Panel */}
-      <div className="space-y-6">
+    <div className={`flex flex-col lg:flex-row gap-6 ${className || ''}`}>
+      {/* Form Panel (~60%) */}
+      <div className="w-full lg:w-[60%] space-y-6">
+        {/* Auto-save status bar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ProfileStatusBar personalProfile={previewData} section="personal" />
+          </div>
+          <div className="flex items-center gap-3">
+            <AutoSaveStatus isSaving={isSaving} lastSavedAt={lastSavedAt} isDirty={editorState.isDirty} />
+            {!profileExists && (
+              <AppButton onClick={handleCreateProfile} disabled={editorState.isSaving} size="sm">
+                Create Profile
+              </AppButton>
+            )}
+            {profileExists && profile && (
+              <AppButton
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(personalProfileService.getPublicProfileUrl(profile.slug), '_blank')}
+              >
+                <ExternalLink className="w-4 h-4 mr-1" />
+                View
+              </AppButton>
+            )}
+          </div>
+        </div>
+
         {/* Avatar Section */}
         <section className="bg-surface border border-border rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
@@ -559,13 +502,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
         {/* Basic Info */}
         <section className="bg-surface border border-border rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-lg font-semibold text-text-primary">Basic Information</h2>
-            <ProfileStatusBar
-              personalProfile={previewData}
-              section="personal"
-            />
-          </div>
+          <h2 className="text-lg font-semibold text-text-primary mb-6">Basic Information</h2>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -579,7 +516,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               </div>
               <AppInput
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => setField('display_name', e.target.value)}
                 placeholder="Your name"
                 error={fieldErrors.displayName}
                 isRequired
@@ -589,9 +526,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-text-primary">
-                  Professional Title
-                </label>
+                <label className="block text-sm font-medium text-text-primary">Professional Title</label>
                 <VisibilityToggle
                   isVisible={visibilityConfig.profile_title ?? true}
                   onChange={(v) => handleVisibilityToggle('profile_title', v)}
@@ -599,7 +534,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               </div>
               <AppInput
                 value={profileTitle}
-                onChange={(e) => setProfileTitle(e.target.value)}
+                onChange={(e) => setField('profile_title', e.target.value)}
                 placeholder="e.g., Wedding Photographer & Filmmaker"
                 leftIcon={<FileText className="w-5 h-5" />}
               />
@@ -610,13 +545,11 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 Profile URL <span className="text-error">*</span>
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-text-tertiary text-sm">
-                  {personalProfileService.getPublicUrlPrefix()}
-                </span>
+                <span className="text-text-tertiary text-sm">{personalProfileService.getPublicUrlPrefix()}</span>
                 <div className="flex-1">
                   <AppInput
                     value={slug}
-                    onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    onChange={(e) => setField('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                     placeholder="your-name"
                     error={slugError || fieldErrors.slug}
                     rightIcon={
@@ -635,9 +568,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-text-primary">
-                  Bio
-                </label>
+                <label className="block text-sm font-medium text-text-primary">Bio</label>
                 <VisibilityToggle
                   isVisible={visibilityConfig.bio ?? true}
                   onChange={(v) => handleVisibilityToggle('bio', v)}
@@ -645,7 +576,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               </div>
               <AppTextarea
                 value={bio}
-                onChange={(e) => setBio(e.target.value)}
+                onChange={(e) => setField('bio', e.target.value)}
                 placeholder="Tell visitors about yourself and your photography style..."
                 rows={4}
                 error={fieldErrors.bio}
@@ -655,9 +586,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-text-primary">
-                  Location
-                </label>
+                <label className="block text-sm font-medium text-text-primary">Location</label>
                 <VisibilityToggle
                   isVisible={visibilityConfig.location ?? true}
                   onChange={(v) => handleVisibilityToggle('location', v)}
@@ -665,7 +594,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               </div>
               <AppInput
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={(e) => setField('location', e.target.value)}
                 placeholder="Based in Berlin - Available Worldwide"
                 leftIcon={<MapPin className="w-5 h-5" />}
               />
@@ -690,7 +619,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               <AppInput
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setField('email', e.target.value)}
                 placeholder="your@email.com"
                 error={fieldErrors.email}
                 isRequired
@@ -700,9 +629,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-text-primary">
-                  Phone
-                </label>
+                <label className="block text-sm font-medium text-text-primary">Phone</label>
                 <VisibilityToggle
                   isVisible={visibilityConfig.phone ?? true}
                   onChange={(v) => handleVisibilityToggle('phone', v)}
@@ -711,7 +638,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               <AppInput
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setField('phone', e.target.value)}
                 placeholder="+1 (555) 123-4567"
                 leftIcon={<Phone className="w-5 h-5" />}
               />
@@ -719,9 +646,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-text-primary">
-                  Website
-                </label>
+                <label className="block text-sm font-medium text-text-primary">Website</label>
                 <VisibilityToggle
                   isVisible={visibilityConfig.website ?? true}
                   onChange={(v) => handleVisibilityToggle('website', v)}
@@ -730,7 +655,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               <AppInput
                 type="url"
                 value={website}
-                onChange={(e) => setWebsite(e.target.value)}
+                onChange={(e) => setField('website', e.target.value)}
                 placeholder="https://your-website.com"
                 leftIcon={<Globe className="w-5 h-5" />}
               />
@@ -738,9 +663,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-text-primary">
-                  Booking Calendar
-                </label>
+                <label className="block text-sm font-medium text-text-primary">Booking Calendar</label>
                 <VisibilityToggle
                   isVisible={visibilityConfig.booking_calendar ?? true}
                   onChange={(v) => handleVisibilityToggle('booking_calendar', v)}
@@ -749,7 +672,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               <AppInput
                 type="url"
                 value={bookingCalendarUrl}
-                onChange={(e) => setBookingCalendarUrl(e.target.value)}
+                onChange={(e) => setField('booking_calendar_url', e.target.value)}
                 placeholder="https://calendly.com/your-name"
                 leftIcon={<Calendar className="w-5 h-5" />}
               />
@@ -764,13 +687,10 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
             {SOCIAL_PLATFORMS.map((platform) => {
               const Icon = platform.icon;
               const visibilityKey = `socials_${platform.key}` as keyof PersonalVisibilityConfig;
-
               return (
                 <div key={platform.key}>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-sm font-medium text-text-primary">
-                      {platform.label}
-                    </label>
+                    <label className="block text-sm font-medium text-text-primary">{platform.label}</label>
                     <VisibilityToggle
                       isVisible={visibilityConfig[visibilityKey] ?? true}
                       onChange={(v) => handleVisibilityToggle(visibilityKey, v)}
@@ -779,10 +699,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                   <AppInput
                     value={socials[platform.key] || ''}
                     onChange={(e) =>
-                      setSocials((prev) => ({
-                        ...prev,
-                        [platform.key]: e.target.value,
-                      }))
+                      setField('socials', { ...socials, [platform.key]: e.target.value })
                     }
                     placeholder={platform.placeholder}
                     leftIcon={<Icon className="w-5 h-5" />}
@@ -798,9 +715,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-text-primary">Categories</h2>
-              <p className="text-text-secondary text-sm">
-                Select up to 10 categories that describe your services.
-              </p>
+              <p className="text-text-secondary text-sm">Select up to 10 categories that describe your services.</p>
             </div>
             <VisibilityToggle
               isVisible={visibilityConfig.categories ?? true}
@@ -813,10 +728,11 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 key={category}
                 type="button"
                 onClick={() => toggleCategory(category)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${categories.includes(category)
-                  ? 'bg-primary text-white'
-                  : 'bg-surface-hover text-text-secondary hover:text-text-primary'
-                  }`}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  categories.includes(category)
+                    ? 'bg-primary text-white'
+                    : 'bg-surface-hover text-text-secondary hover:text-text-primary'
+                }`}
               >
                 {category}
               </button>
@@ -833,13 +749,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 isVisible={visibilityConfig.custom_links ?? true}
                 onChange={(v) => handleVisibilityToggle('custom_links', v)}
               />
-              <AppButton
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addCustomLink}
-                disabled={customLinks.length >= 10}
-              >
+              <AppButton type="button" variant="outline" size="sm" onClick={addCustomLink} disabled={customLinks.length >= 10}>
                 <Plus className="w-4 h-4 mr-1" />
                 Add Link
               </AppButton>
@@ -860,32 +770,23 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                   onChange={(e) => updateCustomLink(index, 'url', e.target.value)}
                   className="flex-[2]"
                 />
-                <AppButton
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeCustomLink(index)}
-                >
+                <AppButton type="button" variant="ghost" size="icon" onClick={() => removeCustomLink(index)}>
                   <Trash2 className="w-4 h-4 text-error" />
                 </AppButton>
               </div>
             ))}
             {customLinks.length === 0 && (
-              <p className="text-text-tertiary text-sm text-center py-4">
-                No custom links added yet.
-              </p>
+              <p className="text-text-tertiary text-sm text-center py-4">No custom links added yet.</p>
             )}
           </div>
         </section>
 
-        {/* Branding (Simplified to just Background Theme) */}
+        {/* Branding */}
         <section className="bg-surface border border-border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-text-primary mb-6">Branding</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-3">
-                Background Theme
-              </label>
+              <label className="block text-sm font-medium text-text-primary mb-3">Background Theme</label>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-max">
                 {PREBUILT_THEMES.map((theme) => (
                   <ThemePreviewCard
@@ -900,18 +801,17 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 Selected: <span className="font-medium text-text-primary">{PREBUILT_THEMES.find(t => t.theme_id === backgroundTheme)?.name}</span>
               </p>
 
-              {/* Customize button */}
               {selectedTheme && (
                 <button
                   type="button"
                   onClick={() => setShowCustomization(!showCustomization)}
                   className="mt-3 text-sm font-medium text-primary hover:underline flex items-center gap-1"
                 >
-                  {showCustomization ? '▼' : '▶'} Customize Theme
+                  {showCustomization ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  Customize Theme
                 </button>
               )}
 
-              {/* Customization panel */}
               {showCustomization && selectedTheme && (
                 <div className="mt-4 border border-border rounded-xl p-4 bg-surface-hover/30">
                   <ThemeCustomization
@@ -923,12 +823,51 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 </div>
               )}
             </div>
+
+            {/* Gradient Color Picker for accent color */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
+              >
+                {showColorPicker ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                Accent Color
+              </button>
+              {showColorPicker && (
+                <div className="mt-3 border border-border rounded-xl p-4 bg-surface-hover/30">
+                  <GradientColorPicker
+                    value={(p.brand_color as string) || '#3B82F6'}
+                    onChange={(val) => setField('brand_color', val)}
+                    label="Profile Accent Color"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
-        {/* Public Toggle & Save */}
+        {/* Section Order (DnD) */}
         <section className="bg-surface border border-border rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
+          <button
+            type="button"
+            onClick={() => setShowSectionOrder(!showSectionOrder)}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            {showSectionOrder ? <ChevronDown className="w-5 h-5 text-text-secondary" /> : <ChevronRight className="w-5 h-5 text-text-secondary" />}
+            <h2 className="text-lg font-semibold text-text-primary">Section Order</h2>
+          </button>
+          {showSectionOrder && (
+            <div className="mt-4">
+              <p className="text-text-secondary text-sm mb-3">Drag sections to reorder how they appear on your public profile.</p>
+              <DndSectionList />
+            </div>
+          )}
+        </section>
+
+        {/* Public Toggle */}
+        <section className="bg-surface border border-border rounded-xl p-6">
+          <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-text-primary">Public Profile</h2>
               <p className="text-text-secondary text-sm mt-1">
@@ -939,56 +878,33 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               type="button"
               role="switch"
               aria-checked={isPublic}
-              onClick={() => setIsPublic(!isPublic)}
+              onClick={() => setField('is_public', !isPublic)}
               title={isPublic ? 'Enabled' : 'Disabled'}
               className={`
-                group
-                relative inline-flex h-6 w-11 items-center rounded-full transition-colors 
+                group relative inline-flex h-6 w-11 items-center rounded-full transition-colors
                 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500
                 aria-checked:bg-green-500 aria-checked:hover:bg-green-600
               `}
             >
-              <span
-                className={`
-                  inline-block h-4 w-4 transform rounded-full bg-white transition-transform 
-                  translate-x-1 group-aria-checked:translate-x-6
-                `}
-              />
+              <span className={`
+                inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                translate-x-1 group-aria-checked:translate-x-6
+              `} />
             </button>
-          </div>
-
-          <div className="flex justify-end gap-3">
-            {profileExists && profile && (
-              <AppButton
-                type="button"
-                variant="outline"
-                onClick={() => window.open(personalProfileService.getPublicProfileUrl(profile.slug), '_blank')}
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                View Public Profile
-              </AppButton>
-            )}
-            <AppButton onClick={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {profileExists ? 'Save Changes' : 'Create Profile'}
-                </>
-              )}
-            </AppButton>
           </div>
         </section>
       </div>
 
-      {/* Preview Panel */}
-      <div className="lg:sticky lg:top-6 h-fit">
-        {/* Preview */}
-        <PersonalProfilePreview data={previewData} />
+      {/* Preview Panel (~40%) */}
+      <div className="w-full lg:w-[40%] lg:sticky lg:top-6 h-fit">
+        <DeviceFramePreview>
+          <PublicProfileRenderer
+            profileData={editorState.profile}
+            profileType="personal"
+            themeId={backgroundTheme}
+            sectionOrder={editorState.sectionOrder}
+          />
+        </DeviceFramePreview>
       </div>
 
       {/* AI Assistant (floating button) */}
@@ -1003,6 +919,22 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
         />
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Exported wrapper component with ProfileEditorProvider
+// ---------------------------------------------------------------------------
+
+export function PersonalProfileTabContent({ className }: TabContentProps) {
+  return (
+    <ProfileEditorProvider
+      initialProfile={{}}
+      profileType="personal"
+      initialSectionOrder={['header', 'bio', 'contact', 'socials']}
+    >
+      <PersonalProfileEditorInner className={className} />
+    </ProfileEditorProvider>
   );
 }
 

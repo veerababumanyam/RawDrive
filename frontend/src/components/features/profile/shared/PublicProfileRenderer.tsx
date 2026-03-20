@@ -24,6 +24,7 @@ interface PublicProfileRendererProps {
   profileData: Record<string, unknown>;
   profileType: ProfileType;
   themeId?: string;
+  sectionOrder?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
   profileData,
   profileType,
   themeId,
+  sectionOrder,
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -75,10 +77,10 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
     };
   }, [tokens]);
 
-  // Get applicable sections
+  // Get applicable sections (respects custom ordering when provided)
   const sections = useMemo(
-    () => getSectionsForProfile(profileType, normalizedData),
-    [profileType, normalizedData],
+    () => getSectionsForProfile(profileType, normalizedData, sectionOrder),
+    [profileType, normalizedData, sectionOrder],
   );
 
   // Get a theme object for ProfileGridItem compatibility

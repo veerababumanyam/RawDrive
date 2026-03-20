@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import {
     Globe,
@@ -32,6 +32,10 @@ import {
     Paintbrush,
     Dribbble,
     ChevronDown,
+    ChevronRight,
+    AlertCircle,
+    CheckCircle,
+    Clock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -55,6 +59,12 @@ import { themeService } from '../../../services/themeService';
 import type { Theme, ThemeCustomization as ThemeCustomizationType } from '../../../types/profileEditor';
 import { validateCoordinates } from '../../../utils/themeTransformer';
 import { VisibilityToggle } from '../../settings/VisibilityToggle';
+import { ProfileEditorProvider, useProfileEditor, useProfileEditorDispatch } from '../../../contexts/ProfileEditorContext';
+import { useProfileAutoSave } from '../../../hooks/useProfileAutoSave';
+import { DndSectionList } from './DndSectionList';
+import { DeviceFramePreview } from './DeviceFramePreview';
+import { GradientColorPicker } from './GradientColorPicker';
+import { PublicProfileRenderer } from '../profile/shared/PublicProfileRenderer';
 
 /**
  * Sanitizes the profile data before submission.
@@ -314,13 +324,58 @@ const CollapsibleSection: React.FC<{
     );
 };
 
-export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfileChange }) => {
+// ---------------------------------------------------------------------------
+// Auto-save status indicator
+// ---------------------------------------------------------------------------
+
+function AutoSaveStatus({ isSaving, lastSavedAt, isDirty }: { isSaving: boolean; lastSavedAt: string | null; isDirty: boolean }) {
+    if (isSaving) {
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Saving...
+            </span>
+        );
+    }
+    if (isDirty) {
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <AlertCircle className="w-3 h-3" />
+                Unsaved changes
+            </span>
+        );
+    }
+    if (lastSavedAt) {
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle className="w-3 h-3" />
+                Saved
+            </span>
+        );
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// Inner form component (has access to ProfileEditorContext)
+// ---------------------------------------------------------------------------
+
+const CompanyProfileFormInner: React.FC<CompanyProfileFormProps> = ({ onProfileChange }) => {
     const { workspace } = useAuth();
     const toast = useToastActions();
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
     const [profileExists, setProfileExists] = useState(false);
     const [updatingVisibility, setUpdatingVisibility] = useState(false);
+
+    // Editor context
+    const editorState = useProfileEditor();
+    const editorDispatch = useProfileEditorDispatch();
+
+    // Section order panel
+    const [showSectionOrder, setShowSectionOrder] = useState(false);
+    // Color picker panel
+    const [showColorPicker, setShowColorPicker] = useState(false);
 
     // Workspace privacy settings for public profile visibility
     const { settings: privacySettings, update: updatePrivacy } = useWorkspacePrivacySettings(workspace?.workspace_id || '');
@@ -404,6 +459,31 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     // Watch all form values for live preview
     const watchedValues = watch();
 
+    // Auto-save integration: sync form values to editor context
+    useEffect(() => {
+        if (!isFetching && watchedValues) {
+            // Sync form values to editor context for auto-save
+            const profileData = {
+                ...watchedValues,
+                company_name: watchedValues.name,
+            };
+            // Only update if changed to avoid loops
+            const currentJson = JSON.stringify(profileData);
+            if (currentJson !== prevWatchedValuesRef.current) {
+                prevWatchedValuesRef.current = currentJson;
+                editorDispatch({ type: 'SET_FIELD', field: '_formData', value: profileData });
+            }
+        }
+    }, [watchedValues, isFetching, editorDispatch]);
+
+    // Auto-save hook
+    const { isSaving: isAutoSaving, lastSavedAt: autoSaveLastSavedAt } = useProfileAutoSave({
+        profileType: 'company',
+        profileData: watchedValues as unknown as Record<string, unknown>,
+        isDirty: editorState.isDirty && profileExists,
+        onSaved: () => editorDispatch({ type: 'MARK_SAVED' }),
+    });
+
     useEffect(() => {
         if (workspace?.workspace_id) {
             loadProfile(workspace.workspace_id);
@@ -459,6 +539,12 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 address_structured: profile.address_structured || DEFAULT_PROFILE.address_structured,
                 socials: profile.socials || DEFAULT_PROFILE.socials,
                 company_visibility: { ...DEFAULT_PROFILE.company_visibility, ...profile.company_visibility }
+            });
+
+            // Sync editor context
+            editorDispatch({
+                type: 'RESET',
+                profile: { ...profile, company_name: profile.name } as unknown as Record<string, unknown>,
             });
 
             // Fetch logo as blob URL if profile has a logo
@@ -784,6 +870,9 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             // Update original slug reference after successful save
             // This ensures future saves with the same slug don't trigger validation
             originalSlugRef.current = data.slug;
+
+            // Mark editor as saved
+            editorDispatch({ type: 'MARK_SAVED' });
         } catch (error: any) {
             toast.error(error.response?.data?.error?.message || "Failed to save changes.", {
                 title: "Error saving profile"
@@ -857,7 +946,9 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         });
         // Sync brand color with theme primary color
         setValue('brand_color', theme.base_colors.primary);
-    }, [setValue]);
+        // Mark editor dirty
+        editorDispatch({ type: 'SET_FIELD', field: '_themeId', value: theme.theme_id });
+    }, [setValue, editorDispatch]);
 
     // Handle theme customization changes
     const handleThemeCustomizationChange = useCallback((changes: Partial<ThemeCustomizationType>) => {
@@ -877,6 +968,14 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             themeUndoRedo.reset();
         }
     }, [selectedTheme, themeUndoRedo]);
+
+    // Preview data for PublicProfileRenderer
+    const previewProfileData = useMemo(() => ({
+        ...watchedValues,
+        company_name: watchedValues.name,
+        display_name: watchedValues.name,
+        logo_url: logoBlobUrl || watchedValues.logo_url,
+    }), [watchedValues, logoBlobUrl]);
 
     // Early return AFTER all hooks have been called
     if (isFetching) {
@@ -899,323 +998,388 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     );
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-w-4xl mx-auto pb-12">
+        <div className="flex flex-col lg:flex-row gap-6">
+            {/* Form Panel (~60%) */}
+            <div className="w-full lg:w-[60%]">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pb-12">
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
-                        <ProfileStatusBar
-                            companyProfile={watchedValues}
-                            section="company"
-                        />
-                    </div>
-                    <p className="text-text-secondary mt-1">Manage your public brand presence and contact information.</p>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                    {watch('slug') && (
-                        <>
-                            {/* Public URL with Copy */}
-                            <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 bg-surface-alt/50">
-                                <Globe size={14} className="text-text-tertiary flex-shrink-0" />
-                                <span className="text-sm text-text-secondary truncate max-w-[200px]">
-                                    {PUBLIC_URL_PREFIX}{watch('slug')}
-                                </span>
-                                <AppButton
-                                    variant="ghost"
-                                    size="sm"
-                                    type="button"
-                                    onClick={handleCopyPublicUrl}
-                                    leftIcon={copiedUrl ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
-                                    className="ml-1"
-                                    title="Copy public URL"
-                                >
-                                    {copiedUrl ? 'Copied' : 'Copy'}
-                                </AppButton>
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
+                                <ProfileStatusBar
+                                    companyProfile={watchedValues}
+                                    section="company"
+                                />
                             </div>
-                            <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
-                                <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadVCard} leftIcon={<Download size={14} />}>
-                                    vCard
-                                </AppButton>
-                                {renderVisibilityToggle('vcard', 'vCard on public page')}
-                            </div>
-                            <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
-                                <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadQRCode} leftIcon={<QrCode size={14} />}>
-                                    QR
-                                </AppButton>
-                                {renderVisibilityToggle('qr_code', 'QR Code on public page')}
-                            </div>
-                        </>
-                    )}
-                    <AppButton type="submit" variant="primary" isLoading={isLoading} leftIcon={<Save size={18} />}>
-                        Save Changes
-                    </AppButton>
-                </div>
-            </div>
-
-            {/* Public Profile Visibility Toggle */}
-            {workspace?.workspace_id && (
-                <div className="glass-card p-4 mb-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-start gap-3 flex-1">
-                            <Eye className="w-5 h-5 text-text-tertiary mt-0.5 flex-shrink-0" />
-                            <div className="flex-1">
-                                <div className="font-medium text-text-primary">Public Profile Visibility</div>
-                                <div className="text-sm text-text-secondary mt-0.5">
-                                    Make the company profile visible to the public. When enabled, your profile will be accessible at the public URL.
-                                </div>
-                            </div>
+                            <p className="text-text-secondary mt-1">Manage your public brand presence and contact information.</p>
                         </div>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={!!privacySettings?.public_profile_enabled}
-                            aria-label={privacySettings?.public_profile_enabled ? 'Disable public profile visibility' : 'Enable public profile visibility'}
-                            onClick={async () => {
-                                if (!privacySettings || updatingVisibility) return;
-                                setUpdatingVisibility(true);
-                                try {
-                                    await updatePrivacy({ public_profile_enabled: !privacySettings.public_profile_enabled });
-                                } catch (err) {
-                                    toast.error('Failed to update public profile visibility');
-                                } finally {
-                                    setUpdatingVisibility(false);
-                                }
-                            }}
-                            disabled={updatingVisibility || !privacySettings}
-                            className={`
-                                group
-                                relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full
-                                border-2 border-transparent transition-colors duration-200 ease-in-out
-                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2
-                                disabled:cursor-not-allowed disabled:opacity-50
-                                bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500
-                                aria-checked:bg-green-500 aria-checked:hover:bg-green-600
-                            `}
-                            title={privacySettings?.public_profile_enabled ? 'Enabled' : 'Disabled'}
-                        >
-                            <span
-                                className={`
-                                    pointer-events-none inline-block h-5 w-5 transform rounded-full
-                                    bg-white shadow ring-0 transition duration-200 ease-in-out
-                                    translate-x-0 group-aria-checked:translate-x-5
-                                `}
-                            />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Logo & QR Code */}
-            <CollapsibleSection
-                title="Company Logo & QR Code"
-                description="Your logo and QR code for easy sharing."
-                icon={<Camera size={20} />}
-                action={renderVisibilityToggle('logo_url', 'Logo')}
-                defaultOpen={true}
-            >
-                <div className="flex flex-wrap items-start gap-6">
-                    {/* Logo Preview */}
-                    <div className="flex flex-col items-center gap-2">
-                        <div
-                            className={`
-                                    relative w-32 h-32 rounded-lg border-2 border-dashed
-                                    flex items-center justify-center cursor-pointer
-                                    transition-all overflow-hidden
-                                    ${isDraggingLogo ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
-                                    ${isUploadingLogo ? 'opacity-50' : ''}
-                                `}
-                            onClick={() => logoInputRef.current?.click()}
-                            onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
-                            onDragLeave={() => setIsDraggingLogo(false)}
-                            onDrop={handleLogoDrop}
-                        >
-                            {logoBlobUrl ? (
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <AutoSaveStatus isSaving={isAutoSaving} lastSavedAt={autoSaveLastSavedAt} isDirty={editorState.isDirty} />
+                            {watch('slug') && (
                                 <>
-                                    <img
-                                        src={logoBlobUrl}
-                                        alt="Company logo"
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <Camera className="w-6 h-6 text-white" />
+                                    {/* Public URL with Copy */}
+                                    <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 bg-surface-alt/50">
+                                        <Globe size={14} className="text-text-tertiary flex-shrink-0" />
+                                        <span className="text-sm text-text-secondary truncate max-w-[200px]">
+                                            {PUBLIC_URL_PREFIX}{watch('slug')}
+                                        </span>
+                                        <AppButton
+                                            variant="ghost"
+                                            size="sm"
+                                            type="button"
+                                            onClick={handleCopyPublicUrl}
+                                            leftIcon={copiedUrl ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
+                                            className="ml-1"
+                                            title="Copy public URL"
+                                        >
+                                            {copiedUrl ? 'Copied' : 'Copy'}
+                                        </AppButton>
+                                    </div>
+                                    <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
+                                        <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadVCard} leftIcon={<Download size={14} />}>
+                                            vCard
+                                        </AppButton>
+                                        {renderVisibilityToggle('vcard', 'vCard on public page')}
+                                    </div>
+                                    <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
+                                        <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadQRCode} leftIcon={<QrCode size={14} />}>
+                                            QR
+                                        </AppButton>
+                                        {renderVisibilityToggle('qr_code', 'QR Code on public page')}
                                     </div>
                                 </>
-                            ) : (
-                                <div className="text-center p-4">
-                                    <Upload className="w-8 h-8 mx-auto mb-2 text-text-tertiary" />
-                                    <span className="text-xs text-text-tertiary">Drop or click</span>
-                                </div>
                             )}
-                            {isUploadingLogo && (
-                                <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
-                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                </div>
-                            )}
+                            <AppButton type="submit" variant="primary" isLoading={isLoading} leftIcon={<Save size={18} />}>
+                                Save Changes
+                            </AppButton>
                         </div>
-                        <input
-                            ref={logoInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            onChange={handleLogoInputChange}
-                            className="hidden"
-                        />
-                        <span className="text-xs text-text-tertiary">Logo</span>
                     </div>
 
-                    {/* QR Code Preview */}
-                    {watch('slug') && (
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="relative w-32 h-32 rounded-lg border border-border bg-white flex items-center justify-center overflow-hidden">
-                                <img
-                                    src={companyProfileService.getQrCodeUrl(watch('slug'))}
-                                    alt="Profile QR Code"
-                                    className="w-28 h-28 object-contain"
-                                />
+                    {/* Public Profile Visibility Toggle */}
+                    {workspace?.workspace_id && (
+                        <div className="glass-card p-4 mb-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-start gap-3 flex-1">
+                                    <Eye className="w-5 h-5 text-text-tertiary mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1">
+                                        <div className="font-medium text-text-primary">Public Profile Visibility</div>
+                                        <div className="text-sm text-text-secondary mt-0.5">
+                                            Make the company profile visible to the public. When enabled, your profile will be accessible at the public URL.
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={!!privacySettings?.public_profile_enabled}
+                                    aria-label={privacySettings?.public_profile_enabled ? 'Disable public profile visibility' : 'Enable public profile visibility'}
+                                    onClick={async () => {
+                                        if (!privacySettings || updatingVisibility) return;
+                                        setUpdatingVisibility(true);
+                                        try {
+                                            await updatePrivacy({ public_profile_enabled: !privacySettings.public_profile_enabled });
+                                        } catch (err) {
+                                            toast.error('Failed to update public profile visibility');
+                                        } finally {
+                                            setUpdatingVisibility(false);
+                                        }
+                                    }}
+                                    disabled={updatingVisibility || !privacySettings}
+                                    className={`
+                                        group
+                                        relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full
+                                        border-2 border-transparent transition-colors duration-200 ease-in-out
+                                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2
+                                        disabled:cursor-not-allowed disabled:opacity-50
+                                        bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500
+                                        aria-checked:bg-green-500 aria-checked:hover:bg-green-600
+                                    `}
+                                    title={privacySettings?.public_profile_enabled ? 'Enabled' : 'Disabled'}
+                                >
+                                    <span
+                                        className={`
+                                            pointer-events-none inline-block h-5 w-5 transform rounded-full
+                                            bg-white shadow ring-0 transition duration-200 ease-in-out
+                                            translate-x-0 group-aria-checked:translate-x-5
+                                        `}
+                                    />
+                                </button>
                             </div>
-                            <div className="flex items-center gap-1">
-                                <span className="text-xs text-text-tertiary">QR Code</span>
-                                {renderVisibilityToggle('qr_code', 'QR Code')}
-                            </div>
-                            <AppButton
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleDownloadQRCode}
-                                leftIcon={<Download size={12} />}
-                                className="text-xs"
-                            >
-                                Download
-                            </AppButton>
                         </div>
                     )}
 
-                    {/* Instructions */}
-                    <div className="flex-1 min-w-[200px] text-sm text-text-secondary space-y-3">
-                        <div>
-                            <p className="font-medium text-text-primary mb-1">Logo</p>
-                            <p>Recommended: Square, at least 512x512px</p>
-                            <p className="text-xs text-text-tertiary">JPEG, PNG, WebP, GIF (max 5MB)</p>
-                        </div>
-                        {watch('slug') && (
-                            <div>
-                                <p className="font-medium text-text-primary mb-1">QR Code</p>
-                                <p>Scan to visit your public profile</p>
-                                <p className="text-xs text-text-tertiary">Toggle visibility for public page</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </CollapsibleSection>
-
-            {/* Logo Editor Modal */}
-            {
-                imageForCrop && (
-                    <AvatarEditorModal
-                        imageSrc={imageForCrop}
-                        isOpen={cropModalOpen}
-                        onSave={handleLogoSave}
-                        onCancel={handleCropCancel}
-                        isLoading={isUploadingLogo}
-                        title="Edit Logo"
-                    />
-                )
-            }
-
-            {/* Basic Information */}
-            <CollapsibleSection
-                title="Basic Information"
-                description="Core identity details visible on your public profile."
-                icon={<Globe size={20} />}
-                defaultOpen={true}
-            >
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Company Name"
-                                    {...register('name', { required: "Name is required" })}
-                                    error={errors.name?.message}
-                                    placeholder="e.g. Acme Photography"
-                                    variant="glass"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('name', 'Name')}
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Tagline"
-                                    {...register('tagline')}
-                                    placeholder="e.g. Capturing moments that matter"
-                                    variant="glass"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('tagline', 'Tagline')}
-                            </div>
-                        </div>
-
-                        {/* Public Slug - Inline edit for existing profiles */}
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-text-primary" id="slug-label">
-                                        Public Slug
-                                    </label>
-                                    {profileExists && !isEditingSlug ? (
-                                        // Display mode - show current slug with edit button
-                                        <div className="flex items-center gap-2 min-h-[48px]">
-                                            <div
-                                                className="flex-1 flex items-center gap-2 px-4 py-3 bg-white/5 rounded-lg border border-white/10 min-h-[48px]"
-                                                aria-labelledby="slug-label"
-                                            >
-                                                <span className="text-text-secondary text-sm">{PUBLIC_URL_PREFIX}</span>
-                                                <span className="text-text-primary font-medium">{currentSlug}</span>
+                    {/* Logo & QR Code */}
+                    <CollapsibleSection
+                        title="Company Logo & QR Code"
+                        description="Your logo and QR code for easy sharing."
+                        icon={<Camera size={20} />}
+                        action={renderVisibilityToggle('logo_url', 'Logo')}
+                        defaultOpen={true}
+                    >
+                        <div className="flex flex-wrap items-start gap-6">
+                            {/* Logo Preview */}
+                            <div className="flex flex-col items-center gap-2">
+                                <div
+                                    className={`
+                                            relative w-32 h-32 rounded-lg border-2 border-dashed
+                                            flex items-center justify-center cursor-pointer
+                                            transition-all overflow-hidden
+                                            ${isDraggingLogo ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
+                                            ${isUploadingLogo ? 'opacity-50' : ''}
+                                        `}
+                                    onClick={() => logoInputRef.current?.click()}
+                                    onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
+                                    onDragLeave={() => setIsDraggingLogo(false)}
+                                    onDrop={handleLogoDrop}
+                                >
+                                    {logoBlobUrl ? (
+                                        <>
+                                            <img
+                                                src={logoBlobUrl}
+                                                alt="Company logo"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <Camera className="w-6 h-6 text-white" />
                                             </div>
-                                            <AppButton
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={handleCopyPublicUrl}
-                                                title="Copy public URL to clipboard"
-                                                aria-label="Copy public URL"
-                                            >
-                                                {copiedUrl ? <CheckCircle2 size={16} className="text-success" /> : <Copy size={16} />}
-                                            </AppButton>
-                                            <AppButton
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={handleStartEditingSlug}
-                                                title="Edit your public URL slug. Changing this will change your public profile URL."
-                                                aria-label="Edit public slug"
-                                            >
-                                                <Pencil size={16} />
-                                            </AppButton>
+                                        </>
+                                    ) : (
+                                        <div className="text-center p-4">
+                                            <Upload className="w-8 h-8 mx-auto mb-2 text-text-tertiary" />
+                                            <span className="text-xs text-text-tertiary">Drop or click</span>
                                         </div>
-                                    ) : isEditingSlug ? (
-                                        // Edit mode - show input with confirm/cancel
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-2 min-h-[48px]">
-                                                <div className="flex-1 relative">
-                                                    <AppInput
-                                                        value={tempSlug}
-                                                        onChange={(e) => setTempSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                                                        placeholder="e.g. acme-photo"
-                                                        leftAddon={PUBLIC_URL_PREFIX}
-                                                        error={slugValidation.status === 'taken' ? slugValidation.message : undefined}
+                                    )}
+                                    {isUploadingLogo && (
+                                        <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
+                                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                        </div>
+                                    )}
+                                </div>
+                                <input
+                                    ref={logoInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    onChange={handleLogoInputChange}
+                                    className="hidden"
+                                />
+                                <span className="text-xs text-text-tertiary">Logo</span>
+                            </div>
+
+                            {/* QR Code Preview */}
+                            {watch('slug') && (
+                                <div className="flex flex-col items-center gap-2">
+                                    <div className="relative w-32 h-32 rounded-lg border border-border bg-white flex items-center justify-center overflow-hidden">
+                                        <img
+                                            src={companyProfileService.getQrCodeUrl(watch('slug'))}
+                                            alt="Profile QR Code"
+                                            className="w-28 h-28 object-contain"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-xs text-text-tertiary">QR Code</span>
+                                        {renderVisibilityToggle('qr_code', 'QR Code')}
+                                    </div>
+                                    <AppButton
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleDownloadQRCode}
+                                        leftIcon={<Download size={12} />}
+                                        className="text-xs"
+                                    >
+                                        Download
+                                    </AppButton>
+                                </div>
+                            )}
+
+                            {/* Instructions */}
+                            <div className="flex-1 min-w-[200px] text-sm text-text-secondary space-y-3">
+                                <div>
+                                    <p className="font-medium text-text-primary mb-1">Logo</p>
+                                    <p>Recommended: Square, at least 512x512px</p>
+                                    <p className="text-xs text-text-tertiary">JPEG, PNG, WebP, GIF (max 5MB)</p>
+                                </div>
+                                {watch('slug') && (
+                                    <div>
+                                        <p className="font-medium text-text-primary mb-1">QR Code</p>
+                                        <p>Scan to visit your public profile</p>
+                                        <p className="text-xs text-text-tertiary">Toggle visibility for public page</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </CollapsibleSection>
+
+                    {/* Logo Editor Modal */}
+                    {
+                        imageForCrop && (
+                            <AvatarEditorModal
+                                imageSrc={imageForCrop}
+                                isOpen={cropModalOpen}
+                                onSave={handleLogoSave}
+                                onCancel={handleCropCancel}
+                                isLoading={isUploadingLogo}
+                                title="Edit Logo"
+                            />
+                        )
+                    }
+
+                    {/* Basic Information */}
+                    <CollapsibleSection
+                        title="Basic Information"
+                        description="Core identity details visible on your public profile."
+                        icon={<Globe size={20} />}
+                        defaultOpen={true}
+                    >
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Company Name"
+                                            {...register('name', { required: "Name is required" })}
+                                            error={errors.name?.message}
+                                            placeholder="e.g. Acme Photography"
+                                            variant="glass"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('name', 'Name')}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Tagline"
+                                            {...register('tagline')}
+                                            placeholder="e.g. Capturing moments that matter"
+                                            variant="glass"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('tagline', 'Tagline')}
+                                    </div>
+                                </div>
+
+                                {/* Public Slug - Inline edit for existing profiles */}
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <div className="space-y-1">
+                                            <label className="text-sm font-medium text-text-primary" id="slug-label">
+                                                Public Slug
+                                            </label>
+                                            {profileExists && !isEditingSlug ? (
+                                                // Display mode - show current slug with edit button
+                                                <div className="flex items-center gap-2 min-h-[48px]">
+                                                    <div
+                                                        className="flex-1 flex items-center gap-2 px-4 py-3 bg-white/5 rounded-lg border border-white/10 min-h-[48px]"
                                                         aria-labelledby="slug-label"
-                                                        aria-describedby="slug-requirements"
+                                                    >
+                                                        <span className="text-text-secondary text-sm">{PUBLIC_URL_PREFIX}</span>
+                                                        <span className="text-text-primary font-medium">{currentSlug}</span>
+                                                    </div>
+                                                    <AppButton
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={handleCopyPublicUrl}
+                                                        title="Copy public URL to clipboard"
+                                                        aria-label="Copy public URL"
+                                                    >
+                                                        {copiedUrl ? <CheckCircle2 size={16} className="text-success" /> : <Copy size={16} />}
+                                                    </AppButton>
+                                                    <AppButton
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={handleStartEditingSlug}
+                                                        title="Edit your public URL slug. Changing this will change your public profile URL."
+                                                        aria-label="Edit public slug"
+                                                    >
+                                                        <Pencil size={16} />
+                                                    </AppButton>
+                                                </div>
+                                            ) : isEditingSlug ? (
+                                                // Edit mode - show input with confirm/cancel
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-2 min-h-[48px]">
+                                                        <div className="flex-1 relative">
+                                                            <AppInput
+                                                                value={tempSlug}
+                                                                onChange={(e) => setTempSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                                                placeholder="e.g. acme-photo"
+                                                                leftAddon={PUBLIC_URL_PREFIX}
+                                                                error={slugValidation.status === 'taken' ? slugValidation.message : undefined}
+                                                                aria-labelledby="slug-label"
+                                                                aria-describedby="slug-requirements"
+                                                                variant="glass"
+                                                            />
+                                                            {/* Validation indicator */}
+                                                            {tempSlug && tempSlug.length >= 3 && (
+                                                                <div className="absolute right-3 top-3" role="status" aria-live="polite">
+                                                                    {slugValidation.status === 'checking' && (
+                                                                        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" aria-label="Checking availability" />
+                                                                    )}
+                                                                    {slugValidation.status === 'available' && (
+                                                                        <CheckCircle2 className="w-4 h-4 text-success" aria-label="Slug is available" />
+                                                                    )}
+                                                                    {slugValidation.status === 'taken' && (
+                                                                        <XCircle className="w-4 h-4 text-error" aria-label="Slug is already taken" />
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <AppButton
+                                                            type="button"
+                                                            variant="primary"
+                                                            size="icon"
+                                                            onClick={handleConfirmSlugEdit}
+                                                            disabled={slugValidation.status === 'taken' || slugValidation.status === 'checking' || tempSlug.length < 3}
+                                                            title="Confirm slug change"
+                                                            aria-label="Confirm slug change"
+                                                        >
+                                                            <CheckCircle2 size={16} />
+                                                        </AppButton>
+                                                        <AppButton
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={handleCancelSlugEdit}
+                                                            title="Cancel editing"
+                                                            aria-label="Cancel editing"
+                                                        >
+                                                            <X size={16} />
+                                                        </AppButton>
+                                                    </div>
+                                                    <p id="slug-requirements" className="text-xs text-text-tertiary">
+                                                        Only lowercase letters, numbers, and hyphens allowed. Minimum 3 characters.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                // Create mode - show regular input with min height for consistency
+                                                <div className="relative min-h-[48px]">
+                                                    <AppInput
+                                                        {...register('slug', {
+                                                            required: "Slug is required",
+                                                            pattern: {
+                                                                value: /^[a-z0-9-]+$/,
+                                                                message: "Only lowercase letters, numbers, and hyphens allowed"
+                                                            },
+                                                            minLength: { value: 3, message: "Slug must be at least 3 characters" }
+                                                        })}
+                                                        error={errors.slug?.message || (slugValidation.status === 'taken' ? slugValidation.message : undefined)}
+                                                        placeholder="e.g. acme-photo"
+                                                        helperText={`Your public profile will be at: ${PUBLIC_URL_PREFIX}${watch('slug') || '...'}`}
+                                                        leftAddon={PUBLIC_URL_PREFIX}
+                                                        aria-labelledby="slug-label"
+                                                        aria-describedby="slug-helper"
                                                         variant="glass"
                                                     />
-                                                    {/* Validation indicator */}
-                                                    {tempSlug && tempSlug.length >= 3 && (
+                                                    {/* Slug validation indicator */}
+                                                    {currentSlug && currentSlug.length >= 3 && (
                                                         <div className="absolute right-3 top-3" role="status" aria-live="polite">
                                                             {slugValidation.status === 'checking' && (
                                                                 <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" aria-label="Checking availability" />
@@ -1229,697 +1393,697 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                         </div>
                                                     )}
                                                 </div>
-                                                <AppButton
-                                                    type="button"
-                                                    variant="primary"
-                                                    size="icon"
-                                                    onClick={handleConfirmSlugEdit}
-                                                    disabled={slugValidation.status === 'taken' || slugValidation.status === 'checking' || tempSlug.length < 3}
-                                                    title="Confirm slug change"
-                                                    aria-label="Confirm slug change"
-                                                >
-                                                    <CheckCircle2 size={16} />
-                                                </AppButton>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Website"
+                                            {...register('website')}
+                                            placeholder="https://example.com"
+                                            leftIcon={<Globe size={16} />}
+                                            variant="glass"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('website', 'Website')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Email Address"
+                                            {...register('email', { required: "Email is required" })}
+                                            error={errors.email?.message}
+                                            placeholder="contact@example.com"
+                                            leftIcon={<Mail size={16} />}
+                                            variant="glass"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('email', 'Email')}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Phone Number"
+                                            {...register('phone')}
+                                            placeholder="+1 (555) 000-0000"
+                                            leftIcon={<Phone size={16} />}
+                                            variant="glass"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('phone', 'Phone')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </CollapsibleSection>
+
+                    {/* Secondary Contacts */}
+                    <CollapsibleSection
+                        title="Secondary Contacts"
+                        description="Additional email addresses and phone numbers (up to 2 each)."
+                        icon={<Mail size={20} />}
+                        defaultOpen={false}
+                    >
+                        <div className="space-y-6">
+                            {/* Secondary Emails */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-sm font-medium text-text-primary">Secondary Emails</h4>
+                                    {secondaryEmailFields.length < 2 && (
+                                        <AppButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            leftIcon={<Plus size={14} />}
+                                            onClick={() => appendSecondaryEmail({ value: '', label: '' })}
+                                        >
+                                            Add Email
+                                        </AppButton>
+                                    )}
+                                </div>
+                                {secondaryEmailFields.length === 0 ? (
+                                    <p className="text-sm text-text-tertiary italic">No secondary emails added.</p>
+                                ) : (
+                                    secondaryEmailFields.map((field, index) => (
+                                        <div key={field.id} className="flex gap-3 items-end">
+                                            <div className="w-40">
+                                                <AppInput
+                                                    label={index === 0 ? "Label" : undefined}
+                                                    placeholder="e.g. Support"
+                                                    {...register(`secondary_emails.${index}.label` as const)}
+                                                    variant="glass"
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <AppInput
+                                                    label={index === 0 ? "Email Address" : undefined}
+                                                    placeholder="support@example.com"
+                                                    leftIcon={<Mail size={14} />}
+                                                    {...register(`secondary_emails.${index}.value` as const, {
+                                                        pattern: {
+                                                            value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                                                            message: "Invalid email format"
+                                                        }
+                                                    })}
+                                                    error={errors.secondary_emails?.[index]?.value?.message}
+                                                    variant="glass"
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {renderVisibilityToggle(
+                                                    `secondary_email_${index + 1}` as keyof CompanyVisibilityConfig,
+                                                    `Secondary Email ${index + 1}`
+                                                )}
                                                 <AppButton
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={handleCancelSlugEdit}
-                                                    title="Cancel editing"
-                                                    aria-label="Cancel editing"
+                                                    className="text-error hover:bg-error/10 hover:text-error"
+                                                    onClick={() => removeSecondaryEmail(index)}
+                                                    title="Remove email"
                                                 >
-                                                    <X size={16} />
+                                                    <Trash2 size={16} />
                                                 </AppButton>
                                             </div>
-                                            <p id="slug-requirements" className="text-xs text-text-tertiary">
-                                                Only lowercase letters, numbers, and hyphens allowed. Minimum 3 characters.
-                                            </p>
                                         </div>
-                                    ) : (
-                                        // Create mode - show regular input with min height for consistency
-                                        <div className="relative min-h-[48px]">
-                                            <AppInput
-                                                {...register('slug', {
-                                                    required: "Slug is required",
-                                                    pattern: {
-                                                        value: /^[a-z0-9-]+$/,
-                                                        message: "Only lowercase letters, numbers, and hyphens allowed"
-                                                    },
-                                                    minLength: { value: 3, message: "Slug must be at least 3 characters" }
-                                                })}
-                                                error={errors.slug?.message || (slugValidation.status === 'taken' ? slugValidation.message : undefined)}
-                                                placeholder="e.g. acme-photo"
-                                                helperText={`Your public profile will be at: ${PUBLIC_URL_PREFIX}${watch('slug') || '...'}`}
-                                                leftAddon={PUBLIC_URL_PREFIX}
-                                                aria-labelledby="slug-label"
-                                                aria-describedby="slug-helper"
-                                                variant="glass"
-                                            />
-                                            {/* Slug validation indicator */}
-                                            {currentSlug && currentSlug.length >= 3 && (
-                                                <div className="absolute right-3 top-3" role="status" aria-live="polite">
-                                                    {slugValidation.status === 'checking' && (
-                                                        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" aria-label="Checking availability" />
-                                                    )}
-                                                    {slugValidation.status === 'available' && (
-                                                        <CheckCircle2 className="w-4 h-4 text-success" aria-label="Slug is available" />
-                                                    )}
-                                                    {slugValidation.status === 'taken' && (
-                                                        <XCircle className="w-4 h-4 text-error" aria-label="Slug is already taken" />
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Divider */}
+                            <div className="border-t border-border" />
+
+                            {/* Secondary Phones */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-sm font-medium text-text-primary">Secondary Phones</h4>
+                                    {secondaryPhoneFields.length < 2 && (
+                                        <AppButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            leftIcon={<Plus size={14} />}
+                                            onClick={() => appendSecondaryPhone({ value: '', label: '' })}
+                                        >
+                                            Add Phone
+                                        </AppButton>
                                     )}
                                 </div>
+                                {secondaryPhoneFields.length === 0 ? (
+                                    <p className="text-sm text-text-tertiary italic">No secondary phones added.</p>
+                                ) : (
+                                    secondaryPhoneFields.map((field, index) => (
+                                        <div key={field.id} className="flex gap-3 items-end">
+                                            <div className="w-40">
+                                                <AppInput
+                                                    label={index === 0 ? "Label" : undefined}
+                                                    placeholder="e.g. Mobile"
+                                                    {...register(`secondary_phones.${index}.label` as const)}
+                                                    variant="glass"
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <AppInput
+                                                    label={index === 0 ? "Phone Number" : undefined}
+                                                    placeholder="+1 (555) 000-0000"
+                                                    leftIcon={<Phone size={14} />}
+                                                    {...register(`secondary_phones.${index}.value` as const)}
+                                                    variant="glass"
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {renderVisibilityToggle(
+                                                    `secondary_phone_${index + 1}` as keyof CompanyVisibilityConfig,
+                                                    `Secondary Phone ${index + 1}`
+                                                )}
+                                                <AppButton
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-error hover:bg-error/10 hover:text-error"
+                                                    onClick={() => removeSecondaryPhone(index)}
+                                                    title="Remove phone"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </AppButton>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
+                    </CollapsibleSection>
 
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Website"
-                                    {...register('website')}
-                                    placeholder="https://example.com"
-                                    leftIcon={<Globe size={16} />}
-                                    variant="glass"
-                                />
+                    {/* Address */}
+                    <CollapsibleSection
+                        title="Structured Address"
+                        description="Physical location for SEO and map integration."
+                        icon={<MapPin size={20} />}
+                        action={renderVisibilityToggle('address', 'Address')}
+                        defaultOpen={false}
+                    >
+                        <div className="space-y-4">
+                            <AppInput label="Address Line 1" {...register('address_structured.line1')} placeholder="123 Main St" variant="glass" />
+                            <AppInput label="Address Line 2" {...register('address_structured.line2')} placeholder="Suite 100" variant="glass" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <AppInput label="City" {...register('address_structured.city')} placeholder="New York" variant="glass" />
+                                <AppInput label="State/Province" {...register('address_structured.state')} placeholder="NY" variant="glass" />
                             </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('website', 'Website')}
+                            <div className="grid grid-cols-2 gap-4">
+                                <AppInput label="Postal Code" {...register('address_structured.postal_code')} placeholder="10001" variant="glass" />
+                                <AppInput label="Country" {...register('address_structured.country')} placeholder="USA" variant="glass" />
                             </div>
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Email Address"
-                                    {...register('email', { required: "Email is required" })}
-                                    error={errors.email?.message}
-                                    placeholder="contact@example.com"
-                                    leftIcon={<Mail size={16} />}
-                                    variant="glass"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('email', 'Email')}
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Phone Number"
-                                    {...register('phone')}
-                                    placeholder="+1 (555) 000-0000"
-                                    leftIcon={<Phone size={16} />}
-                                    variant="glass"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('phone', 'Phone')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </CollapsibleSection>
-
-            {/* Secondary Contacts */}
-            <CollapsibleSection
-                title="Secondary Contacts"
-                description="Additional email addresses and phone numbers (up to 2 each)."
-                icon={<Mail size={20} />}
-                defaultOpen={false}
-            >
-                <div className="space-y-6">
-                    {/* Secondary Emails */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-medium text-text-primary">Secondary Emails</h4>
-                            {secondaryEmailFields.length < 2 && (
+                            {/* GPS Coordinates Section */}
+                            <div className="border-t border-border pt-4 mt-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <MapPin size={16} className="text-text-secondary" />
+                                    <h4 className="text-sm font-medium text-text-primary">GPS Coordinates</h4>
+                                    <span className="text-xs text-text-tertiary">(optional)</span>
+                                </div>
+                                <p className="text-xs text-text-tertiary mb-3">
+                                    For precise map navigation. Coordinates take priority over text address when visitors click your location.
+                                </p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Controller
+                                        name="address_structured.latitude"
+                                        control={control}
+                                        rules={{
+                                            validate: (value) => {
+                                                if (value === undefined || value === null) return true;
+                                                const num = typeof value === 'string' ? parseFloat(value) : value;
+                                                if (isNaN(num)) return 'Invalid number';
+                                                const result = validateCoordinates(num, undefined);
+                                                return result.valid || result.errors[0];
+                                            }
+                                        }}
+                                        render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
+                                            <AppInput
+                                                label="Latitude"
+                                                variant="glass"
+                                                placeholder="e.g. 40.7128"
+                                                leftIcon={<Navigation size={14} />}
+                                                helperText="-90 to 90"
+                                                error={error?.message}
+                                                value={value ?? ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '') {
+                                                        onChange(undefined);
+                                                    } else {
+                                                        const num = parseFloat(val);
+                                                        onChange(isNaN(num) ? val : num);
+                                                    }
+                                                }}
+                                                {...rest}
+                                            />
+                                        )}
+                                    />
+                                    <Controller
+                                        name="address_structured.longitude"
+                                        control={control}
+                                        rules={{
+                                            validate: (value) => {
+                                                if (value === undefined || value === null) return true;
+                                                const num = typeof value === 'string' ? parseFloat(value) : value;
+                                                if (isNaN(num)) return 'Invalid number';
+                                                const result = validateCoordinates(undefined, num);
+                                                return result.valid || result.errors[0];
+                                            }
+                                        }}
+                                        render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
+                                            <AppInput
+                                                label="Longitude"
+                                                variant="glass"
+                                                placeholder="e.g. -74.0060"
+                                                leftIcon={<Navigation size={14} className="rotate-90" />}
+                                                helperText="-180 to 180"
+                                                error={error?.message}
+                                                value={value ?? ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '') {
+                                                        onChange(undefined);
+                                                    } else {
+                                                        const num = parseFloat(val);
+                                                        onChange(isNaN(num) ? val : num);
+                                                    }
+                                                }}
+                                                {...rest}
+                                            />
+                                        )}
+                                    />
+                                </div>
                                 <AppButton
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    leftIcon={<Plus size={14} />}
-                                    onClick={() => appendSecondaryEmail({ value: '', label: '' })}
-                                >
-                                    Add Email
-                                </AppButton>
-                            )}
-                        </div>
-                        {secondaryEmailFields.length === 0 ? (
-                            <p className="text-sm text-text-tertiary italic">No secondary emails added.</p>
-                        ) : (
-                            secondaryEmailFields.map((field, index) => (
-                                <div key={field.id} className="flex gap-3 items-end">
-                                    <div className="w-40">
-                                        <AppInput
-                                            label={index === 0 ? "Label" : undefined}
-                                            placeholder="e.g. Support"
-                                            {...register(`secondary_emails.${index}.label` as const)}
-                                            variant="glass"
-                                        />
-                                    </div>
-                                    <div className="flex-1">
-                                        <AppInput
-                                            label={index === 0 ? "Email Address" : undefined}
-                                            placeholder="support@example.com"
-                                            leftIcon={<Mail size={14} />}
-                                            {...register(`secondary_emails.${index}.value` as const, {
-                                                pattern: {
-                                                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                                                    message: "Invalid email format"
-                                                }
-                                            })}
-                                            error={errors.secondary_emails?.[index]?.value?.message}
-                                            variant="glass"
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {renderVisibilityToggle(
-                                            `secondary_email_${index + 1}` as keyof CompanyVisibilityConfig,
-                                            `Secondary Email ${index + 1}`
-                                        )}
-                                        <AppButton
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-error hover:bg-error/10 hover:text-error"
-                                            onClick={() => removeSecondaryEmail(index)}
-                                            title="Remove email"
-                                        >
-                                            <Trash2 size={16} />
-                                        </AppButton>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-
-                    {/* Divider */}
-                    <div className="border-t border-border" />
-
-                    {/* Secondary Phones */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-medium text-text-primary">Secondary Phones</h4>
-                            {secondaryPhoneFields.length < 2 && (
-                                <AppButton
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    leftIcon={<Plus size={14} />}
-                                    onClick={() => appendSecondaryPhone({ value: '', label: '' })}
-                                >
-                                    Add Phone
-                                </AppButton>
-                            )}
-                        </div>
-                        {secondaryPhoneFields.length === 0 ? (
-                            <p className="text-sm text-text-tertiary italic">No secondary phones added.</p>
-                        ) : (
-                            secondaryPhoneFields.map((field, index) => (
-                                <div key={field.id} className="flex gap-3 items-end">
-                                    <div className="w-40">
-                                        <AppInput
-                                            label={index === 0 ? "Label" : undefined}
-                                            placeholder="e.g. Mobile"
-                                            {...register(`secondary_phones.${index}.label` as const)}
-                                            variant="glass"
-                                        />
-                                    </div>
-                                    <div className="flex-1">
-                                        <AppInput
-                                            label={index === 0 ? "Phone Number" : undefined}
-                                            placeholder="+1 (555) 000-0000"
-                                            leftIcon={<Phone size={14} />}
-                                            {...register(`secondary_phones.${index}.value` as const)}
-                                            variant="glass"
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {renderVisibilityToggle(
-                                            `secondary_phone_${index + 1}` as keyof CompanyVisibilityConfig,
-                                            `Secondary Phone ${index + 1}`
-                                        )}
-                                        <AppButton
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-error hover:bg-error/10 hover:text-error"
-                                            onClick={() => removeSecondaryPhone(index)}
-                                            title="Remove phone"
-                                        >
-                                            <Trash2 size={16} />
-                                        </AppButton>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </CollapsibleSection>
-
-            {/* Address */}
-            <CollapsibleSection
-                title="Structured Address"
-                description="Physical location for SEO and map integration."
-                icon={<MapPin size={20} />}
-                action={renderVisibilityToggle('address', 'Address')}
-                defaultOpen={false}
-            >
-                <div className="space-y-4">
-                    <AppInput label="Address Line 1" {...register('address_structured.line1')} placeholder="123 Main St" variant="glass" />
-                    <AppInput label="Address Line 2" {...register('address_structured.line2')} placeholder="Suite 100" variant="glass" />
-                    <div className="grid grid-cols-2 gap-4">
-                        <AppInput label="City" {...register('address_structured.city')} placeholder="New York" variant="glass" />
-                        <AppInput label="State/Province" {...register('address_structured.state')} placeholder="NY" variant="glass" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <AppInput label="Postal Code" {...register('address_structured.postal_code')} placeholder="10001" variant="glass" />
-                        <AppInput label="Country" {...register('address_structured.country')} placeholder="USA" variant="glass" />
-                    </div>
-
-                    {/* GPS Coordinates Section */}
-                    <div className="border-t border-border pt-4 mt-4">
-                        <div className="flex items-center gap-2 mb-3">
-                            <MapPin size={16} className="text-text-secondary" />
-                            <h4 className="text-sm font-medium text-text-primary">GPS Coordinates</h4>
-                            <span className="text-xs text-text-tertiary">(optional)</span>
-                        </div>
-                        <p className="text-xs text-text-tertiary mb-3">
-                            For precise map navigation. Coordinates take priority over text address when visitors click your location.
-                        </p>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Controller
-                                name="address_structured.latitude"
-                                control={control}
-                                rules={{
-                                    validate: (value) => {
-                                        if (value === undefined || value === null) return true;
-                                        const num = typeof value === 'string' ? parseFloat(value) : value;
-                                        if (isNaN(num)) return 'Invalid number';
-                                        const result = validateCoordinates(num, undefined);
-                                        return result.valid || result.errors[0];
-                                    }
-                                }}
-                                render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
-                                    <AppInput
-                                        label="Latitude"
-                                        variant="glass"
-                                        placeholder="e.g. 40.7128"
-                                        leftIcon={<Navigation size={14} />}
-                                        helperText="-90 to 90"
-                                        error={error?.message}
-                                        value={value ?? ''}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === '') {
-                                                onChange(undefined);
-                                            } else {
-                                                const num = parseFloat(val);
-                                                onChange(isNaN(num) ? val : num);
-                                            }
-                                        }}
-                                        {...rest}
-                                    />
-                                )}
-                            />
-                            <Controller
-                                name="address_structured.longitude"
-                                control={control}
-                                rules={{
-                                    validate: (value) => {
-                                        if (value === undefined || value === null) return true;
-                                        const num = typeof value === 'string' ? parseFloat(value) : value;
-                                        if (isNaN(num)) return 'Invalid number';
-                                        const result = validateCoordinates(undefined, num);
-                                        return result.valid || result.errors[0];
-                                    }
-                                }}
-                                render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
-                                    <AppInput
-                                        label="Longitude"
-                                        variant="glass"
-                                        placeholder="e.g. -74.0060"
-                                        leftIcon={<Navigation size={14} className="rotate-90" />}
-                                        helperText="-180 to 180"
-                                        error={error?.message}
-                                        value={value ?? ''}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === '') {
-                                                onChange(undefined);
-                                            } else {
-                                                const num = parseFloat(val);
-                                                onChange(isNaN(num) ? val : num);
-                                            }
-                                        }}
-                                        {...rest}
-                                    />
-                                )}
-                            />
-                        </div>
-                        <AppButton
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="mt-2"
-                            leftIcon={<Navigation size={14} />}
-                            onClick={async () => {
-                                if (!navigator.geolocation) {
-                                    toast.error('Geolocation is not supported by your browser');
-                                    return;
-                                }
-                                navigator.geolocation.getCurrentPosition(
-                                    (position) => {
-                                        const lat = parseFloat(position.coords.latitude.toFixed(6));
-                                        const lng = parseFloat(position.coords.longitude.toFixed(6));
-                                        setValue('address_structured.latitude', lat);
-                                        setValue('address_structured.longitude', lng);
-                                        toast.success('Location detected successfully');
-                                    },
-                                    (error) => {
-                                        let message = 'Unable to get your location';
-                                        if (error.code === error.PERMISSION_DENIED) {
-                                            message = 'Location access was denied. Please enable location in your browser settings.';
+                                    className="mt-2"
+                                    leftIcon={<Navigation size={14} />}
+                                    onClick={async () => {
+                                        if (!navigator.geolocation) {
+                                            toast.error('Geolocation is not supported by your browser');
+                                            return;
                                         }
-                                        toast.error(message);
-                                    },
-                                    { enableHighAccuracy: true, timeout: 10000 }
-                                );
-                            }}
-                        >
-                            Get Current Location
-                        </AppButton>
-                    </div>
-                </div>
-            </CollapsibleSection>
+                                        navigator.geolocation.getCurrentPosition(
+                                            (position) => {
+                                                const lat = parseFloat(position.coords.latitude.toFixed(6));
+                                                const lng = parseFloat(position.coords.longitude.toFixed(6));
+                                                setValue('address_structured.latitude', lat);
+                                                setValue('address_structured.longitude', lng);
+                                                toast.success('Location detected successfully');
+                                            },
+                                            (error) => {
+                                                let message = 'Unable to get your location';
+                                                if (error.code === error.PERMISSION_DENIED) {
+                                                    message = 'Location access was denied. Please enable location in your browser settings.';
+                                                }
+                                                toast.error(message);
+                                            },
+                                            { enableHighAccuracy: true, timeout: 10000 }
+                                        );
+                                    }}
+                                >
+                                    Get Current Location
+                                </AppButton>
+                            </div>
+                        </div>
+                    </CollapsibleSection>
 
-            {/* Social Media */}
-            <CollapsibleSection
-                title="Social Profiles"
-                description="Connect your audiences across platforms."
-                icon={<Instagram size={20} />}
-                defaultOpen={false}
-            >
-                <div className="space-y-4">
-                    {/* Primary Platforms */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Instagram"
-                                    variant="glass"
-                                    leftIcon={<Instagram size={16} />}
-                                    {...register('socials.instagram')}
-                                    placeholder="username or URL"
-                                />
+                    {/* Social Media */}
+                    <CollapsibleSection
+                        title="Social Profiles"
+                        description="Connect your audiences across platforms."
+                        icon={<Instagram size={20} />}
+                        defaultOpen={false}
+                    >
+                        <div className="space-y-4">
+                            {/* Primary Platforms */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Instagram"
+                                            variant="glass"
+                                            leftIcon={<Instagram size={16} />}
+                                            {...register('socials.instagram')}
+                                            placeholder="username or URL"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('socials_instagram', 'Instagram')}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Facebook"
+                                            variant="glass"
+                                            leftIcon={<Facebook size={16} />}
+                                            {...register('socials.facebook')}
+                                            placeholder="username or URL"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('socials_facebook', 'Facebook')}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="Twitter / X"
+                                            variant="glass"
+                                            leftIcon={<Twitter size={16} />}
+                                            {...register('socials.twitter')}
+                                            placeholder="username or URL"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('socials_twitter', 'Twitter/X')}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="LinkedIn"
+                                            variant="glass"
+                                            leftIcon={<Linkedin size={16} />}
+                                            {...register('socials.linkedin')}
+                                            placeholder="username or URL"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('socials_linkedin', 'LinkedIn')}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="YouTube"
+                                            variant="glass"
+                                            leftIcon={<Youtube size={16} />}
+                                            {...register('socials.youtube')}
+                                            placeholder="channel URL"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('socials_youtube', 'YouTube')}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label="TikTok"
+                                            variant="glass"
+                                            leftIcon={<Music2 size={16} />}
+                                            {...register('socials.tiktok')}
+                                            placeholder="@username or URL"
+                                        />
+                                    </div>
+                                    <div className="mt-8">
+                                        {renderVisibilityToggle('socials_tiktok', 'TikTok')}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('socials_instagram', 'Instagram')}
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Facebook"
-                                    variant="glass"
-                                    leftIcon={<Facebook size={16} />}
-                                    {...register('socials.facebook')}
-                                    placeholder="username or URL"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('socials_facebook', 'Facebook')}
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="Twitter / X"
-                                    variant="glass"
-                                    leftIcon={<Twitter size={16} />}
-                                    {...register('socials.twitter')}
-                                    placeholder="username or URL"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('socials_twitter', 'Twitter/X')}
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="LinkedIn"
-                                    variant="glass"
-                                    leftIcon={<Linkedin size={16} />}
-                                    {...register('socials.linkedin')}
-                                    placeholder="username or URL"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('socials_linkedin', 'LinkedIn')}
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="YouTube"
-                                    variant="glass"
-                                    leftIcon={<Youtube size={16} />}
-                                    {...register('socials.youtube')}
-                                    placeholder="channel URL"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('socials_youtube', 'YouTube')}
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <AppInput
-                                    label="TikTok"
-                                    variant="glass"
-                                    leftIcon={<Music2 size={16} />}
-                                    {...register('socials.tiktok')}
-                                    placeholder="@username or URL"
-                                />
-                            </div>
-                            <div className="mt-8">
-                                {renderVisibilityToggle('socials_tiktok', 'TikTok')}
-                            </div>
-                        </div>
-                    </div>
 
-                    {/* Divider */}
-                    <div className="border-t border-border pt-4 mt-4">
-                        <h4 className="text-sm font-medium text-text-secondary mb-4">Messaging & Creative Platforms</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="flex gap-2">
-                                <div className="flex-1">
-                                    <AppInput
-                                        label="WhatsApp"
-                                        variant="glass"
-                                        leftIcon={<Phone size={16} />}
-                                        {...register('socials.whatsapp')}
-                                        placeholder="phone number or wa.me link"
-                                    />
-                                </div>
-                                <div className="mt-8">
-                                    {renderVisibilityToggle('socials_whatsapp', 'WhatsApp')}
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <div className="flex-1">
-                                    <AppInput
-                                        label="Pinterest"
-                                        variant="glass"
-                                        leftIcon={<Globe size={16} />}
-                                        {...register('socials.pinterest')}
-                                        placeholder="username or URL"
-                                    />
-                                </div>
-                                <div className="mt-8">
-                                    {renderVisibilityToggle('socials_pinterest', 'Pinterest')}
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <div className="flex-1">
-                                    <AppInput
-                                        label="Behance"
-                                        variant="glass"
-                                        leftIcon={<Paintbrush size={16} />}
-                                        {...register('socials.behance')}
-                                        placeholder="username or URL"
-                                    />
-                                </div>
-                                <div className="mt-8">
-                                    {renderVisibilityToggle('socials_behance', 'Behance')}
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <div className="flex-1">
-                                    <AppInput
-                                        label="Dribbble"
-                                        variant="glass"
-                                        leftIcon={<Dribbble size={16} />}
-                                        {...register('socials.dribbble')}
-                                        placeholder="username or URL"
-                                    />
-                                </div>
-                                <div className="mt-8">
-                                    {renderVisibilityToggle('socials_dribbble', 'Dribbble')}
+                            {/* Divider */}
+                            <div className="border-t border-border pt-4 mt-4">
+                                <h4 className="text-sm font-medium text-text-secondary mb-4">Messaging & Creative Platforms</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <AppInput
+                                                label="WhatsApp"
+                                                variant="glass"
+                                                leftIcon={<Phone size={16} />}
+                                                {...register('socials.whatsapp')}
+                                                placeholder="phone number or wa.me link"
+                                            />
+                                        </div>
+                                        <div className="mt-8">
+                                            {renderVisibilityToggle('socials_whatsapp', 'WhatsApp')}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <AppInput
+                                                label="Pinterest"
+                                                variant="glass"
+                                                leftIcon={<Globe size={16} />}
+                                                {...register('socials.pinterest')}
+                                                placeholder="username or URL"
+                                            />
+                                        </div>
+                                        <div className="mt-8">
+                                            {renderVisibilityToggle('socials_pinterest', 'Pinterest')}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <AppInput
+                                                label="Behance"
+                                                variant="glass"
+                                                leftIcon={<Paintbrush size={16} />}
+                                                {...register('socials.behance')}
+                                                placeholder="username or URL"
+                                            />
+                                        </div>
+                                        <div className="mt-8">
+                                            {renderVisibilityToggle('socials_behance', 'Behance')}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <AppInput
+                                                label="Dribbble"
+                                                variant="glass"
+                                                leftIcon={<Dribbble size={16} />}
+                                                {...register('socials.dribbble')}
+                                                placeholder="username or URL"
+                                            />
+                                        </div>
+                                        <div className="mt-8">
+                                            {renderVisibilityToggle('socials_dribbble', 'Dribbble')}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </CollapsibleSection>
+                    </CollapsibleSection>
 
-            {/* Custom Links */}
-            <CollapsibleSection
-                title="Custom Links"
-                description="Add extra links like Portfolio, Booking, etc."
-                icon={<LinkIcon size={20} />}
-                action={renderVisibilityToggle('custom_links', 'Custom Links')}
-                defaultOpen={false}
-            >
-                <div className="space-y-4">
-                    {linkFields.map((field, index) => (
-                        <div key={field.id} className="flex gap-4 items-end">
-                            <div className="flex-1">
-                                <AppInput
-                                    label={index === 0 ? "Label" : undefined}
-                                    variant="glass"
-                                    placeholder="Link Title (e.g. Portfolio)"
-                                    {...register(`custom_links.${index}.label` as const, { required: true })}
-                                />
-                            </div>
-                            <div className="flex-[2]">
-                                <AppInput
-                                    label={index === 0 ? "URL" : undefined}
-                                    variant="glass"
-                                    placeholder="https://"
-                                    leftIcon={<LinkIcon size={14} />}
-                                    {...register(`custom_links.${index}.url` as const, { required: true })}
-                                />
-                            </div>
+                    {/* Custom Links */}
+                    <CollapsibleSection
+                        title="Custom Links"
+                        description="Add extra links like Portfolio, Booking, etc."
+                        icon={<LinkIcon size={20} />}
+                        action={renderVisibilityToggle('custom_links', 'Custom Links')}
+                        defaultOpen={false}
+                    >
+                        <div className="space-y-4">
+                            {linkFields.map((field, index) => (
+                                <div key={field.id} className="flex gap-4 items-end">
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label={index === 0 ? "Label" : undefined}
+                                            variant="glass"
+                                            placeholder="Link Title (e.g. Portfolio)"
+                                            {...register(`custom_links.${index}.label` as const, { required: true })}
+                                        />
+                                    </div>
+                                    <div className="flex-[2]">
+                                        <AppInput
+                                            label={index === 0 ? "URL" : undefined}
+                                            variant="glass"
+                                            placeholder="https://"
+                                            leftIcon={<LinkIcon size={14} />}
+                                            {...register(`custom_links.${index}.url` as const, { required: true })}
+                                        />
+                                    </div>
+                                    <AppButton
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-error hover:bg-error/10 hover:text-error"
+                                        onClick={() => removeLink(index)}
+                                    >
+                                        <Trash2 size={18} />
+                                    </AppButton>
+                                </div>
+                            ))}
+
                             <AppButton
                                 type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="text-error hover:bg-error/10 hover:text-error"
-                                onClick={() => removeLink(index)}
+                                variant="outline"
+                                size="sm"
+                                leftIcon={<Plus size={16} />}
+                                onClick={() => appendLink({ label: '', url: '' })}
                             >
-                                <Trash2 size={18} />
+                                Add Link
                             </AppButton>
                         </div>
-                    ))}
+                    </CollapsibleSection>
 
-                    <AppButton
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<Plus size={16} />}
-                        onClick={() => appendLink({ label: '', url: '' })}
+                    {/* Public Profile Theme */}
+                    <CollapsibleSection
+                        title="Public Profile Theme"
+                        description="Customize the look and feel of your public profile page."
+                        icon={<Palette size={20} className="text-primary" />}
+                        defaultOpen={true}
                     >
-                        Add Link
-                    </AppButton>
-                </div>
-            </CollapsibleSection>
-
-            {/* Public Profile Theme */}
-            <CollapsibleSection
-                title="Public Profile Theme"
-                description="Customize the look and feel of your public profile page."
-                icon={<Palette size={20} className="text-primary" />}
-                defaultOpen={true}
-            >
-                <div className="space-y-6">
-                    {/* Theme Selector */}
-                    <div>
-                        <h4 className="text-sm font-medium text-text-primary mb-4">Choose a Theme</h4>
-                        <ThemeSelector
-                            selectedThemeId={selectedTheme?.theme_id}
-                            onSelect={handleThemeSelect}
-                        />
-                    </div>
-
-                    {/* Theme Customization - only show when theme is selected */}
-                    {selectedTheme && themeCustomization && (
-                        <div className="border-t border-border pt-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h4 className="text-sm font-medium text-text-primary">Customize Theme</h4>
-                                <UndoRedoControls
-                                    canUndo={themeUndoRedo.canUndo}
-                                    canRedo={themeUndoRedo.canRedo}
-                                    onUndo={themeUndoRedo.undo}
-                                    onRedo={themeUndoRedo.redo}
-                                    onReset={handleThemeReset}
-                                    undoCount={themeUndoRedo.undoCount}
-                                    redoCount={themeUndoRedo.redoCount}
-                                    isDirty={themeUndoRedo.isDirty}
-                                    isSavePending={themeUndoRedo.isSavePending}
-                                    lastSaveTime={themeUndoRedo.lastSaveTime}
-                                    compact
+                        <div className="space-y-6">
+                            {/* Theme Selector */}
+                            <div>
+                                <h4 className="text-sm font-medium text-text-primary mb-4">Choose a Theme</h4>
+                                <ThemeSelector
+                                    selectedThemeId={selectedTheme?.theme_id}
+                                    onSelect={handleThemeSelect}
                                 />
                             </div>
-                            <ThemeCustomization
-                                theme={selectedTheme}
-                                customization={themeCustomization}
-                                onChange={handleThemeCustomizationChange}
-                                onReset={handleThemeReset}
-                            />
+
+                            {/* Theme Customization - only show when theme is selected */}
+                            {selectedTheme && themeCustomization && (
+                                <div className="border-t border-border pt-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h4 className="text-sm font-medium text-text-primary">Customize Theme</h4>
+                                        <UndoRedoControls
+                                            canUndo={themeUndoRedo.canUndo}
+                                            canRedo={themeUndoRedo.canRedo}
+                                            onUndo={themeUndoRedo.undo}
+                                            onRedo={themeUndoRedo.redo}
+                                            onReset={handleThemeReset}
+                                            undoCount={themeUndoRedo.undoCount}
+                                            redoCount={themeUndoRedo.redoCount}
+                                            isDirty={themeUndoRedo.isDirty}
+                                            isSavePending={themeUndoRedo.isSavePending}
+                                            lastSaveTime={themeUndoRedo.lastSaveTime}
+                                            compact
+                                        />
+                                    </div>
+                                    <ThemeCustomization
+                                        theme={selectedTheme}
+                                        customization={themeCustomization}
+                                        onChange={handleThemeCustomizationChange}
+                                        onReset={handleThemeReset}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Gradient Color Picker */}
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowColorPicker(!showColorPicker)}
+                                    className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
+                                >
+                                    {showColorPicker ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                    Brand Accent Color
+                                </button>
+                                {showColorPicker && (
+                                    <div className="mt-3 border border-border rounded-xl p-4 bg-surface-hover/30">
+                                        <GradientColorPicker
+                                            value={watch('brand_color') || '#3B82F6'}
+                                            onChange={(val) => setValue('brand_color', val)}
+                                            label="Brand Color"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* No theme selected message */}
+                            {!selectedTheme && (
+                                <div className="text-center py-8 text-text-tertiary">
+                                    <Palette size={32} className="mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">Select a theme above to start customizing your public profile appearance.</p>
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </CollapsibleSection>
 
-                    {/* No theme selected message */}
-                    {!selectedTheme && (
-                        <div className="text-center py-8 text-text-tertiary">
-                            <Palette size={32} className="mx-auto mb-2 opacity-50" />
-                            <p className="text-sm">Select a theme above to start customizing your public profile appearance.</p>
-                        </div>
-                    )}
-                </div>
-            </CollapsibleSection>
-
-            {/* Save Confirmation Modal */}
-            <Modal
-                isOpen={showSaveConfirmation}
-                onClose={handleCancelSave}
-                size="sm"
-            >
-                <ModalHeader bordered={false}>
-                    <ModalTitle>Confirm Changes</ModalTitle>
-                </ModalHeader>
-                <ModalBody padding="md">
-                    <p className="text-text-secondary">
-                        Are you sure you want to save these changes to your company profile?
-                        This will update your public profile information.
-                    </p>
-                </ModalBody>
-                <ModalFooter bordered>
-                    <AppButton
-                        variant="secondary"
-                        onClick={handleCancelSave}
-                        disabled={isLoading}
+                    {/* Section Order (DnD) */}
+                    <CollapsibleSection
+                        title="Section Order"
+                        description="Drag to reorder sections on your public profile."
+                        icon={<Palette size={20} />}
+                        defaultOpen={false}
                     >
-                        Cancel
-                    </AppButton>
-                    <AppButton
-                        variant="primary"
-                        onClick={handleConfirmSave}
-                        isLoading={isLoading}
-                    >
-                        Save Changes
-                    </AppButton>
-                </ModalFooter>
-            </Modal>
+                        <DndSectionList />
+                    </CollapsibleSection>
 
-        </form >
+                    {/* Save Confirmation Modal */}
+                    <Modal
+                        isOpen={showSaveConfirmation}
+                        onClose={handleCancelSave}
+                        size="sm"
+                    >
+                        <ModalHeader bordered={false}>
+                            <ModalTitle>Confirm Changes</ModalTitle>
+                        </ModalHeader>
+                        <ModalBody padding="md">
+                            <p className="text-text-secondary">
+                                Are you sure you want to save these changes to your company profile?
+                                This will update your public profile information.
+                            </p>
+                        </ModalBody>
+                        <ModalFooter bordered>
+                            <AppButton
+                                variant="secondary"
+                                onClick={handleCancelSave}
+                                disabled={isLoading}
+                            >
+                                Cancel
+                            </AppButton>
+                            <AppButton
+                                variant="primary"
+                                onClick={handleConfirmSave}
+                                isLoading={isLoading}
+                            >
+                                Save Changes
+                            </AppButton>
+                        </ModalFooter>
+                    </Modal>
+
+                </form>
+            </div>
+
+            {/* Preview Panel (~40%) */}
+            <div className="w-full lg:w-[40%] lg:sticky lg:top-6 h-fit">
+                <DeviceFramePreview>
+                    <PublicProfileRenderer
+                        profileData={previewProfileData}
+                        profileType="company"
+                        themeId={selectedTheme?.theme_id}
+                        sectionOrder={editorState.sectionOrder}
+                    />
+                </DeviceFramePreview>
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Exported wrapper component with ProfileEditorProvider
+// ---------------------------------------------------------------------------
+
+export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfileChange }) => {
+    return (
+        <ProfileEditorProvider
+            initialProfile={{}}
+            profileType="company"
+            initialSectionOrder={['header', 'bio', 'contact', 'socials']}
+        >
+            <CompanyProfileFormInner onProfileChange={onProfileChange} />
+        </ProfileEditorProvider>
     );
 };
