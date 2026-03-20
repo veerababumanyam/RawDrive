@@ -199,6 +199,8 @@ class GalleryListItemResponse(BaseModel):
     last_accessed_at: Optional[str] = None
     cover_asset_id: Optional[str] = None
     cover_image_url: Optional[str] = None
+    view_count: int = Field(default=0, description="Total views from gallery_views aggregation")
+    download_count: int = Field(default=0, description="Total downloads from gallery_downloads aggregation")
 
 
 class GalleryListResponse(BaseModel):

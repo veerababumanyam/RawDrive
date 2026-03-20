@@ -99,6 +99,8 @@ export interface GalleryListItem {
   pinned_at?: string;
   is_pinned?: boolean;
   last_accessed_at?: string;
+  view_count?: number;
+  download_count?: number;
 }
 
 // Gallery List Response

@@ -82,11 +82,16 @@ async def list_galleries(
     sort: str = Query("created_at"),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None, description="Filter by created_at >= date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Filter by created_at <= date (YYYY-MM-DD)"),
+    client_id: Optional[str] = Query(None, description="Filter by client_id"),
+    tags: Optional[str] = Query(None, description="Comma-separated tags to filter by"),
 ):
     """
     List galleries for the authenticated workspace.
 
     Supports pagination, sorting, and filtering.
+    Sort options: created_at, title, status, shoot_date, views, downloads.
 
     Triggers background cache warming on first page load to preload
     the 5 most recent galleries for faster subsequent access.
@@ -99,6 +104,9 @@ async def list_galleries(
         cache_warming_service = get_cache_warming_service()
         await cache_warming_service.warm_workspace_cache_background(workspace_id)
 
+    # Parse tags from comma-separated string
+    tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+
     try:
         result = await gallery_service.list_galleries(
             workspace_id=workspace_id,
@@ -107,6 +115,10 @@ async def list_galleries(
             sort=sort,
             status=status,
             search=search,
+            date_from=date_from,
+            date_to=date_to,
+            client_id=client_id,
+            tags=tags_list,
         )
         return result
     except GalleryError as e:

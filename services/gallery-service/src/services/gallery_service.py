@@ -599,8 +599,12 @@ class GalleryService:
         sort: str = "created_at",
         status: Optional[str] = None,
         search: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        client_id: Optional[str] = None,
+        tags: Optional[list] = None,
     ) -> dict:
-        """List galleries for a workspace."""
+        """List galleries for a workspace with engagement stats."""
         with metrics.track_db_query("list_galleries"):
             async with get_connection() as conn:
                 offset = (page - 1) * limit
@@ -620,13 +624,38 @@ class GalleryService:
                     params.append(f"%{search}%")
                     param_idx += 1
 
+                if date_from:
+                    where_clauses.append(f"g.created_at >= ${param_idx}::date")
+                    params.append(date_from)
+                    param_idx += 1
+
+                if date_to:
+                    where_clauses.append(f"g.created_at <= (${param_idx}::date + interval '1 day')")
+                    params.append(date_to)
+                    param_idx += 1
+
+                if client_id:
+                    where_clauses.append(f"g.client_id = ${param_idx}")
+                    params.append(UUID(client_id))
+                    param_idx += 1
+
+                if tags:
+                    where_clauses.append(f"g.tags @> ${param_idx}::text[]")
+                    params.append(tags)
+                    param_idx += 1
+
                 where_sql = " AND ".join(where_clauses)
 
-                # Validate sort column (using g. prefix for galleries table)
+                # Validate sort column - support engagement ranking
                 valid_sorts = {"created_at", "title", "status", "shoot_date", "last_accessed_at"}
-                if sort not in valid_sorts:
+                engagement_sorts = {"views", "downloads"}
+                if sort in engagement_sorts:
+                    order_sql = f"ORDER BY {sort}_count DESC NULLS LAST"
+                elif sort in valid_sorts:
+                    order_sql = f"ORDER BY g.{sort} DESC" if sort == "created_at" else f"ORDER BY g.{sort} ASC"
+                else:
                     sort = "created_at"
-                order_sql = f"ORDER BY g.{sort} DESC" if sort == "created_at" else f"ORDER BY g.{sort} ASC"
+                    order_sql = f"ORDER BY g.{sort} DESC"
 
                 # Get total count (using same alias as main query)
                 total = await conn.fetchval(
@@ -634,7 +663,7 @@ class GalleryService:
                     *params,
                 )
 
-                # Get galleries with optimized photo counts (CTE instead of correlated subquery)
+                # Get galleries with optimized photo counts + view/download counts
                 galleries = await conn.fetch(
                     f"""
                     WITH gallery_counts AS (
@@ -646,13 +675,29 @@ class GalleryService:
                             AND a.deleted = FALSE
                             AND a.status = 'available'
                         GROUP BY ga.gallery_id
+                    ),
+                    view_counts AS (
+                        SELECT gallery_id, COUNT(*) as views_count
+                        FROM gallery_views
+                        WHERE workspace_id = $1
+                        GROUP BY gallery_id
+                    ),
+                    download_counts AS (
+                        SELECT gallery_id, COUNT(*) as downloads_count
+                        FROM gallery_downloads
+                        WHERE workspace_id = $1
+                        GROUP BY gallery_id
                     )
                     SELECT
                         g.gallery_id, g.title, g.description, g.client_name, g.client_id, g.shoot_date, g.status,
                         g.cover_asset_id, g.published_at, g.created_at, g.pinned_at, g.last_accessed_at,
-                        COALESCE(gc.photo_count, 0) as photo_count
+                        COALESCE(gc.photo_count, 0) as photo_count,
+                        COALESCE(vc.views_count, 0) as views_count,
+                        COALESCE(dc.downloads_count, 0) as downloads_count
                     FROM galleries g
                     LEFT JOIN gallery_counts gc ON g.gallery_id = gc.gallery_id
+                    LEFT JOIN view_counts vc ON g.gallery_id = vc.gallery_id
+                    LEFT JOIN download_counts dc ON g.gallery_id = dc.gallery_id
                     WHERE {where_sql}
                     {order_sql}
                     LIMIT ${param_idx} OFFSET ${param_idx + 1}
@@ -680,6 +725,8 @@ class GalleryService:
                     "last_accessed_at": g["last_accessed_at"].isoformat() if g["last_accessed_at"] else None,
                     "cover_asset_id": str(g["cover_asset_id"]) if g["cover_asset_id"] else None,
                     "cover_image_url": None,
+                    "view_count": g["views_count"] or 0,
+                    "download_count": g["downloads_count"] or 0,
                 }
                 for g in galleries
             ],

@@ -16,6 +16,9 @@ import {
   ChevronDown,
   Loader2,
   Image,
+  Eye,
+  Download as DownloadIcon,
+  Star,
 } from 'lucide-react';
 import { staggerContainer, staggerItem } from '../../components/landing/animations/presets';
 import { useAuth } from '../../contexts/AuthContext';
@@ -76,7 +79,7 @@ const GalleryListThumbnail: React.FC<GalleryListThumbnailProps> = ({ gallery, wo
    ============================================================================= */
 
 type ViewMode = 'grid' | 'list';
-type SortOption = 'created_at' | 'title' | 'status' | 'shoot_date';
+type SortOption = 'created_at' | 'title' | 'status' | 'shoot_date' | 'views' | 'downloads';
 type FilterStatus = 'all' | GalleryStatus;
 
 const GalleriesPage: React.FC = () => {
@@ -431,12 +434,39 @@ const GalleriesPage: React.FC = () => {
               <option value="title">Name</option>
               <option value="status">Status</option>
               <option value="shoot_date">Shoot Date</option>
+              <option value="views">Most Viewed</option>
+              <option value="downloads">Most Downloaded</option>
             </select>
             <ChevronDown
               size={16}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
             />
           </div>
+
+          {/* Most Popular Preset */}
+          <button
+            onClick={() => {
+              setSortBy('views');
+              setFilterStatus('published');
+              setSearchQuery('');
+              setStartDate('');
+              setEndDate('');
+            }}
+            className={`
+              flex items-center gap-1.5
+              px-3 py-2.5
+              glass-light border border-white/20 dark:border-white/10
+              rounded-xl text-sm font-medium
+              hover:border-white/30 hover:shadow-md
+              transition-all duration-200
+              min-h-[44px]
+              ${sortBy === 'views' && filterStatus === 'published' ? 'bg-gradient-to-r from-primary/10 to-accent/10 text-primary border-primary/30' : 'text-text-secondary hover:text-text-primary'}
+            `}
+            title="Show most popular published galleries"
+          >
+            <Star size={16} />
+            <span className="hidden sm:inline">Popular</span>
+          </button>
 
           {/* View Toggle - Enhanced with glass effect */}
           <div className="hidden sm:flex items-center glass-light border border-white/20 dark:border-white/10 rounded-xl overflow-hidden">
@@ -493,18 +523,36 @@ const GalleriesPage: React.FC = () => {
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
         >
           {(galleries ?? []).map((gallery) => (
-            <GalleryCard
-              key={gallery.gallery_id}
-              gallery={gallery}
-              onClick={() => handleGalleryClick(gallery.gallery_id)}
-              onEdit={() => handleGalleryEdit(gallery.gallery_id)}
-              onShare={() => handleGalleryShare(gallery.gallery_id)}
-              onDelete={() => handleDeleteClick(gallery)}
-              onTogglePin={handleTogglePin}
-              selectable={true}
-              isSelected={selectedGalleryIds.has(gallery.gallery_id)}
-              onSelect={handleGallerySelect}
-            />
+            <div key={gallery.gallery_id} className="space-y-1">
+              <GalleryCard
+                gallery={gallery}
+                onClick={() => handleGalleryClick(gallery.gallery_id)}
+                onEdit={() => handleGalleryEdit(gallery.gallery_id)}
+                onShare={() => handleGalleryShare(gallery.gallery_id)}
+                onDelete={() => handleDeleteClick(gallery)}
+                onTogglePin={handleTogglePin}
+                selectable={true}
+                isSelected={selectedGalleryIds.has(gallery.gallery_id)}
+                onSelect={handleGallerySelect}
+              />
+              {/* Engagement stats badges */}
+              {((gallery.view_count ?? 0) > 0 || (gallery.download_count ?? 0) > 0) && (
+                <div className="flex items-center gap-3 px-2 text-xs text-text-tertiary">
+                  {(gallery.view_count ?? 0) > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Eye size={12} />
+                      {gallery.view_count}
+                    </span>
+                  )}
+                  {(gallery.download_count ?? 0) > 0 && (
+                    <span className="flex items-center gap-1">
+                      <DownloadIcon size={12} />
+                      {gallery.download_count}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           ))}
         </motion.div>
       ) : (
@@ -523,6 +571,12 @@ const GalleriesPage: React.FC = () => {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
                   Status
+                </th>
+                <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Views
+                </th>
+                <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Downloads
                 </th>
                 <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
                   Date
@@ -570,6 +624,18 @@ const GalleriesPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <GalleryStatusBadge status={gallery.status} size="sm" />
+                    </td>
+                    <td className="hidden lg:table-cell px-4 py-3 text-sm text-text-secondary">
+                      <span className="flex items-center gap-1">
+                        <Eye size={14} className="text-text-tertiary" />
+                        {gallery.view_count ?? 0}
+                      </span>
+                    </td>
+                    <td className="hidden lg:table-cell px-4 py-3 text-sm text-text-secondary">
+                      <span className="flex items-center gap-1">
+                        <DownloadIcon size={14} className="text-text-tertiary" />
+                        {gallery.download_count ?? 0}
+                      </span>
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-sm text-text-tertiary">
                       {formatDate(gallery.shoot_date || gallery.created_at)}

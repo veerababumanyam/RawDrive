@@ -146,7 +146,7 @@ interface UseGalleryListOptions {
   workspaceId: string;
   page?: number;
   limit?: number;
-  sort?: 'created_at' | 'title' | 'status' | 'shoot_date' | 'last_accessed_at';
+  sort?: 'created_at' | 'title' | 'status' | 'shoot_date' | 'last_accessed_at' | 'views' | 'downloads';
   status?: 'draft' | 'published' | 'archived';
   search?: string;
   startDate?: string;
