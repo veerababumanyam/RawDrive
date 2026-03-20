@@ -120,7 +120,7 @@ Backend Python equivalents: `from app.shared.types import ...`
 
 ## Skills (auto-loaded by context)
 
-35 skills in `.claude/skills/`:
+36 skills in `.claude/skills/`:
 
 **Core Architecture:** `multi-tenant-security` | `fastapi-services` | `react-frontend` | `database-migrations` | `microservice-development` | `api-design`
 **Features:** `gallery-features` | `invitations` | `client-management` | `billing-payments` | `ai-ml-integration` | `storage-uploads` | `album-proofing` | `notification-system` | `webhook-development`
@@ -129,7 +129,7 @@ Backend Python equivalents: `from app.shared.types import ...`
 **Compliance & Onboarding:** `compliance-legal` | `onboarding-flow`
 **Quality & Ops:** `testing-patterns` | `performance-optimization` | `design-system` | `observability` | `traefik-infrastructure` | `git-workflow`
 **Workflow & Shipping:** `qa-testing` | `design-audit` | `pre-landing-review` | `ship-release` | `doc-sync` | `engineering-retro`
-**Cross-cutting:** `i18n-localization` | `shared-packages`
+**Cross-cutting:** `i18n-localization` | `shared-packages` | `lightbox-image-fitting`
 
 ## Hooks (auto-enforced guardrails)
 

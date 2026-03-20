@@ -91,7 +91,7 @@ function ThumbnailCell({
           focus:outline-none focus-visible:ring-2 focus-visible:ring-white
           ${isSelected
             ? 'ring-2 ring-white scale-100 opacity-100'
-            : 'ring-1 ring-white/20 scale-95 opacity-60 hover:opacity-80 hover:scale-100'
+            : 'opacity-80 hover:opacity-100'
           }
         `}
         aria-label={`View photo ${columnIndex + 1}: ${asset.asset.filename || `Photo ${columnIndex + 1}`}`}
@@ -183,7 +183,7 @@ export const LightboxFilmstrip: React.FC<LightboxFilmstripProps> = ({
   return (
     <div
       className={`
-        bg-black/80 backdrop-blur-sm border-t border-white/10
+        bg-transparent
         ${className}
       `}
       style={{ height: thumbnailHeight + 16 }}

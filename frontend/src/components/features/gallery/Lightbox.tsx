@@ -13,6 +13,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Heart, CheckSquare, Info, Trash2, Image, Film, Play, Pause, Columns } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useLightboxAutoHide } from '../../../hooks/lightbox/useLightboxAutoHide';
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import { AppButton } from '../../ui/AppButton';
@@ -191,6 +192,14 @@ export const Lightbox: React.FC<LightboxProps> = ({
       onSlideshowComplete?.();
     },
   });
+
+  // Auto-hide controls (Apple Photos-style)
+  const {
+    controlsVisible,
+    handleMouseMove: autoHideMouseMove,
+    handleControlsEnter,
+    handleControlsLeave,
+  } = useLightboxAutoHide({ isOpen });
 
   // Handle slideshow mode toggle
   const toggleSlideshow = useCallback(() => {
@@ -518,43 +527,58 @@ export const Lightbox: React.FC<LightboxProps> = ({
 
   const lightbox = (
     <div
-      className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] bg-black/98 backdrop-blur-[80px] saturate-[180%]"
+      style={{
+        backdropFilter: 'blur(80px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(80px) saturate(180%)',
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="lightbox-title"
       aria-describedby="lightbox-description"
+      onMouseMove={autoHideMouseMove}
     >
-      {/* Close Button */}
-      <AppButton
-        variant="ghost"
-        size="icon"
-        onClick={onClose}
-        className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white border-white/20"
-        aria-label="Close lightbox"
-      >
-        <X size={24} />
-      </AppButton>
+      {/* Auto-hiding controls wrapper — everything hides together (Apple Photos) */}
+      <div className={`lightbox-controls ${controlsVisible ? '' : 'hidden'}`}>
+        {/* Gradient scrims for guaranteed contrast on any photo */}
+        <div className="lightbox-scrim-top" />
+        <div className="lightbox-scrim-bottom" />
 
-      {/* Navigation Arrows - Hidden during slideshow */}
-      {!isSlideshowMode && canGoPrevious && (
+        {/* Close Button — centralized glass style */}
         <button
-          onClick={handlePrevious}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full border border-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Previous photo"
+          onClick={onClose}
+          className="lightbox-glass-btn btn-close absolute top-4 right-4 z-50"
+          aria-label="Close lightbox"
+          onMouseEnter={handleControlsEnter}
+          onMouseLeave={handleControlsLeave}
         >
-          <ChevronLeft size={24} />
+          <X size={24} />
         </button>
-      )}
 
-      {!isSlideshowMode && canGoNext && (
-        <button
-          onClick={handleNext}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full border border-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Next photo"
-        >
-          <ChevronRight size={24} />
-        </button>
-      )}
+        {/* Navigation Arrows — centralized glass style */}
+        {!isSlideshowMode && canGoPrevious && (
+          <div className="lightbox-nav-arrow prev">
+            <button
+              onClick={handlePrevious}
+              className="lightbox-glass-btn btn-lg"
+              aria-label="Previous photo"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          </div>
+        )}
+
+        {!isSlideshowMode && canGoNext && (
+          <div className="lightbox-nav-arrow next">
+            <button
+              onClick={handleNext}
+              className="lightbox-glass-btn btn-lg"
+              aria-label="Next photo"
+            >
+              <ChevronRight size={28} />
+            </button>
+          </div>
+        )}
 
       {/* Image Container - Hidden during slideshow (slideshow renders its own) */}
       {!isSlideshowMode && (
@@ -583,10 +607,11 @@ export const Lightbox: React.FC<LightboxProps> = ({
               transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px) rotate(${rotation}deg)`,
               transition: isPanning ? 'none' : 'transform 0.2s ease-out',
               position: 'relative',
-              width: 'auto',
-              height: 'auto',
-              maxWidth: '100%',
-              maxHeight: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              height: '100%',
             }}
           >
             {/* LightboxImage with LQIP blur-up effect */}
@@ -674,7 +699,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
         />
       )}
 
-      {/* Filmstrip Navigation */}
+      {/* Filmstrip Navigation — inside auto-hide wrapper */}
       {showFilmstrip && !isSlideshowMode && !isCompareMode && (
         <div className="absolute bottom-16 left-0 right-0 z-40">
           <LightboxFilmstrip
@@ -686,192 +711,63 @@ export const Lightbox: React.FC<LightboxProps> = ({
         </div>
       )}
 
-      {/* Controls Bar - Hidden during slideshow and compare modes */}
+      {/* Controls Bar — centralized glass buttons */}
       {!isSlideshowMode && !isCompareMode && (
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent p-4">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          {/* Left: Asset Info */}
-          <div className="flex items-center gap-4 text-white text-sm">
-            <span id="lightbox-title" className="font-medium">
-              {currentAsset.asset.filename || `Photo ${currentIndex + 1}`}
-            </span>
-            <span className="text-white/60">
-              {positionLabel}
-            </span>
-            {currentAsset.asset.width && currentAsset.asset.height && (
-              <span className="text-white/60">
-                {currentAsset.asset.width} × {currentAsset.asset.height}
-              </span>
-            )}
-          </div>
+      <div
+        className="lightbox-bottom-bar"
+        onMouseEnter={handleControlsEnter}
+        onMouseLeave={handleControlsLeave}
+      >
+        {/* Left: Asset Info */}
+        <div className="lightbox-info-text hidden md:flex items-center gap-3">
+          <span id="lightbox-title">{currentAsset.asset.filename || `Photo ${currentIndex + 1}`}</span>
+          <span className="secondary">{positionLabel}</span>
+          {currentAsset.asset.width && currentAsset.asset.height && (
+            <span className="secondary">{currentAsset.asset.width} × {currentAsset.asset.height}</span>
+          )}
+        </div>
 
-          {/* Center: Zoom Controls */}
-          <div className="flex items-center gap-2">
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={handleZoomOut}
-              disabled={zoom <= 0.5}
-              className="text-white hover:bg-white/20 border-white/20"
-              aria-label="Zoom out"
-            >
-              <ZoomOut size={20} />
-            </AppButton>
-            <span className="text-white text-sm min-w-[60px] text-center">{Math.round(zoom * 100)}%</span>
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={handleZoomIn}
-              disabled={zoom >= 5}
-              className="text-white hover:bg-white/20 border-white/20"
-              aria-label="Zoom in"
-            >
-              <ZoomIn size={20} />
-            </AppButton>
-            {zoom !== 1 && (
-              <AppButton
-                variant="ghost"
-                size="icon"
-                onClick={resetZoom}
-                className="text-white hover:bg-white/20 border-white/20 ml-2"
-                aria-label="Reset zoom"
-              >
-                Reset
-              </AppButton>
-            )}
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={() => rotate(90)}
-              className="text-white hover:bg-white/20 border-white/20"
-              aria-label="Rotate"
-            >
-              <RotateCw size={20} />
-            </AppButton>
-            {/* Filmstrip toggle */}
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowFilmstrip((prev) => !prev)}
-              className={`text-white hover:bg-white/20 border-white/20 ${showFilmstrip ? 'bg-white/20' : ''}`}
-              aria-label={showFilmstrip ? 'Hide filmstrip' : 'Show filmstrip'}
-            >
-              <Film size={20} />
-            </AppButton>
-            {/* Slideshow toggle */}
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={toggleSlideshow}
-              className={`text-white hover:bg-white/20 border-white/20 ${isSlideshowMode ? 'bg-primary/80 hover:bg-primary' : ''}`}
-              aria-label={isSlideshowMode ? 'Stop slideshow' : 'Start slideshow'}
-              title={isSlideshowMode ? 'Stop slideshow (S)' : 'Start slideshow (S)'}
-            >
-              {isSlideshowMode ? <Pause size={20} /> : <Play size={20} />}
-            </AppButton>
-            {/* Compare mode toggle */}
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={toggleCompareMode}
-              className={`text-white hover:bg-white/20 border-white/20 ${isCompareMode ? 'bg-primary/80 hover:bg-primary' : ''}`}
-              aria-label={isCompareMode ? 'Exit compare mode' : 'Enter compare mode'}
-              title={isCompareMode ? 'Exit compare mode (C)' : 'Compare images (C)'}
-              disabled={assets.length < 2}
-            >
-              <Columns size={20} />
-            </AppButton>
-          </div>
+        {/* Center: Zoom + Mode Controls */}
+        <div className="lightbox-btn-group">
+          <button onClick={handleZoomOut} disabled={zoom <= 0.5} className="lightbox-glass-btn" aria-label="Zoom out"><ZoomOut size={20} /></button>
+          <span className="text-white text-sm min-w-[50px] text-center select-none">{Math.round(zoom * 100)}%</span>
+          <button onClick={handleZoomIn} disabled={zoom >= 5} className="lightbox-glass-btn" aria-label="Zoom in"><ZoomIn size={20} /></button>
+          {zoom !== 1 && (
+            <button onClick={resetZoom} className="lightbox-glass-btn" aria-label="Reset zoom"><span className="text-white text-xs font-medium">1:1</span></button>
+          )}
+          <button onClick={() => rotate(90)} className="lightbox-glass-btn" aria-label="Rotate"><RotateCw size={20} /></button>
+          <button onClick={() => setShowFilmstrip((prev) => !prev)} className={`lightbox-glass-btn ${showFilmstrip ? 'active' : ''}`} aria-label={showFilmstrip ? 'Hide filmstrip' : 'Show filmstrip'}><Film size={20} /></button>
+          <button onClick={toggleSlideshow} className={`lightbox-glass-btn ${isSlideshowMode ? 'active' : ''}`} aria-label={isSlideshowMode ? 'Stop slideshow' : 'Start slideshow'}>{isSlideshowMode ? <Pause size={20} /> : <Play size={20} />}</button>
+          <button onClick={toggleCompareMode} className={`lightbox-glass-btn ${isCompareMode ? 'active' : ''}`} aria-label={isCompareMode ? 'Exit compare mode' : 'Enter compare mode'} disabled={assets.length < 2}><Columns size={20} /></button>
+        </div>
 
-          {/* Right: Actions - Enhanced with glassmorphism styles for consistency */}
-          <div className="flex items-center gap-2">
-            {onFavorite && (
-              <AppButton
-                variant="ghost"
-                size="icon"
-                onClick={() => onFavorite(currentAsset.asset_id, !isFavorite)}
-                className={`
-                  ${isFavorite 
-                    ? 'bg-error/90 text-white hover:bg-error shadow-lg shadow-error/30' 
-                    : 'text-white hover:bg-white/20 border-white/20'
-                  }
-                  transition-all duration-200
-                `}
-                aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
-              </AppButton>
-            )}
-            {onSelect && (
-              <AppButton
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  // Toggle selection - onSelect expects assetId, parent handles toggle logic
-                  onSelect(currentAsset.asset_id);
-                }}
-                className={`
-                  ${isSelected 
-                    ? 'bg-success/90 text-white hover:bg-success shadow-lg shadow-success/30' 
-                    : 'text-white hover:bg-white/20 border-white/20'
-                  }
-                  transition-all duration-200
-                `}
-                aria-label={isSelected ? 'Deselect' : 'Select'}
-              >
-                <CheckSquare size={20} fill={isSelected ? 'currentColor' : 'none'} />
-              </AppButton>
-            )}
-            <AppButton
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowMetadata((prev) => !prev)}
-              className={`${showMetadata ? 'bg-white/20' : ''} text-white hover:bg-white/20 border-white/20`}
-              aria-label="Toggle metadata"
-            >
-              <Info size={20} />
-            </AppButton>
-            {onSetCover && (
-              <AppButton
-                variant="ghost"
-                size="icon"
-                onClick={() => onSetCover(currentAsset.asset_id)}
-                className="text-white hover:bg-white/20 border-white/20"
-                aria-label="Set as Gallery Cover"
-                title="Set as Gallery Cover"
-              >
-                <Image size={20} />
-              </AppButton>
-            )}
-            {canDownload && onDownload && (
-              <AppButton
-                variant="ghost"
-                size="icon"
-                onClick={() => onDownload(currentAsset.asset_id)}
-                className="text-white hover:bg-white/20 border-white/20"
-                aria-label="Download"
-              >
-                <Download size={20} />
-              </AppButton>
-            )}
-            {onDelete && (
-              <AppButton
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  onClose();
-                  onDelete(currentAsset.asset_id);
-                }}
-                className="text-white hover:bg-error/20 hover:text-error border-white/20"
-                aria-label="Delete"
-              >
-                <Trash2 size={20} />
-              </AppButton>
-            )}
-          </div>
+        {/* Right: Actions */}
+        <div className="lightbox-btn-group">
+          {onFavorite && (
+            <button onClick={() => onFavorite(currentAsset.asset_id, !isFavorite)} className={`lightbox-glass-btn btn-favorite ${isFavorite ? 'active' : ''}`} aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={isFavorite}>
+              <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
+            </button>
+          )}
+          {onSelect && (
+            <button onClick={() => onSelect(currentAsset.asset_id)} className={`lightbox-glass-btn btn-select ${isSelected ? 'active' : ''}`} aria-label={isSelected ? 'Deselect' : 'Select'} aria-pressed={isSelected}>
+              <CheckSquare size={20} fill={isSelected ? 'currentColor' : 'none'} />
+            </button>
+          )}
+          <button onClick={() => setShowMetadata((prev) => !prev)} className={`lightbox-glass-btn ${showMetadata ? 'active' : ''}`} aria-label="Toggle metadata"><Info size={20} /></button>
+          {onSetCover && (
+            <button onClick={() => onSetCover(currentAsset.asset_id)} className="lightbox-glass-btn" aria-label="Set as Gallery Cover"><Image size={20} /></button>
+          )}
+          {canDownload && onDownload && (
+            <button onClick={() => onDownload(currentAsset.asset_id)} className="lightbox-glass-btn" aria-label="Download"><Download size={20} /></button>
+          )}
+          {onDelete && (
+            <button onClick={() => { onClose(); onDelete(currentAsset.asset_id); }} className="lightbox-glass-btn btn-delete" aria-label="Delete"><Trash2 size={20} /></button>
+          )}
         </div>
       </div>
       )}
+
+      </div>{/* End auto-hiding controls wrapper */}
 
       {/* Metadata Panel */}
       {

@@ -159,7 +159,7 @@ export const LightboxImage = forwardRef<LightboxImageRef, LightboxImageProps>(
     }
 
     return (
-      <div className={`relative overflow-hidden ${className}`}>
+      <>
         {/* LQIP Layer - Shows blurred placeholder while full image loads */}
         <AnimatePresence>
           {showLqip && lqip && (
@@ -172,8 +172,9 @@ export const LightboxImage = forwardRef<LightboxImageRef, LightboxImageProps>(
               initial="visible"
               animate={imageLoaded ? 'hidden' : 'visible'}
               exit="hidden"
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
+              className={`absolute inset-0 w-full h-full pointer-events-none select-none ${className}`}
               style={{
+                objectFit: 'contain',
                 // GPU acceleration for blur
                 willChange: 'opacity, filter',
               }}
@@ -181,7 +182,7 @@ export const LightboxImage = forwardRef<LightboxImageRef, LightboxImageProps>(
           )}
         </AnimatePresence>
 
-        {/* Main Image Layer */}
+        {/* Main Image Layer - Industry standard: absolute + object-fit */}
         <motion.img
           ref={imageRef}
           src={src}
@@ -191,8 +192,9 @@ export const LightboxImage = forwardRef<LightboxImageRef, LightboxImageProps>(
           animate={imageLoaded ? 'visible' : 'hidden'}
           onLoad={handleLoad}
           onError={handleError}
-          className="block w-full h-full object-contain select-none"
+          className={`absolute inset-0 w-full h-full select-none ${className}`}
           style={{
+            objectFit: 'contain',
             // Ensure smooth rendering
             imageRendering: 'auto',
             willChange: 'opacity',
@@ -202,11 +204,11 @@ export const LightboxImage = forwardRef<LightboxImageRef, LightboxImageProps>(
 
         {/* Loading indicator overlay - shows when waiting for full image */}
         {!imageLoaded && !showLqip && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
             <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           </div>
         )}
-      </div>
+      </>
     );
   }
 );

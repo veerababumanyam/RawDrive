@@ -825,7 +825,7 @@ export class GalleryService {
       throw new Error(response.error.message || 'Failed to load comments');
     }
     return response.data?.comments ?? [];
-  },
+  }
 
   /**
    * Add a comment to an asset in a public gallery (proofing)
@@ -845,7 +845,7 @@ export class GalleryService {
     if (response.error) {
       throw new Error(response.error.message || 'Failed to post comment');
     }
-  },
+  }
 
   /**
    * Get public gallery assets with optional filtering

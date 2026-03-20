@@ -1,34 +1,27 @@
 ---
 phase: 10-foundation-fixes
-verified: 2026-03-19T00:00:00Z
+verified: 2026-03-19T23:00:00Z
 status: gaps_found
-score: 8/10 must-haves verified
+score: 9/10 must-haves verified
+re_verification:
+  previous_status: gaps_found
+  previous_score: 8/10
+  gaps_closed:
+    - "UnifiedThemeEngine exports applyThemeToContainer and removeThemeFromContainer (FNDTN-03 fully closed)"
+  gaps_remaining:
+    - "Company R2 pipeline partially closed: service layer wired, API endpoint missing redirect branch"
+  regressions: []
 gaps:
   - truth: "Avatar uploaded on company profile is stored in R2 and displays correctly after page reload"
-    status: failed
-    reason: "company_profile_service.py has zero R2 integration. upload_logo() stores blobs in company_logo_images table with no R2 upload, no r2_key columns, and no R2 redirect on retrieval. Plan 10-01 Task 3 was not executed."
-    artifacts:
-      - path: "backend/src/app/services/company_profile_service.py"
-        issue: "No R2Client import, no upload_bytes call, no r2_key storage in upload_logo()"
-    missing:
-      - "R2Client.upload_bytes() call in upload_logo() with key format avatars/{workspace_id}/company/{profile_id}/{size}.webp"
-      - "r2_key column(s) in company_logo_images table (Alembic migration)"
-      - "R2 redirect in get_logo_image_by_slug() when r2_key exists, PG fallback when NULL"
-      - "Company-specific R2 tests in test_avatar_r2.py (currently zero company tests)"
-
-  - truth: "UnifiedThemeEngine.ts exports applyThemeToContainer and removeThemeFromContainer as specified"
     status: partial
-    reason: "UnifiedThemeEngine.ts exports applyThemeToRoot/removeThemeFromRoot instead of the plan-specified applyThemeToContainer/removeThemeFromContainer. Functional scoping IS correct — the element is passed and used — but the exported API names diverge from the plan contract. Phase 11 and 12 plans reference applyThemeToContainer and would break on import."
+    reason: "company_profile_service.py now has full R2 integration (upload_bytes, r2_key columns, get_public_url). However the API endpoint get_public_profile_logo() at company_profile.py lines 166-178 was not updated — it calls get_logo_image_by_slug() and passes the result directly to Response(content=image_data, ...) with len(image_data). When the service returns a redirect dict, this code path fails at runtime: len() on a dict does not return byte length, and no RedirectResponse is issued. The R2 presigned URL is never served to the browser."
     artifacts:
-      - path: "frontend/src/components/features/profile/shared/UnifiedThemeEngine.ts"
-        issue: "Exports applyThemeToRoot/removeThemeFromRoot instead of applyThemeToContainer/removeThemeFromContainer"
-      - path: "frontend/src/components/features/profile/shared/PublicProfileRenderer.tsx"
-        issue: "Imports applyThemeToRoot (consistent with engine but diverges from plan spec)"
+      - path: "backend/src/app/api/v1/company_profile.py"
+        issue: "get_public_profile_logo() at lines 166-183 treats service result as raw bytes only — no isinstance(result, dict) check, no RedirectResponse branch"
     missing:
-      - "Rename applyThemeToRoot -> applyThemeToContainer in UnifiedThemeEngine.ts"
-      - "Rename removeThemeFromRoot -> removeThemeFromContainer in UnifiedThemeEngine.ts"
-      - "Update PublicProfileRenderer.tsx import to use renamed exports"
-      - "Update UnifiedThemeEngine.test.ts to reference applyThemeToContainer"
+      - "Add redirect branch in get_public_profile_logo(): if isinstance(image_data, dict) and 'redirect_url' in image_data: return RedirectResponse(url=image_data['redirect_url'], status_code=302)"
+      - "Guard len(image_data) call to only execute on bytes path"
+      - "Add API-layer test covering the R2 redirect response (HTTP 302) from the endpoint"
 human_verification:
   - test: "Visit /u/:slug and /p/:slug in dev server after running pnpm dev"
     expected: "Both pages render header, bio, socials, contact sections with correct theme colors and avatar/initials"
@@ -36,17 +29,25 @@ human_verification:
   - test: "Upload a new avatar on personal profile editor, then reload the public page"
     expected: "New avatar displays immediately after reload (served from R2 presigned URL)"
     why_human: "Requires live R2 credentials and real file upload flow"
-  - test: "Check company logo display on /p/:slug for a company with an existing logo"
-    expected: "Logo renders correctly (from PG blob path — R2 pipeline is missing for company)"
-    why_human: "Requires live data; also confirms PG blob fallback works for company profiles"
+  - test: "Check company logo display on /p/:slug for a company with an existing logo (once API endpoint is fixed)"
+    expected: "Logo renders correctly — R2 presigned URL redirect (302) for logos uploaded after migration, PG blob for legacy logos"
+    why_human: "Requires live data and a real HTTP client to follow the redirect"
 ---
 
-# Phase 10: Foundation Fixes Verification Report
+# Phase 10: Foundation Fixes Verification Report (Re-Verification)
 
 **Phase Goal:** Broken profile functionality works reliably and shared infrastructure is ready for visual redesign
 **Verified:** 2026-03-19
 **Status:** gaps_found
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap closure plan 10-04
+
+## Re-Verification Summary
+
+Previous score: 8/10 (2 gaps). Plan 10-04 addressed both gaps.
+
+- **Gap 2 (FNDTN-03 theme export naming): CLOSED.** UnifiedThemeEngine.ts now exports `applyThemeToContainer` and `removeThemeFromContainer` as primary functions. Deprecated aliases `applyThemeToRoot`/`removeThemeFromRoot` remain for backward compat but no active consumer uses them. All test files and PublicProfileRenderer.tsx reference the new names.
+
+- **Gap 1 (FNDTN-01 company R2 pipeline): PARTIALLY CLOSED.** The service layer is now fully wired — R2Client imported, `upload_bytes` called for all 4 sizes, `r2_key` columns persisted in the INSERT, `get_public_url` called in both `get_logo_image()` and `get_logo_image_by_slug()`. However, the API endpoint `get_public_profile_logo()` was not updated and still treats the service return value as raw bytes, bypassing the R2 redirect entirely at the HTTP boundary.
 
 ## Goal Achievement
 
@@ -54,72 +55,64 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Personal profile avatar stored in R2 and displays after page reload | VERIFIED | personal_profile_service.py line 495-496: key = f"avatars/{workspace_id}/{profile_id}/{size}.webp" + r2_client.upload_bytes(). r2_key_64 persisted (line 523). RedirectResponse on retrieval. |
-| 2 | Company profile avatar stored in R2 and displays after page reload | FAILED | company_profile_service.py: no R2Client import, no upload_bytes, no r2_key columns, no redirect. upload_logo() writes blobs only to company_logo_images. |
-| 3 | Avatar failure shows initials, never broken image icon | VERIFIED | AvatarDisplay.tsx: useState(imgError), onError={() => setImgError(true)}, .split(' ').map(w => w[0]) initials. 7 tests covering all cases. |
-| 4 | Legacy PG avatars still serve (lazy migration) | VERIFIED | personal_profile_service.py: R2 redirect when r2_key exists, PG blob fallback when NULL. Covered by test_avatar_r2.py. |
-| 5 | Theme CSS custom properties applied to scoped container div | VERIFIED | PublicProfileRenderer.tsx calls applyThemeToRoot(tokens, wrapperRef.current) — element passed, so scoped to wrapper div (not document.documentElement). |
-| 6 | Legacy theme IDs resolve to nearest PREBUILT | VERIFIED | LEGACY_TO_PREBUILT_MAP: minimal->theme-clean-slate, dark->theme-midnight-noir, pastel->theme-lavender-haze, bold->theme-vivid-impact, cinematic->theme-golden-hour |
-| 7 | Both /u/:slug and /p/:slug use PublicProfileRenderer | VERIFIED | PublicPersonalProfilePage imports PublicProfileRenderer with profileType="personal". PublicProfilePage imports with profileType="company". |
-| 8 | Section registry filters sections by profile type and data availability | VERIFIED | SectionRegistry.ts exports getSectionsForProfile() filtering by supportedTypes + requiredData, sorted by order. |
-| 9 | UnifiedThemeEngine exports use plan-specified names (applyThemeToContainer) | PARTIAL | Engine exists and scoping works. But exports applyThemeToRoot/removeThemeFromRoot — not the plan-specified applyThemeToContainer/removeThemeFromContainer. |
-| 10 | Smoke tests verify both profile pages, avatars, and themes | VERIFIED | profile-pages.test.tsx: 7 tests across 3 describe blocks (Personal Profile, Company Profile, Theme Application). console.error spy included. |
+| 1 | Personal profile avatar stored in R2 and displays after page reload | VERIFIED | personal_profile_service.py: upload_bytes with key avatars/{workspace_id}/{profile_id}/{size}.webp, r2_key_64 persisted, RedirectResponse on retrieval. Unchanged from initial verification. |
+| 2 | Company profile avatar stored in R2 and displays after page reload | PARTIAL | Service layer: R2Client imported (line 24), upload_bytes called (line 301), r2_key columns in INSERT (lines 315-342), get_public_url called (lines 411, 457). API endpoint company_profile.py lines 166-178: no redirect branch — passes dict result directly to Response(content=image_data). R2 redirect never reaches browser. |
+| 3 | Avatar failure shows initials, never broken image icon | VERIFIED | AvatarDisplay.tsx: useState(imgError), onError={() => setImgError(true)}, initials fallback. 7 tests. Unchanged. |
+| 4 | Legacy PG avatars still serve (lazy migration) | VERIFIED | personal_profile_service.py: R2 redirect when r2_key exists, PG blob fallback when NULL. Company service: same dual-path in get_logo_image_by_slug(). |
+| 5 | Theme CSS custom properties applied to scoped container div | VERIFIED | PublicProfileRenderer.tsx line 60: applyThemeToContainer(tokens, el) — element is wrapperRef.current. Scoped to wrapper div. |
+| 6 | Legacy theme IDs resolve to nearest PREBUILT | VERIFIED | LEGACY_TO_PREBUILT_MAP: minimal->theme-clean-slate, dark->theme-midnight-noir, pastel->theme-lavender-haze, bold->theme-vivid-impact, cinematic->theme-golden-hour. Unchanged. |
+| 7 | Both /u/:slug and /p/:slug use PublicProfileRenderer | VERIFIED | Unchanged from initial verification. |
+| 8 | Section registry filters sections by profile type and data availability | VERIFIED | Unchanged from initial verification. |
+| 9 | UnifiedThemeEngine exports applyThemeToContainer and removeThemeFromContainer as specified | VERIFIED | Line 167: export function applyThemeToContainer. Line 178: export function removeThemeFromContainer. Lines 186/188: deprecated aliases for old names. PublicProfileRenderer.tsx line 10 imports new names. UnifiedThemeEngine.test.ts imports and calls new names. Zero non-deprecated consumers of old names. |
+| 10 | Smoke tests verify both profile pages, avatars, and themes | VERIFIED | profile-pages.test.tsx: 7 tests. Unchanged. |
 
-**Score:** 8/10 truths verified
+**Score:** 9/10 truths verified (+1 from previous 8/10)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `backend/src/app/services/r2_storage.py` | R2Client with upload_bytes + get_public_url | VERIFIED | class R2Client, boto3.client("s3", region_name="auto"), async upload_bytes via run_in_executor, presigned URL generation |
-| `backend/migrations/versions/0197_add_avatar_r2_keys.py` | Adds r2_key columns to personal_profile_avatars | VERIFIED | r2_key_64, r2_key_128, r2_key_256, r2_key_512 as VARCHAR(512) nullable. Downgrade drops them. |
-| `frontend/src/components/features/profile/shared/AvatarDisplay.tsx` | Avatar with initials fallback, exported | VERIFIED | export function AvatarDisplay, useState(imgError), onError, .split(' ').map() initials, size sm/md/lg |
-| `backend/tests/services/test_avatar_r2.py` | R2 tests for personal AND company | PARTIAL | 4 personal R2 tests. Zero company-specific tests. |
-| `frontend/src/components/features/profile/shared/UnifiedThemeEngine.ts` | resolveThemeTokens, applyThemeToContainer, LEGACY_TO_PREBUILT_MAP | PARTIAL | All functions exist and work correctly. Exports applyThemeToRoot/removeThemeFromRoot instead of applyThemeToContainer/removeThemeFromContainer. |
-| `frontend/src/components/features/profile/shared/SectionRegistry.ts` | getSectionsForProfile, ProfileType, SectionRegistryEntry | VERIFIED | All three exported. SECTION_REGISTRY with 4 sections. Filters + sorts correctly. |
-| `frontend/src/components/features/profile/shared/PublicProfileRenderer.tsx` | Shared renderer, both types, scoped theme | VERIFIED | Imports from both UnifiedThemeEngine + SectionRegistry. useRef scoped container. prefers-color-scheme. removeThemeFromRoot on unmount. |
-| `frontend/src/pages/public/PublicPersonalProfilePage.tsx` | Uses PublicProfileRenderer profileType=personal | VERIFIED | Line 15 import, line 119-121 render with profileType="personal" |
-| `frontend/src/pages/public/PublicProfilePage.tsx` | Uses PublicProfileRenderer profileType=company | VERIFIED | Line 15 import, line 90-92 render with profileType="company" |
-| `frontend/src/tests/smoke/profile-pages.test.tsx` | Smoke tests, 5+ cases, console.error spy | VERIFIED | 7 test cases, profile-smoke tag, vi.spyOn(console, 'error') |
-| `frontend/src/components/features/profile/ProfileThemeEngine.ts` | Deleted or re-export stub | VERIFIED | Re-export stub delegating resolveThemeId, resolveThemeTokens, LEGACY_TO_PREBUILT_MAP to UnifiedThemeEngine |
+| `backend/migrations/versions/0199_add_company_logo_r2_keys.py` | r2_key columns on company_logo_images | VERIFIED | Adds r2_key_64/128/256/512 as nullable VARCHAR(512). Downgrade drops them. Revision 0199, down_revision 0198. |
+| `backend/src/app/services/company_profile_service.py` | R2 upload in upload_logo, R2 redirect in get_logo_image_by_slug | VERIFIED (service layer only) | R2Client import line 24, upload_bytes line 301, r2_key columns in INSERT lines 315-342, get_public_url lines 411/457. API endpoint not updated — see gap. |
+| `backend/src/app/api/v1/company_profile.py` | Handle redirect dict from service | STUB | Lines 166-178: calls get_logo_image_by_slug() and passes result to Response(content=image_data) with len(image_data) — no isinstance check, no RedirectResponse branch. |
+| `backend/tests/services/test_avatar_r2.py` | R2 tests for personal AND company | VERIFIED | TestCompanyLogoR2 class with 5 tests: upload correct keys, saves r2_keys in SQL, returns R2 redirect, falls back to PG when no r2_key, survives R2 failure. 11 total tests in file. |
+| `frontend/src/components/features/profile/shared/UnifiedThemeEngine.ts` | applyThemeToContainer, removeThemeFromContainer as primary exports | VERIFIED | Primary functions at lines 167/178. Deprecated aliases at 186/188. No breaking changes to existing consumers. |
+| `frontend/src/components/features/profile/shared/PublicProfileRenderer.tsx` | Imports applyThemeToContainer/removeThemeFromContainer | VERIFIED | Line 10: import { resolveThemeTokens, applyThemeToContainer, removeThemeFromContainer }. Lines 60/65 call new names. |
+| `frontend/src/components/features/profile/shared/__tests__/UnifiedThemeEngine.test.ts` | References new export names | VERIFIED | Lines 5/6 import new names. Lines 92/101/117/125 use new names in describe blocks and calls. |
+| `frontend/src/components/features/profile/shared/__tests__/PublicProfileRenderer.test.tsx` | Mock keys use new names | VERIFIED | Lines 39/40: mock keys applyThemeToContainer/removeThemeFromContainer. Internal mock variable names (mockApplyThemeToRoot etc.) are implementation detail only — no external impact. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| personal_profile_service.py | r2_storage.py | r2_client.upload_bytes() in upload_avatar | WIRED | Lines 495-496: upload with key avatars/{workspace_id}/{profile_id}/{size}.webp |
-| personal_profile_service.py | personal_profile_repository.py | save_avatar_images with r2_key params | WIRED | Line 523: r2_key_64=r2_keys.get(64) |
-| company_profile_service.py | r2_storage.py | R2Client.upload_bytes() in upload_logo | NOT WIRED | No R2Client usage anywhere in company_profile_service.py |
-| AvatarDisplay.tsx | initials render | onError sets imgError -> conditional render | WIRED | onError={() => setImgError(true)}, renders initials div when avatarUrl missing or imgError |
-| PublicProfileRenderer.tsx | UnifiedThemeEngine.ts | resolveThemeTokens + applyThemeToRoot(tokens, el) | WIRED | Calls applyThemeToRoot(tokens, wrapperRef.current) — scoped to wrapper div |
-| PublicProfileRenderer.tsx | SectionRegistry.ts | getSectionsForProfile | WIRED | Line 72: getSectionsForProfile(profileType, normalizedData) in useMemo |
-| UnifiedThemeEngine.ts | constants/themes.ts | getThemeById / getDefaultTheme | WIRED | Imports both; uses getThemeById with getDefaultTheme() fallback |
-| PublicPersonalProfilePage.tsx | PublicProfileRenderer.tsx | import + render profileType='personal' | WIRED | Import line 15, render lines 119-121 |
-| PublicProfilePage.tsx | PublicProfileRenderer.tsx | import + render profileType='company' | WIRED | Import line 15, render lines 90-92 |
+| company_profile_service.py | r2_storage.py | R2Client().upload_bytes() in upload_logo() | WIRED | Line 24 import, line 298 instantiation, line 301 upload_bytes call |
+| company_profile_service.py | r2_storage.py | R2Client().get_public_url() in get_logo_image_by_slug() | WIRED | Lines 410-412: r2_client = R2Client(), redirect_url = r2_client.get_public_url(r2_key) |
+| company_profile.py API | company_profile_service.py | get_logo_image_by_slug() result handled as redirect or bytes | NOT WIRED | Lines 166-178: result assigned to image_data, passed directly to Response(content=image_data) — no dict check, no RedirectResponse. R2 path never reached at HTTP layer. |
+| PublicProfileRenderer.tsx | UnifiedThemeEngine.ts | import applyThemeToContainer | WIRED | Line 10 import, line 60 call |
+| UnifiedThemeEngine.ts stale names | (any consumer) | applyThemeToRoot / removeThemeFromRoot | DEPRECATED ONLY | Only exist as @deprecated aliases on lines 186/188. Zero active imports of old names anywhere in frontend/src/ outside of the deprecated lines themselves. |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|------------|-------------|--------|----------|
-| FNDTN-01 | 10-01 | Avatar upload displays correctly on both personal and company profiles with R2 storage pipeline | BLOCKED | Personal R2 pipeline: complete. Company R2 pipeline: entirely absent. |
-| FNDTN-02 | 10-01 | Avatar has proper fallback (initials/placeholder) when image fails to load | SATISFIED | AvatarDisplay.tsx with onError->initials, 7 passing test cases |
-| FNDTN-03 | 10-02 | Theme engine consolidated into single UnifiedThemeEngine with CSS custom properties (legacy themes deleted) | PARTIAL | Engine functional. Export names differ from spec. Legacy files kept as re-export stubs (not deleted). |
-| FNDTN-04 | 10-02 | Personal and company profiles share a unified PublicProfileRenderer component | SATISFIED | Both pages import and render PublicProfileRenderer. SectionRegistry handles both profile types. |
-| FNDTN-05 | 10-03 | Smoke tests verify both profile pages load, avatar displays, and themes render correctly | SATISFIED | profile-pages.test.tsx with 7 tests, covers personal, company, and theme scenarios |
+| FNDTN-01 | 10-01, 10-04 | Avatar upload displays correctly on both personal and company profiles with R2 storage pipeline | PARTIAL | Personal: complete. Company: service layer complete, API endpoint missing RedirectResponse branch — R2 presigned URL never served to browser. |
+| FNDTN-02 | 10-01 | Avatar has proper fallback (initials/placeholder) when image fails to load | SATISFIED | AvatarDisplay.tsx with onError->initials, 7 passing tests. Unchanged. |
+| FNDTN-03 | 10-02, 10-04 | Theme engine consolidated into single UnifiedThemeEngine with CSS custom properties | SATISFIED | applyThemeToContainer/removeThemeFromContainer are primary exports. Deprecated aliases for old names. All consumers updated. |
+| FNDTN-04 | 10-02 | Personal and company profiles share a unified PublicProfileRenderer component | SATISFIED | Unchanged from initial verification. |
+| FNDTN-05 | 10-03 | Smoke tests verify both profile pages load, avatar displays, and themes render correctly | SATISFIED | Unchanged from initial verification. |
 
 ### Anti-Patterns Found
 
-| File | Pattern | Severity | Impact |
-|------|---------|----------|--------|
-| `backend/src/app/services/company_profile_service.py` | upload_logo() stores PG blobs only, no R2 upload | Blocker | Company avatars not on R2; FNDTN-01 goal only half-achieved |
-| `frontend/src/components/features/profile/shared/UnifiedThemeEngine.ts` | Exports applyThemeToRoot instead of applyThemeToContainer | Warning | API name diverges from plan spec; Phase 11/12 code referencing applyThemeToContainer will fail to import |
+| File | Line | Pattern | Severity | Impact |
+|------|------|---------|----------|--------|
+| `backend/src/app/api/v1/company_profile.py` | 166-178 | get_public_profile_logo() passes service result directly to Response(content=image_data) with no redirect branch | Blocker | When service returns dict with redirect_url, Response(content=dict) produces a runtime error or incorrect response. R2 presigned URL is never issued to browser. Company logo always falls back to PG blob path or fails. |
 
 ### Human Verification Required
 
 #### 1. Visual Profile Page Rendering
 
 **Test:** Run `cd frontend && pnpm dev`, then visit `/u/:slug` (personal) and `/p/:slug` (company)
-**Expected:** Both pages render with profile sections (header, bio, socials, contact), correct theme colors applied to the scoped container, avatar or initials displayed
+**Expected:** Both pages render with profile sections (header, bio, socials, contact), correct theme colors applied to scoped container, avatar or initials displayed
 **Why human:** Section layout, theme visual correctness, and avatar rendering cannot be verified programmatically
 
 #### 2. Personal Avatar Upload Round-Trip
@@ -128,29 +121,29 @@ human_verification:
 **Expected:** New avatar displays after upload without requiring a manual cache clear; falls back to initials if R2 fetch fails
 **Why human:** Requires live R2 credentials and real file upload/redirect flow
 
-#### 3. Company Logo Display (PG Blob Path)
+#### 3. Company Logo Display (after API fix)
 
-**Test:** Visit `/p/:slug` for a company that has a logo already uploaded
-**Expected:** Logo displays correctly from the PG blob path (R2 pipeline absent — this confirms the fallback still works)
-**Why human:** Requires live data; confirms the existing PG path is intact even though R2 was not implemented
+**Test:** Once the API endpoint redirect branch is added, visit `/p/:slug` for a company with a logo uploaded after migration 0199
+**Expected:** HTTP 302 redirect to R2 presigned URL, browser follows redirect and displays logo; for legacy logos (r2_key NULL), PG blob is served as image/webp bytes
+**Why human:** Requires live data and real HTTP client to follow the redirect
 
----
+### Gaps Summary
 
-## Gaps Summary
+One gap remains after plan 10-04.
 
-Two gaps prevent full goal achievement:
+**Gap — company_profile.py API endpoint missing R2 redirect branch (blocks full FNDTN-01)**
 
-**Gap 1 — Company R2 pipeline entirely missing (blocks FNDTN-01)**
+Plan 10-04 Task 1 specified modifying `company_profile.py` `get_public_profile_logo()` to handle the dict/bytes dual return from the service. The task description included the exact code pattern to add. However the file was not updated. Lines 166-178 of `company_profile.py` still call `get_logo_image_by_slug()` and pass the result directly to `Response(content=image_data)` with `len(image_data)` — both of which assume raw bytes. At runtime when the service returns `{"redirect_url": "https://..."}`, this will either raise a `TypeError` or produce a corrupted response.
 
-Plan 10-01 Task 3 specified implementing the same R2 avatar pipeline for company profiles. Nothing from that task was executed. `company_profile_service.py` stores logos as PostgreSQL blobs in `company_logo_images` with no R2 upload step, no r2_key columns in the table, and no R2 redirect on retrieval. The test file contains four personal-profile R2 tests but zero company-specific tests.
+The fix is a single branch insert (8 lines):
+```python
+if isinstance(image_data, dict) and "redirect_url" in image_data:
+    from starlette.responses import RedirectResponse
+    return RedirectResponse(url=image_data["redirect_url"], status_code=302)
+```
+placed before the `Response(content=image_data, ...)` call.
 
-To close this gap: add a migration adding a r2_key column to `company_logo_images`, modify `upload_logo()` to call `R2Client.upload_bytes()` with key format `avatars/{workspace_id}/company/{profile_id}/{size}.webp`, modify `get_logo_image_by_slug()` to redirect to R2 when r2_key exists (PG fallback when NULL), and add at least two company-specific tests to `test_avatar_r2.py`.
-
-**Gap 2 — UnifiedThemeEngine export naming diverges from plan contract (partial FNDTN-03)**
-
-The plan's must_haves artifacts list specifies exports `applyThemeToContainer` and `removeThemeFromContainer`. The implementation exports `applyThemeToRoot` and `removeThemeFromRoot`. Functional scoping behavior is correct — `wrapperRef.current` is passed as the element. However the API naming matters because Phase 11 and 12 plans reference `applyThemeToContainer` by name in their interfaces blocks. This is a small rename-only fix: rename in `UnifiedThemeEngine.ts`, update the import in `PublicProfileRenderer.tsx`, update references in `UnifiedThemeEngine.test.ts`.
-
-These two gaps are independent and can be addressed in a single gap-closure plan for Phase 10.
+The service layer and migration are complete. This is the only remaining blocker for FNDTN-01.
 
 ---
 

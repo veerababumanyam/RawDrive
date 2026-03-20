@@ -641,9 +641,7 @@ class R2StorageService:
 
         # Ensure filename has .enc extension for encrypted files
         if not filename.endswith(".enc"):
-            # Add .enc extension
-            base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
-            filename = f"{base_name}.enc"
+            filename = f"{filename}.enc"
 
         if gallery_id:
              return f"workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/{filename}"

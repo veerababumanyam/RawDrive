@@ -1,8 +1,15 @@
 /**
  * GalleryActionBar Component
- * Modern action bar with color-coded buttons using centralized CSS classes
+ * iOS-quality liquid glassmorphic action bar with tier-based button hierarchy
+ * Premium glass effects with spring animations and 50-80px blur
  * WCAG 2.1 AA compliant - accessible colors and focus states
- * Light/Dark mode support via CSS custom properties
+ * Full light/dark mode parity with Apple-tier visual quality
+ *
+ * Button Hierarchy:
+ * - Tier 1 (Upload): Solid vibrant orange with glow - always visible text
+ * - Tier 2 (Share, Delete): Glass with semantic colors - medium priority
+ * - Tier 3 (Settings): Subtle neutral glass - configuration
+ * - Tier 4 (Preview, FaceID, AI, Culling, Cover, XMP): Compact contextual glass
  */
 
 import React from 'react';
@@ -72,14 +79,14 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
     <div className={`gallery-action-bar ${className}`}>
       {/* Action buttons row - responsive flex wrap with mobile-first design */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
-        {/* Primary Actions Group - Left */}
+        {/* Contextual Actions Group - TIER 4 (Compact glass, icon-first) */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-          {/* Preview - Cyan */}
+          {/* Preview - TIER 4 CONTEXTUAL */}
           {onViewAsClient && (
             <ActionBarTooltip content="View gallery as your clients see it - test magic links, permissions, and viewing experience">
               <button
                 onClick={onViewAsClient}
-                className="btn-gallery-action btn-action-cyan min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-contextual"
                 aria-label="Preview gallery as client"
               >
                 <Eye size={16} className="flex-shrink-0" />
@@ -88,12 +95,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* FaceID - Purple (AI) */}
+          {/* FaceID - TIER 4 CONTEXTUAL */}
           {onFindPeople && (
             <ActionBarTooltip content="Search and organize photos by facial recognition - automatically group photos by person">
               <button
                 onClick={onFindPeople}
-                className="btn-gallery-action btn-action-purple min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-contextual"
                 aria-label="Find people with facial recognition"
               >
                 <Users size={16} className="flex-shrink-0" />
@@ -102,13 +109,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* AI Tools - Purple (AI) - Opens AI Tools Hub */}
+          {/* AI Tools - TIER 4 CONTEXTUAL (highlighted when open) */}
           {onAITools && (
             <ActionBarTooltip content="Access AI-powered features: Smart Curate, AI Story, Quality Check, and more">
               <button
                 onClick={onAITools}
-                className={`btn-gallery-action min-h-[36px] sm:min-h-[40px] ${aiToolsOpen ? 'btn-action-primary' : 'btn-action-purple'
-                  }`}
+                className={`btn-ios ${aiToolsOpen ? 'btn-ios-contextual ring-2 ring-purple-400/50 ring-offset-2' : 'btn-ios-contextual'}`}
                 aria-label="AI Tools"
                 aria-pressed={aiToolsOpen}
               >
@@ -118,12 +124,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* Culling - Amber (Workflow) - Navigate to culling workflow */}
+          {/* Culling - TIER 4 CONTEXTUAL */}
           {onCulling && (
             <ActionBarTooltip content="Bulk photo culling workflow - select best shots, auto-reject low quality, preview final gallery">
               <button
                 onClick={onCulling}
-                className="btn-gallery-action btn-action-amber min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-contextual"
                 aria-label="Culling workflow"
               >
                 <Scissors size={16} className="flex-shrink-0" />
@@ -138,12 +144,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
 
         {/* Secondary Actions Group - Right */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-          {/* Share - Blue */}
+          {/* Share - TIER 2 HIGH PRIORITY (Emerald glass with tint) */}
           {onShare && (
             <ActionBarTooltip content="Create share links with custom permissions - send to clients via email, SMS, or social media">
               <button
                 onClick={onShare}
-                className="btn-gallery-action btn-action-blue min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-share"
                 aria-label="Share gallery"
               >
                 <Share2 size={16} className="flex-shrink-0" />
@@ -152,12 +158,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* Cover - Green */}
+          {/* Cover/Design Studio - TIER 4 CONTEXTUAL */}
           {onDesignStudio && (
             <ActionBarTooltip content="Customize gallery cover, theme, typography, and visual identity">
               <button
                 onClick={onDesignStudio}
-                className="btn-gallery-action btn-action-green min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-contextual"
                 aria-label="Customize gallery cover design"
               >
                 <Palette size={16} className="flex-shrink-0" />
@@ -166,27 +172,27 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* Upload - Orange */}
+          {/* Upload - TIER 1 PRIMARY (Orange glass with glow) */}
           {onUpload && (
             <ActionBarTooltip content="Add photos and videos to this gallery - supports bulk upload and drag-and-drop">
               <button
                 onClick={onUpload}
-                className={`btn-gallery-action min-h-[36px] sm:min-h-[40px] ${uploadOpen ? 'btn-action-primary' : 'btn-action-orange'}`}
+                className={`btn-ios btn-ios-primary ${uploadOpen ? 'ring-2 ring-orange-400/50 ring-offset-2' : ''}`}
                 aria-label="Upload photos"
                 aria-pressed={uploadOpen}
               >
-                <Upload size={16} className="flex-shrink-0" />
-                <span className="hidden sm:inline">Upload</span>
+                <Upload size={18} className="flex-shrink-0" />
+                <span>Upload</span>
               </button>
             </ActionBarTooltip>
           )}
 
-          {/* XMP Export - Teal */}
+          {/* XMP Export - TIER 4 CONTEXTUAL */}
           {onXmpExport && (
             <ActionBarTooltip content="Export XMP sidecar files for Lightroom/Adobe compatibility - sync ratings, flags, and labels">
               <button
                 onClick={onXmpExport}
-                className="btn-gallery-action btn-action-teal min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-contextual"
                 aria-label="Export XMP files"
               >
                 <FileText size={16} className="flex-shrink-0" />
@@ -195,12 +201,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* XMP Import - Teal variant */}
+          {/* XMP Import - TIER 4 CONTEXTUAL */}
           {onXmpImport && (
             <ActionBarTooltip content="Import XMP sidecar files from Lightroom/Adobe - apply ratings, flags, and labels from external edits">
               <button
                 onClick={onXmpImport}
-                className="btn-gallery-action btn-action-teal min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-contextual"
                 aria-label="Import XMP files"
               >
                 <FileInput size={16} className="flex-shrink-0" />
@@ -209,28 +215,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* Settings - iOS style with gradient color */}
+          {/* Settings - TIER 3 CONFIGURATION (Neutral glass) */}
           {onSettings && (
             <ActionBarTooltip content="Configure gallery settings: visibility, download permissions, watermarks, expiration, and privacy">
               <button
                 onClick={onSettings}
-                className="
-                  inline-flex items-center justify-center gap-1.5
-                  px-3 sm:px-4
-                  min-h-[36px] sm:min-h-[40px]
-                  rounded-full
-                  backdrop-blur-sm
-                  bg-gradient-to-r from-slate-500/20 to-slate-600/20 dark:from-slate-400/20 dark:to-slate-500/20
-                  border border-slate-400/30 dark:border-slate-500/30
-                  text-slate-700 dark:text-slate-200
-                  hover:from-slate-500/30 hover:to-slate-600/30 dark:hover:from-slate-400/30 dark:hover:to-slate-500/30
-                  hover:border-slate-500/50 dark:hover:border-slate-400/50
-                  hover:text-slate-900 dark:hover:text-slate-100
-                  hover:shadow-md hover:shadow-slate-500/20
-                  transition-all duration-200 ease-out
-                  font-medium text-sm
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50 focus-visible:ring-offset-2
-                "
+                className="btn-ios btn-ios-settings"
                 aria-label="Settings"
               >
                 <Settings size={16} className="flex-shrink-0" />
@@ -239,12 +229,12 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </ActionBarTooltip>
           )}
 
-          {/* Delete - Red with white text for clear visibility */}
+          {/* Delete - TIER 2 HIGH PRIORITY (Red glass outline → fill on hover) */}
           {onDelete && (
             <ActionBarTooltip content="Permanently delete this gallery and all its contents - this action cannot be undone">
               <button
                 onClick={onDelete}
-                className="btn-gallery-action btn-action-ghost-destructive min-h-[36px] sm:min-h-[40px]"
+                className="btn-ios btn-ios-delete"
                 aria-label="Delete gallery"
               >
                 <Trash2 size={16} className="flex-shrink-0" />

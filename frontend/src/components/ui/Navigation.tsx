@@ -3,6 +3,10 @@ import { ChevronRight, ChevronLeft, MoreHorizontal } from 'lucide-react';
 
 /* =============================================================================
    Tabs Component
+
+   iOS-quality navigation tabs with liquid glassmorphic effects
+   Features 30px blur, gradient backgrounds, and spring animations
+   Full dark mode support with WCAG AA accessibility
    ============================================================================= */
 
 interface TabsContextType {
@@ -145,6 +149,7 @@ export const Tab: React.FC<TabProps> = ({
     lg: 'px-5 py-2.5 text-base gap-2',
   };
 
+  // iOS glass variants with gradient backgrounds
   const variantStyles = {
     default: `
       border-b-2 -mb-px
@@ -152,24 +157,18 @@ export const Tab: React.FC<TabProps> = ({
         ? 'border-primary text-primary'
         : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border'}
     `,
-    pills: `
-      rounded-lg
-      ${isActive
-        ? 'bg-primary text-white shadow-sm'
-        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'}
-    `,
+    pills: isActive
+      ? 'nav-tab-glass-active rounded-xl'
+      : 'nav-tab-glass rounded-xl',
     underline: `
       border-b-2 -mb-px
       ${isActive
         ? 'border-primary text-primary'
         : 'border-transparent text-text-secondary hover:text-text-primary'}
     `,
-    segmented: `
-      rounded-md
-      ${isActive
-        ? 'bg-surface text-text-primary shadow-sm'
-        : 'text-text-secondary hover:text-text-primary'}
-    `,
+    segmented: isActive
+      ? 'nav-tab-glass-active rounded-lg'
+      : 'nav-tab-glass rounded-lg',
   };
 
   return (
@@ -183,8 +182,8 @@ export const Tab: React.FC<TabProps> = ({
       className={`
         inline-flex items-center justify-center
         font-medium
-        transition-all duration-150 ease-out
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
+        transition-all duration-[var(--spring-duration-fast)] ease-[var(--spring-ios)]
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
         disabled:opacity-50 disabled:cursor-not-allowed
         ${sizeStyles[size]}
         ${variantStyles[variant]}

@@ -2,6 +2,12 @@
  * Public Gallery Lightbox
  * Extracted from PublicGalleryPage monolith. Handles photo/video viewing,
  * zoom, swipe navigation, keyboard shortcuts, EXIF info, and watermarks.
+ *
+ * Enhanced with:
+ * - Auto-hide controls (Apple Photos-style: 2.5s idle, mouse-move reveal)
+ * - Centralized glassmorphism buttons (lightbox-glass-btn from index.css)
+ * - Gradient scrims for guaranteed contrast on any photo
+ * - WCAG 3.0 APCA compliant contrast ratios
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import {
@@ -10,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { PublicGalleryAsset, GalleryDetailData } from '../../types/gallery';
 import { useGalleryInteraction } from '../../contexts/GalleryInteractionContext';
+import { useLightboxAutoHide } from '../../hooks/lightbox/useLightboxAutoHide';
 
 interface PublicGalleryLightboxProps {
   asset: PublicGalleryAsset;
@@ -41,6 +48,15 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
   const [zoomPosition, setZoomPosition] = useState({ x: 50, y: 50 });
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
+  // Auto-hide controls
+  const {
+    controlsVisible,
+    handleMouseMove: autoHideMouseMove,
+    handleControlsEnter,
+    handleControlsLeave,
+    showControls,
+  } = useLightboxAutoHide({ isOpen: true });
+
   // Reset state on asset change
   useEffect(() => {
     setShowExif(false);
@@ -61,7 +77,7 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
     setIsVideoMuted(!isVideoMuted);
   }, [isVideoMuted]);
 
-  // Touch handlers
+  // Touch handlers (navigation + zoom)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
     touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
@@ -84,13 +100,15 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
         lastTapRef.current = 0; touchStartRef.current = null; return;
       }
       lastTapRef.current = now;
+      // Single tap: toggle controls
+      showControls();
     }
     touchStartRef.current = null;
     if (isZoomed || dt > 300) return;
     const ax = Math.abs(dx), ay = Math.abs(dy);
     if (ax > 50 && ax > ay * 0.5) { onNavigate(dx > 0 ? 'prev' : 'next'); return; }
     if (ay > 50 && ay > ax * 0.5 && dy < 0) onClose();
-  }, [onNavigate, onClose, isZoomed, asset.type]);
+  }, [onNavigate, onClose, isZoomed, asset.type, showControls]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -119,39 +137,135 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
   const showWatermark = gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only';
 
   return (
-    <div ref={lightboxRef} className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center touch-none" onClick={onClose} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} role="dialog" aria-modal="true" aria-label="Photo viewer">
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2 text-white/80 text-sm"><span>{index + 1} / {total}</span></div>
-        <div className="flex items-center gap-2">
-          {gallery.exif_visible && asset.metadata && (
-            <button className={`p-2 rounded-full transition-colors ${showExif ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white'}`} onClick={(e) => { e.stopPropagation(); setShowExif(!showExif); }} aria-label="Toggle photo info"><Info size={24} /></button>
-          )}
-          {gallery.download_policy !== 'view_only' && (
-            <button className="p-2 text-white/60 hover:text-white transition-colors disabled:opacity-50" onClick={(e) => { e.stopPropagation(); onDownload(asset); }} disabled={isDownloading} aria-label="Download"><Download size={24} className={isDownloading ? 'animate-pulse' : ''} /></button>
-          )}
-          <button className="p-2 text-white/60 hover:text-white transition-colors" onClick={onClose} aria-label="Close"><X size={28} /></button>
+    <div
+      ref={lightboxRef}
+      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center touch-none"
+      onClick={onClose}
+      onMouseMove={autoHideMouseMove}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+    >
+      {/* Auto-hiding controls wrapper */}
+      <div className={`lightbox-controls ${controlsVisible ? '' : 'hidden'}`}>
+        {/* Gradient scrims for guaranteed contrast */}
+        <div className="lightbox-scrim-top" />
+        <div className="lightbox-scrim-bottom" />
+
+        {/* Top bar */}
+        <div
+          className="lightbox-top-bar"
+          onMouseEnter={handleControlsEnter}
+          onMouseLeave={handleControlsLeave}
+        >
+          <div className="lightbox-info-text">
+            <span>{index + 1} <span className="secondary">/ {total}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            {gallery.exif_visible && asset.metadata && (
+              <button
+                className={`lightbox-glass-btn ${showExif ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); setShowExif(!showExif); }}
+                aria-label="Toggle photo info"
+              >
+                <Info size={20} />
+              </button>
+            )}
+            {gallery.download_policy !== 'view_only' && (
+              <button
+                className="lightbox-glass-btn"
+                onClick={(e) => { e.stopPropagation(); onDownload(asset); }}
+                disabled={isDownloading}
+                aria-label="Download"
+              >
+                <Download size={20} className={isDownloading ? 'animate-pulse' : ''} />
+              </button>
+            )}
+            <button
+              className="lightbox-glass-btn btn-close"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation arrows */}
+        {total > 1 && (
+          <>
+            <div className="lightbox-nav-arrow prev">
+              <button
+                className="lightbox-glass-btn btn-lg"
+                onClick={(e) => { e.stopPropagation(); onNavigate('prev'); }}
+                aria-label="Previous"
+              >
+                <ChevronLeft size={28} />
+              </button>
+            </div>
+            <div className="lightbox-nav-arrow next">
+              <button
+                className="lightbox-glass-btn btn-lg"
+                onClick={(e) => { e.stopPropagation(); onNavigate('next'); }}
+                aria-label="Next"
+              >
+                <ChevronRight size={28} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Bottom action bar */}
+        <div
+          className="lightbox-bottom-bar"
+          onMouseEnter={handleControlsEnter}
+          onMouseLeave={handleControlsLeave}
+        >
+          {/* Left: keyboard hint (desktop only) */}
+          <div className="lightbox-info-text hidden md:block">
+            <span className="secondary text-xs">? Shortcuts</span>
+          </div>
+
+          {/* Center: Favorite + Select */}
+          <div className="lightbox-btn-group">
+            <button
+              className={`lightbox-glass-btn btn-favorite ${isFav ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.asset_id); }}
+              aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+              aria-pressed={isFav}
+            >
+              <Heart size={20} className={isFav ? 'fill-current' : ''} />
+            </button>
+            <button
+              className={`lightbox-glass-btn btn-select ${isSel ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleSelection(asset.asset_id); }}
+              aria-label={isSel ? 'Remove from picks' : 'Add to picks'}
+              aria-pressed={isSel}
+            >
+              <Bookmark size={20} className={isSel ? 'fill-current' : ''} />
+            </button>
+          </div>
+
+          {/* Right: mobile hint */}
+          <div className="lightbox-info-text md:hidden">
+            <span className="secondary text-xs">Swipe to navigate</span>
+          </div>
+          <div className="hidden md:block w-[80px]" /> {/* Spacer for centering */}
         </div>
       </div>
 
-      {/* Navigation arrows */}
-      {total > 1 && (
-        <>
-          <button className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-full transition-all backdrop-blur-sm z-10" onClick={(e) => { e.stopPropagation(); onNavigate('prev'); }} aria-label="Previous"><ChevronLeft size={32} /></button>
-          <button className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-full transition-all backdrop-blur-sm z-10" onClick={(e) => { e.stopPropagation(); onNavigate('next'); }} aria-label="Next"><ChevronRight size={32} /></button>
-        </>
-      )}
-
-      {/* Main media */}
+      {/* Main media (NOT inside auto-hide wrapper) */}
       <div className="relative" onClick={(e) => e.stopPropagation()}>
         {asset.type === 'video' ? (
           <>
             <video ref={videoRef} src={previewUrl} className="max-w-[90vw] max-h-[85vh] object-contain" controls={false} playsInline onPlay={() => setIsVideoPlaying(true)} onPause={() => setIsVideoPlaying(false)} onEnded={() => setIsVideoPlaying(false)} onClick={toggleVideoPlayback} />
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-4 py-2">
-              <button className="p-2 text-white/80 hover:text-white" onClick={(e) => { e.stopPropagation(); toggleVideoPlayback(); }} aria-label={isVideoPlaying ? 'Pause' : 'Play'}>{isVideoPlaying ? <Pause size={24} /> : <Play size={24} />}</button>
-              <button className="p-2 text-white/80 hover:text-white" onClick={(e) => { e.stopPropagation(); toggleVideoMute(); }} aria-label={isVideoMuted ? 'Unmute' : 'Mute'}>{isVideoMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 lightbox-btn-group">
+              <button className="lightbox-glass-btn" onClick={(e) => { e.stopPropagation(); toggleVideoPlayback(); }} aria-label={isVideoPlaying ? 'Pause' : 'Play'}>{isVideoPlaying ? <Pause size={20} /> : <Play size={20} />}</button>
+              <button className="lightbox-glass-btn" onClick={(e) => { e.stopPropagation(); toggleVideoMute(); }} aria-label={isVideoMuted ? 'Unmute' : 'Mute'}>{isVideoMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
             </div>
-            {!isVideoPlaying && <div className="absolute inset-0 flex items-center justify-center cursor-pointer" onClick={toggleVideoPlayback}><div className="p-4 bg-black/50 backdrop-blur-sm rounded-full"><Play size={48} className="text-white" /></div></div>}
+            {!isVideoPlaying && <div className="absolute inset-0 flex items-center justify-center cursor-pointer" onClick={toggleVideoPlayback}><div className="lightbox-glass-btn btn-lg" style={{ width: 72, height: 72 }}><Play size={36} /></div></div>}
           </>
         ) : (
           <div className={`relative overflow-hidden ${isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} style={{ maxWidth: '90vw', maxHeight: '85vh' }}>
@@ -170,9 +284,9 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
         {caption && <div className="absolute -bottom-12 left-0 right-0 text-center px-4"><p className="text-white/90 text-sm md:text-base max-w-2xl mx-auto line-clamp-2">{caption}</p></div>}
       </div>
 
-      {/* Info Panel */}
+      {/* Info Panel (outside auto-hide — stays visible when toggled) */}
       {showExif && (asset.metadata || asset.type === 'video') && (
-        <div className="absolute right-4 top-20 bg-black/80 backdrop-blur-md rounded-lg p-4 text-white text-sm max-w-xs z-10" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute right-4 top-20 bg-black/80 backdrop-blur-md rounded-lg p-4 text-white text-sm max-w-xs z-[40]" onClick={(e) => e.stopPropagation()}>
           <h4 className="font-semibold mb-3 flex items-center gap-2">{asset.type === 'video' ? <><Video size={16} />Video Info</> : <><Camera size={16} />Photo Info</>}</h4>
           <div className="space-y-2 text-white/80">
             {asset.type === 'video' && asset.duration && <div className="flex justify-between"><span className="text-white/60">Duration</span><span>{Math.floor(asset.duration / 60)}:{String(Math.floor(asset.duration % 60)).padStart(2, '0')}</span></div>}
@@ -195,23 +309,6 @@ export const PublicGalleryLightbox: React.FC<PublicGalleryLightboxProps> = ({
           <p className="mt-3 pt-3 border-t border-white/20 text-white/50 text-xs">Press I to toggle</p>
         </div>
       )}
-
-      {/* Bottom action bar */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 flex items-center justify-center gap-4 z-10">
-        <button className={`p-3 rounded-full backdrop-blur-sm transition-all ${isFav ? 'bg-red-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'}`} onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.asset_id); }} aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}>
-          <Heart size={24} className={isFav ? 'fill-current' : ''} />
-        </button>
-        <button className={`p-3 rounded-full backdrop-blur-sm transition-all ${isSel ? 'bg-green-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'}`} onClick={(e) => { e.stopPropagation(); toggleSelection(asset.asset_id); }} aria-label={isSel ? 'Remove from picks' : 'Add to picks'}>
-          <Bookmark size={24} className={isSel ? 'fill-current' : ''} />
-        </button>
-      </div>
-
-      <div className="absolute bottom-4 right-4 text-white/40 text-xs hidden md:block">
-        &larr; &rarr; Navigate | F Favorite | S Select{gallery.download_policy !== 'view_only' ? ' | D Download' : ''} | I Info{asset.type === 'video' ? ' | Space Play/Pause | M Mute' : ''} | ? Help | Esc Close
-      </div>
-      <div className="absolute bottom-4 left-4 right-4 text-white/40 text-xs text-center md:hidden">
-        {asset.type !== 'video' && 'Double-tap to zoom | '}Swipe left/right to navigate | Swipe up to close
-      </div>
 
       {/* Keyboard shortcuts help */}
       {showKeyboardHelp && (

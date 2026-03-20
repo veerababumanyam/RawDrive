@@ -4,8 +4,16 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 /* =============================================================================
    Sidebar Component
 
-   A navigation sidebar component with support for collapsible sections,
-   nested items, badges, and icons.
+   iOS-quality liquid glassmorphic navigation sidebar with 80px backdrop blur
+   Apple-tier glass effects with spring animations and gradient mesh backgrounds
+   Full light/dark mode parity with WCAG AA accessibility compliance
+
+   Features:
+   - 80px blur sidebar glass container
+   - iOS glass navigation items with hover/active states
+   - Spring physics animations (250-400ms)
+   - Gradient indicator bar on active items
+   - Collapsible sections with subtle glass effects
    ============================================================================= */
 
 interface SidebarContextType {
@@ -64,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           h-full
           min-h-0
           overflow-x-hidden
-          ${glass ? 'glass-light' : ''}
+          ${glass ? 'glass-sidebar dark:glass-sidebar-dark mesh-gradient-sidebar dark:mesh-gradient-sidebar-dark' : ''}
           ${className}
         `}
         aria-label="Sidebar navigation"
@@ -94,8 +102,10 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         flex items-center
         h-16
         px-4
-        border-b border-border
+        border-b border-border/30
         flex-shrink-0
+        backdrop-blur-[30px]
+        bg-white/40 dark:bg-slate-900/40
         ${className}
       `}
     >
@@ -150,8 +160,10 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
     <div
       className={`
         flex-shrink-0
-        border-t border-border
+        border-t border-border/30
         p-4
+        backdrop-blur-[30px]
+        bg-white/40 dark:bg-slate-900/40
         ${className}
       `}
     >
@@ -199,9 +211,8 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
       {title && (
         <div
           className={`
-            flex items-center justify-between
-            px-3 py-2
-            ${collapsible ? 'cursor-pointer hover:bg-surface-hover hover:shadow-sm rounded-lg transition-all duration-200' : ''}
+            sidebar-section-header
+            ${collapsible ? 'cursor-pointer' : ''}
           `}
           onClick={collapsible ? () => setExpanded(!expanded) : undefined}
           role={collapsible ? 'button' : undefined}
@@ -215,7 +226,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
               size={16}
               className={`
                 text-text-tertiary
-                transition-transform duration-200
+                transition-transform duration-[var(--spring-duration-fast)] ease-[var(--spring-ios)]
                 ${expanded ? '' : '-rotate-90'}
               `}
             />
@@ -294,68 +305,13 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
     }
   };
 
-  const baseStyles = `
-    sidebar-item
-    group
-    relative
-    flex items-center
-    w-full
-    px-3
-    ${collapsed ? 'justify-center' : ''}
-    py-2.5
-    rounded-xl
-    text-sm font-medium
-    transition-all duration-200 ease-out
-    outline-none
-    focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
-  `;
-
-  // Modern active state with gradient and glassmorphism
-  const getActiveStyles = () => {
-    if (gradientActive) {
-      return `
-        sidebar-item-active-gradient
-        bg-gradient-to-r from-primary/15 to-accent/15
-        text-primary
-        border border-primary/20
-        shadow-sm
-        backdrop-blur-sm
-      `;
-    }
-    return `
-      sidebar-item-active
-      bg-primary/10
-      text-primary
-      shadow-sm
-      border border-primary/20
-    `;
-  };
-
-  // Modern hover state with glassmorphism effect
-  const getHoverStyles = () => {
-    if (glowHover) {
-      return `
-        hover:bg-surface-hover/80
-        hover:backdrop-blur-sm
-        hover:text-text-primary
-        hover:shadow-md
-        hover:shadow-primary/10
-        hover:border hover:border-border/50
-      `;
-    }
-    return `
-      hover:bg-surface-hover/80
-      hover:backdrop-blur-sm
-      hover:text-text-primary
-      hover:shadow-sm
-    `;
-  };
+  const baseStyles = `sidebar-nav-item`;
 
   const stateStyles = disabled
     ? 'opacity-50 cursor-not-allowed'
     : isActive
-    ? getActiveStyles()
-    : `text-text-secondary ${getHoverStyles()}`;
+    ? 'sidebar-nav-item-active'
+    : '';
 
   const Component = href && !disabled ? 'a' : 'button';
 
@@ -364,14 +320,10 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       {icon && (
         <span
           className={`
-            sidebar-item-icon
             flex-shrink-0
             ${collapsed ? '' : 'mr-3'}
-            transition-all duration-200
-            ${isActive
-              ? 'text-primary scale-110'
-              : 'text-text-tertiary group-hover:text-accent group-hover:scale-110'
-            }
+            transition-all duration-[var(--spring-duration-fast)] ease-[var(--spring-ios)]
+            ${isActive ? 'scale-110' : 'group-hover:scale-110'}
           `}
         >
           {icon}
@@ -387,19 +339,12 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
               className={`
                 flex-shrink-0 ml-2
                 text-text-tertiary
-                transition-transform duration-200 ease-spring
+                transition-transform duration-[var(--spring-duration-fast)] ease-[var(--spring-ios)]
                 ${expanded ? 'rotate-90' : ''}
               `}
             />
           )}
         </>
-      )}
-      {/* Active indicator bar on left */}
-      {isActive && (
-        <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-gradient-to-b from-primary to-accent shadow-sm shadow-primary/30"
-          aria-hidden="true"
-        />
       )}
     </>
   );

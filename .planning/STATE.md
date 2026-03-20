@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Profile & Public Page Modernization
+milestone: v1.2
+milestone_name: Public Gallery & Gallery Player Modernization
 status: unknown
 stopped_at: Completed 18-02-PLAN.md
 last_updated: "2026-03-20T08:38:47.079Z"

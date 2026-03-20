@@ -72,7 +72,8 @@ check_*.py
 verify_*.py
 *_out.txt
 
-# Test screenshots in root
+# Test/QA screenshots
+screenshots/
 .playwright-mcp/
 
 seed-app-settings.cjs

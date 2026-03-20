@@ -3,14 +3,21 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 /* =============================================================================
    AppShell Component
 
-   A responsive application shell that provides the main layout structure
-   with header, sidebar, main content area, and optional footer.
+   iOS-quality liquid glassmorphic application shell with animated gradient mesh
+   Apple-tier visual quality with 80px blur, spring animations, and full dark mode
 
-   IMPORTANT: This layout follows best practices:
+   Features:
+   - Animated gradient mesh backgrounds (20-30s animation cycles)
+   - 80px blur glass sidebar with iOS spring physics
+   - Premium glass header with 30px blur
+   - Full light/dark mode parity
+   - WCAG AA accessibility compliance
+   - Mobile-first responsive design with persistent state
+
+   Layout Structure:
    - Header is fixed at the top (full width)
    - Sidebar starts BELOW the header (not from top)
-   - Content area fills remaining space
-   - Mobile-first responsive design
+   - Content area fills remaining space with gradient mesh
    - Sidebar is collapsible (hide/show) and remembers state
    ============================================================================= */
 
@@ -136,7 +143,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           h-screen
           flex flex-col
           overflow-hidden
-          bg-background
+          mesh-gradient-light dark:mesh-gradient-dark
           text-text-primary
           ${className}
         `}
@@ -182,11 +189,24 @@ export const AppShellHeader: React.FC<AppShellHeaderProps> = ({
     lg: 'h-20',
   };
 
-  // Determine background style
+  // Determine background style with iOS glass
   const getBackgroundStyle = () => {
-    if (glassPremium) return 'glass-premium';
-    if (transparent) return 'glass-light';
-    return 'bg-surface';
+    if (glassPremium) {
+      return `
+        glass-ios dark:glass-ios-dark
+        backdrop-blur-[30px]
+        bg-white/70 dark:bg-slate-900/70
+        border-b border-white/20 dark:border-white/5
+        shadow-sm
+      `;
+    }
+    if (transparent) {
+      return `
+        glass-ios dark:glass-ios-dark
+        backdrop-blur-[20px]
+      `;
+    }
+    return 'bg-surface backdrop-blur-[10px]';
   };
 
   return (
@@ -195,10 +215,10 @@ export const AppShellHeader: React.FC<AppShellHeaderProps> = ({
         ${heightStyles[size]}
         ${sticky ? 'sticky top-0 z-sticky' : ''}
         ${getBackgroundStyle()}
-        ${bordered ? 'border-b border-border/50' : ''}
+        ${bordered && !glassPremium && !transparent ? 'border-b border-border/30' : ''}
         flex items-center
         px-4 lg:px-6
-        transition-all duration-300 ease-out
+        transition-all duration-[var(--spring-duration-normal)] ease-[var(--spring-ios)]
         ${className}
       `}
     >
@@ -254,10 +274,14 @@ export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
         <div
           className="
             fixed inset-0 z-40 lg:hidden
-            bg-black/50 backdrop-blur-sm
-            transition-opacity duration-300 ease-out
+            bg-black/60 backdrop-blur-[40px] saturate-[180%]
+            transition-opacity duration-[var(--spring-duration-normal)] ease-[var(--spring-ios)]
           "
-          style={{ top: `${headerHeight}px` }}
+          style={{
+            top: `${headerHeight}px`,
+            backdropFilter: 'blur(40px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+          }}
           onClick={closeMobileMenu}
           aria-hidden="true"
         />
@@ -267,11 +291,11 @@ export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
       <aside
         className={`
           ${bordered ? (position === 'left' ? 'border-r' : 'border-l') : ''}
-          border-border/50
-          ${glass ? 'glass-light' : 'bg-surface'}
+          ${bordered ? 'border-white/20 dark:border-white/5' : ''}
+          ${glass ? 'glass-sidebar dark:glass-sidebar-dark mesh-gradient-sidebar dark:mesh-gradient-sidebar-dark' : 'bg-surface'}
           flex flex-col
           overflow-hidden
-          transition-all duration-300 ease-spring
+          transition-all duration-[var(--spring-duration-normal)] ease-[var(--spring-ios)]
 
           /* Mobile: Fixed overlay starting below header */
           fixed ${position === 'left' ? 'left-0' : 'right-0'} bottom-0 top-16 z-50

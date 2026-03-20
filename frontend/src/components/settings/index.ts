@@ -43,3 +43,6 @@ export { DataExportStatus } from './DataExportStatus';
 export { GeminiApiKeyForm } from './GeminiApiKeyForm';
 export { GeminiModelSelector } from './GeminiModelSelector';
 export { GeminiErrorAlert, GeminiInlineError } from './GeminiErrorAlert';
+
+// Gradient Theme Selector (iOS 18-inspired vibrant themes)
+export { GradientThemeSelector } from './GradientThemeSelector';

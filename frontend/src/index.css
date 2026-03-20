@@ -757,6 +757,445 @@
 }
 
 /* =============================================================================
+   iOS 18-Quality Vibrant Gradient Mesh & Button System
+   Apple-tier visual quality with 50-120px blur and spring animations
+   Full dark/light mode parity - WCAG AA compliant
+   ============================================================================= */
+
+/* CSS Custom Properties for Dynamic Theme System */
+:root {
+  /* Default Light Theme - "Radiant Sunset" (iOS 18 inspired) */
+  --gradient-stop-1: #FF6B6B;  /* Vibrant coral */
+  --gradient-stop-2: #FF8E53;  /* Bright orange */
+  --gradient-stop-3: #C77DFF;  /* Rich purple */
+  --gradient-stop-4: #4ECDC4;  /* Cyan teal */
+  --gradient-stop-5: #FFE66D;  /* Sunny yellow */
+
+  /* Default Dark Theme - "Midnight Aurora" */
+  --gradient-dark-stop-1: #6A4C93;  /* Deep purple */
+  --gradient-dark-stop-2: #A64AC9;  /* Vibrant magenta */
+  --gradient-dark-stop-3: #2E5EAA;  /* Royal blue */
+  --gradient-dark-stop-4: #17BEBB;  /* Bright teal */
+  --gradient-dark-stop-5: #1B4965;  /* Deep ocean */
+
+  /* iOS Spring Physics */
+  --spring-ios: cubic-bezier(0.16, 1, 0.3, 1);
+  --spring-ios-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --spring-duration-fast: 250ms;
+  --spring-duration-normal: 400ms;
+  --spring-duration-slow: 600ms;
+
+  /* iOS-quality liquid glass blur (Apple-tier) */
+  --blur-ios-light: 50px;
+  --blur-ios-heavy: 80px;
+  --blur-ios-ultra: 120px;
+
+  /* Saturation multipliers for vibrancy */
+  --saturate-ios: 180%;
+  --saturate-ios-heavy: 220%;
+  --saturate-ios-ultra: 250%;
+
+  /* Glass tint overlays for colored surfaces */
+  --glass-tint-blue: rgba(59, 130, 246, 0.08);
+  --glass-tint-purple: rgba(139, 92, 246, 0.08);
+  --glass-tint-amber: rgba(245, 158, 11, 0.08);
+  --glass-tint-neutral: rgba(148, 163, 184, 0.06);
+  --glass-tint-emerald: rgba(16, 185, 129, 0.08);
+  --glass-tint-orange: rgba(249, 115, 22, 0.08);
+
+  /* Enhanced glass shadows for depth */
+  --shadow-glass-float: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-glass-elevated: 0 20px 60px rgba(0, 0, 0, 0.16), 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-glass-glow-blue: 0 0 40px rgba(59, 130, 246, 0.15), 0 8px 32px rgba(59, 130, 246, 0.1);
+  --shadow-glass-glow-purple: 0 0 40px rgba(139, 92, 246, 0.15), 0 8px 32px rgba(139, 92, 246, 0.1);
+  --shadow-glass-glow-orange: 0 0 40px rgba(249, 115, 22, 0.15), 0 8px 32px rgba(249, 115, 22, 0.1);
+}
+
+/* Vibrant Gradient Meshes - Light Mode */
+.mesh-gradient-light {
+  position: relative;
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 25%, #C77DFF 50%, #4ECDC4 75%, #FFE66D 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+.mesh-gradient-ocean {
+  position: relative;
+  background: linear-gradient(135deg, #22D3EE 0%, #14B8A6 25%, #3B82F6 50%, #6366F1 75%, #8B5CF6 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+.mesh-gradient-forest {
+  position: relative;
+  background: linear-gradient(135deg, #84CC16 0%, #10B981 25%, #14B8A6 50%, #06B6D4 75%, #6EE7B7 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+.mesh-gradient-lavender {
+  position: relative;
+  background: linear-gradient(135deg, #F9A8D4 0%, #C084FC 25%, #A78BFA 50%, #818CF8 75%, #E9D5FF 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+/* Vibrant Gradient Meshes - Dark Mode */
+.mesh-gradient-dark {
+  position: relative;
+  background: linear-gradient(135deg, #6A4C93 0%, #A64AC9 25%, #2E5EAA 50%, #17BEBB 75%, #1B4965 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+.mesh-gradient-cosmic {
+  position: relative;
+  background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 25%, #8B5CF6 50%, #DB2777 75%, #1E293B 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+.mesh-gradient-emerald {
+  position: relative;
+  background: linear-gradient(135deg, #115E59 0%, #059669 25%, #047857 50%, #10B981 75%, #064E3B 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+.mesh-gradient-amber {
+  position: relative;
+  background: linear-gradient(135deg, #C2410C 0%, #F59E0B 25%, #FB7185 50%, #BE123C 75%, #7C2D12 100%);
+  background-size: 400% 400%;
+  animation: mesh-shift 20s ease-in-out infinite;
+}
+
+/* Mesh Animation Keyframes */
+@keyframes mesh-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* iOS Button Base */
+.btn-ios {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all var(--spring-duration-fast) var(--spring-ios);
+  outline: none;
+  min-height: 40px;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+
+.btn-ios:focus-visible {
+  ring: 2px;
+  ring-color: rgba(249, 115, 22, 0.5);
+  ring-offset: 2px;
+}
+
+/* Tier 1: Primary action button (Upload) - Solid vibrant with glow */
+.btn-ios-primary {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.95) 0%, rgba(234, 88, 12, 0.95) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom-width: 2px;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+  box-shadow:
+    var(--shadow-glass-glow-orange),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  min-height: 44px;
+  font-size: 0.9375rem;
+}
+
+.btn-ios-primary:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.98) 0%, rgba(194, 65, 12, 0.98) 100%);
+  box-shadow:
+    0 0 50px rgba(249, 115, 22, 0.2),
+    0 12px 36px rgba(249, 115, 22, 0.3),
+    0 2px 8px rgba(249, 115, 22, 0.2);
+}
+
+.btn-ios-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 0 30px rgba(249, 115, 22, 0.15),
+    0 4px 12px rgba(249, 115, 22, 0.2);
+}
+
+/* Tier 2: Share button - Emerald glass with semantic color */
+.btn-ios-share {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.1) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow:
+    0 4px 12px rgba(16, 185, 129, 0.08),
+    0 0 0 1px rgba(16, 185, 129, 0.1) inset;
+  font-weight: 500;
+}
+
+.btn-ios-share:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.15) 100%);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow:
+    0 6px 16px rgba(16, 185, 129, 0.12),
+    0 0 0 1px rgba(16, 185, 129, 0.2) inset;
+}
+
+/* Tier 2: Delete button - Red glass with semantic color */
+.btn-ios-delete {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(220, 38, 38, 0.1) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  box-shadow:
+    0 4px 12px rgba(239, 68, 68, 0.08),
+    0 0 0 1px rgba(239, 68, 68, 0.1) inset;
+  font-weight: 500;
+}
+
+.btn-ios-delete:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(220, 38, 38, 0.15) 100%);
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow:
+    0 6px 16px rgba(239, 68, 68, 0.12),
+    0 0 0 1px rgba(239, 68, 68, 0.2) inset;
+}
+
+/* Tier 3: Settings button - Neutral glass configuration */
+.btn-ios-settings {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.1) 0%, rgba(148, 163, 184, 0.06) 100%);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow:
+    0 2px 8px rgba(148, 163, 184, 0.06),
+    0 0 0 1px rgba(148, 163, 184, 0.08) inset;
+}
+
+.btn-ios-settings:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(148, 163, 184, 0.1) 100%);
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow:
+    0 4px 12px rgba(148, 163, 184, 0.1),
+    0 0 0 1px rgba(148, 163, 184, 0.15) inset;
+}
+
+/* Tier 4: Contextual buttons - Compact glass for Preview, FaceID, etc */
+.btn-ios-contextual {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.08) 0%, rgba(148, 163, 184, 0.05) 100%);
+  backdrop-filter: blur(15px) saturate(140%);
+  -webkit-backdrop-filter: blur(15px) saturate(140%);
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 2px 6px rgba(148, 163, 184, 0.04);
+  min-height: 40px;
+  font-size: 0.875rem;
+}
+
+.btn-ios-contextual:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0.08) 100%);
+  color: var(--color-text-primary);
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 4px 10px rgba(148, 163, 184, 0.08);
+}
+
+/* Dark Mode Button Variants */
+.dark .btn-ios-primary {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.9) 0%, rgba(234, 88, 12, 0.9) 100%);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 0 40px rgba(249, 115, 22, 0.2),
+    0 8px 32px rgba(249, 115, 22, 0.15);
+}
+
+.dark .btn-ios-primary:hover:not(:disabled) {
+  box-shadow:
+    0 0 60px rgba(249, 115, 22, 0.3),
+    0 12px 36px rgba(249, 115, 22, 0.25);
+}
+
+.dark .btn-ios-share {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.12) 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow:
+    0 4px 12px rgba(16, 185, 129, 0.12),
+    0 0 0 1px rgba(16, 185, 129, 0.15) inset;
+}
+
+.dark .btn-ios-delete {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.12) 100%);
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow:
+    0 4px 12px rgba(239, 68, 68, 0.12),
+    0 0 0 1px rgba(239, 68, 68, 0.15) inset;
+}
+
+.dark .btn-ios-settings,
+.dark .btn-ios-contextual {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0.08) 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: var(--color-text-primary);
+}
+
+.dark .btn-ios-contextual {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.1) 0%, rgba(148, 163, 184, 0.06) 100%);
+  color: var(--color-text-secondary);
+}
+
+/* Sidebar Navigation Glass Styles */
+.sidebar-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: all var(--spring-duration-fast) var(--spring-ios);
+  outline: none;
+}
+
+.sidebar-nav-item:focus-visible {
+  ring: 2px;
+  ring-color: rgba(249, 115, 22, 0.5);
+  ring-offset: 2px;
+}
+
+.sidebar-nav-item:hover:not(.sidebar-nav-item-active):not(:disabled) {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0.08) 100%);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  transform: translateX(4px);
+  color: var(--color-text-primary);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(148, 163, 184, 0.1) inset;
+}
+
+.sidebar-nav-item-active {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(234, 88, 12, 0.12) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  color: var(--color-primary-600);
+  font-weight: 600;
+  transform: translateX(6px);
+  box-shadow:
+    0 4px 12px rgba(249, 115, 22, 0.12),
+    0 0 0 1px rgba(249, 115, 22, 0.2) inset,
+    -3px 0 0 0 var(--color-primary-500) inset;
+}
+
+.dark .sidebar-nav-item:hover:not(.sidebar-nav-item-active):not(:disabled) {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(148, 163, 184, 0.1) 100%);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.dark .sidebar-nav-item-active {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.15) 100%);
+  color: var(--color-primary-400);
+  box-shadow:
+    0 4px 12px rgba(249, 115, 22, 0.2),
+    0 0 0 1px rgba(249, 115, 22, 0.3) inset,
+    -3px 0 0 0 var(--color-primary-500) inset;
+}
+
+/* Glass Container Utilities */
+.glass-ios {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.25) 100%);
+  backdrop-filter: blur(var(--blur-ios-light)) saturate(var(--saturate-ios));
+  -webkit-backdrop-filter: blur(var(--blur-ios-light)) saturate(var(--saturate-ios));
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.02) inset;
+}
+
+.glass-ios-dark {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(15, 23, 42, 0.5) 100%);
+  backdrop-filter: blur(var(--blur-ios-light)) saturate(var(--saturate-ios));
+  -webkit-backdrop-filter: blur(var(--blur-ios-light)) saturate(var(--saturate-ios));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.glass-sidebar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%);
+  backdrop-filter: blur(var(--blur-ios-heavy)) saturate(var(--saturate-ios-heavy));
+  -webkit-backdrop-filter: blur(var(--blur-ios-heavy)) saturate(var(--saturate-ios-heavy));
+  border-right: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    8px 0 32px rgba(0, 0, 0, 0.04),
+    1px 0 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.glass-sidebar-dark {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0.75) 100%);
+  backdrop-filter: blur(var(--blur-ios-heavy)) saturate(var(--saturate-ios-heavy));
+  -webkit-backdrop-filter: blur(var(--blur-ios-heavy)) saturate(var(--saturate-ios-heavy));
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow:
+    8px 0 32px rgba(0, 0, 0, 0.2),
+    1px 0 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+/* Reduced Motion Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .mesh-gradient-light,
+  .mesh-gradient-dark,
+  .mesh-gradient-ocean,
+  .mesh-gradient-forest,
+  .mesh-gradient-lavender,
+  .mesh-gradient-cosmic,
+  .mesh-gradient-emerald,
+  .mesh-gradient-amber {
+    animation: none;
+    background-position: 50% 50%;
+  }
+
+  .btn-ios,
+  .btn-ios-primary,
+  .btn-ios-share,
+  .btn-ios-delete,
+  .btn-ios-settings,
+  .btn-ios-contextual,
+  .sidebar-nav-item {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =============================================================================
    2. BASE STYLES
    ============================================================================= */
 
