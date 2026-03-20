@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Profile & Public Page Modernization
-status: unknown
-stopped_at: Completed 16-03-PLAN.md (Phase 16 complete)
-last_updated: "2026-03-20T07:48:48.687Z"
+milestone: v1.2
+milestone_name: Public Gallery & Gallery Player Modernization
+status: in-progress
+stopped_at: Completed 17-02-PLAN.md (Phase 17 complete)
+last_updated: "2026-03-20T07:57:07.221Z"
 progress:
   total_phases: 11
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 17 (Gallery Player) — IN PROGRESS
-Plan: 1 of 2 complete
+Phase: 17 (Gallery Player) — COMPLETE
+Plan: 2 of 2 complete
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Plan: 1 of 2 complete
 - [Phase 16]: CSS column-count for EnhancedMasonryLayout with JS reordering for chronological display (lighter than SmartMasonryGrid absolute positioning)
 - [Phase 16]: activeLayout state in PublicGalleryShell with localStorage persistence; GalleryCanvas preserved as fallback for management views; LucideIcon type for icon mapping
 - [Phase 17]: Inline Tailwind glassmorphism classes (bg-white/10 backdrop-blur-md border-white/20) instead of undefined lightbox-glass-btn CSS; gesture binding on content div not motion.div to avoid TS type conflicts; scrollIntoView guarded for jsdom
+- [Phase 17]: PlayerExifPanel uses motion.div slide-up (y:20->0) with backdrop-blur-md; PublicGalleryLightbox replaced by GalleryPlayer via openPlayer(index) from GalleryPlayerContext
 
 ### Roadmap Evolution
 
@@ -91,8 +92,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T07:48:06Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-03-20T07:55:51Z
+Stopped at: Completed 17-02-PLAN.md (Phase 17 complete)
 Resume file: None
 
 ### Upcoming Milestones
