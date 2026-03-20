@@ -200,12 +200,12 @@ Plans:
   3. Client leaves a comment on a photo during proofing and photographer sees the comment in their dashboard in real-time via WebSocket
   4. Each AI tool in the gallery toolbar shows a tooltip with 1-2 sentence description on hover explaining what it does
   5. Multi-selecting photos activates a visible bulk action toolbar with batch edit, tag, download, and delete operations
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] 18-01: TBD
-- [ ] 18-02: TBD
-- [ ] 18-03: TBD
+- [ ] 18-01-PLAN.md — Client interactions: favorites, selection quotas, per-photo comments
+- [ ] 18-02-PLAN.md — WebSocket real-time proofing sync
+- [ ] 18-03-PLAN.md — Gallery UX: AI tooltips, bulk actions, settings presets, AI status, permissions
 
 ### Phase 19: Downloads & Delivery
 **Goal**: Clients can download gallery photos in multiple formats with tracking, and galleries auto-expire with clear communication
