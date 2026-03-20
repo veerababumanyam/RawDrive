@@ -309,7 +309,7 @@ services:
       - ../../backend:/app
       - ../../packages:/app/packages
       # Mount Google Cloud credentials from path defined in .env (GOOGLE_APPLICATION_CREDENTIALS_FILE)
-      - ../../${GOOGLE_APPLICATION_CREDENTIALS_FILE:-docs/docparser-468004-9b82008238af.json}:/run/secrets/gcp-credentials.json:ro
+      - ../../${GOOGLE_APPLICATION_CREDENTIALS_FILE:-docs/RawDrivFaceID.json}:/run/secrets/gcp-credentials.json:ro
     deploy:
       resources:
         limits:
@@ -356,7 +356,7 @@ services:
       - ../../backend:/app
       - ../../packages:/app/packages
       # Mount Google Cloud credentials from path defined in .env
-      - ../../${GOOGLE_APPLICATION_CREDENTIALS_FILE:-docs/docparser-468004-9b82008238af.json}:/run/secrets/gcp-credentials.json:ro
+      - ../../${GOOGLE_APPLICATION_CREDENTIALS_FILE:-docs/RawDrivFaceID.json}:/run/secrets/gcp-credentials.json:ro
     deploy:
       resources:
         limits:
