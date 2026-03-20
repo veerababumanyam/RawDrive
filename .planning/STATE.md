@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Profile & Public Page Modernization
+milestone: v1.2
+milestone_name: Public Gallery & Gallery Player Modernization
 status: unknown
-stopped_at: Completed 19-02-PLAN.md
+stopped_at: Completed 19-03-PLAN.md
 last_updated: "2026-03-20T09:03:33.802Z"
 progress:
   total_phases: 5
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 19 (Downloads & Delivery) — IN PROGRESS
-Plan: 2 complete
+Phase: 19 (Downloads & Delivery) — COMPLETE
+Plan: 3 of 3 complete
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Plan: 2 complete
 - [Phase 19]: Expiration check moved from service layer (404) to API endpoint layer (410 with gallery details) for structured expired gallery response
 - [Phase 19]: ExpirationReminderWorker uses dependency injection pattern for testability; Redis dedup keys with milestone-specific TTLs (8d/2d/30d)
 - [Phase 19]: asyncio.create_task for ZIP generation (no Celery in gallery-service); 2GB memory guard on batch downloads; no-upscale guard in resize
+- [Phase 19]: BatchDownloadModal replaces old per-file bulk download with ZIP-based batch via gallery-service API; ExpirationCountdown computes days client-side; DownloadTrackingPanel in collapsible details element
 
 ### Roadmap Evolution
 
@@ -98,8 +99,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:02:00Z
-Stopped at: Completed 19-01-PLAN.md (retroactive; 19-02 already done)
+Last session: 2026-03-20T09:11:00Z
+Stopped at: Completed 19-03-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones

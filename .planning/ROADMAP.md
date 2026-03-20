@@ -140,7 +140,7 @@ Plans:
 - [x] **Phase 16: Gallery Layout Engine & Progressive Loading** - Justified, mosaic, enhanced masonry layouts, layout switcher, LQIP blur-up pipeline (completed 2026-03-20)
 - [x] **Phase 17: Gallery Player** - Fullscreen lightbox with zoom/pan/swipe, EXIF overlay, filmstrip navigation, mobile touch gestures (completed 2026-03-20)
 - [x] **Phase 18: Client Interactions & Gallery UX** - Favorites, selections with quotas, comments, WebSocket sync, AI tooltips, bulk actions, settings presets, sub-gallery permissions (completed 2026-03-20)
-- [ ] **Phase 19: Downloads & Delivery** - Batch ZIP downloads, size options, gallery expiration with reminder emails, download tracking
+- [x] **Phase 19: Downloads & Delivery** - Batch ZIP downloads, size options, gallery expiration with reminder emails, download tracking (completed 2026-03-20)
 - [ ] **Phase 20: Sharing, Analytics & Polish** - OG previews, QR codes, embeds, dark/light toggle, branded password page, background music, per-gallery analytics, gallery discovery
 
 ### Phase 15: Foundation Refactor & Data Model
@@ -219,9 +219,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 19-01-PLAN.md — Backend download infrastructure: DB migration, download service with policy enforcement and resize, ZIP worker, download tracking API
-- [ ] 19-02-PLAN.md — Gallery expiration: middleware, reminder email worker, expired gallery page, settings update
-- [ ] 19-03-PLAN.md — Frontend download UX: batch download modal, SSE progress bar, expiration countdown, download tracking panel
+- [x] 19-01-PLAN.md — Backend download infrastructure: DB migration, download service with policy enforcement and resize, ZIP worker, download tracking API
+- [x] 19-02-PLAN.md — Gallery expiration: middleware, reminder email worker, expired gallery page, settings update
+- [x] 19-03-PLAN.md — Frontend download UX: batch download modal, SSE progress bar, expiration countdown, download tracking panel
 
 ### Phase 20: Sharing, Analytics & Polish
 **Goal**: Galleries are shareable with rich previews, photographers see per-gallery engagement data, and all gallery experiences are polished across themes and devices
@@ -322,7 +322,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 16. Gallery Layout Engine & Progressive Loading | 3/3 | Complete    | 2026-03-20 | - |
 | 17. Gallery Player | v1.2 | Complete    | 2026-03-20 | 2026-03-20 |
 | 18. Client Interactions & Gallery UX | 3/3 | Complete    | 2026-03-20 | - |
-| 19. Downloads & Delivery | 2/3 | In Progress|  | - |
+| 19. Downloads & Delivery | 3/3 | Complete | 2026-03-20 | 2026-03-20 |
 | 20. Sharing, Analytics & Polish | v1.2 | 0/? | Not started | - |
 | 21. Onboarding & Feature Discovery | v1.3 | 0/? | Not started | - |
 | 22. Pricing & Monetization UX | v1.3 | 0/? | Not started | - |
