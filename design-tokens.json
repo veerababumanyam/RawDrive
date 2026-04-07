@@ -1,0 +1,391 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "_meta": {
+    "name": "RawDrive Design Token System",
+    "version": "1.0.0",
+    "description": "Single source of truth for all visual styling across RawDrive. Every component, page, agent prompt, and design tool reads from this file. Change it once — everything cascades.",
+    "lastUpdated": "2026-04-07",
+    "generatesTo": [
+      "frontend/src/index.css            — Tailwind CSS v4 custom properties",
+      "frontend/src/lib/tokens.ts         — TypeScript token constants for runtime use",
+      ".stitch/DESIGN.md                  — Stitch MCP design system definition",
+      "component-registry.json            — Component catalog token references"
+    ],
+    "themeSystem": {
+      "activeTheme": "liquid-glass",
+      "availableThemes": ["liquid-glass", "liquid-glass-dark", "midnight"],
+      "extensible": true,
+      "note": "Add new themes by adding a key under 'themes'. The build script picks up all theme keys automatically."
+    }
+  },
+
+  "brand": {
+    "_description": "User-editable branding. Studios can override these in their workspace settings (stored in DB). These are the platform defaults.",
+    "name": "RawDrive",
+    "tagline": "The Operating System for Professional Photography in India",
+    "logoPath": "frontend/public/logo/android-chrome-512x512.png",
+    "faviconPath": "frontend/public/logo/favicon-32x32.png",
+    "domain": "rawdrive.in",
+    "locale": "en-IN",
+    "supportedLocales": ["en-IN", "hi", "te", "ta", "kn", "mr", "gu", "bn", "ml", "pa", "or"],
+    "socialProfiles": {
+      "instagram": "",
+      "twitter": "",
+      "youtube": "",
+      "linkedin": ""
+    },
+    "legalEntity": {
+      "companyName": "",
+      "registeredAddress": "",
+      "dpoEmail": "privacy@rawdrive.in"
+    }
+  },
+
+  "themes": {
+    "liquid-glass": {
+      "_description": "Default light theme. Liquid Glass aesthetic inspired by iOS 26 / macOS Tahoe. Translucent surfaces, soft shadows, depth through blur.",
+      "colorMode": "light",
+
+      "surface": {
+        "base":        { "value": "hsl(220, 20%, 97%)",   "description": "Primary page background" },
+        "elevated":    { "value": "hsl(0, 0%, 100%)",     "description": "Cards, modals, raised elements" },
+        "sunken":      { "value": "hsl(220, 15%, 93%)",   "description": "Secondary backgrounds, inset areas" },
+        "overlay":     { "value": "hsla(220, 20%, 97%, 0.80)", "description": "Modal/dialog backdrop" }
+      },
+
+      "text": {
+        "primary":     { "value": "hsl(220, 25%, 10%)",   "description": "High-contrast headers, body text" },
+        "secondary":   { "value": "hsl(220, 15%, 40%)",   "description": "Subheaders, descriptive text" },
+        "tertiary":    { "value": "hsl(220, 10%, 55%)",   "description": "Captions, timestamps, metadata" },
+        "inverse":     { "value": "hsl(0, 0%, 100%)",     "description": "Text on dark/accent backgrounds" }
+      },
+
+      "accent": {
+        "default":     { "value": "hsl(221, 83%, 53%)",   "description": "Brand color — primary buttons, links, highlights (blue-600)" },
+        "hover":       { "value": "hsl(221, 83%, 46%)",   "description": "Accent hover state" },
+        "active":      { "value": "hsl(221, 83%, 40%)",   "description": "Accent pressed state" },
+        "subtle":      { "value": "hsla(221, 83%, 53%, 0.10)", "description": "Accent background wash (10% opacity)" },
+        "muted":       { "value": "hsla(221, 83%, 53%, 0.20)", "description": "Accent background medium (20% opacity)" }
+      },
+
+      "semantic": {
+        "success":     { "value": "hsl(142, 71%, 45%)",   "description": "Positive actions, confirmations" },
+        "warning":     { "value": "hsl(38, 92%, 50%)",    "description": "Caution states, pending actions" },
+        "destructive": { "value": "hsl(0, 84%, 60%)",     "description": "Errors, destructive actions, critical alerts" },
+        "info":        { "value": "hsl(199, 89%, 48%)",   "description": "Informational states, tips" }
+      },
+
+      "border": {
+        "default":     { "value": "hsl(220, 13%, 87%)",   "description": "Default border color" },
+        "strong":      { "value": "hsl(220, 13%, 75%)",   "description": "Emphasized borders, dividers" },
+        "subtle":      { "value": "hsl(220, 13%, 93%)",   "description": "Subtle borders, hairlines" },
+        "focus":       { "value": "hsl(221, 83%, 53%)",   "description": "Focus ring color (matches accent)" }
+      },
+
+      "glass": {
+        "blur":        { "value": "12px",   "description": "backdrop-blur intensity for glassmorphism" },
+        "saturation":  { "value": "180%",   "description": "backdrop-saturate for glass vibrancy" },
+        "borderOpacity": { "value": "0.18", "description": "Border opacity for glass edges" }
+      }
+    },
+
+    "liquid-glass-dark": {
+      "_description": "Dark variant of Liquid Glass. Same depth and translucency principles, inverted for dark backgrounds. Reduces eye strain during long editing sessions.",
+      "colorMode": "dark",
+
+      "surface": {
+        "base":        { "value": "hsl(222, 25%, 8%)",    "description": "Primary page background" },
+        "elevated":    { "value": "hsl(222, 20%, 14%)",   "description": "Cards, modals, raised elements" },
+        "sunken":      { "value": "hsl(222, 25%, 5%)",    "description": "Secondary backgrounds, inset areas" },
+        "overlay":     { "value": "hsla(222, 25%, 8%, 0.85)", "description": "Modal/dialog backdrop" }
+      },
+
+      "text": {
+        "primary":     { "value": "hsl(220, 15%, 93%)",   "description": "High-contrast headers, body text" },
+        "secondary":   { "value": "hsl(220, 10%, 65%)",   "description": "Subheaders, descriptive text" },
+        "tertiary":    { "value": "hsl(220, 8%, 48%)",    "description": "Captions, timestamps, metadata" },
+        "inverse":     { "value": "hsl(220, 25%, 10%)",   "description": "Text on light/accent backgrounds" }
+      },
+
+      "accent": {
+        "default":     { "value": "hsl(217, 91%, 60%)",   "description": "Brand color — brighter blue for dark backgrounds" },
+        "hover":       { "value": "hsl(217, 91%, 67%)",   "description": "Accent hover state" },
+        "active":      { "value": "hsl(217, 91%, 53%)",   "description": "Accent pressed state" },
+        "subtle":      { "value": "hsla(217, 91%, 60%, 0.12)", "description": "Accent background wash" },
+        "muted":       { "value": "hsla(217, 91%, 60%, 0.22)", "description": "Accent background medium" }
+      },
+
+      "semantic": {
+        "success":     { "value": "hsl(142, 60%, 55%)",   "description": "Positive actions" },
+        "warning":     { "value": "hsl(38, 85%, 55%)",    "description": "Caution states" },
+        "destructive": { "value": "hsl(0, 72%, 65%)",     "description": "Errors, destructive actions" },
+        "info":        { "value": "hsl(199, 80%, 55%)",   "description": "Informational states" }
+      },
+
+      "border": {
+        "default":     { "value": "hsl(222, 15%, 22%)",   "description": "Default border color" },
+        "strong":      { "value": "hsl(222, 15%, 32%)",   "description": "Emphasized borders" },
+        "subtle":      { "value": "hsl(222, 15%, 15%)",   "description": "Subtle borders" },
+        "focus":       { "value": "hsl(217, 91%, 60%)",   "description": "Focus ring" }
+      },
+
+      "glass": {
+        "blur":        { "value": "16px",   "description": "Slightly stronger blur on dark for contrast" },
+        "saturation":  { "value": "150%",   "description": "Reduced saturation for dark mode" },
+        "borderOpacity": { "value": "0.12", "description": "Softer glass edges in dark" }
+      }
+    },
+
+    "midnight": {
+      "_description": "Rich, deep-dark theme for photographers who prefer dramatic, studio-grade UI. AMOLED-friendly true blacks with warm gold accent. Ideal for photo editing environments where UI should disappear.",
+      "colorMode": "dark",
+
+      "surface": {
+        "base":        { "value": "hsl(240, 15%, 3%)",    "description": "Near-black base — AMOLED friendly" },
+        "elevated":    { "value": "hsl(240, 12%, 9%)",    "description": "Slightly lifted cards" },
+        "sunken":      { "value": "hsl(0, 0%, 0%)",       "description": "True black insets" },
+        "overlay":     { "value": "hsla(240, 15%, 3%, 0.90)", "description": "Modal backdrop" }
+      },
+
+      "text": {
+        "primary":     { "value": "hsl(40, 15%, 90%)",    "description": "Warm off-white for readability" },
+        "secondary":   { "value": "hsl(40, 8%, 60%)",     "description": "Warm muted secondary" },
+        "tertiary":    { "value": "hsl(40, 5%, 42%)",     "description": "Subdued metadata" },
+        "inverse":     { "value": "hsl(240, 15%, 5%)",    "description": "Text on accent backgrounds" }
+      },
+
+      "accent": {
+        "default":     { "value": "hsl(42, 78%, 55%)",    "description": "Warm gold accent — evokes studio warmth" },
+        "hover":       { "value": "hsl(42, 78%, 62%)",    "description": "Accent hover" },
+        "active":      { "value": "hsl(42, 78%, 48%)",    "description": "Accent pressed" },
+        "subtle":      { "value": "hsla(42, 78%, 55%, 0.10)", "description": "Gold wash" },
+        "muted":       { "value": "hsla(42, 78%, 55%, 0.20)", "description": "Gold medium" }
+      },
+
+      "semantic": {
+        "success":     { "value": "hsl(160, 60%, 45%)",   "description": "Teal-green success" },
+        "warning":     { "value": "hsl(30, 90%, 55%)",    "description": "Warm orange warning" },
+        "destructive": { "value": "hsl(0, 65%, 58%)",     "description": "Muted red for dark context" },
+        "info":        { "value": "hsl(200, 70%, 55%)",   "description": "Cool blue info" }
+      },
+
+      "border": {
+        "default":     { "value": "hsl(240, 10%, 15%)",   "description": "Default border" },
+        "strong":      { "value": "hsl(240, 10%, 25%)",   "description": "Emphasized borders" },
+        "subtle":      { "value": "hsl(240, 10%, 8%)",    "description": "Barely visible borders" },
+        "focus":       { "value": "hsl(42, 78%, 55%)",    "description": "Gold focus ring" }
+      },
+
+      "glass": {
+        "blur":        { "value": "20px",   "description": "Heavy blur for dramatic depth" },
+        "saturation":  { "value": "120%",   "description": "Low saturation — moody feel" },
+        "borderOpacity": { "value": "0.08", "description": "Near-invisible glass edges" }
+      }
+    }
+  },
+
+  "typography": {
+    "_description": "System font stack. No web fonts loaded — optimizes LCP and supports Indic scripts natively via OS fonts.",
+    "fontFamily": {
+      "sans":  { "value": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" },
+      "mono":  { "value": "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" }
+    },
+    "scale": {
+      "xs":    { "value": "0.75rem",   "lineHeight": "1rem",    "usage": "Caption, metadata, badges" },
+      "sm":    { "value": "0.875rem",  "lineHeight": "1.25rem", "usage": "Secondary text, form labels" },
+      "base":  { "value": "1rem",      "lineHeight": "1.5rem",  "usage": "Body text, paragraphs" },
+      "lg":    { "value": "1.125rem",  "lineHeight": "1.75rem", "usage": "Card titles, emphasized body" },
+      "xl":    { "value": "1.25rem",   "lineHeight": "1.75rem", "usage": "Section subheadings" },
+      "2xl":   { "value": "1.5rem",    "lineHeight": "2rem",    "usage": "Section headings (h2)" },
+      "3xl":   { "value": "1.875rem",  "lineHeight": "2.25rem", "usage": "Page titles (h1)" },
+      "4xl":   { "value": "2.25rem",   "lineHeight": "2.5rem",  "usage": "Hero headings" },
+      "5xl":   { "value": "3rem",      "lineHeight": "1",       "usage": "Landing page hero" }
+    },
+    "weight": {
+      "normal":    { "value": "400" },
+      "medium":    { "value": "500" },
+      "semibold":  { "value": "600" },
+      "bold":      { "value": "700" }
+    }
+  },
+
+  "spacing": {
+    "_description": "4px base unit. All spacing derives from this scale. No arbitrary pixel values.",
+    "unit": "4px",
+    "scale": {
+      "0":    { "value": "0" },
+      "0.5":  { "value": "0.125rem",  "px": "2px" },
+      "1":    { "value": "0.25rem",   "px": "4px" },
+      "1.5":  { "value": "0.375rem",  "px": "6px" },
+      "2":    { "value": "0.5rem",    "px": "8px" },
+      "3":    { "value": "0.75rem",   "px": "12px" },
+      "4":    { "value": "1rem",      "px": "16px" },
+      "5":    { "value": "1.25rem",   "px": "20px" },
+      "6":    { "value": "1.5rem",    "px": "24px" },
+      "8":    { "value": "2rem",      "px": "32px" },
+      "10":   { "value": "2.5rem",    "px": "40px" },
+      "12":   { "value": "3rem",      "px": "48px" },
+      "16":   { "value": "4rem",      "px": "64px" },
+      "20":   { "value": "5rem",      "px": "80px" },
+      "24":   { "value": "6rem",      "px": "96px" }
+    }
+  },
+
+  "radii": {
+    "_description": "Border radius tokens. Liquid Glass favors generous rounding.",
+    "none":   { "value": "0" },
+    "sm":     { "value": "0.25rem",  "px": "4px",  "usage": "Badges, chips" },
+    "md":     { "value": "0.375rem", "px": "6px",  "usage": "Inputs, small buttons" },
+    "lg":     { "value": "0.5rem",   "px": "8px",  "usage": "Cards, dialogs" },
+    "xl":     { "value": "0.75rem",  "px": "12px", "usage": "Large cards, modals" },
+    "2xl":    { "value": "1rem",     "px": "16px", "usage": "Hero cards, feature sections" },
+    "full":   { "value": "9999px",                  "usage": "Pills, avatars, circular elements" }
+  },
+
+  "shadows": {
+    "_description": "Shadow tokens. 'glass' is the primary shadow for Liquid Glass surfaces. Never use raw Tailwind shadow primitives.",
+    "sm":     { "value": "0 1px 2px 0 hsla(0, 0%, 0%, 0.05)",                    "usage": "Subtle elevation (badges, tooltips)" },
+    "md":     { "value": "0 4px 6px -1px hsla(0, 0%, 0%, 0.07), 0 2px 4px -2px hsla(0, 0%, 0%, 0.05)", "usage": "Medium elevation (dropdowns)" },
+    "glass":  { "value": "0 8px 32px -4px hsla(0, 0%, 0%, 0.08), 0 4px 8px -2px hsla(0, 0%, 0%, 0.04)", "usage": "PRIMARY — glassmorphism cards, navbar, modals" },
+    "lg":     { "value": "0 10px 15px -3px hsla(0, 0%, 0%, 0.08), 0 4px 6px -4px hsla(0, 0%, 0%, 0.04)", "usage": "High elevation (popovers, floating panels)" },
+    "xl":     { "value": "0 20px 25px -5px hsla(0, 0%, 0%, 0.10), 0 8px 10px -6px hsla(0, 0%, 0%, 0.04)", "usage": "Max elevation (full modals, lightbox)" },
+    "inner":  { "value": "inset 0 2px 4px 0 hsla(0, 0%, 0%, 0.05)",              "usage": "Sunken inputs, inset areas" }
+  },
+
+  "motion": {
+    "_description": "Animation tokens. All transitions use these durations and easings. Respects prefers-reduced-motion automatically.",
+    "duration": {
+      "instant":  { "value": "0ms",    "usage": "Reduced motion fallback" },
+      "fast":     { "value": "150ms",  "usage": "Micro-interactions (hover, focus)" },
+      "normal":   { "value": "300ms",  "usage": "Component transitions (expand, collapse, modal)" },
+      "slow":     { "value": "500ms",  "usage": "Page transitions, large layout shifts" },
+      "shimmer":  { "value": "1500ms", "usage": "Skeleton loading shimmer (infinite)" }
+    },
+    "easing": {
+      "default":  { "value": "cubic-bezier(0.4, 0, 0.2, 1)", "usage": "Standard easing — most transitions" },
+      "in":       { "value": "cubic-bezier(0.4, 0, 1, 1)",   "usage": "Elements leaving view" },
+      "out":      { "value": "cubic-bezier(0, 0, 0.2, 1)",   "usage": "Elements entering view" },
+      "bounce":   { "value": "cubic-bezier(0.34, 1.56, 0.64, 1)", "usage": "Playful interactions (FAB, notifications)" }
+    }
+  },
+
+  "breakpoints": {
+    "_description": "Responsive breakpoints. Mobile-first (min-width). Matches Tailwind v4 defaults with India-specific xs for budget Android phones.",
+    "xs":   { "value": "0px",     "target": "Small phones (budget Android)" },
+    "sm":   { "value": "480px",   "target": "Large phones" },
+    "md":   { "value": "640px",   "target": "Small tablets" },
+    "lg":   { "value": "768px",   "target": "Tablets, small laptops" },
+    "xl":   { "value": "1024px",  "target": "Laptops" },
+    "2xl":  { "value": "1280px",  "target": "Desktops" }
+  },
+
+  "zIndex": {
+    "_description": "Z-index scale to prevent stacking context wars.",
+    "base":       { "value": "0" },
+    "dropdown":   { "value": "10" },
+    "sticky":     { "value": "20",   "usage": "Sticky navbar, section nav" },
+    "overlay":    { "value": "30",   "usage": "Modal backdrops, drawer overlays" },
+    "modal":      { "value": "40",   "usage": "Modals, dialogs" },
+    "popover":    { "value": "50",   "usage": "Popovers, tooltips" },
+    "toast":      { "value": "60",   "usage": "Toast notifications (always on top)" }
+  },
+
+  "components": {
+    "_description": "Component-level tokens. These compose the primitive tokens above into component-specific presets.",
+
+    "navbar": {
+      "height":         { "value": "64px" },
+      "heightMobile":   { "value": "56px" },
+      "blur":           { "ref": "themes.{active}.glass.blur" },
+      "background":     { "ref": "themes.{active}.surface.overlay" },
+      "shadow":         { "ref": "shadows.glass" },
+      "zIndex":         { "ref": "zIndex.sticky" }
+    },
+
+    "card": {
+      "background":     { "ref": "themes.{active}.surface.elevated" },
+      "border":         { "ref": "themes.{active}.border.default" },
+      "borderRadius":   { "ref": "radii.xl" },
+      "shadow":         { "ref": "shadows.glass" },
+      "hoverScale":     { "value": "1.01" },
+      "hoverTransition": { "ref": "motion.duration.normal" },
+      "padding":        { "ref": "spacing.scale.6" }
+    },
+
+    "button": {
+      "primaryBg":       { "ref": "themes.{active}.accent.default" },
+      "primaryHoverBg":  { "ref": "themes.{active}.accent.hover" },
+      "primaryActiveBg": { "ref": "themes.{active}.accent.active" },
+      "primaryText":     { "ref": "themes.{active}.text.inverse" },
+      "borderRadius":    { "ref": "radii.lg" },
+      "paddingX":        { "ref": "spacing.scale.4" },
+      "paddingY":        { "ref": "spacing.scale.2" },
+      "height":          { "value": "40px" },
+      "heightSm":        { "value": "32px" },
+      "heightLg":        { "value": "48px" },
+      "transition":      { "ref": "motion.duration.fast" }
+    },
+
+    "input": {
+      "background":      { "ref": "themes.{active}.surface.sunken" },
+      "border":          { "ref": "themes.{active}.border.default" },
+      "borderFocus":     { "ref": "themes.{active}.border.focus" },
+      "borderRadius":    { "ref": "radii.md" },
+      "height":          { "value": "40px" },
+      "paddingX":        { "ref": "spacing.scale.3" },
+      "placeholderColor": { "ref": "themes.{active}.text.tertiary" }
+    },
+
+    "modal": {
+      "background":     { "ref": "themes.{active}.surface.elevated" },
+      "overlay":        { "ref": "themes.{active}.surface.overlay" },
+      "borderRadius":   { "ref": "radii.xl" },
+      "shadow":         { "ref": "shadows.xl" },
+      "blur":           { "ref": "themes.{active}.glass.blur" },
+      "zIndex":         { "ref": "zIndex.modal" },
+      "maxWidth":       { "value": "32rem" }
+    },
+
+    "sidebar": {
+      "widthExpanded":   { "value": "240px" },
+      "widthCollapsed":  { "value": "64px" },
+      "background":      { "ref": "themes.{active}.surface.elevated" },
+      "border":          { "ref": "themes.{active}.border.subtle" }
+    },
+
+    "toast": {
+      "zIndex":          { "ref": "zIndex.toast" },
+      "borderRadius":    { "ref": "radii.lg" },
+      "shadow":          { "ref": "shadows.lg" },
+      "autoDismiss":     { "value": "5000ms" }
+    },
+
+    "gallery": {
+      "gridGap":         { "ref": "spacing.scale.3" },
+      "columnsMobile":   { "value": "1" },
+      "columnsTablet":   { "value": "2" },
+      "columnsDesktop":  { "value": "3-4" },
+      "imageRadius":     { "ref": "radii.lg" },
+      "hoverOverlayBg":  { "value": "hsla(0, 0%, 0%, 0.4)" },
+      "staggerDelay":    { "value": "50ms" }
+    },
+
+    "skeleton": {
+      "baseColor":       { "ref": "themes.{active}.surface.sunken" },
+      "shimmerDuration": { "ref": "motion.duration.shimmer" },
+      "shimmerEasing":   { "value": "linear" }
+    },
+
+    "focusRing": {
+      "width":           { "value": "2px" },
+      "offset":          { "value": "2px" },
+      "color":           { "ref": "themes.{active}.border.focus" },
+      "style":           { "value": "solid" }
+    },
+
+    "touchTarget": {
+      "minimum":         { "value": "44px", "description": "WCAG minimum touch target" },
+      "gap":             { "value": "8px",  "description": "Minimum gap between touch targets" }
+    }
+  }
+}

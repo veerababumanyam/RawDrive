@@ -1,0 +1,68 @@
+{
+  "projectId": "cobolt-rawdrive-f651e4",
+  "projectType": "greenfield",
+  "currentStage": "S5-S6",
+  "version": "1.0.0",
+  "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
+  "flags": {
+    "generateSkills": false,
+    "hasUI": true
+  },
+  "playwright": {
+    "installed": true,
+    "configPath": "e2e/playwright.config.js",
+    "lastSmokeTest": null,
+    "smokeTestPassed": null
+  },
+  "initCheckpoints": {
+    "detect-configure": "completed",
+    "create-directories": "completed",
+    "create-config": "completed",
+    "generate-docker": "completed",
+    "generate-playwright": "completed",
+    "install-quality": "completed",
+    "generate-skills": "skipped",
+    "create-claude-md": "completed"
+  },
+  "lastUpdated": "2026-04-07T18:31:56.781Z",
+  "planning": {
+    "completedAt": "2026-04-07T13:39:14.048Z",
+    "phases": 5,
+    "artifacts": 63,
+    "totalSize": "1.2MB",
+    "milestones": 10,
+    "epics": 28,
+    "stories": 85,
+    "requirements": {
+      "FRs": 705,
+      "NFRs": 259,
+      "TRs": 66,
+      "IRs": 110,
+      "Day2NFRs": 77,
+      "total": 1217
+    },
+    "readinessVerdict": "BUILD_AUTHORIZED",
+    "readinessScore": 4.5,
+    "firstMilestone": "M1"
+  },
+  "currentMilestone": "M1",
+  "pipeline": {
+    "currentStage": "S5-S6",
+    "currentMilestone": "M1",
+    "infra_verified": true,
+    "infra_started": true,
+    "infra_healthy": true
+  },
+  "build": {
+    "version": "2.0.0",
+    "currentStep": "00-preflight",
+    "currentMilestone": "M1",
+    "autoMode": false,
+    "parallelMode": false,
+    "startedAt": "2026-04-07T18:26:35Z",
+    "fixIterations": 0,
+    "reviewCycles": 0,
+    "phantomRates": {},
+    "agentScoring": {}
+  }
+}

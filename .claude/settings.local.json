@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(wc -c _cobolt-output/latest/planning/*.md)",
+      "mcp__StitchMCP__create_project",
+      "mcp__StitchMCP__get_project",
+      "mcp__StitchMCP__list_projects",
+      "mcp__StitchMCP__list_screens",
+      "mcp__StitchMCP__get_screen",
+      "mcp__StitchMCP__generate_screen_from_text",
+      "mcp__StitchMCP__edit_screens",
+      "mcp__StitchMCP__generate_variants",
+      "mcp__StitchMCP__create_design_system",
+      "mcp__StitchMCP__update_design_system",
+      "mcp__StitchMCP__list_design_systems",
+      "mcp__StitchMCP__apply_design_system",
+      "mcp__Figma__get_file",
+      "mcp__Figma__get_file_nodes",
+      "mcp__Figma__get_file_components",
+      "mcp__Figma__get_file_styles",
+      "mcp__Figma__get_file_images",
+      "mcp__Figma__get_image_fills",
+      "mcp__Figma__get_comments",
+      "mcp__Figma__get_team_projects",
+      "mcp__Figma__get_project_files",
+      "mcp__Figma__get_component_sets",
+      "mcp__Figma__get_team_components",
+      "mcp__Figma__get_team_styles"
+    ]
+  }
+}

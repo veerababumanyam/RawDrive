@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "StitchMCP": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://stitch.googleapis.com/mcp", "--header", "X-Goog-Api-Key: ${STITCH_API_KEY}"],
+      "env": {
+        "STITCH_API_KEY": "AQ.Ab8RN6JNw5z0D_PCq1b5jbByHvYquXPbg6U6naaWkXQHwvcKCg"
+      }
+    },
+    "Figma": {
+      "command": "npx",
+      "args": ["-y", "@thirdstrandstudio/mcp-figma"],
+      "env": {
+        "FIGMA_API_KEY": "figd_fYF4nPcfAt_i4sk2vILEcyyi6ZIBhlgiSmBUB7W7"
+      }
+    }
+  }
+}

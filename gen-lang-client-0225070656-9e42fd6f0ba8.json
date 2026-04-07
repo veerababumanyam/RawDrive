@@ -1,0 +1,13 @@
+{
+  "web": {
+    "client_id": "1057612383675-qg1horr2ng0pu5tnbbu3c1m5jbq8pnir.apps.googleusercontent.com",
+    "project_id": "gen-lang-client-0225070656",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "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",
+    "javascript_origins": [
+      "https://www.rawdrive.in"
+    ]
+  }
+}

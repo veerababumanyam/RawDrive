@@ -1,0 +1,13 @@
+# CoBolt managed
+.env.cobolt
+.env.mcp
+_cobolt-output/
+_cobolt-docker/.env
+node_modules/
+dist/
+.next/
+build/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
