@@ -1,0 +1,45 @@
+{
+  "name": "RawDrive",
+  "short_name": "RawDrive",
+  "description": "The Operating System for Professional Photography in India",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#3B82F6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/logo/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["photography", "business", "productivity"],
+  "lang": "en-IN",
+  "dir": "ltr",
+  "screenshots": [],
+  "share_target": {
+    "action": "/upload",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "file",
+          "accept": ["image/*", ".cr2", ".nef", ".arw", ".dng", ".raf"]
+        }
+      ]
+    }
+  }
+}

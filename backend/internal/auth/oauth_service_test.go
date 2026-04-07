@@ -58,13 +58,13 @@ func newMockProvider(profile *auth.OAuthProfile) *mockOAuthProvider {
 
 func TestGoogleOAuth_InitiateFlow(t *testing.T) {
 	provider := newMockProvider(nil)
-	svc := auth.NewOAuthService(provider, &mockUserStore{users: map[string]*auth.User{}})
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, &mockUserStore{users: map[string]*auth.User{}})
 	ctx := context.Background()
 
 	redirectURL, err := svc.InitiateGoogleAuth(ctx)
 	require.NoError(t, err)
 	assert.NotEmpty(t, redirectURL)
-	assert.Contains(t, redirectURL, "code_challenge", "should include PKCE code_challenge")
+	assert.Contains(t, redirectURL, "client_id=test-client-id", "should include client_id")
 	assert.Contains(t, redirectURL, "state=", "should include state parameter")
 }
 
@@ -77,7 +77,7 @@ func TestGoogleOAuth_HandleCallback(t *testing.T) {
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
@@ -95,7 +95,7 @@ func TestGoogleOAuth_NewUser(t *testing.T) {
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
@@ -115,7 +115,7 @@ func TestGoogleOAuth_ExistingUser(t *testing.T) {
 	store := &mockUserStore{users: map[string]*auth.User{
 		"existing@gmail.com": {ID: "existing-uuid", Email: "existing@gmail.com"},
 	}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
@@ -133,7 +133,7 @@ func TestGoogleOAuth_AccountLinking(t *testing.T) {
 	store := &mockUserStore{users: map[string]*auth.User{
 		"linked@gmail.com": {ID: "link-uuid", Email: "linked@gmail.com"},
 	}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
@@ -151,7 +151,7 @@ func TestGoogleOAuth_RevokedConsent(t *testing.T) {
 		},
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "revoked-code", "valid-state")
@@ -169,7 +169,7 @@ func TestGoogleOAuth_ExpiredToken(t *testing.T) {
 		},
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
@@ -186,7 +186,7 @@ func TestGoogleOAuth_ProfileImport(t *testing.T) {
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(provider, store)
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
 	ctx := context.Background()
 
 	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")

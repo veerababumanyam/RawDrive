@@ -1,0 +1,73 @@
+package user
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// PgRepo implements Repository using PostgreSQL.
+type PgRepo struct {
+	pool *pgxpool.Pool
+}
+
+// NewPgRepo creates a new PostgreSQL-backed user repository.
+func NewPgRepo(pool *pgxpool.Pool) *PgRepo {
+	return &PgRepo{pool: pool}
+}
+
+func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO users (email, phone, display_name, avatar_url)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id`,
+		u.Email, u.Phone, u.DisplayName, u.AvatarURL,
+	).Scan(&u.ID)
+	if err != nil {
+		return nil, fmt.Errorf("user repo create: %w", err)
+	}
+	return u, nil
+}
+
+func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
+	u := &User{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,'')
+		 FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL)
+	if err == pgx.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("user repo get by id: %w", err)
+	}
+	return u, nil
+}
+
+func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
+	u := &User{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,'')
+		 FROM users WHERE email = $1`, email,
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL)
+	if err == pgx.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("user repo get by email: %w", err)
+	}
+	return u, nil
+}
+
+func (r *PgRepo) Update(ctx context.Context, u *User) (*User, error) {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET display_name = $1, avatar_url = $2, updated_at = now() WHERE id = $3`,
+		u.DisplayName, u.AvatarURL, u.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("user repo update: %w", err)
+	}
+	return u, nil
+}

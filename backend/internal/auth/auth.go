@@ -220,17 +220,21 @@ type JWTService interface {
 	GenerateAccessToken(ctx context.Context, claims TokenClaims) (string, error)
 	ParseAccessToken(ctx context.Context, tokenStr string) (*TokenClaims, error)
 	GenerateRefreshToken(ctx context.Context, userID, familyID string) (string, error)
+	GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, stateID string) (string, error)
 	RotateRefreshToken(ctx context.Context, oldToken string) (newAccess string, newRefresh string, err error)
 	InspectRefreshToken(ctx context.Context, tokenStr string) (*RefreshTokenInfo, error)
 	RevokeSession(ctx context.Context, familyID string) error
 }
 
 type refreshEntry struct {
-	sub       string
-	familyID  string
-	expiresAt time.Time
-	revoked   bool
-	used      bool
+	sub         string
+	familyID    string
+	workspaceID string
+	role        string
+	stateID     string
+	expiresAt   time.Time
+	revoked     bool
+	used        bool
 }
 
 type jwtService struct {
@@ -356,6 +360,42 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID, familyID 
 	return tokenStr, nil
 }
 
+func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, stateID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.userSessions[userID] == nil {
+		s.userSessions[userID] = make(map[string]bool)
+	}
+
+	activeCount := 0
+	for fid, active := range s.userSessions[userID] {
+		if active && !s.families[fid] {
+			activeCount++
+		}
+	}
+	if !s.userSessions[userID][familyID] && activeCount >= s.config.MaxSessions {
+		return "", errors.New("max concurrent sessions exceeded")
+	}
+
+	tokenStr, err := s.generateRefreshTokenString()
+	if err != nil {
+		return "", err
+	}
+
+	s.refreshTokens[tokenStr] = &refreshEntry{
+		sub:         userID,
+		familyID:    familyID,
+		workspaceID: workspaceID,
+		role:        role,
+		stateID:     stateID,
+		expiresAt:   time.Now().Add(s.config.RefreshTokenExpiry),
+	}
+	s.userSessions[userID][familyID] = true
+
+	return tokenStr, nil
+}
+
 func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (string, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -391,19 +431,32 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 	}
 
 	s.refreshTokens[newTokenStr] = &refreshEntry{
-		sub:       entry.sub,
-		familyID:  entry.familyID,
-		expiresAt: time.Now().Add(s.config.RefreshTokenExpiry),
-		revoked:   false,
-		used:      false,
+		sub:         entry.sub,
+		familyID:    entry.familyID,
+		workspaceID: entry.workspaceID,
+		role:        entry.role,
+		stateID:     entry.stateID,
+		expiresAt:   time.Now().Add(s.config.RefreshTokenExpiry),
 	}
 
-	// Generate new access token
+	// Generate new access token — carry forward claims from original login
+	wsID := entry.workspaceID
+	role := entry.role
+	stID := entry.stateID
+	if wsID == "" {
+		wsID = "pending-onboarding"
+	}
+	if role == "" {
+		role = "Owner"
+	}
+	if stID == "" {
+		stID = "pending-onboarding"
+	}
 	accessToken, err := s.generateAccessTokenUnlocked(TokenClaims{
 		Sub:         entry.sub,
-		WorkspaceID: "ws-default",
-		Role:        "Owner",
-		StateID:     "state-default",
+		WorkspaceID: wsID,
+		Role:        role,
+		StateID:     stID,
 	})
 	if err != nil {
 		return "", "", err
@@ -451,15 +504,23 @@ func (s *jwtService) RevokeSession(ctx context.Context, familyID string) error {
 
 // ──────────────────────────── OAuth Service ────────────────────────────
 
+type OAuthConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURI  string
+}
+
 type OAuthService struct {
+	config   OAuthConfig
 	provider OAuthProvider
 	store    UserStore
 	mu       sync.Mutex
 	states   map[string]bool
 }
 
-func NewOAuthService(provider OAuthProvider, store UserStore) *OAuthService {
+func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore) *OAuthService {
 	return &OAuthService{
+		config:   config,
 		provider: provider,
 		store:    store,
 		states:   make(map[string]bool),
@@ -467,23 +528,26 @@ func NewOAuthService(provider OAuthProvider, store UserStore) *OAuthService {
 }
 
 func (s *OAuthService) InitiateGoogleAuth(ctx context.Context) (string, error) {
+	if s.config.ClientID == "" {
+		return "", fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_ID not set")
+	}
+
 	stateBytes := make([]byte, 16)
 	if _, err := rand.Read(stateBytes); err != nil {
 		return "", err
 	}
 	state := fmt.Sprintf("%x", stateBytes)
 
-	challengeBytes := make([]byte, 32)
-	if _, err := rand.Read(challengeBytes); err != nil {
-		return "", err
-	}
-	codeChallenge := fmt.Sprintf("%x", challengeBytes)
-
 	s.mu.Lock()
 	s.states[state] = true
 	s.mu.Unlock()
 
-	url := fmt.Sprintf("https://accounts.google.com/o/oauth2/v2/auth?state=%s&code_challenge=%s", state, codeChallenge)
+	url := fmt.Sprintf(
+		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=openid+email+profile&state=%s&access_type=offline&prompt=consent",
+		s.config.ClientID,
+		s.config.RedirectURI,
+		state,
+	)
 	return url, nil
 }
 

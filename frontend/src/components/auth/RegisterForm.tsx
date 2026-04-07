@@ -4,9 +4,39 @@ import { useState } from "react";
 import Link from "next/link";
 import { Mail, Phone } from "lucide-react";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
 export function RegisterForm() {
   const [identifier, setIdentifier] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  async function handleRegister() {
+    if (!identifier.trim() || !termsAccepted) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identifier }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Registration failed");
+        return;
+      }
+      setSuccess(true);
+      // Redirect to login to complete OTP verification
+      setTimeout(() => { window.location.href = "/login"; }, 1500);
+    } catch {
+      setError("Network error — is the server running?");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="mt-8 space-y-6">
@@ -56,13 +86,25 @@ export function RegisterForm() {
         </label>
       </div>
 
+      {error && (
+        <div className="rounded-lg bg-error/10 border border-error/20 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-lg bg-success/10 border border-success/20 px-4 py-3 text-sm text-success">
+          Account created! Redirecting to login...
+        </div>
+      )}
+
       <button
         type="button"
-        disabled={!termsAccepted}
+        onClick={handleRegister}
+        disabled={!termsAccepted || loading || !identifier.trim()}
         className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
       >
-        Register
+        {loading ? "Registering..." : "Register"}
       </button>
 
       <div className="relative">

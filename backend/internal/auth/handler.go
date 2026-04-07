@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -50,13 +51,21 @@ type UserService interface {
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
 }
 
+// WorkspaceLookup resolves a user's primary workspace and state.
+type WorkspaceLookup interface {
+	// GetUserWorkspace returns (workspaceID, stateID, error).
+	// Returns ("","",nil) if user has no workspace yet (needs onboarding).
+	GetUserWorkspace(ctx context.Context, userID string) (string, string, error)
+}
+
 // ──────────────────────────── Handler ────────────────────────────
 
 type Handler struct {
-	otp          OTPService
-	jwt          JWTService
-	oauth        *OAuthService
-	users        UserService
+	otp        OTPService
+	jwt        JWTService
+	oauth      *OAuthService
+	users      UserService
+	workspaces WorkspaceLookup
 }
 
 func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserService) *Handler {
@@ -68,11 +77,18 @@ func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserS
 	}
 }
 
+// WithWorkspaceLookup attaches a workspace resolver to the handler.
+func (h *Handler) WithWorkspaceLookup(wl WorkspaceLookup) *Handler {
+	h.workspaces = wl
+	return h
+}
+
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/register", h.Register)
 	r.Post("/verify-otp", h.VerifyOTP)
 	r.Get("/oauth/google", h.OAuthGoogle)
+	r.Get("/oauth/google/callback", h.OAuthGoogleCallback)
 	r.Post("/refresh", h.RefreshToken)
 	r.Post("/logout", h.Logout)
 	return r
@@ -145,19 +161,33 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve user's workspace and state
+	wsID := "pending-onboarding"
+	stateID := "pending-onboarding"
+	role := "Owner"
+	if h.workspaces != nil {
+		resolvedWS, resolvedState, _ := h.workspaces.GetUserWorkspace(r.Context(), userID)
+		if resolvedWS != "" {
+			wsID = resolvedWS
+		}
+		if resolvedState != "" {
+			stateID = resolvedState
+		}
+	}
+
 	// Generate tokens
 	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
 		Sub:         userID,
-		WorkspaceID: "ws-default",
-		Role:        "Owner",
-		StateID:     "state-default",
+		WorkspaceID: wsID,
+		Role:        role,
+		StateID:     stateID,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate access token"})
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshToken(r.Context(), userID, "family-"+userID)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+userID, wsID, role, stateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
@@ -182,6 +212,59 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, url, http.StatusFound)
+}
+
+func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if h.oauth == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "OAuth not configured"})
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+	if code == "" || state == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing code or state"})
+		return
+	}
+
+	user, err := h.oauth.HandleGoogleCallback(r.Context(), code, state)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "OAuth callback failed"})
+		return
+	}
+
+	// Generate tokens for the authenticated user
+	oauthWsID := "pending-onboarding"
+	oauthStateID := "pending-onboarding"
+	if h.workspaces != nil {
+		rws, rst, _ := h.workspaces.GetUserWorkspace(r.Context(), user.ID)
+		if rws != "" {
+			oauthWsID = rws
+		}
+		if rst != "" {
+			oauthStateID = rst
+		}
+	}
+
+	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
+		Sub:         user.ID,
+		WorkspaceID: oauthWsID,
+		Role:        "Owner",
+		StateID:     oauthStateID,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+		return
+	}
+
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+user.ID, oauthWsID, "Owner", oauthStateID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
+		return
+	}
+
+	// Redirect to frontend with tokens as query params (frontend stores them)
+	http.Redirect(w, r, fmt.Sprintf("/login?access_token=%s&refresh_token=%s", accessToken, refreshToken), http.StatusFound)
 }
 
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {

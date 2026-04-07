@@ -216,7 +216,7 @@ func TestOAuthGoogleHandler_Redirect(t *testing.T) {
 	userSvc := newMockUserService()
 
 	// Create a minimal OAuthService
-	oauthSvc := auth.NewOAuthService(nil, nil)
+	oauthSvc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client", RedirectURI: "http://localhost/callback"}, nil, nil)
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userSvc)
 
 	ts := newTestServer(handler)

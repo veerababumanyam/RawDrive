@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 
 export const metadata: Metadata = {
   title: {
@@ -35,11 +36,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="liquid-glass" className="h-full antialiased">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#3B82F6" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      </head>
       <body
         className="min-h-full flex flex-col bg-surface text-text-primary"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         <Navbar />
+        <ServiceWorkerRegister />
         <main className="flex-1">{children}</main>
         <Footer />
       </body>

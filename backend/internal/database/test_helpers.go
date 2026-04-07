@@ -101,7 +101,7 @@ func SeedTestGallery(t *testing.T, pool *pgxpool.Pool, ctx context.Context, work
 
 	var galleryID string
 	err := pool.QueryRow(ctx,
-		`INSERT INTO galleries (workspace_id, name, created_at)
+		`INSERT INTO galleries (workspace_id, title, created_at)
 		 VALUES ($1, $2, NOW())
 		 RETURNING id::text`, workspaceID, name).Scan(&galleryID)
 	if err != nil {
