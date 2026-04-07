@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/logo/android-chrome-512x512.png" alt="RawDrive Logo" width="180" height="180" style="border-radius: 40px; box-shadow: 0 30px 60px rgba(37, 99, 235, 0.3);" />
+  <img src="logo/android-chrome-512x512.png" alt="RawDrive Logo" width="180" height="180" style="border-radius: 40px; box-shadow: 0 30px 60px rgba(37, 99, 235, 0.3);" />
 </p>
 
 <h1 align="center">RawDrive</h1>
@@ -162,7 +162,7 @@ pnpm dev
   <br />
   <sub>Designed for Indian workflows • Built on Indian infrastructure • Priced for Indian businesses</sub>
   <br /><br />
-  <img src="frontend/public/logo/favicon-32x32.png" width="32" />
+  <img src="logo/favicon-32x32.png" width="32" />
 </p>
 
 
