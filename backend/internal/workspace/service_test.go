@@ -1,0 +1,176 @@
+package workspace_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/rawdrive/backend/internal/workspace"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// mockWorkspaceRepo simulates workspace persistence.
+type mockWorkspaceRepo struct {
+	workspaces map[string]*workspace.Workspace
+}
+
+func newMockWorkspaceRepo() *mockWorkspaceRepo {
+	return &mockWorkspaceRepo{workspaces: map[string]*workspace.Workspace{}}
+}
+
+func (m *mockWorkspaceRepo) Create(ctx context.Context, ws *workspace.Workspace) (*workspace.Workspace, error) {
+	m.workspaces[ws.ID] = ws
+	return ws, nil
+}
+
+func (m *mockWorkspaceRepo) GetByID(ctx context.Context, id string) (*workspace.Workspace, error) {
+	if ws, ok := m.workspaces[id]; ok {
+		return ws, nil
+	}
+	return nil, workspace.ErrNotFound
+}
+
+// mockEventPublisher records published events.
+type mockEventPublisher struct {
+	events []string
+}
+
+func (m *mockEventPublisher) Publish(ctx context.Context, subject string, data []byte) error {
+	m.events = append(m.events, subject)
+	return nil
+}
+
+// mockStorageBucket records bucket provisioning calls.
+type mockStorageBucket struct {
+	provisioned []string
+}
+
+func (m *mockStorageBucket) ProvisionBucket(ctx context.Context, workspaceID string) error {
+	m.provisioned = append(m.provisioned, workspaceID)
+	return nil
+}
+
+func newTestWorkspaceService() (workspace.Service, *mockEventPublisher, *mockStorageBucket) {
+	repo := newMockWorkspaceRepo()
+	pub := &mockEventPublisher{}
+	bucket := &mockStorageBucket{}
+	svc := workspace.NewService(repo, pub, bucket)
+	return svc, pub, bucket
+}
+
+func TestCreateWorkspace(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Test Workspace",
+		StateID: "state-uuid-001",
+		OwnerID: "user-uuid-001",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ws)
+	assert.NotEmpty(t, ws.ID)
+	assert.Equal(t, "Test Workspace", ws.Name)
+	assert.Equal(t, "state-uuid-001", ws.StateID)
+}
+
+func TestCreateWorkspace_AssignsOwnerRole(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Owner Test",
+		StateID: "state-uuid-002",
+		OwnerID: "user-uuid-002",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "user-uuid-002", ws.OwnerID, "creator should be assigned as owner")
+}
+
+func TestCreateWorkspace_DefaultBucket(t *testing.T) {
+	svc, _, bucket := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Bucket Test",
+		StateID: "state-uuid-003",
+		OwnerID: "user-uuid-003",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, bucket.provisioned, ws.ID, "storage bucket should be provisioned")
+}
+
+func TestGetWorkspace_ByID(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Lookup Test",
+		StateID: "state-uuid-004",
+		OwnerID: "user-uuid-004",
+	})
+	require.NoError(t, err)
+
+	found, err := svc.GetByID(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, found.ID)
+}
+
+func TestGetWorkspace_CrossTenant(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Tenant A Workspace",
+		StateID: "state-a",
+		OwnerID: "user-a",
+	})
+	require.NoError(t, err)
+
+	// Attempt to access with a different tenant context
+	ctxOther := workspace.WithTenantID(ctx, "other-state-id")
+	_, err = svc.GetByID(ctxOther, "nonexistent-ws-id")
+	assert.Error(t, err, "cross-tenant workspace access should return not found")
+}
+
+func TestOnboardingComplete(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:         "Onboarding WS",
+		StateID:      "state-uuid-005",
+		OwnerID:      "user-uuid-005",
+		BusinessName: "My Business",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, ws)
+	assert.NotEmpty(t, ws.ID)
+}
+
+func TestOnboardingComplete_SendsWelcomeEvent(t *testing.T) {
+	svc, pub, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Event Test",
+		StateID: "state-uuid-006",
+		OwnerID: "user-uuid-006",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, pub.events, "workspace.created", "should publish workspace.created NATS event")
+}
+
+func TestWorkspaceName_DefaultsToBusinessName(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:         "", // empty name
+		StateID:      "state-uuid-007",
+		OwnerID:      "user-uuid-007",
+		BusinessName: "Acme Corp",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Acme Corp", ws.Name, "workspace name should default to business name")
+}

@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS states (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(10) UNIQUE NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'state',
+    is_union_territory BOOLEAN NOT NULL DEFAULT FALSE
+);

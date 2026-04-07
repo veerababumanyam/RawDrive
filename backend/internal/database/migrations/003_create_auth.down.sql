@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS user_auth_methods CASCADE;
+DROP TABLE IF EXISTS magic_link_tokens CASCADE;
+DROP TABLE IF EXISTS otp_tokens CASCADE;
