@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS coupon_redemptions CASCADE;
+DROP TABLE IF EXISTS coupons CASCADE;
