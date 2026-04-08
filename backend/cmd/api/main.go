@@ -324,6 +324,29 @@ func main() {
 
 	log.Println("M4: Business Operations routes registered (CRM, Billing, Contracts, Calendar, Notifications, GST Reports, ICS Export, CSV Import, Payment Links)")
 
+	// ──────────────────────── M5: Marketplaces & Communication ──────────────────
+	freelancerRepo := repository.NewFreelancerRepo(dbPool)
+	gearRepo := repository.NewGearRepo(dbPool)
+	messagingRepo := repository.NewMessagingRepo(dbPool)
+	moderationRepo := repository.NewModerationRepo(dbPool)
+
+	handler.RegisterM5Routes(api, handler.M5Dependencies{
+		DB:             dbPool,
+		FreelancerRepo: freelancerRepo,
+		GearRepo:       gearRepo,
+		MessagingRepo:  messagingRepo,
+		ModerationRepo: moderationRepo,
+		Events:         &logEventPublisher{},
+	})
+
+	// M5 Workers
+	msgCleanupWorker := worker.NewMessageCleanupWorker(messagingRepo)
+	moderationWorker := worker.NewModerationWorker(messagingRepo, moderationRepo)
+	workerRegistry.Register("message-cleanup", msgCleanupWorker)
+	workerRegistry.Register("moderation", moderationWorker)
+
+	log.Println("M5: Marketplaces & Communication routes registered (Freelancer, Gear, Messaging, Moderation)")
+
 	}) // end protected API group
 
 	// Public lead capture (no auth required — embeddable on external sites)
