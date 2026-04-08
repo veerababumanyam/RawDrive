@@ -52,52 +52,71 @@ export function PricingContent() {
   const [coupon, setCoupon] = useState("");
 
   return (
-    <div className="bg-surface">
-      {/* Header */}
-      <section className="px-4 py-16 text-center lg:px-8">
-        <h1 className="text-4xl font-bold text-text-primary">Pricing Plans</h1>
-        <p className="mt-4 text-lg text-text-secondary">
-          Start free, scale as you grow. No hidden fees.
-        </p>
+    <div className="bg-surface text-text-primary">
+      <section className="mx-auto grid max-w-7xl gap-10 px-4 py-16 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
+        <div className="space-y-8">
+          <span className="inline-flex rounded-full bg-accent-subtle px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-accent">
+            Pricing
+          </span>
+          <div className="space-y-5">
+            <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
+              Choose the plan that matches your studio today and scale without replatforming later.
+            </h1>
+            <p className="max-w-2xl text-lg leading-8 text-text-secondary">
+              This route now leans on the original Stitch plan-selection page instead of a generic SaaS pricing header.
+            </p>
+          </div>
 
-        {/* Monthly/Annual Toggle */}
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <span
-            className={`text-sm font-medium ${!isAnnual ? "text-text-primary" : "text-text-tertiary"}`}
-          >
-            Monthly
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isAnnual}
-            aria-label="Toggle annual billing"
-            onClick={() => setIsAnnual(!isAnnual)}
-            className="relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-border transition-colors"
-            style={{
-              backgroundColor: isAnnual ? "var(--accent-default)" : "var(--surface-sunken)",
-              transitionDuration: "var(--duration-fast)",
-              minHeight: "var(--touch-target-min)",
-              minWidth: "var(--touch-target-min)",
-            }}
-          >
+          <div className="surface-panel inline-flex max-w-max items-center gap-3 px-4 py-3">
             <span
-              className="inline-block h-5 w-5 rounded-full bg-surface-elevated shadow-sm transition-transform"
+              className={`text-sm font-medium ${!isAnnual ? "text-text-primary" : "text-text-tertiary"}`}
+            >
+              Monthly
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isAnnual}
+              aria-label="Toggle annual billing"
+              onClick={() => setIsAnnual(!isAnnual)}
+              className="relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-border transition-colors"
               style={{
-                transform: isAnnual ? "translateX(22px)" : "translateX(3px)",
+                backgroundColor: isAnnual ? "var(--accent-default)" : "var(--surface-sunken)",
                 transitionDuration: "var(--duration-fast)",
+                minHeight: "var(--touch-target-min)",
+                minWidth: "var(--touch-target-min)",
               }}
-            />
-          </button>
-          <span
-            className={`text-sm font-medium ${isAnnual ? "text-text-primary" : "text-text-tertiary"}`}
-          >
-            Annual <span className="text-accent">(Save 17%)</span>
-          </span>
+            >
+              <span
+                className="inline-block h-5 w-5 rounded-full bg-surface-elevated shadow-sm transition-transform"
+                style={{
+                  transform: isAnnual ? "translateX(22px)" : "translateX(3px)",
+                  transitionDuration: "var(--duration-fast)",
+                }}
+              />
+            </button>
+            <span
+              className={`text-sm font-medium ${isAnnual ? "text-text-primary" : "text-text-tertiary"}`}
+            >
+              Annual <span className="text-accent">(Save 17%)</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="relative">
+          <div className="absolute inset-x-8 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
+          <div className="glass-card relative overflow-hidden p-3">
+            <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
+              <img
+                src="/stitch/pricing.png"
+                alt="Stitch pricing page preview"
+                className="h-auto w-full object-cover"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Plan Cards */}
       <section className="px-4 pb-16 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
           {pricingPlans.map((plan) => {

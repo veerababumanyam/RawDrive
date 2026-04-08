@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { getCredits, getFaceClusters, type CreditSummary, type ClusterSummary } from "@/lib/api/ai";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function AIOverviewPage() {
   const [credits, setCredits] = useState<CreditSummary | null>(null);
   const [clusters, setClusters] = useState<ClusterSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  const token = getStoredAccessToken();
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     Promise.all([getCredits(token), getFaceClusters(token)])
       .then(([c, cl]) => { setCredits(c); setClusters(cl); })
       .catch(console.error)

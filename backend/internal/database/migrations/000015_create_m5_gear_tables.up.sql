@@ -23,16 +23,18 @@ CREATE TABLE IF NOT EXISTS gear_listings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_gear_listings_user ON gear_listings(user_id);
-CREATE INDEX idx_gear_listings_state_type ON gear_listings(state_id, listing_type) WHERE is_published = true;
-CREATE INDEX idx_gear_listings_category_brand ON gear_listings(category, brand);
-CREATE INDEX idx_gear_listings_workspace ON gear_listings(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_gear_listings_user ON gear_listings(user_id);
+CREATE INDEX IF NOT EXISTS idx_gear_listings_state_type ON gear_listings(state_id, listing_type) WHERE is_published = true;
+CREATE INDEX IF NOT EXISTS idx_gear_listings_category_brand ON gear_listings(category, brand);
+CREATE INDEX IF NOT EXISTS idx_gear_listings_workspace ON gear_listings(workspace_id);
 
 ALTER TABLE gear_listings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS gear_listings_public_read ON gear_listings;
 CREATE POLICY gear_listings_public_read ON gear_listings
     FOR SELECT USING (is_published = true OR user_id = current_setting('app.current_user_id', true)::uuid);
 
+DROP POLICY IF EXISTS gear_listings_owner_manage ON gear_listings;
 CREATE POLICY gear_listings_owner_manage ON gear_listings
     FOR ALL USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
@@ -57,13 +59,14 @@ CREATE TABLE IF NOT EXISTS gear_bookings (
     CHECK (end_date >= start_date)
 );
 
-CREATE INDEX idx_gear_bookings_renter ON gear_bookings(renter_id, created_at DESC);
-CREATE INDEX idx_gear_bookings_owner ON gear_bookings(owner_id, created_at DESC);
-CREATE INDEX idx_gear_bookings_listing ON gear_bookings(gear_listing_id);
-CREATE INDEX idx_gear_bookings_dates ON gear_bookings(gear_listing_id, start_date, end_date) WHERE status IN ('pending', 'approved', 'active');
+CREATE INDEX IF NOT EXISTS idx_gear_bookings_renter ON gear_bookings(renter_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gear_bookings_owner ON gear_bookings(owner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gear_bookings_listing ON gear_bookings(gear_listing_id);
+CREATE INDEX IF NOT EXISTS idx_gear_bookings_dates ON gear_bookings(gear_listing_id, start_date, end_date) WHERE status IN ('pending', 'approved', 'active');
 
 ALTER TABLE gear_bookings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS gear_bookings_participant ON gear_bookings;
 CREATE POLICY gear_bookings_participant ON gear_bookings
     FOR ALL USING (
         renter_id = current_setting('app.current_user_id', true)::uuid

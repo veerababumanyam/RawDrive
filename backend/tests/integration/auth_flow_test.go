@@ -20,15 +20,15 @@ import (
 // ──────────────────────────── Shared Stubs ────────────────────────────
 
 type testUserService struct {
-	users map[string]string // email -> userID
+	users map[string]string
 }
 
 func newTestUserService() *testUserService {
 	return &testUserService{users: make(map[string]string)}
 }
 
-func (s *testUserService) Create(_ context.Context, email string) (string, error) {
-	id := "user-" + email
+func (s *testUserService) Create(_ context.Context, email, password string) (string, error) {
+	id := "test-user-" + email
 	s.users[email] = id
 	return id, nil
 }
@@ -36,6 +36,18 @@ func (s *testUserService) Create(_ context.Context, email string) (string, error
 func (s *testUserService) FindByEmail(_ context.Context, email string) (string, bool, error) {
 	id, ok := s.users[email]
 	return id, ok, nil
+}
+
+func (s *testUserService) VerifyPassword(_ context.Context, email, password string) (string, bool, bool, error) {
+	id, ok := s.users[email]
+	if !ok {
+		return "", false, false, nil
+	}
+	return id, true, true, nil
+}
+
+func (s *testUserService) MarkEmailVerified(_ context.Context, userID string) error {
+	return nil
 }
 
 type testDBContext struct{}
@@ -164,7 +176,8 @@ func TestFullAuthFlow(t *testing.T) {
 
 	// 1. Register
 	resp, err := postJSON(ts.URL+"/auth/register", map[string]string{
-		"email": "flow@example.com",
+		"email":    "flow@example.com",
+		"password": "TestPassword123!",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -237,7 +250,7 @@ func TestSessionRotation(t *testing.T) {
 	defer ts.Close()
 
 	// Register user
-	_, err := userSvc.Create(context.Background(), "rotate@example.com")
+	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!")
 	require.NoError(t, err)
 
 	// Get OTP and verify

@@ -3,14 +3,18 @@
 import { useEffect, useState } from "react";
 import { getDuplicates, type DuplicateGroup } from "@/lib/api/ai";
 import { DuplicateComparison } from "@/components/ai/DuplicateComparison";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function AIDuplicatesPage() {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  const token = getStoredAccessToken();
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     getDuplicates(token, "pending")
       .then((data) => setGroups(data.groups))
       .catch(console.error)

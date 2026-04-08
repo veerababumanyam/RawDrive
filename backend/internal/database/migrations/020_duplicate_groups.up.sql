@@ -13,6 +13,7 @@ CREATE INDEX IF NOT EXISTS idx_duplicate_groups_workspace ON duplicate_groups(wo
 
 ALTER TABLE duplicate_groups ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS duplicate_groups_workspace_isolation ON duplicate_groups;
 CREATE POLICY duplicate_groups_workspace_isolation ON duplicate_groups
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -44,6 +45,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_quality_scores_asset ON quality_scores(ass
 
 ALTER TABLE quality_scores ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS quality_scores_workspace_isolation ON quality_scores;
 CREATE POLICY quality_scores_workspace_isolation ON quality_scores
     USING (
         current_setting('app.bypass_rls', true) = 'on'

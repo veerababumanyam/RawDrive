@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { listChannels, getMessages, sendMessage, type Channel, type Message } from "@/lib/api/messaging";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function MessagesPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [msgText, setMsgText] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  const token = getStoredAccessToken();
 
   useEffect(() => {
     listChannels(token)
@@ -19,7 +21,7 @@ export default function MessagesPage() {
         setChannels(chs);
         if (chs.length > 0) setActiveChannel(chs[0].id);
       })
-      .catch(() => setChannels([]))
+      .catch((err) => { setError(err?.message || "Failed to load channels"); setChannels([]); })
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -27,7 +29,7 @@ export default function MessagesPage() {
     if (!activeChannel) return;
     getMessages(token, activeChannel)
       .then(setMessages)
-      .catch(() => setMessages([]));
+      .catch((err) => { setError(err?.message || "Failed to load messages"); setMessages([]); });
   }, [activeChannel, token]);
 
   // SSE for real-time chat updates
@@ -82,12 +84,18 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
+      {error && (
+        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0">
       {/* Channel sidebar */}
       <aside className="w-72 shrink-0 border-r border-border-default bg-white/[0.02] flex flex-col">
         <div className="p-4 border-b border-border-default flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text-primary">Channels</h2>
-          <button className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-white/10 transition-colors">
+          <button className="surface-button h-8 w-8 p-0">
             +
           </button>
         </div>
@@ -174,12 +182,12 @@ export default function MessagesPage() {
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message..."
                   rows={1}
-                  className="flex-1 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-text-primary text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/50 min-h-[44px]"
+                  className="input-base min-h-[44px] flex-1 resize-none"
                 />
                 <button
                   onClick={handleSend}
                   disabled={sending || !msgText.trim()}
-                  className="px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity min-h-[44px]"
+                  className="btn-primary px-4 py-2.5 text-sm disabled:opacity-50"
                 >
                   Send
                 </button>
@@ -191,6 +199,7 @@ export default function MessagesPage() {
             Select a channel to start messaging
           </div>
         )}
+      </div>
       </div>
     </div>
   );

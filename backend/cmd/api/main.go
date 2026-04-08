@@ -237,6 +237,9 @@ func main() {
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService()
 
+	// In-process event broker for real-time SSE delivery to frontend
+	eventBroker := handler.NewEventBroker()
+
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
 	// All M2, M3, M4 data-plane endpoints require authentication.
 	r.Group(func(api chi.Router) {
@@ -355,7 +358,7 @@ func main() {
 			GearRepo:       gearRepo,
 			MessagingRepo:  messagingRepo,
 			ModerationRepo: moderationRepo,
-			Events:         &logEventPublisher{},
+			Events:         eventBroker,
 		})
 
 		// M5 Workers
@@ -411,6 +414,13 @@ func main() {
 		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")
 
 	}) // end protected API group
+
+	// SSE event stream (self-authenticating via query-param JWT — outside middleware group)
+	// Mounted at /api/v1/events/stream to match frontend EventSource URL
+	r.Route("/api/v1", func(apiSSE chi.Router) {
+		handler.RegisterEventRoutes(apiSSE, eventBroker, jwtSvc)
+	})
+	log.Println("SSE: Event stream endpoint registered at /api/v1/events/stream")
 
 	// Public lead capture (no auth required — embeddable on external sites)
 	publicLeadRepo := repository.NewLeadRepo(dbPool)

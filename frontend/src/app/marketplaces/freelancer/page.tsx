@@ -1,21 +1,55 @@
 import type { Metadata } from "next";
+import { MarketplaceShowcasePage } from "@/components/marketing/MarketplaceShowcasePage";
 
 export const metadata: Metadata = {
   title: "Freelancer Marketplace | RawDrive",
-  description: "Find the best freelancers for your photography studio in one unified marketplace.",
+  description:
+    "Find the best freelancers for your photography studio in one unified marketplace.",
 };
 
 export default function FreelancerMarketplacePage() {
   return (
-    <section className="bg-surface px-4 py-20 lg:px-8 lg:py-32">
-      <div className="mx-auto max-w-4xl text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-5xl">
-          Freelancer Marketplace
-        </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-text-secondary">
-          Scale your studio team on demand by finding vetted associates, lead operators, and retouchers tailored to your working style.
-        </p>
-      </div>
-    </section>
+    <MarketplaceShowcasePage
+      eyebrow="Marketplace"
+      title="Find second shooters, editors, and specialists without leaving RawDrive."
+      description="This page body is now rebuilt from the Stitch marketplace direction, with the application navbar and footer still preserved."
+      previewSrc="/stitch/freelancers.png"
+      previewAlt="Stitch freelancer marketplace preview"
+      primaryCta={{ href: "/register", label: "Create your profile" }}
+      secondaryCta={{ href: "/contact", label: "Talk to our team" }}
+      filters={["Mumbai", "Wedding", "Portrait", "Drone", "Retouching", "Top rated"]}
+      cards={[
+        {
+          name: "Aarav Mehta",
+          location: "Mumbai",
+          specialty: "Wedding and candid specialist",
+          badge: "Featured",
+          price: "4.9 rating",
+          image:
+            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80",
+          note: "Available for second-shooting, same-day edits, and premium client handling.",
+        },
+        {
+          name: "Simran Kaur",
+          location: "Chandigarh",
+          specialty: "Portrait and fashion retouching",
+          badge: "Editor",
+          price: "Starts Rs. 7k",
+          image:
+            "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80",
+          note: "Fast-turnaround color grading and skin-retouch pipelines for editorial work.",
+        },
+        {
+          name: "Vikram Rao",
+          location: "Bengaluru",
+          specialty: "Drone and event coverage",
+          badge: "On site",
+          price: "4.8 rating",
+          image:
+            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=80",
+          note: "Covers large-format events and hybrid production days with drone support.",
+        },
+      ]}
+    />
   );
 }

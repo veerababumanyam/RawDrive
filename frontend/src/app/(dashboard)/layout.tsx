@@ -1,32 +1,44 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Bell,
+  BrainCircuit,
   CalendarDays,
   Home,
   ImageIcon,
+  MessageSquare,
   ReceiptText,
   Search,
   Settings,
   Shield,
+  ShoppingBag,
+  Store,
+  Upload,
   Users,
 } from "lucide-react";
-import { getStoredAccessToken } from "@/lib/auth";
+import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/galleries", label: "Galleries", icon: ImageIcon },
+  { href: "/upload", label: "Upload", icon: Upload },
   { href: "/crm/contacts", label: "Clients", icon: Users },
+  { href: "/crm", label: "CRM", icon: BarChart3 },
   { href: "/calendar", label: "Bookings", icon: CalendarDays },
   { href: "/billing", label: "Invoices", icon: ReceiptText },
-  { href: "/crm", label: "Analytics", icon: BarChart3 },
+  { href: "/ai", label: "AI Studio", icon: BrainCircuit },
+  { href: "/marketplace/freelancers", label: "Marketplace", icon: ShoppingBag },
+  { href: "/messages", label: "Messages", icon: MessageSquare },
+  { href: "/dealer", label: "Dealer", icon: Store },
+  { href: "/moderation", label: "Moderation", icon: Shield },
   { href: "/settings/storage", label: "Settings", icon: Settings },
   { href: "/admin/users", label: "Admin", icon: Shield },
 ];
@@ -34,6 +46,7 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -42,9 +55,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Redirect to onboarding if workspace not set up yet (unless already there)
+    if (!isOnboarding) {
+      const claims = getStoredAccessTokenClaims();
+      if (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id) {
+        window.location.assign("/onboarding");
+        return;
+      }
+    }
+
     const frame = window.requestAnimationFrame(() => setAuthenticated(true));
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [isOnboarding]);
 
   if (authenticated === null) {
     return (
@@ -58,16 +80,34 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return null;
   }
 
+  // During onboarding, render a minimal layout without sidebar/header
+  if (isOnboarding) {
+    return (
+      <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
+        <main className="min-h-screen px-4 pb-12 pt-8">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
       <aside className="glass-surface fixed left-0 top-0 z-50 hidden h-screen w-[var(--sidebar-width-expanded)] flex-col px-4 py-8 lg:flex">
-        <div className="mb-10 px-2">
-          <h1 className="font-headline text-2xl font-bold tracking-[-0.06em] text-accent">
-            RawDrive
-          </h1>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-text-tertiary">
-            Creative Studio
-          </p>
+        <div className="mb-10 flex items-center gap-3 px-2">
+          <Image
+            src="/logo/android-chrome-192x192.png"
+            alt="RawDrive Logo"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-lg"
+          />
+          <div>
+            <h1 className="font-headline text-lg font-bold tracking-[-0.04em] text-accent">
+              RawDrive
+            </h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-text-tertiary">
+              Creative Studio
+            </p>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-2">

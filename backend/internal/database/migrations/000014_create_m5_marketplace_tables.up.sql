@@ -21,16 +21,18 @@ CREATE TABLE IF NOT EXISTS freelancer_listings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_freelancer_listings_user ON freelancer_listings(user_id);
-CREATE INDEX idx_freelancer_listings_state_city ON freelancer_listings(state_id, city) WHERE is_published = true;
-CREATE INDEX idx_freelancer_listings_specializations ON freelancer_listings USING GIN(specializations);
-CREATE INDEX idx_freelancer_listings_workspace ON freelancer_listings(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_freelancer_listings_user ON freelancer_listings(user_id);
+CREATE INDEX IF NOT EXISTS idx_freelancer_listings_state_city ON freelancer_listings(state_id, city) WHERE is_published = true;
+CREATE INDEX IF NOT EXISTS idx_freelancer_listings_specializations ON freelancer_listings USING GIN(specializations);
+CREATE INDEX IF NOT EXISTS idx_freelancer_listings_workspace ON freelancer_listings(workspace_id);
 
 ALTER TABLE freelancer_listings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS freelancer_listings_public_read ON freelancer_listings;
 CREATE POLICY freelancer_listings_public_read ON freelancer_listings
     FOR SELECT USING (is_published = true OR user_id = current_setting('app.current_user_id', true)::uuid);
 
+DROP POLICY IF EXISTS freelancer_listings_owner_manage ON freelancer_listings;
 CREATE POLICY freelancer_listings_owner_manage ON freelancer_listings
     FOR ALL USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
@@ -46,14 +48,16 @@ CREATE TABLE IF NOT EXISTS freelancer_reviews (
     UNIQUE(booking_id, reviewer_id)
 );
 
-CREATE INDEX idx_freelancer_reviews_listing ON freelancer_reviews(listing_id);
-CREATE INDEX idx_freelancer_reviews_reviewer ON freelancer_reviews(reviewer_id);
+CREATE INDEX IF NOT EXISTS idx_freelancer_reviews_listing ON freelancer_reviews(listing_id);
+CREATE INDEX IF NOT EXISTS idx_freelancer_reviews_reviewer ON freelancer_reviews(reviewer_id);
 
 ALTER TABLE freelancer_reviews ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS freelancer_reviews_public_read ON freelancer_reviews;
 CREATE POLICY freelancer_reviews_public_read ON freelancer_reviews
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS freelancer_reviews_author_manage ON freelancer_reviews;
 CREATE POLICY freelancer_reviews_author_manage ON freelancer_reviews
     FOR ALL USING (reviewer_id = current_setting('app.current_user_id', true)::uuid);
 
@@ -72,12 +76,13 @@ CREATE TABLE IF NOT EXISTS marketplace_inquiries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_marketplace_inquiries_from ON marketplace_inquiries(from_user_id, created_at DESC);
-CREATE INDEX idx_marketplace_inquiries_to ON marketplace_inquiries(to_user_id, created_at DESC);
-CREATE INDEX idx_marketplace_inquiries_listing ON marketplace_inquiries(listing_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_inquiries_from ON marketplace_inquiries(from_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_marketplace_inquiries_to ON marketplace_inquiries(to_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_marketplace_inquiries_listing ON marketplace_inquiries(listing_id);
 
 ALTER TABLE marketplace_inquiries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS marketplace_inquiries_participant ON marketplace_inquiries;
 CREATE POLICY marketplace_inquiries_participant ON marketplace_inquiries
     FOR ALL USING (
         from_user_id = current_setting('app.current_user_id', true)::uuid
@@ -101,12 +106,13 @@ CREATE TABLE IF NOT EXISTS hire_requests (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_hire_requests_requester ON hire_requests(requester_id, created_at DESC);
-CREATE INDEX idx_hire_requests_freelancer ON hire_requests(freelancer_id, created_at DESC);
-CREATE INDEX idx_hire_requests_listing ON hire_requests(listing_id);
+CREATE INDEX IF NOT EXISTS idx_hire_requests_requester ON hire_requests(requester_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_hire_requests_freelancer ON hire_requests(freelancer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_hire_requests_listing ON hire_requests(listing_id);
 
 ALTER TABLE hire_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS hire_requests_participant ON hire_requests;
 CREATE POLICY hire_requests_participant ON hire_requests
     FOR ALL USING (
         requester_id = current_setting('app.current_user_id', true)::uuid

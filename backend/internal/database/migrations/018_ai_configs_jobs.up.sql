@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS ai_configs (
 
 ALTER TABLE ai_configs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS ai_configs_workspace_isolation ON ai_configs;
 CREATE POLICY ai_configs_workspace_isolation ON ai_configs
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -41,6 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_workspace_operation ON ai_usage_logs(wor
 
 ALTER TABLE ai_usage_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS ai_usage_workspace_isolation ON ai_usage_logs;
 CREATE POLICY ai_usage_workspace_isolation ON ai_usage_logs
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -65,6 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_jobs_workspace ON ai_jobs(workspace_id, create
 
 ALTER TABLE ai_jobs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS ai_jobs_workspace_isolation ON ai_jobs;
 CREATE POLICY ai_jobs_workspace_isolation ON ai_jobs
     USING (
         current_setting('app.bypass_rls', true) = 'on'

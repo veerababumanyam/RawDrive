@@ -6,37 +6,42 @@ describe("Landing Page", () => {
   it("renders the hero headline", () => {
     render(<LandingPage />);
     expect(
-      screen.getByText("The Operating System for Photography Businesses in India")
+      screen.getByRole("heading", {
+        level: 1,
+        name: /Professional Photography,\s*Simplified/i,
+      }),
     ).toBeInTheDocument();
   });
 
   it("renders hero CTAs", () => {
     render(<LandingPage />);
-    expect(screen.getByText("Get Started Free")).toBeInTheDocument();
+    expect(screen.getAllByText("Start Free Trial").length).toBeGreaterThan(0);
+    expect(screen.getByText("Watch Demo")).toBeInTheDocument();
     expect(screen.getByText("See Pricing")).toBeInTheDocument();
   });
 
   it("renders 6 feature cards", () => {
     render(<LandingPage />);
-    expect(screen.getByText("Gallery Delivery")).toBeInTheDocument();
+    expect(screen.getByText("Gallery Management")).toBeInTheDocument();
     expect(screen.getByText("Client Proofing")).toBeInTheDocument();
-    expect(screen.getByText("AI Culling")).toBeInTheDocument();
-    expect(screen.getByText("CRM & Bookings")).toBeInTheDocument();
+    expect(screen.getByText("GST Invoicing")).toBeInTheDocument();
+    expect(screen.getByText("AI Smart Culling")).toBeInTheDocument();
     expect(screen.getByText("Live Streaming")).toBeInTheDocument();
-    expect(screen.getByText("Marketplaces")).toBeInTheDocument();
+    expect(screen.getByText("Booking Calendar")).toBeInTheDocument();
   });
 
-  it("renders pricing teaser", () => {
+  it("renders the studio workflow section", () => {
     render(<LandingPage />);
-    expect(screen.getByText("Simple, Transparent Pricing")).toBeInTheDocument();
-    expect(screen.getByText("Free")).toBeInTheDocument();
-    expect(screen.getByText("Professional")).toBeInTheDocument();
+    expect(screen.getByText("Everything your studio needs")).toBeInTheDocument();
+    expect(screen.getByText("Trusted by Indian Photographers")).toBeInTheDocument();
   });
 
-  it("renders social proof stats", () => {
+  it("renders social proof and growth stats", () => {
     render(<LandingPage />);
-    expect(screen.getByText("10,000+")).toBeInTheDocument();
-    expect(screen.getByText("Photographers")).toBeInTheDocument();
+    expect(screen.getAllByText(/5,000\+/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Active Studios")).toBeInTheDocument();
+    expect(screen.getByText("Photos Delivered")).toBeInTheDocument();
+    expect(screen.getByText("Revenue Processed")).toBeInTheDocument();
   });
 
   it("renders Made in India badge", () => {
@@ -44,9 +49,10 @@ describe("Landing Page", () => {
     expect(screen.getByText("Made in India")).toBeInTheDocument();
   });
 
-  it("contains JSON-LD structured data", () => {
+  it("renders the closing studio CTA", () => {
     render(<LandingPage />);
-    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-    expect(scripts.length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/From first inquiry to final delivery, RawDrive keeps the whole studio moving\./i),
+    ).toBeInTheDocument();
   });
 });

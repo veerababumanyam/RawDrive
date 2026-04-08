@@ -9,6 +9,7 @@ const SPECIALIZATIONS = ["wedding", "portrait", "event", "drone", "aerial", "com
 export default function FreelancersPage() {
   const [freelancers, setFreelancers] = useState<FreelancerListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [specialization, setSpecialization] = useState("");
   const [city, setCity] = useState("");
 
@@ -20,12 +21,17 @@ export default function FreelancersPage() {
       sort: "rating",
     })
       .then(setFreelancers)
-      .catch(() => setFreelancers([]))
+      .catch((err) => { setError(err?.message || "Failed to load freelancers"); setFreelancers([]); })
       .finally(() => setLoading(false));
   }, [specialization, city]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      {error && (
+        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Freelance Photographers</h1>
@@ -35,7 +41,7 @@ export default function FreelancersPage() {
         </div>
         <Link
           href="/marketplace/freelancers/edit"
-          className="px-4 py-2.5 rounded-lg bg-accent text-white text-sm font-medium hover:opacity-90 transition-opacity"
+          className="btn-primary px-4 py-2.5 text-sm"
         >
           Create Profile
         </Link>
@@ -48,12 +54,12 @@ export default function FreelancersPage() {
           placeholder="Filter by city..."
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          className="px-3 py-2.5 rounded-lg border border-border-default bg-surface text-text-primary text-sm min-w-[200px]"
+          className="input-base min-w-[200px]"
         />
         <select
           value={specialization}
           onChange={(e) => setSpecialization(e.target.value)}
-          className="px-3 py-2.5 rounded-lg border border-border-default bg-surface text-text-primary text-sm"
+          className="input-base"
         >
           <option value="">All Specializations</option>
           {SPECIALIZATIONS.map((s) => (
@@ -87,17 +93,14 @@ export default function FreelancersPage() {
               )}
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {f.specializations.map((s) => (
-                  <span
-                    key={s}
-                    className="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent"
-                  >
+                  <span key={s} className="status-badge status-badge--accent">
                     {s}
                   </span>
                 ))}
               </div>
               <div className="flex items-center justify-between mt-4">
                 <div className="flex items-center gap-1">
-                  <span className="text-yellow-500">★</span>
+                  <span className="rating-star">★</span>
                   <span className="text-sm font-medium text-text-primary">
                     {f.rating_avg?.toFixed(1) || "New"}
                   </span>

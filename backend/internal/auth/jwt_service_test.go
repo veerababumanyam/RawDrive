@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,8 +188,17 @@ func TestTokenTampering(t *testing.T) {
 	token, err := svc.GenerateAccessToken(ctx, testClaims())
 	require.NoError(t, err)
 
-	// Tamper with the signature (flip last character)
-	tampered := token[:len(token)-1] + "X"
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+
+	signature := parts[2]
+	mid := len(signature) / 2
+	replacement := "A"
+	if signature[mid:mid+1] == replacement {
+		replacement = "B"
+	}
+	parts[2] = signature[:mid] + replacement + signature[mid+1:]
+	tampered := strings.Join(parts, ".")
 
 	_, err = svc.ParseAccessToken(ctx, tampered)
 	assert.Error(t, err, "tampered token should be rejected")

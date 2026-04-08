@@ -1,19 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+import { galleryStatusClasses, galleryTypeClasses } from "@/lib/dashboard-ui";
 
 export default function GalleriesPage() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
     const token = getStoredAccessToken();
     listGalleries(token)
       .then(setGalleries)
-      .catch(() => setGalleries([]))
+      .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -34,6 +38,11 @@ export default function GalleriesPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      {error && (
+        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Galleries</h1>
@@ -44,9 +53,12 @@ export default function GalleriesPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setViewMode("grid")}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === "grid" ? "bg-accent/10 text-accent" : "text-text-secondary hover:bg-surface-raised"
-            }`}
+            className={cn(
+              "segmented-control-button h-11 w-11 p-0",
+              viewMode === "grid"
+                ? "segmented-control-button--active"
+                : "segmented-control-button--inactive",
+            )}
             aria-label="Grid view"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -55,9 +67,12 @@ export default function GalleriesPage() {
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === "list" ? "bg-accent/10 text-accent" : "text-text-secondary hover:bg-surface-raised"
-            }`}
+            className={cn(
+              "segmented-control-button h-11 w-11 p-0",
+              viewMode === "list"
+                ? "segmented-control-button--active"
+                : "segmented-control-button--inactive",
+            )}
             aria-label="List view"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -85,7 +100,7 @@ export default function GalleriesPage() {
           }
         >
           {galleries.map((g) => (
-            <a
+            <Link
               key={g.id}
               href={`/galleries/${g.id}`}
               className={`
@@ -96,15 +111,28 @@ export default function GalleriesPage() {
             >
               <div className={viewMode === "grid" ? "" : "flex-1 min-w-0"}>
                 <h3 className="font-medium text-text-primary truncate">{g.title}</h3>
-                <p className="text-sm text-text-secondary mt-0.5">
-                  {g.gallery_type} &middot; {g.status}
-                  {g.is_published && " &middot; Published"}
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span
+                    className={cn(
+                      galleryTypeClasses[g.gallery_type] || "status-badge status-badge--neutral",
+                    )}
+                  >
+                    {g.gallery_type}
+                  </span>
+                  <span
+                    className={cn(
+                      galleryStatusClasses[g.status] || "status-badge status-badge--neutral",
+                    )}
+                  >
+                    {g.status}
+                  </span>
+                  {g.is_published && <span className="status-badge status-badge--success">Published</span>}
+                </div>
               </div>
               <span className="text-xs text-text-tertiary">
                 {new Date(g.created_at).toLocaleDateString("en-IN")}
               </span>
-            </a>
+            </Link>
           ))}
         </div>
       )}

@@ -38,8 +38,7 @@ function isMarketingRoute(pathname: string | null) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const marketingRoute = isMarketingRoute(pathname);
-  const showMarketingChrome = marketingRoute;
+  const showMarketingChrome = isMarketingRoute(pathname);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -47,13 +46,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     document.body.dataset.chrome = showMarketingChrome ? "marketing" : "app";
-    document.body.dataset.theme = marketingRoute ? "midnight" : "liquid-glass-dark";
 
     return () => {
       delete document.body.dataset.chrome;
-      delete document.body.dataset.theme;
     };
-  }, [marketingRoute, showMarketingChrome]);
+  }, [showMarketingChrome]);
 
   return (
     <>

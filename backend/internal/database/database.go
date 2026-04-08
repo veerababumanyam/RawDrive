@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,6 +20,8 @@ var migrationFS embed.FS
 type Migrator struct {
 	dsn string
 }
+
+const migrationAdvisoryLockKey int64 = 6_420_017
 
 // NewMigrator creates a new Migrator for the given DSN.
 func NewMigrator(dsn string) *Migrator {
@@ -34,8 +37,21 @@ func (m *Migrator) Up() error {
 	}
 	defer pool.Close()
 
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring migration connection: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err = conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrationAdvisoryLockKey); err != nil {
+		return fmt.Errorf("acquiring migration lock: %w", err)
+	}
+	defer func() {
+		_, _ = conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrationAdvisoryLockKey)
+	}()
+
 	// Create migrations tracking table
-	_, err = pool.Exec(ctx, `
+	_, err = conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version VARCHAR(255) PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -55,7 +71,7 @@ func (m *Migrator) Up() error {
 
 		// Check if already applied
 		var exists bool
-		err := pool.QueryRow(ctx,
+		err := conn.QueryRow(ctx,
 			`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`,
 			version).Scan(&exists)
 		if err != nil {
@@ -70,13 +86,14 @@ func (m *Migrator) Up() error {
 			return fmt.Errorf("reading migration %s: %w", file, err)
 		}
 
-		_, err = pool.Exec(ctx, string(sql))
+		_, err = conn.Exec(ctx, string(sql))
 		if err != nil {
 			return fmt.Errorf("applying migration %s: %w", file, err)
 		}
 
-		_, err = pool.Exec(ctx,
-			`INSERT INTO schema_migrations (version) VALUES ($1)`, version)
+		_, err = conn.Exec(ctx,
+			`INSERT INTO schema_migrations (version) VALUES ($1)
+			 ON CONFLICT (version) DO NOTHING`, version)
 		if err != nil {
 			return fmt.Errorf("recording migration %s: %w", version, err)
 		}
@@ -94,6 +111,19 @@ func (m *Migrator) Down() error {
 	}
 	defer pool.Close()
 
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring migration connection: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err = conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrationAdvisoryLockKey); err != nil {
+		return fmt.Errorf("acquiring migration lock: %w", err)
+	}
+	defer func() {
+		_, _ = conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrationAdvisoryLockKey)
+	}()
+
 	files, err := getMigrationFiles("down")
 	if err != nil {
 		return err
@@ -110,12 +140,12 @@ func (m *Migrator) Down() error {
 			return fmt.Errorf("reading migration %s: %w", file, err)
 		}
 
-		_, err = pool.Exec(ctx, string(sql))
+		_, err = conn.Exec(ctx, string(sql))
 		if err != nil {
 			return fmt.Errorf("rolling back migration %s: %w", file, err)
 		}
 
-		_, err = pool.Exec(ctx,
+		_, err = conn.Exec(ctx,
 			`DELETE FROM schema_migrations WHERE version = $1`, version)
 		if err != nil {
 			// Ignore errors deleting from schema_migrations during down
@@ -124,7 +154,7 @@ func (m *Migrator) Down() error {
 	}
 
 	// Drop the schema_migrations table itself
-	_, _ = pool.Exec(ctx, `DROP TABLE IF EXISTS schema_migrations`)
+	_, _ = conn.Exec(ctx, `DROP TABLE IF EXISTS schema_migrations`)
 
 	return nil
 }
@@ -143,7 +173,14 @@ func getMigrationFiles(direction string) ([]string, error) {
 		}
 	}
 
-	sort.Strings(files)
+	sort.Slice(files, func(i, j int) bool {
+		leftOrder := migrationOrder(files[i])
+		rightOrder := migrationOrder(files[j])
+		if leftOrder != rightOrder {
+			return leftOrder < rightOrder
+		}
+		return files[i] < files[j]
+	})
 	return files, nil
 }
 
@@ -154,4 +191,25 @@ func extractVersion(filename string) string {
 		return parts[0]
 	}
 	return filename
+}
+
+func migrationOrder(filename string) int {
+	var prefix strings.Builder
+	for _, ch := range filename {
+		if ch < '0' || ch > '9' {
+			break
+		}
+		prefix.WriteRune(ch)
+	}
+
+	if prefix.Len() == 0 {
+		return 0
+	}
+
+	order, err := strconv.Atoi(prefix.String())
+	if err != nil {
+		return 0
+	}
+
+	return order
 }

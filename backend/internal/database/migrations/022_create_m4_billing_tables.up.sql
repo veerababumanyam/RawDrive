@@ -1,6 +1,6 @@
 -- M4: Billing Tables — invoices, payments
 
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     state_id INT NOT NULL REFERENCES states(id),
@@ -27,20 +27,21 @@ CREATE TABLE invoices (
     CONSTRAINT invoices_status_check CHECK (status IN ('draft', 'sent', 'paid', 'partially_paid', 'overdue', 'cancelled', 'refunded'))
 );
 
-CREATE INDEX idx_invoices_workspace_id ON invoices(workspace_id);
-CREATE INDEX idx_invoices_workspace_status ON invoices(workspace_id, status);
-CREATE INDEX idx_invoices_contact_id ON invoices(contact_id);
-CREATE INDEX idx_invoices_state_id ON invoices(state_id);
-CREATE INDEX idx_invoices_paid_at ON invoices(paid_at) WHERE paid_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_workspace_id ON invoices(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_workspace_status ON invoices(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_invoices_contact_id ON invoices(contact_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_state_id ON invoices(state_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_paid_at ON invoices(paid_at) WHERE paid_at IS NOT NULL;
 
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS invoices_workspace_isolation ON invoices;
 CREATE POLICY invoices_workspace_isolation ON invoices
     USING (
         current_setting('app.bypass_rls', true) = 'on'
         OR workspace_id::text = current_setting('app.workspace_id', true)
     );
 
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     invoice_id UUID NOT NULL REFERENCES invoices(id),
@@ -53,10 +54,11 @@ CREATE TABLE payments (
     CONSTRAINT payments_method_check CHECK (method IN ('cash', 'upi', 'bank_transfer', 'card', 'cheque', 'razorpay'))
 );
 
-CREATE INDEX idx_payments_workspace_id ON payments(workspace_id);
-CREATE INDEX idx_payments_invoice_id ON payments(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payments_workspace_id ON payments(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments(invoice_id);
 
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS payments_workspace_isolation ON payments;
 CREATE POLICY payments_workspace_isolation ON payments
     USING (
         current_setting('app.bypass_rls', true) = 'on'

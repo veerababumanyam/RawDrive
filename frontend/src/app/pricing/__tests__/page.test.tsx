@@ -5,7 +5,12 @@ import { PricingContent } from "@/components/pricing/PricingContent";
 describe("Pricing Page", () => {
   it("renders the pricing headline", () => {
     render(<PricingContent />);
-    expect(screen.getByText("Pricing Plans")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /Choose the plan that matches your studio today and scale without replatforming later\./i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders all 5 plan cards", () => {

@@ -1,18 +1,52 @@
 {
+  "version": "0.0.9",
   "mcpServers": {
     "StitchMCP": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://stitch.googleapis.com/mcp", "--header", "X-Goog-Api-Key: ${STITCH_API_KEY}"],
-      "env": {
-        "STITCH_API_KEY": "AQ.Ab8RN6JNw5z0D_PCq1b5jbByHvYquXPbg6U6naaWkXQHwvcKCg"
-      }
+      "args": [
+        "-y",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "mcp-remote",
+        "https://stitch.googleapis.com/mcp",
+        "--header",
+        "X-Goog-Api-Key: ${STITCH_API_KEY}"
+      ]
     },
     "Figma": {
       "command": "npx",
-      "args": ["-y", "@thirdstrandstudio/mcp-figma"],
-      "env": {
-        "FIGMA_API_KEY": "figd_fYF4nPcfAt_i4sk2vILEcyyi6ZIBhlgiSmBUB7W7"
-      }
+      "args": [
+        "-y",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "@thirdstrandstudio/mcp-figma"
+      ]
+    },
+    "context7": {
+      "enabled": true,
+      "description": "Library documentation lookup",
+      "command": "npx",
+      "args": [
+        "-y",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "${CONTEXT7_API_KEY}"
+      ]
     }
+  },
+  "defaults": {
+    "timeout": 30000,
+    "retries": 2
   }
 }

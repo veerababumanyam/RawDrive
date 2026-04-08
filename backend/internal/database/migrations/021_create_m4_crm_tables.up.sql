@@ -1,6 +1,6 @@
 -- M4: CRM Tables — leads, contacts, deals, follow_ups
 
-CREATE TABLE leads (
+CREATE TABLE IF NOT EXISTS leads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -21,19 +21,20 @@ CREATE TABLE leads (
     CONSTRAINT leads_source_check CHECK (source IN ('website', 'referral', 'whatsapp', 'walk_in', 'social_media', 'marketplace'))
 );
 
-CREATE INDEX idx_leads_workspace_id ON leads(workspace_id);
-CREATE INDEX idx_leads_workspace_stage ON leads(workspace_id, stage);
-CREATE INDEX idx_leads_assigned_to ON leads(assigned_to);
-CREATE INDEX idx_leads_event_date ON leads(workspace_id, event_date);
+CREATE INDEX IF NOT EXISTS idx_leads_workspace_id ON leads(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_leads_workspace_stage ON leads(workspace_id, stage);
+CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_leads_event_date ON leads(workspace_id, event_date);
 
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS leads_workspace_isolation ON leads;
 CREATE POLICY leads_workspace_isolation ON leads
     USING (
         current_setting('app.bypass_rls', true) = 'on'
         OR workspace_id::text = current_setting('app.workspace_id', true)
     );
 
-CREATE TABLE contacts (
+CREATE TABLE IF NOT EXISTS contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id),
@@ -51,12 +52,13 @@ CREATE TABLE contacts (
     CONSTRAINT contacts_type_check CHECK (contact_type IN ('client', 'vendor', 'collaborator'))
 );
 
-CREATE INDEX idx_contacts_workspace_id ON contacts(workspace_id);
-CREATE INDEX idx_contacts_user_id ON contacts(user_id);
-CREATE INDEX idx_contacts_workspace_email ON contacts(workspace_id, email);
-CREATE INDEX idx_contacts_tags_gin ON contacts USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_contacts_workspace_id ON contacts(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_workspace_email ON contacts(workspace_id, email);
+CREATE INDEX IF NOT EXISTS idx_contacts_tags_gin ON contacts USING GIN (tags);
 
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS contacts_workspace_isolation ON contacts;
 CREATE POLICY contacts_workspace_isolation ON contacts
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -64,10 +66,19 @@ CREATE POLICY contacts_workspace_isolation ON contacts
     );
 
 -- Add FK from leads.converted_contact_id now that contacts table exists
-ALTER TABLE leads ADD CONSTRAINT leads_converted_contact_fk
-    FOREIGN KEY (converted_contact_id) REFERENCES contacts(id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'leads_converted_contact_fk'
+    ) THEN
+        ALTER TABLE leads ADD CONSTRAINT leads_converted_contact_fk
+            FOREIGN KEY (converted_contact_id) REFERENCES contacts(id);
+    END IF;
+END $$;
 
-CREATE TABLE deals (
+CREATE TABLE IF NOT EXISTS deals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     contact_id UUID NOT NULL REFERENCES contacts(id),
@@ -84,18 +95,19 @@ CREATE TABLE deals (
     CONSTRAINT deals_stage_check CHECK (stage IN ('proposal', 'negotiation', 'confirmed', 'in_progress', 'completed', 'cancelled'))
 );
 
-CREATE INDEX idx_deals_workspace_id ON deals(workspace_id);
-CREATE INDEX idx_deals_contact_id ON deals(contact_id);
-CREATE INDEX idx_deals_workspace_stage ON deals(workspace_id, stage);
+CREATE INDEX IF NOT EXISTS idx_deals_workspace_id ON deals(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_deals_contact_id ON deals(contact_id);
+CREATE INDEX IF NOT EXISTS idx_deals_workspace_stage ON deals(workspace_id, stage);
 
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS deals_workspace_isolation ON deals;
 CREATE POLICY deals_workspace_isolation ON deals
     USING (
         current_setting('app.bypass_rls', true) = 'on'
         OR workspace_id::text = current_setting('app.workspace_id', true)
     );
 
-CREATE TABLE follow_ups (
+CREATE TABLE IF NOT EXISTS follow_ups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     lead_id UUID REFERENCES leads(id),
@@ -113,11 +125,12 @@ CREATE TABLE follow_ups (
     CONSTRAINT follow_ups_status_check CHECK (status IN ('pending', 'completed', 'overdue', 'cancelled'))
 );
 
-CREATE INDEX idx_follow_ups_workspace_id ON follow_ups(workspace_id);
-CREATE INDEX idx_follow_ups_due_at ON follow_ups(workspace_id, due_at) WHERE status = 'pending';
-CREATE INDEX idx_follow_ups_assigned_to ON follow_ups(assigned_to) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_follow_ups_workspace_id ON follow_ups(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_follow_ups_due_at ON follow_ups(workspace_id, due_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_follow_ups_assigned_to ON follow_ups(assigned_to) WHERE status = 'pending';
 
 ALTER TABLE follow_ups ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS follow_ups_workspace_isolation ON follow_ups;
 CREATE POLICY follow_ups_workspace_isolation ON follow_ups
     USING (
         current_setting('app.bypass_rls', true) = 'on'

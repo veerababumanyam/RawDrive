@@ -7,13 +7,14 @@ import { getStoredAccessToken } from "@/lib/auth";
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     const token = getStoredAccessToken();
     listContacts(token, search ? { search } : undefined)
       .then(setContacts)
-      .catch(() => setContacts([]))
+      .catch((err) => { setError(err?.message || "Failed to load contacts"); setContacts([]); })
       .finally(() => setLoading(false));
   }, [search]);
 
@@ -34,6 +35,11 @@ export default function ContactsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      {error && (
+        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
@@ -48,7 +54,7 @@ export default function ContactsPage() {
         placeholder="Search by name, email, or phone..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-md px-4 py-2 rounded-xl bg-surface-raised border border-border-default text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent/40"
+        className="input-base w-full max-w-md"
       />
 
       {contacts.length === 0 ? (
@@ -71,7 +77,7 @@ export default function ContactsPage() {
                 </div>
               </div>
               <div className="text-right">
-                <span className="px-2 py-0.5 rounded text-xs font-medium bg-accent/10 text-accent capitalize">
+                <span className="status-badge status-badge--accent capitalize">
                   {c.contact_type}
                 </span>
                 {c.total_revenue_paisa > 0 && (

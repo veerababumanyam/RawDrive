@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS face_clusters (
 
 ALTER TABLE face_clusters ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS face_clusters_workspace_isolation ON face_clusters;
 CREATE POLICY face_clusters_workspace_isolation ON face_clusters
     USING (
         current_setting('app.bypass_rls', true) = 'on'

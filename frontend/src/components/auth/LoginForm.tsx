@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail, RotateCcw } from "lucide-react";
+import { Mail, KeyRound } from "lucide-react";
 import {
   getGoogleOAuthStartUrl,
   getPostLoginPath,
@@ -31,8 +31,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -62,7 +61,7 @@ export function LoginForm() {
 
   useEffect(() => {
     if (registered) {
-      setNotice("Account created. We’ve prefilled your email so you can request your OTP.");
+      setNotice("Account created. Please login below.");
       return;
     }
 
@@ -72,8 +71,9 @@ export function LoginForm() {
     }
   }, [oauthError, registered]);
 
-  async function handleSendOtp() {
-    if (!email.trim()) {
+  async function handleLogin(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!email.trim() || !password) {
       return;
     }
 
@@ -85,44 +85,18 @@ export function LoginForm() {
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(
-          payload.error || "We could not send your OTP. Please check your email and try again.",
-        );
+      
+      if (response.status === 403 && payload.error === "account not activated") {
+        router.push(`/activate?email=${encodeURIComponent(email.trim())}`);
         return;
       }
 
-      setOtpSent(true);
-      setNotice("OTP sent. In local development the code is printed in the backend logs.");
-    } catch {
-      setError("Network error. Please confirm the API server is running.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleVerifyOtp() {
-    if (otpCode.trim().length < 6) {
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch(`${API_BASE}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), code: otpCode.trim() }),
-      });
-
-      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(payload.error || "OTP verification failed.");
+        setError(payload.error || "Login failed. Please check your credentials.");
         return;
       }
 
@@ -131,30 +105,32 @@ export function LoginForm() {
     } catch {
       setError("Network error. Please confirm the API server is running.");
     } finally {
-      setLoading(false);
+      if (!error && loading) {
+        setLoading(false); // only reset loading if not redirecting
+      }
     }
   }
 
   return (
     <div className="mt-10 space-y-6">
       {notice ? (
-        <div className="rounded-2xl border border-[#a3a6ff]/20 bg-[#a3a6ff]/10 px-4 py-3 text-sm text-[#d9c8ff]">
+        <div className="rounded-2xl border border-border bg-accent-subtle px-4 py-3 text-sm text-accent">
           {notice}
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-[#ff6e84]/30 bg-[#a70138]/20 px-4 py-3 text-sm text-[#ffb2b9]">
+        <div className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       ) : null}
 
-      {!otpSent ? (
-        <>
+      <form onSubmit={handleLogin} className="space-y-6">
+        <div className="space-y-4">
           <div className="space-y-2">
             <label
               htmlFor="login-email"
-              className="block pl-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/55"
+              className="block pl-1 text-xs font-semibold uppercase tracking-[0.24em] text-text-tertiary"
             >
               Email Address
             </label>
@@ -162,92 +138,61 @@ export function LoginForm() {
               <input
                 id="login-email"
                 type="email"
+                name="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void handleSendOtp();
-                  }
-                }}
                 placeholder="name@photographer.com"
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-4 pr-12 text-white placeholder:text-zinc-600 focus:border-[#a3a6ff] focus:outline-none focus:ring-2 focus:ring-[#a3a6ff]/40"
+                className="input-base w-full pr-12"
                 autoComplete="email"
+                required
               />
-              <Mail className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-600 transition-colors group-focus-within:text-[#a3a6ff]" />
+              <Mail className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary transition-colors group-focus-within:text-accent" />
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void handleSendOtp()}
-            disabled={loading || !email.trim()}
-            className="w-full rounded-xl bg-gradient-to-r from-[#a3a6ff] to-[#8455ef] py-4 font-headline text-base font-bold text-[#0f00a4] shadow-lg shadow-[#a3a6ff]/20 transition-all hover:opacity-90 hover:shadow-[#a3a6ff]/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Sending OTP..." : "Send OTP"}
-          </button>
-        </>
-      ) : (
-        <>
           <div className="space-y-2">
             <label
-              htmlFor="otp-code"
-              className="block pl-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/55"
+              htmlFor="login-password"
+              className="block pl-1 text-xs font-semibold uppercase tracking-[0.24em] text-text-tertiary"
             >
-              One-Time Password
+              Password
             </label>
-            <input
-              id="otp-code"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otpCode}
-              onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ""))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void handleVerifyOtp();
-                }
-              }}
-              placeholder="123456"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-center text-2xl tracking-[0.45em] text-white placeholder:text-zinc-600 focus:border-[#a3a6ff] focus:outline-none focus:ring-2 focus:ring-[#a3a6ff]/40"
-              autoFocus
-            />
+            <div className="group relative">
+              <input
+                id="login-password"
+                type="password"
+                name="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                className="input-base w-full pr-12"
+                autoComplete="current-password"
+                required
+              />
+              <KeyRound className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary transition-colors group-focus-within:text-accent" />
+            </div>
           </div>
+        </div>
 
-          <button
-            type="button"
-            onClick={() => void handleVerifyOtp()}
-            disabled={loading || otpCode.length < 6}
-            className="w-full rounded-xl bg-gradient-to-r from-[#a3a6ff] to-[#8455ef] py-4 font-headline text-base font-bold text-[#0f00a4] shadow-lg shadow-[#a3a6ff]/20 transition-all hover:opacity-90 hover:shadow-[#a3a6ff]/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Verifying..." : "Verify OTP"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setOtpSent(false);
-              setOtpCode("");
-              setError("");
-              setNotice("");
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:text-white"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Use a different email
-          </button>
-        </>
-      )}
+        <button
+          type="submit"
+          disabled={loading || !email.trim() || !password}
+          className="btn-primary w-full py-4 font-headline text-base disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loading ? "Signing in..." : "Sign In"}
+        </button>
+      </form>
 
       <div className="relative flex items-center py-2">
-        <div className="flex-grow border-t border-white/10" />
-        <span className="mx-4 text-xs font-bold tracking-[0.24em] text-zinc-500">OR</span>
-        <div className="flex-grow border-t border-white/10" />
+        <div className="soft-divider flex-grow" />
+        <span className="mx-4 text-xs font-bold tracking-[0.24em] text-text-tertiary">OR</span>
+        <div className="soft-divider flex-grow" />
       </div>
 
       <button
         type="button"
         onClick={() => window.location.assign(googleStartUrl)}
-        className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 py-4 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98]"
+        className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-surface-container-low px-4 py-4 font-medium text-text-primary transition-colors hover:bg-surface-container-high"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -271,11 +216,11 @@ export function LoginForm() {
       </button>
 
       <div className="text-center">
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-text-secondary">
           Don&apos;t have an account?
           <Link
             href="/register"
-            className="ml-1 font-bold text-indigo-300 underline decoration-2 underline-offset-4 transition-colors hover:text-white"
+            className="ml-1 font-bold text-accent transition-colors hover:text-accent-hover"
           >
             Sign up
           </Link>

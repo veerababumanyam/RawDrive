@@ -3,25 +3,19 @@
 import { useState, useEffect } from "react";
 import { listInvoices, formatPaisa, type Invoice } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
-
-const statusColors: Record<string, string> = {
-  draft: "bg-surface-sunken text-text-secondary",
-  sent: "bg-blue-500/10 text-blue-600",
-  paid: "bg-green-500/10 text-green-600",
-  partially_paid: "bg-yellow-500/10 text-yellow-600",
-  overdue: "bg-red-500/10 text-red-600",
-  cancelled: "bg-surface-sunken text-text-tertiary",
-};
+import { cn } from "@/lib/utils";
+import { invoiceStatusClasses } from "@/lib/dashboard-ui";
 
 export default function BillingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
     listInvoices(token)
       .then(setInvoices)
-      .catch(() => setInvoices([]))
+      .catch((err) => { setError(err?.message || "Failed to load invoices"); setInvoices([]); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -42,6 +36,11 @@ export default function BillingPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      {error && (
+        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Invoices</h1>
@@ -72,7 +71,12 @@ export default function BillingPage() {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-text-primary">{formatPaisa(inv.total_paisa)}</p>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium mt-1 inline-block ${statusColors[inv.status] || ""}`}>
+                  <span
+                    className={cn(
+                      "mt-1",
+                      invoiceStatusClasses[inv.status] || "status-badge status-badge--neutral",
+                    )}
+                  >
                     {inv.status.replace("_", " ")}
                   </span>
                 </div>

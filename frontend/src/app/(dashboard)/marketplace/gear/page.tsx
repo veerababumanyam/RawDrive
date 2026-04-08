@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { listGear, type GearListing } from "@/lib/api/gear";
+import { availabilityClasses } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
   { value: "", label: "All" },
@@ -16,18 +18,24 @@ const CATEGORIES = [
 export default function GearPage() {
   const [gear, setGear] = useState<GearListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState("");
 
   useEffect(() => {
     setLoading(true);
     listGear({ category: category || undefined })
       .then(setGear)
-      .catch(() => setGear([]))
+      .catch((err) => { setError(err?.message || "Failed to load gear listings"); setGear([]); })
       .finally(() => setLoading(false));
   }, [category]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      {error && (
+        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Gear Rental</h1>
@@ -37,7 +45,7 @@ export default function GearPage() {
         </div>
         <Link
           href="/marketplace/gear/new"
-          className="px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px] flex items-center"
+          className="btn-primary px-4 py-2.5 text-sm"
         >
           List Your Gear
         </Link>
@@ -49,11 +57,12 @@ export default function GearPage() {
           <button
             key={cat.value}
             onClick={() => setCategory(cat.value)}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors min-h-[44px] ${
+            className={cn(
+              "segmented-control-button whitespace-nowrap text-sm",
               category === cat.value
-                ? "bg-accent/20 text-accent border border-accent/30"
-                : "bg-white/5 text-text-secondary border border-white/10 hover:bg-white/10"
-            }`}
+                ? "segmented-control-button--active"
+                : "segmented-control-button--inactive",
+            )}
           >
             {cat.label}
           </button>
@@ -77,7 +86,7 @@ export default function GearPage() {
             <Link
               key={g.id}
               href={`/marketplace/gear/${g.id}`}
-              className="block rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden hover:bg-white/[0.08] transition-colors"
+              className="surface-panel block overflow-hidden transition-colors hover:bg-surface-container-high"
             >
               {/* Image placeholder */}
               {g.images && g.images.length > 0 ? (
@@ -92,16 +101,16 @@ export default function GearPage() {
               <div className="p-4 space-y-2">
                 <div className="flex items-start justify-between">
                   <h3 className="text-sm font-semibold text-text-primary">{g.title}</h3>
-                  <span className={`px-2 py-0.5 text-xs rounded-full ${
-                    g.is_available
-                      ? "bg-green-500/10 text-green-400"
-                      : "bg-red-500/10 text-red-400"
-                  }`}>
+                  <span
+                    className={cn(
+                      availabilityClasses[g.is_available ? "available" : "unavailable"],
+                    )}
+                  >
                     {g.is_available ? "Available" : "Booked"}
                   </span>
                 </div>
                 {g.brand && (
-                  <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-white/5 border border-white/10 text-text-secondary">
+                  <span className="status-badge status-badge--neutral">
                     {g.brand}
                   </span>
                 )}

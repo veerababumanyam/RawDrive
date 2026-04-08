@@ -8,6 +8,41 @@ import { getStoredAccessToken } from "@/lib/auth";
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
+const INDIAN_STATES = [
+  { id: 1, code: "AN", name: "Andaman & Nicobar Islands" },
+  { id: 2, code: "AP", name: "Andhra Pradesh" },
+  { id: 3, code: "AR", name: "Arunachal Pradesh" },
+  { id: 4, code: "AS", name: "Assam" },
+  { id: 5, code: "BR", name: "Bihar" },
+  { id: 6, code: "CH", name: "Chandigarh" },
+  { id: 7, code: "CT", name: "Chhattisgarh" },
+  { id: 8, code: "DL", name: "Delhi" },
+  { id: 9, code: "GA", name: "Goa" },
+  { id: 10, code: "GJ", name: "Gujarat" },
+  { id: 11, code: "HR", name: "Haryana" },
+  { id: 12, code: "HP", name: "Himachal Pradesh" },
+  { id: 13, code: "JK", name: "Jammu & Kashmir" },
+  { id: 14, code: "JH", name: "Jharkhand" },
+  { id: 15, code: "KA", name: "Karnataka" },
+  { id: 16, code: "KL", name: "Kerala" },
+  { id: 17, code: "MP", name: "Madhya Pradesh" },
+  { id: 18, code: "MH", name: "Maharashtra" },
+  { id: 19, code: "MN", name: "Manipur" },
+  { id: 20, code: "ML", name: "Meghalaya" },
+  { id: 21, code: "MZ", name: "Mizoram" },
+  { id: 22, code: "NL", name: "Nagaland" },
+  { id: 23, code: "OR", name: "Odisha" },
+  { id: 24, code: "PB", name: "Punjab" },
+  { id: 25, code: "RJ", name: "Rajasthan" },
+  { id: 26, code: "SK", name: "Sikkim" },
+  { id: 27, code: "TN", name: "Tamil Nadu" },
+  { id: 28, code: "TS", name: "Telangana" },
+  { id: 29, code: "TR", name: "Tripura" },
+  { id: 30, code: "UK", name: "Uttarakhand" },
+  { id: 31, code: "UP", name: "Uttar Pradesh" },
+  { id: 32, code: "WB", name: "West Bengal" },
+];
+
 interface Props {
   onSuccess: () => void;
 }
@@ -106,7 +141,9 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
             className="input-base w-full min-h-[44px]"
           >
             <option value={0}>Select state</option>
-            {/* States populated from API */}
+            {INDIAN_STATES.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
           </select>
         </div>
 

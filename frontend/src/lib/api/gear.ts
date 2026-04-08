@@ -91,3 +91,19 @@ export async function deleteGearListing(token: string, id: string): Promise<void
     headers: headers(token),
   });
 }
+
+export async function createGearBooking(token: string, id: string, data: {
+  start_date: string;
+  end_date: string;
+  total_paisa: number;
+  deposit_paisa: number;
+  message?: string;
+}): Promise<GearBooking> {
+  const res = await fetch(`${API_BASE}/api/v1/marketplace/gear/${id}/bookings`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  return json.data;
+}

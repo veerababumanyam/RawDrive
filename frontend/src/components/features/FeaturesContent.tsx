@@ -173,13 +173,54 @@ export function FeaturesContent() {
   }, []);
 
   return (
-    <div className="bg-surface">
-      {/* Hero */}
-      <section className="px-4 py-16 text-center lg:px-8">
-        <h1 className="text-4xl font-bold text-text-primary">Features</h1>
-        <p className="mt-4 text-lg text-text-secondary">
-          Everything you need to run a professional photography business in India.
-        </p>
+    <div className="bg-surface text-text-primary">
+      <section className="mx-auto grid max-w-7xl gap-10 px-4 py-16 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
+        <div className="space-y-8">
+          <span className="inline-flex rounded-full bg-accent-subtle px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-accent">
+            Feature Showcase
+          </span>
+          <div className="space-y-5">
+            <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
+              Every core workflow, rebuilt around the original Stitch feature direction.
+            </h1>
+            <p className="max-w-2xl text-lg leading-8 text-text-secondary">
+              Explore the product surfaces that matter most to photography businesses: delivery,
+              proofing, AI, CRM, streaming, analytics, privacy, and local operations.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/register" className="btn-primary px-6 py-3 text-sm font-semibold">
+              Start free trial
+            </Link>
+            <Link
+              href="/pricing"
+              className="btn-tertiary border border-border px-6 py-3 text-sm font-semibold"
+            >
+              Compare plans
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="glass-card overflow-hidden p-3">
+            <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
+              <img
+                src="/stitch/features-a.png"
+                alt="Stitch features showcase preview"
+                className="h-auto w-full object-cover"
+              />
+            </div>
+          </div>
+          <div className="glass-card overflow-hidden p-3 sm:translate-y-12">
+            <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
+              <img
+                src="/stitch/features-b.png"
+                alt="Stitch features showcase secondary preview"
+                className="h-auto w-full object-cover"
+              />
+            </div>
+          </div>
+        </div>
       </section>
 
       <div className="mx-auto max-w-7xl px-4 pb-20 lg:px-8">

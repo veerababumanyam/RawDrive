@@ -1,9 +1,10 @@
 "use client";
 
 import { AISearchBar } from "@/components/ai/AISearchBar";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function AISearchPage() {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  const token = getStoredAccessToken();
 
   return (
     <div>

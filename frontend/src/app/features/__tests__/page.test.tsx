@@ -16,7 +16,12 @@ beforeEach(() => {
 describe("Features Page", () => {
   it("renders the features headline", () => {
     render(<FeaturesContent />);
-    expect(screen.getByText("Features")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /Every core workflow, rebuilt around the original Stitch feature direction\./i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders all 10 feature sections", () => {

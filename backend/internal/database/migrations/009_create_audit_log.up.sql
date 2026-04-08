@@ -18,11 +18,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create triggers to enforce immutability
+DROP TRIGGER IF EXISTS audit_log_prevent_update ON audit_log;
 CREATE TRIGGER audit_log_prevent_update
     BEFORE UPDATE ON audit_log
     FOR EACH ROW
     EXECUTE FUNCTION prevent_audit_log_modification();
 
+DROP TRIGGER IF EXISTS audit_log_prevent_delete ON audit_log;
 CREATE TRIGGER audit_log_prevent_delete
     BEFORE DELETE ON audit_log
     FOR EACH ROW

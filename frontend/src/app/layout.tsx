@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import {
+  ThemeProvider,
+  rawDriveThemeInitScript,
+} from "@/components/theme/ThemeProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -58,20 +62,21 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      data-theme="liquid-glass"
+      data-theme="liquid-glass-dark"
+      suppressHydrationWarning
       className={`h-full antialiased ${inter.variable} ${manrope.variable}`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#3B82F6" />
+        <meta name="theme-color" content="#0b1326" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <script dangerouslySetInnerHTML={{ __html: rawDriveThemeInitScript }} />
       </head>
-      <body
-        className="min-h-full flex flex-col bg-surface text-text-primary"
-        style={{ fontFamily: "var(--font-sans)" }}
-      >
-        <AppShell>{children}</AppShell>
+      <body className="flex min-h-full flex-col bg-surface font-sans text-text-primary">
+        <ThemeProvider>
+          <AppShell>{children}</AppShell>
+        </ThemeProvider>
       </body>
     </html>
   );

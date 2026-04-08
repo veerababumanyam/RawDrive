@@ -12,11 +12,12 @@ CREATE TABLE IF NOT EXISTS channels (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_channels_workspace ON channels(workspace_id);
-CREATE INDEX idx_channels_type ON channels(workspace_id, channel_type);
+CREATE INDEX IF NOT EXISTS idx_channels_workspace ON channels(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_channels_type ON channels(workspace_id, channel_type);
 
 ALTER TABLE channels ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS channels_workspace_isolation ON channels;
 CREATE POLICY channels_workspace_isolation ON channels
     FOR ALL USING (workspace_id = current_setting('app.current_workspace_id', true)::uuid);
 
@@ -30,10 +31,11 @@ CREATE TABLE IF NOT EXISTS channel_members (
     PRIMARY KEY (channel_id, user_id)
 );
 
-CREATE INDEX idx_channel_members_user ON channel_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_channel_members_user ON channel_members(user_id);
 
 ALTER TABLE channel_members ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS channel_members_workspace_isolation ON channel_members;
 CREATE POLICY channel_members_workspace_isolation ON channel_members
     FOR ALL USING (
         channel_id IN (
@@ -60,17 +62,18 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 -- Add full-text search vector (generated column)
-ALTER TABLE messages ADD COLUMN search_vector tsvector
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector
     GENERATED ALWAYS AS (to_tsvector('english', coalesce(body, ''))) STORED;
 
-CREATE INDEX idx_messages_channel ON messages(channel_id, inserted_at DESC);
-CREATE INDEX idx_messages_workspace ON messages(workspace_id);
-CREATE INDEX idx_messages_sender ON messages(sender_id);
-CREATE INDEX idx_messages_parent ON messages(parent_message_id) WHERE parent_message_id IS NOT NULL;
-CREATE INDEX idx_messages_search ON messages USING GIN(search_vector);
+CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, inserted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_workspace ON messages(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_message_id) WHERE parent_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_messages_search ON messages USING GIN(search_vector);
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS messages_workspace_isolation ON messages;
 CREATE POLICY messages_workspace_isolation ON messages
     FOR ALL USING (workspace_id = current_setting('app.current_workspace_id', true)::uuid);
 
@@ -87,10 +90,11 @@ CREATE TABLE IF NOT EXISTS client_conversations (
     UNIQUE(gallery_id, share_token)
 );
 
-CREATE INDEX idx_client_conversations_gallery ON client_conversations(gallery_id);
-CREATE INDEX idx_client_conversations_workspace ON client_conversations(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_client_conversations_gallery ON client_conversations(gallery_id);
+CREATE INDEX IF NOT EXISTS idx_client_conversations_workspace ON client_conversations(workspace_id);
 
 ALTER TABLE client_conversations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS client_conversations_workspace_isolation ON client_conversations;
 CREATE POLICY client_conversations_workspace_isolation ON client_conversations
     FOR ALL USING (workspace_id = current_setting('app.current_workspace_id', true)::uuid);

@@ -2,7 +2,7 @@
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
@@ -26,12 +26,13 @@ CREATE TABLE events (
     CONSTRAINT events_end_after_start CHECK (end_at > start_at)
 );
 
-CREATE INDEX idx_events_workspace_id ON events(workspace_id);
-CREATE INDEX idx_events_workspace_range ON events(workspace_id, start_at, end_at);
-CREATE INDEX idx_events_contact_id ON events(contact_id);
-CREATE INDEX idx_events_deal_id ON events(deal_id);
+CREATE INDEX IF NOT EXISTS idx_events_workspace_id ON events(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_events_workspace_range ON events(workspace_id, start_at, end_at);
+CREATE INDEX IF NOT EXISTS idx_events_contact_id ON events(contact_id);
+CREATE INDEX IF NOT EXISTS idx_events_deal_id ON events(deal_id);
 
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS events_workspace_isolation ON events;
 CREATE POLICY events_workspace_isolation ON events
     USING (
         current_setting('app.bypass_rls', true) = 'on'

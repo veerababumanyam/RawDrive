@@ -1,6 +1,6 @@
 -- M4: Notifications — notifications, notification_preferences
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -16,18 +16,19 @@ CREATE TABLE notifications (
     CONSTRAINT notifications_channel_check CHECK (channel IN ('in_app', 'email', 'whatsapp', 'push'))
 );
 
-CREATE INDEX idx_notifications_user_unread ON notifications(user_id, created_at DESC) WHERE is_read = false;
-CREATE INDEX idx_notifications_user_id ON notifications(user_id, created_at DESC);
-CREATE INDEX idx_notifications_workspace_id ON notifications(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, created_at DESC) WHERE is_read = false;
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_workspace_id ON notifications(workspace_id);
 
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS notifications_owner ON notifications;
 CREATE POLICY notifications_owner ON notifications
     USING (
         current_setting('app.bypass_rls', true) = 'on'
         OR user_id::text = current_setting('app.user_id', true)
     );
 
-CREATE TABLE notification_preferences (
+CREATE TABLE IF NOT EXISTS notification_preferences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     category TEXT NOT NULL,
@@ -45,9 +46,10 @@ CREATE TABLE notification_preferences (
     CONSTRAINT notification_prefs_digest_check CHECK (digest_mode IN ('none', 'daily', 'weekly'))
 );
 
-CREATE INDEX idx_notification_prefs_user_id ON notification_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_notification_prefs_user_id ON notification_preferences(user_id);
 
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS notification_prefs_owner ON notification_preferences;
 CREATE POLICY notification_prefs_owner ON notification_preferences
     USING (
         current_setting('app.bypass_rls', true) = 'on'

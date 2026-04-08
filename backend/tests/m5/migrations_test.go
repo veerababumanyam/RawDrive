@@ -3,12 +3,19 @@ package m5_test
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/rawdrive/backend/internal/database"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	m5MigrationsOnce sync.Once
+	m5MigrationsErr  error
 )
 
 func getTestDB(t *testing.T) *pgxpool.Pool {
@@ -17,6 +24,12 @@ func getTestDB(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		dsn = "postgresql://rawdrive_user:e706fbd6b28d036aa80379447729737b@localhost:55070/rawdrive_db?sslmode=disable"
 	}
+
+	m5MigrationsOnce.Do(func() {
+		m5MigrationsErr = database.NewMigrator(dsn).Up()
+	})
+	require.NoError(t, m5MigrationsErr, "failed to apply migrations for M5 tests")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)

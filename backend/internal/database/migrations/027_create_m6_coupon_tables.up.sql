@@ -1,6 +1,6 @@
 -- M6: Coupon Engine — coupons, coupon_redemptions
 
-CREATE TABLE coupons (
+CREATE TABLE IF NOT EXISTS coupons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(50) NOT NULL,
     created_by UUID NOT NULL REFERENCES users(id),
@@ -25,12 +25,13 @@ CREATE TABLE coupons (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_coupons_code_upper ON coupons(UPPER(code));
-CREATE INDEX idx_coupons_dealer_id ON coupons(dealer_id) WHERE dealer_id IS NOT NULL;
-CREATE INDEX idx_coupons_scope_state ON coupons(scope_state_id);
-CREATE INDEX idx_coupons_valid_active ON coupons(valid_from, valid_until) WHERE is_active = true;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_coupons_code_upper ON coupons(UPPER(code));
+CREATE INDEX IF NOT EXISTS idx_coupons_dealer_id ON coupons(dealer_id) WHERE dealer_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_coupons_scope_state ON coupons(scope_state_id);
+CREATE INDEX IF NOT EXISTS idx_coupons_valid_active ON coupons(valid_from, valid_until) WHERE is_active = true;
 
 ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS coupons_access ON coupons;
 CREATE POLICY coupons_access ON coupons
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -38,7 +39,7 @@ CREATE POLICY coupons_access ON coupons
         OR (dealer_id IS NOT NULL AND dealer_id IN (SELECT id FROM dealers WHERE user_id::text = current_setting('app.user_id', true)))
     );
 
-CREATE TABLE coupon_redemptions (
+CREATE TABLE IF NOT EXISTS coupon_redemptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     coupon_id UUID NOT NULL REFERENCES coupons(id),
     user_id UUID NOT NULL REFERENCES users(id),
@@ -49,11 +50,12 @@ CREATE TABLE coupon_redemptions (
     redeemed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_coupon_redemptions_coupon_user ON coupon_redemptions(coupon_id, user_id);
-CREATE INDEX idx_coupon_redemptions_workspace ON coupon_redemptions(workspace_id);
-CREATE INDEX idx_coupon_redemptions_state ON coupon_redemptions(state_id);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_coupon_user ON coupon_redemptions(coupon_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_workspace ON coupon_redemptions(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_state ON coupon_redemptions(state_id);
 
 ALTER TABLE coupon_redemptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS coupon_redemptions_access ON coupon_redemptions;
 CREATE POLICY coupon_redemptions_access ON coupon_redemptions
     USING (
         current_setting('app.bypass_rls', true) = 'on'

@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { FaceClusterBrowser } from "@/components/ai/FaceClusterBrowser";
 import { FaceClusterDetail } from "@/components/ai/FaceClusterDetail";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function AIFacesPage() {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  const token = getStoredAccessToken();
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
 
   return (

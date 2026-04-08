@@ -2,6 +2,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export interface StorageConfig {
   driver: string;
+  local_dir?: string;
   bucket: string;
   region: string;
   endpoint: string;

@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { getGear, type GearListing } from "@/lib/api/gear";
+import { availabilityClasses } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 export default function GearDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -43,11 +45,11 @@ export default function GearDetailPage({ params }: { params: Promise<{ id: strin
           <h1 className="text-2xl font-semibold text-text-primary">{gear.title}</h1>
           <div className="flex items-center gap-2 mt-2">
             {gear.brand && (
-              <span className="px-2.5 py-1 text-xs rounded-full bg-white/5 border border-white/10 text-text-secondary">{gear.brand}</span>
+              <span className="status-badge status-badge--neutral">{gear.brand}</span>
             )}
-            <span className="px-2.5 py-1 text-xs rounded-full bg-accent/10 text-accent">{gear.category.replace("_", " ")}</span>
+            <span className="status-badge status-badge--accent">{gear.category.replace("_", " ")}</span>
             {gear.condition && (
-              <span className="px-2.5 py-1 text-xs rounded-full bg-white/5 border border-white/10 text-text-secondary">{gear.condition.replace("_", " ")}</span>
+              <span className="status-badge status-badge--neutral">{gear.condition.replace("_", " ")}</span>
             )}
           </div>
         </div>
@@ -58,16 +60,19 @@ export default function GearDetailPage({ params }: { params: Promise<{ id: strin
               /{gear.listing_type === "rental" ? "day" : "sale"}
             </span>
           </div>
-          <span className={`inline-block mt-1 px-3 py-1 text-xs rounded-full ${
-            gear.is_available ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
-          }`}>
+          <span
+            className={cn(
+              "mt-1",
+              availabilityClasses[gear.is_available ? "available" : "unavailable"],
+            )}
+          >
             {gear.is_available ? "Available" : "Currently Booked"}
           </span>
         </div>
       </div>
 
       {gear.description && (
-        <div className="p-5 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
+        <div className="surface-panel p-5">
           <p className="text-sm text-text-secondary leading-relaxed">{gear.description}</p>
         </div>
       )}
@@ -79,7 +84,7 @@ export default function GearDetailPage({ params }: { params: Promise<{ id: strin
       {gear.is_available && gear.listing_type === "rental" && (
         <Link
           href={`/marketplace/gear/${gear.id}/book`}
-          className="inline-block px-6 py-3 rounded-xl bg-accent text-white font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+          className="btn-primary inline-flex px-6 py-3 text-sm"
         >
           Book This Gear
         </Link>

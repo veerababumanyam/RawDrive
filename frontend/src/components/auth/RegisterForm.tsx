@@ -39,6 +39,11 @@ export function RegisterForm() {
       return;
     }
 
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -46,7 +51,13 @@ export function RegisterForm() {
       const response = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ 
+          email: email.trim(), 
+          password,
+          full_name: fullName.trim(),
+          phone: phone.trim(),
+          state: stateValue
+        }),
       });
 
       const payload = await response.json().catch(() => ({}));
@@ -55,7 +66,7 @@ export function RegisterForm() {
         return;
       }
 
-      router.push(`/login?registered=1&email=${encodeURIComponent(email.trim())}`);
+      router.push(`/activate?email=${encodeURIComponent(email.trim())}`);
     } catch {
       setError("Network error. Please confirm the API server is running.");
     } finally {
@@ -66,7 +77,7 @@ export function RegisterForm() {
   return (
     <form className="space-y-6" onSubmit={(event) => void handleRegister(event)}>
       {error ? (
-        <div className="rounded-2xl border border-[#fe8983]/40 bg-[#fff7f6] px-4 py-3 text-sm text-[#752121]">
+        <div className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       ) : null}
@@ -74,7 +85,7 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-name"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5a6061]"
+          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Full name
         </label>
@@ -84,14 +95,14 @@ export function RegisterForm() {
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
           placeholder="Arjun Malhotra"
-          className="h-12 w-full rounded-xl border-none bg-[#f2f4f4] px-4 text-[#2d3435] placeholder:text-[#adb3b4] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#5f5e5e]/20"
+          className="input-base w-full"
         />
       </div>
 
       <div className="space-y-1.5">
         <label
           htmlFor="register-email"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5a6061]"
+          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Email address
         </label>
@@ -101,7 +112,7 @@ export function RegisterForm() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="arjun@studio.in"
-          className="h-12 w-full rounded-xl border-none bg-[#f2f4f4] px-4 text-[#2d3435] placeholder:text-[#adb3b4] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#5f5e5e]/20"
+          className="input-base w-full"
           autoComplete="email"
         />
       </div>
@@ -109,14 +120,14 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-phone"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5a6061]"
+          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Phone number
         </label>
         <div className="relative">
-          <div className="absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2 border-r border-[#adb3b4]/30 pr-3">
+          <div className="absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2 border-r border-border pr-3">
             <span className="text-lg">IN</span>
-            <span className="text-sm font-semibold text-[#2d3435]">+91</span>
+            <span className="text-sm font-semibold text-text-primary">+91</span>
           </div>
           <input
             id="register-phone"
@@ -124,7 +135,7 @@ export function RegisterForm() {
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
             placeholder="98765 43210"
-            className="h-12 w-full rounded-xl border-none bg-[#f2f4f4] pl-24 pr-4 text-[#2d3435] placeholder:text-[#adb3b4] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#5f5e5e]/20"
+            className="input-base w-full pl-24 pr-4"
             autoComplete="tel"
           />
         </div>
@@ -133,7 +144,7 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-password"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5a6061]"
+          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Password
         </label>
@@ -144,13 +155,13 @@ export function RegisterForm() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="••••••••"
-            className="h-12 w-full rounded-xl border-none bg-[#f2f4f4] px-4 pr-12 text-[#2d3435] placeholder:text-[#adb3b4] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#5f5e5e]/20"
+            className="input-base w-full pr-12"
             autoComplete="new-password"
           />
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#757c7d]"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary"
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -161,7 +172,7 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-state"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#5a6061]"
+          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Business Location
         </label>
@@ -170,7 +181,7 @@ export function RegisterForm() {
             id="register-state"
             value={stateValue}
             onChange={(event) => setStateValue(event.target.value)}
-            className="h-12 w-full appearance-none rounded-xl border-none bg-[#f2f4f4] px-4 text-[#2d3435] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#5f5e5e]/20"
+            className="input-base w-full appearance-none pr-12"
           >
             <option value="">Select State</option>
             {indianStates.map((state) => (
@@ -179,7 +190,7 @@ export function RegisterForm() {
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#757c7d]" />
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary" />
         </div>
       </div>
 
@@ -189,15 +200,15 @@ export function RegisterForm() {
           type="checkbox"
           checked={termsAccepted}
           onChange={(event) => setTermsAccepted(event.target.checked)}
-          className="mt-0.5 h-5 w-5 rounded border-[#adb3b4] bg-[#f2f4f4] text-[#2d3435] focus:ring-[#5f5e5e]/20"
+          className="mt-0.5 h-5 w-5 rounded border-border bg-surface-container-low text-accent focus:ring-accent/20"
         />
-        <label htmlFor="terms" className="text-sm leading-tight text-[#5c6060]">
+        <label htmlFor="terms" className="text-sm leading-tight text-text-secondary">
           I accept the{" "}
-          <Link href="/terms" className="font-semibold text-[#2d3435] underline underline-offset-2">
+          <Link href="/terms" className="font-semibold text-text-primary underline underline-offset-2">
             Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/privacy" className="font-semibold text-[#2d3435] underline underline-offset-2">
+          <Link href="/privacy" className="font-semibold text-text-primary underline underline-offset-2">
             Privacy Policy
           </Link>
         </label>
@@ -206,7 +217,7 @@ export function RegisterForm() {
       <button
         type="submit"
         disabled={loading || !email.trim() || !termsAccepted}
-        className="font-headline mt-2 h-14 w-full rounded-xl bg-[#2d3435] font-bold text-white shadow-lg shadow-[#2d3435]/10 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn-primary mt-2 h-14 w-full font-headline disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? "Creating Account..." : "Create Account"}
       </button>
@@ -214,9 +225,9 @@ export function RegisterForm() {
       <div className="mt-8 space-y-6">
         <div className="relative flex items-center justify-center">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[#e4e9ea]" />
+            <div className="soft-divider w-full" />
           </div>
-          <span className="relative bg-white px-4 text-xs font-bold uppercase tracking-[0.22em] text-[#757c7d]">
+          <span className="relative bg-surface-elevated px-4 text-xs font-bold uppercase tracking-[0.22em] text-text-tertiary">
             or continue with
           </span>
         </div>
@@ -224,7 +235,7 @@ export function RegisterForm() {
         <button
           type="button"
           onClick={() => window.location.assign(googleStartUrl)}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-[#f2f4f4] font-semibold text-[#5a6061] transition-colors hover:bg-[#e4e9ea]"
+          className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-surface-container-low font-semibold text-text-primary transition-colors hover:bg-surface-container-high"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -248,12 +259,12 @@ export function RegisterForm() {
         </button>
 
         <div className="space-y-4 pt-2 text-center">
-          <div className="h-px w-full bg-[#f2f4f4]" />
-          <p className="text-sm text-[#5c6060]">
+          <div className="soft-divider w-full" />
+          <p className="text-sm text-text-secondary">
             Already have an account?
             <Link
               href="/login"
-              className="ml-1 font-bold text-[#2d3435] underline decoration-2 underline-offset-4"
+              className="ml-1 font-bold text-accent transition-colors hover:text-accent-hover"
             >
               Sign in
             </Link>

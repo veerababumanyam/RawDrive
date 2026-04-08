@@ -52,6 +52,15 @@ func (m *mockUserRepo) Update(ctx context.Context, u *user.User) (*user.User, er
 	return u, nil
 }
 
+func (m *mockUserRepo) MarkEmailVerified(_ context.Context, id string) error {
+	u, ok := m.users[id]
+	if !ok {
+		return user.ErrNotFound
+	}
+	u.EmailVerified = true
+	return nil
+}
+
 func newTestUserService() user.Service {
 	return user.NewService(newMockUserRepo())
 }

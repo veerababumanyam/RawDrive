@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,15 +19,19 @@ import (
 // ──────────────────────────── Mock UserService ────────────────────────────
 
 type mockUserService struct {
-	users map[string]string // email -> userID
+	users       map[string]string // email -> userID
+	errOnCreate bool
 }
 
 func newMockUserService() *mockUserService {
 	return &mockUserService{users: make(map[string]string)}
 }
 
-func (m *mockUserService) Create(_ context.Context, email string) (string, error) {
-	id := "user-" + email
+func (m *mockUserService) Create(_ context.Context, email, password string) (string, error) {
+	if m.errOnCreate {
+		return "", errors.New("mock create error")
+	}
+	id := "mock-id-" + email
 	m.users[email] = id
 	return id, nil
 }
@@ -34,6 +39,18 @@ func (m *mockUserService) Create(_ context.Context, email string) (string, error
 func (m *mockUserService) FindByEmail(_ context.Context, email string) (string, bool, error) {
 	id, ok := m.users[email]
 	return id, ok, nil
+}
+
+func (m *mockUserService) VerifyPassword(_ context.Context, email, password string) (string, bool, bool, error) {
+	id, ok := m.users[email]
+	if !ok {
+		return "", false, false, nil
+	}
+	return id, true, true, nil
+}
+
+func (m *mockUserService) MarkEmailVerified(_ context.Context, userID string) error {
+	return nil
 }
 
 // ──────────────────────────── Helper ────────────────────────────
@@ -75,7 +92,8 @@ func TestRegisterHandler_Success(t *testing.T) {
 	defer ts.Close()
 
 	resp, err := postJSON(ts.URL+"/auth/register", map[string]string{
-		"email": "test@example.com",
+		"email":    "test@example.com",
+		"password": "TestPassword123!",
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -110,7 +128,8 @@ func TestRegisterHandler_DuplicateEmail(t *testing.T) {
 	defer ts.Close()
 
 	resp, err := postJSON(ts.URL+"/auth/register", map[string]string{
-		"email": "dup@example.com",
+		"email":    "dup@example.com",
+		"password": "TestPassword123!",
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()

@@ -21,6 +21,7 @@ func NewStorageConfigHandler(svc *service.StorageConfigService) *StorageConfigHa
 func (h *StorageConfigHandler) TestConnection(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Driver    string `json:"driver"`
+		LocalDir  string `json:"local_dir"`
 		Bucket    string `json:"bucket"`
 		Region    string `json:"region"`
 		Endpoint  string `json:"endpoint"`
@@ -34,6 +35,7 @@ func (h *StorageConfigHandler) TestConnection(w http.ResponseWriter, r *http.Req
 
 	cfg := storage.Config{
 		Driver:    input.Driver,
+		LocalDir:  input.LocalDir,
 		Bucket:    input.Bucket,
 		Region:    input.Region,
 		Endpoint:  input.Endpoint,

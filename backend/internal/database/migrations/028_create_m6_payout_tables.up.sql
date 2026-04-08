@@ -1,6 +1,6 @@
 -- M6: Payout Settlement — payouts
 
-CREATE TABLE payouts (
+CREATE TABLE IF NOT EXISTS payouts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     dealer_id UUID NOT NULL REFERENCES dealers(id) ON DELETE RESTRICT,
     state_id INTEGER REFERENCES states(id),
@@ -22,12 +22,13 @@ CREATE TABLE payouts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_payouts_dealer_period ON payouts(dealer_id, period_start, period_end);
-CREATE INDEX idx_payouts_dealer_id ON payouts(dealer_id);
-CREATE INDEX idx_payouts_status ON payouts(status);
-CREATE INDEX idx_payouts_state ON payouts(state_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_dealer_period ON payouts(dealer_id, period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_payouts_dealer_id ON payouts(dealer_id);
+CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
+CREATE INDEX IF NOT EXISTS idx_payouts_state ON payouts(state_id);
 
 ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS payouts_access ON payouts;
 CREATE POLICY payouts_access ON payouts
     USING (
         current_setting('app.bypass_rls', true) = 'on'

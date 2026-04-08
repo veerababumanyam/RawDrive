@@ -1,6 +1,6 @@
 -- M4: Contracts & E-Signatures — contract_templates, contracts
 
-CREATE TABLE contract_templates (
+CREATE TABLE IF NOT EXISTS contract_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -14,16 +14,17 @@ CREATE TABLE contract_templates (
     CONSTRAINT contract_templates_category_check CHECK (category IN ('wedding', 'event', 'commercial', 'portrait', 'custom'))
 );
 
-CREATE INDEX idx_contract_templates_workspace_id ON contract_templates(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_contract_templates_workspace_id ON contract_templates(workspace_id);
 
 ALTER TABLE contract_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS contract_templates_workspace_isolation ON contract_templates;
 CREATE POLICY contract_templates_workspace_isolation ON contract_templates
     USING (
         current_setting('app.bypass_rls', true) = 'on'
         OR workspace_id::text = current_setting('app.workspace_id', true)
     );
 
-CREATE TABLE contracts (
+CREATE TABLE IF NOT EXISTS contracts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     contact_id UUID NOT NULL REFERENCES contacts(id),
@@ -43,11 +44,12 @@ CREATE TABLE contracts (
     CONSTRAINT contracts_status_check CHECK (status IN ('draft', 'sent', 'viewed', 'signed', 'expired', 'cancelled'))
 );
 
-CREATE INDEX idx_contracts_workspace_id ON contracts(workspace_id);
-CREATE INDEX idx_contracts_contact_id ON contracts(contact_id);
-CREATE INDEX idx_contracts_workspace_status ON contracts(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_contracts_workspace_id ON contracts(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_contact_id ON contracts(contact_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_workspace_status ON contracts(workspace_id, status);
 
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS contracts_workspace_isolation ON contracts;
 CREATE POLICY contracts_workspace_isolation ON contracts
     USING (
         current_setting('app.bypass_rls', true) = 'on'

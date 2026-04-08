@@ -1,6 +1,6 @@
 -- M6: Dealer Channel — dealers, dealer_attributions, margin_ratios
 
-CREATE TABLE dealers (
+CREATE TABLE IF NOT EXISTS dealers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     state_id INTEGER NOT NULL REFERENCES states(id),
@@ -20,12 +20,13 @@ CREATE TABLE dealers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_dealers_user_id ON dealers(user_id);
-CREATE INDEX idx_dealers_state_id ON dealers(state_id);
-CREATE INDEX idx_dealers_status ON dealers(status);
-CREATE INDEX idx_dealers_referral_code ON dealers(referral_code) WHERE referral_code IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dealers_user_id ON dealers(user_id);
+CREATE INDEX IF NOT EXISTS idx_dealers_state_id ON dealers(state_id);
+CREATE INDEX IF NOT EXISTS idx_dealers_status ON dealers(status);
+CREATE INDEX IF NOT EXISTS idx_dealers_referral_code ON dealers(referral_code) WHERE referral_code IS NOT NULL;
 
 ALTER TABLE dealers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS dealers_owner ON dealers;
 CREATE POLICY dealers_owner ON dealers
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -33,7 +34,7 @@ CREATE POLICY dealers_owner ON dealers
     );
 
 -- Dealer Attributions — tracks which dealer brought which workspace
-CREATE TABLE dealer_attributions (
+CREATE TABLE IF NOT EXISTS dealer_attributions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     dealer_id UUID NOT NULL REFERENCES dealers(id) ON DELETE CASCADE,
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -49,11 +50,12 @@ CREATE TABLE dealer_attributions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_dealer_attributions_dealer_id ON dealer_attributions(dealer_id);
-CREATE INDEX idx_dealer_attributions_workspace_current ON dealer_attributions(workspace_id) WHERE is_current = true;
-CREATE INDEX idx_dealer_attributions_state_id ON dealer_attributions(state_id);
+CREATE INDEX IF NOT EXISTS idx_dealer_attributions_dealer_id ON dealer_attributions(dealer_id);
+CREATE INDEX IF NOT EXISTS idx_dealer_attributions_workspace_current ON dealer_attributions(workspace_id) WHERE is_current = true;
+CREATE INDEX IF NOT EXISTS idx_dealer_attributions_state_id ON dealer_attributions(state_id);
 
 ALTER TABLE dealer_attributions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS dealer_attributions_access ON dealer_attributions;
 CREATE POLICY dealer_attributions_access ON dealer_attributions
     USING (
         current_setting('app.bypass_rls', true) = 'on'
@@ -61,7 +63,7 @@ CREATE POLICY dealer_attributions_access ON dealer_attributions
     );
 
 -- Margin Ratios — statewise commission configuration
-CREATE TABLE margin_ratios (
+CREATE TABLE IF NOT EXISTS margin_ratios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     state_id INTEGER REFERENCES states(id),
     plan_id UUID,
@@ -80,9 +82,10 @@ CREATE TABLE margin_ratios (
     CONSTRAINT margin_ratios_pct_sum CHECK (dealer_pct + platform_pct = 100)
 );
 
-CREATE INDEX idx_margin_ratios_state_plan ON margin_ratios(state_id, plan_id, product_type, effective_from);
-CREATE INDEX idx_margin_ratios_effective ON margin_ratios(effective_from, effective_until);
+CREATE INDEX IF NOT EXISTS idx_margin_ratios_state_plan ON margin_ratios(state_id, plan_id, product_type, effective_from);
+CREATE INDEX IF NOT EXISTS idx_margin_ratios_effective ON margin_ratios(effective_from, effective_until);
 
 ALTER TABLE margin_ratios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS margin_ratios_read ON margin_ratios;
 CREATE POLICY margin_ratios_read ON margin_ratios FOR SELECT
     USING (current_setting('app.bypass_rls', true) = 'on' OR true);
