@@ -7,6 +7,11 @@ import MarginHistory from "./MarginHistory";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
 interface MarginRatio { id: string; state_id: number | null; dealer_pct: number; platform_pct: number; calculation_basis: string; effective_from: string; }
 
 export default function MarginManagement() {
@@ -19,18 +24,22 @@ export default function MarginManagement() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/api/v1/admin/margins`).then(r => r.ok ? r.json() : []).then(setRatios).catch(() => setRatios([])).finally(() => setLoading(false));
+    fetch(`${API}/api/v1/admin/margins`, { headers: getAuthHeaders() })
+      .then(r => { if (!r.ok) throw new Error("Failed to load"); return r.json(); })
+      .then(setRatios)
+      .catch(() => setRatios([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await fetch(`${API}/api/v1/admin/margins`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: getAuthHeaders(),
         body: JSON.stringify({ state_id: selectedState ? Number(selectedState) : null, dealer_pct: dealerPct, platform_pct: 100 - dealerPct, calculation_basis: "net_of_gst", effective_from: effectiveFrom }),
       });
       setShowForm(false);
-      const res = await fetch(`${API}/api/v1/admin/margins`);
+      const res = await fetch(`${API}/api/v1/admin/margins`, { headers: getAuthHeaders() });
       if (res.ok) setRatios(await res.json());
     } finally { setSaving(false); }
   };
@@ -69,7 +78,7 @@ export default function MarginManagement() {
               <span className="text-sm text-text-secondary">{r.platform_pct}%</span>
               <span className="text-sm text-text-secondary capitalize">{r.calculation_basis.replace("_", " ")}</span>
               <span className="text-sm text-text-secondary">{new Date(r.effective_from).toLocaleDateString("en-IN")}</span>
-              <button className="text-sm text-accent-primary hover:underline min-h-[44px]">Edit</button>
+              <button onClick={() => { setDealerPct(r.dealer_pct); setEffectiveFrom(""); setShowForm(true); }} className="text-sm text-accent-primary hover:underline min-h-[44px]">Edit</button>
             </div>
           ))}
         </div>

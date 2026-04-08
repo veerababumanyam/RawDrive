@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -86,8 +87,15 @@ func (h *PayoutHandler) ListStatements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all payouts for this dealer and year, format as statement summaries
-	filter := repository.PayoutFilter{DealerID: dealer.ID, Limit: 12}
+	// Get payouts for this dealer filtered by year in SQL
+	yearStart := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	yearEnd := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
+	filter := repository.PayoutFilter{
+		DealerID: dealer.ID,
+		FromDate: &yearStart,
+		ToDate:   &yearEnd,
+		Limit:    12,
+	}
 	payouts, err := h.repo.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
@@ -105,9 +113,6 @@ func (h *PayoutHandler) ListStatements(w http.ResponseWriter, r *http.Request) {
 
 	statements := []StatementSummary{}
 	for _, p := range payouts {
-		if p.PeriodStart.Year() != year {
-			continue
-		}
 		month := p.PeriodStart.Format("2006-01")
 		statements = append(statements, StatementSummary{
 			Month:              month,
@@ -127,7 +132,18 @@ func (h *PayoutHandler) DownloadStatementPDF(w http.ResponseWriter, r *http.Requ
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	_ = userID
+
+	// Verify the requesting user is a registered dealer
+	if h.dealerRepo == nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	_, err := h.dealerRepo.GetByUserID(r.Context(), userID)
+	if err != nil {
+		http.Error(w, `{"error":"not a registered dealer"}`, http.StatusForbidden)
+		return
+	}
+
 	month := chi.URLParam(r, "month")
 	if month == "" {
 		http.Error(w, `{"error":"month parameter required"}`, http.StatusBadRequest)
@@ -168,6 +184,16 @@ func (h *PayoutHandler) ApprovePayout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid payout id"}`, http.StatusBadRequest)
 		return
 	}
+	// Validate status transition: only "pending" -> "approved"
+	payout, err := h.repo.GetByID(r.Context(), payoutID)
+	if err != nil {
+		http.Error(w, `{"error":"payout not found"}`, http.StatusNotFound)
+		return
+	}
+	if payout.Status != "pending" {
+		http.Error(w, `{"error":"payout must be in pending status to approve"}`, http.StatusConflict)
+		return
+	}
 	if err := h.repo.UpdateStatus(r.Context(), payoutID, "approved", &adminID); err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
@@ -186,6 +212,16 @@ func (h *PayoutHandler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PaymentReference == "" {
 		http.Error(w, `{"error":"payment_reference required"}`, http.StatusBadRequest)
+		return
+	}
+	// Validate status transition: only "processing" -> "paid"
+	payout, err := h.repo.GetByID(r.Context(), payoutID)
+	if err != nil {
+		http.Error(w, `{"error":"payout not found"}`, http.StatusNotFound)
+		return
+	}
+	if payout.Status != "processing" {
+		http.Error(w, `{"error":"payout must be in processing status to confirm payment"}`, http.StatusConflict)
 		return
 	}
 	if err := h.repo.MarkPaid(r.Context(), payoutID, body.PaymentReference); err != nil {

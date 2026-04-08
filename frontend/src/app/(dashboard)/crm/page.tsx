@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { listLeads, type Lead } from "@/lib/api/crm";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 
@@ -21,7 +22,7 @@ export default function CRMPage() {
   const [activeStage, setActiveStage] = useState<string | "">("");
 
   useEffect(() => {
-    const token = "";
+    const token = getStoredAccessToken();
     listLeads(token, activeStage ? { stage: activeStage } : undefined)
       .then(setLeads)
       .catch(() => setLeads([]))

@@ -3,8 +3,10 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -240,7 +242,12 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url, err := h.oauth.InitiateGoogleAuth(r.Context())
+	returnTo := sanitizeFrontendOrigin(r.URL.Query().Get("redirect_to"))
+	if returnTo == "" {
+		returnTo = sanitizeFrontendOrigin(os.Getenv("FRONTEND_URL"))
+	}
+
+	url, err := h.oauth.InitiateGoogleAuth(r.Context(), returnTo)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to initiate OAuth"})
 		return
@@ -255,16 +262,27 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fallbackOrigin := sanitizeFrontendOrigin(os.Getenv("FRONTEND_URL"))
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 	if code == "" || state == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing code or state"})
+		http.Redirect(
+			w,
+			r,
+			buildFrontendLoginRedirect("", fallbackOrigin, map[string]string{"error": "missing_state"}),
+			http.StatusFound,
+		)
 		return
 	}
 
-	user, err := h.oauth.HandleGoogleCallback(r.Context(), code, state)
+	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "OAuth callback failed"})
+		http.Redirect(
+			w,
+			r,
+			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": "oauth_failed"}),
+			http.StatusFound,
+		)
 		return
 	}
 
@@ -298,8 +316,15 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Redirect to frontend with tokens as query params (frontend stores them)
-	http.Redirect(w, r, fmt.Sprintf("/login?access_token=%s&refresh_token=%s", accessToken, refreshToken), http.StatusFound)
+	http.Redirect(
+		w,
+		r,
+		buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+		}),
+		http.StatusFound,
+	)
 }
 
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -369,4 +394,47 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+func sanitizeFrontendOrigin(candidate string) string {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+
+	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
+}
+
+func buildFrontendLoginRedirect(origin, fallback string, params map[string]string) string {
+	base := origin
+	if base == "" {
+		base = fallback
+	}
+
+	target := &url.URL{Path: "/login"}
+	if base != "" {
+		if parsed, err := url.Parse(base); err == nil {
+			target = parsed
+			target.Path = "/login"
+			target.RawPath = ""
+		}
+	}
+
+	query := target.Query()
+	for key, value := range params {
+		if strings.TrimSpace(value) != "" {
+			query.Set(key, value)
+		}
+	}
+	target.RawQuery = query.Encode()
+	return target.String()
 }

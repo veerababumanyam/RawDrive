@@ -1,98 +1,138 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import {
+  BarChart3,
+  CalendarDays,
+  Home,
+  ImageIcon,
+  Bell,
+  ReceiptText,
+  Search,
+  Settings,
+  Users,
+} from "lucide-react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const navItems = [
-  { href: "/galleries", label: "Galleries", icon: "M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" },
-  { href: "/upload", label: "Upload", icon: "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" },
-  { href: "/settings/storage", label: "Storage", icon: "M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375" },
-  { href: "/marketplace", label: "Marketplace", icon: "M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016A3.001 3.001 0 0021 9.349m-18 0A2.993 2.993 0 013.75 6h16.5a2.993 2.993 0 01.75 3.349" },
-  { href: "/messages", label: "Messages", icon: "M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" },
+  { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/galleries", label: "Galleries", icon: ImageIcon },
+  { href: "/crm/contacts", label: "Clients", icon: Users },
+  { href: "/calendar", label: "Bookings", icon: CalendarDays },
+  { href: "/billing", label: "Invoices", icon: ReceiptText },
+  { href: "/crm", label: "Analytics", icon: BarChart3 },
+  { href: "/settings/storage", label: "Settings", icon: Settings },
 ];
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check for auth token — redirect to login if missing
-    const token = typeof window !== "undefined"
-      ? localStorage.getItem("rawdrive_token") || sessionStorage.getItem("rawdrive_token")
-      : null;
-
+    const token = getStoredAccessToken();
     if (!token) {
-      setAuthenticated(false);
-      window.location.href = "/login";
+      window.location.assign("/login");
       return;
     }
-    setAuthenticated(true);
+
+    const frame = window.requestAnimationFrame(() => setAuthenticated(true));
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  // Loading state while checking auth
   if (authenticated === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-text-secondary">Loading...</div>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#0e0c1e] text-[#e8e2fc]">
+        Loading workspace...
       </div>
     );
   }
 
-  // Redirect handled by useEffect — render nothing while redirecting
   if (!authenticated) {
     return null;
   }
 
   return (
-    <div className="min-h-screen flex bg-surface">
-      {/* Sidebar navigation */}
-      <aside className="w-60 shrink-0 border-r border-border-default bg-surface-raised hidden md:block">
-        <div className="p-4">
-          <Link href="/" className="text-lg font-bold text-text-primary">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-[#0e0c1e] text-[#e8e2fc]">
+      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[240px] flex-col bg-violet-950/40 py-8 shadow-[0px_0px_40px_rgba(163,166,255,0.06)] backdrop-blur-xl lg:flex">
+        <div className="mb-10 px-6">
+          <h1 className="font-headline text-2xl font-bold tracking-[-0.06em] text-[#a3a6ff]">
             RawDrive
-          </Link>
+          </h1>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-slate-400/60">
+            Creative Studio
+          </p>
         </div>
-        <nav className="px-2 space-y-1">
+
+        <nav className="flex-1 space-y-2 px-4">
           {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const Icon = item.icon;
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
             return (
               <Link
-                key={item.href}
+                key={`${item.href}-${item.label}`}
                 href={item.href}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                  transition-colors duration-150
-                  ${isActive
-                    ? "bg-accent/10 text-accent"
-                    : "text-text-secondary hover:text-text-primary hover:bg-surface-sunken"
-                  }
-                `}
+                className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+                  active
+                    ? "border-r-2 border-[#a3a6ff] bg-[#a3a6ff]/10 text-[#a3a6ff]"
+                    : "text-slate-400/80 hover:bg-[#a3a6ff]/5 hover:text-[#a3a6ff]"
+                }`}
               >
-                <svg
-                  className="w-5 h-5 shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                {item.label}
+                <Icon className="h-5 w-5" />
+                <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
+
+        <div className="mt-auto px-4">
+          <div className="flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-all hover:bg-white/5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#a3a6ff]/20 bg-[#1f1d35] text-xs font-bold text-white">
+              AS
+            </div>
+            <div className="overflow-hidden">
+              <p className="truncate text-sm text-[#e8e2fc]">Arjun Singh</p>
+              <p className="text-[10px] text-slate-400/60">View Profile</p>
+            </div>
+          </div>
+        </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-auto">
-        {children}
-      </main>
+      <header className="fixed right-0 top-0 z-40 flex h-16 w-full items-center justify-between bg-violet-950/30 px-4 backdrop-blur-md lg:w-[calc(100%-240px)] lg:px-8">
+        <div className="flex flex-1 items-center gap-6">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search galleries, clients, or files..."
+              className="w-full rounded-xl border border-[#48455a]/15 bg-black/20 py-2 pl-10 pr-4 text-sm text-[#e8e2fc] outline-none transition-all focus:border-[#a3a6ff] focus:ring-1 focus:ring-[#a3a6ff]"
+            />
+          </div>
+
+          <div className="hidden items-center gap-4 font-headline text-sm md:flex">
+            <Link href="/" className="font-bold text-[#a3a6ff]">
+              Home
+            </Link>
+            <Link href="/galleries" className="text-slate-400 transition-opacity hover:opacity-80">
+              Projects
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button className="flex h-10 w-10 items-center justify-center rounded-full text-[#a3a6ff] transition-all hover:bg-white/5">
+            <Bell className="h-5 w-5" />
+          </button>
+          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-[#a3a6ff]/20 bg-[#1f1d35] text-xs font-bold text-white">
+            AS
+          </div>
+        </div>
+      </header>
+
+      <main className="min-h-screen px-4 pb-12 pt-24 lg:ml-[240px] lg:px-8">{children}</main>
     </div>
   );
 }

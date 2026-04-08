@@ -25,3 +25,14 @@
 - Update `.env.cobolt` if you already have infrastructure.
 - Start local services from `_cobolt-docker/` with `docker compose up -d` when needed.
 - Run `/cobolt-plan project .` to begin planning.
+
+## Documentation MCP
+Use Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service, including setup, version migrations, configuration, or library-specific debugging.
+
+Do not use it for refactoring, writing scripts from scratch, debugging business logic, code review, or general programming concepts.
+
+When using Context7 MCP:
+1. Start with `resolve-library-id` unless the user already provided an exact `/org/project` library ID.
+2. Pick the best match using exact name, description relevance, snippet coverage, source reputation, and benchmark score.
+3. Query docs with the selected library ID and the user's full question.
+4. Answer from the fetched docs.

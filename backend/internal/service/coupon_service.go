@@ -50,6 +50,7 @@ func (s *CouponService) CreateAdminCoupon(ctx context.Context, userID uuid.UUID,
 }
 
 // BulkGenerate generates N unique coupon codes from a pattern like "DEAL-XXXXX".
+// Returns the generated codes and the count of skipped duplicates.
 func (s *CouponService) BulkGenerate(ctx context.Context, userID uuid.UUID, ownerType string, pattern string, count int, template *repository.Coupon) ([]string, error) {
 	if !strings.Contains(pattern, "X") {
 		return nil, ErrInvalidPattern
@@ -60,6 +61,7 @@ func (s *CouponService) BulkGenerate(ctx context.Context, userID uuid.UUID, owne
 
 	codes := make([]string, 0, count)
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	duplicates := 0
 
 	for i := 0; i < count; i++ {
 		var sb strings.Builder
@@ -81,8 +83,12 @@ func (s *CouponService) BulkGenerate(ctx context.Context, userID uuid.UUID, owne
 		c.CreatedBy = userID
 		c.OwnerType = ownerType
 		if err := s.repo.Create(ctx, &c); err != nil {
-			// Skip duplicates, continue
-			continue
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+				duplicates++
+				continue
+			}
+			// Non-duplicate error — return what we have so far with the error
+			return codes, fmt.Errorf("bulk generate failed after %d codes: %w", len(codes), err)
 		}
 		codes = append(codes, code)
 	}

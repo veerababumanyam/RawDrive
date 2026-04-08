@@ -1,11 +1,31 @@
 package handler
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
+
+// requireAdmin is middleware that restricts access to users with Admin or Owner role.
+func requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := middleware.JWTClaimsFromContext(r.Context())
+		if claims == nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		role, _ := claims["role"].(string)
+		if role != "Admin" && role != "Owner" && role != "super_admin" {
+			http.Error(w, `{"error":"admin access required"}`, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // M6Dependencies holds all dependencies needed for M6 route registration.
 type M6Dependencies struct {
@@ -30,8 +50,9 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	payoutHandler := NewPayoutHandler(deps.PayoutRepo)
 	payoutHandler.dealerRepo = deps.DealerRepo
 
-	// Admin dealer management
+	// Admin dealer management (requires Admin/Owner role)
 	r.Route("/api/v1/admin/dealers", func(r chi.Router) {
+		r.Use(requireAdmin)
 		r.Post("/", dealerHandler.Create)
 		r.Get("/", dealerHandler.List)
 		r.Put("/{id}/approve", dealerHandler.Approve)
@@ -49,21 +70,24 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 		r.Get("/statements/{month}/pdf", payoutHandler.DownloadStatementPDF)
 	})
 
-	// Admin margins
+	// Admin margins (requires Admin/Owner role)
 	r.Route("/api/v1/admin/margins", func(r chi.Router) {
+		r.Use(requireAdmin)
 		r.Put("/", marginHandler.Configure)
 		r.Get("/", marginHandler.ListMargins)
 		r.Get("/history", marginHandler.GetHistory)
 	})
 
-	// Admin coupons
+	// Admin coupons (requires Admin/Owner role)
 	r.Route("/api/v1/admin/coupons", func(r chi.Router) {
+		r.Use(requireAdmin)
 		r.Post("/", couponHandler.CreateAdminCoupon)
 		r.Get("/", couponHandler.ListAdminCoupons)
 	})
 
-	// Admin payouts
+	// Admin payouts (requires Admin/Owner role)
 	r.Route("/api/v1/admin/payouts", func(r chi.Router) {
+		r.Use(requireAdmin)
 		r.Post("/{id}/approve", payoutHandler.ApprovePayout)
 		r.Post("/{id}/confirm-payment", payoutHandler.ConfirmPayment)
 	})

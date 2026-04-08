@@ -108,6 +108,33 @@ func (r *MarginRepo) ListCurrent(ctx context.Context, stateID *int) ([]MarginRat
 	return ratios, rows.Err()
 }
 
+// ListAll returns all margin ratios including expired ones (full version history).
+func (r *MarginRepo) ListAll(ctx context.Context, stateID *int) ([]MarginRatio, error) {
+	query := `SELECT ` + marginCols + ` FROM margin_ratios WHERE 1=1`
+	args := []any{}
+	if stateID != nil {
+		query += ` AND state_id = $1`
+		args = append(args, *stateID)
+	}
+	query += ` ORDER BY created_at DESC`
+
+	rows, err := r.DB.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ratios []MarginRatio
+	for rows.Next() {
+		m, err := scanMargin(rows)
+		if err != nil {
+			return nil, err
+		}
+		ratios = append(ratios, m)
+	}
+	return ratios, rows.Err()
+}
+
 func (r *MarginRepo) UpdateEffectiveUntil(ctx context.Context, id uuid.UUID, until time.Time) error {
 	_, err := r.DB.Exec(ctx, `UPDATE margin_ratios SET effective_until=$2, updated_at=now() WHERE id=$1`, id, until)
 	return err

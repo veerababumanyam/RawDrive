@@ -33,19 +33,31 @@ self.addEventListener("activate", (event) => {
 
 // Fetch: network-first for API, cache-first for gallery images
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== "GET") {
+    return;
+  }
+
+  if (request.cache === "only-if-cached" && request.mode !== "same-origin") {
+    return;
+  }
 
   // Gallery image requests: cache-first with network fallback
-  if (url.pathname.startsWith("/api/v1/public/galleries/") || isImageRequest(event.request)) {
+  if (url.pathname.startsWith("/api/v1/public/galleries/") || isImageRequest(request)) {
     event.respondWith(
       caches.open(GALLERY_CACHE).then((cache) =>
-        cache.match(event.request).then((cached) => {
+        cache.match(request).then((cached) => {
           if (cached) return cached;
-          return fetch(event.request).then((response) => {
-            if (response.ok && isImageRequest(event.request)) {
-              cache.put(event.request, response.clone());
+          return fetch(request).then((response) => {
+            if (response.ok && isImageRequest(request)) {
+              cache.put(request, response.clone());
             }
             return response;
+          }).catch(async () => {
+            const fallback = await caches.match(request);
+            return fallback || new Response("", { status: 504 });
           });
         })
       )
@@ -56,22 +68,74 @@ self.addEventListener("fetch", (event) => {
   // API requests: network-first
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(request).catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) {
+          return cached;
+        }
+
+        return new Response(JSON.stringify({ error: "offline" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      })
+    );
+    return;
+  }
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then(async (response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            const cache = await caches.open(CACHE_NAME);
+            void cache.put(request, clone);
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) {
+            return cached;
+          }
+
+          const home = await caches.match("/");
+          if (home) {
+            return home;
+          }
+
+          return new Response(
+            "<!doctype html><html><body><p>Offline</p></body></html>",
+            {
+              status: 503,
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }
+          );
+        })
     );
     return;
   }
 
   // Navigation and static assets: network-first with cache fallback
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok) {
+    fetch(request)
+      .then(async (response) => {
+        if (response.ok && url.origin === self.location.origin) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          const cache = await caches.open(CACHE_NAME);
+          void cache.put(request, clone);
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) {
+          return cached;
+        }
+
+        return new Response("", { status: 504 });
+      })
   );
 });
 

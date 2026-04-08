@@ -1,17 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import Image from "next/image";
+import { Menu, X, ChevronDown, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navLinks = [
-  { href: "/features", label: "Features" },
-  { href: "/pricing", label: "Pricing" },
+const solutionsLinks = [
+  { href: "/solutions/galleries", label: "Client Galleries" },
+  { href: "/solutions/ai-intelligence", label: "AI Culling & FaceID" },
+  { href: "/solutions/digital-invitations", label: "Digital Invitations" },
+  { href: "/solutions/crm-contracts", label: "CRM & Contracts" },
+  { href: "/solutions/live-streaming", label: "Live Streaming" },
+  { href: "/solutions/scheduling", label: "Calendar & Scheduling" },
+];
+
+const marketplacesLinks = [
+  { href: "/marketplaces/freelancer", label: "Freelancer Marketplace" },
+  { href: "/marketplaces/rentals", label: "Camera Rentals" },
+];
+
+const companyLinks = [
+  { href: "/about", label: "About Us" },
+  { href: "/contact", label: "Contact Us" },
 ];
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState("liquid-glass");
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Read current theme on mount
+    const currentTheme = document.documentElement.getAttribute("data-theme") || "liquid-glass";
+    setTheme(currentTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "liquid-glass" ? "liquid-glass-dark" : "liquid-glass";
+    setTheme(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+  };
+
+  const toggleDropdown = (name: string) => {
+    setOpenDropdown(openDropdown === name ? null : name);
+  };
 
   return (
     <header
@@ -22,102 +55,238 @@ export function Navbar() {
         {/* Logo */}
         <Link
           href="/"
-          className="text-xl font-bold text-text-primary"
+          className="flex items-center gap-2 text-xl font-bold text-text-primary"
           aria-label="RawDrive home"
         >
+          <Image src="/logo/android-chrome-192x192.png" alt="RawDrive Logo" width={32} height={32} className="h-8 w-8 rounded-lg" />
           RawDrive
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-text-secondary transition-colors hover:text-accent"
-              style={{ transitionDuration: "var(--duration-fast)" }}
-            >
-              {link.label}
-            </Link>
-          ))}
+        <nav className="hidden h-full items-center gap-6 lg:flex" aria-label="Main navigation">
+          {/* Solutions Dropdown */}
+          <div 
+            className="group relative flex h-full items-center"
+            onMouseEnter={() => setOpenDropdown("solutions")}
+            onMouseLeave={() => setOpenDropdown(null)}
+          >
+            <button className="flex items-center gap-1 text-sm font-medium text-text-secondary transition-colors hover:text-accent group-hover:text-accent">
+              Products & Solutions <ChevronDown className="h-4 w-4" />
+            </button>
+            {openDropdown === "solutions" && (
+              <div className="absolute top-full left-0 w-56 rounded-xl border border-border bg-surface-elevated p-2 shadow-lg">
+                {solutionsLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="block rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-accent-subtle hover:text-accent"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Marketplaces Dropdown */}
+          <div 
+            className="group relative flex h-full items-center"
+            onMouseEnter={() => setOpenDropdown("marketplaces")}
+            onMouseLeave={() => setOpenDropdown(null)}
+          >
+            <button className="flex items-center gap-1 text-sm font-medium text-text-secondary transition-colors hover:text-accent group-hover:text-accent">
+              Marketplaces <ChevronDown className="h-4 w-4" />
+            </button>
+            {openDropdown === "marketplaces" && (
+              <div className="absolute top-full left-0 w-48 rounded-xl border border-border bg-surface-elevated p-2 shadow-lg">
+                {marketplacesLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="block rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-accent-subtle hover:text-accent"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Link href="/dealership" className="text-sm font-medium text-text-secondary transition-colors hover:text-accent">
+            Partner Program
+          </Link>
+
+          <Link href="/pricing" className="text-sm font-medium text-text-secondary transition-colors hover:text-accent">
+            Pricing
+          </Link>
+
+          {/* Company Dropdown */}
+          <div 
+            className="group relative flex h-full items-center"
+            onMouseEnter={() => setOpenDropdown("company")}
+            onMouseLeave={() => setOpenDropdown(null)}
+          >
+            <button className="flex items-center gap-1 text-sm font-medium text-text-secondary transition-colors hover:text-accent group-hover:text-accent">
+              Company <ChevronDown className="h-4 w-4" />
+            </button>
+            {openDropdown === "company" && (
+              <div className="absolute top-full left-0 w-40 rounded-xl border border-border bg-surface-elevated p-2 shadow-lg">
+                {companyLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="block rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-accent-subtle hover:text-accent"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* Desktop actions */}
         <div className="hidden items-center gap-4 md:flex">
+          <button 
+            type="button" 
+            onClick={toggleTheme} 
+            className="p-2 text-text-secondary transition-colors hover:text-accent"
+            aria-label="Toggle theme"
+          >
+            {theme === "liquid-glass-dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+
           <Link
             href="/login"
             className="text-sm font-medium text-text-secondary transition-colors hover:text-accent"
-            style={{
-              transitionDuration: "var(--duration-fast)",
-              minHeight: "var(--touch-target-min)",
-              display: "inline-flex",
-              alignItems: "center",
-            }}
+            style={{ minHeight: "var(--touch-target-min)", display: "inline-flex", alignItems: "center" }}
           >
             Login
           </Link>
           <Link
             href="/register"
             className="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover active:bg-accent-active"
-            style={{
-              transitionDuration: "var(--duration-fast)",
-              minHeight: "var(--touch-target-min)",
-            }}
+            style={{ minHeight: "var(--touch-target-min)" }}
           >
             Get Started
           </Link>
         </div>
 
-        {/* Mobile hamburger */}
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-lg p-2 text-text-secondary transition-colors hover:text-accent md:hidden"
-          style={{ minWidth: "var(--touch-target-min)", minHeight: "var(--touch-target-min)" }}
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-expanded={mobileMenuOpen}
-          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-        >
-          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {/* Mobile controls */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <button 
+            type="button" 
+            onClick={toggleTheme} 
+            className="p-2 text-text-secondary transition-colors hover:text-accent"
+            aria-label="Toggle theme"
+          >
+            {theme === "liquid-glass-dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-lg p-2 text-text-secondary transition-colors hover:text-accent"
+            style={{ minWidth: "var(--touch-target-min)", minHeight: "var(--touch-target-min)" }}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-expanded={mobileMenuOpen}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
       <div
         className={cn(
-          "glass-surface absolute left-0 right-0 top-full border-t border-border md:hidden",
-          "transition-all overflow-hidden",
-          mobileMenuOpen ? "max-h-80 opacity-100" : "max-h-0 opacity-0"
+          "glass-surface absolute left-0 right-0 top-full overflow-y-auto border-t border-border lg:hidden",
+          "transition-all",
+          mobileMenuOpen ? "max-h-[80vh] opacity-100" : "max-h-0 opacity-0"
         )}
         style={{ transitionDuration: "var(--duration-normal)" }}
       >
         <nav className="flex flex-col gap-1 px-4 py-4" aria-label="Mobile navigation">
-          {navLinks.map((link) => (
+          {/* Solutions */}
+          <div className="py-2">
+            <p className="px-3 text-xs font-bold uppercase tracking-wider text-text-tertiary">Products</p>
+            {solutionsLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="my-1 h-px bg-border-subtle" />
+
+          {/* Marketplaces */}
+          <div className="py-2">
+            <p className="px-3 text-xs font-bold uppercase tracking-wider text-text-tertiary">Marketplaces</p>
+            {marketplacesLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="my-1 h-px bg-border-subtle" />
+
+          <Link
+            href="/dealership"
+            className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Partner Program
+          </Link>
+          <Link
+            href="/pricing"
+            className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Pricing
+          </Link>
+
+          <div className="my-1 h-px bg-border-subtle" />
+
+          <div className="py-2">
+            <p className="px-3 text-xs font-bold uppercase tracking-wider text-text-tertiary">Company</p>
+            {companyLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2">
             <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-lg px-3 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
-              style={{ minHeight: "var(--touch-target-min)" }}
+              href="/login"
+              className="rounded-lg px-3 py-3 text-center text-sm font-medium border border-border text-text-primary transition-colors hover:bg-accent-subtle"
               onClick={() => setMobileMenuOpen(false)}
             >
-              {link.label}
+              Login
             </Link>
-          ))}
-          <Link
-            href="/login"
-            className="rounded-lg px-3 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-accent-subtle hover:text-accent"
-            style={{ minHeight: "var(--touch-target-min)" }}
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            Login
-          </Link>
-          <Link
-            href="/register"
-            className="mt-2 inline-flex items-center justify-center rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-            style={{ minHeight: "var(--touch-target-min)" }}
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            Get Started
-          </Link>
+            <Link
+              href="/register"
+              className="rounded-lg bg-accent px-4 py-3 text-center text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Get Started
+            </Link>
+          </div>
         </nav>
       </div>
     </header>

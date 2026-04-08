@@ -53,11 +53,10 @@ func (h *MarginHandler) ListMargins(w http.ResponseWriter, r *http.Request) {
 
 func (h *MarginHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	// Return all margin ratios (including expired ones) ordered by created_at DESC — full version history
-	ratios, err := h.svc.ListCurrentMargins(r.Context(), nil)
+	ratios, err := h.svc.ListAllMargins(r.Context(), nil)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	// Wrap in standard response with metadata
 	respondJSON(w, http.StatusOK, map[string]any{"data": ratios, "total": len(ratios)})
 }

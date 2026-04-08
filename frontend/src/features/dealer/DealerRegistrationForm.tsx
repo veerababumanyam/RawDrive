@@ -3,6 +3,7 @@
 
 import { useState, type FormEvent } from "react";
 import { createDealer, type CreateDealerRequest } from "@/lib/api/dealer";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
@@ -64,7 +65,7 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
         bank_account: { bank, ifsc, account_number: accountNumber, upi_id: upiId || undefined },
         agreement_accepted: true,
       };
-      await createDealer("", req);
+      await createDealer(getStoredAccessToken(), req);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");

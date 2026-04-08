@@ -19,7 +19,8 @@ export default function DealerAdminReview() {
   const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
-    listDealers("")
+    const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+    listDealers(token)
       .then(setDealers)
       .catch(() => setDealers([]))
       .finally(() => setLoading(false));
@@ -27,7 +28,8 @@ export default function DealerAdminReview() {
 
   const handleApprove = async (id: string) => {
     try {
-      await approveDealer("", id, commissionRate);
+      const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+      await approveDealer(token, id, commissionRate);
       setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "approved" as const } : d)));
       setSelectedId(null);
     } catch (err) {
@@ -38,7 +40,8 @@ export default function DealerAdminReview() {
   const handleReject = async (id: string) => {
     if (!rejectReason) return;
     try {
-      await rejectDealer("", id, rejectReason);
+      const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+      await rejectDealer(token, id, rejectReason);
       setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "pending" as const } : d)));
       setSelectedId(null);
       setRejectReason("");

@@ -106,7 +106,7 @@ func (s *DealerService) ApproveDealer(ctx context.Context, dealerID, adminID uui
 }
 
 func (s *DealerService) RejectDealer(ctx context.Context, dealerID, adminID uuid.UUID, reason string) error {
-	return s.repo.UpdateStatus(ctx, dealerID, "pending", &adminID, &reason)
+	return s.repo.UpdateStatus(ctx, dealerID, "rejected", &adminID, &reason)
 }
 
 func (s *DealerService) SuspendDealer(ctx context.Context, dealerID, adminID uuid.UUID, reason string) error {

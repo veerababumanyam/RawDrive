@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function GalleriesPage() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
@@ -9,8 +10,7 @@ export default function GalleriesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
-    // TODO: Get token from auth context
-    const token = "";
+    const token = getStoredAccessToken();
     listGalleries(token)
       .then(setGalleries)
       .catch(() => setGalleries([]))

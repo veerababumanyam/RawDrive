@@ -5,6 +5,11 @@ import { useState, useEffect } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
 interface Payout { id: string; dealer_id: string; period_start: string; period_end: string; net_payable: number; status: string; }
 
 function formatPaisa(p: number) { return `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`; }
@@ -18,16 +23,23 @@ export default function PayoutApproval() {
   const [paymentRef, setPaymentRef] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/api/v1/dealers/payouts`).then(r => r.ok ? r.json() : []).then(setPayouts).catch(() => setPayouts([])).finally(() => setLoading(false));
+    fetch(`${API}/api/v1/dealers/payouts`, { headers: getAuthHeaders() })
+      .then(r => { if (!r.ok) throw new Error("Failed to load"); return r.json(); })
+      .then(setPayouts)
+      .catch(() => setPayouts([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const doAction = async (id: string, action: string, body?: Record<string, string>) => {
     try {
-      await fetch(`${API}/api/v1/admin/payouts/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const res = await fetch(`${API}/api/v1/admin/payouts/${id}/${action}`, { method: "POST", headers: getAuthHeaders(), body: body ? JSON.stringify(body) : undefined });
+      if (!res.ok) throw new Error("Action failed");
       setPayouts(prev => prev.map(p => p.id === id ? { ...p, status: action === "approve" ? "approved" : action === "confirm-payment" ? "paid" : p.status } : p));
       setActionPayout(null);
       setPaymentRef("");
-    } catch { /* handled by UI state */ }
+    } catch (err) {
+      console.error("Payout action failed:", err);
+    }
   };
 
   if (loading) return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="glass-card h-16 animate-pulse rounded-xl" />)}</div>;

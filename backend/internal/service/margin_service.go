@@ -86,3 +86,8 @@ func (s *MarginService) ResolveMargin(ctx context.Context, dealerID uuid.UUID, s
 func (s *MarginService) ListCurrentMargins(ctx context.Context, stateID *int) ([]repository.MarginRatio, error) {
 	return s.repo.ListCurrent(ctx, stateID)
 }
+
+// ListAllMargins returns all margin ratios including expired ones (full version history).
+func (s *MarginService) ListAllMargins(ctx context.Context, stateID *int) ([]repository.MarginRatio, error) {
+	return s.repo.ListAll(ctx, stateID)
+}

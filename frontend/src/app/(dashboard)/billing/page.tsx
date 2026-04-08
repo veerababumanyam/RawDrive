@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { listInvoices, formatPaisa, type Invoice } from "@/lib/api/billing";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const statusColors: Record<string, string> = {
   draft: "bg-surface-sunken text-text-secondary",
@@ -17,7 +18,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = "";
+    const token = getStoredAccessToken();
     listInvoices(token)
       .then(setInvoices)
       .catch(() => setInvoices([]))

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -28,7 +29,6 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<"month" | "week">("month");
 
   const monthStart = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]);
   const monthEnd = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), [currentDate]);
@@ -36,8 +36,9 @@ export default function CalendarPage() {
   useEffect(() => {
     const from = monthStart.toISOString();
     const to = monthEnd.toISOString();
+    const token = getStoredAccessToken();
     fetch(`${API_BASE}/api/v1/calendar/events?from=${from}&to=${to}`, {
-      headers: { Authorization: "Bearer " },
+      headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then(setEvents)

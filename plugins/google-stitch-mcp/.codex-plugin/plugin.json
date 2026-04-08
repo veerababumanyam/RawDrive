@@ -1,0 +1,36 @@
+{
+  "name": "google-stitch-mcp",
+  "version": "0.1.0",
+  "description": "Repo-local Codex plugin for the Google Stitch remote MCP server.",
+  "author": {
+    "name": "Local Workspace"
+  },
+  "homepage": "https://docs.cloud.google.com/mcp",
+  "license": "UNLICENSED",
+  "keywords": [
+    "google",
+    "stitch",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Google Stitch MCP",
+    "shortDescription": "Connect Codex to Google's Stitch MCP endpoint.",
+    "longDescription": "Adds a remote MCP server configuration for Stitch. Set STITCH_API_KEY in your environment before using the plugin.",
+    "developerName": "Local Workspace",
+    "category": "Productivity",
+    "capabilities": [
+      "Remote MCP",
+      "Google API"
+    ],
+    "websiteURL": "https://docs.cloud.google.com/mcp",
+    "privacyPolicyURL": "https://policies.google.com/privacy",
+    "termsOfServiceURL": "https://policies.google.com/terms",
+    "defaultPrompt": [
+      "Use Google Stitch tools for this repo.",
+      "Connect to the Stitch MCP server.",
+      "Help me query Stitch through MCP."
+    ],
+    "brandColor": "#4285F4"
+  }
+}

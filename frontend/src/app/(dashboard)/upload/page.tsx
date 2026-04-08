@@ -2,11 +2,11 @@
 
 import { UploadDropzone, UploadProgress, UploadQueue } from "@/components/upload";
 import { useUpload } from "@/hooks/use-upload";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function UploadPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-  // TODO: Get token from auth context
-  const token = "";
+  const token = getStoredAccessToken();
 
   const { items, addFiles, cancel, retry, cancelAll, pauseAll, resumeAll, isPaused } = useUpload(
     apiUrl,

@@ -132,7 +132,24 @@ func main() {
 	})
 
 	wsLookup := workspace.NewAuthLookup(dbPool)
-	authHandler := auth.NewHandler(otpSvc, jwtSvc, nil, userAuthAdapter).WithWorkspaceLookup(wsLookup)
+	var oauthSvc *auth.OAuthService
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	if googleClientID != "" && googleClientSecret != "" && googleRedirectURL != "" {
+		oauthStore := newOAuthUserStore(userSvc, dbPool)
+		googleProvider := auth.NewGoogleProvider(googleClientID, googleClientSecret, googleRedirectURL)
+		oauthSvc = auth.NewOAuthService(auth.OAuthConfig{
+			ClientID:     googleClientID,
+			ClientSecret: googleClientSecret,
+			RedirectURI:  googleRedirectURL,
+		}, googleProvider, oauthStore)
+		log.Println("Google OAuth configured")
+	} else {
+		log.Println("Google OAuth disabled: missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URL")
+	}
+
+	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).WithWorkspaceLookup(wsLookup)
 
 	// Real workspace service backed by DB
 	wsRepo := workspace.NewPgRepo(dbPool)
@@ -161,6 +178,7 @@ func main() {
 
 	// Mount auth routes (no JWT required — this IS the login endpoint)
 	r.Mount("/auth", authHandler.Routes())
+	r.Mount("/api/v1/auth", authHandler.Routes())
 
 	// Protected routes — JWT auth → tenant context → state check
 	r.Group(func(pr chi.Router) {
@@ -224,144 +242,144 @@ func main() {
 		api.Use(middleware.JWTAuth(jwtSvc))
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
 
-	// M2 Protected routes
-	handler.RegisterM2Routes(api, handler.M2Dependencies{
-		AssetService:         assetSvc,
-		UploadService:        uploadSvc,
-		GalleryService:       gallerySvc,
-		ShareLinkService:     shareLinkSvc,
-		ProofingService:      proofingSvc,
-		StorageConfigService: storageConfigSvc,
-	})
+		// M2 Protected routes
+		handler.RegisterM2Routes(api, handler.M2Dependencies{
+			AssetService:         assetSvc,
+			UploadService:        uploadSvc,
+			GalleryService:       gallerySvc,
+			ShareLinkService:     shareLinkSvc,
+			ProofingService:      proofingSvc,
+			StorageConfigService: storageConfigSvc,
+		})
 
-	// Chunked upload routes
-	tmpDir := os.Getenv("UPLOAD_TMP_DIR")
-	if tmpDir == "" {
-		tmpDir = ".tmp/uploads"
-	}
-	chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir)
-	chunkedHandler.RegisterRoutes(api)
+		// Chunked upload routes
+		tmpDir := os.Getenv("UPLOAD_TMP_DIR")
+		if tmpDir == "" {
+			tmpDir = ".tmp/uploads"
+		}
+		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir)
+		chunkedHandler.RegisterRoutes(api)
 
-	// Thumbnail worker
-	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider)
-	workerRegistry := worker.NewRegistry()
-	workerRegistry.Register("thumbnail", thumbWorker)
-	workerCtx, workerCancel := context.WithCancel(context.Background())
-	defer workerCancel()
-	workerRegistry.StartAll(workerCtx)
+		// Thumbnail worker
+		thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider)
+		workerRegistry := worker.NewRegistry()
+		workerRegistry.Register("thumbnail", thumbWorker)
+		workerCtx, workerCancel := context.WithCancel(context.Background())
+		defer workerCancel()
+		workerRegistry.StartAll(workerCtx)
 
-	log.Println("M2: routes registered, thumbnail worker started")
+		log.Println("M2: routes registered, thumbnail worker started")
 
-	// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────
+		// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────
 
-	// AI encryption key (32 bytes from env, or dev default)
-	aiEncKeyStr := os.Getenv("AI_ENCRYPTION_KEY")
-	if aiEncKeyStr == "" {
-		aiEncKeyStr = "rawdrive-dev-key-32bytes-pad!!" // 32 bytes, dev only
-		log.Println("M3: WARNING - using dev AI encryption key. Set AI_ENCRYPTION_KEY in production.")
-	}
-	aiEncKey := []byte(aiEncKeyStr)
+		// AI encryption key (32 bytes from env, or dev default)
+		aiEncKeyStr := os.Getenv("AI_ENCRYPTION_KEY")
+		if aiEncKeyStr == "" {
+			aiEncKeyStr = "rawdrive-dev-key-32bytes-pad!!" // 32 bytes, dev only
+			log.Println("M3: WARNING - using dev AI encryption key. Set AI_ENCRYPTION_KEY in production.")
+		}
+		aiEncKey := []byte(aiEncKeyStr)
 
-	// AI repositories
-	aiConfigRepo := ai.NewConfigRepo(dbPool, aiEncKey)
-	aiSpendRepo := ai.NewSpendRepo(dbPool)
-	aiJobRepo := ai.NewJobRepo(dbPool)
-	aiFaceRepo := ai.NewFaceRepo(dbPool)
+		// AI repositories
+		aiConfigRepo := ai.NewConfigRepo(dbPool, aiEncKey)
+		aiSpendRepo := ai.NewSpendRepo(dbPool)
+		aiJobRepo := ai.NewJobRepo(dbPool)
+		aiFaceRepo := ai.NewFaceRepo(dbPool)
 
-	// Gemini client
-	geminiModelID := os.Getenv("GEMINI_MODEL_ID")
-	if geminiModelID == "" {
-		geminiModelID = "gemini-2.0-flash"
-	}
-	geminiClient := ai.NewGeminiClient(geminiModelID)
+		// Gemini client
+		geminiModelID := os.Getenv("GEMINI_MODEL_ID")
+		if geminiModelID == "" {
+			geminiModelID = "gemini-2.0-flash"
+		}
+		geminiClient := ai.NewGeminiClient(geminiModelID)
 
-	// AI services
-	faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
-	searchSvc := ai.NewSearchService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
-	duplicateSvc := ai.NewDuplicateService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
-	cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
+		// AI services
+		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+		searchSvc := ai.NewSearchService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+		duplicateSvc := ai.NewDuplicateService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
+		cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
 
-	// AI handler (all endpoints in one handler)
-	aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo)
+		// AI handler (all endpoints in one handler)
+		aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo)
 
-	// M3 routes
-	handler.RegisterM3Routes(api, handler.M3Dependencies{AIHandler: aiHandler})
+		// M3 routes
+		handler.RegisterM3Routes(api, handler.M3Dependencies{AIHandler: aiHandler})
 
-	// AI workers
-	faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider)
-	searchWorker := ai.NewSearchWorker(dbPool, searchSvc, aiConfigRepo)
-	duplicateWorker := ai.NewDuplicateWorker(aiJobRepo, duplicateSvc)
-	workerRegistry.Register("face-detection", faceWorker)
-	workerRegistry.Register("ai-tagging", searchWorker)
-	workerRegistry.Register("duplicate-scan", duplicateWorker)
+		// AI workers
+		faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider)
+		searchWorker := ai.NewSearchWorker(dbPool, searchSvc, aiConfigRepo)
+		duplicateWorker := ai.NewDuplicateWorker(aiJobRepo, duplicateSvc)
+		workerRegistry.Register("face-detection", faceWorker)
+		workerRegistry.Register("ai-tagging", searchWorker)
+		workerRegistry.Register("duplicate-scan", duplicateWorker)
 
-	log.Println("M3: AI routes registered, 3 workers registered")
+		log.Println("M3: AI routes registered, 3 workers registered")
 
-	// ──────────────────────── M4: Business Operations ──────────────────────
+		// ──────────────────────── M4: Business Operations ──────────────────────
 
-	// M4 Repositories
-	leadRepo := repository.NewLeadRepo(dbPool)
-	contactRepo := repository.NewContactRepo(dbPool)
-	dealRepo := repository.NewDealRepo(dbPool)
-	invoiceRepo := repository.NewInvoiceRepo(dbPool)
-	paymentRepo := repository.NewPaymentRepo(dbPool)
-	contractRepo := repository.NewContractRepo(dbPool)
-	eventRepo := repository.NewEventRepo(dbPool)
-	notificationRepo := repository.NewNotificationRepo(dbPool)
+		// M4 Repositories
+		leadRepo := repository.NewLeadRepo(dbPool)
+		contactRepo := repository.NewContactRepo(dbPool)
+		dealRepo := repository.NewDealRepo(dbPool)
+		invoiceRepo := repository.NewInvoiceRepo(dbPool)
+		paymentRepo := repository.NewPaymentRepo(dbPool)
+		contractRepo := repository.NewContractRepo(dbPool)
+		eventRepo := repository.NewEventRepo(dbPool)
+		notificationRepo := repository.NewNotificationRepo(dbPool)
 
-	// M4 routes (public lead form is registered inside RegisterM4Routes without auth)
-	handler.RegisterM4Routes(api, handler.M4Dependencies{
-		DB:               dbPool,
-		LeadRepo:         leadRepo,
-		ContactRepo:      contactRepo,
-		DealRepo:         dealRepo,
-		InvoiceRepo:      invoiceRepo,
-		PaymentRepo:      paymentRepo,
-		ContractRepo:     contractRepo,
-		EventRepo:        eventRepo,
-		NotificationRepo: notificationRepo,
-	})
+		// M4 routes (public lead form is registered inside RegisterM4Routes without auth)
+		handler.RegisterM4Routes(api, handler.M4Dependencies{
+			DB:               dbPool,
+			LeadRepo:         leadRepo,
+			ContactRepo:      contactRepo,
+			DealRepo:         dealRepo,
+			InvoiceRepo:      invoiceRepo,
+			PaymentRepo:      paymentRepo,
+			ContractRepo:     contractRepo,
+			EventRepo:        eventRepo,
+			NotificationRepo: notificationRepo,
+		})
 
-	log.Println("M4: Business Operations routes registered (CRM, Billing, Contracts, Calendar, Notifications, GST Reports, ICS Export, CSV Import, Payment Links)")
+		log.Println("M4: Business Operations routes registered (CRM, Billing, Contracts, Calendar, Notifications, GST Reports, ICS Export, CSV Import, Payment Links)")
 
-	// ──────────────────────── M5: Marketplaces & Communication ──────────────────
-	freelancerRepo := repository.NewFreelancerRepo(dbPool)
-	gearRepo := repository.NewGearRepo(dbPool)
-	messagingRepo := repository.NewMessagingRepo(dbPool)
-	moderationRepo := repository.NewModerationRepo(dbPool)
+		// ──────────────────────── M5: Marketplaces & Communication ──────────────────
+		freelancerRepo := repository.NewFreelancerRepo(dbPool)
+		gearRepo := repository.NewGearRepo(dbPool)
+		messagingRepo := repository.NewMessagingRepo(dbPool)
+		moderationRepo := repository.NewModerationRepo(dbPool)
 
-	handler.RegisterM5Routes(api, handler.M5Dependencies{
-		DB:             dbPool,
-		FreelancerRepo: freelancerRepo,
-		GearRepo:       gearRepo,
-		MessagingRepo:  messagingRepo,
-		ModerationRepo: moderationRepo,
-		Events:         &logEventPublisher{},
-	})
+		handler.RegisterM5Routes(api, handler.M5Dependencies{
+			DB:             dbPool,
+			FreelancerRepo: freelancerRepo,
+			GearRepo:       gearRepo,
+			MessagingRepo:  messagingRepo,
+			ModerationRepo: moderationRepo,
+			Events:         &logEventPublisher{},
+		})
 
-	// M5 Workers
-	msgCleanupWorker := worker.NewMessageCleanupWorker(messagingRepo)
-	moderationWorker := worker.NewModerationWorker(messagingRepo, moderationRepo)
-	workerRegistry.Register("message-cleanup", msgCleanupWorker)
-	workerRegistry.Register("moderation", moderationWorker)
+		// M5 Workers
+		msgCleanupWorker := worker.NewMessageCleanupWorker(messagingRepo)
+		moderationWorker := worker.NewModerationWorker(messagingRepo, moderationRepo)
+		workerRegistry.Register("message-cleanup", msgCleanupWorker)
+		workerRegistry.Register("moderation", moderationWorker)
 
-	log.Println("M5: Marketplaces & Communication routes registered (Freelancer, Gear, Messaging, Moderation)")
+		log.Println("M5: Marketplaces & Communication routes registered (Freelancer, Gear, Messaging, Moderation)")
 
-	// ──────────────────────── M6: Revenue & Dealership Engine ──────────────────
-	dealerRepo := repository.NewDealerRepo(dbPool)
-	couponRepo := repository.NewCouponRepo(dbPool)
-	marginRepo := repository.NewMarginRepo(dbPool)
-	payoutRepo := repository.NewPayoutRepo(dbPool)
+		// ──────────────────────── M6: Revenue & Dealership Engine ──────────────────
+		dealerRepo := repository.NewDealerRepo(dbPool)
+		couponRepo := repository.NewCouponRepo(dbPool)
+		marginRepo := repository.NewMarginRepo(dbPool)
+		payoutRepo := repository.NewPayoutRepo(dbPool)
 
-	handler.RegisterM6Routes(api, handler.M6Dependencies{
-		DB:         dbPool,
-		DealerRepo: dealerRepo,
-		CouponRepo: couponRepo,
-		MarginRepo: marginRepo,
-		PayoutRepo: payoutRepo,
-	})
+		handler.RegisterM6Routes(api, handler.M6Dependencies{
+			DB:         dbPool,
+			DealerRepo: dealerRepo,
+			CouponRepo: couponRepo,
+			MarginRepo: marginRepo,
+			PayoutRepo: payoutRepo,
+		})
 
-	log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts)")
+		log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts)")
 
 	}) // end protected API group
 

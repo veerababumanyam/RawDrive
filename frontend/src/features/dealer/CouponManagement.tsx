@@ -19,9 +19,14 @@ import CouponForm from "./CouponForm";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
 function CouponFormInline() {
   const handleSubmit = async (data: Record<string, unknown>) => {
-    const res = await fetch(`${API_BASE}/api/v1/dealers/coupons`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const res = await fetch(`${API_BASE}/api/v1/dealers/coupons`, { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data) });
     if (!res.ok) { const err = await res.json().catch(() => ({ error: "unknown" })); throw new Error(err.error || "Failed to create"); }
   };
   return <CouponForm onSubmit={handleSubmit} isDealer={true} />;
@@ -46,8 +51,11 @@ export default function CouponManagement() {
   const [activeTab, setActiveTab] = useState<"list" | "create">("list");
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/v1/dealers/coupons`)
-      .then((r) => (r.ok ? r.json() : []))
+    fetch(`${API_BASE}/api/v1/dealers/coupons`, { headers: getAuthHeaders() })
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load coupons");
+        return r.json();
+      })
       .then(setCoupons)
       .catch(() => setCoupons([]))
       .finally(() => setLoading(false));

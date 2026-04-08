@@ -1,246 +1,224 @@
 import Link from "next/link";
-import {
-  Image,
-  CheckCircle,
-  Sparkles,
-  Users,
-  Video,
-  Store,
-  Heart,
-  Camera,
-  Globe,
-  Shield,
-} from "lucide-react";
 import type { Metadata } from "next";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Camera,
+  Heart,
+  ImageIcon,
+  ReceiptText,
+  Sparkles,
+  Tv,
+  Users,
+} from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RawDrive — The Operating System for Photography Businesses in India",
+  title: "RawDrive | India's Premium Photography SaaS",
   description:
-    "All-in-one platform for Indian photographers — gallery delivery, client proofing, AI culling, CRM, live streaming, and marketplaces.",
+    "The all-in-one platform for Indian photographers. Manage galleries, deliver to clients, handle GST invoices, and grow your studio with AI.",
 };
 
 const features = [
   {
-    icon: Image,
-    title: "Gallery Delivery",
+    icon: ImageIcon,
+    title: "Gallery Management",
     description:
-      "Deliver stunning, branded galleries to clients with password protection, download controls, and expiry dates.",
+      "High-speed uploads with automated folder structures and client-ready previews.",
   },
   {
-    icon: CheckCircle,
+    icon: CheckCircle2,
     title: "Client Proofing",
     description:
-      "Let clients select, favourite, and approve photos directly in-browser with real-time collaboration.",
+      "Let clients select their favorites with a single tap. Mobile-optimized for easy viewing.",
+  },
+  {
+    icon: ReceiptText,
+    title: "GST Invoicing",
+    description:
+      "Automated GST compliance for India. Generate professional tax invoices in seconds.",
   },
   {
     icon: Sparkles,
-    title: "AI Culling",
+    title: "AI Smart Culling",
     description:
-      "Automatically sort thousands of photos by quality, sharpness, and duplicates — save hours of editing time.",
+      "Save hours of work. Our AI automatically detects blurry shots and duplicates for you.",
   },
   {
-    icon: Users,
-    title: "CRM & Bookings",
-    description:
-      "Manage leads, bookings, contracts, invoices, and payments in one unified dashboard.",
-  },
-  {
-    icon: Video,
+    icon: Tv,
     title: "Live Streaming",
     description:
-      "Stream weddings and events live to remote guests with branded overlays and multi-camera support.",
+      "Stream wedding highlights directly to guests who couldn't make it, integrated with your gallery.",
   },
   {
-    icon: Store,
-    title: "Marketplaces",
+    icon: CalendarDays,
+    title: "Booking Calendar",
     description:
-      "List your services on the RawDrive marketplace and get discovered by clients in your city.",
+      "Manage your dates and advance payments with an intuitive studio-wide calendar.",
   },
-];
-
-const planTeaser = [
-  { name: "Free", price: "Rs. 0", note: "90-day trial" },
-  { name: "Starter", price: "Rs. 500", note: "/month" },
-  { name: "Professional", price: "Rs. 1,200", note: "/month", popular: true },
-  { name: "Business", price: "Rs. 5,000", note: "/month" },
 ];
 
 const stats = [
-  { value: "10,000+", label: "Photographers" },
-  { value: "50L+", label: "Photos Delivered" },
-  { value: "500+", label: "Cities Covered" },
-  { value: "99.9%", label: "Uptime" },
+  { value: "5,000+", label: "Active Studios", tone: "text-accent" },
+  { value: "1M+", label: "Photos Delivered", tone: "text-accent-primary" },
+  { value: "Rs. 50Cr+", label: "Revenue Processed", tone: "text-accent-tertiary" },
 ];
-
-function JsonLd() {
-  const data = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        name: "RawDrive",
-        url: "https://rawdrive.in",
-        logo: "https://rawdrive.in/logo/android-chrome-512x512.png",
-        sameAs: [],
-      },
-      {
-        "@type": "SoftwareApplication",
-        name: "RawDrive",
-        applicationCategory: "BusinessApplication",
-        operatingSystem: "Web",
-        offers: {
-          "@type": "AggregateOffer",
-          lowPrice: "0",
-          highPrice: "5000",
-          priceCurrency: "INR",
-          offerCount: 5,
-        },
-      },
-    ],
-  };
-  // Static trusted content — no user input involved
-  const html = JSON.stringify(data);
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: html }} />;
-}
 
 export default function LandingPage() {
   return (
-    <>
-      <JsonLd />
+    <div className="min-h-[100dvh] bg-surface text-text-primary selection:bg-accent selection:text-text-inverse">
+      <main className="pt-20">
+        <section className="mx-auto grid min-h-[100dvh] max-w-7xl items-center gap-12 px-6 md:grid-cols-2">
+          <div className="space-y-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-elevated px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-accent">
+              <Sparkles className="h-4 w-4" />
+              India&apos;s #1 Photography SaaS
+            </div>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-surface px-4 py-20 lg:px-8 lg:py-32">
-        <div className="mx-auto max-w-4xl text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-5xl">
-            The Operating System for Photography Businesses in India
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-text-secondary">
-            Gallery delivery, client proofing, AI culling, CRM, live streaming, and
-            marketplaces — everything you need to run your photography business, in one
-            platform.
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
-              href="/register"
-              className="inline-flex items-center justify-center rounded-lg bg-accent px-6 py-3 text-base font-semibold text-text-inverse shadow-glass transition-colors hover:bg-accent-hover active:bg-accent-active"
-              style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
-            >
-              Get Started Free
-            </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-6 py-3 text-base font-semibold text-text-primary shadow-sm transition-colors hover:bg-accent-subtle hover:text-accent"
-              style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
-            >
-              See Pricing
-            </Link>
+            <h1 className="font-headline text-5xl font-extrabold leading-[0.95] text-text-primary md:text-7xl">
+              Professional Photography, <span className="text-accent">Simplified</span>
+            </h1>
+
+            <p className="max-w-lg text-lg leading-8 text-text-secondary">
+              The all-in-one platform for Indian photographers. Manage galleries,
+              deliver to clients, handle GST invoices, and grow your studio with
+              cutting-edge AI.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/register"
+                className="inline-flex rounded-xl bg-accent px-8 py-4 text-lg font-bold text-text-inverse shadow-glass transition-all hover:shadow-lg active:scale-95"
+              >
+                Start Free Trial
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex rounded-xl border border-border bg-surface-elevated px-8 py-4 text-lg font-bold text-text-primary transition-all hover:bg-surface-sunken"
+              >
+                Watch Demo
+              </Link>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-6 pt-4 text-sm text-text-tertiary">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-accent" />
+                5,000+ Photographers
+              </div>
+              <div className="flex items-center gap-2">
+                <Heart className="h-4 w-4 text-accent" />
+                Made in India
+              </div>
+              <div className="flex items-center gap-2">
+                <Camera className="h-4 w-4 text-accent" />
+                DPDPA Compliant
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
 
-      {/* Feature Highlights */}
-      <section className="bg-surface-sunken px-4 py-20 lg:px-8" id="features-preview">
-        <div className="mx-auto max-w-7xl">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-text-primary">
-              Everything You Need to Run Your Studio
+          <div className="relative hidden md:block">
+            <div className="absolute -inset-4 rounded-full bg-accent-muted blur-3xl" />
+            <div className="relative overflow-hidden rounded-[1.25rem] border border-border bg-surface-elevated shadow-2xl backdrop-blur-md">
+              <img
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDB9mQtzsQntF6IssWlOlcKYOZ-_zY0ZBq9AaidjZXttyGH5tpujmSsYXTQJuSX5Jxmz6SKu--PQVckHRLa0bRX4rFQu-6jDZhohX9970IsK4eWXkqKabALdSo6yWQa07334qVCuO0LBbCtMTYQ2gf486_dskCSo65jUnKg0NiNDv0Q2nmPI7PZyf8UJMwTMZa0OxbiNFlaDQULV81ydHyLtp0f0kQpgn1OKiJVMrPmSLtB38g4P3Tv-SC1uTuw7gzeFiEQj8HCMqM"
+                alt="RawDrive dashboard preview"
+                className="h-auto w-full opacity-90"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent opacity-40" />
+            </div>
+
+            <div className="absolute -bottom-6 -left-6 flex items-center gap-4 rounded-xl border border-border bg-surface-elevated p-4 shadow-2xl backdrop-blur-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-text-inverse">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-text-tertiary">New Client Booking</p>
+                <p className="font-bold text-text-primary">Premium Wedding Set</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-7xl px-6 py-24">
+          <div className="mb-16 space-y-4 text-center">
+            <h2 className="font-headline text-4xl font-bold text-text-primary">
+              Everything your studio needs
             </h2>
-            <p className="mt-4 text-text-secondary">
-              Six powerful tools, one platform. No more juggling apps.
+            <p className="mx-auto max-w-2xl text-text-secondary">
+              Built specifically for the workflow of modern Indian photography studios.
             </p>
           </div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
-              <div
+              <article
                 key={feature.title}
-                className="rounded-xl border border-border bg-surface-elevated p-6 shadow-glass transition-transform hover:scale-[1.01]"
-                style={{ transitionDuration: "var(--duration-normal)" }}
+                className="rounded-[1.25rem] border border-border bg-surface-elevated p-8 backdrop-blur-md transition-all hover:border-accent"
               >
-                <feature.icon className="h-8 w-8 text-accent" aria-hidden="true" />
-                <h3 className="mt-4 text-lg font-semibold text-text-primary">
+                <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-accent-subtle text-accent">
+                  <feature.icon className="h-6 w-6" />
+                </div>
+                <h3 className="font-headline text-xl font-bold text-text-primary">
                   {feature.title}
                 </h3>
-                <p className="mt-2 text-sm text-text-secondary">{feature.description}</p>
-              </div>
+                <p className="mt-3 leading-7 text-text-secondary">{feature.description}</p>
+              </article>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Pricing Teaser */}
-      <section className="bg-surface px-4 py-20 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-text-primary">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="mt-4 text-text-secondary">Start free. Scale as you grow.</p>
-          </div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {planTeaser.map((plan) => (
-              <div
-                key={plan.name}
-                className={`rounded-xl border p-6 text-center shadow-glass transition-transform hover:scale-[1.01] ${
-                  plan.popular
-                    ? "border-accent bg-accent-subtle"
-                    : "border-border bg-surface-elevated"
-                }`}
-                style={{ transitionDuration: "var(--duration-normal)" }}
-              >
-                {plan.popular && (
-                  <span className="mb-3 inline-block rounded-full bg-accent px-3 py-1 text-xs font-semibold text-text-inverse">
-                    Popular
-                  </span>
-                )}
-                <h3 className="text-lg font-semibold text-text-primary">{plan.name}</h3>
-                <p className="mt-2 text-2xl font-bold text-text-primary">{plan.price}</p>
-                <p className="text-sm text-text-tertiary">{plan.note}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-              style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
-            >
-              View Full Pricing
-            </Link>
-          </div>
-        </div>
-      </section>
+        <section className="overflow-hidden bg-surface-sunken py-20">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="mb-12 text-center">
+              <h2 className="font-headline text-3xl font-bold text-text-primary">
+                Trusted by Indian Photographers
+              </h2>
+            </div>
 
-      {/* Social Proof */}
-      <section className="bg-surface-sunken px-4 py-20 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-3xl font-bold text-accent">{stat.value}</p>
-                <p className="mt-1 text-sm text-text-secondary">{stat.label}</p>
+            <div className="grid gap-12 lg:grid-cols-3 lg:items-center">
+              <div className="space-y-10 lg:col-span-1">
+                {stats.map((stat) => (
+                  <div key={stat.label} className="space-y-2">
+                    <p className={`font-headline text-4xl font-black ${stat.tone}`}>
+                      {stat.value}
+                    </p>
+                    <p className="text-xs font-bold uppercase tracking-[0.26em] text-text-tertiary">
+                      {stat.label}
+                    </p>
+                  </div>
+                ))}
               </div>
-            ))}
+
+              <div className="lg:col-span-2">
+                <div className="rounded-[1.75rem] border border-border bg-surface-elevated p-8 backdrop-blur-md">
+                  <p className="font-headline text-2xl font-bold text-text-primary">
+                    From first inquiry to final delivery, RawDrive keeps the whole
+                    studio moving.
+                  </p>
+                  <p className="mt-4 max-w-2xl leading-8 text-text-secondary">
+                    Premium client galleries, GST-ready billing, AI-assisted sorting,
+                    and a workflow built for Indian studios that need polish without
+                    operational chaos.
+                  </p>
+                  <div className="mt-8 flex flex-wrap gap-3">
+                    <Link
+                      href="/register"
+                      className="inline-flex rounded-xl bg-accent px-6 py-3 font-bold text-text-inverse shadow-glass transition-all hover:shadow-lg"
+                    >
+                      Start Free Trial
+                    </Link>
+                    <Link
+                      href="/pricing"
+                      className="inline-flex rounded-xl border border-border bg-surface-elevated px-6 py-3 font-semibold text-text-primary transition-all hover:bg-surface-sunken"
+                    >
+                      See Pricing
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6">
-            <div className="flex items-center gap-2 rounded-full bg-accent-subtle px-4 py-2">
-              <Heart className="h-4 w-4 text-accent fill-current" aria-hidden="true" />
-              <span className="text-sm font-medium text-accent">Made in India</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-full bg-accent-subtle px-4 py-2">
-              <Camera className="h-4 w-4 text-accent" aria-hidden="true" />
-              <span className="text-sm font-medium text-accent">Built for Photographers</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-full bg-accent-subtle px-4 py-2">
-              <Globe className="h-4 w-4 text-accent" aria-hidden="true" />
-              <span className="text-sm font-medium text-accent">11 Indian Languages</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-full bg-accent-subtle px-4 py-2">
-              <Shield className="h-4 w-4 text-accent" aria-hidden="true" />
-              <span className="text-sm font-medium text-accent">DPDPA Compliant</span>
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
+        </section>
+      </main>
+    </div>
   );
 }

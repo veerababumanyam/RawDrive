@@ -13,7 +13,7 @@ export default function DealerDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = "";
+    const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
     getDealerDashboard(token)
       .then(setDealer)
       .catch(() => setDealer(null))

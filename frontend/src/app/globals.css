@@ -12,6 +12,7 @@
   --surface-elevated: hsl(0, 0%, 100%);
   --surface-sunken: hsl(220, 15%, 93%);
   --surface-overlay: hsla(220, 20%, 97%, 0.80);
+  --surface-container: hsla(220, 20%, 98%, 0.88);
 
   /* Text */
   --text-primary: hsl(220, 25%, 10%);
@@ -25,12 +26,18 @@
   --accent-active: hsl(221, 83%, 40%);
   --accent-subtle: hsla(221, 83%, 53%, 0.10);
   --accent-muted: hsla(221, 83%, 53%, 0.20);
+  --accent-primary: hsl(241, 86%, 74%);
+  --accent-secondary: hsl(168, 76%, 42%);
+  --accent-tertiary: hsl(33, 93%, 57%);
 
   /* Semantic */
   --semantic-success: hsl(142, 71%, 45%);
   --semantic-warning: hsl(38, 92%, 50%);
   --semantic-destructive: hsl(0, 84%, 60%);
   --semantic-info: hsl(199, 89%, 48%);
+  --feedback-success: var(--semantic-success);
+  --feedback-warning: var(--semantic-warning);
+  --feedback-error: var(--semantic-destructive);
 
   /* Border */
   --border-default: hsl(220, 13%, 87%);
@@ -97,6 +104,7 @@
   --surface-elevated: hsl(222, 20%, 14%);
   --surface-sunken: hsl(222, 25%, 5%);
   --surface-overlay: hsla(222, 25%, 8%, 0.85);
+  --surface-container: hsla(222, 20%, 16%, 0.9);
 
   --text-primary: hsl(220, 15%, 93%);
   --text-secondary: hsl(220, 10%, 65%);
@@ -108,11 +116,17 @@
   --accent-active: hsl(217, 91%, 53%);
   --accent-subtle: hsla(217, 91%, 60%, 0.12);
   --accent-muted: hsla(217, 91%, 60%, 0.22);
+  --accent-primary: hsl(241, 88%, 78%);
+  --accent-secondary: hsl(168, 74%, 44%);
+  --accent-tertiary: hsl(36, 91%, 60%);
 
   --semantic-success: hsl(142, 60%, 55%);
   --semantic-warning: hsl(38, 85%, 55%);
   --semantic-destructive: hsl(0, 72%, 65%);
   --semantic-info: hsl(199, 80%, 55%);
+  --feedback-success: var(--semantic-success);
+  --feedback-warning: var(--semantic-warning);
+  --feedback-error: var(--semantic-destructive);
 
   --border-default: hsl(222, 15%, 22%);
   --border-strong: hsl(222, 15%, 32%);
@@ -130,6 +144,7 @@
   --surface-elevated: hsl(240, 12%, 9%);
   --surface-sunken: hsl(0, 0%, 0%);
   --surface-overlay: hsla(240, 15%, 3%, 0.90);
+  --surface-container: hsla(240, 14%, 10%, 0.92);
 
   --text-primary: hsl(40, 15%, 90%);
   --text-secondary: hsl(40, 8%, 60%);
@@ -141,11 +156,17 @@
   --accent-active: hsl(42, 78%, 48%);
   --accent-subtle: hsla(42, 78%, 55%, 0.10);
   --accent-muted: hsla(42, 78%, 55%, 0.20);
+  --accent-primary: hsl(248, 90%, 74%);
+  --accent-secondary: hsl(168, 69%, 43%);
+  --accent-tertiary: hsl(35, 89%, 57%);
 
   --semantic-success: hsl(160, 60%, 45%);
   --semantic-warning: hsl(30, 90%, 55%);
   --semantic-destructive: hsl(0, 65%, 58%);
   --semantic-info: hsl(200, 70%, 55%);
+  --feedback-success: var(--semantic-success);
+  --feedback-warning: var(--semantic-warning);
+  --feedback-error: var(--semantic-destructive);
 
   --border-default: hsl(240, 10%, 15%);
   --border-strong: hsl(240, 10%, 25%);
@@ -161,9 +182,12 @@
 @theme inline {
   /* Surface colors */
   --color-surface: var(--surface-base);
+  --color-surface-base: var(--surface-base);
   --color-surface-elevated: var(--surface-elevated);
+  --color-surface-raised: var(--surface-elevated);
   --color-surface-sunken: var(--surface-sunken);
   --color-surface-overlay: var(--surface-overlay);
+  --color-surface-container: var(--surface-container);
 
   /* Text colors */
   --color-text-primary: var(--text-primary);
@@ -177,15 +201,23 @@
   --color-accent-active: var(--accent-active);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-muted: var(--accent-muted);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-tertiary: var(--accent-tertiary);
 
   /* Semantic colors */
   --color-success: var(--semantic-success);
   --color-warning: var(--semantic-warning);
   --color-destructive: var(--semantic-destructive);
   --color-info: var(--semantic-info);
+  --color-error: var(--feedback-error);
+  --color-feedback-success: var(--feedback-success);
+  --color-feedback-warning: var(--feedback-warning);
+  --color-feedback-error: var(--feedback-error);
 
   /* Border colors */
   --color-border: var(--border-default);
+  --color-border-default: var(--border-default);
   --color-border-strong: var(--border-strong);
   --color-border-subtle: var(--border-subtle);
   --color-border-focus: var(--border-focus);
@@ -197,6 +229,7 @@
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
   --shadow-inner: var(--shadow-inner);
+  --shadow-elevation-1: var(--shadow-md);
 
   /* Radii */
   --radius-sm: var(--radius-sm);
@@ -207,7 +240,8 @@
   --radius-full: var(--radius-full);
 
   /* Font families */
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-manrope), var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
@@ -218,6 +252,17 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-headline {
+  font-family: var(--font-display);
+}
+
+body[data-chrome="marketing"] {
+  background:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent-primary) 18%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 82% 10%, color-mix(in srgb, var(--accent-secondary) 12%, transparent) 0, transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-base) 72%, #0f0d26 28%) 0%, var(--surface-base) 100%);
 }
 
 /* --- Focus ring utility --- */
@@ -238,6 +283,75 @@ body {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   box-shadow: var(--shadow-glass);
+}
+
+.glass-card {
+  background: color-mix(in srgb, var(--surface-overlay) 84%, transparent);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.2)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.2)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+  box-shadow: var(--shadow-glass);
+  border-radius: var(--radius-2xl);
+}
+
+.input-base {
+  min-height: var(--touch-target-min);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  background: color-mix(in srgb, var(--surface-sunken) 88%, transparent);
+  color: var(--text-primary);
+  padding: 0.75rem 0.95rem;
+  transition:
+    border-color var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default),
+    background-color var(--duration-fast) var(--easing-default);
+}
+
+.input-base::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input-base:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 28%, var(--border-default));
+}
+
+.input-base:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent-primary) 70%, var(--border-focus));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary) 14%, transparent);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 68%, white));
+  color: #11112a;
+  font-weight: 700;
+  box-shadow:
+    0 18px 40px -22px color-mix(in srgb, var(--accent-primary) 72%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform var(--duration-fast) var(--easing-default),
+    filter var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.7);
 }
 
 /* --- Reduced motion --- */

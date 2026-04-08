@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"net/url"
 	"testing"
 
 	"github.com/rawdrive/backend/internal/auth"
@@ -56,12 +57,29 @@ func newMockProvider(profile *auth.OAuthProfile) *mockOAuthProvider {
 	}
 }
 
+func newAuthorizedService(t *testing.T, provider auth.OAuthProvider, store auth.UserStore) (*auth.OAuthService, string) {
+	t.Helper()
+
+	svc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"},
+		provider,
+		store,
+	)
+	redirectURL, err := svc.InitiateGoogleAuth(context.Background(), "http://localhost:3000")
+	require.NoError(t, err)
+
+	parsed, err := url.Parse(redirectURL)
+	require.NoError(t, err)
+
+	return svc, parsed.Query().Get("state")
+}
+
 func TestGoogleOAuth_InitiateFlow(t *testing.T) {
 	provider := newMockProvider(nil)
 	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, &mockUserStore{users: map[string]*auth.User{}})
 	ctx := context.Background()
 
-	redirectURL, err := svc.InitiateGoogleAuth(ctx)
+	redirectURL, err := svc.InitiateGoogleAuth(ctx, "http://localhost:3000")
 	require.NoError(t, err)
 	assert.NotEmpty(t, redirectURL)
 	assert.Contains(t, redirectURL, "client_id=test-client-id", "should include client_id")
@@ -77,13 +95,13 @@ func TestGoogleOAuth_HandleCallback(t *testing.T) {
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
+	user, returnTo, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "user@gmail.com", user.Email)
+	assert.Equal(t, "http://localhost:3000", returnTo)
 }
 
 func TestGoogleOAuth_NewUser(t *testing.T) {
@@ -95,10 +113,9 @@ func TestGoogleOAuth_NewUser(t *testing.T) {
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "newuser@gmail.com", user.Email)
@@ -115,10 +132,9 @@ func TestGoogleOAuth_ExistingUser(t *testing.T) {
 	store := &mockUserStore{users: map[string]*auth.User{
 		"existing@gmail.com": {ID: "existing-uuid", Email: "existing@gmail.com"},
 	}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
 	require.NoError(t, err)
 	assert.Equal(t, "existing-uuid", user.ID, "should return existing user")
 }
@@ -133,10 +149,9 @@ func TestGoogleOAuth_AccountLinking(t *testing.T) {
 	store := &mockUserStore{users: map[string]*auth.User{
 		"linked@gmail.com": {ID: "link-uuid", Email: "linked@gmail.com"},
 	}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
 	require.NoError(t, err)
 	assert.Equal(t, "link-uuid", user.ID, "should link Google to existing account")
 }
@@ -151,10 +166,9 @@ func TestGoogleOAuth_RevokedConsent(t *testing.T) {
 		},
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "revoked-code", "valid-state")
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "revoked-code", state)
 	assert.Error(t, err, "revoked consent should produce an error")
 	assert.Nil(t, user)
 }
@@ -169,10 +183,9 @@ func TestGoogleOAuth_ExpiredToken(t *testing.T) {
 		},
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
 	assert.Error(t, err, "expired OAuth token should produce an error")
 	assert.Nil(t, user)
 }
@@ -186,10 +199,9 @@ func TestGoogleOAuth_ProfileImport(t *testing.T) {
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, store)
-	ctx := context.Background()
+	svc, state := newAuthorizedService(t, provider, store)
 
-	user, err := svc.HandleGoogleCallback(ctx, "valid-code", "valid-state")
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
 	require.NoError(t, err)
 	assert.Equal(t, "Profile User", user.DisplayName, "should import display name")
 	assert.Equal(t, "https://lh3.googleusercontent.com/avatar.jpg", user.AvatarURL, "should import avatar URL")

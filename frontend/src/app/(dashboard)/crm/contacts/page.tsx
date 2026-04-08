@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { listContacts, type Contact } from "@/lib/api/crm";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -9,7 +10,7 @@ export default function ContactsPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const token = "";
+    const token = getStoredAccessToken();
     listContacts(token, search ? { search } : undefined)
       .then(setContacts)
       .catch(() => setContacts([]))

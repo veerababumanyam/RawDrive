@@ -85,7 +85,7 @@ func (h *DealerHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		if err == service.ErrDealerNotFound {
 			http.Error(w, `{"error":"dealer not found"}`, http.StatusNotFound)
 		} else {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"failed to approve dealer"}`, http.StatusBadRequest)
 		}
 		return
 	}
@@ -131,7 +131,10 @@ func (h *DealerHandler) Suspend(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
 	if err := h.svc.SuspendDealer(r.Context(), dealerID, adminID, body.Reason); err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return

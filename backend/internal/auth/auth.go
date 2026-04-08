@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"sync"
 	"time"
 
@@ -515,7 +516,7 @@ type OAuthService struct {
 	provider OAuthProvider
 	store    UserStore
 	mu       sync.Mutex
-	states   map[string]bool
+	states   map[string]string
 }
 
 func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore) *OAuthService {
@@ -523,11 +524,13 @@ func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore
 		config:   config,
 		provider: provider,
 		store:    store,
-		states:   make(map[string]bool),
+		states:   make(map[string]string),
 	}
 }
 
-func (s *OAuthService) InitiateGoogleAuth(ctx context.Context) (string, error) {
+func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) (string, error) {
+	_ = ctx
+
 	if s.config.ClientID == "" {
 		return "", fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_ID not set")
 	}
@@ -539,43 +542,62 @@ func (s *OAuthService) InitiateGoogleAuth(ctx context.Context) (string, error) {
 	state := fmt.Sprintf("%x", stateBytes)
 
 	s.mu.Lock()
-	s.states[state] = true
+	s.states[state] = returnTo
 	s.mu.Unlock()
 
-	url := fmt.Sprintf(
-		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=openid+email+profile&state=%s&access_type=offline&prompt=consent",
-		s.config.ClientID,
-		s.config.RedirectURI,
-		state,
-	)
-	return url, nil
+	query := url.Values{
+		"client_id":     []string{s.config.ClientID},
+		"redirect_uri":  []string{s.config.RedirectURI},
+		"response_type": []string{"code"},
+		"scope":         []string{"openid email profile"},
+		"state":         []string{state},
+		"access_type":   []string{"offline"},
+		"prompt":        []string{"consent"},
+	}
+
+	return "https://accounts.google.com/o/oauth2/v2/auth?" + query.Encode(), nil
 }
 
-func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state string) (*User, error) {
+func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state string) (*User, string, error) {
+	if s.provider == nil || s.store == nil {
+		return nil, "", errors.New("oauth service not fully configured")
+	}
+
+	s.mu.Lock()
+	returnTo, ok := s.states[state]
+	if ok {
+		delete(s.states, state)
+	}
+	s.mu.Unlock()
+
+	if !ok {
+		return nil, "", errors.New("invalid oauth state")
+	}
+
 	token, err := s.provider.ExchangeCode(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("exchange code failed: %w", err)
+		return nil, returnTo, fmt.Errorf("exchange code failed: %w", err)
 	}
 
 	profile, err := s.provider.GetProfile(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("get profile failed: %w", err)
+		return nil, returnTo, fmt.Errorf("get profile failed: %w", err)
 	}
 
 	existing, err := s.store.FindByEmail(ctx, profile.Email)
 	if err != nil {
-		return nil, err
+		return nil, returnTo, err
 	}
 
 	if existing != nil {
 		_ = s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID)
-		return existing, nil
+		return existing, returnTo, nil
 	}
 
 	// Create new user
 	idBytes := make([]byte, 16)
 	if _, err := rand.Read(idBytes); err != nil {
-		return nil, err
+		return nil, returnTo, err
 	}
 
 	newUser := &User{
@@ -587,11 +609,11 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 
 	created, err := s.store.Create(ctx, newUser)
 	if err != nil {
-		return nil, err
+		return nil, returnTo, err
 	}
 
 	_ = s.store.LinkOAuth(ctx, created.ID, "google", profile.ProviderID)
-	return created, nil
+	return created, returnTo, nil
 }
 
 // ──────────────────────────── Password Service ────────────────────────────

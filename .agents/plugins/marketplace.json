@@ -1,0 +1,20 @@
+{
+  "name": "rawdrive-local",
+  "interface": {
+    "displayName": "RawDrive Local Plugins"
+  },
+  "plugins": [
+    {
+      "name": "google-stitch-mcp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/google-stitch-mcp"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -8,10 +8,10 @@ CREATE TABLE dealers (
     territory_type VARCHAR(20) NOT NULL DEFAULT 'primary'
         CHECK (territory_type IN ('primary', 'secondary', 'ambassador')),
     status VARCHAR(20) NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'approved', 'suspended', 'terminated')),
+        CHECK (status IN ('pending', 'approved', 'rejected', 'suspended', 'terminated')),
     commission_rate_pct DECIMAL(5,2),
     bank_account JSONB,
-    pan_number VARCHAR(10),
+    pan_number VARCHAR(10) NOT NULL,
     gstin VARCHAR(15),
     referral_code VARCHAR(50) UNIQUE,
     approved_at TIMESTAMPTZ,

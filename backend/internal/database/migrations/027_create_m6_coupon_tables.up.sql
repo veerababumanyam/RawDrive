@@ -9,7 +9,7 @@ CREATE TABLE coupons (
     dealer_id UUID REFERENCES dealers(id),
     coupon_type VARCHAR(30) NOT NULL
         CHECK (coupon_type IN ('percentage', 'fixed_amount', 'trial_extension', 'onboarding_bonus', 'feature_addon', 'first_payment_waiver')),
-    discount_value DECIMAL(10,2) NOT NULL,
+    discount_value BIGINT NOT NULL,
     scope_state_id INTEGER REFERENCES states(id),
     scope_plan_id UUID,
     scope_product VARCHAR(50),
