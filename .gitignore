@@ -14,3 +14,5 @@ Thumbs.db
 *.exe
 node_modules/
 _cobolt-output/stitch-screens/
+test-results/
+tests/photos/
