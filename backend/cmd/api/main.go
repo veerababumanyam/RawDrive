@@ -82,6 +82,7 @@ func main() {
 	r := chi.NewRouter()
 
 	// Global middleware
+	r.Use(middleware.CORS)
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
@@ -118,10 +119,10 @@ func main() {
 	// OTP with dev logging (prints code to stdout)
 	otpSvc := auth.NewOTPServiceWithDelivery(auth.OTPConfig{
 		CodeLength:      6,
-		Expiry:          5 * time.Minute,
+		Expiry:          15 * time.Minute,
 		MaxAttempts:     5,
 		RateLimitMax:    10,
-		RateLimitWindow: time.Minute,
+		RateLimitWindow: 15 * time.Minute,
 	}, &logOTPDelivery{})
 
 	// JWT
@@ -380,6 +381,34 @@ func main() {
 		})
 
 		log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts)")
+
+		// ──────────────────────── M7: Admin Command Center & Reporting ──────────────────
+		adminUserRepo := repository.NewAdminUserRepo(dbPool)
+		adminModerationRepo := repository.NewAdminModerationRepo(dbPool)
+		adminWorkspaceRepo := repository.NewAdminWorkspaceRepo(dbPool)
+		adminRevenueRepo := repository.NewAdminRevenueRepo(dbPool)
+		adminAnalyticsRepo := repository.NewAdminAnalyticsRepo(dbPool)
+		adminHealthRepo := repository.NewAdminHealthRepo(dbPool)
+		auditLogRepo := repository.NewAuditLogRepo(dbPool)
+
+		auditLogSvc := service.NewAuditLogService(auditLogRepo)
+		jwtSecret := []byte(os.Getenv("JWT_IMPERSONATION_SECRET"))
+		if len(jwtSecret) == 0 {
+			jwtSecret = []byte("rawdrive-impersonation-dev-key")
+		}
+
+		handler.RegisterAdminRoutes(api, handler.AdminDeps{
+			UserSvc:       service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret),
+			ModerationSvc: service.NewAdminModerationService(adminModerationRepo, auditLogSvc),
+			WorkspaceSvc:  service.NewAdminWorkspaceService(adminWorkspaceRepo),
+			RevenueSvc:    service.NewAdminRevenueService(adminRevenueRepo),
+			AnalyticsSvc:  service.NewAdminAnalyticsService(adminAnalyticsRepo),
+			ExportSvc:     service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
+			HealthSvc:     service.NewAdminHealthService(adminHealthRepo),
+			AuditLogSvc:   auditLogSvc,
+		})
+
+		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")
 
 	}) // end protected API group
 
