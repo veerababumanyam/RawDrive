@@ -12,6 +12,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/handler"
 	"github.com/rawdrive/backend/internal/middleware"
@@ -244,6 +245,51 @@ func main() {
 	workerRegistry.StartAll(workerCtx)
 
 	log.Println("M2: routes registered, thumbnail worker started")
+
+	// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────
+
+	// AI encryption key (32 bytes from env, or dev default)
+	aiEncKeyStr := os.Getenv("AI_ENCRYPTION_KEY")
+	if aiEncKeyStr == "" {
+		aiEncKeyStr = "rawdrive-dev-key-32bytes-pad!!" // 32 bytes, dev only
+		log.Println("M3: WARNING - using dev AI encryption key. Set AI_ENCRYPTION_KEY in production.")
+	}
+	aiEncKey := []byte(aiEncKeyStr)
+
+	// AI repositories
+	aiConfigRepo := ai.NewConfigRepo(dbPool, aiEncKey)
+	aiSpendRepo := ai.NewSpendRepo(dbPool)
+	aiJobRepo := ai.NewJobRepo(dbPool)
+	aiFaceRepo := ai.NewFaceRepo(dbPool)
+
+	// Gemini client
+	geminiModelID := os.Getenv("GEMINI_MODEL_ID")
+	if geminiModelID == "" {
+		geminiModelID = "gemini-2.0-flash"
+	}
+	geminiClient := ai.NewGeminiClient(geminiModelID)
+
+	// AI services
+	faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+	searchSvc := ai.NewSearchService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+	duplicateSvc := ai.NewDuplicateService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
+	cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
+
+	// AI handler (all endpoints in one handler)
+	aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo)
+
+	// M3 routes
+	handler.RegisterM3Routes(r, handler.M3Dependencies{AIHandler: aiHandler})
+
+	// AI workers
+	faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider)
+	searchWorker := ai.NewSearchWorker(dbPool, searchSvc, aiConfigRepo)
+	duplicateWorker := ai.NewDuplicateWorker(aiJobRepo, duplicateSvc)
+	workerRegistry.Register("face-detection", faceWorker)
+	workerRegistry.Register("ai-tagging", searchWorker)
+	workerRegistry.Register("duplicate-scan", duplicateWorker)
+
+	log.Println("M3: AI routes registered, 3 workers registered")
 
 	// ──────────────────────── Health Check ────────────────────────
 

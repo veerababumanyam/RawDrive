@@ -1,0 +1,95 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { FaceClusterBrowser } from "../FaceClusterBrowser";
+
+vi.mock("@/lib/api/ai", () => ({
+  getFaceClusters: vi.fn(),
+  renameCluster: vi.fn(),
+}));
+
+import { getFaceClusters, renameCluster } from "@/lib/api/ai";
+
+const mockGetFaceClusters = vi.mocked(getFaceClusters);
+const mockRenameCluster = vi.mocked(renameCluster);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("FaceClusterBrowser", () => {
+  it("shows loading spinner initially", () => {
+    mockGetFaceClusters.mockReturnValue(new Promise(() => {}));
+    render(<FaceClusterBrowser token="test" />);
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
+  });
+
+  it("shows empty state when no clusters", async () => {
+    mockGetFaceClusters.mockResolvedValue([]);
+    render(<FaceClusterBrowser token="test" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No people detected/)).toBeTruthy();
+    });
+  });
+
+  it("renders cluster cards with names and counts", async () => {
+    mockGetFaceClusters.mockResolvedValue([
+      { cluster_label: "c1", cluster_name: "Bride", face_count: 45, asset_count: 30, sample_asset_id: "a1" },
+      { cluster_label: "c2", cluster_name: "Groom", face_count: 32, asset_count: 25, sample_asset_id: "a2" },
+    ]);
+    render(<FaceClusterBrowser token="test" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Bride")).toBeTruthy();
+      expect(screen.getByText("Groom")).toBeTruthy();
+      expect(screen.getByText("45 photos")).toBeTruthy();
+      expect(screen.getByText("32 photos")).toBeTruthy();
+    });
+  });
+
+  it("shows Unknown for unnamed clusters", async () => {
+    mockGetFaceClusters.mockResolvedValue([
+      { cluster_label: "c1", cluster_name: "", face_count: 10, asset_count: 8, sample_asset_id: "a1" },
+    ]);
+    render(<FaceClusterBrowser token="test" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Unknown")).toBeTruthy();
+    });
+  });
+
+  it("calls onSelectCluster when card clicked", async () => {
+    const onSelect = vi.fn();
+    mockGetFaceClusters.mockResolvedValue([
+      { cluster_label: "c1", cluster_name: "Bride", face_count: 10, asset_count: 8, sample_asset_id: "a1" },
+    ]);
+    render(<FaceClusterBrowser token="test" onSelectCluster={onSelect} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Bride")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("Bride"));
+    expect(onSelect).toHaveBeenCalledWith("c1");
+  });
+
+  it("passes galleryId to API call", async () => {
+    mockGetFaceClusters.mockResolvedValue([]);
+    render(<FaceClusterBrowser token="test" galleryId="gal-123" />);
+
+    await waitFor(() => {
+      expect(mockGetFaceClusters).toHaveBeenCalledWith("test", "gal-123");
+    });
+  });
+
+  it("shows singular 'photo' for count of 1", async () => {
+    mockGetFaceClusters.mockResolvedValue([
+      { cluster_label: "c1", cluster_name: "Solo", face_count: 1, asset_count: 1, sample_asset_id: "a1" },
+    ]);
+    render(<FaceClusterBrowser token="test" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("1 photo")).toBeTruthy();
+    });
+  });
+});
