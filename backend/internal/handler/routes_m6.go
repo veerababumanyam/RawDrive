@@ -25,8 +25,10 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	dealerHandler := NewDealerHandler(dealerSvc)
 	marginHandler := NewMarginHandler(marginSvc)
 	couponHandler := NewCouponHandler(deps.CouponRepo)
+	couponHandler.dealerRepo = deps.DealerRepo
 	couponValidationHandler := NewCouponValidationHandler(couponValidationSvc)
 	payoutHandler := NewPayoutHandler(deps.PayoutRepo)
+	payoutHandler.dealerRepo = deps.DealerRepo
 
 	// Admin dealer management
 	r.Route("/api/v1/admin/dealers", func(r chi.Router) {
@@ -58,6 +60,12 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	r.Route("/api/v1/admin/coupons", func(r chi.Router) {
 		r.Post("/", couponHandler.CreateAdminCoupon)
 		r.Get("/", couponHandler.ListAdminCoupons)
+	})
+
+	// Admin payouts
+	r.Route("/api/v1/admin/payouts", func(r chi.Router) {
+		r.Post("/{id}/approve", payoutHandler.ApprovePayout)
+		r.Post("/{id}/confirm-payment", payoutHandler.ConfirmPayment)
 	})
 
 	// Coupon validation (onboarding flow)

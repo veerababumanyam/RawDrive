@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -29,7 +31,21 @@ func (h *CouponValidationHandler) ValidateCoupon(w http.ResponseWriter, r *http.
 		return
 	}
 
-	coupon, err := h.svc.ValidateCoupon(r.Context(), body.CouponCode, userID, nil, nil)
+	// Extract plan_id and state_id from query params (set by onboarding frontend)
+	var planID *uuid.UUID
+	var stateID *int
+	if pid := r.URL.Query().Get("plan_id"); pid != "" {
+		if parsed, err := uuid.Parse(pid); err == nil {
+			planID = &parsed
+		}
+	}
+	if sid := r.URL.Query().Get("state_id"); sid != "" {
+		if parsed, err := strconv.Atoi(sid); err == nil {
+			stateID = &parsed
+		}
+	}
+
+	coupon, err := h.svc.ValidateCoupon(r.Context(), body.CouponCode, userID, planID, stateID)
 	if err != nil {
 		switch err {
 		case service.ErrCouponNotFound:
@@ -52,8 +68,13 @@ func (h *CouponValidationHandler) ValidateCoupon(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Calculate discount preview (use a default plan amount for preview)
-	originalPaisa := int64(199900) // Default plan price — in real impl, resolve from plan
+	// Calculate discount preview — resolve plan amount from query param or use onboarding default
+	originalPaisa := int64(199900)
+	if amtStr := r.URL.Query().Get("plan_amount_paisa"); amtStr != "" {
+		if amt, err := strconv.ParseInt(amtStr, 10, 64); err == nil && amt > 0 {
+			originalPaisa = amt
+		}
+	}
 	discount := service.CalculateDiscount(coupon, originalPaisa)
 
 	resp := service.CouponValidationResponse{

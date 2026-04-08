@@ -347,6 +347,22 @@ func main() {
 
 	log.Println("M5: Marketplaces & Communication routes registered (Freelancer, Gear, Messaging, Moderation)")
 
+	// ──────────────────────── M6: Revenue & Dealership Engine ──────────────────
+	dealerRepo := repository.NewDealerRepo(dbPool)
+	couponRepo := repository.NewCouponRepo(dbPool)
+	marginRepo := repository.NewMarginRepo(dbPool)
+	payoutRepo := repository.NewPayoutRepo(dbPool)
+
+	handler.RegisterM6Routes(api, handler.M6Dependencies{
+		DB:         dbPool,
+		DealerRepo: dealerRepo,
+		CouponRepo: couponRepo,
+		MarginRepo: marginRepo,
+		PayoutRepo: payoutRepo,
+	})
+
+	log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts)")
+
 	}) // end protected API group
 
 	// Public lead capture (no auth required — embeddable on external sites)

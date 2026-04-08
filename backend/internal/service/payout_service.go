@@ -19,8 +19,9 @@ var (
 const DefaultMinPayoutPaisa = int64(100000) // Rs. 1,000
 
 type PayoutService struct {
-	repo      *repository.PayoutRepo
-	marginSvc *MarginService
+	repo          *repository.PayoutRepo
+	marginSvc     *MarginService
+	analyticsRepo *repository.DealerAnalyticsRepo
 }
 
 func NewPayoutService(repo *repository.PayoutRepo, marginSvc *MarginService) *PayoutService {
@@ -45,8 +46,14 @@ func (s *PayoutService) CalculateMonthlyPayout(ctx context.Context, dealerID uui
 		margin = &ResolvedMargin{DealerPct: 15, PlatformPct: 85, CalculationBasis: "net_of_gst", Source: "default"}
 	}
 
-	// Placeholder revenue — in real impl, aggregate from dealer_attributions + invoices
-	grossRevenue := int64(0) // Would come from analytics repo
+	// Aggregate revenue from dealer attributions for the period
+	grossRevenue := int64(0)
+	if s.analyticsRepo != nil {
+		rev, err := s.analyticsRepo.GetRevenueForPeriod(ctx, dealerID, periodStart, periodEnd)
+		if err == nil {
+			grossRevenue = rev
+		}
+	}
 	commissionEarned := CalculateCommission(grossRevenue, margin.DealerPct)
 	tdsWithheld := commissionEarned * 10 / 100 // 10% TDS
 	netPayable := commissionEarned - tdsWithheld

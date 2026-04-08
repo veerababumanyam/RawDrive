@@ -15,7 +15,17 @@ interface Coupon {
   valid_until: string | null;
 }
 
+import CouponForm from "./CouponForm";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+function CouponFormInline() {
+  const handleSubmit = async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_BASE}/api/v1/dealers/coupons`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (!res.ok) { const err = await res.json().catch(() => ({ error: "unknown" })); throw new Error(err.error || "Failed to create"); }
+  };
+  return <CouponForm onSubmit={handleSubmit} isDealer={true} />;
+}
 
 const typeColors: Record<string, string> = {
   percentage: "bg-accent-primary/10 text-accent-primary",
@@ -106,7 +116,7 @@ export default function CouponManagement() {
 
       {activeTab === "create" && (
         <div className="glass-card p-6 max-w-lg space-y-4">
-          <p className="text-text-secondary text-sm">Coupon creation form coming in next iteration.</p>
+          <CouponFormInline />
         </div>
       )}
     </div>

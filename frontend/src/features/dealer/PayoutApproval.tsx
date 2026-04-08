@@ -1,0 +1,70 @@
+// Design source: Stitch MCP — Payout Approval table (status badges, action buttons, inline inputs)
+"use client";
+
+import { useState, useEffect } from "react";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+interface Payout { id: string; dealer_id: string; period_start: string; period_end: string; net_payable: number; status: string; }
+
+function formatPaisa(p: number) { return `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`; }
+
+const statusColors: Record<string, string> = { draft: "bg-surface-sunken text-text-tertiary", pending: "bg-yellow-500/10 text-yellow-500", approved: "bg-accent-primary/10 text-accent-primary", processing: "bg-accent-secondary/10 text-accent-secondary", paid: "bg-green-500/10 text-green-400", failed: "bg-feedback-error/10 text-feedback-error" };
+
+export default function PayoutApproval() {
+  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionPayout, setActionPayout] = useState<string | null>(null);
+  const [paymentRef, setPaymentRef] = useState("");
+
+  useEffect(() => {
+    fetch(`${API}/api/v1/dealers/payouts`).then(r => r.ok ? r.json() : []).then(setPayouts).catch(() => setPayouts([])).finally(() => setLoading(false));
+  }, []);
+
+  const doAction = async (id: string, action: string, body?: Record<string, string>) => {
+    try {
+      await fetch(`${API}/api/v1/admin/payouts/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      setPayouts(prev => prev.map(p => p.id === id ? { ...p, status: action === "approve" ? "approved" : action === "confirm-payment" ? "paid" : p.status } : p));
+      setActionPayout(null);
+      setPaymentRef("");
+    } catch { /* handled by UI state */ }
+  };
+
+  if (loading) return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="glass-card h-16 animate-pulse rounded-xl" />)}</div>;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-medium text-text-primary">Payout Approvals</h2>
+      {payouts.length === 0 ? <p className="text-text-secondary text-center py-8 glass-card rounded-xl">No payouts to review.</p> : (
+        <div className="space-y-3">
+          {payouts.map(p => (
+            <div key={p.id} className="glass-card p-4 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-text-primary">Dealer: {p.dealer_id.slice(0, 8)}...</p>
+                  <p className="text-xs text-text-tertiary">{new Date(p.period_start).toLocaleDateString("en-IN")} – {new Date(p.period_end).toLocaleDateString("en-IN")}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-text-primary">{formatPaisa(p.net_payable)}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[p.status] || ""}`}>{p.status}</span>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {p.status === "pending" && <button onClick={() => doAction(p.id, "approve")} className="bg-accent-secondary/20 text-accent-secondary px-4 py-2 rounded-full text-sm min-h-[44px]">Approve</button>}
+                {p.status === "approved" && <button onClick={() => doAction(p.id, "process")} className="bg-accent-primary/20 text-accent-primary px-4 py-2 rounded-full text-sm min-h-[44px]">Process</button>}
+                {p.status === "processing" && (
+                  actionPayout === p.id ? (
+                    <div className="flex gap-2 items-center">
+                      <input type="text" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} placeholder="UTR/Reference" className="input-base min-h-[44px] w-48" />
+                      <button onClick={() => doAction(p.id, "confirm-payment", { payment_reference: paymentRef })} disabled={!paymentRef} className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm min-h-[44px] disabled:opacity-50">Confirm</button>
+                    </div>
+                  ) : <button onClick={() => setActionPayout(p.id)} className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm min-h-[44px]">Confirm Payment</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
