@@ -9,16 +9,13 @@
     "type": "git",
     "url": "https://github.com/veerababumanyam/RawDriveCoBolt.git"
   },
-  "workspaces": [
-    "src/frontend"
-  ],
   "scripts": {
-    "dev": "npm run dev --workspace=src/frontend",
-    "build": "npm run build --workspace=src/frontend",
+    "dev": "cd frontend && pnpm dev",
+    "build": "cd frontend && pnpm build",
     "test": "npm run test:backend && npm run test:frontend",
-    "test:frontend": "npm run test --workspace=src/frontend",
-    "test:backend": "cd src/backend && go test ./... -count=1 -timeout 120s",
-    "lint": "npm run lint --workspace=src/frontend",
+    "test:frontend": "cd frontend && pnpm test",
+    "test:backend": "cd backend && go test ./... -count=1 -timeout 120s",
+    "lint": "cd frontend && pnpm lint",
     "version:check": "node -e \"console.log(require('./package.json').version)\""
   },
   "engines": {
