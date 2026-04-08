@@ -86,6 +86,7 @@ func (h *Handler) WithWorkspaceLookup(wl WorkspaceLookup) *Handler {
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/register", h.Register)
+	r.Post("/login", h.Login)
 	r.Post("/verify-otp", h.VerifyOTP)
 	r.Get("/oauth/google", h.OAuthGoogle)
 	r.Get("/oauth/google/callback", h.OAuthGoogleCallback)
@@ -135,6 +136,40 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Message: "OTP sent to email",
 		UserID:  userID,
 	})
+}
+
+// Login sends an OTP to an existing user (for returning users).
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if !isValidEmail(req.Email) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
+		return
+	}
+
+	// Check user exists
+	_, exists, err := h.users.FindByEmail(r.Context(), req.Email)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if !exists {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found, please register first"})
+		return
+	}
+
+	// Generate and send OTP
+	_, err = h.otp.Generate(r.Context(), req.Email)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate OTP"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "OTP sent to email"})
 }
 
 func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {

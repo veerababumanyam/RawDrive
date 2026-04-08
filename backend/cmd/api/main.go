@@ -163,13 +163,13 @@ func main() {
 	r.Mount("/auth", authHandler.Routes())
 
 	// Protected routes — JWT auth → tenant context → state check
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.JWTAuth(jwtSvc)) // <-- THE MISSING PIECE: validates Bearer token
-		r.Use(middleware.TenantContext(dbCtx, auditLog))
-		r.Use(middleware.RequireState)
+	r.Group(func(pr chi.Router) {
+		pr.Use(middleware.JWTAuth(jwtSvc))
+		pr.Use(middleware.TenantContext(dbCtx, auditLog))
+		pr.Use(middleware.RequireState)
 
-		r.Mount("/workspace", wsHandler.Routes())
-		r.Mount("/team", teamHandler.Routes())
+		pr.Mount("/workspace", wsHandler.Routes())
+		pr.Mount("/team", teamHandler.Routes())
 	})
 
 	// Onboarding routes (JWT auth but exempt from RequireState)
@@ -218,8 +218,14 @@ func main() {
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService()
 
-	// M2 Protected routes (inside JWT group)
-	handler.RegisterM2Routes(r, handler.M2Dependencies{
+	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
+	// All M2, M3, M4 data-plane endpoints require authentication.
+	r.Group(func(api chi.Router) {
+		api.Use(middleware.JWTAuth(jwtSvc))
+		api.Use(middleware.TenantContext(dbCtx, auditLog))
+
+	// M2 Protected routes
+	handler.RegisterM2Routes(api, handler.M2Dependencies{
 		AssetService:         assetSvc,
 		UploadService:        uploadSvc,
 		GalleryService:       gallerySvc,
@@ -234,7 +240,7 @@ func main() {
 		tmpDir = ".tmp/uploads"
 	}
 	chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir)
-	chunkedHandler.RegisterRoutes(r)
+	chunkedHandler.RegisterRoutes(api)
 
 	// Thumbnail worker
 	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider)
@@ -279,7 +285,7 @@ func main() {
 	aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo)
 
 	// M3 routes
-	handler.RegisterM3Routes(r, handler.M3Dependencies{AIHandler: aiHandler})
+	handler.RegisterM3Routes(api, handler.M3Dependencies{AIHandler: aiHandler})
 
 	// AI workers
 	faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider)
@@ -290,6 +296,42 @@ func main() {
 	workerRegistry.Register("duplicate-scan", duplicateWorker)
 
 	log.Println("M3: AI routes registered, 3 workers registered")
+
+	// ──────────────────────── M4: Business Operations ──────────────────────
+
+	// M4 Repositories
+	leadRepo := repository.NewLeadRepo(dbPool)
+	contactRepo := repository.NewContactRepo(dbPool)
+	dealRepo := repository.NewDealRepo(dbPool)
+	invoiceRepo := repository.NewInvoiceRepo(dbPool)
+	paymentRepo := repository.NewPaymentRepo(dbPool)
+	contractRepo := repository.NewContractRepo(dbPool)
+	eventRepo := repository.NewEventRepo(dbPool)
+	notificationRepo := repository.NewNotificationRepo(dbPool)
+
+	// M4 routes (public lead form is registered inside RegisterM4Routes without auth)
+	handler.RegisterM4Routes(api, handler.M4Dependencies{
+		DB:               dbPool,
+		LeadRepo:         leadRepo,
+		ContactRepo:      contactRepo,
+		DealRepo:         dealRepo,
+		InvoiceRepo:      invoiceRepo,
+		PaymentRepo:      paymentRepo,
+		ContractRepo:     contractRepo,
+		EventRepo:        eventRepo,
+		NotificationRepo: notificationRepo,
+	})
+
+	log.Println("M4: Business Operations routes registered (CRM, Billing, Contracts, Calendar, Notifications, GST Reports, ICS Export, CSV Import, Payment Links)")
+
+	}) // end protected API group
+
+	// Public lead capture (no auth required — embeddable on external sites)
+	publicLeadRepo := repository.NewLeadRepo(dbPool)
+	publicLeadHandler := handler.NewLeadEmbedHandler(publicLeadRepo)
+	r.Post("/api/v1/public/leads/{workspaceId}", publicLeadHandler.Submit)
+
+	log.Println("Public lead form endpoint registered")
 
 	// ──────────────────────── Health Check ────────────────────────
 

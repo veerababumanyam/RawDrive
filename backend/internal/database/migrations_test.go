@@ -182,3 +182,243 @@ func TestRLSEnabled(t *testing.T) {
 		assert.True(t, rlsEnabled, fmt.Sprintf("RLS should be enabled on %s", table))
 	}
 }
+
+// === M4: Business Operations Tables ===
+
+func TestLeadsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'leads'`).Scan(&tableName)
+	require.NoError(t, err, "leads table should exist")
+	assert.Equal(t, "leads", tableName)
+
+	expectedColumns := []string{"id", "workspace_id", "name", "phone", "email", "source", "stage", "event_type", "event_date", "budget_paisa", "assigned_to", "notes", "created_at", "updated_at"}
+	for _, col := range expectedColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("leads table should have column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestContactsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'contacts'`).Scan(&tableName)
+	require.NoError(t, err, "contacts table should exist")
+	assert.Equal(t, "contacts", tableName)
+
+	expectedColumns := []string{"id", "workspace_id", "name", "phone", "email", "contact_type", "company", "address", "tags", "notes", "total_revenue_paisa", "created_at", "updated_at"}
+	for _, col := range expectedColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'contacts' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("contacts table should have column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestDealsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'deals'`).Scan(&tableName)
+	require.NoError(t, err, "deals table should exist")
+	assert.Equal(t, "deals", tableName)
+
+	expectedColumns := []string{"id", "workspace_id", "contact_id", "title", "stage", "amount_paisa", "event_type", "event_date", "venue", "notes", "created_at", "updated_at"}
+	for _, col := range expectedColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'deals' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("deals table should have column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestFollowUpsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'follow_ups'`).Scan(&tableName)
+	require.NoError(t, err, "follow_ups table should exist")
+	assert.Equal(t, "follow_ups", tableName)
+}
+
+func TestInvoicesTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'invoices'`).Scan(&tableName)
+	require.NoError(t, err, "invoices table should exist")
+	assert.Equal(t, "invoices", tableName)
+
+	// Verify GST-specific columns
+	gstColumns := []string{"state_id", "cgst_paisa", "sgst_paisa", "igst_paisa", "subtotal_paisa", "total_paisa", "invoice_number", "invoice_type", "line_items"}
+	for _, col := range gstColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'invoices' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("invoices table should have GST column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestContractsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'contracts'`).Scan(&tableName)
+	require.NoError(t, err, "contracts table should exist")
+	assert.Equal(t, "contracts", tableName)
+
+	expectedColumns := []string{"id", "workspace_id", "contact_id", "title", "status", "content_html", "signature_data", "signed_at", "signer_ip"}
+	for _, col := range expectedColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'contracts' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("contracts table should have column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestContractTemplatesTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'contract_templates'`).Scan(&tableName)
+	require.NoError(t, err, "contract_templates table should exist")
+	assert.Equal(t, "contract_templates", tableName)
+}
+
+func TestEventsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'events'`).Scan(&tableName)
+	require.NoError(t, err, "events table should exist")
+	assert.Equal(t, "events", tableName)
+
+	expectedColumns := []string{"id", "workspace_id", "title", "event_type", "start_at", "end_at", "all_day", "location", "contact_id", "status", "recurrence_rule", "buffer_before_min", "buffer_after_min"}
+	for _, col := range expectedColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'events' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("events table should have column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestNotificationsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'notifications'`).Scan(&tableName)
+	require.NoError(t, err, "notifications table should exist")
+	assert.Equal(t, "notifications", tableName)
+
+	expectedColumns := []string{"id", "user_id", "workspace_id", "notification_type", "title", "body", "channel", "is_read", "created_at"}
+	for _, col := range expectedColumns {
+		var colName string
+		err := pool.QueryRow(ctx,
+			`SELECT column_name FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = $1`, col).Scan(&colName)
+		require.NoError(t, err, fmt.Sprintf("notifications table should have column %q", col))
+		assert.Equal(t, col, colName)
+	}
+}
+
+func TestPaymentsTableExists(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var tableName string
+	err := pool.QueryRow(ctx,
+		`SELECT table_name FROM information_schema.tables
+		 WHERE table_schema = 'public' AND table_name = 'payments'`).Scan(&tableName)
+	require.NoError(t, err, "payments table should exist")
+	assert.Equal(t, "payments", tableName)
+}
+
+func TestM4RLSEnabled(t *testing.T) {
+	migrator := database.NewMigrator(testDSN)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	m4Tables := []string{"leads", "contacts", "deals", "follow_ups", "invoices", "contracts", "contract_templates", "events", "payments"}
+	for _, table := range m4Tables {
+		var rlsEnabled bool
+		err := pool.QueryRow(ctx,
+			`SELECT relrowsecurity FROM pg_class WHERE relname = $1`, table).Scan(&rlsEnabled)
+		require.NoError(t, err, fmt.Sprintf("should be able to check RLS on %s", table))
+		assert.True(t, rlsEnabled, fmt.Sprintf("RLS should be enabled on %s", table))
+	}
+}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -126,21 +127,32 @@ func (h *AssetHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 // helpers
 
 func getWorkspaceID(r *http.Request) (uuid.UUID, bool) {
-	val := r.Context().Value("workspace_id")
-	if val == nil {
+	// Try typed context key first (from TenantContext middleware)
+	wsStr := middleware.WorkspaceIDFromContext(r.Context())
+	if wsStr == "" || wsStr == "pending-onboarding" {
 		return uuid.Nil, false
 	}
-	id, ok := val.(uuid.UUID)
-	return id, ok
+	id, err := uuid.Parse(wsStr)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
 }
 
 func getUserID(r *http.Request) (uuid.UUID, bool) {
-	val := r.Context().Value("user_id")
-	if val == nil {
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims == nil {
 		return uuid.Nil, false
 	}
-	id, ok := val.(uuid.UUID)
-	return id, ok
+	sub, ok := claims["sub"].(string)
+	if !ok || sub == "" {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(sub)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
