@@ -204,11 +204,12 @@ type JWTConfig struct {
 }
 
 type TokenClaims struct {
-	Sub         string
-	WorkspaceID string
-	Role        string
-	StateID     string
-	ExpiresAt   time.Time
+	Sub          string
+	WorkspaceID  string
+	Role         string // Workspace role: Owner/Admin/Editor/Viewer
+	PlatformRole string // Platform role: super_admin/admin/dealer/photographer/team_member/client
+	StateID      string
+	ExpiresAt    time.Time
 }
 
 type RefreshTokenInfo struct {
@@ -221,21 +222,22 @@ type JWTService interface {
 	GenerateAccessToken(ctx context.Context, claims TokenClaims) (string, error)
 	ParseAccessToken(ctx context.Context, tokenStr string) (*TokenClaims, error)
 	GenerateRefreshToken(ctx context.Context, userID, familyID string) (string, error)
-	GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, stateID string) (string, error)
+	GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error)
 	RotateRefreshToken(ctx context.Context, oldToken string) (newAccess string, newRefresh string, err error)
 	InspectRefreshToken(ctx context.Context, tokenStr string) (*RefreshTokenInfo, error)
 	RevokeSession(ctx context.Context, familyID string) error
 }
 
 type refreshEntry struct {
-	sub         string
-	familyID    string
-	workspaceID string
-	role        string
-	stateID     string
-	expiresAt   time.Time
-	revoked     bool
-	used        bool
+	sub          string
+	familyID     string
+	workspaceID  string
+	role         string
+	platformRole string
+	stateID      string
+	expiresAt    time.Time
+	revoked      bool
+	used         bool
 }
 
 type jwtService struct {
@@ -270,15 +272,19 @@ func (s *jwtService) GenerateAccessToken(ctx context.Context, claims TokenClaims
 	if claims.Sub == "" || claims.WorkspaceID == "" || claims.Role == "" || claims.StateID == "" {
 		return "", errors.New("missing required claims")
 	}
+	if claims.PlatformRole == "" {
+		claims.PlatformRole = "photographer"
+	}
 
 	now := time.Now()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub":          claims.Sub,
-		"workspace_id": claims.WorkspaceID,
-		"role":         claims.Role,
-		"state_id":     claims.StateID,
-		"exp":          now.Add(s.config.AccessTokenExpiry).Unix(),
-		"iat":          now.Unix(),
+		"sub":           claims.Sub,
+		"workspace_id":  claims.WorkspaceID,
+		"role":          claims.Role,
+		"platform_role": claims.PlatformRole,
+		"state_id":      claims.StateID,
+		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
+		"iat":           now.Unix(),
 	})
 
 	return token.SignedString(s.privateKey)
@@ -306,12 +312,18 @@ func (s *jwtService) ParseAccessToken(ctx context.Context, tokenStr string) (*To
 		expiresAt = exp.Time
 	}
 
+	platformRole, _ := mapClaims["platform_role"].(string)
+	if platformRole == "" {
+		platformRole = "photographer"
+	}
+
 	return &TokenClaims{
-		Sub:         mapClaims["sub"].(string),
-		WorkspaceID: mapClaims["workspace_id"].(string),
-		Role:        mapClaims["role"].(string),
-		StateID:     mapClaims["state_id"].(string),
-		ExpiresAt:   expiresAt,
+		Sub:          mapClaims["sub"].(string),
+		WorkspaceID:  mapClaims["workspace_id"].(string),
+		Role:         mapClaims["role"].(string),
+		PlatformRole: platformRole,
+		StateID:      mapClaims["state_id"].(string),
+		ExpiresAt:    expiresAt,
 	}, nil
 }
 
@@ -361,7 +373,7 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID, familyID 
 	return tokenStr, nil
 }
 
-func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, stateID string) (string, error) {
+func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -385,12 +397,13 @@ func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID,
 	}
 
 	s.refreshTokens[tokenStr] = &refreshEntry{
-		sub:         userID,
-		familyID:    familyID,
-		workspaceID: workspaceID,
-		role:        role,
-		stateID:     stateID,
-		expiresAt:   time.Now().Add(s.config.RefreshTokenExpiry),
+		sub:          userID,
+		familyID:     familyID,
+		workspaceID:  workspaceID,
+		role:         role,
+		platformRole: platformRole,
+		stateID:      stateID,
+		expiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
 	}
 	s.userSessions[userID][familyID] = true
 
@@ -432,17 +445,19 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 	}
 
 	s.refreshTokens[newTokenStr] = &refreshEntry{
-		sub:         entry.sub,
-		familyID:    entry.familyID,
-		workspaceID: entry.workspaceID,
-		role:        entry.role,
-		stateID:     entry.stateID,
-		expiresAt:   time.Now().Add(s.config.RefreshTokenExpiry),
+		sub:          entry.sub,
+		familyID:     entry.familyID,
+		workspaceID:  entry.workspaceID,
+		role:         entry.role,
+		platformRole: entry.platformRole,
+		stateID:      entry.stateID,
+		expiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
 	}
 
 	// Generate new access token — carry forward claims from original login
 	wsID := entry.workspaceID
 	role := entry.role
+	pRole := entry.platformRole
 	stID := entry.stateID
 	if wsID == "" {
 		wsID = "pending-onboarding"
@@ -450,14 +465,18 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 	if role == "" {
 		role = "Owner"
 	}
+	if pRole == "" {
+		pRole = "photographer"
+	}
 	if stID == "" {
 		stID = "pending-onboarding"
 	}
 	accessToken, err := s.generateAccessTokenUnlocked(TokenClaims{
-		Sub:         entry.sub,
-		WorkspaceID: wsID,
-		Role:        role,
-		StateID:     stID,
+		Sub:          entry.sub,
+		WorkspaceID:  wsID,
+		Role:         role,
+		PlatformRole: pRole,
+		StateID:      stID,
 	})
 	if err != nil {
 		return "", "", err
@@ -467,14 +486,18 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 }
 
 func (s *jwtService) generateAccessTokenUnlocked(claims TokenClaims) (string, error) {
+	if claims.PlatformRole == "" {
+		claims.PlatformRole = "photographer"
+	}
 	now := time.Now()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub":          claims.Sub,
-		"workspace_id": claims.WorkspaceID,
-		"role":         claims.Role,
-		"state_id":     claims.StateID,
-		"exp":          now.Add(s.config.AccessTokenExpiry).Unix(),
-		"iat":          now.Unix(),
+		"sub":           claims.Sub,
+		"workspace_id":  claims.WorkspaceID,
+		"role":          claims.Role,
+		"platform_role": claims.PlatformRole,
+		"state_id":      claims.StateID,
+		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
+		"iat":           now.Unix(),
 	})
 	return token.SignedString(s.privateKey)
 }

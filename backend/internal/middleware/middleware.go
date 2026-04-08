@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ──────────────────────────── Context Keys ────────────────────────────
@@ -168,4 +170,103 @@ func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Ha
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// ──────────────────────────── Admin Auth Middleware ────────────────────────────
+
+// RequireAuth is chi middleware that ensures a valid JWT is present.
+// It wraps the existing JWTAuth mechanism and rejects unauthenticated requests.
+func RequireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := JWTClaimsFromContext(r.Context())
+		if claims == nil {
+			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequirePlatformRole returns chi middleware that checks the user's platform_role JWT claim.
+// Accepts variadic roles for OR-matching: RequirePlatformRole("super_admin", "admin")
+// means the user must have either super_admin OR admin as their platform role.
+func RequirePlatformRole(roles ...string) func(http.Handler) http.Handler {
+	allowed := make(map[string]bool, len(roles))
+	for _, r := range roles {
+		allowed[r] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := JWTClaimsFromContext(r.Context())
+			if claims == nil {
+				http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+				return
+			}
+			userPlatformRole, _ := claims["platform_role"].(string)
+			if !allowed[userPlatformRole] {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireWorkspaceRole returns chi middleware that checks the user's workspace role claim
+// using a hierarchy: Owner(4) > Admin(3) > Editor(2) > Viewer(1).
+// The user must have at least the specified minimum role level.
+func RequireWorkspaceRole(minRole string) func(http.Handler) http.Handler {
+	roleLevel := map[string]int{
+		"Owner": 4, "Admin": 3, "Editor": 2, "Viewer": 1,
+	}
+	minLevel := roleLevel[minRole]
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := JWTClaimsFromContext(r.Context())
+			if claims == nil {
+				http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+				return
+			}
+			userRole, _ := claims["role"].(string)
+			if roleLevel[userRole] < minLevel {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireRole is kept for backward compatibility — delegates to RequirePlatformRole.
+// Deprecated: Use RequirePlatformRole for platform-level checks or RequireWorkspaceRole for workspace-level checks.
+func RequireRole(role string) func(http.Handler) http.Handler {
+	return RequirePlatformRole(role)
+}
+
+// RejectImpersonationWrites blocks mutating requests (POST/PUT/PATCH/DELETE) when
+// the JWT contains an "impersonation": true claim. Impersonated sessions are read-only.
+func RejectImpersonationWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := JWTClaimsFromContext(r.Context())
+		if claims != nil {
+			if imp, _ := claims["impersonation"].(bool); imp {
+				if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+					http.Error(w, `{"error":"impersonated sessions are read-only"}`, http.StatusForbidden)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// GetActorID extracts the actor (admin) UUID from JWT claims in the request context.
+func GetActorID(ctx context.Context) uuid.UUID {
+	claims := JWTClaimsFromContext(ctx)
+	if claims == nil {
+		return uuid.Nil
+	}
+	sub, _ := claims["sub"].(string)
+	id, _ := uuid.Parse(sub)
+	return id
 }

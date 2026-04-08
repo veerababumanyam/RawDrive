@@ -33,10 +33,11 @@ func JWTAuth(jwtSvc auth.JWTService) func(http.Handler) http.Handler {
 
 			// Inject claims into context as map[string]interface{} for TenantContext
 			claimsMap := map[string]interface{}{
-				"sub":          claims.Sub,
-				"workspace_id": claims.WorkspaceID,
-				"role":         claims.Role,
-				"state_id":     claims.StateID,
+				"sub":           claims.Sub,
+				"workspace_id":  claims.WorkspaceID,
+				"role":          claims.Role,
+				"platform_role": claims.PlatformRole,
+				"state_id":      claims.StateID,
 			}
 
 			ctx := WithJWTClaims(r.Context(), claimsMap)

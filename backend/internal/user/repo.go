@@ -19,11 +19,14 @@ func NewPgRepo(pool *pgxpool.Pool) *PgRepo {
 }
 
 func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
+	if u.PlatformRole == "" {
+		u.PlatformRole = "photographer"
+	}
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO users (email, phone, display_name, avatar_url)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO users (email, phone, display_name, avatar_url, password_hash, email_verified, platform_role)
+		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7)
 		 RETURNING id`,
-		u.Email, u.Phone, u.DisplayName, u.AvatarURL,
+		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole,
 	).Scan(&u.ID)
 	if err != nil {
 		return nil, fmt.Errorf("user repo create: %w", err)
@@ -34,9 +37,9 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
 	u := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,'')
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer')
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL)
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -49,9 +52,9 @@ func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
 func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
 	u := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,'')
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer')
 		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL)
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -70,4 +73,15 @@ func (r *PgRepo) Update(ctx context.Context, u *User) (*User, error) {
 		return nil, fmt.Errorf("user repo update: %w", err)
 	}
 	return u, nil
+}
+
+func (r *PgRepo) MarkEmailVerified(ctx context.Context, id string) error {
+	cmdTag, err := r.pool.Exec(ctx, `UPDATE users SET email_verified = true, updated_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("user repo mark email verified: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

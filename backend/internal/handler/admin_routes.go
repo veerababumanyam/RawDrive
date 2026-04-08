@@ -29,7 +29,7 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
-		r.Use(middleware.RequireRole("super_admin"))
+		r.Use(middleware.RequirePlatformRole("super_admin", "admin"))
 
 		r.Get("/users", users.List)
 		r.Get("/users/{id}", users.GetByID)

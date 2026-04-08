@@ -15,8 +15,9 @@ import (
 // adminClaims returns JWT claims for a super_admin user.
 func adminClaims() map[string]interface{} {
 	return map[string]interface{}{
-		"sub":  "admin-001",
-		"role": "super_admin",
+		"sub":           "admin-001",
+		"role":          "Owner",
+		"platform_role": "super_admin",
 	}
 }
 
@@ -24,7 +25,7 @@ func setupContractRouter() *chi.Mux {
 	r := chi.NewRouter()
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
-		r.Use(middleware.RequireRole("super_admin"))
+		r.Use(middleware.RequirePlatformRole("super_admin", "admin"))
 
 		r.Get("/users", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

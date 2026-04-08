@@ -14,7 +14,16 @@ import (
 // ──────────────────────────── Request / Response Types ────────────────────────────
 
 type RegisterRequest struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	FullName string `json:"full_name"`
+	State    string `json:"state,omitempty"` // Accepted from frontend; state is applied during onboarding flow
+	Phone    string `json:"phone"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type RegisterResponse struct {
@@ -49,15 +58,17 @@ type LogoutRequest struct {
 
 // UserService abstracts user creation and lookup for the auth handler.
 type UserService interface {
-	Create(ctx context.Context, email string) (string, error)
+	Create(ctx context.Context, email, password string) (string, error)
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
+	VerifyPassword(ctx context.Context, email, password string) (string, bool, bool, error)
+	MarkEmailVerified(ctx context.Context, userID string) error
 }
 
-// WorkspaceLookup resolves a user's primary workspace and state.
+// WorkspaceLookup resolves a user's primary workspace, state, workspace role, and platform role.
 type WorkspaceLookup interface {
-	// GetUserWorkspace returns (workspaceID, stateID, error).
-	// Returns ("","",nil) if user has no workspace yet (needs onboarding).
-	GetUserWorkspace(ctx context.Context, userID string) (string, string, error)
+	// GetUserWorkspace returns (workspaceID, stateID, workspaceRole, platformRole, error).
+	// Returns ("","","","",nil) if user has no workspace yet (needs onboarding).
+	GetUserWorkspace(ctx context.Context, userID string) (string, string, string, string, error)
 }
 
 // ──────────────────────────── Handler ────────────────────────────
@@ -109,6 +120,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Password) < 8 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+		return
+	}
+
 	// Check if user already exists
 	_, exists, err := h.users.FindByEmail(r.Context(), req.Email)
 	if err != nil {
@@ -120,29 +136,29 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
-	userID, err := h.users.Create(r.Context(), req.Email)
+	// Create user with password
+	userID, err := h.users.Create(r.Context(), req.Email, req.Password)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
 	}
 
-	// Generate OTP
+	// Generate OTP for activation
 	_, err = h.otp.Generate(r.Context(), req.Email)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate OTP"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate activation OTP"})
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, RegisterResponse{
-		Message: "OTP sent to email",
+		Message: "User registered successfully. Check your email for the OTP.",
 		UserID:  userID,
 	})
 }
 
-// Login sends an OTP to an existing user (for returning users).
+// Login is for standard password login
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var req RegisterRequest
+	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
@@ -153,25 +169,75 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check user exists
-	_, exists, err := h.users.FindByEmail(r.Context(), req.Email)
+	userID, emailVerified, exists, err := h.users.VerifyPassword(r.Context(), req.Email, req.Password)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	if !exists {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found, please register first"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid email or password"})
+		return
+	}
+	if !emailVerified {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "account not activated"})
 		return
 	}
 
-	// Generate and send OTP
-	_, err = h.otp.Generate(r.Context(), req.Email)
+	// Resolve user's workspace, state, workspace role, and platform role
+	wsID := "pending-onboarding"
+	stateID := "pending-onboarding"
+	role := "Owner"
+	platformRole := "photographer"
+	if h.workspaces != nil {
+		resolvedWS, resolvedState, resolvedRole, resolvedPlatformRole, _ := h.workspaces.GetUserWorkspace(r.Context(), userID)
+		if resolvedWS != "" {
+			wsID = resolvedWS
+		}
+		if resolvedState != "" {
+			stateID = resolvedState
+		}
+		if resolvedRole != "" {
+			role = resolvedRole
+		}
+		if resolvedPlatformRole != "" {
+			platformRole = resolvedPlatformRole
+		}
+	}
+
+	// Generate tokens
+	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
+		Sub:          userID,
+		WorkspaceID:  wsID,
+		Role:         role,
+		PlatformRole: platformRole,
+		StateID:      stateID,
+	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate OTP"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate access token"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "OTP sent to email"})
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+userID, wsID, role, platformRole, stateID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
+		return
+	}
+
+	// Set refresh token in HttpOnly cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true, // Should be true in production, using HTTPS
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   7 * 24 * 60 * 60, // 7 days
+	})
+
+	writeJSON(w, http.StatusOK, VerifyOTPResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
@@ -198,33 +264,47 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve user's workspace and state
+	// Mark user's email as verified
+	if err := h.users.MarkEmailVerified(r.Context(), userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to activate account"})
+		return
+	}
+
+	// Resolve user's workspace, state, workspace role, and platform role
 	wsID := "pending-onboarding"
 	stateID := "pending-onboarding"
 	role := "Owner"
+	platformRole := "photographer"
 	if h.workspaces != nil {
-		resolvedWS, resolvedState, _ := h.workspaces.GetUserWorkspace(r.Context(), userID)
+		resolvedWS, resolvedState, resolvedRole, resolvedPlatformRole, _ := h.workspaces.GetUserWorkspace(r.Context(), userID)
 		if resolvedWS != "" {
 			wsID = resolvedWS
 		}
 		if resolvedState != "" {
 			stateID = resolvedState
 		}
+		if resolvedRole != "" {
+			role = resolvedRole
+		}
+		if resolvedPlatformRole != "" {
+			platformRole = resolvedPlatformRole
+		}
 	}
 
 	// Generate tokens
 	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
-		Sub:         userID,
-		WorkspaceID: wsID,
-		Role:        role,
-		StateID:     stateID,
+		Sub:          userID,
+		WorkspaceID:  wsID,
+		Role:         role,
+		PlatformRole: platformRole,
+		StateID:      stateID,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate access token"})
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+userID, wsID, role, stateID)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+userID, wsID, role, platformRole, stateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
@@ -289,28 +369,37 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Generate tokens for the authenticated user
 	oauthWsID := "pending-onboarding"
 	oauthStateID := "pending-onboarding"
+	oauthRole := "Owner"
+	oauthPlatformRole := "photographer"
 	if h.workspaces != nil {
-		rws, rst, _ := h.workspaces.GetUserWorkspace(r.Context(), user.ID)
+		rws, rst, rrl, rpr, _ := h.workspaces.GetUserWorkspace(r.Context(), user.ID)
 		if rws != "" {
 			oauthWsID = rws
 		}
 		if rst != "" {
 			oauthStateID = rst
 		}
+		if rrl != "" {
+			oauthRole = rrl
+		}
+		if rpr != "" {
+			oauthPlatformRole = rpr
+		}
 	}
 
 	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
-		Sub:         user.ID,
-		WorkspaceID: oauthWsID,
-		Role:        "Owner",
-		StateID:     oauthStateID,
+		Sub:          user.ID,
+		WorkspaceID:  oauthWsID,
+		Role:         oauthRole,
+		PlatformRole: oauthPlatformRole,
+		StateID:      oauthStateID,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+user.ID, oauthWsID, "Owner", oauthStateID)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+user.ID, oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return

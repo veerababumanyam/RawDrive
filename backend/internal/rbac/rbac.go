@@ -13,12 +13,33 @@ var (
 
 type Role string
 
+// Workspace roles (within a workspace)
 const (
 	RoleOwner  Role = "Owner"
 	RoleAdmin  Role = "Admin"
 	RoleEditor Role = "Editor"
 	RoleViewer Role = "Viewer"
 )
+
+// Platform roles (user-level, from PRD 6.2)
+const (
+	PlatformSuperAdmin   = "super_admin"
+	PlatformAdmin        = "admin"
+	PlatformDealer       = "dealer"
+	PlatformPhotographer = "photographer"
+	PlatformTeamMember   = "team_member"
+	PlatformClient       = "client"
+)
+
+// ValidPlatformRoles is the set of all valid platform role values.
+var ValidPlatformRoles = map[string]bool{
+	PlatformSuperAdmin:   true,
+	PlatformAdmin:        true,
+	PlatformDealer:       true,
+	PlatformPhotographer: true,
+	PlatformTeamMember:   true,
+	PlatformClient:       true,
+}
 
 // Role hierarchy: Owner > Admin > Editor > Viewer
 var roleLevel = map[Role]int{

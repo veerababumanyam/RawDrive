@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -13,16 +15,20 @@ var (
 )
 
 type User struct {
-	ID          string
-	Email       string
-	Phone       string
-	DisplayName string
-	AvatarURL   string
+	ID            string
+	Email         string
+	Phone         string
+	DisplayName   string
+	AvatarURL     string
+	PasswordHash  *string
+	EmailVerified bool
+	PlatformRole  string // super_admin|admin|dealer|photographer|team_member|client
 }
 
 type CreateUserInput struct {
-	Email string
-	Phone string
+	Email    string
+	Phone    string
+	Password string
 }
 
 type UpdateUserInput struct {
@@ -35,6 +41,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	Update(ctx context.Context, u *User) (*User, error)
+	MarkEmailVerified(ctx context.Context, id string) error
 }
 
 type Service interface {
@@ -42,6 +49,7 @@ type Service interface {
 	GetByID(ctx context.Context, id string) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	Update(ctx context.Context, id string, input UpdateUserInput) (*User, error)
+	MarkEmailVerified(ctx context.Context, id string) error
 }
 
 type service struct {
@@ -64,6 +72,16 @@ func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, err
 		Email: input.Email,
 		Phone: input.Phone,
 	}
+
+	if input.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		hashStr := string(hash)
+		u.PasswordHash = &hashStr
+	}
+
 	return s.repo.Create(ctx, u)
 }
 
@@ -89,4 +107,8 @@ func (s *service) Update(ctx context.Context, id string, input UpdateUserInput) 
 	}
 
 	return s.repo.Update(ctx, u)
+}
+
+func (s *service) MarkEmailVerified(ctx context.Context, id string) error {
+	return s.repo.MarkEmailVerified(ctx, id)
 }
