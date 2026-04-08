@@ -9,12 +9,16 @@ import {
   escalateModeration,
   type ModerationItem,
 } from "@/lib/api/admin";
-import { cn } from "@/lib/utils";
 
-const reasonClasses: Record<string, string> = {
-  auto_flagged: "status-badge status-badge--warning",
-  reported: "status-badge status-badge--danger",
-};
+function ReasonBadge({ reason }: { reason: string }) {
+  const isAutoFlagged = reason === "auto_flagged";
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${isAutoFlagged ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
+      <span className={`w-1 h-1 rounded-full ${isAutoFlagged ? "bg-amber-400" : "bg-red-400"}`} />
+      {isAutoFlagged ? "Auto-flagged" : "Reported"}
+    </span>
+  );
+}
 
 export default function AdminModerationPage() {
   const [items, setItems] = useState<ModerationItem[]>([]);
@@ -37,98 +41,58 @@ export default function AdminModerationPage() {
     }
   };
 
-  useEffect(() => {
-    fetchQueue();
-  }, []);
+  useEffect(() => { fetchQueue(); }, []);
 
-  const handleApprove = async (id: string) => {
-    const token = getStoredAccessToken();
-    await approveModeration(token, id);
-    fetchQueue();
-  };
+  const handleApprove = async (id: string) => { const token = getStoredAccessToken(); await approveModeration(token, id); fetchQueue(); };
+  const handleReject = async (id: string) => { const token = getStoredAccessToken(); await rejectModeration(token, id, "Admin rejected"); fetchQueue(); };
+  const handleEscalate = async (id: string) => { const token = getStoredAccessToken(); await escalateModeration(token, id, "Needs further review"); fetchQueue(); };
 
-  const handleReject = async (id: string) => {
-    const token = getStoredAccessToken();
-    await rejectModeration(token, id, "Admin rejected");
-    fetchQueue();
-  };
-
-  const handleEscalate = async (id: string) => {
-    const token = getStoredAccessToken();
-    await escalateModeration(token, id, "Needs further review");
-    fetchQueue();
-  };
-
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <p className="text-text-secondary">Loading moderation queue...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <p className="text-semantic-destructive">{error}</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading moderation queue...</p></div>;
+  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error}</p></div>;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Content Moderation</h1>
-        <p className="text-sm text-text-secondary mt-1">
-          {total} pending {total === 1 ? "item" : "items"}
-        </p>
+        <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
+          Content Moderation
+          <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-white/5">
+            {total} pending {total === 1 ? "item" : "items"}
+          </span>
+        </h2>
+        <p className="text-gray-500 mt-2 font-body text-sm">Review and action flagged content across the platform.</p>
       </div>
 
       {items.length === 0 ? (
-        <div className="text-center py-12 text-text-secondary">
-          No items pending moderation.
-        </div>
+        <div className="text-center py-16 text-gray-500">No items pending moderation.</div>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
             <div
               key={item.id}
-              className="surface-panel p-4 flex items-center justify-between gap-4"
+              className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-5 rounded-2xl hover:bg-white/[0.02] transition-all flex items-center justify-between gap-6"
             >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="status-badge status-badge--accent">{item.content_type}</span>
-                  <span className={cn(reasonClasses[item.reason] || "status-badge status-badge--neutral")}>
-                    {item.reason === "auto_flagged" ? "Auto-flagged" : "Reported"}
+              <div className="min-w-0 space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase">
+                    {item.content_type}
                   </span>
+                  <ReasonBadge reason={item.reason} />
                 </div>
-                <p className="text-xs text-text-secondary mt-1">
+                <p className="text-xs text-gray-500 font-body">
                   Content: {item.content_id} &middot; Workspace: {item.workspace_id}
                 </p>
-                <p className="text-xs text-text-tertiary">
+                <p className="text-[10px] text-gray-600 font-label uppercase tracking-wider">
                   {new Date(item.created_at).toLocaleDateString()}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleApprove(item.id)}
-                  className="px-3 py-1.5 text-xs rounded bg-semantic-success/10 text-semantic-success hover:bg-semantic-success/20 font-medium"
-                  aria-label={`Approve ${item.id}`}
-                >
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => handleApprove(item.id)} className="px-4 py-2 text-xs rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all font-bold" aria-label={`Approve ${item.id}`}>
                   Approve
                 </button>
-                <button
-                  onClick={() => handleReject(item.id)}
-                  className="px-3 py-1.5 text-xs rounded bg-semantic-destructive/10 text-semantic-destructive hover:bg-semantic-destructive/20 font-medium"
-                  aria-label={`Reject ${item.id}`}
-                >
+                <button onClick={() => handleReject(item.id)} className="px-4 py-2 text-xs rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all font-bold" aria-label={`Reject ${item.id}`}>
                   Reject
                 </button>
-                <button
-                  onClick={() => handleEscalate(item.id)}
-                  className="px-3 py-1.5 text-xs rounded bg-semantic-warning/10 text-semantic-warning hover:bg-semantic-warning/20 font-medium"
-                  aria-label={`Escalate ${item.id}`}
-                >
+                <button onClick={() => handleEscalate(item.id)} className="px-4 py-2 text-xs rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all font-bold" aria-label={`Escalate ${item.id}`}>
                   Escalate
                 </button>
               </div>

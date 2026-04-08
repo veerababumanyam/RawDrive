@@ -37,7 +37,7 @@ describe("AdminSystemPage", () => {
     render(<AdminSystemPage />);
     await waitFor(() => {
       expect(screen.getByText(/p50/i)).toBeTruthy();
-      expect(screen.getByText(/12\s*ms/i)).toBeTruthy();
+      expect(screen.getByText("12")).toBeTruthy();
     });
   });
 
@@ -45,7 +45,7 @@ describe("AdminSystemPage", () => {
     render(<AdminSystemPage />);
     await waitFor(() => {
       expect(screen.getByText(/p95/i)).toBeTruthy();
-      expect(screen.getByText(/45\s*ms/i)).toBeTruthy();
+      expect(screen.getByText("45")).toBeTruthy();
     });
   });
 

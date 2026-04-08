@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
-import {
-  getEngagementMetrics,
-  getGrowthMetrics,
-  getFeatureAdoption,
-  type EngagementMetrics,
-  type GrowthMetrics,
-  type FeatureAdoption,
-} from "@/lib/api/admin";
+import { getEngagementMetrics, getGrowthMetrics, getFeatureAdoption, type EngagementMetrics, type GrowthMetrics, type FeatureAdoption } from "@/lib/api/admin";
 
-function formatNum(n: number): string {
-  return n.toLocaleString("en-IN");
+function formatNum(n: number): string { return n.toLocaleString("en-IN"); }
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-6 rounded-2xl">
+      <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500 font-label">{label}</p>
+      <p className="text-3xl font-bold text-on-surface font-headline mt-2">{value}</p>
+    </div>
+  );
 }
 
 export default function AdminAnalyticsPage() {
@@ -24,44 +24,25 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    Promise.all([
-      getEngagementMetrics(token),
-      getGrowthMetrics(token),
-      getFeatureAdoption(token),
-    ])
-      .then(([eng, gro, feat]) => {
-        setEngagement(eng);
-        setGrowth(gro);
-        setFeatures(feat);
-        setError(null);
-      })
+    Promise.all([getEngagementMetrics(token), getGrowthMetrics(token), getFeatureAdoption(token)])
+      .then(([eng, gro, feat]) => { setEngagement(eng); setGrowth(gro); setFeatures(feat); setError(null); })
       .catch(() => setError("Failed to load analytics"))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-text-secondary">Loading analytics...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-semantic-destructive">{error}</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading analytics...</p></div>;
+  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error}</p></div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      <h1 className="text-2xl font-semibold text-text-primary">Analytics & Engagement</h1>
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div>
+        <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">Analytics & Engagement</h2>
+        <p className="text-gray-500 mt-2 font-body text-sm">Monitor platform growth, engagement, and feature adoption.</p>
+      </div>
 
       {engagement && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Engagement</h2>
+          <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Engagement</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <MetricCard label="DAU" value={formatNum(engagement.dau)} />
             <MetricCard label="WAU" value={formatNum(engagement.wau)} />
@@ -75,7 +56,7 @@ export default function AdminAnalyticsPage() {
 
       {growth && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Growth</h2>
+          <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Growth</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <MetricCard label="Total Users" value={formatNum(growth.total_users)} />
             <MetricCard label="New Today" value={String(growth.new_users_today)} />
@@ -87,22 +68,22 @@ export default function AdminAnalyticsPage() {
 
       {features.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Feature Adoption</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Feature Adoption</h3>
+          <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-border-default text-left text-text-secondary">
-                  <th className="pb-2 font-medium">Feature</th>
-                  <th className="pb-2 font-medium">Adoption</th>
-                  <th className="pb-2 font-medium">Active Users</th>
+                <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+                  <th className="px-6 py-4 font-semibold">Feature</th>
+                  <th className="px-6 py-4 font-semibold">Adoption</th>
+                  <th className="px-6 py-4 font-semibold">Active Users</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-white/[0.03]">
                 {features.map((f) => (
-                  <tr key={f.feature} className="border-b border-border-default">
-                    <td className="py-3 text-text-primary">{f.feature}</td>
-                    <td className="py-3 text-text-secondary">{f.adoption_pct}%</td>
-                    <td className="py-3 text-text-secondary">{formatNum(f.active_users)}</td>
+                  <tr key={f.feature} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-5 text-sm font-semibold text-on-surface">{f.feature}</td>
+                    <td className="px-6 py-5 text-sm text-primary font-bold">{f.adoption_pct}%</td>
+                    <td className="px-6 py-5 text-sm text-gray-400">{formatNum(f.active_users)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -110,15 +91,6 @@ export default function AdminAnalyticsPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="surface-panel p-4 rounded-xl">
-      <p className="text-sm text-text-secondary">{label}</p>
-      <p className="text-2xl font-bold text-text-primary mt-1">{value}</p>
     </div>
   );
 }

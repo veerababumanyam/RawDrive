@@ -44,14 +44,14 @@ describe("AdminRevenuePage", () => {
   it("renders MRR card", async () => {
     render(<AdminRevenuePage />);
     await waitFor(() => {
-      expect(screen.getByText(/MRR/i)).toBeTruthy();
+      expect(screen.getAllByText(/MRR/i).length).toBeGreaterThan(0);
     });
   });
 
   it("renders ARR card", async () => {
     render(<AdminRevenuePage />);
     await waitFor(() => {
-      expect(screen.getByText(/ARR/i)).toBeTruthy();
+      expect(screen.getAllByText(/ARR/i).length).toBeGreaterThan(0);
     });
   });
 

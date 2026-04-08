@@ -9,13 +9,21 @@ import {
   exportUsers,
   type AdminUser,
 } from "@/lib/api/admin";
-import { cn } from "@/lib/utils";
 
-const statusClasses: Record<string, string> = {
-  active: "status-badge status-badge--success",
-  suspended: "status-badge status-badge--danger",
-  deleted: "status-badge status-badge--neutral",
-};
+function StatusBadge({ status }: { status: string }) {
+  const colors: Record<string, { bg: string; text: string; dot: string }> = {
+    active: { bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "bg-emerald-400" },
+    suspended: { bg: "bg-red-500/10", text: "text-red-400", dot: "bg-red-400" },
+    deleted: { bg: "bg-gray-500/10", text: "text-gray-400", dot: "bg-gray-400" },
+  };
+  const c = colors[status] || colors.deleted;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${c.bg} ${c.text} text-[10px] font-bold uppercase`}>
+      <span className={`w-1 h-1 rounded-full ${c.dot}`} />
+      {status}
+    </span>
+  );
+}
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -41,14 +49,9 @@ export default function AdminUsersPage() {
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
-  const handleSearch = () => {
-    setLoading(true);
-    fetchUsers(search);
-  };
+  const handleSearch = () => { setLoading(true); fetchUsers(search); };
 
   const handleSuspend = async (id: string) => {
     const token = getStoredAccessToken();
@@ -75,101 +78,125 @@ export default function AdminUsersPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-text-secondary">Loading users...</p>
+      <div className="max-w-7xl mx-auto space-y-8 p-8">
+        <p className="text-gray-500">Loading users...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-semantic-destructive">{error}</p>
+      <div className="max-w-7xl mx-auto space-y-8 p-8">
+        <p className="text-red-400">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">User Management</h1>
-          <p className="text-sm text-text-secondary mt-1">{total} users</p>
+          <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
+            User Management
+            <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-white/5">
+              {total} users
+            </span>
+          </h2>
+          <p className="text-gray-500 mt-2 font-body text-sm">Manage photographers, studio accounts, and subscription tiers.</p>
         </div>
         <button
           onClick={handleExport}
-          className="px-4 py-2 bg-accent-default text-text-inverse rounded-lg text-sm font-medium hover:bg-accent-hover"
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
           aria-label="Export CSV"
         >
           Export CSV
         </button>
       </div>
 
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Search users by name, email, phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          className="flex-1 px-3 py-2 border border-border-default rounded-lg bg-surface-elevated text-text-primary placeholder:text-text-tertiary text-sm"
-        />
-      </div>
+      {/* Filter Bar */}
+      <section className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-5 rounded-2xl shadow-xl">
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              placeholder="Search users by name, email, phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="w-full bg-surface-container-lowest border-none rounded-xl pl-4 pr-4 py-3 text-sm focus:ring-2 focus:ring-secondary/50 transition-all outline-none placeholder:text-gray-600"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            className="bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all active:scale-[0.98]"
+          >
+            Search
+          </button>
+        </div>
+      </section>
 
+      {/* Data Table */}
       {users.length === 0 ? (
-        <div className="text-center py-12 text-text-secondary">No users found.</div>
+        <div className="text-center py-12 text-gray-500">No users found.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border-default text-left text-text-secondary">
-                <th className="pb-2 font-medium">Name</th>
-                <th className="pb-2 font-medium">Email</th>
-                <th className="pb-2 font-medium">Role</th>
-                <th className="pb-2 font-medium">Status</th>
-                <th className="pb-2 font-medium">State</th>
-                <th className="pb-2 font-medium">Tier</th>
-                <th className="pb-2 font-medium">Workspaces</th>
-                <th className="pb-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-b border-border-default">
-                  <td className="py-3 text-text-primary font-medium">{user.full_name}</td>
-                  <td className="py-3 text-text-secondary">{user.email}</td>
-                  <td className="py-3 text-text-secondary">{user.platform_role}</td>
-                  <td className="py-3">
-                    <span className={cn(statusClasses[user.status] || "status-badge status-badge--neutral")}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-text-secondary">{user.state_name || "—"}</td>
-                  <td className="py-3 text-text-secondary">{user.tier_name || "—"}</td>
-                  <td className="py-3 text-text-secondary">{user.workspace_count}</td>
-                  <td className="py-3 space-x-2">
-                    {user.status === "active" ? (
-                      <button
-                        onClick={() => handleSuspend(user.id)}
-                        className="px-2 py-1 text-xs rounded bg-semantic-destructive/10 text-semantic-destructive hover:bg-semantic-destructive/20"
-                        aria-label={`Suspend ${user.full_name}`}
-                      >
-                        Suspend
-                      </button>
-                    ) : user.status === "suspended" ? (
-                      <button
-                        onClick={() => handleReactivate(user.id)}
-                        className="px-2 py-1 text-xs rounded bg-semantic-success/10 text-semantic-success hover:bg-semantic-success/20"
-                        aria-label={`Reactivate ${user.full_name}`}
-                      >
-                        Reactivate
-                      </button>
-                    ) : null}
-                  </td>
+        <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+                  <th className="px-6 py-4 font-semibold">Name</th>
+                  <th className="px-6 py-4 font-semibold">Email</th>
+                  <th className="px-6 py-4 font-semibold">Role</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 font-semibold">State</th>
+                  <th className="px-6 py-4 font-semibold">Tier</th>
+                  <th className="px-6 py-4 font-semibold">Workspaces</th>
+                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/[0.03]">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-white/[0.02] transition-colors group">
+                    <td className="px-6 py-5">
+                      <span className="text-sm font-semibold text-on-surface">{user.full_name}</span>
+                    </td>
+                    <td className="px-6 py-5 text-sm text-gray-400">{user.email}</td>
+                    <td className="px-6 py-5">
+                      <span className="text-sm text-secondary font-medium">{user.platform_role}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <StatusBadge status={user.status} />
+                    </td>
+                    <td className="px-6 py-5 text-sm text-gray-400">{user.state_name || "—"}</td>
+                    <td className="px-6 py-5">
+                      <span className="text-sm font-medium text-primary">{user.tier_name || "—"}</span>
+                    </td>
+                    <td className="px-6 py-5 text-sm font-medium">{user.workspace_count}</td>
+                    <td className="px-6 py-5 text-right">
+                      {user.status === "active" ? (
+                        <button
+                          onClick={() => handleSuspend(user.id)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all font-medium"
+                          aria-label={`Suspend ${user.full_name}`}
+                        >
+                          Suspend
+                        </button>
+                      ) : user.status === "suspended" ? (
+                        <button
+                          onClick={() => handleReactivate(user.id)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all font-medium"
+                          aria-label={`Reactivate ${user.full_name}`}
+                        >
+                          Reactivate
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
