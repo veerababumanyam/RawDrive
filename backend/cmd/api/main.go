@@ -333,6 +333,8 @@ func main() {
 	// In-process event broker for real-time SSE delivery to frontend
 	eventBroker := handler.NewEventBroker()
 
+	var m8Deps handler.M8Dependencies // declared here so public routes can reference
+
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
 	// All M2, M3, M4 data-plane endpoints require authentication.
 	r.Group(func(api chi.Router) {
@@ -535,7 +537,22 @@ func main() {
 		handler.RegisterAdminSettingsRoutes(api, platformSettingsRepo)
 		log.Println("Admin: Platform settings CRUD registered (storage, auth, payments, ai, email)")
 
+		// ──────────────────────── M8: Live Streaming & Desktop Companion ──────────────
+		streamRepo := repository.NewStreamRepo(dbPool)
+		streamChatRepo := repository.NewStreamChatRepo(dbPool)
+		videoRepo := repository.NewVideoRepo(dbPool)
+		desktopSessionRepo := repository.NewDesktopSessionRepo(dbPool)
+		streamSvc := service.NewStreamService(streamRepo, streamChatRepo)
+		videoSvc := service.NewVideoService(videoRepo)
+		desktopSvc := service.NewDesktopService(desktopSessionRepo)
+		m8Deps = handler.M8Dependencies{StreamService: streamSvc, VideoService: videoSvc, DesktopService: desktopSvc}
+		handler.RegisterM8Routes(api, m8Deps)
+		log.Println("M8: Live Streaming, Video, Desktop routes registered")
+
 	}) // end protected API group
+
+	// M8 public routes (stream viewer, desktop download — no auth)
+	handler.RegisterM8PublicRoutes(r, m8Deps)
 
 	// SSE event stream (self-authenticating via query-param JWT — outside middleware group)
 	// Mounted at /api/v1/events/stream to match frontend EventSource URL
