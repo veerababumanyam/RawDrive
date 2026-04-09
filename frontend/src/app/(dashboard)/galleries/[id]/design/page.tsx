@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useReducer, useEffect, useCallback } from "react";
+import { useState, useReducer, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
+import { COVER_STYLES, COVER_CATEGORIES } from "@/components/gallery/cover-styles";
+import { DesignTemplates } from "@/components/gallery/design-templates";
+import { AIDesignSuggest } from "@/components/gallery/ai-design-suggest";
+import { useDesignHistory } from "@/hooks/use-design-history";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -19,6 +23,7 @@ type DesignAction =
   | { type: "SET_TYPOGRAPHY"; payload: Partial<DesignConfig["typography"]> }
   | { type: "SET_GRID"; payload: Partial<DesignConfig["grid"]> }
   | { type: "LOAD"; payload: DesignConfig }
+  | { type: "RESET_SECTION"; section: string }
   | { type: "RESET" };
 
 const defaultConfig: DesignConfig = {
@@ -29,6 +34,13 @@ const defaultConfig: DesignConfig = {
   version: 1,
 };
 
+const sectionDefaults: Record<string, unknown> = {
+  theme: defaultConfig.theme,
+  cover: defaultConfig.cover,
+  typography: defaultConfig.typography,
+  grid: defaultConfig.grid,
+};
+
 function designReducer(state: DesignConfig, action: DesignAction): DesignConfig {
   switch (action.type) {
     case "SET_THEME": return { ...state, theme: { ...state.theme, ...action.payload } };
@@ -36,6 +48,7 @@ function designReducer(state: DesignConfig, action: DesignAction): DesignConfig 
     case "SET_TYPOGRAPHY": return { ...state, typography: { ...state.typography, ...action.payload } };
     case "SET_GRID": return { ...state, grid: { ...state.grid, ...action.payload } };
     case "LOAD": return action.payload;
+    case "RESET_SECTION": return { ...state, [action.section]: sectionDefaults[action.section] ?? (state as Record<string, unknown>)[action.section] };
     case "RESET": return defaultConfig;
     default: return state;
   }
@@ -71,6 +84,9 @@ const GRID_LAYOUTS = [
   { id: "carousel", label: "Carousel", icon: "◀▶" },
 ] as const;
 
+type PreviewDevice = "desktop" | "tablet" | "mobile";
+const PREVIEW_WIDTHS: Record<PreviewDevice, string> = { desktop: "100%", tablet: "768px", mobile: "375px" };
+
 // ──────────────────────── Draft Persistence ────────────────────────
 
 function useDraftPersistence(galleryId: string, config: DesignConfig) {
@@ -83,19 +99,17 @@ function useDraftPersistence(galleryId: string, config: DesignConfig) {
     return () => clearTimeout(timer);
   }, [config, key]);
 
-  const restore = useCallback((): DesignConfig | null => {
+  const getSavedDraft = useCallback((): { config: DesignConfig; savedAt: number } | null => {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
-      return JSON.parse(raw).config;
-    } catch {
-      return null;
-    }
+      return JSON.parse(raw);
+    } catch { return null; }
   }, [key]);
 
   const discard = useCallback(() => localStorage.removeItem(key), [key]);
 
-  return { restore, discard };
+  return { getSavedDraft, discard };
 }
 
 // ──────────────────────── Page Component ────────────────────────
@@ -104,71 +118,146 @@ export default function GalleryDesignStudioPage() {
   const params = useParams();
   const galleryId = params.id as string;
   const [config, dispatch] = useReducer(designReducer, defaultConfig);
-  const [draftAge, setDraftAge] = useState<string>("Draft saved just now");
+  const [draftAge, setDraftAge] = useState<string>("No draft");
   const [activeSection, setActiveSection] = useState<string>("cover");
-  const { restore, discard } = useDraftPersistence(galleryId, config);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<DesignConfig | null>(null);
+  const [publishStatus, setPublishStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
+  const [resetConfirm, setResetConfirm] = useState<string | null>(null);
+  const { getSavedDraft, discard } = useDraftPersistence(galleryId, config);
 
-  // Check for recoverable draft on mount
+  // Undo/redo
+  const history = useDesignHistory(config);
+
+  // Sync history when config changes via dispatch (not undo/redo)
+  const lastDispatchRef = useRef(false);
+  const wrappedDispatch = useCallback((action: DesignAction) => {
+    lastDispatchRef.current = true;
+    dispatch(action);
+  }, []);
   useEffect(() => {
-    const draft = restore();
-    if (draft) {
-      dispatch({ type: "LOAD", payload: draft });
+    if (lastDispatchRef.current) {
+      history.push(config);
+      lastDispatchRef.current = false;
     }
-  }, [restore]);
+  }, [config, history]);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); history.undo(); dispatch({ type: "LOAD", payload: history.state }); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); history.redo(); dispatch({ type: "LOAD", payload: history.state }); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [history]);
+
+  // Check for recoverable draft on mount — show dialog
+  useEffect(() => {
+    const draft = getSavedDraft();
+    if (draft) {
+      const age = Date.now() - draft.savedAt;
+      if (age < 7 * 24 * 60 * 60 * 1000) {
+        setPendingDraft(draft.config);
+        setShowRestoreDialog(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Update draft age indicator
   useEffect(() => {
-    const interval = setInterval(() => setDraftAge("Draft saved 3s ago"), 3000);
+    const interval = setInterval(() => {
+      const draft = getSavedDraft();
+      if (draft) {
+        const secs = Math.floor((Date.now() - draft.savedAt) / 1000);
+        setDraftAge(secs < 5 ? "Draft saved just now" : secs < 60 ? `Draft saved ${secs}s ago` : `Draft saved ${Math.floor(secs / 60)}m ago`);
+      }
+    }, 3000);
     return () => clearInterval(interval);
-  }, [config]);
+  }, [config, getSavedDraft]);
 
   const handlePublish = async () => {
+    setPublishStatus("saving");
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-      await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/design`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const token = localStorage.getItem("rawdrive_token");
+      const res = await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/design`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ ...config, version: config.version + 1 }),
       });
+      if (!res.ok) throw new Error("Publish failed");
+      wrappedDispatch({ type: "LOAD", payload: { ...config, version: config.version + 1 } });
       discard();
-    } catch (err) {
-      console.error("Publish failed:", err);
+      setPublishStatus("success");
+      setTimeout(() => setPublishStatus("idle"), 2000);
+    } catch {
+      setPublishStatus("error");
+      setTimeout(() => setPublishStatus("idle"), 3000);
+    }
+  };
+
+  const handleSectionReset = (section: string) => {
+    if (resetConfirm === section) {
+      wrappedDispatch({ type: "RESET_SECTION", section });
+      setResetConfirm(null);
+    } else {
+      setResetConfirm(section);
+      setTimeout(() => setResetConfirm(null), 3000);
     }
   };
 
   const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
-    <div className="border-b border-white/5">
-      <button
-        onClick={() => setActiveSection(activeSection === id ? "" : id)}
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-on-surface hover:bg-white/5 transition-colors"
-      >
-        {title}
-        <span className="text-xs text-on-surface-variant">{activeSection === id ? "−" : "+"}</span>
-      </button>
+    <div className="border-b border-border-subtle">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setActiveSection(activeSection === id ? "" : id)}
+          className="flex-1 flex items-center justify-between px-4 py-3 text-sm font-medium text-text-primary hover:bg-surface-container-low transition-colors"
+        >
+          {title}
+          <span className="text-xs text-text-tertiary">{activeSection === id ? "−" : "+"}</span>
+        </button>
+        {activeSection === id && (
+          <button onClick={() => handleSectionReset(id)} className={`mr-2 text-xs px-2 py-1 rounded ${resetConfirm === id ? "bg-feedback-error text-text-inverse" : "text-text-tertiary hover:text-text-secondary"}`}>
+            {resetConfirm === id ? "Confirm Reset" : "Reset"}
+          </button>
+        )}
+      </div>
       {activeSection === id && <div className="px-4 pb-4 space-y-3">{children}</div>}
     </div>
   );
 
   return (
-    <div className="h-screen flex flex-col bg-surface text-on-surface">
+    <div className="h-dvh flex flex-col bg-surface-base text-text-primary">
+      {/* Restore Draft Dialog */}
+      {showRestoreDialog && pendingDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim">
+          <div className="glass-card p-6 max-w-sm mx-4 space-y-4">
+            <h2 className="text-lg font-semibold">Restore Draft?</h2>
+            <p className="text-sm text-text-secondary">An unsaved draft was found for this gallery. Would you like to restore it or start fresh?</p>
+            <div className="flex gap-2">
+              <button onClick={() => { dispatch({ type: "LOAD", payload: pendingDraft }); setShowRestoreDialog(false); }} className="flex-1 py-2 text-sm rounded-xl bg-accent-default text-text-inverse">Restore Draft</button>
+              <button onClick={() => { discard(); setShowRestoreDialog(false); }} className="flex-1 py-2 text-sm rounded-xl border border-border-default text-text-secondary">Discard</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Bar */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-white/5 backdrop-blur-md bg-white/[0.03]">
+      <header className="flex items-center justify-between px-6 py-3 border-b border-border-subtle backdrop-blur-md bg-surface-overlay">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold font-headline">Gallery Design Studio</h1>
-          <span className="text-xs text-on-surface-variant">{draftAge}</span>
+          <h1 className="text-lg font-semibold">Gallery Design Studio</h1>
+          <span className="text-xs text-text-tertiary">{draftAge}</span>
+          {history.canUndo && <span className="text-xs text-text-tertiary">· {history.historySize} changes</span>}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => { dispatch({ type: "RESET" }); discard(); }}
-            className="px-4 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5 transition-colors"
-          >
-            Discard
-          </button>
-          <button
-            onClick={handlePublish}
-            className="px-6 py-2 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary shadow-lg hover:shadow-primary/20 transition-all"
-          >
-            Publish
+          <button onClick={() => { history.undo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canUndo} className="px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Undo (Ctrl+Z)">↩</button>
+          <button onClick={() => { history.redo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canRedo} className="px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">↪</button>
+          <button onClick={() => { wrappedDispatch({ type: "RESET" }); discard(); }} className="px-4 py-2 text-sm rounded-xl border border-border-default hover:bg-surface-container-low transition-colors">Discard All</button>
+          <button onClick={handlePublish} disabled={publishStatus === "saving"} className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${publishStatus === "success" ? "bg-feedback-success text-text-inverse" : publishStatus === "error" ? "bg-feedback-error text-text-inverse" : "bg-accent-default text-text-inverse hover:bg-accent-hover"}`}>
+            {publishStatus === "saving" ? "Publishing..." : publishStatus === "success" ? "Published!" : publishStatus === "error" ? "Failed — Retry" : "Publish"}
           </button>
         </div>
       </header>
@@ -176,44 +265,56 @@ export default function GalleryDesignStudioPage() {
       {/* Split Screen */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel — Controls */}
-        <aside className="w-[40%] border-r border-white/5 overflow-y-auto backdrop-blur-md bg-white/[0.02]">
+        <aside className="w-[40%] border-r border-border-subtle overflow-y-auto bg-surface-elevated">
           {/* Cover Photo */}
           <Section id="cover" title="Cover Photo">
-            <div className="aspect-video rounded-xl bg-surface-container border border-white/10 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center text-on-surface-variant">
+            <div className="aspect-video rounded-xl bg-surface-container border border-border-subtle flex items-center justify-center relative overflow-hidden">
+              <div className="text-center text-text-tertiary">
                 <p className="text-sm">Drag cover image here</p>
                 <p className="text-xs mt-1">or select from gallery</p>
               </div>
-              {/* Focal point crosshair */}
               <div
-                className="absolute w-6 h-6 border-2 border-primary rounded-full cursor-move"
+                className="absolute w-6 h-6 border-2 border-accent-primary rounded-full cursor-move"
                 style={{ left: `${config.cover.focalPoint.x}%`, top: `${config.cover.focalPoint.y}%`, transform: "translate(-50%, -50%)" }}
+                onMouseDown={(e) => {
+                  const rect = (e.target as HTMLElement).parentElement!.getBoundingClientRect();
+                  const onMove = (ev: MouseEvent) => {
+                    const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+                    const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
+                    wrappedDispatch({ type: "SET_COVER", payload: { focalPoint: { x: Math.round(x), y: Math.round(y) } } });
+                  };
+                  const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+                  window.addEventListener("mousemove", onMove);
+                  window.addEventListener("mouseup", onUp);
+                }}
               />
             </div>
-            <div className="grid grid-cols-6 gap-1.5 mt-2">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => dispatch({ type: "SET_COVER", payload: { styleId: `style-${i + 1}` } })}
-                  className={`aspect-[4/3] rounded-lg border transition-all ${
-                    config.cover.styleId === `style-${i + 1}` ? "border-primary bg-primary/10" : "border-white/10 bg-surface-container hover:border-white/20"
-                  }`}
-                />
-              ))}
-            </div>
+            <p className="text-xs text-text-tertiary mt-1">Focal: {config.cover.focalPoint.x}%, {config.cover.focalPoint.y}%</p>
+            {COVER_CATEGORIES.map((cat) => (
+              <div key={cat} className="mt-2">
+                <p className="text-xs text-text-secondary capitalize mb-1">{cat}</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {COVER_STYLES.filter((s) => s.category === cat).map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => wrappedDispatch({ type: "SET_COVER", payload: { styleId: s.id } })}
+                      className={`aspect-[4/3] rounded-lg border text-[9px] flex items-end p-1 transition-all ${
+                        config.cover.styleId === s.id ? "border-accent-primary bg-accent-subtle" : "border-border-subtle bg-surface-container hover:border-border-default"
+                      }`}
+                    >
+                      <span className="truncate">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </Section>
 
           {/* Theme */}
           <Section id="theme" title="Theme">
             <div className="grid grid-cols-3 gap-2">
               {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => dispatch({ type: "SET_THEME", payload: { id: t.id, accentColor: t.accent } })}
-                  className={`p-2 rounded-xl text-center text-xs transition-all ${
-                    config.theme.id === t.id ? "ring-2 ring-primary bg-white/10" : "bg-surface-container hover:bg-white/5"
-                  }`}
-                >
+                <button key={t.id} onClick={() => wrappedDispatch({ type: "SET_THEME", payload: { id: t.id, accentColor: t.accent } })} className={`p-2 rounded-xl text-center text-xs transition-all ${config.theme.id === t.id ? "ring-2 ring-accent-primary bg-accent-subtle" : "bg-surface-container hover:bg-surface-container-high"}`}>
                   <div className="w-6 h-6 rounded-full mx-auto mb-1" style={{ backgroundColor: t.accent }} />
                   {t.name}
                 </button>
@@ -221,13 +322,7 @@ export default function GalleryDesignStudioPage() {
             </div>
             <div className="flex gap-2 mt-3">
               {(["light", "dark", "auto"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => dispatch({ type: "SET_THEME", payload: { variant: v } })}
-                  className={`flex-1 py-1.5 text-xs rounded-lg capitalize transition-all ${
-                    config.theme.variant === v ? "bg-primary/20 text-primary" : "bg-surface-container text-on-surface-variant hover:bg-white/5"
-                  }`}
-                >
+                <button key={v} onClick={() => wrappedDispatch({ type: "SET_THEME", payload: { variant: v } })} className={`flex-1 py-1.5 text-xs rounded-lg capitalize transition-all ${config.theme.variant === v ? "bg-accent-subtle text-accent-primary" : "bg-surface-container text-text-tertiary hover:bg-surface-container-high"}`}>
                   {v}
                 </button>
               ))}
@@ -238,15 +333,9 @@ export default function GalleryDesignStudioPage() {
           <Section id="typography" title="Typography">
             <div className="space-y-2">
               {FONT_PAIRINGS.map((fp) => (
-                <button
-                  key={fp.id}
-                  onClick={() => dispatch({ type: "SET_TYPOGRAPHY", payload: { pairingId: fp.id, headingFont: fp.heading, bodyFont: fp.body } })}
-                  className={`w-full p-3 rounded-xl text-left transition-all ${
-                    config.typography.pairingId === fp.id ? "ring-1 ring-primary bg-white/10" : "bg-surface-container hover:bg-white/5"
-                  }`}
-                >
+                <button key={fp.id} onClick={() => wrappedDispatch({ type: "SET_TYPOGRAPHY", payload: { pairingId: fp.id, headingFont: fp.heading, bodyFont: fp.body } })} className={`w-full p-3 rounded-xl text-left transition-all ${config.typography.pairingId === fp.id ? "ring-1 ring-accent-primary bg-accent-subtle" : "bg-surface-container hover:bg-surface-container-high"}`}>
                   <p className="text-sm font-semibold">{fp.heading}</p>
-                  <p className="text-xs text-on-surface-variant">{fp.body} — {fp.label}</p>
+                  <p className="text-xs text-text-tertiary">{fp.body} — {fp.label}</p>
                 </button>
               ))}
             </div>
@@ -256,13 +345,7 @@ export default function GalleryDesignStudioPage() {
           <Section id="grid" title="Grid Layout">
             <div className="grid grid-cols-4 gap-2">
               {GRID_LAYOUTS.map((gl) => (
-                <button
-                  key={gl.id}
-                  onClick={() => dispatch({ type: "SET_GRID", payload: { layout: gl.id } })}
-                  className={`py-2 rounded-lg text-center text-xs transition-all ${
-                    config.grid.layout === gl.id ? "bg-primary/20 text-primary ring-1 ring-primary" : "bg-surface-container hover:bg-white/5"
-                  }`}
-                >
+                <button key={gl.id} onClick={() => wrappedDispatch({ type: "SET_GRID", payload: { layout: gl.id } })} className={`py-2 rounded-lg text-center text-xs transition-all ${config.grid.layout === gl.id ? "bg-accent-subtle text-accent-primary ring-1 ring-accent-primary" : "bg-surface-container hover:bg-surface-container-high"}`}>
                   <span className="text-lg">{gl.icon}</span>
                   <p className="mt-0.5">{gl.label}</p>
                 </button>
@@ -271,61 +354,61 @@ export default function GalleryDesignStudioPage() {
             <div className="space-y-2 mt-3">
               <label className="flex items-center justify-between text-xs">
                 <span>Columns: {config.grid.columns}</span>
-                <input
-                  type="range" min={1} max={6} value={config.grid.columns}
-                  onChange={(e) => dispatch({ type: "SET_GRID", payload: { columns: Number(e.target.value) } })}
-                  className="w-32 accent-primary"
-                />
+                <input type="range" min={1} max={6} value={config.grid.columns} onChange={(e) => wrappedDispatch({ type: "SET_GRID", payload: { columns: Number(e.target.value) } })} className="w-32 accent-[var(--accent-primary)]" aria-label="Grid columns" />
               </label>
               <label className="flex items-center justify-between text-xs">
                 <span>Gap: {config.grid.gap}px</span>
-                <input
-                  type="range" min={0} max={24} value={config.grid.gap}
-                  onChange={(e) => dispatch({ type: "SET_GRID", payload: { gap: Number(e.target.value) } })}
-                  className="w-32 accent-primary"
-                />
+                <input type="range" min={0} max={24} value={config.grid.gap} onChange={(e) => wrappedDispatch({ type: "SET_GRID", payload: { gap: Number(e.target.value) } })} className="w-32 accent-[var(--accent-primary)]" aria-label="Grid gap" />
               </label>
               <label className="flex items-center justify-between text-xs">
                 <span>Show photo info</span>
-                <input
-                  type="checkbox" checked={config.grid.showInfo}
-                  onChange={(e) => dispatch({ type: "SET_GRID", payload: { showInfo: e.target.checked } })}
-                  className="accent-primary"
-                />
+                <input type="checkbox" checked={config.grid.showInfo} onChange={(e) => wrappedDispatch({ type: "SET_GRID", payload: { showInfo: e.target.checked } })} className="accent-[var(--accent-primary)]" />
               </label>
             </div>
+          </Section>
+
+          {/* Templates */}
+          <Section id="templates" title="Templates">
+            <DesignTemplates onApply={(tplConfig) => wrappedDispatch({ type: "LOAD", payload: tplConfig as unknown as DesignConfig })} currentConfig={config as unknown as Record<string, unknown>} />
+          </Section>
+
+          {/* AI Suggestions */}
+          <Section id="ai" title="AI Suggestions">
+            <AIDesignSuggest galleryId={galleryId} onApply={(s) => {
+              wrappedDispatch({ type: "SET_THEME", payload: { id: s.theme } });
+              wrappedDispatch({ type: "SET_COVER", payload: { styleId: s.coverStyle } });
+              const fp = FONT_PAIRINGS.find((f) => f.id === s.fontPairing);
+              if (fp) wrappedDispatch({ type: "SET_TYPOGRAPHY", payload: { pairingId: fp.id, headingFont: fp.heading, bodyFont: fp.body } });
+            }} />
           </Section>
         </aside>
 
         {/* Right Panel — Live Preview */}
-        <main className="flex-1 overflow-y-auto bg-surface-container-low p-8">
-          <div className="max-w-4xl mx-auto">
+        <main className="flex-1 overflow-y-auto bg-surface-sunken p-8">
+          {/* Responsive preview controls */}
+          <div className="flex justify-center gap-2 mb-4">
+            {(["desktop", "tablet", "mobile"] as const).map((d) => (
+              <button key={d} onClick={() => setPreviewDevice(d)} className={`px-3 py-1.5 text-xs rounded-lg capitalize ${previewDevice === d ? "bg-accent-subtle text-accent-primary" : "bg-surface-container text-text-tertiary"}`}>
+                {d === "desktop" ? "🖥" : d === "tablet" ? "📱" : "📲"} {d}
+              </button>
+            ))}
+          </div>
+
+          <div className="mx-auto transition-all duration-300" style={{ maxWidth: PREVIEW_WIDTHS[previewDevice] }}>
             {/* Cover Preview */}
-            <div className="aspect-[21/9] rounded-2xl bg-surface-container border border-white/5 mb-8 flex items-center justify-center">
-              <p className="text-on-surface-variant text-sm">Cover preview — {config.cover.styleId}</p>
+            <div className="aspect-[21/9] rounded-2xl bg-surface-container border border-border-subtle mb-8 flex items-center justify-center relative overflow-hidden">
+              {COVER_STYLES.find((s) => s.id === config.cover.styleId)?.overlay && (
+                <div className="absolute inset-0" style={{ background: COVER_STYLES.find((s) => s.id === config.cover.styleId)!.overlay }} />
+              )}
+              <p className="text-text-tertiary text-sm relative z-10">{COVER_STYLES.find((s) => s.id === config.cover.styleId)?.name || config.cover.styleId}</p>
             </div>
 
             {/* Gallery Grid Preview */}
-            <div
-              className="gap-3"
-              style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${config.grid.columns}, 1fr)`,
-                gap: `${config.grid.gap}px`,
-              }}
-            >
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${previewDevice === "mobile" ? Math.min(config.grid.columns, 1) : previewDevice === "tablet" ? Math.min(config.grid.columns, 2) : config.grid.columns}, 1fr)`, gap: `${config.grid.gap}px` }}>
               {Array.from({ length: 12 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl bg-surface-container border border-white/5 overflow-hidden"
-                  style={{ aspectRatio: i % 3 === 0 ? "3/4" : i % 3 === 1 ? "4/3" : "1/1" }}
-                >
+                <div key={i} className="rounded-xl bg-surface-container border border-border-subtle overflow-hidden" style={{ aspectRatio: i % 3 === 0 ? "3/4" : i % 3 === 1 ? "4/3" : "1/1" }}>
                   <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-high" />
-                  {config.grid.showInfo && (
-                    <div className="p-2">
-                      <p className="text-[10px] text-on-surface-variant">IMG_{1000 + i}.jpg</p>
-                    </div>
-                  )}
+                  {config.grid.showInfo && <div className="p-2"><p className="text-[10px] text-text-tertiary">IMG_{1000 + i}.jpg</p></div>}
                 </div>
               ))}
             </div>

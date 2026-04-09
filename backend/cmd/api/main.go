@@ -334,6 +334,8 @@ func main() {
 			GalleryDesignSvc:     service.NewGalleryDesignService(galleryRepo),
 			GalleryRepo:          galleryRepo,
 			DesignTemplateSvc:    service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
+			DesignCollabSvc:      service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence
+			DesignAISvc:          nil, // set after AI init below
 		})
 
 		// Chunked upload routes
@@ -390,6 +392,11 @@ func main() {
 		workerRegistry.Register("duplicate-scan", duplicateWorker)
 
 		log.Println("M3: AI routes registered, 3 workers registered")
+
+		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available)
+		designAISvc := service.NewDesignAIService(assetRepo, geminiClient, aiConfigRepo)
+		designAIHandler := handler.NewDesignAIHandler(designAISvc)
+		api.Get("/api/v1/galleries/{id}/ai-suggest", designAIHandler.Suggest)
 
 		// ──────────────────────── M4: Business Operations ──────────────────────
 

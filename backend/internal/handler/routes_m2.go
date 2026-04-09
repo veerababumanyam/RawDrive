@@ -99,6 +99,18 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 			templateHandler := NewDesignTemplateHandler(deps.DesignTemplateSvc)
 			r.Post("/{id}/apply-template", templateHandler.ApplyTemplate)
 		}
+		if deps.DesignCollabSvc != nil {
+			collabHandler := NewDesignCollabHandler(deps.DesignCollabSvc)
+			r.Post("/{id}/collab/join", collabHandler.JoinSession)
+			r.Post("/{id}/collab/leave", collabHandler.LeaveSession)
+			r.Post("/{id}/collab/lock", collabHandler.AcquireLock)
+			r.Delete("/{id}/collab/lock/{sectionId}", collabHandler.ReleaseLock)
+			r.Get("/{id}/collab/stream", collabHandler.SSEStream)
+		}
+		if deps.DesignAISvc != nil {
+			aiHandler := NewDesignAIHandler(deps.DesignAISvc)
+			r.Get("/{id}/ai-suggest", aiHandler.Suggest)
+		}
 
 		// Share links
 		r.Post("/{id}/share", shareHandler.Create)
@@ -171,4 +183,6 @@ type M2Dependencies struct {
 	DesignTemplateSvc    *service.DesignTemplateService
 	GalleryRepo          *repository.GalleryRepo
 	GalleryDesignSvc     *service.GalleryDesignService
+	DesignCollabSvc      *service.DesignCollabService
+	DesignAISvc          *service.DesignAIService
 }
