@@ -71,7 +71,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
         setGallery(galleryData);
         setAssets(hydratedAssets);
-        setSelections(gallerySelections);
+        setSelections(gallerySelections ?? []);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load gallery.");
@@ -120,6 +120,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   }, [upload]);
 
   const selectionCounts = useMemo(() => {
+    if (!selections) return {};
     return selections.reduce<Record<string, number>>((counts, selection) => {
       counts[selection.status] = (counts[selection.status] || 0) + 1;
       return counts;
