@@ -75,7 +75,24 @@ func (h *ProofingHandler) SubmitPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: resolve gallery from slug, validate share link access
-	// For now, return not implemented
-	http.Error(w, `{"error":"not implemented - requires gallery slug resolution"}`, http.StatusNotImplemented)
+	if input.ClientName == "" || input.ClientEmail == "" {
+		http.Error(w, `{"error":"client_name and client_email are required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(input.AssetIDs) == 0 {
+		http.Error(w, `{"error":"at least one asset_id is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.proofingSvc.SubmitPublicBySlug(r.Context(), slug, input.AssetIDs, input.ClientName, input.ClientEmail, input.Note); err != nil {
+		if err.Error() == "gallery not found" || err.Error() == "gallery is not published" {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"submission failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"status":"submitted"}`))
 }

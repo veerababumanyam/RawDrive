@@ -112,6 +112,62 @@ Change `design-tokens.json` → regenerate downstream files. Never edit downstre
 - [ ] Verify touch targets >= 44px on interactive elements
 - [ ] Verify focus ring uses `focusRing` component tokens
 
+## Test Photos — MANDATORY FOR ALL TESTING
+
+### Test Asset Directory
+`tests/photos/` contains 17 real JPEG files for integration, E2E, and UI testing:
+- **Wedding photos**: `Wedding (42).jpg` through `Wedding (259).jpg` (8 files)
+- **Portrait photos**: `veera.jpg`, `veera3.jpg`, `reethu.jpg`
+- **Social/event**: `493851581_*.jpg`, `WhatsApp Image *.jpeg`
+- **Reference cards**: `vCard.jpeg`, `Image.jpeg`
+
+### Usage Rules
+1. **Always use `tests/photos/` for upload, processing, and gallery tests.** Never generate synthetic test images or use external URLs.
+2. These are real Indian wedding photography samples — ideal for testing AI pipeline (face detection, auto-tagging, duplicate detection, culling).
+3. For E2E upload tests, pick 2–3 files (e.g., `Wedding (42).jpg`, `veera.jpg`) to keep tests fast.
+4. For batch/gallery tests, use the full set to exercise pagination and grid layouts.
+5. Files with spaces in names (e.g., `Wedding (42).jpg`) are intentional — tests MUST handle filenames with spaces and parentheses.
+
+## MCP Tools — MANDATORY FOR ALL AGENTS
+
+### Playwright MCP (UI/UX Testing)
+- **Purpose**: Browser-based E2E testing, visual regression, and interactive UI validation.
+- **Config**: `e2e/playwright.config.js` — base URL `http://localhost:8229`, Chromium + Firefox projects.
+- **E2E auth**: Dashboard tests require `storageState` or `addInitScript` to inject auth tokens (see `reference_e2e_auth_pattern` memory).
+- **Playwright runs in Docker**, not the Windows host. Use `_cobolt-docker/` compose for the test runner.
+- **Skill**: Use `/chrome-devtools-mcp:chrome-devtools` skill for Playwright MCP interactions.
+- **When to use**: After any frontend change — navigate pages, click elements, verify layouts, check responsive behavior, validate accessibility.
+
+### Chrome DevTools MCP (Browser Debugging)
+- **Purpose**: Live browser inspection — DOM snapshots, console logs, network requests, performance traces, accessibility audits, Lighthouse.
+- **Tools**: `take_screenshot`, `take_snapshot` (DOM), `evaluate_script`, `lighthouse_audit`, `list_network_requests`, `click`, `fill`, `navigate_page`.
+- **Skill**: Use `/chrome-devtools-mcp:chrome-devtools` for general debugging, `/chrome-devtools-mcp:a11y-debugging` for accessibility, `/chrome-devtools-mcp:debug-optimize-lcp` for performance.
+- **When to use**: Debugging rendering issues, checking console errors, validating network calls to API, performance profiling, accessibility compliance (WCAG).
+
+### Figma MCP (Design Reference)
+- **Purpose**: Read Figma design files to extract component specs, spacing, colors, and layout intent.
+- **Tools**: `figma_get_file`, `figma_get_file_nodes`, `figma_get_file_styles`, `figma_get_file_components`, `figma_get_images`.
+- **When to use**: Before building new UI — fetch the Figma source of truth for component dimensions, spacing, and visual hierarchy. Cross-reference with `design-tokens.json`.
+
+### Stitch MCP (Frontend Design Generation)
+- **Purpose**: AI-powered screen generation, design system application, and variant exploration.
+- **Tools**: `generate_screen_from_text`, `edit_screens`, `generate_variants`, `create_design_system`, `apply_design_system`.
+- **Config**: Design system definition lives at `.stitch/DESIGN.md`, synced from `design-tokens.json`.
+- **When to use**: Generating new page layouts, exploring design variants, applying the RawDrive design system to new screens. Always feed `design-tokens.json` values into Stitch prompts.
+
+### Context7 MCP (Library Documentation)
+- **Purpose**: Fetch current docs for any library/framework/SDK.
+- **Tools**: `resolve-library-id` → `query-docs`.
+- **When to use**: Before using any library API — verify current signatures, check for breaking changes, get code examples.
+
+### Agent Checklist (Before Writing Any Test)
+- [ ] Use `tests/photos/` assets — never synthetic images
+- [ ] E2E tests use Playwright MCP or Chrome DevTools MCP for browser interaction
+- [ ] Visual validation uses `take_screenshot` or `take_snapshot` for DOM state
+- [ ] Network assertions use `list_network_requests` to verify API calls
+- [ ] Accessibility checks use Lighthouse audit or a11y-debugging skill
+- [ ] All tests handle filenames with spaces/parentheses
+
 ## Next Steps
 - Update `.env.cobolt` if you already have infrastructure.
 - Start local services from `_cobolt-docker/` with `docker compose up -d` when needed.

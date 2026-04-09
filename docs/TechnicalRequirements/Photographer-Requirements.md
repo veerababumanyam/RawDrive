@@ -100,11 +100,16 @@ The **Photographer / Studio Owner** is the primary paying user and the core of R
 
 | Element | Description |
 |---------|-------------|
+| Quick Navigation | Left-aligned `Home` and `Projects` shortcuts with workspace-specific icons and hover text |
+| Workspace Search | Centered desktop search field for galleries, clients, and files |
 | Notification Bell | Badge count with priority |
 | Storage Indicator | Quick bar: "45GB / 100GB" with color (green/amber/red) |
 | Plan Badge | Current plan name with upgrade CTA if near limits |
 | "View as Client" Toggle | Available on gallery screens |
 | Account Menu | Profile, billing, settings, logout |
+
+**FR-PHO-NAV-004**: Desktop dashboard header uses a three-zone layout: left quick navigation, centered search, right utility actions.
+**FR-PHO-NAV-005**: `Home` routes to the authenticated dashboard and `Projects` routes to the gallery workspace, with descriptive hover text for both shortcuts.
 
 **FR-PHO-NAV-001**: Storage indicator visible at all times; amber at 80%, red at 95%.
 **FR-PHO-NAV-002**: Plan upgrade CTA appears when within 10% of any limit (storage, galleries, clients).
@@ -548,6 +553,10 @@ The **Photographer / Studio Owner** is the primary paying user and the core of R
 **AC-PHO-001**: Cannot access `/workspace/*` without completing state selection.
 **AC-PHO-002**: Mid-funnel return resumes at last step.
 **AC-PHO-003**: Completing onboarding lands on welcome dashboard.
+
+### 11.1A Workspace Navigation
+**AC-PHO-003A**: Desktop dashboard header keeps the gallery/client/file search input centered between quick navigation and utility actions.
+**AC-PHO-003B**: Header quick navigation exposes `Home` and `Projects` shortcuts with photographer-specific hover text and correct destinations.
 
 ### 11.2 Galleries
 **AC-PHO-004**: Creating gallery when at limit shows upgrade prompt, not error.

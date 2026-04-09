@@ -24,7 +24,7 @@ type Dealer struct {
 	CommissionRatePct *float64    `json:"commission_rate_pct"`
 	BankAccount       *string     `json:"bank_account"` // JSONB stored as string
 	PANNumber         string      `json:"pan_number"`
-	GSTIN             string      `json:"gstin"`
+	GSTIN             *string     `json:"gstin"`
 	ReferralCode      *string     `json:"referral_code"`
 	ApprovedAt        *time.Time  `json:"approved_at"`
 	ApprovedBy        *uuid.UUID  `json:"approved_by"`

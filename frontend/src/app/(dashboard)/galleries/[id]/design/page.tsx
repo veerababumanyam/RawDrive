@@ -48,7 +48,7 @@ function designReducer(state: DesignConfig, action: DesignAction): DesignConfig 
     case "SET_TYPOGRAPHY": return { ...state, typography: { ...state.typography, ...action.payload } };
     case "SET_GRID": return { ...state, grid: { ...state.grid, ...action.payload } };
     case "LOAD": return action.payload;
-    case "RESET_SECTION": return { ...state, [action.section]: sectionDefaults[action.section] ?? (state as Record<string, unknown>)[action.section] };
+    case "RESET_SECTION": return { ...state, [action.section]: sectionDefaults[action.section] ?? (state as unknown as Record<string, unknown>)[action.section] };
     case "RESET": return defaultConfig;
     default: return state;
   }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/onboarding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func setupOnboardingServer(wsc *onbWorkspaceCreator, pub *onbEventPub, userID st
 	// Inject user_id context
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), "user_id", userID)
+			ctx := middleware.WithJWTClaims(r.Context(), map[string]interface{}{"sub": userID})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})

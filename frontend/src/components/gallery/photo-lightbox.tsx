@@ -198,11 +198,11 @@ export function PhotoLightbox({
             </div>
             {Object.keys(exif).length > 0 && (
               <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
-                {exif.camera_make && <div><span className="text-white/35">Camera</span> <span className="text-white/70">{String(exif.camera_make)} {String(exif.camera_model || "")}</span></div>}
-                {exif.focal_length && <div><span className="text-white/35">Focal</span> <span className="text-white/70">{String(exif.focal_length)}mm</span></div>}
-                {exif.exposure_time && <div><span className="text-white/35">Shutter</span> <span className="text-white/70">{String(exif.exposure_time)}</span></div>}
-                {exif.f_number && <div><span className="text-white/35">Aperture</span> <span className="text-white/70">f/{String(exif.f_number)}</span></div>}
-                {exif.iso && <div><span className="text-white/35">ISO</span> <span className="text-white/70">{String(exif.iso)}</span></div>}
+                {exif.camera_make ? <div><span className="text-white/35">Camera</span> <span className="text-white/70">{String(exif.camera_make)} {String(exif.camera_model || "")}</span></div> : null}
+                {exif.focal_length ? <div><span className="text-white/35">Focal</span> <span className="text-white/70">{String(exif.focal_length)}mm</span></div> : null}
+                {exif.exposure_time ? <div><span className="text-white/35">Shutter</span> <span className="text-white/70">{String(exif.exposure_time)}</span></div> : null}
+                {exif.f_number ? <div><span className="text-white/35">Aperture</span> <span className="text-white/70">f/{String(exif.f_number)}</span></div> : null}
+                {exif.iso ? <div><span className="text-white/35">ISO</span> <span className="text-white/70">{String(exif.iso)}</span></div> : null}
               </div>
             )}
           </div>

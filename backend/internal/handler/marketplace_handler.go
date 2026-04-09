@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -108,10 +109,17 @@ func (h *MarketplaceHandler) CreateFreelancerListing(w http.ResponseWriter, r *h
 		return
 	}
 
+	stateID := 1
+	if sid := middleware.StateIDFromContext(r.Context()); sid != "" {
+		if parsed, err := strconv.Atoi(sid); err == nil {
+			stateID = parsed
+		}
+	}
+
 	listing := &repository.FreelancerListing{
 		UserID:          userID,
 		WorkspaceID:     wsID,
-		StateID:         1, // TODO: resolve from workspace
+		StateID:         stateID,
 		Title:           req.Title,
 		Specializations: req.Specializations,
 		City:            req.City,

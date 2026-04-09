@@ -1,0 +1,15 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4 — registers custom design tokens as utility classes.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 docs",
+          "url": "https://tailwindcss.com/docs/theme"
+        }
+      ]
+    }
+  ]
+}

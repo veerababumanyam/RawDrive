@@ -22,24 +22,29 @@ import {
   Store,
   Users,
 } from "lucide-react";
-import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
+import { getStoredAccessToken, getStoredAccessTokenClaims, getStoredPlatformRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 
+// Roles that can see each nav item
+const PHOTOGRAPHER_ROLES = ["photographer", "assistant", "studio_manager", "admin", "super_admin"];
+const ADMIN_ROLES = ["admin", "super_admin"];
+const DEALER_ROLES = ["dealer", "admin", "super_admin"];
+
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/galleries", label: "Galleries", icon: ImageIcon },
-  { href: "/crm/contacts", label: "Clients", icon: Users },
-  { href: "/crm", label: "CRM", icon: BarChart3 },
-  { href: "/calendar", label: "Bookings", icon: CalendarDays },
-  { href: "/billing", label: "Invoices", icon: ReceiptText },
-  { href: "/ai", label: "AI Studio", icon: BrainCircuit },
-  { href: "/marketplace/freelancers", label: "Marketplace", icon: ShoppingBag },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/dealer", label: "Dealer", icon: Store },
-  { href: "/moderation", label: "Moderation", icon: Shield },
-  { href: "/settings/storage", label: "Settings", icon: Settings },
-  { href: "/admin/users", label: "Admin", icon: Shield },
+  { href: "/dashboard", label: "Dashboard", icon: Home, roles: [...PHOTOGRAPHER_ROLES, "dealer"] },
+  { href: "/galleries", label: "Galleries", icon: ImageIcon, roles: PHOTOGRAPHER_ROLES },
+  { href: "/crm/contacts", label: "Clients", icon: Users, roles: PHOTOGRAPHER_ROLES },
+  { href: "/crm", label: "CRM", icon: BarChart3, roles: PHOTOGRAPHER_ROLES },
+  { href: "/calendar", label: "Bookings", icon: CalendarDays, roles: PHOTOGRAPHER_ROLES },
+  { href: "/billing", label: "Invoices", icon: ReceiptText, roles: PHOTOGRAPHER_ROLES },
+  { href: "/ai", label: "AI Studio", icon: BrainCircuit, roles: PHOTOGRAPHER_ROLES },
+  { href: "/marketplace/freelancers", label: "Marketplace", icon: ShoppingBag, roles: PHOTOGRAPHER_ROLES },
+  { href: "/messages", label: "Messages", icon: MessageSquare, roles: [...PHOTOGRAPHER_ROLES, "dealer"] },
+  { href: "/dealer", label: "Dealer", icon: Store, roles: DEALER_ROLES },
+  { href: "/moderation", label: "Moderation", icon: Shield, roles: ADMIN_ROLES },
+  { href: "/settings/storage", label: "Settings", icon: Settings, roles: [...PHOTOGRAPHER_ROLES, "dealer"] },
+  { href: "/admin/users", label: "Admin", icon: Shield, roles: ADMIN_ROLES },
 ];
 
 const headerNavItems = [
@@ -60,6 +65,17 @@ const headerNavItems = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [role, setRole] = useState<string>(() => {
+    if (typeof window === "undefined") return "photographer";
+    return getStoredPlatformRole();
+  });
+  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string }>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  });
   const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
 
   useEffect(() => {
@@ -78,8 +94,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
     }
 
-    const frame = window.requestAnimationFrame(() => setAuthenticated(true));
-    return () => window.cancelAnimationFrame(frame);
+    setRole(getStoredPlatformRole());
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) setUserInfo(JSON.parse(stored));
+    } catch { /* fallback */ }
+    setAuthenticated(true);
   }, [isOnboarding]);
 
   if (authenticated === null) {
@@ -125,7 +145,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-2">
-          {navItems.map((item) => {
+          {navItems.filter((item) => item.roles.includes(role)).map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -150,10 +170,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="mt-auto">
           <div className="surface-panel flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-container-high">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
-              AS
+              {(userInfo.display_name || userInfo.email || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
             </div>
             <div className="overflow-hidden">
-              <p className="truncate text-sm text-text-primary">Arjun Singh</p>
+              <p className="truncate text-sm text-text-primary">{userInfo.display_name || userInfo.email || "User"}</p>
               <p className="text-[10px] text-text-tertiary">View Profile</p>
             </div>
           </div>

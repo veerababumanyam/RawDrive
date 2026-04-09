@@ -57,6 +57,11 @@ Apply `shadow-glass` and `backdrop-blur-md` to high-prominence UI layers:
 - Modal backdrops
 - Premium Plan cards
 
+### 3.1.1 Dashboard Header Composition
+- Authenticated dashboard headers must preserve a three-zone desktop layout: left quick navigation, centered search, right utility controls.
+- Global workspace search inputs belong in the center column on desktop surfaces, not anchored to the left edge.
+- `Home` and `Projects` quick links should use product-relevant icons and descriptive hover text so their purpose remains obvious during future refactors.
+
 ### 3.2 Motion Principles
 - **Standard Durations:** Use `duration-300` for most interactions.
 - **Curve:** All transitions must use the standard cubic-bezier: `cubic-bezier(0.4, 0, 0.2, 1)`.

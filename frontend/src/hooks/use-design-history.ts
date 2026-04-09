@@ -69,7 +69,7 @@ export function useDesignHistory<T>(initialState: T) {
   }, []);
 
   // Keyboard shortcuts ref
-  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>();
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(undefined);
   keyHandlerRef.current = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
       e.preventDefault();

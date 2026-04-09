@@ -63,7 +63,7 @@ func (s *DealerService) RegisterDealer(ctx context.Context, userID uuid.UUID, re
 		BusinessName:  req.BusinessName,
 		TerritoryType: req.TerritoryType,
 		PANNumber:     req.PANNumber,
-		GSTIN:         req.GSTIN,
+		GSTIN:         nilIfEmpty(req.GSTIN),
 		BankAccount:   req.BankAccount,
 		Status:        "pending",
 	}
@@ -123,4 +123,11 @@ func (s *DealerService) GetDealerDashboard(ctx context.Context, userID uuid.UUID
 
 func (s *DealerService) ListDealers(ctx context.Context, filter repository.DealerFilter) ([]repository.Dealer, error) {
 	return s.repo.List(ctx, filter)
+}
+
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

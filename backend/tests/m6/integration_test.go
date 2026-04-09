@@ -34,7 +34,7 @@ func TestDealerFullLifecycle(t *testing.T) {
 		BusinessName:  "Test Photo Studio",
 		TerritoryType: "primary",
 		PANNumber:     "ABCDE1234F",
-		GSTIN:         "",
+		GSTIN:         nil,
 		Status:        "pending",
 	}
 	err = dealerRepo.Create(ctx, dealer)

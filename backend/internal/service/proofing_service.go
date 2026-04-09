@@ -76,6 +76,37 @@ func (s *ProofingService) ListByClient(ctx context.Context, galleryID uuid.UUID,
 	return s.proofingRepo.ListByClient(ctx, galleryID, email)
 }
 
+// SubmitPublicBySlug resolves a gallery from its public slug and submits proofing selections.
+func (s *ProofingService) SubmitPublicBySlug(ctx context.Context, slug string, assetIDs []string, clientName, clientEmail, note string) error {
+	gallery, err := s.galleryRepo.GetBySlug(ctx, slug)
+	if err != nil {
+		return fmt.Errorf("proofing: resolve slug: %w", err)
+	}
+	if gallery == nil {
+		return fmt.Errorf("gallery not found")
+	}
+	if !gallery.IsPublished {
+		return fmt.Errorf("gallery is not published")
+	}
+
+	parsedIDs := make([]uuid.UUID, 0, len(assetIDs))
+	for _, id := range assetIDs {
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			return fmt.Errorf("invalid asset id: %s", id)
+		}
+		parsedIDs = append(parsedIDs, parsed)
+	}
+
+	return s.SubmitSelections(ctx, SubmitSelectionInput{
+		GalleryID:   gallery.ID,
+		AssetIDs:    parsedIDs,
+		ClientName:  clientName,
+		ClientEmail: clientEmail,
+		Note:        note,
+	})
+}
+
 // UpdateStatus changes a selection's status.
 func (s *ProofingService) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	return s.proofingRepo.UpdateStatus(ctx, id, status)

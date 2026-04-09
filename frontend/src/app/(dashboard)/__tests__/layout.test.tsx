@@ -28,6 +28,7 @@ vi.mock("next/image", () => ({
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
   getStoredAccessTokenClaims: vi.fn(() => ({ workspace_id: "workspace-123", platform_role: "photographer" })),
+  getStoredPlatformRole: vi.fn(() => "photographer"),
 }));
 
 function renderDashboardLayout() {
