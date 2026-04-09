@@ -400,6 +400,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           onNext={() => setLightboxIndex((i) => (i !== null && i < assets.length - 1 ? i + 1 : i))}
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < assets.length - 1}
+          isProofing={gallery?.gallery_type === "proofing"}
         />
       )}
     </div>
