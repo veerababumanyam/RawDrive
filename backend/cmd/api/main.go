@@ -272,6 +272,12 @@ func main() {
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService()
 
+	// M11 Services: Storage Accounting, Lifecycle, Albums
+	storageAccountingSvc := service.NewStorageAccounting(dbPool)
+	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
+	albumRepo := repository.NewAlbumRepo(dbPool)
+	albumSvc := service.NewAlbumService(albumRepo)
+
 	// In-process event broker for real-time SSE delivery to frontend
 	eventBroker := handler.NewEventBroker()
 
@@ -281,7 +287,7 @@ func main() {
 		api.Use(middleware.JWTAuth(jwtSvc))
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
 
-		// M2 Protected routes
+		// M2 + M11 Protected routes
 		handler.RegisterM2Routes(api, handler.M2Dependencies{
 			AssetService:         assetSvc,
 			UploadService:        uploadSvc,
@@ -289,6 +295,11 @@ func main() {
 			ShareLinkService:     shareLinkSvc,
 			ProofingService:      proofingSvc,
 			StorageConfigService: storageConfigSvc,
+			// M11
+			AlbumService:         albumSvc,
+			StorageAccountingSvc: storageAccountingSvc,
+			LifecycleService:     lifecycleSvc,
+			AssetRepo:            assetRepo,
 		})
 
 		// Chunked upload routes
