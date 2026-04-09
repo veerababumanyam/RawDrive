@@ -122,3 +122,39 @@ func (r *ProofingRepo) CountByGalleryAndClient(ctx context.Context, galleryID uu
 	}
 	return count, nil
 }
+
+// UpdateSessionID updates a selection's session_id.
+func (r *ProofingRepo) UpdateSessionID(ctx context.Context, id uuid.UUID, sessionID *uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE proofing_selections SET session_id = $1 WHERE id = $2`,
+		sessionID, id,
+	)
+	if err != nil {
+		return fmt.Errorf("proofing update session_id: %w", err)
+	}
+	return nil
+}
+
+// UpdateStarRating updates a selection's star rating.
+func (r *ProofingRepo) UpdateStarRating(ctx context.Context, id uuid.UUID, rating int) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE proofing_selections SET star_rating = $1 WHERE id = $2`,
+		rating, id,
+	)
+	if err != nil {
+		return fmt.Errorf("proofing update star_rating: %w", err)
+	}
+	return nil
+}
+
+// UpdateColorLabel updates a selection's color label.
+func (r *ProofingRepo) UpdateColorLabel(ctx context.Context, id uuid.UUID, label string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE proofing_selections SET color_label = $1 WHERE id = $2`,
+		label, id,
+	)
+	if err != nil {
+		return fmt.Errorf("proofing update color_label: %w", err)
+	}
+	return nil
+}

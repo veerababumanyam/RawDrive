@@ -251,3 +251,20 @@ func (r *GalleryRepo) UpdateStatus(ctx context.Context, galleryID uuid.UUID, sta
 	}
 	return nil
 }
+
+// UpdateField updates a single column on a gallery. The column must be a valid gallery column.
+func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, field string, value any) error {
+	allowedFields := map[string]bool{
+		"password_hash": true, "access_mode": true, "proofing_deadline": true,
+		"faceid_enabled": true, "cover_config": true,
+	}
+	if !allowedFields[field] {
+		return fmt.Errorf("gallery repo: field %q is not updatable via UpdateField", field)
+	}
+	query := fmt.Sprintf(`UPDATE galleries SET %s=$1, updated_at=now() WHERE id=$2`, field)
+	_, err := r.pool.Exec(ctx, query, value, galleryID)
+	if err != nil {
+		return fmt.Errorf("gallery repo update field %s: %w", field, err)
+	}
+	return nil
+}

@@ -8,8 +8,12 @@ import { getGallery, type Gallery } from "@/lib/api/galleries";
 import {
   listProofingSelections,
   updateSelectionStatus,
+  listProofingSessions,
+  setStarRating as apiSetStarRating,
   type ProofingSelection,
+  type ProofingSession,
 } from "@/lib/api/proofing";
+import { StarRating } from "@/components/gallery/star-rating";
 import { getAssetPreviewUrl, proofingStatusClasses } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +24,7 @@ export default function GalleryProofingPage({ params }: { params: Promise<{ id: 
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
   const [assetsById, setAssetsById] = useState<AssetMap>({});
+  const [sessions, setSessions] = useState<ProofingSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeSelectionId, setActiveSelectionId] = useState("");
@@ -40,9 +45,10 @@ export default function GalleryProofingPage({ params }: { params: Promise<{ id: 
       setError("");
 
       try {
-        const [galleryData, selectionData] = await Promise.all([
+        const [galleryData, selectionData, sessionData] = await Promise.all([
           getGallery(token, id),
           listProofingSelections(token, id),
+          listProofingSessions(token, id).catch(() => [] as ProofingSession[]),
         ]);
 
         const assetEntries = await Promise.allSettled(
@@ -67,6 +73,7 @@ export default function GalleryProofingPage({ params }: { params: Promise<{ id: 
         setGallery(galleryData);
         setSelections(selectionData);
         setAssetsById(nextAssetMap);
+        setSessions(sessionData);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load proofing selections.");
@@ -163,6 +170,16 @@ export default function GalleryProofingPage({ params }: { params: Promise<{ id: 
             <span className="status-badge status-badge--success">Approved {selectionCounts.approved || 0}</span>
             <span className="status-badge status-badge--danger">Rejected {selectionCounts.rejected || 0}</span>
           </div>
+          {sessions.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              <span className="text-xs text-text-secondary">Lists:</span>
+              {sessions.map(s => (
+                <span key={s.id} className="status-badge status-badge--neutral text-xs">
+                  {s.name} {s.is_system ? "(system)" : ""}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -227,31 +244,49 @@ export default function GalleryProofingPage({ params }: { params: Promise<{ id: 
                     </p>
                   )}
 
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => handleUpdate(selection.id, "selected")}
-                      className="surface-button text-sm"
-                    >
-                      Mark selected
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => handleUpdate(selection.id, "approved")}
-                      className="status-button status-button--success px-4 py-2.5 text-sm"
-                    >
-                      {isBusy && selection.status !== "approved" ? "Updating..." : "Approve"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => handleUpdate(selection.id, "rejected")}
-                      className="status-button status-button--danger px-4 py-2.5 text-sm"
-                    >
-                      Reject
-                    </button>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleUpdate(selection.id, "selected")}
+                        className="surface-button text-sm"
+                      >
+                        Mark selected
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleUpdate(selection.id, "approved")}
+                        className="status-button status-button--success px-4 py-2.5 text-sm"
+                      >
+                        {isBusy && selection.status !== "approved" ? "Updating..." : "Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleUpdate(selection.id, "rejected")}
+                        className="status-button status-button--danger px-4 py-2.5 text-sm"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                    {/* M13: Star rating */}
+                    <StarRating
+                      rating={(selection as unknown as Record<string, unknown>).star_rating as number || 0}
+                      onChange={async (rating) => {
+                        const token = getStoredAccessToken();
+                        if (token) {
+                          try {
+                            await apiSetStarRating(token, id, selection.id, rating);
+                            setSelections(prev => prev.map(s =>
+                              s.id === selection.id ? { ...s, star_rating: rating } as ProofingSelection : s
+                            ));
+                          } catch { /* silently fail — non-critical */ }
+                        }
+                      }}
+                      size="sm"
+                    />
                   </div>
                 </div>
               </article>

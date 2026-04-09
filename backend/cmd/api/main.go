@@ -302,6 +302,16 @@ func main() {
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService()
 
+	// M13 Services: Gallery Access, Proofing Sessions, Comments, Album Approval
+	accessLogRepo := repository.NewGalleryAccessLogRepo(dbPool)
+	proofingSessionRepo := repository.NewProofingSessionRepo(dbPool)
+	proofingCommentRepo := repository.NewProofingCommentRepo(dbPool)
+	albumApprovalRepo := repository.NewAlbumApprovalRepo(dbPool)
+	galleryAccessSvc := service.NewGalleryAccessService(galleryRepo, accessLogRepo)
+	proofingSessionSvc := service.NewProofingSessionService(proofingSessionRepo, proofingRepo)
+	proofingCommentSvc := service.NewProofingCommentService(proofingCommentRepo)
+	albumApprovalSvc := service.NewAlbumApprovalService(albumApprovalRepo)
+
 	// M11 Services: Lifecycle
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
 
@@ -336,6 +346,11 @@ func main() {
 			DesignTemplateSvc:    service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
 			DesignCollabSvc:      service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence
 			DesignAISvc:          nil, // set after AI init below
+			// M13
+			GalleryAccessSvc:     galleryAccessSvc,
+			ProofingSessionSvc:   proofingSessionSvc,
+			ProofingCommentSvc:   proofingCommentSvc,
+			AlbumApprovalSvc:     albumApprovalSvc,
 		})
 
 		// Chunked upload routes

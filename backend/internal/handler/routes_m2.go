@@ -120,6 +120,31 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		// Proofing
 		r.Get("/{id}/proofing", proofingHandler.ListByGallery)
 		r.Patch("/{id}/proofing/{selectionId}", proofingHandler.UpdateStatus)
+
+		// M13: Gallery Access Control
+		if deps.GalleryAccessSvc != nil {
+			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc)
+			r.Post("/{id}/password", accessHandler.SetPassword)
+			r.Patch("/{id}/access-mode", accessHandler.SetAccessMode)
+			r.Post("/{id}/view-as-client", accessHandler.ViewAsClient)
+			r.Get("/{id}/access-logs", accessHandler.GetAccessLogs)
+			r.Patch("/{id}/proofing/deadline", accessHandler.SetProofingDeadline)
+		}
+
+		// M13: Enhanced Proofing (sessions, comments, album approval)
+		if deps.ProofingSessionSvc != nil {
+			psHandler := NewProofingSessionHandler(deps.ProofingSessionSvc, deps.ProofingCommentSvc, deps.AlbumApprovalSvc)
+			r.Post("/{id}/proofing/sessions", psHandler.CreateSession)
+			r.Get("/{id}/proofing/sessions", psHandler.ListSessions)
+			r.Patch("/{id}/proofing/sessions/{sessionId}", psHandler.UpdateSession)
+			r.Delete("/{id}/proofing/sessions/{sessionId}", psHandler.DeleteSession)
+			r.Patch("/{id}/proofing/selections/{selId}/rating", psHandler.SetStarRating)
+			r.Patch("/{id}/proofing/selections/{selId}/label", psHandler.SetColorLabel)
+			r.Post("/{id}/proofing/comments", psHandler.CreateComment)
+			r.Get("/{id}/proofing/comments", psHandler.GetComments)
+			r.Post("/{id}/proofing/album-approval", psHandler.SubmitAlbumApproval)
+			r.Get("/{id}/proofing/album-approval", psHandler.ListAlbumApprovals)
+		}
 	})
 
 	// M11: Album detail routes
@@ -163,6 +188,12 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
+
+		// M13: Public gallery access verification
+		if deps.GalleryAccessSvc != nil {
+			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc)
+			r.Post("/galleries/{slug}/verify-password", accessHandler.VerifyPassword)
+		}
 	})
 }
 
@@ -185,4 +216,9 @@ type M2Dependencies struct {
 	GalleryDesignSvc     *service.GalleryDesignService
 	DesignCollabSvc      *service.DesignCollabService
 	DesignAISvc          *service.DesignAIService
+	// M13 dependencies (nil-safe)
+	GalleryAccessSvc     *service.GalleryAccessService
+	ProofingSessionSvc   *service.ProofingSessionService
+	ProofingCommentSvc   *service.ProofingCommentService
+	AlbumApprovalSvc     *service.AlbumApprovalService
 }
