@@ -16,3 +16,7 @@ node_modules/
 _cobolt-output/stitch-screens/
 test-results/
 tests/photos/
+.storage/
+.tmp/
+backend/.storage/
+*.exe~
