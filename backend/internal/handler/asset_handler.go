@@ -107,6 +107,64 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, result)
 }
 
+// Download handles GET /api/v1/assets/{id}/download?format=original|webp|thumbnail
+func (h *AssetHandler) Download(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
+		return
+	}
+
+	asset, err := h.assetSvc.GetByID(r.Context(), id)
+	if err != nil || asset == nil {
+		http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
+		return
+	}
+
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "original"
+	}
+
+	var downloadKey string
+	var filename string
+
+	switch format {
+	case "webp":
+		// Prefer display_webp, fallback to thumb_lg_webp
+		if key, ok := asset.ThumbnailURLs["display_webp"]; ok {
+			downloadKey = key
+			filename = asset.Filename + ".webp"
+		} else if key, ok := asset.ThumbnailURLs["thumb_lg_webp"]; ok {
+			downloadKey = key
+			filename = asset.Filename + ".webp"
+		} else {
+			http.Error(w, `{"error":"webp version not available"}`, http.StatusNotFound)
+			return
+		}
+	case "thumbnail":
+		if key, ok := asset.ThumbnailURLs["thumb_lg"]; ok {
+			downloadKey = key
+			filename = "thumb_" + asset.Filename
+		} else {
+			http.Error(w, `{"error":"thumbnail not available"}`, http.StatusNotFound)
+			return
+		}
+	default: // "original"
+		downloadKey = asset.StorageKey
+		filename = asset.Filename
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": map[string]interface{}{
+			"download_url": "/storage/" + downloadKey,
+			"filename":     filename,
+			"format":       format,
+		},
+	})
+}
+
 // SoftDelete handles DELETE /api/v1/assets/{id}
 func (h *AssetHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

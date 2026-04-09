@@ -11,6 +11,9 @@ import (
 	_ "image/png"
 	"io"
 
+	"os"
+	"os/exec"
+
 	"github.com/disintegration/imaging"
 	"github.com/rawdrive/backend/internal/storage"
 )
@@ -43,8 +46,18 @@ var CoverSizes = []ThumbnailSize{
 // OGImageSize is the social share preview (1200x630 for Open Graph).
 var OGImageSize = ThumbnailSize{Name: "og_image", MaxWidth: 1200, MaxHeight: 630}
 
-// AllDerivativeSizes combines all derivative types for full pipeline processing.
+// AllDerivativeSizes combines all derivative types for full pipeline processing (JPEG).
 var AllDerivativeSizes = append(append(StandardSizes, CoverSizes...), OGImageSize)
+
+// WebPDisplaySize is the full-res WebP conversion used for in-app display (replaces original in UI).
+var WebPDisplaySize = ThumbnailSize{Name: "display_webp", MaxWidth: 2400, MaxHeight: 2400}
+
+// WebPThumbSizes are the WebP versions of the standard thumbnail sizes.
+var WebPThumbSizes = []ThumbnailSize{
+	{Name: "thumb_sm_webp", MaxWidth: 200, MaxHeight: 200},
+	{Name: "thumb_md_webp", MaxWidth: 600, MaxHeight: 600},
+	{Name: "thumb_lg_webp", MaxWidth: 1200, MaxHeight: 1200},
+}
 
 // WatermarkPreviewSize is the watermarked mid-res preview for proofing galleries.
 var WatermarkPreviewSize = ThumbnailSize{Name: "watermark_preview", MaxWidth: 1200, MaxHeight: 1200}
@@ -146,14 +159,27 @@ func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID s
 		Height: bounds.Dy(),
 	}
 
-	// Generate all derivative sizes (thumbnails + covers + OG)
+	// Generate JPEG derivative sizes (thumbnails + covers + OG)
 	for _, size := range AllDerivativeSizes {
 		dr, err := s.generateDerivative(ctx, assetID, srcImg, size)
 		if err != nil {
-			// Log but continue — one failed derivative shouldn't block others
 			continue
 		}
 		result.Derivatives = append(result.Derivatives, *dr)
+	}
+
+	// Generate WebP derivatives for in-app display (smaller, faster loading)
+	for _, size := range WebPThumbSizes {
+		dr, err := s.generateWebPDerivative(ctx, assetID, srcImg, size)
+		if err != nil {
+			continue
+		}
+		result.Derivatives = append(result.Derivatives, *dr)
+	}
+
+	// Generate full-res WebP display version (replaces original in UI)
+	if displayWebP, err := s.generateWebPDerivative(ctx, assetID, srcImg, WebPDisplaySize); err == nil {
+		result.Derivatives = append(result.Derivatives, *displayWebP)
 	}
 
 	// Generate real LQIP (20px wide, base64 encoded)
@@ -168,6 +194,82 @@ func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID s
 	}
 
 	return result, nil
+}
+
+// generateWebPDerivative creates a WebP derivative using cwebp (libwebp) if available,
+// falling back to optimized JPEG if cwebp is not installed.
+// In production Docker containers, cwebp is always available.
+func (s *ThumbnailService) generateWebPDerivative(ctx context.Context, assetID string, src image.Image, size ThumbnailSize) (*DerivativeResult, error) {
+	resized := imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
+
+	// Try WebP via cwebp command (available in Docker)
+	if _, err := exec.LookPath("cwebp"); err == nil {
+		return s.encodeWebPViaCwebp(ctx, assetID, resized, size)
+	}
+
+	// Fallback: optimized JPEG at quality 75 (smaller than the standard 85)
+	buf := new(bytes.Buffer)
+	if err := imaging.Encode(buf, resized, imaging.JPEG, imaging.JPEGQuality(75)); err != nil {
+		return nil, fmt.Errorf("fallback jpeg encode %s: %w", size.Name, err)
+	}
+
+	key := fmt.Sprintf("derivatives/%s/%s.jpg", assetID, size.Name)
+	if err := s.store.Put(ctx, key, buf, int64(buf.Len()), "image/jpeg"); err != nil {
+		return nil, fmt.Errorf("store fallback %s: %w", size.Name, err)
+	}
+
+	rBounds := resized.Bounds()
+	return &DerivativeResult{
+		Variant:    size.Name,
+		StorageKey: key,
+		Width:      rBounds.Dx(),
+		Height:     rBounds.Dy(),
+		SizeBytes:  int64(buf.Len()),
+		Format:     "jpeg", // fallback format
+	}, nil
+}
+
+// encodeWebPViaCwebp uses the cwebp CLI tool to produce real WebP output.
+func (s *ThumbnailService) encodeWebPViaCwebp(ctx context.Context, assetID string, img image.Image, size ThumbnailSize) (*DerivativeResult, error) {
+	// Write intermediate PNG to temp file
+	tmpIn, err := os.CreateTemp("", "rawdrive-webp-in-*.png")
+	if err != nil {
+		return nil, fmt.Errorf("webp temp in: %w", err)
+	}
+	defer os.Remove(tmpIn.Name())
+	if err := imaging.Encode(tmpIn, img, imaging.PNG); err != nil {
+		tmpIn.Close()
+		return nil, fmt.Errorf("webp png encode: %w", err)
+	}
+	tmpIn.Close()
+
+	tmpOut := tmpIn.Name() + ".webp"
+	defer os.Remove(tmpOut)
+
+	cmd := exec.CommandContext(ctx, "cwebp", "-q", "82", "-m", "6", tmpIn.Name(), "-o", tmpOut)
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("cwebp: %w", err)
+	}
+
+	webpData, err := os.ReadFile(tmpOut)
+	if err != nil {
+		return nil, fmt.Errorf("read webp: %w", err)
+	}
+
+	key := fmt.Sprintf("derivatives/%s/%s.webp", assetID, size.Name)
+	if err := s.store.Put(ctx, key, bytes.NewReader(webpData), int64(len(webpData)), "image/webp"); err != nil {
+		return nil, fmt.Errorf("store webp %s: %w", size.Name, err)
+	}
+
+	bounds := img.Bounds()
+	return &DerivativeResult{
+		Variant:    size.Name,
+		StorageKey: key,
+		Width:      bounds.Dx(),
+		Height:     bounds.Dy(),
+		SizeBytes:  int64(len(webpData)),
+		Format:     "webp",
+	}, nil
 }
 
 // generateWatermarkPreview creates a watermarked mid-res preview for proofing galleries.

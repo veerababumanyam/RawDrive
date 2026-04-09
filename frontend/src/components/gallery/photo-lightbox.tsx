@@ -36,6 +36,7 @@ export function PhotoLightbox({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   const [showComments, setShowComments] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [zoom, setZoom] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -117,14 +118,36 @@ export function PhotoLightbox({
     else document.exitFullscreen?.();
   }, []);
 
-  const handleDownload = () => {
-    const url = asset.download_url || Object.values(asset.thumbnail_urls || {})[0];
-    if (url) {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = asset.filename;
-      a.click();
+  const handleDownloadFormat = (format: "original" | "webp" | "thumbnail") => {
+    let url: string;
+    let filename: string;
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+    switch (format) {
+      case "webp":
+        url = asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp || "";
+        filename = asset.filename.replace(/\.[^.]+$/, ".webp");
+        break;
+      case "thumbnail":
+        url = asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg || "";
+        filename = "thumb_" + asset.filename;
+        break;
+      default:
+        url = asset.download_url || asset.storage_key || "";
+        filename = asset.filename;
     }
+
+    if (!url) return;
+
+    // If it's a relative path, prepend the API base + storage prefix
+    if (!url.startsWith("http")) {
+      url = `${API_BASE}/storage/${url}`;
+    }
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
   };
 
   const handleSubmitComment = () => {
@@ -204,12 +227,54 @@ export function PhotoLightbox({
             </svg>
           </button>
 
-          {/* Download */}
-          <button onClick={handleDownload} className={btnClass} aria-label="Download original" title="Download">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </button>
+          {/* Download with format options */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDownloadMenu((s) => !s)}
+              className={`${btnClass} ${showDownloadMenu ? "bg-white/25" : ""}`}
+              aria-label="Download options"
+              title="Download"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+            {showDownloadMenu && (
+              <div className="absolute right-0 top-12 z-20 w-56 rounded-xl bg-black/90 border border-white/10 backdrop-blur-sm py-1 shadow-xl">
+                <button
+                  onClick={() => { handleDownloadFormat("original"); setShowDownloadMenu(false); }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10"
+                >
+                  <span className="text-white/50 w-12 text-xs">ORIG</span>
+                  <span>Original ({formatBytes(asset.size_bytes)})</span>
+                </button>
+                {asset.thumbnail_urls?.display_webp && (
+                  <button
+                    onClick={() => { handleDownloadFormat("webp"); setShowDownloadMenu(false); }}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10"
+                  >
+                    <span className="text-white/50 w-12 text-xs">WebP</span>
+                    <span>Optimized WebP</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => { handleDownloadFormat("thumbnail"); setShowDownloadMenu(false); }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10"
+                >
+                  <span className="text-white/50 w-12 text-xs">THUMB</span>
+                  <span>Thumbnail (small)</span>
+                </button>
+                <div className="border-t border-white/10 mx-3 my-1" />
+                <button
+                  onClick={() => { handleDownloadFormat("original"); handleDownloadFormat("webp"); setShowDownloadMenu(false); }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10"
+                >
+                  <span className="text-white/50 w-12 text-xs">BOTH</span>
+                  <span>Original + WebP</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Fullscreen */}
           <button onClick={toggleFullscreen} className={btnClass} aria-label="Toggle fullscreen" title="Fullscreen (F)">

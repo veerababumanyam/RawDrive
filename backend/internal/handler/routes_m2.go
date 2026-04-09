@@ -52,6 +52,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 
 		// Parametric routes
 		r.Get("/{id}", assetHandler.GetByID)
+		r.Get("/{id}/download", assetHandler.Download)
 		r.Delete("/{id}", assetHandler.SoftDelete)
 		if processingStatusHandler != nil {
 			r.Get("/{id}/processing-status", processingStatusHandler.GetStatus)
