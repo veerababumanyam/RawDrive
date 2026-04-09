@@ -62,8 +62,9 @@ func (s *StreamService) CreateStream(ctx context.Context, input CreateStreamInpu
 	}
 
 	// Provision Cloudflare Stream live input (if API key configured)
-	cfAPIToken := os.Getenv("CF_STREAM_API_TOKEN")
-	cfAccountID := os.Getenv("CF_STREAM_ACCOUNT_ID")
+	// Check multiple env var names for compatibility with existing .env.cobolt
+	cfAPIToken := envFirst("CF_STREAM_API_TOKEN", "CLODFLARE_STREAMING", "CLOUDFLARE_STREAMING")
+	cfAccountID := envFirst("CF_STREAM_ACCOUNT_ID", "R2_ACCOUNT_ID")
 	if cfAPIToken != "" && cfAccountID != "" {
 		cfUID, rtmpsURL, rtmpsKey, playbackURL, err := provisionCloudflareStream(ctx, cfAPIToken, cfAccountID, stream.Title)
 		if err != nil {
@@ -173,22 +174,36 @@ func (s *StreamService) VerifyStreamPin(ctx context.Context, streamID uuid.UUID,
 	return *stream.PinCode == pin, nil
 }
 
+// envFirst returns the first non-empty value from the given env var names.
+func envFirst(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // provisionCloudflareStream creates a live input on Cloudflare Stream.
 // Returns: cfUID, rtmpsURL, rtmpsKey, playbackURL.
 func provisionCloudflareStream(_ context.Context, apiToken, accountID, title string) (string, string, string, string, error) {
 	// Cloudflare Stream Live Input API:
 	// POST https://api.cloudflare.com/client/v4/accounts/{account_id}/stream/live_inputs
-	// This is a placeholder for the actual API call — requires net/http client.
-	// In production, this calls CF API and returns the RTMPS credentials.
+	// In production, this sends an HTTP POST to CF API with the Bearer token.
+	// For now, this returns placeholder values that will be replaced when the real
+	// HTTP client is wired in.
 	_ = apiToken // Used in production for CF API Authorization header
 	log.Printf("Cloudflare Stream: would provision live input for %q (account: %s)", title, accountID)
 
-	// Return placeholder values — in production these come from CF API response.
-	// The actual integration sends: {"meta":{"name":"title"},"recording":{"mode":"automatic"}}
-	// and receives: {"uid":"...", "rtmps":{"url":"...", "streamKey":"..."}, "webRTC":{"url":"..."}}
+	// Use configured subdomain or derive from account ID
+	subdomain := envFirst("CLOUDFLARE_SUB_DOMAIN")
+	if subdomain == "" {
+		subdomain = fmt.Sprintf("customer-%s.cloudflarestream.com", accountID[:8])
+	}
+
 	return fmt.Sprintf("cf-live-%s", uuid.New().String()[:8]),
 		"rtmps://live.cloudflare.com:443/live/",
 		fmt.Sprintf("key-%s", uuid.New().String()[:12]),
-		fmt.Sprintf("https://customer-%s.cloudflarestream.com/", accountID[:8]),
+		fmt.Sprintf("https://%s/", subdomain),
 		nil
 }
