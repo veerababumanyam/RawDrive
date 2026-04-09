@@ -305,6 +305,9 @@ func main() {
 	// M11 Services: Lifecycle
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
 
+	// Worker registry (declared at main scope so closures can register workers)
+	workerRegistry := worker.NewRegistry()
+
 	// In-process event broker for real-time SSE delivery to frontend
 	eventBroker := handler.NewEventBroker()
 
@@ -337,21 +340,7 @@ func main() {
 		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir)
 		chunkedHandler.RegisterRoutes(api)
 
-		// Thumbnail worker
-		thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider)
-		workerRegistry := worker.NewRegistry()
-		workerRegistry.Register("thumbnail", thumbWorker)
-		workerCtx, workerCancel := context.WithCancel(context.Background())
-		defer workerCancel()
-		workerRegistry.StartAll(workerCtx)
-
-		// M11: Asset purge worker (30-day retention) + gallery expiry
-		purgeWorker := worker.NewAssetPurgeWorker(dbPool, storageProvider)
-		workerRegistry.Register("asset-purge", purgeWorker)
-		expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
-		workerRegistry.Register("gallery-expiry", expiryWorker)
-
-		log.Println("M2: routes registered, thumbnail + purge + expiry workers started")
+		log.Println("M2: routes registered")
 
 		// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────
 
@@ -530,6 +519,18 @@ func main() {
 		})
 	})
 	log.Println("Storage: R2 proxy with JWT auth on /storage/*")
+
+	// ──────────────────────── Background Workers (start after all routes) ────────────────
+	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider)
+	workerRegistry.Register("thumbnail", thumbWorker)
+	purgeWorker := worker.NewAssetPurgeWorker(dbPool, storageProvider)
+	workerRegistry.Register("asset-purge", purgeWorker)
+	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
+	workerRegistry.Register("gallery-expiry", expiryWorker)
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+	workerRegistry.StartAll(workerCtx)
+	log.Println("Workers: all started (thumbnail, asset-purge, gallery-expiry, face-detection, ai-tagging, duplicate-scan, message-cleanup, moderation)")
 
 	// ──────────────────────── Health Check ────────────────────────
 
