@@ -1,8 +1,8 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "greenfield",
-  "currentStage": "M2-complete",
-  "version": "0.0.11",
+  "currentStage": "M11-partial",
+  "version": "0.0.12",
   "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
   "flags": {
     "generateSkills": false,
@@ -24,7 +24,7 @@
     "generate-skills": "skipped",
     "create-claude-md": "completed"
   },
-  "lastUpdated": "2026-04-09T12:12:27.364Z",
+  "lastUpdated": "2026-04-09T12:19:24.846Z",
   "planning": {
     "completedAt": "2026-04-07T13:39:14.048Z",
     "phases": 5,
@@ -111,7 +111,9 @@
       "stitch": true,
       "figma": true,
       "stitchModel": "GEMINI_3_1_PRO"
-    }
+    },
+    "openIssues": 16,
+    "resolvedIssues": 3
   },
   "gates": {
     "preflight": "passed"
