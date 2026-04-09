@@ -330,6 +330,10 @@ func main() {
 			StorageAccountingSvc: storageAccountingSvc,
 			LifecycleService:     lifecycleSvc,
 			AssetRepo:            assetRepo,
+			// M12
+			GalleryDesignSvc:     service.NewGalleryDesignService(galleryRepo),
+			GalleryRepo:          galleryRepo,
+			DesignTemplateSvc:    service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
 		})
 
 		// Chunked upload routes

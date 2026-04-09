@@ -85,6 +85,21 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 			r.Post("/{galleryId}/assets/retry-failed", processingStatusHandler.BulkRetry)
 		}
 
+		// M12: Gallery Design Studio
+		if deps.GalleryDesignSvc != nil {
+			designHandler := NewGalleryDesignHandler(deps.GalleryDesignSvc)
+			r.Get("/{id}/design", designHandler.GetDesign)
+			r.Put("/{id}/design", designHandler.UpdateDesign)
+		}
+		if deps.GalleryRepo != nil {
+			coverHandler := NewGalleryCoverHandler(deps.GalleryRepo)
+			r.Put("/{id}/cover", coverHandler.UpdateCover)
+		}
+		if deps.DesignTemplateSvc != nil {
+			templateHandler := NewDesignTemplateHandler(deps.DesignTemplateSvc)
+			r.Post("/{id}/apply-template", templateHandler.ApplyTemplate)
+		}
+
 		// Share links
 		r.Post("/{id}/share", shareHandler.Create)
 		r.Get("/{id}/share", shareHandler.ListByGallery)
@@ -109,6 +124,19 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Route("/api/v1/storage", func(r chi.Router) {
 			r.Get("/analytics", storageAnalyticsHandler.GetAnalytics)
 			r.Get("/usage", storageAnalyticsHandler.GetUsage)
+		})
+	}
+
+	// M12: Design Templates (top-level, not nested under galleries/{id})
+	if deps.DesignTemplateSvc != nil {
+		templateHandler := NewDesignTemplateHandler(deps.DesignTemplateSvc)
+		r.Route("/api/v1/design-templates", func(r chi.Router) {
+			r.Post("/", templateHandler.CreateTemplate)
+			r.Get("/", templateHandler.ListTemplates)
+			r.Get("/{id}", templateHandler.GetTemplate)
+			r.Put("/{id}", templateHandler.UpdateTemplate)
+			r.Delete("/{id}", templateHandler.DeleteTemplate)
+			r.Post("/{id}/restore", templateHandler.RestoreTemplate)
 		})
 	}
 
@@ -139,4 +167,8 @@ type M2Dependencies struct {
 	StorageAccountingSvc *service.StorageAccounting
 	LifecycleService     *service.AssetLifecycleService
 	AssetRepo            *repository.AssetRepo
+	// M12 dependencies
+	DesignTemplateSvc    *service.DesignTemplateService
+	GalleryRepo          *repository.GalleryRepo
+	GalleryDesignSvc     *service.GalleryDesignService
 }
