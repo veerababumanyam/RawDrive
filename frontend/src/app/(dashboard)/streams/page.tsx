@@ -37,9 +37,14 @@ export default function StreamsPage() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    const token = getStoredAccessToken();
-    await deleteStream(token, id);
-    loadStreams();
+    if (!confirm("Delete this stream? This action cannot be undone.")) return;
+    try {
+      const token = getStoredAccessToken();
+      await deleteStream(token, id);
+      loadStreams();
+    } catch {
+      setError("Failed to delete stream");
+    }
   };
 
   if (loading) {

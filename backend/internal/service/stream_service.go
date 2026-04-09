@@ -1,9 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -184,26 +188,96 @@ func envFirst(names ...string) string {
 	return ""
 }
 
-// provisionCloudflareStream creates a live input on Cloudflare Stream.
-// Returns: cfUID, rtmpsURL, rtmpsKey, playbackURL.
-func provisionCloudflareStream(_ context.Context, apiToken, accountID, title string) (string, string, string, string, error) {
-	// Cloudflare Stream Live Input API:
-	// POST https://api.cloudflare.com/client/v4/accounts/{account_id}/stream/live_inputs
-	// In production, this sends an HTTP POST to CF API with the Bearer token.
-	// For now, this returns placeholder values that will be replaced when the real
-	// HTTP client is wired in.
-	_ = apiToken // Used in production for CF API Authorization header
-	log.Printf("Cloudflare Stream: would provision live input for %q (account: %s)", title, accountID)
+// cfLiveInputRequest is the request body for Cloudflare Stream Live Input API.
+type cfLiveInputRequest struct {
+	Meta      map[string]string `json:"meta"`
+	Recording cfRecordingConfig `json:"recording"`
+}
 
-	// Use configured subdomain or derive from account ID
-	subdomain := envFirst("CLOUDFLARE_SUB_DOMAIN")
-	if subdomain == "" {
-		subdomain = fmt.Sprintf("customer-%s.cloudflarestream.com", accountID[:8])
+type cfRecordingConfig struct {
+	Mode string `json:"mode"`
+}
+
+// cfLiveInputResponse is the response from Cloudflare Stream Live Input API.
+type cfLiveInputResponse struct {
+	Success bool `json:"success"`
+	Result  struct {
+		UID  string `json:"uid"`
+		RTMPS struct {
+			URL       string `json:"url"`
+			StreamKey string `json:"streamKey"`
+		} `json:"rtmps"`
+		WebRTC struct {
+			URL string `json:"url"`
+		} `json:"webRTC"`
+	} `json:"result"`
+	Errors []struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+// provisionCloudflareStream creates a live input on Cloudflare Stream.
+// Calls POST /client/v4/accounts/{account_id}/stream/live_inputs
+// Returns: cfUID, rtmpsURL, rtmpsKey, playbackURL.
+func provisionCloudflareStream(ctx context.Context, apiToken, accountID, title string) (string, string, string, string, error) {
+	reqBody := cfLiveInputRequest{
+		Meta:      map[string]string{"name": title},
+		Recording: cfRecordingConfig{Mode: "automatic"},
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	return fmt.Sprintf("cf-live-%s", uuid.New().String()[:8]),
-		"rtmps://live.cloudflare.com:443/live/",
-		fmt.Sprintf("key-%s", uuid.New().String()[:12]),
-		fmt.Sprintf("https://%s/", subdomain),
+	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/stream/live_inputs", accountID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("CF Stream API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("read CF response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", "", "", "", fmt.Errorf("CF Stream API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var cfResp cfLiveInputResponse
+	if err := json.Unmarshal(respBody, &cfResp); err != nil {
+		return "", "", "", "", fmt.Errorf("parse CF response: %w", err)
+	}
+	if !cfResp.Success {
+		errMsg := "unknown error"
+		if len(cfResp.Errors) > 0 {
+			errMsg = cfResp.Errors[0].Message
+		}
+		return "", "", "", "", fmt.Errorf("CF Stream API error: %s", errMsg)
+	}
+
+	// Build playback URL from configured subdomain or CF default
+	subdomain := envFirst("CLOUDFLARE_SUB_DOMAIN")
+	if subdomain == "" {
+		subdomain = fmt.Sprintf("customer-%s.cloudflarestream.com", accountID)
+	}
+	playbackURL := fmt.Sprintf("https://%s/%s/iframe", subdomain, cfResp.Result.UID)
+
+	log.Printf("Cloudflare Stream: provisioned live input %s for %q", cfResp.Result.UID, title)
+
+	return cfResp.Result.UID,
+		cfResp.Result.RTMPS.URL,
+		cfResp.Result.RTMPS.StreamKey,
+		playbackURL,
 		nil
 }

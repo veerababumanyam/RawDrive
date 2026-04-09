@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { getPublicStream, sendChatMessage, verifyStreamPin, type PublicStream, type StreamChat } from "@/lib/api/streams";
+import { getPublicStream, getPublicChatHistory, sendChatMessage, verifyStreamPin, type PublicStream, type StreamChat } from "@/lib/api/streams";
 
 export default function StreamViewerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -23,6 +23,10 @@ export default function StreamViewerPage({ params }: { params: Promise<{ id: str
         setStream(s);
         if (s.pin_required) {
           setPinRequired(true);
+        }
+        // Load existing chat messages
+        if (s.chat_enabled) {
+          getPublicChatHistory(id, 100).then(setChatMessages).catch(() => {});
         }
       })
       .catch(() => setError("Stream not found"))

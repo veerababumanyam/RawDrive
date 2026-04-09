@@ -158,3 +158,149 @@ export async function verifyStreamPin(id: string, pin: string): Promise<boolean>
   const data = await res.json();
   return data.valid;
 }
+
+// Public chat history (no auth required — for stream viewer page)
+export async function getPublicChatHistory(streamId: string, limit?: number): Promise<StreamChat[]> {
+  const query = limit ? `?limit=${limit}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/public/streams/${streamId}/chat${query}`);
+  if (!res.ok) throw new Error(`Failed to get chat: ${res.status}`);
+  return res.json();
+}
+
+// ─── Chat Moderation (authenticated) ───
+
+export async function muteUser(token: string, streamId: string, userName: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/streams/${streamId}/chat/mute`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ user_name: userName }),
+  });
+  if (!res.ok) throw new Error(`Failed to mute user: ${res.status}`);
+}
+
+export async function deleteChatMessage(token: string, streamId: string, messageId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/streams/${streamId}/chat/${messageId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to delete message: ${res.status}`);
+}
+
+export async function updateChatSettings(token: string, streamId: string, enabled: boolean, slowModeSecs: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/streams/${streamId}/chat/settings`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled, slow_mode_seconds: slowModeSecs }),
+  });
+  if (!res.ok) throw new Error(`Failed to update chat settings: ${res.status}`);
+}
+
+// ─── Video Assets ───
+
+export interface VideoAsset {
+  id: string;
+  asset_id: string;
+  workspace_id: string;
+  status: string;
+  duration_seconds?: number;
+  codec?: string;
+  resolution?: string;
+  file_size_bytes?: number;
+  qualities: string;
+  thumbnail_urls: string;
+  cf_video_uid?: string;
+  cf_playback_url?: string;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createVideoAsset(token: string, data: { asset_id: string; file_size_bytes?: number; codec?: string; resolution?: string }): Promise<VideoAsset> {
+  const res = await fetch(`${API_BASE}/api/v1/videos`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to create video: ${res.status}`);
+  return res.json();
+}
+
+export async function getVideoAsset(token: string, id: string): Promise<VideoAsset> {
+  const res = await fetch(`${API_BASE}/api/v1/videos/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Video not found: ${res.status}`);
+  return res.json();
+}
+
+export async function getVideoByAssetId(token: string, assetId: string): Promise<VideoAsset> {
+  const res = await fetch(`${API_BASE}/api/v1/videos/by-asset/${assetId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Video not found for asset: ${res.status}`);
+  return res.json();
+}
+
+export async function getVideoTranscodingStatus(token: string, id: string): Promise<{ id: string; status: string; qualities: string; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/videos/${id}/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Video not found: ${res.status}`);
+  return res.json();
+}
+
+// ─── Desktop Sessions ───
+
+export interface DesktopSession {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  device_name: string;
+  os: string;
+  app_version: string;
+  last_seen_at: string;
+  is_active: boolean;
+  upload_stats: string;
+  created_at: string;
+}
+
+export async function registerDesktopSession(token: string, data: { device_name: string; os: string; app_version: string }): Promise<DesktopSession> {
+  const res = await fetch(`${API_BASE}/api/v1/desktop/sessions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to register session: ${res.status}`);
+  return res.json();
+}
+
+export async function listDesktopSessions(token: string): Promise<DesktopSession[]> {
+  const res = await fetch(`${API_BASE}/api/v1/desktop/sessions`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to list sessions: ${res.status}`);
+  return res.json();
+}
+
+export async function desktopHeartbeat(token: string, sessionId: string, appVersion: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/desktop/sessions/${sessionId}/heartbeat`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ app_version: appVersion }),
+  });
+  if (!res.ok) throw new Error(`Failed to heartbeat: ${res.status}`);
+}
+
+export async function deactivateDesktopSession(token: string, sessionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/desktop/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to deactivate session: ${res.status}`);
+}
+
+export async function getDesktopDownloadInfo(): Promise<{ app_name: string; platforms: Record<string, { url: string; version: string; min_os: string }> }> {
+  const res = await fetch(`${API_BASE}/api/v1/desktop/download`);
+  if (!res.ok) throw new Error(`Failed to get download info: ${res.status}`);
+  return res.json();
+}
