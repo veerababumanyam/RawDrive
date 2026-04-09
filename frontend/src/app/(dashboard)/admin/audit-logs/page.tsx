@@ -6,10 +6,10 @@ import { listAuditLogs, type AuditLogEntry } from "@/lib/api/admin";
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
-    low: { bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "bg-emerald-400" },
-    medium: { bg: "bg-amber-500/10", text: "text-amber-400", dot: "bg-amber-400" },
-    high: { bg: "bg-red-500/10", text: "text-red-400", dot: "bg-red-400" },
-    critical: { bg: "bg-red-600/20", text: "text-red-300", dot: "bg-red-300" },
+    low: { bg: "bg-feedback-success/10", text: "text-feedback-success", dot: "bg-feedback-success" },
+    medium: { bg: "bg-feedback-warning/10", text: "text-feedback-warning", dot: "bg-feedback-warning" },
+    high: { bg: "bg-feedback-error/10", text: "text-feedback-error", dot: "bg-feedback-error" },
+    critical: { bg: "bg-feedback-error/20", text: "text-feedback-error/70", dot: "bg-feedback-error/50" },
   };
   const c = colors[severity] || colors.low;
   return (
@@ -46,8 +46,8 @@ export default function AdminAuditLogsPage() {
 
   useEffect(() => { fetchLogs(); }, []);
 
-  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading audit logs...</p></div>;
-  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error}</p></div>;
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading audit logs...</p></div>;
+  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error}</p></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -59,7 +59,7 @@ export default function AdminAuditLogsPage() {
               {total} entries
             </span>
           </h2>
-          <p className="text-gray-500 mt-2 font-body text-sm">Immutable record of every administrative action.</p>
+          <p className="text-text-secondary mt-2 font-body text-sm">Immutable record of every administrative action.</p>
         </div>
       </div>
 
@@ -77,13 +77,13 @@ export default function AdminAuditLogsPage() {
       </section>
 
       {logs.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">No audit logs found.</div>
+        <div className="text-center py-16 text-text-secondary">No audit logs found.</div>
       ) : (
         <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
                   <th className="px-6 py-4 font-semibold">Timestamp</th>
                   <th className="px-6 py-4 font-semibold">Actor</th>
                   <th className="px-6 py-4 font-semibold">Action</th>
@@ -95,12 +95,12 @@ export default function AdminAuditLogsPage() {
               <tbody className="divide-y divide-white/[0.03]">
                 {logs.map((log) => (
                   <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-5 text-xs text-gray-500 font-label">{new Date(log.inserted_at).toLocaleString()}</td>
-                    <td className="px-6 py-5 text-sm text-gray-400">{log.actor_email || log.actor_id}</td>
+                    <td className="px-6 py-5 text-xs text-text-secondary font-label">{new Date(log.inserted_at).toLocaleString()}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{log.actor_email || log.actor_id}</td>
                     <td className="px-6 py-5 text-sm font-mono text-secondary">{log.action}</td>
-                    <td className="px-6 py-5 text-sm text-gray-400">{log.resource_type}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{log.resource_type}</td>
                     <td className="px-6 py-5"><SeverityBadge severity={log.severity} /></td>
-                    <td className="px-6 py-5 text-xs text-gray-600 font-mono">{log.ip_address || "—"}</td>
+                    <td className="px-6 py-5 text-xs text-text-secondary font-mono">{log.ip_address || "—"}</td>
                   </tr>
                 ))}
               </tbody>

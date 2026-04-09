@@ -67,9 +67,9 @@ export function SpendDashboard({ token }: SpendDashboardProps) {
             <div
               className={`h-full rounded-full transition-all ${
                 credits.cap_used_percent >= 100
-                  ? "bg-red-500"
+                  ? "bg-feedback-error"
                   : credits.cap_used_percent >= 80
-                  ? "bg-yellow-500"
+                  ? "bg-feedback-warning"
                   : "bg-accent"
               }`}
               style={{ width: `${Math.min(credits.cap_used_percent, 100)}%` }}

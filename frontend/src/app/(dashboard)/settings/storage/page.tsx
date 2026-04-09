@@ -96,12 +96,12 @@ export default function StorageSettingsPage() {
               <p className="text-lg font-semibold">Cloudflare R2</p>
               <p className="text-xs text-on-surface-variant mt-0.5">Managed by RawDrive — zero egress, global CDN</p>
             </div>
-            <span className={`text-xs px-3 py-1 rounded-full ${warningLevel === "critical" ? "bg-red-500/10 text-red-400" : warningLevel === "warning" ? "bg-yellow-500/10 text-yellow-400" : "bg-primary/10 text-primary"}`}>
+            <span className={`text-xs px-3 py-1 rounded-full ${warningLevel === "critical" ? "bg-feedback-error/10 text-feedback-error" : warningLevel === "warning" ? "bg-feedback-warning/10 text-feedback-warning" : "bg-primary/10 text-primary"}`}>
               {warningLevel === "critical" ? "Storage Critical" : warningLevel === "warning" ? "Storage Warning" : "Active"}
             </span>
           </div>
           <div className="h-2 rounded-full bg-surface-container overflow-hidden">
-            <div className={`h-full rounded-full ${warningLevel === "critical" ? "bg-red-500" : warningLevel === "warning" ? "bg-yellow-500" : "bg-gradient-to-r from-primary to-primary-container"}`} style={{ width: `${Math.min(pctUsed, 100)}%` }} />
+            <div className={`h-full rounded-full ${warningLevel === "critical" ? "bg-feedback-error" : warningLevel === "warning" ? "bg-feedback-warning" : "bg-gradient-to-r from-primary to-primary-container"}`} style={{ width: `${Math.min(pctUsed, 100)}%` }} />
           </div>
           <p className="text-xs text-on-surface-variant mt-2">{loading ? "Loading..." : `${usedDisplay} / ${quotaDisplay} used`}</p>
         </div>
@@ -188,8 +188,8 @@ export default function StorageSettingsPage() {
                     className="px-5 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5 transition-colors disabled:opacity-50">
                     {testResult === "testing" ? "Testing..." : testResult === "success" ? "Connected" : testResult === "error" ? "Failed — Retry" : "Test Connection"}
                   </button>
-                  {testResult === "success" && <p className="text-xs text-green-400">Connection successful.</p>}
-                  {testResult === "error" && <p className="text-xs text-red-400">Connection failed — check credentials.</p>}
+                  {testResult === "success" && <p className="text-xs text-feedback-success">Connection successful.</p>}
+                  {testResult === "error" && <p className="text-xs text-feedback-error">Connection failed — check credentials.</p>}
                 </div>
                 <div className="flex justify-between mt-6">
                   <button onClick={() => setStep(1)} className="px-5 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5">Back</button>

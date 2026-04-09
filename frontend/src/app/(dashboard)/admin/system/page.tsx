@@ -19,26 +19,26 @@ function formatUptime(seconds: number): string {
 }
 
 function LatencyCard({ label, value, unit }: { label: string; value: number; unit: string }) {
-  const color = value < 50 ? "text-secondary" : value < 100 ? "text-amber-400" : "text-red-400";
+  const color = value < 50 ? "text-secondary" : value < 100 ? "text-feedback-warning" : "text-feedback-error";
   return (
     <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-6 rounded-2xl">
-      <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500 font-label">{label}</p>
-      <p className={`text-3xl font-bold font-headline mt-2 ${color}`}>{value} <span className="text-sm font-normal text-gray-500">{unit}</span></p>
+      <p className="text-[10px] uppercase tracking-[0.1em] text-text-secondary font-label">{label}</p>
+      <p className={`text-3xl font-bold font-headline mt-2 ${color}`}>{value} <span className="text-sm font-normal text-text-secondary">{unit}</span></p>
     </div>
   );
 }
 
 function InfraCard({ label, value, unit, pct }: { label: string; value: string; unit?: string; pct?: number }) {
-  const color = pct !== undefined ? (pct < 60 ? "text-emerald-400" : pct < 80 ? "text-amber-400" : "text-red-400") : "text-on-surface";
+  const color = pct !== undefined ? (pct < 60 ? "text-feedback-success" : pct < 80 ? "text-feedback-warning" : "text-feedback-error") : "text-on-surface";
   return (
     <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-6 rounded-2xl">
-      <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500 font-label">{label}</p>
+      <p className="text-[10px] uppercase tracking-[0.1em] text-text-secondary font-label">{label}</p>
       <p className={`text-3xl font-bold font-headline mt-2 ${color}`}>
-        {value}{unit && <span className="text-sm font-normal text-gray-500 ml-1">{unit}</span>}
+        {value}{unit && <span className="text-sm font-normal text-text-secondary ml-1">{unit}</span>}
       </p>
       {pct !== undefined && (
         <div className="mt-3 w-full h-1.5 rounded-full bg-surface-container-lowest overflow-hidden">
-          <div className={`h-full rounded-full ${pct < 60 ? "bg-emerald-400" : pct < 80 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+          <div className={`h-full rounded-full ${pct < 60 ? "bg-feedback-success" : pct < 80 ? "bg-feedback-warning" : "bg-feedback-error"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
         </div>
       )}
     </div>
@@ -58,15 +58,15 @@ export default function AdminSystemPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading system metrics...</p></div>;
-  if (error || !metrics) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error || "No data"}</p></div>;
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading system metrics...</p></div>;
+  if (error || !metrics) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error || "No data"}</p></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex items-center gap-4">
         <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">System Health</h2>
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-feedback-success/10 text-feedback-success text-xs font-bold">
+          <span className="w-1.5 h-1.5 rounded-full bg-feedback-success animate-pulse" />
           All Systems Operational
         </span>
       </div>
@@ -95,7 +95,7 @@ export default function AdminSystemPage() {
       <div>
         <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Uptime</h3>
         <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-8 rounded-2xl inline-block">
-          <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500 font-label">System Uptime</p>
+          <p className="text-[10px] uppercase tracking-[0.1em] text-text-secondary font-label">System Uptime</p>
           <p className="text-5xl font-bold text-on-surface font-headline mt-2">{formatUptime(metrics.uptime_seconds)}</p>
         </div>
       </div>

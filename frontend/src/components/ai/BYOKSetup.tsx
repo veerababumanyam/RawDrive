@@ -75,7 +75,7 @@ export function BYOKSetup({ token }: BYOKSetupProps) {
 
       {config?.configured && (
         <div className="flex items-center gap-3 rounded-lg bg-surface-sunken px-4 py-3">
-          <div className="h-2 w-2 rounded-full bg-green-500" />
+          <div className="h-2 w-2 rounded-full bg-feedback-success" />
           <span className="text-sm text-text-primary">Key configured: {config.key_masked}</span>
           <span className="text-xs text-text-tertiary ml-auto">Model: {config.model_preference}</span>
         </div>
@@ -105,7 +105,7 @@ export function BYOKSetup({ token }: BYOKSetupProps) {
         </select>
       </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-feedback-error">{error}</p>}
 
       <div className="flex gap-3">
         <button
@@ -128,7 +128,7 @@ export function BYOKSetup({ token }: BYOKSetupProps) {
       </div>
 
       {validResult && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${validResult.valid ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-500"}`}>
+        <div className={`rounded-lg px-4 py-3 text-sm ${validResult.valid ? "bg-feedback-success/10 text-feedback-success" : "bg-feedback-error/10 text-feedback-error"}`}>
           {validResult.valid ? "Key is valid and working." : `Key validation failed: ${validResult.error}`}
         </div>
       )}

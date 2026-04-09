@@ -9,7 +9,7 @@ function formatNum(n: number): string { return n.toLocaleString("en-IN"); }
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-6 rounded-2xl">
-      <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500 font-label">{label}</p>
+      <p className="text-[10px] uppercase tracking-[0.1em] text-text-secondary font-label">{label}</p>
       <p className="text-3xl font-bold text-on-surface font-headline mt-2">{value}</p>
     </div>
   );
@@ -30,14 +30,14 @@ export default function AdminAnalyticsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading analytics...</p></div>;
-  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error}</p></div>;
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading analytics...</p></div>;
+  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error}</p></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div>
         <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">Analytics & Engagement</h2>
-        <p className="text-gray-500 mt-2 font-body text-sm">Monitor platform growth, engagement, and feature adoption.</p>
+        <p className="text-text-secondary mt-2 font-body text-sm">Monitor platform growth, engagement, and feature adoption.</p>
       </div>
 
       {engagement && (
@@ -72,7 +72,7 @@ export default function AdminAnalyticsPage() {
           <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
                   <th className="px-6 py-4 font-semibold">Feature</th>
                   <th className="px-6 py-4 font-semibold">Adoption</th>
                   <th className="px-6 py-4 font-semibold">Active Users</th>
@@ -83,7 +83,7 @@ export default function AdminAnalyticsPage() {
                   <tr key={f.feature} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-6 py-5 text-sm font-semibold text-on-surface">{f.feature}</td>
                     <td className="px-6 py-5 text-sm text-primary font-bold">{f.adoption_pct}%</td>
-                    <td className="px-6 py-5 text-sm text-gray-400">{formatNum(f.active_users)}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{formatNum(f.active_users)}</td>
                   </tr>
                 ))}
               </tbody>

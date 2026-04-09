@@ -17,7 +17,7 @@ interface DealerUser {
 const statusColors: Record<string, string> = {
   active: "bg-accent-secondary/10 text-accent-secondary",
   trialing: "bg-accent-primary/10 text-accent-primary",
-  cancelled: "bg-yellow-500/10 text-yellow-500",
+  cancelled: "bg-feedback-warning/10 text-feedback-warning",
   churned: "bg-feedback-error/10 text-feedback-error",
   none: "bg-surface-sunken text-text-tertiary",
 };

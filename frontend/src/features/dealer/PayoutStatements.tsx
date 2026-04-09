@@ -9,7 +9,7 @@ interface Statement { month: string; gross_revenue_paisa: number; dealer_share_p
 
 function formatPaisa(p: number) { return `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`; }
 
-const statusColors: Record<string, string> = { draft: "text-text-tertiary", pending: "text-yellow-500", approved: "text-accent-primary", processing: "text-accent-secondary", paid: "text-green-400", failed: "text-feedback-error" };
+const statusColors: Record<string, string> = { draft: "text-text-tertiary", pending: "text-feedback-warning", approved: "text-accent-primary", processing: "text-accent-secondary", paid: "text-feedback-success", failed: "text-feedback-error" };
 
 export default function PayoutStatements() {
   const [year, setYear] = useState(new Date().getFullYear());

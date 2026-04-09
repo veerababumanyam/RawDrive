@@ -47,10 +47,10 @@ export default function DealerDashboard() {
   }
 
   const statusColors: Record<string, string> = {
-    pending: "bg-yellow-500/10 text-yellow-600",
-    approved: "bg-green-500/10 text-green-600",
-    suspended: "bg-red-500/10 text-red-600",
-    terminated: "bg-gray-500/10 text-gray-600",
+    pending: "bg-feedback-warning/10 text-feedback-warning",
+    approved: "bg-feedback-success/10 text-feedback-success",
+    suspended: "bg-feedback-error/10 text-feedback-error",
+    terminated: "bg-surface-container/10 text-text-secondary",
   };
 
   return (

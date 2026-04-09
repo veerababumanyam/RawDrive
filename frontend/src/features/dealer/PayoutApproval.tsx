@@ -14,7 +14,7 @@ interface Payout { id: string; dealer_id: string; period_start: string; period_e
 
 function formatPaisa(p: number) { return `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`; }
 
-const statusColors: Record<string, string> = { draft: "bg-surface-sunken text-text-tertiary", pending: "bg-yellow-500/10 text-yellow-500", approved: "bg-accent-primary/10 text-accent-primary", processing: "bg-accent-secondary/10 text-accent-secondary", paid: "bg-green-500/10 text-green-400", failed: "bg-feedback-error/10 text-feedback-error" };
+const statusColors: Record<string, string> = { draft: "bg-surface-sunken text-text-tertiary", pending: "bg-feedback-warning/10 text-feedback-warning", approved: "bg-accent-primary/10 text-accent-primary", processing: "bg-accent-secondary/10 text-accent-secondary", paid: "bg-feedback-success/10 text-feedback-success", failed: "bg-feedback-error/10 text-feedback-error" };
 
 export default function PayoutApproval() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
@@ -68,9 +68,9 @@ export default function PayoutApproval() {
                   actionPayout === p.id ? (
                     <div className="flex gap-2 items-center">
                       <input type="text" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} placeholder="UTR/Reference" className="input-base min-h-[44px] w-48" />
-                      <button onClick={() => doAction(p.id, "confirm-payment", { payment_reference: paymentRef })} disabled={!paymentRef} className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm min-h-[44px] disabled:opacity-50">Confirm</button>
+                      <button onClick={() => doAction(p.id, "confirm-payment", { payment_reference: paymentRef })} disabled={!paymentRef} className="bg-feedback-success/20 text-feedback-success px-4 py-2 rounded-full text-sm min-h-[44px] disabled:opacity-50">Confirm</button>
                     </div>
-                  ) : <button onClick={() => setActionPayout(p.id)} className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm min-h-[44px]">Confirm Payment</button>
+                  ) : <button onClick={() => setActionPayout(p.id)} className="bg-feedback-success/20 text-feedback-success px-4 py-2 rounded-full text-sm min-h-[44px]">Confirm Payment</button>
                 )}
               </div>
             </div>

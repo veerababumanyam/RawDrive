@@ -33,7 +33,7 @@ export function DuplicateComparison({ group, onResolve, onDismiss }: DuplicateCo
           group.status === "pending"
             ? "bg-accent/10 text-accent"
             : group.status === "resolved"
-            ? "bg-green-500/10 text-green-600"
+            ? "bg-feedback-success/10 text-feedback-success"
             : "bg-surface-sunken text-text-tertiary"
         }`}>
           {group.status}

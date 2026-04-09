@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { listDealers, approveDealer, rejectDealer, type Dealer } from "@/lib/api/dealer";
 
 const statusColors: Record<string, string> = {
-  pending: "bg-yellow-500/10 text-yellow-500",
+  pending: "bg-feedback-warning/10 text-feedback-warning",
   approved: "bg-accent-secondary/10 text-accent-secondary",
   suspended: "bg-feedback-error/10 text-feedback-error",
   terminated: "bg-text-tertiary/10 text-text-tertiary",

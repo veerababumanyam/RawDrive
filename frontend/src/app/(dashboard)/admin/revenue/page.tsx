@@ -11,7 +11,7 @@ function formatINR(paisa: number): string {
 function MetricCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-6 rounded-2xl">
-      <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500 font-label">{label}</p>
+      <p className="text-[10px] uppercase tracking-[0.1em] text-text-secondary font-label">{label}</p>
       <p className={`text-3xl font-bold font-headline mt-2 ${accent ? "text-primary" : "text-on-surface"}`}>{value}</p>
     </div>
   );
@@ -31,14 +31,14 @@ export default function AdminRevenuePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading revenue data...</p></div>;
-  if (error || !revenue) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error || "No data"}</p></div>;
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading revenue data...</p></div>;
+  if (error || !revenue) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error || "No data"}</p></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div>
         <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">Revenue Dashboard</h2>
-        <p className="text-gray-500 mt-2 font-body text-sm">MRR, ARR, churn, and state-wise revenue breakdown.</p>
+        <p className="text-text-secondary mt-2 font-body text-sm">MRR, ARR, churn, and state-wise revenue breakdown.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -53,7 +53,7 @@ export default function AdminRevenuePage() {
         <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+              <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
                 <th className="px-6 py-4 font-semibold">State</th>
                 <th className="px-6 py-4 font-semibold">Revenue</th>
                 <th className="px-6 py-4 font-semibold">Subscribers</th>
@@ -64,7 +64,7 @@ export default function AdminRevenuePage() {
                 <tr key={s.state_name} className="hover:bg-white/[0.02] transition-colors">
                   <td className="px-6 py-5 text-sm font-semibold text-on-surface">{s.state_name}</td>
                   <td className="px-6 py-5 text-sm text-primary font-medium">₹{formatINR(s.revenue_paisa)}</td>
-                  <td className="px-6 py-5 text-sm text-gray-400">{s.subscriber_count}</td>
+                  <td className="px-6 py-5 text-sm text-text-tertiary">{s.subscriber_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -78,7 +78,7 @@ export default function AdminRevenuePage() {
           <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
                   <th className="px-6 py-4 font-semibold">Period</th>
                   <th className="px-6 py-4 font-semibold">Revenue</th>
                   <th className="px-6 py-4 font-semibold">Subscribers</th>
@@ -89,7 +89,7 @@ export default function AdminRevenuePage() {
                   <tr key={ts.period} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-6 py-5 text-sm text-on-surface">{ts.period}</td>
                     <td className="px-6 py-5 text-sm text-primary font-medium">₹{formatINR(ts.revenue_paisa)}</td>
-                    <td className="px-6 py-5 text-sm text-gray-400">{ts.subscribers}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{ts.subscribers}</td>
                   </tr>
                 ))}
               </tbody>

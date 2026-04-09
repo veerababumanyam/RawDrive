@@ -23,10 +23,10 @@ function formatPaisa(paisa: number): string {
 
 const statusColors: Record<string, string> = {
   draft: "bg-text-tertiary/10 text-text-tertiary",
-  pending: "bg-yellow-500/10 text-yellow-500",
+  pending: "bg-feedback-warning/10 text-feedback-warning",
   approved: "bg-accent-primary/10 text-accent-primary",
   processing: "bg-accent-secondary/10 text-accent-secondary",
-  paid: "bg-green-500/10 text-green-500",
+  paid: "bg-feedback-success/10 text-feedback-success",
   failed: "bg-feedback-error/10 text-feedback-error",
 };
 

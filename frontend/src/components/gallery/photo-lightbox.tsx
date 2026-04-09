@@ -191,9 +191,9 @@ export function PhotoLightbox({
                 — {formatBytes(asset.size_bytes)} — {asset.content_type}
               </p>
               <span className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
-                asset.status === "ready" ? "bg-green-500/15 text-green-300 border-green-400/20" :
-                asset.status === "failed" ? "bg-red-500/15 text-red-300 border-red-400/20" :
-                "bg-yellow-500/15 text-yellow-300 border-yellow-400/20"
+                asset.status === "ready" ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20" :
+                asset.status === "failed" ? "bg-feedback-error/15 text-feedback-error/70 border-feedback-error/20" :
+                "bg-feedback-warning/15 text-feedback-warning/70 border-feedback-warning/20"
               }`}>{asset.status}</span>
             </div>
             {Object.keys(exif).length > 0 && (

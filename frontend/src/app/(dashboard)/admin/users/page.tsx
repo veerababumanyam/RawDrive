@@ -12,9 +12,9 @@ import {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
-    active: { bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "bg-emerald-400" },
-    suspended: { bg: "bg-red-500/10", text: "text-red-400", dot: "bg-red-400" },
-    deleted: { bg: "bg-gray-500/10", text: "text-gray-400", dot: "bg-gray-400" },
+    active: { bg: "bg-feedback-success/10", text: "text-feedback-success", dot: "bg-feedback-success" },
+    suspended: { bg: "bg-feedback-error/10", text: "text-feedback-error", dot: "bg-feedback-error" },
+    deleted: { bg: "bg-surface-container/10", text: "text-text-tertiary", dot: "bg-surface-container-high" },
   };
   const c = colors[status] || colors.deleted;
   return (
@@ -79,7 +79,7 @@ export default function AdminUsersPage() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto space-y-8 p-8">
-        <p className="text-gray-500">Loading users...</p>
+        <p className="text-text-secondary">Loading users...</p>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function AdminUsersPage() {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto space-y-8 p-8">
-        <p className="text-red-400">{error}</p>
+        <p className="text-feedback-error">{error}</p>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export default function AdminUsersPage() {
               {total} users
             </span>
           </h2>
-          <p className="text-gray-500 mt-2 font-body text-sm">Manage photographers, studio accounts, and subscription tiers.</p>
+          <p className="text-text-secondary mt-2 font-body text-sm">Manage photographers, studio accounts, and subscription tiers.</p>
         </div>
         <button
           onClick={handleExport}
@@ -138,13 +138,13 @@ export default function AdminUsersPage() {
 
       {/* Data Table */}
       {users.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">No users found.</div>
+        <div className="text-center py-12 text-text-secondary">No users found.</div>
       ) : (
         <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low text-gray-500 font-label text-[10px] uppercase tracking-[0.1em]">
+                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
                   <th className="px-6 py-4 font-semibold">Name</th>
                   <th className="px-6 py-4 font-semibold">Email</th>
                   <th className="px-6 py-4 font-semibold">Role</th>
@@ -161,14 +161,14 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-5">
                       <span className="text-sm font-semibold text-on-surface">{user.full_name}</span>
                     </td>
-                    <td className="px-6 py-5 text-sm text-gray-400">{user.email}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{user.email}</td>
                     <td className="px-6 py-5">
                       <span className="text-sm text-secondary font-medium">{user.platform_role}</span>
                     </td>
                     <td className="px-6 py-5">
                       <StatusBadge status={user.status} />
                     </td>
-                    <td className="px-6 py-5 text-sm text-gray-400">{user.state_name || "—"}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{user.state_name || "—"}</td>
                     <td className="px-6 py-5">
                       <span className="text-sm font-medium text-primary">{user.tier_name || "—"}</span>
                     </td>
@@ -177,7 +177,7 @@ export default function AdminUsersPage() {
                       {user.status === "active" ? (
                         <button
                           onClick={() => handleSuspend(user.id)}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all font-medium"
+                          className="px-3 py-1.5 text-xs rounded-lg bg-feedback-error/10 text-feedback-error hover:bg-red-500/20 transition-all font-medium"
                           aria-label={`Suspend ${user.full_name}`}
                         >
                           Suspend
@@ -185,7 +185,7 @@ export default function AdminUsersPage() {
                       ) : user.status === "suspended" ? (
                         <button
                           onClick={() => handleReactivate(user.id)}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all font-medium"
+                          className="px-3 py-1.5 text-xs rounded-lg bg-feedback-success/10 text-feedback-success hover:bg-emerald-500/20 transition-all font-medium"
                           aria-label={`Reactivate ${user.full_name}`}
                         >
                           Reactivate

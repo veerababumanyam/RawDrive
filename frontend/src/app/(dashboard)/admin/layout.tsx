@@ -29,7 +29,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-xl transition-all ${
                 active
                   ? "bg-white/5 text-primary font-semibold backdrop-blur-lg"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]"
+                  : "text-text-tertiary hover:text-gray-200 hover:bg-white/[0.03]"
               }`}
             >
               {item.label}

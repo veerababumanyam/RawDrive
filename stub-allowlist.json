@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "description": "Explicitly permitted stubs — reviewed and accepted as intentional",
+  "allowedPatterns": [
+    {
+      "pattern": "test.*stub|stub.*test|_test\\.go",
+      "reason": "Test doubles are intentional stubs for unit testing"
+    },
+    {
+      "pattern": "placeholder=\"",
+      "reason": "HTML placeholder attributes, not code stubs"
+    },
+    {
+      "pattern": "placeholder copy|placeholder filler|placeholder section|placeholder shell",
+      "reason": "Marketing/about page content describing design philosophy"
+    },
+    {
+      "pattern": "X placeholder",
+      "reason": "Coupon bulk pattern validation error message"
+    }
+  ],
+  "allowedFiles": [
+    {
+      "file": "backend/internal/worker/moderation_worker.go",
+      "reason": "Heartbeat worker for future batch screening — infrastructure in place, deferred to M15"
+    },
+    {
+      "file": "backend/internal/handler/bulk_asset_handler.go",
+      "line": 84,
+      "reason": "TODO workspace scoping — function works, scope param deferred"
+    },
+    {
+      "file": "backend/internal/repository/gallery_repo_test.go",
+      "line": 126,
+      "reason": "Placeholder assertion for future ParentID field"
+    }
+  ],
+  "reviewedAt": "2026-04-09T17:15:00Z",
+  "reviewedBy": "Manyam Prasad"
+}

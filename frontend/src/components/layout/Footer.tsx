@@ -43,7 +43,7 @@ export function Footer() {
             </p>
             <div className="mt-4 flex items-center gap-2 text-xs text-text-tertiary">
               <span className="inline-flex items-center gap-1 rounded-full bg-accent-subtle px-3 py-1 text-accent font-medium">
-                Made with <Heart className="h-3 w-3 fill-red-500 text-red-500" /> in India
+                Made with <Heart className="h-3 w-3 fill-red-500 text-feedback-error" /> in India
               </span>
             </div>
           </div>

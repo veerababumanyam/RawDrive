@@ -39,7 +39,7 @@ const typeColors: Record<string, string> = {
 };
 
 function getStatus(c: Coupon): { label: string; color: string } {
-  if (!c.is_active) return { label: "Paused", color: "bg-yellow-500/10 text-yellow-500" };
+  if (!c.is_active) return { label: "Paused", color: "bg-feedback-warning/10 text-feedback-warning" };
   if (c.valid_until && new Date(c.valid_until) < new Date()) return { label: "Expired", color: "bg-text-tertiary/10 text-text-tertiary" };
   if (c.max_redemptions && c.redemption_count >= c.max_redemptions) return { label: "Exhausted", color: "bg-feedback-error/10 text-feedback-error" };
   return { label: "Active", color: "bg-accent-secondary/10 text-accent-secondary" };

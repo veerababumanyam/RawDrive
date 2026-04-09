@@ -73,33 +73,33 @@ const variantClasses: Record<Variant, { base: string; active: string }> = {
   },
   danger: {
     base: [
-      "bg-red-500/[0.15]",
+      "bg-feedback-error/[0.15]",
       "backdrop-blur-[12px]",
-      "border border-red-400/[0.25]",
-      "text-red-300",
+      "border border-feedback-error/[0.25]",
+      "text-feedback-error/70",
       "hover:bg-red-500/[0.25] hover:border-red-400/[0.35]",
     ].join(" "),
-    active: "bg-red-500/[0.35] border-red-400/[0.45]",
+    active: "bg-feedback-error/[0.35] border-feedback-error/[0.45]",
   },
   success: {
     base: [
-      "bg-green-500/[0.15]",
+      "bg-feedback-success/[0.15]",
       "backdrop-blur-[12px]",
-      "border border-green-400/[0.25]",
-      "text-green-300",
+      "border border-feedback-success/[0.25]",
+      "text-feedback-success/70",
       "hover:bg-green-500/[0.25] hover:border-green-400/[0.35]",
     ].join(" "),
-    active: "bg-green-500/[0.35] border-green-400/[0.45]",
+    active: "bg-feedback-success/[0.35] border-feedback-success/[0.45]",
   },
   accent: {
     base: [
-      "bg-blue-500/[0.15]",
+      "bg-accent-secondary/[0.15]",
       "backdrop-blur-[12px]",
-      "border border-blue-400/[0.25]",
-      "text-blue-300",
+      "border border-accent-secondary/[0.25]",
+      "text-accent-secondary/70",
       "hover:bg-blue-500/[0.25] hover:border-blue-400/[0.35]",
     ].join(" "),
-    active: "bg-blue-500/[0.35] border-blue-400/[0.45]",
+    active: "bg-accent-secondary/[0.35] border-accent-secondary/[0.45]",
   },
 };
 
@@ -128,7 +128,7 @@ export const GlassIconButton = forwardRef<HTMLButtonElement, GlassIconButtonProp
       >
         {children}
         {badge !== undefined && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-feedback-error px-1 text-[10px] font-bold text-white shadow-sm">
             {badge}
           </span>
         )}

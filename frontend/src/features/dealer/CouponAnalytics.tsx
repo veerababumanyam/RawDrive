@@ -23,7 +23,7 @@ export default function CouponAnalytics({ couponId }: { couponId: string }) {
   const stats = [
     { label: "Total Uses", value: data.total_uses.toLocaleString(), color: "text-accent-primary" },
     { label: "Unique Users", value: data.unique_users.toLocaleString(), color: "text-accent-secondary" },
-    { label: "Revenue Impact", value: formatPaisa(data.revenue_impact), color: "text-green-400" },
+    { label: "Revenue Impact", value: formatPaisa(data.revenue_impact), color: "text-feedback-success" },
   ];
 
   return (

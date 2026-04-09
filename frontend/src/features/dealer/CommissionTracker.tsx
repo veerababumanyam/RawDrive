@@ -7,8 +7,8 @@ interface Commission { id: string; workspace_name: string; amount_paisa: number;
 
 const statusColors: Record<string, string> = {
   earned: "bg-accent-primary/10 text-accent-primary",
-  pending: "bg-yellow-500/10 text-yellow-500",
-  paid: "bg-green-500/10 text-green-500",
+  pending: "bg-feedback-warning/10 text-feedback-warning",
+  paid: "bg-feedback-success/10 text-feedback-success",
 };
 
 function formatPaisa(p: number) { return `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`; }

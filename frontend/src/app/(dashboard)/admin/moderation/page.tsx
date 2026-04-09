@@ -13,8 +13,8 @@ import {
 function ReasonBadge({ reason }: { reason: string }) {
   const isAutoFlagged = reason === "auto_flagged";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${isAutoFlagged ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"}`}>
-      <span className={`w-1 h-1 rounded-full ${isAutoFlagged ? "bg-amber-400" : "bg-red-400"}`} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${isAutoFlagged ? "bg-feedback-warning/10 text-feedback-warning" : "bg-feedback-error/10 text-feedback-error"}`}>
+      <span className={`w-1 h-1 rounded-full ${isAutoFlagged ? "bg-feedback-warning" : "bg-feedback-error"}`} />
       {isAutoFlagged ? "Auto-flagged" : "Reported"}
     </span>
   );
@@ -47,8 +47,8 @@ export default function AdminModerationPage() {
   const handleReject = async (id: string) => { const token = getStoredAccessToken(); await rejectModeration(token, id, "Admin rejected"); fetchQueue(); };
   const handleEscalate = async (id: string) => { const token = getStoredAccessToken(); await escalateModeration(token, id, "Needs further review"); fetchQueue(); };
 
-  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-gray-500">Loading moderation queue...</p></div>;
-  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-red-400">{error}</p></div>;
+  if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading moderation queue...</p></div>;
+  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error}</p></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -59,11 +59,11 @@ export default function AdminModerationPage() {
             {total} pending {total === 1 ? "item" : "items"}
           </span>
         </h2>
-        <p className="text-gray-500 mt-2 font-body text-sm">Review and action flagged content across the platform.</p>
+        <p className="text-text-secondary mt-2 font-body text-sm">Review and action flagged content across the platform.</p>
       </div>
 
       {items.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">No items pending moderation.</div>
+        <div className="text-center py-16 text-text-secondary">No items pending moderation.</div>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
@@ -78,21 +78,21 @@ export default function AdminModerationPage() {
                   </span>
                   <ReasonBadge reason={item.reason} />
                 </div>
-                <p className="text-xs text-gray-500 font-body">
+                <p className="text-xs text-text-secondary font-body">
                   Content: {item.content_id} &middot; Workspace: {item.workspace_id}
                 </p>
-                <p className="text-[10px] text-gray-600 font-label uppercase tracking-wider">
+                <p className="text-[10px] text-text-secondary font-label uppercase tracking-wider">
                   {new Date(item.created_at).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => handleApprove(item.id)} className="px-4 py-2 text-xs rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all font-bold" aria-label={`Approve ${item.id}`}>
+                <button onClick={() => handleApprove(item.id)} className="px-4 py-2 text-xs rounded-xl bg-feedback-success/10 text-feedback-success hover:bg-emerald-500/20 transition-all font-bold" aria-label={`Approve ${item.id}`}>
                   Approve
                 </button>
-                <button onClick={() => handleReject(item.id)} className="px-4 py-2 text-xs rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all font-bold" aria-label={`Reject ${item.id}`}>
+                <button onClick={() => handleReject(item.id)} className="px-4 py-2 text-xs rounded-xl bg-feedback-error/10 text-feedback-error hover:bg-red-500/20 transition-all font-bold" aria-label={`Reject ${item.id}`}>
                   Reject
                 </button>
-                <button onClick={() => handleEscalate(item.id)} className="px-4 py-2 text-xs rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all font-bold" aria-label={`Escalate ${item.id}`}>
+                <button onClick={() => handleEscalate(item.id)} className="px-4 py-2 text-xs rounded-xl bg-feedback-warning/10 text-feedback-warning hover:bg-amber-500/20 transition-all font-bold" aria-label={`Escalate ${item.id}`}>
                   Escalate
                 </button>
               </div>
