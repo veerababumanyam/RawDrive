@@ -1,66 +1,105 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   Bell,
-  BrainCircuit,
-  CalendarDays,
   FolderOpen,
   Home,
-  ImageIcon,
-  MessageSquare,
-  ReceiptText,
   Search,
-  Settings,
-  Shield,
-  ShoppingBag,
-  Store,
-  Users,
 } from "lucide-react";
 import { getStoredAccessToken, getStoredAccessTokenClaims, getStoredPlatformRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
+import {
+  AdminSidebar,
+  DealerSidebar,
+  StudioSidebar,
+  ClientSidebar,
+} from "@/components/layout/navigation";
 
-// Roles that can see each nav item
-const PHOTOGRAPHER_ROLES = ["photographer", "assistant", "studio_manager", "admin", "super_admin"];
-const ADMIN_ROLES = ["admin", "super_admin"];
-const DEALER_ROLES = ["dealer", "admin", "super_admin"];
+/* ------------------------------------------------------------------ */
+/*  Role-specific header quick-nav items                              */
+/* ------------------------------------------------------------------ */
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home, roles: [...PHOTOGRAPHER_ROLES, "dealer"] },
-  { href: "/galleries", label: "Galleries", icon: ImageIcon, roles: PHOTOGRAPHER_ROLES },
-  { href: "/crm/contacts", label: "Clients", icon: Users, roles: PHOTOGRAPHER_ROLES },
-  { href: "/crm", label: "CRM", icon: BarChart3, roles: PHOTOGRAPHER_ROLES },
-  { href: "/calendar", label: "Bookings", icon: CalendarDays, roles: PHOTOGRAPHER_ROLES },
-  { href: "/billing", label: "Invoices", icon: ReceiptText, roles: PHOTOGRAPHER_ROLES },
-  { href: "/ai", label: "AI Studio", icon: BrainCircuit, roles: PHOTOGRAPHER_ROLES },
-  { href: "/marketplace/freelancers", label: "Marketplace", icon: ShoppingBag, roles: PHOTOGRAPHER_ROLES },
-  { href: "/messages", label: "Messages", icon: MessageSquare, roles: [...PHOTOGRAPHER_ROLES, "dealer"] },
-  { href: "/dealer", label: "Dealer", icon: Store, roles: DEALER_ROLES },
-  { href: "/moderation", label: "Moderation", icon: Shield, roles: ADMIN_ROLES },
-  { href: "/settings/storage", label: "Settings", icon: Settings, roles: [...PHOTOGRAPHER_ROLES, "dealer"] },
-  { href: "/admin/users", label: "Admin", icon: Shield, roles: ADMIN_ROLES },
-];
-
-const headerNavItems = [
-  {
-    href: "/dashboard",
-    label: "Home",
-    icon: Home,
-    title: "Open your studio dashboard",
-  },
-  {
-    href: "/galleries",
-    label: "Projects",
-    icon: FolderOpen,
-    title: "Browse gallery projects and client deliveries",
-  },
+const studioHeaderNav = [
+  { href: "/dashboard", label: "Home", icon: Home, title: "Open your studio dashboard" },
+  { href: "/galleries", label: "Projects", icon: FolderOpen, title: "Browse gallery projects and client deliveries" },
 ] as const;
+
+const adminHeaderNav = [
+  { href: "/admin/dashboard", label: "Overview", icon: Home, title: "Admin dashboard overview" },
+] as const;
+
+const dealerHeaderNav = [
+  { href: "/dealer", label: "Overview", icon: Home, title: "Dealer dashboard overview" },
+] as const;
+
+const clientHeaderNav = [
+  { href: "/galleries", label: "My Galleries", icon: Home, title: "View your photo galleries" },
+] as const;
+
+function getHeaderNav(role: string) {
+  switch (role) {
+    case "super_admin":
+    case "admin":
+      return adminHeaderNav;
+    case "dealer":
+      return dealerHeaderNav;
+    case "client":
+      return clientHeaderNav;
+    default:
+      return studioHeaderNav;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Role-specific search placeholders                                 */
+/* ------------------------------------------------------------------ */
+
+function getSearchPlaceholder(role: string) {
+  switch (role) {
+    case "super_admin":
+    case "admin":
+      return "Search users, workspaces, or logs...";
+    case "dealer":
+      return "Search registrations or coupons...";
+    case "client":
+      return "Search your photos...";
+    default:
+      return "Search galleries, clients, or files...";
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Role → Sidebar component (completely separate nav per role)       */
+/* ------------------------------------------------------------------ */
+
+function RoleSidebar({ role, userInfo }: { role: string; userInfo: { display_name?: string; email?: string } }) {
+  const name = userInfo.display_name || userInfo.email || "User";
+
+  switch (role) {
+    case "super_admin":
+    case "admin":
+      return <AdminSidebar userName={name} platformRole={role} />;
+    case "dealer":
+      return <DealerSidebar userName={name} />;
+    case "client":
+      return <ClientSidebar userName={name} />;
+    case "photographer":
+    case "team_member":
+    case "assistant":
+    case "studio_manager":
+    default:
+      return <StudioSidebar userName={name} />;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main dashboard layout                                             */
+/* ------------------------------------------------------------------ */
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -123,63 +162,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  const headerNavItems = getHeaderNav(role);
+  const searchPlaceholder = getSearchPlaceholder(role);
+
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
-      <aside className="glass-surface fixed left-0 top-0 z-50 hidden h-screen w-[var(--sidebar-width-expanded)] flex-col px-4 py-8 lg:flex">
-        <div className="mb-10 flex items-center gap-3 px-2">
-          <Image
-            src="/logo/android-chrome-192x192.png"
-            alt="RawDrive Logo"
-            width={36}
-            height={36}
-            className="h-9 w-9 rounded-lg"
-          />
-          <div>
-            <h1 className="font-headline text-lg font-bold tracking-[-0.04em] text-accent">
-              RawDrive
-            </h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-text-tertiary">
-              Creative Studio
-            </p>
-          </div>
-        </div>
+      {/* Role-specific sidebar — completely different component per role */}
+      <RoleSidebar role={role} userInfo={userInfo} />
 
-        <nav className="flex-1 space-y-2">
-          {navItems.filter((item) => item.roles.includes(role)).map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-            return (
-              <Link
-                key={`${item.href}-${item.label}`}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors",
-                  active
-                    ? "bg-surface-container-high text-accent shadow-sm"
-                    : "text-text-secondary hover:bg-surface-container-low hover:text-text-primary",
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto">
-          <div className="surface-panel flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-container-high">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
-              {(userInfo.display_name || userInfo.email || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="overflow-hidden">
-              <p className="truncate text-sm text-text-primary">{userInfo.display_name || userInfo.email || "User"}</p>
-              <p className="text-[10px] text-text-tertiary">View Profile</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
+      {/* Header bar — offset from sidebar on desktop */}
       <header className="glass-surface fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 lg:w-[calc(100%-var(--sidebar-width-expanded))] lg:px-8 md:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)]">
         <nav className="hidden min-w-0 items-center gap-2 md:flex" aria-label="Workspace quick navigation">
           {headerNavItems.map((item) => {
@@ -210,8 +201,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <input
             type="text"
-            aria-label="Search galleries, clients, or files"
-            placeholder="Search galleries, clients, or files..."
+            aria-label={searchPlaceholder}
+            placeholder={searchPlaceholder}
             className="input-base w-full pl-10 pr-4 text-sm"
           />
         </div>
@@ -220,16 +211,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <ThemeToggleButton />
           <button
             type="button"
+            aria-label="Notifications"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-accent"
           >
             <Bell className="h-5 w-5" />
           </button>
           <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
-            AS
+            {(userInfo.display_name || userInfo.email || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
           </div>
         </div>
       </header>
 
+      {/* Main content — offset by sidebar on desktop */}
       <main className="min-h-screen px-4 pb-12 pt-24 lg:ml-[var(--sidebar-width-expanded)] lg:px-8">{children}</main>
     </div>
   );

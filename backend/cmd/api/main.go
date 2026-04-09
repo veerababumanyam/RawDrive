@@ -300,7 +300,7 @@ func main() {
 	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo).WithAlbumService(albumSvc)
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
-	storageConfigSvc := service.NewStorageConfigService()
+	storageConfigSvc := service.NewStorageConfigService(dbPool)
 
 	// M13 Services: Gallery Access, Proofing Sessions, Comments, Album Approval
 	accessLogRepo := repository.NewGalleryAccessLogRepo(dbPool)
@@ -419,18 +419,25 @@ func main() {
 		// AI handler (all endpoints in one handler)
 		aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo)
 
-		// M3 routes
-		handler.RegisterM3Routes(api, handler.M3Dependencies{AIHandler: aiHandler})
+		// M3 routes (FR-012, FR-013, FR-020)
+		watermarkSvc := service.NewWatermarkService()
+		edgeHandler := handler.NewEdgeDeliveryHandler(assetRepo, thumbnailSvc, watermarkSvc)
+		handler.RegisterM3Routes(api, handler.M3Dependencies{AIHandler: aiHandler, EdgeDeliveryHandler: edgeHandler})
 
-		// AI workers
 		faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider)
 		searchWorker := ai.NewSearchWorker(dbPool, searchSvc, aiConfigRepo)
 		duplicateWorker := ai.NewDuplicateWorker(aiJobRepo, duplicateSvc)
+		burstSvc := ai.NewBurstService(dbPool)
+		aestheticWorker := ai.NewAestheticWorker(dbPool, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+		burstWorker := ai.NewBurstWorker(aiJobRepo, burstSvc)
 		workerRegistry.Register("face-detection", faceWorker)
 		workerRegistry.Register("ai-tagging", searchWorker)
 		workerRegistry.Register("duplicate-scan", duplicateWorker)
+		workerRegistry.Register("aesthetic-scoring", aestheticWorker)
+		workerRegistry.Register("burst-grouping", burstWorker)
+		_ = burstSvc
 
-		log.Println("M3: AI routes registered, 3 workers registered")
+		log.Println("M3: AI routes + 5 workers registered")
 
 		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available)
 		designAISvc := service.NewDesignAIService(assetRepo, geminiClient, aiConfigRepo)

@@ -1,0 +1,55 @@
+"use client";
+
+import {
+  BarChart3,
+  FileText,
+  Home,
+  LayoutGrid,
+  LineChart,
+  Server,
+  Shield,
+  Users,
+} from "lucide-react";
+import { SidebarShell, SidebarAvatar } from "./SidebarShell";
+import type { NavGroup } from "./SidebarShell";
+
+/* ------------------------------------------------------------------ */
+/*  Admin / Super-Admin sidebar — PRD §6.2 Admin navigation profile   */
+/*  8 items: Dashboard, Users, Moderation, Workspaces,               */
+/*           Revenue, Analytics, System Health, Audit Logs            */
+/* ------------------------------------------------------------------ */
+
+const groups: NavGroup[] = [
+  {
+    items: [
+      { href: "/admin/dashboard", label: "Dashboard Overview", icon: Home },
+      { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/moderation", label: "Moderation", icon: Shield },
+      { href: "/admin/workspaces", label: "Workspaces", icon: LayoutGrid },
+      { href: "/admin/revenue", label: "Revenue", icon: LineChart },
+      { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/admin/system", label: "System Health", icon: Server },
+      { href: "/admin/audit-logs", label: "Audit Logs", icon: FileText },
+    ],
+  },
+];
+
+interface AdminSidebarProps {
+  userName: string;
+  platformRole: string;
+}
+
+export function AdminSidebar({ userName, platformRole }: AdminSidebarProps) {
+  return (
+    <SidebarShell
+      subtitle="Admin Console"
+      groups={groups}
+      footer={
+        <SidebarAvatar
+          name={userName}
+          badge={platformRole === "super_admin" ? "Super Admin" : "Admin"}
+        />
+      }
+    />
+  );
+}

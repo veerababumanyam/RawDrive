@@ -538,6 +538,114 @@ func (h *Handler) GetCullingSuggestions(w http.ResponseWriter, r *http.Request) 
 	respondJSON(w, http.StatusOK, map[string]any{"suggestions": suggestions, "total": len(suggestions)})
 }
 
+// ---- FR-012: Aesthetic Scoring ----
+
+func (h *Handler) TriggerAestheticScore(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	var req struct {
+		AssetIDs []uuid.UUID `json:"asset_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.AssetIDs) == 0 {
+		respondError(w, http.StatusBadRequest, "asset_ids required (1-50)")
+		return
+	}
+	if len(req.AssetIDs) > 50 {
+		respondError(w, http.StatusBadRequest, "max 50 asset_ids per request")
+		return
+	}
+	job := &AIJob{WorkspaceID: wsID, Type: "aesthetic_scoring", Status: "pending", TotalItems: len(req.AssetIDs), Result: map[string]any{"asset_ids": req.AssetIDs}}
+	if err := h.jobRepo.Create(r.Context(), job); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]any{"job_id": job.ID, "status": job.Status, "queued": len(req.AssetIDs)})
+}
+
+func (h *Handler) GetAestheticScore(w http.ResponseWriter, r *http.Request) {
+	assetID, err := uuid.Parse(chi.URLParam(r, "assetId"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid asset_id")
+		return
+	}
+	wsID := getWorkspaceID(r)
+	var score QualityScore
+	err = h.cullingSvc.pool.QueryRow(r.Context(),
+		`SELECT sharpness, exposure, composition, overall FROM quality_scores WHERE asset_id = $1 AND workspace_id = $2`,
+		assetID, wsID).Scan(&score.Sharpness, &score.Exposure, &score.Composition, &score.Overall)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "no aesthetic score found for this asset")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"asset_id": assetID, "score": score})
+}
+
+// ---- FR-013: Burst Grouping ----
+
+func (h *Handler) TriggerBurstGrouping(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	var body struct {
+		GalleryID     uuid.UUID `json:"gallery_id"`
+		TimeWindowSec int       `json:"time_window_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.GalleryID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "gallery_id required")
+		return
+	}
+	if body.TimeWindowSec <= 0 {
+		body.TimeWindowSec = 3
+	}
+	job := &AIJob{WorkspaceID: wsID, Type: "burst_grouping", Status: "pending", Result: map[string]any{"gallery_id": body.GalleryID.String(), "time_window_sec": body.TimeWindowSec}}
+	if err := h.jobRepo.Create(r.Context(), job); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]any{"job_id": job.ID, "status": job.Status})
+}
+
+func (h *Handler) ListBurstGroups(w http.ResponseWriter, r *http.Request) {
+	galleryIDStr := r.URL.Query().Get("gallery_id")
+	galleryID, err := uuid.Parse(galleryIDStr)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "gallery_id required")
+		return
+	}
+	rows, err := h.cullingSvc.pool.Query(r.Context(),
+		`SELECT bg.id, bg.name, bg.asset_count, bg.best_pick_id
+		 FROM burst_groups bg WHERE bg.gallery_id = $1 ORDER BY bg.created_at ASC`, galleryID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+	type BurstGroupResp struct {
+		ID         uuid.UUID  `json:"id"`
+		Name       *string    `json:"name"`
+		AssetCount int        `json:"asset_count"`
+		BestPickID *uuid.UUID `json:"best_pick_id"`
+	}
+	var groups []BurstGroupResp
+	for rows.Next() {
+		var g BurstGroupResp
+		if err := rows.Scan(&g.ID, &g.Name, &g.AssetCount, &g.BestPickID); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		groups = append(groups, g)
+	}
+	if groups == nil {
+		groups = []BurstGroupResp{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"groups": groups, "total": len(groups)})
+}
+
 // ---- Helpers ----
 
 func respondJSON(w http.ResponseWriter, status int, data any) {

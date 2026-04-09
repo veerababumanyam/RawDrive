@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -60,6 +61,11 @@ type AssetRepo struct {
 // NewAssetRepo creates a new AssetRepo.
 func NewAssetRepo(pool *pgxpool.Pool) *AssetRepo {
 	return &AssetRepo{pool: pool}
+}
+
+// Pool returns the underlying database pool.
+func (r *AssetRepo) Pool() *pgxpool.Pool {
+	return r.pool
 }
 
 // Create inserts a new asset.
@@ -469,4 +475,53 @@ func (r *AssetRepo) GetWorkspaceStorageUsed(ctx context.Context, workspaceID uui
 		return 0, fmt.Errorf("asset repo get workspace storage: %w", err)
 	}
 	return total, nil
+}
+
+func (r *AssetRepo) BulkSetRating(ctx context.Context, ids []uuid.UUID, rating int, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx, `UPDATE assets SET rating = $1, updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, rating, ids, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("bulk set rating: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *AssetRepo) BulkSetColorLabel(ctx context.Context, ids []uuid.UUID, label string, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx, `UPDATE assets SET color_label = $1, updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, label, ids, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("bulk set color label: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *AssetRepo) BulkAddTags(ctx context.Context, ids []uuid.UUID, tags []string, workspaceID uuid.UUID) (int64, error) {
+	type tagObj struct {
+		Tag        string  `json:"tag"`
+		Category   string  `json:"category"`
+		Confidence float64 `json:"confidence"`
+		Source     string  `json:"source"`
+		Status     string  `json:"status"`
+	}
+	tagObjects := make([]tagObj, len(tags))
+	for i, t := range tags {
+		tagObjects[i] = tagObj{Tag: t, Category: "manual", Confidence: 1.0, Source: "user", Status: "accepted"}
+	}
+	tagsJSON, err := json.Marshal(tagObjects)
+	if err != nil {
+		return 0, fmt.Errorf("bulk add tags marshal: %w", err)
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE assets SET ai_tags = COALESCE(ai_tags, '[]'::jsonb) || $1::jsonb, updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, string(tagsJSON), ids, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("bulk add tags: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *AssetRepo) BulkRemoveTags(ctx context.Context, ids []uuid.UUID, tags []string, workspaceID uuid.UUID) (int64, error) {
+	for _, tagName := range tags {
+		_, err := r.pool.Exec(ctx, `UPDATE assets SET ai_tags = (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb) FROM jsonb_array_elements(COALESCE(ai_tags, '[]'::jsonb)) elem WHERE elem->>'tag' != $1), updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, tagName, ids, workspaceID)
+		if err != nil {
+			return 0, fmt.Errorf("bulk remove tag %s: %w", tagName, err)
+		}
+	}
+	return int64(len(ids)), nil
 }

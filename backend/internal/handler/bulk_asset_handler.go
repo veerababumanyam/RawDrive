@@ -27,10 +27,13 @@ func (h *BulkAssetHandler) BulkAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		Action    string   `json:"action"`
-		AssetIDs  []string `json:"asset_ids"`
-		TargetID  string   `json:"target_id,omitempty"`
-		NewStatus string   `json:"new_status,omitempty"`
+		Action     string   `json:"action"`
+		AssetIDs   []string `json:"asset_ids"`
+		TargetID   string   `json:"target_id,omitempty"`
+		NewStatus  string   `json:"new_status,omitempty"`
+		Rating     *int     `json:"rating,omitempty"`
+		ColorLabel string   `json:"color_label,omitempty"`
+		Tags       []string `json:"tags,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -88,8 +91,33 @@ func (h *BulkAssetHandler) BulkAction(w http.ResponseWriter, r *http.Request) {
 		}
 	case "delete":
 		affected, err = h.assetRepo.BulkUpdateStatus(r.Context(), ids, "deleted", workspaceID)
+	case "set_rating":
+		if input.Rating == nil || *input.Rating < 0 || *input.Rating > 5 {
+			http.Error(w, `{"error":"rating must be 0-5"}`, http.StatusBadRequest)
+			return
+		}
+		affected, err = h.assetRepo.BulkSetRating(r.Context(), ids, *input.Rating, workspaceID)
+	case "set_label":
+		validLabels := map[string]bool{"": true, "red": true, "yellow": true, "green": true, "blue": true, "purple": true}
+		if !validLabels[input.ColorLabel] {
+			http.Error(w, `{"error":"invalid color_label"}`, http.StatusBadRequest)
+			return
+		}
+		affected, err = h.assetRepo.BulkSetColorLabel(r.Context(), ids, input.ColorLabel, workspaceID)
+	case "add_tags":
+		if len(input.Tags) == 0 {
+			http.Error(w, `{"error":"tags required"}`, http.StatusBadRequest)
+			return
+		}
+		affected, err = h.assetRepo.BulkAddTags(r.Context(), ids, input.Tags, workspaceID)
+	case "remove_tags":
+		if len(input.Tags) == 0 {
+			http.Error(w, `{"error":"tags required"}`, http.StatusBadRequest)
+			return
+		}
+		affected, err = h.assetRepo.BulkRemoveTags(r.Context(), ids, input.Tags, workspaceID)
 	default:
-		http.Error(w, `{"error":"unknown action, expected: update_status, move, delete"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"unknown action"}`, http.StatusBadRequest)
 		return
 	}
 

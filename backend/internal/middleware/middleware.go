@@ -96,6 +96,7 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 			// Enrich context
 			ctx := context.WithValue(r.Context(), workspaceIDKey, wsID)
 			ctx = context.WithValue(ctx, stateIDKey, stateID)
+			ctx = context.WithValue(ctx, "workspace_id", wsID) // plain key for ai package (import cycle prevents typed key sharing)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

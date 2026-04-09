@@ -73,6 +73,11 @@ func NewThumbnailService(store storage.Provider) *ThumbnailService {
 	return &ThumbnailService{store: store, watermarkSvc: NewWatermarkService()}
 }
 
+// GetStore returns the storage provider (used by edge delivery handler).
+func (s *ThumbnailService) GetStore() storage.Provider {
+	return s.store
+}
+
 // ThumbnailResult holds the generated thumbnail URLs and metadata.
 type ThumbnailResult struct {
 	URLs     map[string]string // size name -> storage key
