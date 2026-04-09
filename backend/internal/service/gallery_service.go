@@ -108,3 +108,71 @@ func (s *GalleryService) RemoveAsset(ctx context.Context, galleryID, assetID uui
 func (s *GalleryService) ListAssets(ctx context.Context, galleryID uuid.UUID) ([]repository.GalleryAsset, error) {
 	return s.galleryAssetRepo.ListByGallery(ctx, galleryID)
 }
+
+// ──────────────────────── Gallery State Machine (ISS-016) ────────────────────────
+
+// GalleryState represents valid gallery lifecycle states.
+type GalleryState string
+
+const (
+	GalleryDraft     GalleryState = "draft"
+	GalleryShared    GalleryState = "shared"
+	GalleryExpired   GalleryState = "expired"
+	GalleryProtected GalleryState = "protected"
+	GalleryArchived  GalleryState = "archived"
+	GalleryDeleted   GalleryState = "deleted"
+)
+
+// ValidGalleryTransitions maps current state to allowed next states.
+var ValidGalleryTransitions = map[GalleryState][]GalleryState{
+	GalleryDraft:     {GalleryShared, GalleryProtected, GalleryArchived, GalleryDeleted},
+	GalleryShared:    {GalleryDraft, GalleryExpired, GalleryArchived, GalleryDeleted},
+	GalleryExpired:   {GalleryShared, GalleryArchived, GalleryDeleted},
+	GalleryProtected: {GalleryShared, GalleryDraft, GalleryArchived, GalleryDeleted},
+	GalleryArchived:  {GalleryDraft, GalleryDeleted},
+	GalleryDeleted:   {GalleryDraft}, // Restore from deleted
+}
+
+// CanTransitionGallery checks if a gallery state transition is valid.
+func CanTransitionGallery(from, to GalleryState) bool {
+	allowed, ok := ValidGalleryTransitions[from]
+	if !ok {
+		return false
+	}
+	for _, s := range allowed {
+		if s == to {
+			return true
+		}
+	}
+	return false
+}
+
+// TransitionGalleryState changes a gallery's lifecycle state with validation.
+func (s *GalleryService) TransitionGalleryState(ctx context.Context, galleryID uuid.UUID, targetState GalleryState) error {
+	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil || gallery == nil {
+		return fmt.Errorf("gallery not found")
+	}
+
+	currentState := GalleryState(gallery.Status)
+	if !CanTransitionGallery(currentState, targetState) {
+		return fmt.Errorf("invalid gallery transition from %s to %s", currentState, targetState)
+	}
+
+	return s.galleryRepo.UpdateStatus(ctx, galleryID, string(targetState))
+}
+
+// Publish transitions a gallery from draft to shared.
+func (s *GalleryService) Publish(ctx context.Context, galleryID uuid.UUID) error {
+	return s.TransitionGalleryState(ctx, galleryID, GalleryShared)
+}
+
+// Archive transitions a gallery to archived.
+func (s *GalleryService) Archive(ctx context.Context, galleryID uuid.UUID) error {
+	return s.TransitionGalleryState(ctx, galleryID, GalleryArchived)
+}
+
+// Restore transitions a deleted/archived gallery back to draft.
+func (s *GalleryService) Restore(ctx context.Context, galleryID uuid.UUID) error {
+	return s.TransitionGalleryState(ctx, galleryID, GalleryDraft)
+}

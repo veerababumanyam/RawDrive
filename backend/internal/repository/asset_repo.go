@@ -31,13 +31,25 @@ type Asset struct {
 	DeletedAt     *time.Time             `json:"deleted_at,omitempty"`
 }
 
-// AssetFilter contains filters for listing assets.
+// AssetFilter contains composable filters for listing assets.
 type AssetFilter struct {
-	WorkspaceID uuid.UUID
-	Status      string
-	ContentType string
-	Limit       int
-	Offset      int
+	WorkspaceID    uuid.UUID
+	GalleryID      *uuid.UUID
+	Status         string
+	ContentType    string
+	LifecycleState string
+	Search         string
+	CameraModel    string
+	LensModel      string
+	FromDate       string // ISO 8601
+	ToDate         string // ISO 8601
+	MinRating      int
+	IsFavorite     *bool
+	Sort           string // "created_at", "filename", "size_bytes", "capture_date"
+	Order          string // "asc", "desc"
+	Limit          int
+	Offset         int
+	Cursor         *uuid.UUID
 }
 
 // AssetRepo handles asset persistence.
@@ -118,8 +130,46 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 		args = append(args, f.ContentType)
 		argIdx++
 	}
+	if f.LifecycleState != "" {
+		query += fmt.Sprintf(" AND lifecycle_state = $%d", argIdx)
+		args = append(args, f.LifecycleState)
+		argIdx++
+	}
+	if f.GalleryID != nil {
+		query += fmt.Sprintf(" AND id IN (SELECT asset_id FROM gallery_assets WHERE gallery_id = $%d)", argIdx)
+		args = append(args, *f.GalleryID)
+		argIdx++
+	}
+	if f.Search != "" {
+		query += fmt.Sprintf(" AND (filename ILIKE $%d OR exif_data->>'model' ILIKE $%d)", argIdx, argIdx)
+		args = append(args, "%"+f.Search+"%")
+		argIdx++
+	}
+	if f.CameraModel != "" {
+		query += fmt.Sprintf(" AND exif_data->>'model' ILIKE $%d", argIdx)
+		args = append(args, "%"+f.CameraModel+"%")
+		argIdx++
+	}
+	if f.FromDate != "" {
+		query += fmt.Sprintf(" AND capture_date >= $%d", argIdx)
+		args = append(args, f.FromDate)
+		argIdx++
+	}
+	if f.ToDate != "" {
+		query += fmt.Sprintf(" AND capture_date <= $%d", argIdx)
+		args = append(args, f.ToDate)
+		argIdx++
+	}
 
-	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	sortCol := "created_at"
+	if f.Sort == "filename" || f.Sort == "size_bytes" || f.Sort == "capture_date" {
+		sortCol = f.Sort
+	}
+	sortOrder := "DESC"
+	if f.Order == "asc" {
+		sortOrder = "ASC"
+	}
+	query += fmt.Sprintf(" ORDER BY %s %s LIMIT $%d OFFSET $%d", sortCol, sortOrder, argIdx, argIdx+1)
 	args = append(args, limit, f.Offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -259,6 +309,49 @@ func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uui
 		return nil, fmt.Errorf("asset repo get by id and workspace: %w", err)
 	}
 	return a, nil
+}
+
+// BulkUpdateStatus changes status for multiple assets at once.
+func (r *AssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status string, workspaceID uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE assets SET status = $1, updated_at = now()
+		 WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`,
+		status, ids, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo bulk update status: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// BulkMoveToGallery moves multiple assets to a different gallery.
+func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID, fromGalleryID, toGalleryID uuid.UUID) error {
+	if len(assetIDs) == 0 {
+		return nil
+	}
+	// Remove from old gallery
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM gallery_assets WHERE gallery_id = $1 AND asset_id = ANY($2)`,
+		fromGalleryID, assetIDs,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo bulk move remove: %w", err)
+	}
+	// Add to new gallery
+	for i, id := range assetIDs {
+		_, err := r.pool.Exec(ctx,
+			`INSERT INTO gallery_assets (gallery_id, asset_id, sort_order, added_at)
+			 VALUES ($1, $2, $3, now()) ON CONFLICT DO NOTHING`,
+			toGalleryID, id, i,
+		)
+		if err != nil {
+			return fmt.Errorf("asset repo bulk move add: %w", err)
+		}
+	}
+	return nil
 }
 
 // GetWorkspaceStorageUsed returns total storage bytes used by a workspace.

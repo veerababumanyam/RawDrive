@@ -239,3 +239,15 @@ func (r *GalleryRepo) UpdateCover(ctx context.Context, galleryID uuid.UUID, cove
 	}
 	return nil
 }
+
+// UpdateStatus changes the gallery's status field.
+func (r *GalleryRepo) UpdateStatus(ctx context.Context, galleryID uuid.UUID, status string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE galleries SET status=$1, updated_at=now() WHERE id=$2`,
+		status, galleryID,
+	)
+	if err != nil {
+		return fmt.Errorf("gallery repo update status: %w", err)
+	}
+	return nil
+}
