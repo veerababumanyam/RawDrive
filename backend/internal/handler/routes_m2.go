@@ -182,6 +182,36 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Post("/test", storageConfigHandler.TestConnection)
 	})
 
+	// M14: Download routes
+	if deps.DownloadService != nil {
+		dlHandler := NewDownloadHandler(deps.DownloadService)
+		r.Route("/api/v1/galleries/{id}/downloads", func(r chi.Router) {
+			r.Post("/", dlHandler.CreateJob)
+			r.Get("/", dlHandler.ListJobs)
+			r.Get("/{jobId}", dlHandler.GetJob)
+		})
+		r.Get("/api/v1/galleries/{id}/download-zip", dlHandler.DownloadZIP)
+		r.Get("/api/v1/galleries/{id}/download-audit", dlHandler.GetAudit)
+	}
+
+	// M14: Analytics routes
+	if deps.GalleryAnalyticsSvc != nil {
+		analyticsHandler := NewGalleryAnalyticsHandler(deps.GalleryAnalyticsSvc)
+		r.Get("/api/v1/galleries/{id}/analytics/summary", analyticsHandler.GetSummary)
+		r.Get("/api/v1/galleries/{id}/analytics/daily", analyticsHandler.GetDailyStats)
+	}
+
+	// M14: Webhook routes
+	if deps.WebhookSvc != nil {
+		webhookHandler := NewWebhookHandler(deps.WebhookSvc)
+		r.Route("/api/v1/workspaces/{workspaceId}/webhooks", func(r chi.Router) {
+			r.Post("/", webhookHandler.Create)
+			r.Get("/", webhookHandler.List)
+			r.Delete("/{id}", webhookHandler.Delete)
+			r.Get("/{id}/deliveries", webhookHandler.GetDeliveries)
+		})
+	}
+
 	// Public routes (no auth required)
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)
@@ -221,4 +251,8 @@ type M2Dependencies struct {
 	ProofingSessionSvc   *service.ProofingSessionService
 	ProofingCommentSvc   *service.ProofingCommentService
 	AlbumApprovalSvc     *service.AlbumApprovalService
+	// M14 dependencies (nil-safe)
+	DownloadService      *service.DownloadService
+	GalleryAnalyticsSvc  *service.GalleryAnalyticsService
+	WebhookSvc           *service.WebhookService
 }

@@ -13,14 +13,21 @@ import (
 
 // DownloadService handles single and batch asset downloads.
 type DownloadService struct {
-	assetRepo      *repository.AssetRepo
+	assetRepo        *repository.AssetRepo
 	galleryAssetRepo *repository.GalleryAssetRepo
-	store          storage.Provider
+	store            storage.Provider
+	downloadRepo     *repository.DownloadRepo
 }
 
 // NewDownloadService creates a new DownloadService.
 func NewDownloadService(ar *repository.AssetRepo, gar *repository.GalleryAssetRepo, store storage.Provider) *DownloadService {
 	return &DownloadService{assetRepo: ar, galleryAssetRepo: gar, store: store}
+}
+
+// WithDownloadRepo sets the download repo for job tracking.
+func (s *DownloadService) WithDownloadRepo(dr *repository.DownloadRepo) *DownloadService {
+	s.downloadRepo = dr
+	return s
 }
 
 // GetOriginal returns a reader for the original asset file.
@@ -92,6 +99,48 @@ func (s *DownloadService) WriteZIP(ctx context.Context, galleryID uuid.UUID, w i
 	}
 
 	return nil
+}
+
+// ── M14: Download Job Tracking ──
+
+// CreateDownloadJob creates a download job record.
+func (s *DownloadService) CreateDownloadJob(ctx context.Context, job *repository.DownloadJob) error {
+	if s.downloadRepo == nil {
+		return nil
+	}
+	return s.downloadRepo.CreateJob(ctx, job)
+}
+
+// GetDownloadJob returns a download job by ID.
+func (s *DownloadService) GetDownloadJob(ctx context.Context, id uuid.UUID) (*repository.DownloadJob, error) {
+	if s.downloadRepo == nil {
+		return nil, fmt.Errorf("download repo not configured")
+	}
+	return s.downloadRepo.GetJob(ctx, id)
+}
+
+// ListDownloadJobs returns download jobs for a gallery.
+func (s *DownloadService) ListDownloadJobs(ctx context.Context, galleryID uuid.UUID) ([]repository.DownloadJob, error) {
+	if s.downloadRepo == nil {
+		return nil, nil
+	}
+	return s.downloadRepo.ListJobsByGallery(ctx, galleryID)
+}
+
+// LogDownloadEvent records a download event for audit.
+func (s *DownloadService) LogDownloadEvent(ctx context.Context, event *repository.DownloadEvent) error {
+	if s.downloadRepo == nil {
+		return nil
+	}
+	return s.downloadRepo.CreateEvent(ctx, event)
+}
+
+// GetDownloadAudit returns download events for a gallery.
+func (s *DownloadService) GetDownloadAudit(ctx context.Context, galleryID uuid.UUID, limit int) ([]repository.DownloadEvent, error) {
+	if s.downloadRepo == nil {
+		return nil, nil
+	}
+	return s.downloadRepo.ListEventsByGallery(ctx, galleryID, limit)
 }
 
 // WriteSelectedZIP streams a ZIP containing only selected asset IDs.

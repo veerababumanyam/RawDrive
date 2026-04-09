@@ -312,6 +312,14 @@ func main() {
 	proofingCommentSvc := service.NewProofingCommentService(proofingCommentRepo)
 	albumApprovalSvc := service.NewAlbumApprovalService(albumApprovalRepo)
 
+	// M14 Services: Downloads, Analytics, Webhooks
+	downloadRepo := repository.NewDownloadRepo(dbPool)
+	galleryAnalyticsRepo := repository.NewGalleryAnalyticsRepo(dbPool)
+	webhookRepo := repository.NewWebhookRepo(dbPool)
+	galleryAnalyticsSvc := service.NewGalleryAnalyticsService(galleryAnalyticsRepo)
+	webhookSvc := service.NewWebhookService(webhookRepo)
+	downloadSvc := service.NewDownloadService(assetRepo, galleryAssetRepo, storageProvider).WithDownloadRepo(downloadRepo)
+
 	// M11 Services: Lifecycle
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
 
@@ -351,6 +359,10 @@ func main() {
 			ProofingSessionSvc:   proofingSessionSvc,
 			ProofingCommentSvc:   proofingCommentSvc,
 			AlbumApprovalSvc:     albumApprovalSvc,
+			// M14
+			DownloadService:      downloadSvc,
+			GalleryAnalyticsSvc:  galleryAnalyticsSvc,
+			WebhookSvc:           webhookSvc,
 		})
 
 		// Chunked upload routes
