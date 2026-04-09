@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -47,9 +48,12 @@ func (h *DownloadHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		assetIDs = append(assetIDs, uid)
 	}
 
+	wsIDStr := middleware.WorkspaceIDFromContext(r.Context())
+	wsID, _ := uuid.Parse(wsIDStr)
+
 	job := &repository.DownloadJob{
 		GalleryID:   galleryID,
-		WorkspaceID: galleryID, // simplified — would come from gallery lookup
+		WorkspaceID: wsID,
 		AssetIDs:    assetIDs,
 		Variant:     input.Variant,
 		TotalAssets: len(assetIDs),

@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,12 +15,19 @@ import (
 
 // GalleryAccessHandler handles gallery access control HTTP requests.
 type GalleryAccessHandler struct {
-	accessSvc *service.GalleryAccessService
+	accessSvc  *service.GalleryAccessService
+	gallerySvc *service.GalleryService
 }
 
 // NewGalleryAccessHandler creates a new GalleryAccessHandler.
 func NewGalleryAccessHandler(svc *service.GalleryAccessService) *GalleryAccessHandler {
 	return &GalleryAccessHandler{accessSvc: svc}
+}
+
+// WithGalleryService sets the gallery service for slug resolution.
+func (h *GalleryAccessHandler) WithGalleryService(gs *service.GalleryService) *GalleryAccessHandler {
+	h.gallerySvc = gs
+	return h
 }
 
 // VerifyPassword handles POST /public/galleries/{slug}/verify-password
@@ -37,9 +46,8 @@ func (h *GalleryAccessHandler) VerifyPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Resolve gallery ID from slug — this would use the gallery repo
-	// For now, we parse the slug as a potential gallery ID for direct access
-	galleryID, err := resolveGalleryFromSlug(slug)
+	// Resolve gallery ID from slug
+	galleryID, err := h.resolveSlug(r.Context(), slug)
 	if err != nil {
 		http.Error(w, `{"error":"invalid password"}`, http.StatusUnauthorized)
 		return
@@ -188,10 +196,20 @@ func (h *GalleryAccessHandler) SetProofingDeadline(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusOK)
 }
 
-// resolveGalleryFromSlug attempts to parse a slug as a UUID (simple implementation).
-// In production, this would lookup the gallery by slug from the repository.
-func resolveGalleryFromSlug(slug string) (uuid.UUID, error) {
-	return uuid.Parse(slug)
+// resolveSlug resolves a gallery slug to its UUID. Tries UUID parse first, then slug lookup.
+func (h *GalleryAccessHandler) resolveSlug(ctx context.Context, slug string) (uuid.UUID, error) {
+	// Try direct UUID parse
+	if id, err := uuid.Parse(slug); err == nil {
+		return id, nil
+	}
+	// Lookup by slug via gallery service
+	if h.gallerySvc != nil {
+		gallery, err := h.gallerySvc.GetBySlug(ctx, slug)
+		if err == nil && gallery != nil {
+			return gallery.ID, nil
+		}
+	}
+	return uuid.Nil, fmt.Errorf("gallery not found")
 }
 
 func parseISO8601(s string) (time.Time, error) {

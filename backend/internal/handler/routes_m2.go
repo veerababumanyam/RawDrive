@@ -12,7 +12,6 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 	galleryHandler := NewGalleryHandler(deps.GalleryService)
 	shareHandler := NewShareLinkHandler(deps.ShareLinkService)
 	proofingHandler := NewProofingHandler(deps.ProofingService)
-	publicHandler := NewPublicGalleryHandler(deps.GalleryService, deps.AssetService, deps.ShareLinkService)
 	storageConfigHandler := NewStorageConfigHandler(deps.StorageConfigService)
 
 	// M11 handlers
@@ -212,7 +211,15 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		})
 	}
 
-	// Public routes (no auth required)
+	// NOTE: Public routes moved to RegisterPublicGalleryRoutes — must be called on outer (no-auth) router
+}
+
+// RegisterPublicGalleryRoutes registers gallery public routes that do NOT require authentication.
+// MUST be called on the outer router (not inside JWT middleware group).
+func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
+	publicHandler := NewPublicGalleryHandler(deps.GalleryService, deps.AssetService, deps.ShareLinkService)
+	proofingHandler := NewProofingHandler(deps.ProofingService)
+
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
@@ -221,7 +228,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 
 		// M13: Public gallery access verification
 		if deps.GalleryAccessSvc != nil {
-			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc)
+			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc).WithGalleryService(deps.GalleryService)
 			r.Post("/galleries/{slug}/verify-password", accessHandler.VerifyPassword)
 		}
 

@@ -340,7 +340,7 @@ func main() {
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
 
 		// M2 + M11 Protected routes
-		handler.RegisterM2Routes(api, handler.M2Dependencies{
+		m2Deps := handler.M2Dependencies{
 			AssetService:         assetSvc,
 			UploadService:        uploadSvc,
 			GalleryService:       gallerySvc,
@@ -369,7 +369,11 @@ func main() {
 			WebhookSvc:           webhookSvc,
 			// M15
 			ConsentSvc:           consentSvc,
-		})
+		}
+		handler.RegisterM2Routes(api, m2Deps)
+
+		// Public gallery routes — registered on outer router (no auth required)
+		handler.RegisterPublicGalleryRoutes(r, m2Deps)
 
 		// Chunked upload routes
 		tmpDir := os.Getenv("UPLOAD_TMP_DIR")

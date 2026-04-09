@@ -13,7 +13,9 @@ import (
 
 func setupM2Router() *chi.Mux {
 	r := chi.NewRouter()
-	RegisterM2Routes(r, M2Dependencies{})
+	deps := M2Dependencies{}
+	RegisterM2Routes(r, deps)
+	RegisterPublicGalleryRoutes(r, deps)
 	return r
 }
 

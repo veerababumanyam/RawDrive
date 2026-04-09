@@ -14,17 +14,17 @@ type DownloadJob struct {
 	ID                uuid.UUID  `json:"id"`
 	GalleryID         uuid.UUID  `json:"gallery_id"`
 	WorkspaceID       uuid.UUID  `json:"workspace_id"`
-	RequestedByName   string     `json:"requested_by_name,omitempty"`
-	RequestedByEmail  string     `json:"requested_by_email,omitempty"`
+	RequestedByName   *string    `json:"requested_by_name,omitempty"`
+	RequestedByEmail  *string    `json:"requested_by_email,omitempty"`
 	RequestedByUserID *uuid.UUID `json:"requested_by_user_id,omitempty"`
 	AssetIDs          []uuid.UUID `json:"asset_ids"`
 	Variant           string     `json:"variant"`
 	Status            string     `json:"status"`
 	Progress          int        `json:"progress"`
 	TotalAssets       int        `json:"total_assets"`
-	DownloadURL       string     `json:"download_url,omitempty"`
-	FileSizeBytes     int64      `json:"file_size_bytes,omitempty"`
-	ErrorMessage      string     `json:"error_message,omitempty"`
+	DownloadURL       *string    `json:"download_url,omitempty"`
+	FileSizeBytes     *int64     `json:"file_size_bytes,omitempty"`
+	ErrorMessage      *string    `json:"error_message,omitempty"`
 	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	CompletedAt       *time.Time `json:"completed_at,omitempty"`
