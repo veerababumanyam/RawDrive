@@ -36,6 +36,7 @@ func (h *LifecycleHandler) Transition(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		TargetState string `json:"target_state"`
 		Reason      string `json:"reason"`
+		Force       bool   `json:"force"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -51,6 +52,7 @@ func (h *LifecycleHandler) Transition(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID: workspaceID,
 		TargetState: service.LifecycleState(input.TargetState),
 		Reason:      input.Reason,
+		Force:       input.Force,
 	})
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")

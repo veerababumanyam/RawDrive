@@ -14,6 +14,7 @@ type GalleryService struct {
 	galleryAssetRepo *repository.GalleryAssetRepo
 	coverSvc         *GalleryCoverService
 	assetRepo        *repository.AssetRepo
+	albumSvc         *AlbumService
 }
 
 // NewGalleryService creates a new GalleryService.
@@ -24,6 +25,12 @@ func NewGalleryService(gr *repository.GalleryRepo, gar *repository.GalleryAssetR
 // WithAssetRepo attaches the asset repo for timeline queries.
 func (s *GalleryService) WithAssetRepo(ar *repository.AssetRepo) *GalleryService {
 	s.assetRepo = ar
+	return s
+}
+
+// WithAlbumService attaches album service for utility album seeding on gallery create.
+func (s *GalleryService) WithAlbumService(as *AlbumService) *GalleryService {
+	s.albumSvc = as
 	return s
 }
 
@@ -51,6 +58,12 @@ func (s *GalleryService) Create(ctx context.Context, input CreateGalleryInput) (
 	if err := s.galleryRepo.Create(ctx, g); err != nil {
 		return nil, err
 	}
+
+	// Seed utility smart albums (Favorites, Videos, RAW)
+	if s.albumSvc != nil {
+		_ = s.albumSvc.SeedUtilityAlbums(ctx, g.ID) // best-effort
+	}
+
 	return g, nil
 }
 

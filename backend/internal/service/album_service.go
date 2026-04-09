@@ -74,3 +74,54 @@ func (s *AlbumService) RemoveAsset(ctx context.Context, albumID, assetID uuid.UU
 func (s *AlbumService) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.albumRepo.Delete(ctx, id)
 }
+
+// GetSmartAlbumAssets evaluates the smart filter and returns matching assets.
+func (s *AlbumService) GetSmartAlbumAssets(ctx context.Context, albumID uuid.UUID, assetRepo *repository.AssetRepo) ([]repository.Asset, error) {
+	album, err := s.albumRepo.GetByID(ctx, albumID)
+	if err != nil || album == nil {
+		return nil, fmt.Errorf("album not found")
+	}
+	if album.SmartFilter == nil || len(album.SmartFilter) == 0 {
+		return nil, nil // Not a smart album
+	}
+
+	// Build asset filter from smart_filter JSON
+	f := repository.AssetFilter{GalleryID: &album.GalleryID, Limit: 200}
+	if ct, ok := album.SmartFilter["content_type"].(string); ok {
+		f.ContentType = ct
+	}
+	if status, ok := album.SmartFilter["status"].(string); ok {
+		f.Status = status
+	}
+	if search, ok := album.SmartFilter["search"].(string); ok {
+		f.Search = search
+	}
+
+	return assetRepo.List(ctx, f)
+}
+
+// UtilityAlbums are well-known smart albums seeded on gallery creation.
+var UtilityAlbums = []struct {
+	Name        string
+	SmartFilter map[string]interface{}
+}{
+	{Name: "Favorites", SmartFilter: map[string]interface{}{"is_favorite": true}},
+	{Name: "Videos", SmartFilter: map[string]interface{}{"content_type": "video/"}},
+	{Name: "RAW", SmartFilter: map[string]interface{}{"content_type": "image/x-"}},
+}
+
+// SeedUtilityAlbums creates the standard smart albums for a new gallery.
+func (s *AlbumService) SeedUtilityAlbums(ctx context.Context, galleryID uuid.UUID) error {
+	for i, u := range UtilityAlbums {
+		album := &repository.Album{
+			GalleryID:   galleryID,
+			Name:        u.Name,
+			Position:    i + 1000, // high position so they sort last
+			SmartFilter: u.SmartFilter,
+		}
+		if err := s.albumRepo.Create(ctx, album); err != nil {
+			return fmt.Errorf("seed utility album %s: %w", u.Name, err)
+		}
+	}
+	return nil
+}

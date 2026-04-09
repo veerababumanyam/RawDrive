@@ -46,14 +46,18 @@ var OGImageSize = ThumbnailSize{Name: "og_image", MaxWidth: 1200, MaxHeight: 630
 // AllDerivativeSizes combines all derivative types for full pipeline processing.
 var AllDerivativeSizes = append(append(StandardSizes, CoverSizes...), OGImageSize)
 
+// WatermarkPreviewSize is the watermarked mid-res preview for proofing galleries.
+var WatermarkPreviewSize = ThumbnailSize{Name: "watermark_preview", MaxWidth: 1200, MaxHeight: 1200}
+
 // ThumbnailService generates and stores thumbnails.
 type ThumbnailService struct {
-	store storage.Provider
+	store        storage.Provider
+	watermarkSvc *WatermarkService
 }
 
 // NewThumbnailService creates a new ThumbnailService.
 func NewThumbnailService(store storage.Provider) *ThumbnailService {
-	return &ThumbnailService{store: store}
+	return &ThumbnailService{store: store, watermarkSvc: NewWatermarkService()}
 }
 
 // ThumbnailResult holds the generated thumbnail URLs and metadata.
@@ -155,7 +159,55 @@ func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID s
 	// Generate real LQIP (20px wide, base64 encoded)
 	result.LQIPBase64 = s.generateLQIP(srcImg)
 
+	// Generate watermark preview (mid-res with watermark overlay for proofing)
+	if s.watermarkSvc != nil {
+		wpDr, err := s.generateWatermarkPreview(ctx, assetID, srcImg)
+		if err == nil && wpDr != nil {
+			result.Derivatives = append(result.Derivatives, *wpDr)
+		}
+	}
+
 	return result, nil
+}
+
+// generateWatermarkPreview creates a watermarked mid-res preview for proofing galleries.
+func (s *ThumbnailService) generateWatermarkPreview(ctx context.Context, assetID string, src image.Image) (*DerivativeResult, error) {
+	// Resize to watermark preview size
+	resized := imaging.Fit(src, WatermarkPreviewSize.MaxWidth, WatermarkPreviewSize.MaxHeight, imaging.Lanczos)
+
+	// Encode to JPEG buffer for watermark input
+	buf := new(bytes.Buffer)
+	if err := imaging.Encode(buf, resized, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
+		return nil, fmt.Errorf("watermark preview encode: %w", err)
+	}
+
+	// Apply watermark
+	watermarked, err := s.watermarkSvc.Apply(ctx, buf, DefaultWatermarkConfig())
+	if err != nil {
+		return nil, fmt.Errorf("watermark preview apply: %w", err)
+	}
+
+	// Read watermarked result
+	wmBuf := new(bytes.Buffer)
+	if _, err := io.Copy(wmBuf, watermarked); err != nil {
+		return nil, fmt.Errorf("watermark preview read: %w", err)
+	}
+
+	// Store
+	key := fmt.Sprintf("derivatives/%s/watermark_preview.jpg", assetID)
+	if err := s.store.Put(ctx, key, wmBuf, int64(wmBuf.Len()), "image/jpeg"); err != nil {
+		return nil, fmt.Errorf("watermark preview store: %w", err)
+	}
+
+	rBounds := resized.Bounds()
+	return &DerivativeResult{
+		Variant:    "watermark_preview",
+		StorageKey: key,
+		Width:      rBounds.Dx(),
+		Height:     rBounds.Dy(),
+		SizeBytes:  int64(wmBuf.Len()),
+		Format:     "jpeg",
+	}, nil
 }
 
 // generateDerivative creates a single derivative and stores it, returning metadata.

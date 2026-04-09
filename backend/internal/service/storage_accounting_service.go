@@ -3,19 +3,59 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// analyticsCache is a simple in-memory cache with TTL for storage analytics.
+type analyticsCache struct {
+	mu      sync.RWMutex
+	entries map[uuid.UUID]*analyticsCacheEntry
+}
+
+type analyticsCacheEntry struct {
+	data      *StorageAnalytics
+	expiresAt time.Time
+}
+
+func newAnalyticsCache() *analyticsCache {
+	return &analyticsCache{entries: make(map[uuid.UUID]*analyticsCacheEntry)}
+}
+
+func (c *analyticsCache) get(workspaceID uuid.UUID) (*StorageAnalytics, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	entry, ok := c.entries[workspaceID]
+	if !ok || time.Now().After(entry.expiresAt) {
+		return nil, false
+	}
+	return entry.data, true
+}
+
+func (c *analyticsCache) set(workspaceID uuid.UUID, data *StorageAnalytics, ttl time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[workspaceID] = &analyticsCacheEntry{data: data, expiresAt: time.Now().Add(ttl)}
+}
+
+func (c *analyticsCache) invalidate(workspaceID uuid.UUID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.entries, workspaceID)
+}
+
 // StorageAccounting tracks per-workspace storage usage with quota enforcement.
 type StorageAccounting struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	cache *analyticsCache
 }
 
 // NewStorageAccounting creates a new StorageAccounting service.
 func NewStorageAccounting(pool *pgxpool.Pool) *StorageAccounting {
-	return &StorageAccounting{pool: pool}
+	return &StorageAccounting{pool: pool, cache: newAnalyticsCache()}
 }
 
 // WorkspaceStorage represents current storage usage for a workspace.
@@ -85,6 +125,7 @@ func (s *StorageAccounting) RecordUpload(ctx context.Context, workspaceID uuid.U
 	if err != nil {
 		return fmt.Errorf("storage accounting: record upload: %w", err)
 	}
+	s.cache.invalidate(workspaceID)
 	return nil
 }
 
@@ -100,6 +141,7 @@ func (s *StorageAccounting) RecordDelete(ctx context.Context, workspaceID uuid.U
 	if err != nil {
 		return fmt.Errorf("storage accounting: record delete: %w", err)
 	}
+	s.cache.invalidate(workspaceID)
 	return nil
 }
 
@@ -124,8 +166,13 @@ type StorageAnalytics struct {
 	TypeBreakdown StorageTypeBreakdown    `json:"type_breakdown"`
 }
 
-// GetAnalytics returns full storage analytics for a workspace.
+// GetAnalytics returns full storage analytics for a workspace (cached for 1 hour).
 func (s *StorageAccounting) GetAnalytics(ctx context.Context, workspaceID uuid.UUID) (*StorageAnalytics, error) {
+	// Check cache first
+	if cached, ok := s.cache.get(workspaceID); ok {
+		return cached, nil
+	}
+
 	usage, err := s.GetUsage(ctx, workspaceID)
 	if err != nil {
 		// If workspace_storage row doesn't exist yet, return zeros
@@ -144,11 +191,16 @@ func (s *StorageAccounting) GetAnalytics(ctx context.Context, workspaceID uuid.U
 		typeBreak = &StorageTypeBreakdown{}
 	}
 
-	return &StorageAnalytics{
+	result := &StorageAnalytics{
 		Usage:         usage,
 		TopGalleries:  galleries,
 		TypeBreakdown: *typeBreak,
-	}, nil
+	}
+
+	// Cache for 1 hour
+	s.cache.set(workspaceID, result, 1*time.Hour)
+
+	return result, nil
 }
 
 func (s *StorageAccounting) getTopGalleries(ctx context.Context, workspaceID uuid.UUID, limit int) ([]GalleryStorageBreakdown, error) {

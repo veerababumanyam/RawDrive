@@ -263,6 +263,8 @@ func main() {
 
 	// M11 Services (initialized early — used by M2 services)
 	storageAccountingSvc := service.NewStorageAccounting(dbPool)
+	albumRepo := repository.NewAlbumRepo(dbPool)
+	albumSvc := service.NewAlbumService(albumRepo)
 
 	// M2 Services
 	exifSvc := service.NewExifService()
@@ -270,15 +272,13 @@ func main() {
 	assetSvc := service.NewAssetService(assetRepo, storageProvider)
 	thumbnailSvc := service.NewThumbnailService(storageProvider)
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
-	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo)
+	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo).WithAlbumService(albumSvc)
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService()
 
-	// M11 Services: Lifecycle, Albums
+	// M11 Services: Lifecycle
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
-	albumRepo := repository.NewAlbumRepo(dbPool)
-	albumSvc := service.NewAlbumService(albumRepo)
 
 	// In-process event broker for real-time SSE delivery to frontend
 	eventBroker := handler.NewEventBroker()
@@ -320,7 +320,13 @@ func main() {
 		defer workerCancel()
 		workerRegistry.StartAll(workerCtx)
 
-		log.Println("M2: routes registered, thumbnail worker started")
+		// M11: Asset purge worker (30-day retention) + gallery expiry
+		purgeWorker := worker.NewAssetPurgeWorker(dbPool, storageProvider)
+		workerRegistry.Register("asset-purge", purgeWorker)
+		expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
+		workerRegistry.Register("gallery-expiry", expiryWorker)
+
+		log.Println("M2: routes registered, thumbnail + purge + expiry workers started")
 
 		// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────
 

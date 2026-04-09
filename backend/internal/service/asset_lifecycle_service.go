@@ -60,6 +60,7 @@ type TransitionInput struct {
 	WorkspaceID uuid.UUID
 	TargetState LifecycleState
 	Reason      string
+	Force       bool // Skip cascade warnings for multi-gallery referenced assets
 }
 
 // Transition changes an asset's lifecycle state with validation.
@@ -80,6 +81,13 @@ func (s *AssetLifecycleService) Transition(ctx context.Context, input Transition
 	// Handle state-specific side effects before the generic status update
 	switch input.TargetState {
 	case StateDeleted:
+		// Check for gallery references and warn if not forced
+		if !input.Force {
+			galleries, _ := s.assetRepo.GetGalleriesForAsset(ctx, input.AssetID)
+			if len(galleries) > 1 {
+				return fmt.Errorf("lifecycle: asset referenced in %d galleries — set force=true to confirm deletion", len(galleries))
+			}
+		}
 		// Soft delete — sets deleted_at + status in one operation
 		if err := s.assetRepo.SoftDelete(ctx, input.AssetID); err != nil {
 			return fmt.Errorf("lifecycle: soft delete: %w", err)

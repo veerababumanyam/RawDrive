@@ -1,10 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/google/uuid"
@@ -153,9 +157,29 @@ func (p *ProcessingPipeline) processMessage(ctx context.Context, msg *nats.Msg) 
 	var taskErrors []string
 	var derivativeResult *FullDerivativeResult
 
+	// Check for unsupported formats that need external tools
+	isUnsupportedImage := isHEICFormat(job.ContentType)
+	isVideo := isVideoFormat(job.ContentType)
+
 	for _, task := range job.Tasks {
 		switch task {
 		case "thumbnail":
+			if isVideo {
+				// Video poster frame extraction requires ffmpeg — degrade gracefully
+				p.logger.Info("video detected, skipping Go-based thumbnail generation",
+					"asset_id", job.AssetID, "content_type", job.ContentType)
+				// Try ffmpeg if available on the system
+				if err := p.tryVideoThumbnail(ctx, job); err != nil {
+					p.logger.Warn("video thumbnail extraction unavailable", "asset_id", job.AssetID, "error", err)
+				}
+				continue
+			}
+			if isUnsupportedImage {
+				p.logger.Warn("HEIC/HEIF format detected — Go imaging library does not support this format",
+					"asset_id", job.AssetID, "content_type", job.ContentType)
+				taskErrors = append(taskErrors, "thumbnail: unsupported format "+job.ContentType+" (HEIC requires ffmpeg/libvips)")
+				continue
+			}
 			result, err := p.thumbnailSvc.GenerateForAsset(ctx, job.AssetID, job.StorageKey)
 			if err != nil {
 				p.logger.Error("thumbnail generation failed", "asset_id", job.AssetID, "error", err)
@@ -206,5 +230,69 @@ func (p *ProcessingPipeline) processMessage(ctx context.Context, msg *nats.Msg) 
 		return fmt.Errorf("update asset status: %w", err)
 	}
 
+	return nil
+}
+
+// isHEICFormat returns true if the content type indicates HEIC/HEIF format.
+func isHEICFormat(ct string) bool {
+	return ct == "image/heic" || ct == "image/heif" || ct == "image/heic-sequence"
+}
+
+// isVideoFormat returns true if the content type is a video format.
+func isVideoFormat(ct string) bool {
+	return len(ct) > 6 && ct[:6] == "video/"
+}
+
+// tryVideoThumbnail attempts to extract a poster frame from a video using ffmpeg.
+func (p *ProcessingPipeline) tryVideoThumbnail(ctx context.Context, job ProcessingJob) error {
+	_, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found in PATH — video thumbnails require ffmpeg")
+	}
+
+	reader, err := p.store.Get(ctx, job.StorageKey)
+	if err != nil {
+		return fmt.Errorf("get video: %w", err)
+	}
+	defer reader.Close()
+
+	tmpFile, err := os.CreateTemp("", "rawdrive-video-*.mp4")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := io.Copy(tmpFile, reader); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	outPath := tmpFile.Name() + ".jpg"
+	defer os.Remove(outPath)
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-i", tmpFile.Name(), "-ss", "1", "-frames:v", "1", "-q:v", "2", outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg extract: %w", err)
+	}
+
+	posterData, err := os.ReadFile(outPath)
+	if err != nil {
+		return fmt.Errorf("read poster: %w", err)
+	}
+
+	key := fmt.Sprintf("derivatives/%s/poster.jpg", job.AssetID)
+	if err := p.store.Put(ctx, key, bytes.NewReader(posterData), int64(len(posterData)), "image/jpeg"); err != nil {
+		return fmt.Errorf("store poster: %w", err)
+	}
+
+	thumbnails := map[string]string{"poster": key}
+	if err := p.assetRepo.UpdateThumbnails(ctx, job.AssetID, thumbnails, ""); err != nil {
+		return fmt.Errorf("persist poster: %w", err)
+	}
+
+	p.logger.Info("extracted video poster frame", "asset_id", job.AssetID, "key", key)
 	return nil
 }
