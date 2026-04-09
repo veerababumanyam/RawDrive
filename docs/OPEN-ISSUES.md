@@ -1,9 +1,11 @@
 # Open Issues — M2/M11 Build Gaps
 
-> **Last Updated:** 2026-04-09 (v0.0.13)  
+> **Last Updated:** 2026-04-09 (v0.0.14)  
 > **Source of Truth:** `_cobolt-output/latest/planning/issue-and-blocker-tracker.json`  
-> **Status:** 12 open, 7 resolved  
-> **Phase 1 complete** — ISS-009 (derivatives), ISS-010 (LQIP), ISS-016 (gallery states), ISS-017 (filters/bulk) resolved
+> **Status:** 8 open (1 P1, 7 P2), 11 resolved  
+> **Phase 1 complete** — ISS-009, ISS-010, ISS-016, ISS-017 resolved  
+> **Phase 2 complete** — ISS-001 (TUS), ISS-002 (share links), ISS-003 (ZIP download), ISS-004 (PWA) resolved  
+> **All M12/M13 blockers cleared.** Remaining 8 items are P2 (deferrable).
 
 ## Implementation Sequence
 
