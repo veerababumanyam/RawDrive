@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
@@ -22,39 +23,16 @@ type ProfileRequest struct {
 
 // ──────────────────────────── Context helpers ────────────────────────────
 
-type contextKey string
-
-const userIDKey contextKey = "user_id"
-
-// UserIDFromRequest extracts user_id from JWT claims in context.
-// Expects middleware to set map[string]interface{} with "sub" key.
+// UserIDFromRequest extracts user_id from JWT claims set by middleware.JWTAuth.
 func UserIDFromRequest(r *http.Request) string {
-	// Try direct context value first (for handler tests)
-	if v, ok := r.Context().Value(userIDKey).(string); ok && v != "" {
-		return v
-	}
-	// Try plain string key (for cross-package test injection)
-	if v, ok := r.Context().Value("user_id").(string); ok && v != "" {
-		return v
-	}
-	// Try JWT claims map (from middleware)
-	if claims, ok := r.Context().Value(jwtClaimsKey).(map[string]interface{}); ok {
-		if sub, ok := claims["sub"].(string); ok {
-			return sub
-		}
-	}
-	// Try any type of "jwt_claims" key
-	if claims, ok := r.Context().Value("jwt_claims").(map[string]interface{}); ok {
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims != nil {
 		if sub, ok := claims["sub"].(string); ok {
 			return sub
 		}
 	}
 	return ""
 }
-
-type jwtContextKey string
-
-const jwtClaimsKey jwtContextKey = "jwt_claims"
 
 // ──────────────────────────── Handler ────────────────────────────
 

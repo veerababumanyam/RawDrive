@@ -1,8 +1,8 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "greenfield",
-  "currentStage": "M7.5-complete",
-  "version": "0.0.8",
+  "currentStage": "M1.1-planning-complete",
+  "version": "0.0.9",
   "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
   "flags": {
     "generateSkills": false,
@@ -46,10 +46,10 @@
     "readinessScore": 4.5,
     "firstMilestone": "M1"
   },
-  "currentMilestone": "M7.6",
+  "currentMilestone": "M1.1",
   "pipeline": {
     "currentStage": "S5-S6",
-    "currentMilestone": "M7.6",
+    "currentMilestone": "M1.1",
     "infra_verified": true,
     "infra_started": true,
     "infra_healthy": true
@@ -57,7 +57,7 @@
   "build": {
     "version": "2.0.0",
     "currentStep": "00-preflight",
-    "currentMilestone": "M7.6",
+    "currentMilestone": "M1.1",
     "autoMode": true,
     "parallelMode": false,
     "startedAt": "2026-04-08T22:42:45Z",

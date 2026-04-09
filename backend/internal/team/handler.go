@@ -1,10 +1,12 @@
 package team
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
@@ -27,28 +29,14 @@ type MemberResponse struct {
 
 // ──────────────────────────── Context Helpers ────────────────────────────
 
-type contextKeyType string
-
-const jwtClaimsCtxKey contextKeyType = "jwt_claims"
-
-func jwtClaimsFromContext(ctx interface{ Value(any) any }) map[string]interface{} {
-	type mwCtxKey string
-	if v, ok := ctx.Value(mwCtxKey("jwt_claims")).(map[string]interface{}); ok {
-		return v
-	}
-	if v, ok := ctx.Value(jwtClaimsCtxKey).(map[string]interface{}); ok {
-		return v
-	}
-	if v, ok := ctx.Value("jwt_claims").(map[string]interface{}); ok {
-		return v
-	}
-	return nil
+func jwtClaimsFromContext(ctx context.Context) map[string]interface{} {
+	return middleware.JWTClaimsFromContext(ctx)
 }
 
 // ──────────────────────────── Permission Checker ────────────────────────────
 
 type PermissionChecker interface {
-	Evaluate(ctx interface{ Value(any) any }, userID, workspaceID, resource, action string) (bool, error)
+	Evaluate(ctx context.Context, userID, workspaceID, resource, action string) (bool, error)
 }
 
 // MemberLister lists members for a workspace.

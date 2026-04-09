@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/onboarding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,14 +55,19 @@ func postJSONWithAuth(url, userID string, body interface{}) (*http.Response, err
 	return http.DefaultClient.Do(req)
 }
 
-// authInjectServer wraps the handler to inject user_id into context.
+// authInjectServer wraps the handler to inject JWT claims into context
+// using the canonical middleware.WithJWTClaims so the handler can find them.
 func authInjectServer(svc onboarding.Service, userID string) *httptest.Server {
 	handler := onboarding.NewHandler(svc)
 	r := chi.NewRouter()
-	// Inject JWT claims into context
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), "user_id", userID)
+			ctx := middleware.WithJWTClaims(r.Context(), map[string]interface{}{
+				"sub":          userID,
+				"workspace_id": "test-ws",
+				"role":         "Owner",
+				"state_id":     "1",
+			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})

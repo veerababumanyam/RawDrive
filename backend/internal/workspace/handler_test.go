@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,7 +56,7 @@ func newWSTestServer(svc workspace.Service, claims map[string]interface{}) *http
 	if claims != nil {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				ctx := context.WithValue(r.Context(), "jwt_claims", claims)
+				ctx := middleware.WithJWTClaims(r.Context(), claims)
 				next.ServeHTTP(w, r.WithContext(ctx))
 			})
 		})

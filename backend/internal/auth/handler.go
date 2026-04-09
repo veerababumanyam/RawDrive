@@ -429,6 +429,28 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-resolve workspace claims from DB so post-onboarding refresh
+	// picks up the newly created workspace instead of "pending-onboarding".
+	if h.workspaces != nil {
+		claims, parseErr := h.jwt.ParseAccessToken(r.Context(), newAccess)
+		if parseErr == nil && claims.Sub != "" {
+			wsID, stateID, role, platformRole, _ := h.workspaces.GetUserWorkspace(r.Context(), claims.Sub)
+			if wsID != "" && wsID != claims.WorkspaceID {
+				// Claims changed — regenerate access token with fresh data
+				freshAccess, genErr := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
+					Sub:          claims.Sub,
+					WorkspaceID:  wsID,
+					Role:         role,
+					PlatformRole: platformRole,
+					StateID:      stateID,
+				})
+				if genErr == nil {
+					newAccess = freshAccess
+				}
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, RefreshResponse{
 		AccessToken:  newAccess,
 		RefreshToken: newRefresh,

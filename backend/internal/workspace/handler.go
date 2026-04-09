@@ -1,11 +1,13 @@
 package workspace
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
@@ -113,33 +115,13 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // ──────────────────────────── Context Helpers ────────────────────────────
 
-type contextKeyType string
-
-const jwtClaimsCtxKey contextKeyType = "jwt_claims"
-
-func jwtClaimsFromContext(ctx interface{ Value(any) any }) map[string]interface{} {
-	// Try the middleware contextKey type first
-	type mwCtxKey string
-	if v, ok := ctx.Value(mwCtxKey("jwt_claims")).(map[string]interface{}); ok {
-		return v
-	}
-	// Try our local contextKeyType
-	if v, ok := ctx.Value(jwtClaimsCtxKey).(map[string]interface{}); ok {
-		return v
-	}
-	// Try plain string key
-	if v, ok := ctx.Value("jwt_claims").(map[string]interface{}); ok {
-		return v
-	}
-	return nil
+func jwtClaimsFromContext(ctx context.Context) map[string]interface{} {
+	return middleware.JWTClaimsFromContext(ctx)
 }
 
 // WithJWTClaims sets JWT claims into context (for testing).
-func WithJWTClaims(ctx interface {
-	Value(any) any
-}, claims map[string]interface{}) interface{ Value(any) any } {
-	// This is a stub for the actual implementation in the middleware package
-	return nil
+func WithJWTClaims(ctx context.Context, claims map[string]interface{}) context.Context {
+	return middleware.WithJWTClaims(ctx, claims)
 }
 
 // ──────────────────────────── Helpers ────────────────────────────

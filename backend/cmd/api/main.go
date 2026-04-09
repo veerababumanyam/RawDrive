@@ -61,20 +61,55 @@ func (p *logOTPDelivery) SendOTP(_ context.Context, email, code string) error {
 }
 
 // onboardingWorkspaceCreator adapts workspace.Service for onboarding.
+// It resolves 2-letter state codes (e.g. "TS") to integer state IDs from the DB,
+// updates the user's state_id, and creates the workspace + membership.
 type onboardingWorkspaceCreator struct {
 	wsSvc workspace.Service
+	pool  *pgxpool.Pool
 }
 
-func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateID, businessName string) (string, error) {
+func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateCode, businessName string) (string, error) {
+	// Resolve state code to integer state ID.
+	// Frontend may send 2-letter codes ("TG"), ISO codes ("IN-TG"), state names ("Telangana"),
+	// or numeric IDs ("24"). Try all patterns for maximum compatibility.
+	var stateID int
+	err := o.pool.QueryRow(ctx,
+		`SELECT id FROM states
+		 WHERE code = $1
+		    OR code = 'IN-' || $1
+		    OR REPLACE(code, 'IN-', '') = $1
+		    OR UPPER(name) = UPPER($1)
+		    OR id::text = $1
+		 LIMIT 1`, stateCode,
+	).Scan(&stateID)
+	if err != nil {
+		log.Printf("WARNING: could not resolve state code %q: %v", stateCode, err)
+		return "", fmt.Errorf("resolve state: %w", err)
+	}
+
+	stateIDStr := fmt.Sprintf("%d", stateID)
+
+	// Update user's state_id in DB
+	_, _ = o.pool.Exec(ctx, `UPDATE users SET state_id = $1 WHERE id = $2`, stateID, userID)
+
+	// Create workspace with the resolved integer state ID
 	ws, err := o.wsSvc.Create(ctx, workspace.CreateWorkspaceInput{
 		Name:         businessName,
-		StateID:      stateID,
+		StateID:      stateIDStr,
 		OwnerID:      userID,
 		BusinessName: businessName,
 	})
 	if err != nil {
 		return "", err
 	}
+
+	// Ensure workspace_members row exists (for AuthLookup to find)
+	_, _ = o.pool.Exec(ctx,
+		`INSERT INTO workspace_members (workspace_id, user_id, role_id)
+		 VALUES ($1, $2, (SELECT id FROM roles WHERE name = 'Owner'))
+		 ON CONFLICT DO NOTHING`,
+		ws.ID, userID)
+
 	return ws.ID, nil
 }
 
@@ -158,7 +193,7 @@ func main() {
 	wsHandler := workspace.NewHandler(wsSvc)
 
 	// Onboarding with real workspace creation
-	onbSvc := onboarding.NewService(&onboardingWorkspaceCreator{wsSvc: wsSvc}, &logEventPublisher{})
+	onbSvc := onboarding.NewService(&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool}, &logEventPublisher{})
 	onbHandler := onboarding.NewHandler(onbSvc)
 
 	// Real team repos backed by DB

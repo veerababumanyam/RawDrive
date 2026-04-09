@@ -12,14 +12,18 @@ var (
 	ErrStepRequired = errors.New("previous step required")
 )
 
-// Valid Indian states (subset for demonstration).
+// All 28 states + 8 union territories — codes match DB states.code without IN- prefix.
 var validStates = map[string]bool{
-	"MH": true, "KA": true, "TN": true, "DL": true, "GJ": true,
-	"RJ": true, "UP": true, "WB": true, "AP": true, "TS": true,
-	"KL": true, "MP": true, "BR": true, "PB": true, "HR": true,
-	"JK": true, "GA": true, "HP": true, "UK": true, "JH": true,
-	"AS": true, "CT": true, "OR": true, "MN": true, "ML": true,
-	"MZ": true, "NL": true, "SK": true, "TR": true, "AR": true,
+	// 28 States
+	"AP": true, "AR": true, "AS": true, "BR": true, "CT": true,
+	"GA": true, "GJ": true, "HR": true, "HP": true, "JH": true,
+	"KA": true, "KL": true, "MP": true, "MH": true, "MN": true,
+	"ML": true, "MZ": true, "NL": true, "OR": true, "PB": true,
+	"RJ": true, "SK": true, "TN": true, "TG": true, "TR": true,
+	"UT": true, "UP": true, "WB": true,
+	// 8 Union Territories
+	"AN": true, "CH": true, "DH": true, "DL": true,
+	"JK": true, "LA": true, "LD": true, "PY": true,
 }
 
 type Step string

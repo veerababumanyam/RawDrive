@@ -1,22 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
+import { getStoredAccessToken, getStoredRefreshToken, persistAuthTokens } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+// All 28 states + 8 union territories — codes match DB states.code (without IN- prefix)
 const indianStates = [
   { code: "AP", name: "Andhra Pradesh" },
   { code: "AR", name: "Arunachal Pradesh" },
   { code: "AS", name: "Assam" },
   { code: "BR", name: "Bihar" },
   { code: "CT", name: "Chhattisgarh" },
-  { code: "DL", name: "Delhi" },
   { code: "GA", name: "Goa" },
   { code: "GJ", name: "Gujarat" },
   { code: "HR", name: "Haryana" },
   { code: "HP", name: "Himachal Pradesh" },
-  { code: "JK", name: "Jammu & Kashmir" },
   { code: "JH", name: "Jharkhand" },
   { code: "KA", name: "Karnataka" },
   { code: "KL", name: "Kerala" },
@@ -31,11 +30,20 @@ const indianStates = [
   { code: "RJ", name: "Rajasthan" },
   { code: "SK", name: "Sikkim" },
   { code: "TN", name: "Tamil Nadu" },
-  { code: "TS", name: "Telangana" },
+  { code: "TG", name: "Telangana" },
   { code: "TR", name: "Tripura" },
-  { code: "UK", name: "Uttarakhand" },
+  { code: "UT", name: "Uttarakhand" },
   { code: "UP", name: "Uttar Pradesh" },
   { code: "WB", name: "West Bengal" },
+  // Union Territories
+  { code: "AN", name: "Andaman & Nicobar Islands" },
+  { code: "CH", name: "Chandigarh" },
+  { code: "DH", name: "Dadra & Nagar Haveli and Daman & Diu" },
+  { code: "DL", name: "Delhi" },
+  { code: "JK", name: "Jammu & Kashmir" },
+  { code: "LA", name: "Ladakh" },
+  { code: "LD", name: "Lakshadweep" },
+  { code: "PY", name: "Puducherry" },
 ];
 
 type Step = "state_selection" | "profile" | "complete";
@@ -117,6 +125,28 @@ export default function OnboardingPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to save profile");
       }
+
+      // Refresh JWT to get updated workspace_id (no longer "pending-onboarding")
+      const refreshToken = getStoredRefreshToken();
+      if (refreshToken) {
+        try {
+          const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            if (refreshData.access_token && refreshData.refresh_token) {
+              persistAuthTokens(refreshData.access_token, refreshData.refresh_token);
+            }
+          }
+        } catch {
+          // Token refresh failed — user can still see completion step
+          // and will get fresh tokens on next login
+        }
+      }
+
       setStep("complete");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");

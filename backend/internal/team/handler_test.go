@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/team"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ type handlerPermChecker struct {
 	allowed bool
 }
 
-func (m *handlerPermChecker) Evaluate(_ interface{ Value(any) any }, _, _, _, _ string) (bool, error) {
+func (m *handlerPermChecker) Evaluate(_ context.Context, _, _, _, _ string) (bool, error) {
 	return m.allowed, nil
 }
 
@@ -59,7 +60,7 @@ func newHandlerTestServer(
 	if claims != nil {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				ctx := context.WithValue(r.Context(), "jwt_claims", claims)
+				ctx := middleware.WithJWTClaims(r.Context(), claims)
 				next.ServeHTTP(w, r.WithContext(ctx))
 			})
 		})
