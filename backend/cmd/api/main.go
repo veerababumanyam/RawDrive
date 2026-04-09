@@ -483,6 +483,22 @@ func main() {
 
 	log.Println("Public lead form endpoint registered")
 
+	// ──────────────────────── Authenticated Storage File Serving ────────────────
+	// Serves files from local storage with JWT verification.
+	// In production, R2/S3 files are served via signed URLs — this is for dev/local only.
+	if storageCfg.Driver == "local" {
+		storageDir := storageCfg.LocalDir
+		r.Route("/storage", func(sr chi.Router) {
+			sr.Use(middleware.JWTAuth(jwtSvc)) // Require valid JWT
+			sr.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+				filePath := chi.URLParam(r, "*")
+				fullPath := storageDir + "/" + filePath
+				http.ServeFile(w, r, fullPath)
+			})
+		})
+		log.Printf("Storage: local file serving with JWT auth on /storage/* (dir: %s)", storageDir)
+	}
+
 	// ──────────────────────── Health Check ────────────────────────
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

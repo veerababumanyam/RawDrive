@@ -19,6 +19,7 @@ import {
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { useUpload } from "@/hooks/use-upload";
+import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -31,6 +32,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -291,7 +293,24 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   const previewUrl = getAssetPreviewUrl(entry.asset || undefined);
 
                   return (
-                    <article key={entry.id} className="surface-panel overflow-hidden">
+                    <article
+                      key={entry.id}
+                      className="surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg"
+                      onClick={() => {
+                        const idx = assets.findIndex((a) => a.id === entry.id);
+                        if (idx !== -1) setLightboxIndex(idx);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View ${entry.asset?.filename || "photo"}`}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          const idx = assets.findIndex((a) => a.id === entry.id);
+                          if (idx !== -1) setLightboxIndex(idx);
+                        }
+                      }}
+                    >
                       {previewUrl ? (
                         <img
                           src={previewUrl}
@@ -371,6 +390,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </aside>
       </div>
+
+      {/* Photo lightbox */}
+      {lightboxIndex !== null && assets[lightboxIndex]?.asset && (
+        <PhotoLightbox
+          asset={assets[lightboxIndex].asset!}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() => setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i))}
+          onNext={() => setLightboxIndex((i) => (i !== null && i < assets.length - 1 ? i + 1 : i))}
+          hasPrev={lightboxIndex > 0}
+          hasNext={lightboxIndex < assets.length - 1}
+        />
+      )}
     </div>
   );
 }
