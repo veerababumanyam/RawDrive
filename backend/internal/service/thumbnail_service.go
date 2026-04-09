@@ -93,6 +93,20 @@ func (s *ThumbnailService) generateOne(ctx context.Context, assetID string, src 
 	return key, nil
 }
 
+// GenerateForAsset fetches an asset from storage, generates all thumbnails, and updates the asset record.
+// Used by the processing pipeline for async thumbnail generation.
+func (s *ThumbnailService) GenerateForAsset(ctx context.Context, assetID interface{}, storageKey string) error {
+	reader, err := s.store.Get(ctx, storageKey)
+	if err != nil {
+		return fmt.Errorf("thumbnail: get original: %w", err)
+	}
+	defer reader.Close()
+
+	idStr := fmt.Sprintf("%v", assetID)
+	_, err = s.GenerateAll(ctx, idStr, reader)
+	return err
+}
+
 // generateBlurhash creates a simple placeholder hash.
 // In production, use github.com/bbrks/go-blurhash for real BlurHash encoding.
 func generateBlurhash(img image.Image) string {

@@ -1,19 +1,55 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/storage"
 	"github.com/rwcarlsen/goexif/exif"
 )
 
 // ExifService extracts EXIF metadata from images.
-type ExifService struct{}
+type ExifService struct {
+	store     storage.Provider
+	assetRepo *repository.AssetRepo
+}
 
 // NewExifService creates a new ExifService.
 func NewExifService() *ExifService {
 	return &ExifService{}
+}
+
+// NewExifServiceWithDeps creates an ExifService with storage and repo dependencies for pipeline use.
+func NewExifServiceWithDeps(store storage.Provider, assetRepo *repository.AssetRepo) *ExifService {
+	return &ExifService{store: store, assetRepo: assetRepo}
+}
+
+// ExtractAndStore fetches an asset from storage, extracts EXIF data, and updates the asset record.
+func (s *ExifService) ExtractAndStore(ctx context.Context, assetID uuid.UUID, storageKey string) error {
+	if s.store == nil {
+		return fmt.Errorf("exif: storage provider not configured")
+	}
+
+	reader, err := s.store.Get(ctx, storageKey)
+	if err != nil {
+		return fmt.Errorf("exif: get original: %w", err)
+	}
+	defer reader.Close()
+
+	meta, err := s.Extract(reader)
+	if err != nil {
+		// EXIF extraction failure is non-fatal — some files don't have EXIF
+		return nil
+	}
+
+	if s.assetRepo != nil {
+		return s.assetRepo.UpdateExif(ctx, assetID, meta.ToMap())
+	}
+	return nil
 }
 
 // ExifMetadata holds extracted EXIF data.

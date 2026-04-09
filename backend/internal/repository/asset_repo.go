@@ -225,3 +225,51 @@ func (r *AssetRepo) UpdateThumbnails(ctx context.Context, id uuid.UUID, thumbnai
 	}
 	return nil
 }
+
+// UpdateExif sets the EXIF metadata for an asset.
+func (r *AssetRepo) UpdateExif(ctx context.Context, id uuid.UUID, exifData map[string]interface{}) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE assets SET exif_data = $1, updated_at = now() WHERE id = $2`,
+		exifData, id,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo update exif: %w", err)
+	}
+	return nil
+}
+
+// GetByIDAndWorkspace retrieves an asset by ID scoped to a workspace.
+func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*Asset, error) {
+	a := &Asset{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key, storage_driver,
+		 width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status,
+		 created_at, updated_at, deleted_at
+		 FROM assets WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+		id, workspaceID,
+	).Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+		&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash,
+		&a.ExifData, &a.ThumbnailURLs, &a.UploadedBy, &a.Status,
+		&a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("asset repo get by id and workspace: %w", err)
+	}
+	return a, nil
+}
+
+// GetWorkspaceStorageUsed returns total storage bytes used by a workspace.
+func (r *AssetRepo) GetWorkspaceStorageUsed(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	var total int64
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(size_bytes), 0) FROM assets WHERE workspace_id = $1 AND deleted_at IS NULL`,
+		workspaceID,
+	).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo get workspace storage: %w", err)
+	}
+	return total, nil
+}
