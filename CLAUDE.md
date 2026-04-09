@@ -46,6 +46,30 @@
 - Secrets encrypted at rest. Super admin CRUD via /api/v1/admin/settings/.
 - R2 env vars: R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_REGION, R2_PUBLIC_URL
 
+## UI Component System — MANDATORY FOR ALL AGENTS
+
+### GlassIconButton (ABSOLUTE — use for ALL icon buttons)
+- **Component**: `frontend/src/components/ui/glass-icon-button.tsx`
+- **Icons**: `frontend/src/components/icons/index.tsx` (SF Symbols-style SVGs)
+- **NEVER** use raw `<button>` with inline SVG for icon actions. Always use `GlassIconButton`.
+- **Sizes**: `sm` (36px), `md` (44px — default, meets WCAG touch target), `lg` (52px)
+- **Variants**: `glass` (default), `solid`, `ghost`, `danger`, `success`, `accent`
+- **Required prop**: `label` (string) for accessibility — no icon button without a label.
+- **Active state**: `active={boolean}` for toggle buttons (info panel, comments sidebar)
+- **Design**: iOS 26 liquid glass — backdrop-blur, translucent bg, glass border, spring press animation
+- **Proofing convention**: Select=`accent`, Approve=`success`, Reject=`danger`
+
+### Icon Set
+All icons are in `frontend/src/components/icons/index.tsx`:
+- Navigation: `ChevronLeft`, `ChevronRight`
+- Actions: `XMark`, `Download`, `Expand`, `Compress`
+- Zoom: `ZoomIn`, `ZoomOut`
+- Info: `InfoCircle`
+- Communication: `ChatBubble`
+- Proofing: `CheckCircle`, `ThumbsUp`, `XCircle`
+- Rating: `Star`
+- Add new icons here following the same pattern (24x24 viewBox, 1.5px stroke, round caps)
+
 ## Design Token System — MANDATORY FOR ALL AGENTS
 
 ### Single Source of Truth

@@ -326,6 +326,26 @@
       "transition":      { "ref": "motion.duration.fast" }
     },
 
+    "glassIconButton": {
+      "_description": "iOS 26 liquid glass circular icon button. Component: frontend/src/components/ui/glass-icon-button.tsx. MANDATORY for all icon-only interactive elements.",
+      "sizeSm":           { "value": "36px",  "usage": "Compact toolbar buttons" },
+      "sizeMd":           { "value": "44px",  "usage": "Standard — meets WCAG 2.1 AA touch target" },
+      "sizeLg":           { "value": "52px",  "usage": "Prominent actions (lightbox nav, proofing)" },
+      "borderRadius":     { "ref": "radii.full" },
+      "backdropBlur":     { "ref": "themes.{active}.glass.blur" },
+      "backdropSaturate": { "ref": "themes.{active}.glass.saturation" },
+      "borderOpacity":    { "ref": "themes.{active}.glass.borderOpacity" },
+      "bgOpacity":        { "value": "0.12", "description": "Background opacity for glass variant" },
+      "bgOpacityHover":   { "value": "0.22", "description": "Background opacity on hover" },
+      "bgOpacityActive":  { "value": "0.30", "description": "Background opacity when active/pressed" },
+      "pressScale":       { "value": "0.92", "description": "Scale on press — spring animation" },
+      "transition":       { "ref": "motion.duration.fast" },
+      "shadow":           { "value": "0 2px 8px -2px hsla(0,0%,0%,0.08)", "usage": "Subtle elevation" },
+      "shadowHover":      { "value": "0 4px 12px -2px hsla(0,0%,0%,0.12)", "usage": "Elevated on hover" },
+      "iconStrokeWidth":  { "value": "1.5", "description": "SF Symbols-style stroke weight" },
+      "iconViewBox":      { "value": "0 0 24 24", "description": "Standard 24x24 icon grid" }
+    },
+
     "input": {
       "background":      { "ref": "themes.{active}.surface.sunken" },
       "border":          { "ref": "themes.{active}.border.default" },
