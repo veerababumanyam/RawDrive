@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS album_assets;
+DROP TABLE IF EXISTS albums;
+DROP TABLE IF EXISTS asset_derivatives;
+ALTER TABLE assets DROP COLUMN IF EXISTS processing_status;
+ALTER TABLE assets DROP COLUMN IF EXISTS processing_error;
+ALTER TABLE assets DROP COLUMN IF EXISTS lifecycle_state;
+ALTER TABLE assets DROP COLUMN IF EXISTS lqip_base64;
+ALTER TABLE assets DROP COLUMN IF EXISTS ai_quality_score;
+ALTER TABLE assets DROP COLUMN IF EXISTS burst_group_id;
+ALTER TABLE assets DROP COLUMN IF EXISTS capture_date;
+ALTER TABLE galleries DROP COLUMN IF EXISTS expires_at;
+ALTER TABLE galleries DROP COLUMN IF EXISTS gallery_state;

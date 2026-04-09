@@ -1,0 +1,135 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/service"
+)
+
+// AlbumHandler handles album HTTP requests.
+type AlbumHandler struct {
+	albumSvc *service.AlbumService
+}
+
+// NewAlbumHandler creates a new AlbumHandler.
+func NewAlbumHandler(svc *service.AlbumService) *AlbumHandler {
+	return &AlbumHandler{albumSvc: svc}
+}
+
+// Create handles POST /api/v1/galleries/{galleryId}/albums
+func (h *AlbumHandler) Create(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "galleryId"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var input struct {
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		ParentID    *string `json:"parent_id,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	createInput := service.CreateAlbumInput{
+		GalleryID:   galleryID,
+		Name:        input.Name,
+		Description: input.Description,
+	}
+	if input.ParentID != nil {
+		pid, err := uuid.Parse(*input.ParentID)
+		if err == nil {
+			createInput.ParentID = &pid
+		}
+	}
+
+	album, err := h.albumSvc.Create(r.Context(), createInput)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": album})
+}
+
+// List handles GET /api/v1/galleries/{galleryId}/albums
+func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "galleryId"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	albums, err := h.albumSvc.ListByGallery(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": albums})
+}
+
+// GetByID handles GET /api/v1/albums/{id}
+func (h *AlbumHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+
+	album, err := h.albumSvc.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if album == nil {
+		http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": album})
+}
+
+// Breadcrumb handles GET /api/v1/albums/{id}/breadcrumb
+func (h *AlbumHandler) Breadcrumb(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+
+	chain, err := h.albumSvc.GetBreadcrumb(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": chain})
+}
+
+// Delete handles DELETE /api/v1/albums/{id}
+func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.albumSvc.Delete(r.Context(), id); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
