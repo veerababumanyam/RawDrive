@@ -150,23 +150,58 @@ func (p *ProcessingPipeline) processMessage(ctx context.Context, msg *nats.Msg) 
 		"tasks", job.Tasks,
 	)
 
+	var taskErrors []string
+	var derivativeResult *FullDerivativeResult
+
 	for _, task := range job.Tasks {
 		switch task {
 		case "thumbnail":
-			if err := p.thumbnailSvc.GenerateForAsset(ctx, job.AssetID, job.StorageKey); err != nil {
+			result, err := p.thumbnailSvc.GenerateForAsset(ctx, job.AssetID, job.StorageKey)
+			if err != nil {
 				p.logger.Error("thumbnail generation failed", "asset_id", job.AssetID, "error", err)
-				// Continue with other tasks
+				taskErrors = append(taskErrors, "thumbnail: "+err.Error())
+			} else {
+				derivativeResult = result
 			}
 		case "exif":
 			if err := p.exifSvc.ExtractAndStore(ctx, job.AssetID, job.StorageKey); err != nil {
 				p.logger.Error("exif extraction failed", "asset_id", job.AssetID, "error", err)
+				taskErrors = append(taskErrors, "exif: "+err.Error())
 			}
 		default:
 			p.logger.Warn("unknown processing task", "task", task)
 		}
 	}
 
-	// Mark asset as ready
+	// Persist derivative metadata (LQIP, blurhash, thumbnail URLs)
+	if derivativeResult != nil {
+		thumbnails := map[string]string{}
+		for _, d := range derivativeResult.Derivatives {
+			thumbnails[d.Variant] = d.StorageKey
+		}
+		blurhash := ""
+		if derivativeResult.LQIPBase64 != "" {
+			blurhash = derivativeResult.LQIPBase64 // Use LQIP as blurhash fallback
+		}
+		if err := p.assetRepo.UpdateThumbnails(ctx, job.AssetID, thumbnails, blurhash); err != nil {
+			p.logger.Error("failed to persist thumbnails", "asset_id", job.AssetID, "error", err)
+		}
+	}
+
+	if len(taskErrors) > 0 {
+		// Mark asset as failed and persist the error reason
+		errMsg := fmt.Sprintf("%d/%d tasks failed: %s", len(taskErrors), len(job.Tasks), taskErrors[0])
+		if err := p.assetRepo.UpdateProcessingError(ctx, job.AssetID, errMsg); err != nil {
+			p.logger.Error("failed to persist processing error", "asset_id", job.AssetID, "error", err)
+		}
+		if err := p.assetRepo.UpdateStatus(ctx, job.AssetID, "failed"); err != nil {
+			return fmt.Errorf("update asset status to failed: %w", err)
+		}
+		p.logger.Warn("asset processing failed", "asset_id", job.AssetID, "errors", taskErrors)
+		return nil // Don't return error — we handled it by marking failed
+	}
+
+	// All tasks succeeded — mark asset as ready
 	if err := p.assetRepo.UpdateStatus(ctx, job.AssetID, "ready"); err != nil {
 		return fmt.Errorf("update asset status: %w", err)
 	}

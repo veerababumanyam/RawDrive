@@ -13,11 +13,18 @@ type GalleryService struct {
 	galleryRepo      *repository.GalleryRepo
 	galleryAssetRepo *repository.GalleryAssetRepo
 	coverSvc         *GalleryCoverService
+	assetRepo        *repository.AssetRepo
 }
 
 // NewGalleryService creates a new GalleryService.
 func NewGalleryService(gr *repository.GalleryRepo, gar *repository.GalleryAssetRepo, cs *GalleryCoverService) *GalleryService {
 	return &GalleryService{galleryRepo: gr, galleryAssetRepo: gar, coverSvc: cs}
+}
+
+// WithAssetRepo attaches the asset repo for timeline queries.
+func (s *GalleryService) WithAssetRepo(ar *repository.AssetRepo) *GalleryService {
+	s.assetRepo = ar
+	return s
 }
 
 // CreateInput holds the input for creating a gallery.
@@ -107,6 +114,14 @@ func (s *GalleryService) RemoveAsset(ctx context.Context, galleryID, assetID uui
 // ListAssets returns all assets in a gallery.
 func (s *GalleryService) ListAssets(ctx context.Context, galleryID uuid.UUID) ([]repository.GalleryAsset, error) {
 	return s.galleryAssetRepo.ListByGallery(ctx, galleryID)
+}
+
+// GetTimeline returns assets grouped by capture/creation date for timeline view.
+func (s *GalleryService) GetTimeline(ctx context.Context, galleryID uuid.UUID) ([]repository.TimelineGroup, error) {
+	if s.assetRepo == nil {
+		return nil, fmt.Errorf("timeline: asset repo not configured")
+	}
+	return s.assetRepo.ListGroupedByDate(ctx, galleryID, 200)
 }
 
 // ──────────────────────── Gallery State Machine (ISS-016) ────────────────────────

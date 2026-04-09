@@ -15,14 +15,21 @@ import (
 
 // UploadService handles file upload orchestration.
 type UploadService struct {
-	storage   storage.Provider
-	assetRepo *repository.AssetRepo
-	exifSvc   *ExifService
+	storage    storage.Provider
+	assetRepo  *repository.AssetRepo
+	exifSvc    *ExifService
+	storageSvc *StorageAccounting
 }
 
 // NewUploadService creates a new UploadService.
 func NewUploadService(store storage.Provider, assetRepo *repository.AssetRepo, exifSvc *ExifService) *UploadService {
 	return &UploadService{storage: store, assetRepo: assetRepo, exifSvc: exifSvc}
+}
+
+// WithStorageAccounting attaches the storage accounting service for quota tracking.
+func (s *UploadService) WithStorageAccounting(sa *StorageAccounting) *UploadService {
+	s.storageSvc = sa
+	return s
 }
 
 // UploadInput contains the data for creating an upload.
@@ -80,6 +87,11 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadR
 		// Attempt cleanup on failure
 		_ = s.storage.Delete(ctx, storageKey)
 		return nil, fmt.Errorf("upload: create asset: %w", err)
+	}
+
+	// Record storage usage for quota tracking (best-effort — don't fail upload)
+	if s.storageSvc != nil {
+		_ = s.storageSvc.RecordUpload(ctx, input.WorkspaceID, input.SizeBytes, 0)
 	}
 
 	return &UploadResult{

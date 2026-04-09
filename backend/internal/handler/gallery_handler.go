@@ -219,6 +219,23 @@ func (h *GalleryHandler) RemoveAsset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Timeline handles GET /api/v1/galleries/{id}/assets/timeline
+func (h *GalleryHandler) Timeline(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	groups, err := h.gallerySvc.GetTimeline(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"timeline failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, groups)
+}
+
 // ListAssets handles GET /api/v1/galleries/{id}/assets
 func (h *GalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))

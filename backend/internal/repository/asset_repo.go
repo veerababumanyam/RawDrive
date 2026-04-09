@@ -236,11 +236,11 @@ func (r *AssetRepo) UpdateDimensions(ctx context.Context, id uuid.UUID, width, h
 	return nil
 }
 
-// SoftDelete marks an asset as deleted.
+// SoftDelete marks an asset as deleted (sets deleted_at and status).
 func (r *AssetRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	now := time.Now()
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE assets SET deleted_at = $1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`,
+		`UPDATE assets SET deleted_at = $1, status = 'deleted', updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`,
 		now, id,
 	)
 	if err != nil {
@@ -288,6 +288,30 @@ func (r *AssetRepo) UpdateExif(ctx context.Context, id uuid.UUID, exifData map[s
 	return nil
 }
 
+// UpdateProcessingError persists a processing error message on an asset.
+func (r *AssetRepo) UpdateProcessingError(ctx context.Context, id uuid.UUID, errMsg string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE assets SET processing_error = $1, updated_at = now() WHERE id = $2`,
+		errMsg, id,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo update processing error: %w", err)
+	}
+	return nil
+}
+
+// Restore clears the deleted_at timestamp and sets status back to active.
+func (r *AssetRepo) Restore(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE assets SET deleted_at = NULL, status = 'active', updated_at = now() WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo restore: %w", err)
+	}
+	return nil
+}
+
 // GetByIDAndWorkspace retrieves an asset by ID scoped to a workspace.
 func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*Asset, error) {
 	a := &Asset{}
@@ -309,6 +333,86 @@ func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uui
 		return nil, fmt.Errorf("asset repo get by id and workspace: %w", err)
 	}
 	return a, nil
+}
+
+// TimelineGroup represents a date bucket with its assets.
+type TimelineGroup struct {
+	Date       string  `json:"date"`
+	AssetCount int     `json:"asset_count"`
+	Assets     []Asset `json:"assets"`
+}
+
+// ListGroupedByDate returns assets for a gallery grouped by capture date (or created_at fallback).
+func (r *AssetRepo) ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, limit int) ([]TimelineGroup, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT a.id, a.workspace_id, a.filename, a.content_type, a.size_bytes, a.storage_key,
+		 a.storage_driver, a.width, a.height, a.blurhash, a.exif_data, a.thumbnail_urls,
+		 a.uploaded_by, a.status, a.created_at, a.updated_at, a.deleted_at,
+		 COALESCE(a.capture_date::date, a.created_at::date) as group_date
+		 FROM assets a
+		 JOIN gallery_assets ga ON ga.asset_id = a.id
+		 WHERE ga.gallery_id = $1 AND a.deleted_at IS NULL
+		 ORDER BY group_date DESC, a.created_at DESC
+		 LIMIT $2`,
+		galleryID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo timeline: %w", err)
+	}
+	defer rows.Close()
+
+	groupMap := map[string]*TimelineGroup{}
+	var groupOrder []string
+	for rows.Next() {
+		var a Asset
+		var groupDate time.Time
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&groupDate,
+		); err != nil {
+			return nil, fmt.Errorf("asset repo timeline scan: %w", err)
+		}
+		dateKey := groupDate.Format("2006-01-02")
+		if _, exists := groupMap[dateKey]; !exists {
+			groupMap[dateKey] = &TimelineGroup{Date: dateKey}
+			groupOrder = append(groupOrder, dateKey)
+		}
+		groupMap[dateKey].Assets = append(groupMap[dateKey].Assets, a)
+		groupMap[dateKey].AssetCount++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]TimelineGroup, 0, len(groupOrder))
+	for _, key := range groupOrder {
+		result = append(result, *groupMap[key])
+	}
+	return result, nil
+}
+
+// GetGalleriesForAsset returns the gallery IDs that contain this asset.
+func (r *AssetRepo) GetGalleriesForAsset(ctx context.Context, assetID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT gallery_id FROM gallery_assets WHERE asset_id = $1`, assetID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo get galleries: %w", err)
+	}
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // BulkUpdateStatus changes status for multiple assets at once.

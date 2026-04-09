@@ -71,6 +71,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Post("/{id}/assets", galleryHandler.AddAsset)
 		r.Delete("/{id}/assets/{assetId}", galleryHandler.RemoveAsset)
 		r.Get("/{id}/assets", galleryHandler.ListAssets)
+		r.Get("/{id}/assets/timeline", galleryHandler.Timeline)
 
 		// M11: Albums (sub-galleries)
 		if albumHandler != nil {

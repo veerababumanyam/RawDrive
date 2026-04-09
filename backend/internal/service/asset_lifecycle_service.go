@@ -77,21 +77,51 @@ func (s *AssetLifecycleService) Transition(ctx context.Context, input Transition
 		return fmt.Errorf("lifecycle: invalid transition from %s to %s", currentState, input.TargetState)
 	}
 
-	if err := s.assetRepo.UpdateStatus(ctx, input.AssetID, string(input.TargetState)); err != nil {
-		return fmt.Errorf("lifecycle: update status: %w", err)
-	}
-
-	// Handle side effects
+	// Handle state-specific side effects before the generic status update
 	switch input.TargetState {
 	case StateDeleted:
-		// Soft delete — set deleted_at for retention window
-		// Cover auto-update if this was the gallery cover
-		// Note: actual purge happens via background job after 30-day retention
+		// Soft delete — sets deleted_at + status in one operation
+		if err := s.assetRepo.SoftDelete(ctx, input.AssetID); err != nil {
+			return fmt.Errorf("lifecycle: soft delete: %w", err)
+		}
+		// Recalculate gallery cover if this asset was the cover
+		s.recalcCoversForAsset(ctx, input.AssetID)
+		return nil
+
 	case StateActive:
-		// Restore — clear deleted_at
+		if currentState == StateDeleted {
+			// Restore — clears deleted_at and sets status to active
+			if err := s.assetRepo.Restore(ctx, input.AssetID); err != nil {
+				return fmt.Errorf("lifecycle: restore: %w", err)
+			}
+			return nil
+		}
+		// Non-delete → active transitions use generic status update
+		fallthrough
+
+	default:
+		if err := s.assetRepo.UpdateStatus(ctx, input.AssetID, string(input.TargetState)); err != nil {
+			return fmt.Errorf("lifecycle: update status: %w", err)
+		}
 	}
 
 	return nil
+}
+
+// recalcCoversForAsset triggers cover recalculation for galleries where this asset is the cover.
+func (s *AssetLifecycleService) recalcCoversForAsset(ctx context.Context, assetID uuid.UUID) {
+	if s.coverSvc == nil {
+		return
+	}
+	// Find galleries where this asset is the cover and auto-set a new one
+	// The cover service's AutoSetCover picks the next best asset
+	galleries, err := s.assetRepo.GetGalleriesForAsset(ctx, assetID)
+	if err != nil {
+		return // Best-effort — don't fail the lifecycle transition
+	}
+	for _, galleryID := range galleries {
+		_ = s.coverSvc.AutoSetCover(ctx, galleryID)
+	}
 }
 
 // Archive moves an asset to archived state (hidden from gallery but stored).

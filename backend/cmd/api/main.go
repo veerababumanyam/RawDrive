@@ -261,19 +261,21 @@ func main() {
 	shareLinkRepo := repository.NewShareLinkRepo(dbPool)
 	proofingRepo := repository.NewProofingRepo(dbPool)
 
+	// M11 Services (initialized early — used by M2 services)
+	storageAccountingSvc := service.NewStorageAccounting(dbPool)
+
 	// M2 Services
 	exifSvc := service.NewExifService()
-	uploadSvc := service.NewUploadService(storageProvider, assetRepo, exifSvc)
+	uploadSvc := service.NewUploadService(storageProvider, assetRepo, exifSvc).WithStorageAccounting(storageAccountingSvc)
 	assetSvc := service.NewAssetService(assetRepo, storageProvider)
 	thumbnailSvc := service.NewThumbnailService(storageProvider)
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
-	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc)
+	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo)
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService()
 
-	// M11 Services: Storage Accounting, Lifecycle, Albums
-	storageAccountingSvc := service.NewStorageAccounting(dbPool)
+	// M11 Services: Lifecycle, Albums
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
 	albumRepo := repository.NewAlbumRepo(dbPool)
 	albumSvc := service.NewAlbumService(albumRepo)
