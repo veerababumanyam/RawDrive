@@ -1,8 +1,8 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "greenfield",
-  "currentStage": "M1.1-planning-complete",
-  "version": "0.0.9",
+  "currentStage": "M2-complete",
+  "version": "0.0.11",
   "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
   "flags": {
     "generateSkills": false,
@@ -24,7 +24,7 @@
     "generate-skills": "skipped",
     "create-claude-md": "completed"
   },
-  "lastUpdated": "2026-04-09T11:09:15.613Z",
+  "lastUpdated": "2026-04-09T11:38:18.645Z",
   "planning": {
     "completedAt": "2026-04-07T13:39:14.048Z",
     "phases": 5,
@@ -60,7 +60,7 @@
     "currentMilestone": "M11",
     "autoMode": true,
     "parallelMode": false,
-    "startedAt": "2026-04-09T10:34:58Z",
+    "startedAt": "2026-04-09T11:33:18Z",
     "fixIterations": 0,
     "reviewCycles": 0,
     "phantomRates": {},
@@ -85,13 +85,13 @@
       "expectedStories": 12,
       "completedStories": 0
     },
-    "totalTasks": 42,
-    "totalWaves": 5,
+    "totalTasks": 21,
+    "totalWaves": 4,
     "tddPhase": "green",
     "totalRounds": 5,
-    "currentRound": 4,
+    "currentRound": 1,
     "currentRoundPhase": "red",
-    "currentRoundName": "frontend",
+    "currentRoundName": "foundation",
     "roundsCompleted": [
       "round-1-foundation",
       "round-2-core",
