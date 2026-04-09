@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -25,10 +25,41 @@ const BYOS_PROVIDERS: { id: Provider; name: string; desc: string }[] = [
 
 // ──────────────────────── Page ────────────────────────
 
+interface StorageAnalytics {
+  usage: { used_bytes: number; derivative_bytes: number; quota_bytes: number; percent_used: number; warning_level: string };
+  top_galleries: { gallery_id: string; gallery_name: string; used_bytes: number }[];
+  type_breakdown: { originals_bytes: number; derivatives_bytes: number; thumbnails_bytes: number };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
 export default function StorageSettingsPage() {
   // TODO: Read from auth context / workspace API
   const [planTier] = useState<PlanTier>("professional");
   const isEnterprise = planTier === "enterprise";
+
+  const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+    fetch(`${apiUrl}/api/v1/storage/analytics`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.data) setAnalytics(data.data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const usage = analytics?.usage;
+  const usedDisplay = usage ? formatBytes(usage.used_bytes) : "—";
+  const quotaDisplay = usage ? formatBytes(usage.quota_bytes) : "—";
+  const pctUsed = usage?.percent_used ?? 0;
+  const warningLevel = usage?.warning_level ?? "none";
 
   const [step, setStep] = useState<WizardStep>(1);
   const [config, setConfig] = useState<StorageConfig>({
@@ -65,12 +96,14 @@ export default function StorageSettingsPage() {
               <p className="text-lg font-semibold">Cloudflare R2</p>
               <p className="text-xs text-on-surface-variant mt-0.5">Managed by RawDrive — zero egress, global CDN</p>
             </div>
-            <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary">Default</span>
+            <span className={`text-xs px-3 py-1 rounded-full ${warningLevel === "critical" ? "bg-red-500/10 text-red-400" : warningLevel === "warning" ? "bg-yellow-500/10 text-yellow-400" : "bg-primary/10 text-primary"}`}>
+              {warningLevel === "critical" ? "Storage Critical" : warningLevel === "warning" ? "Storage Warning" : "Active"}
+            </span>
           </div>
           <div className="h-2 rounded-full bg-surface-container overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary-container" style={{ width: "45%" }} />
+            <div className={`h-full rounded-full ${warningLevel === "critical" ? "bg-red-500" : warningLevel === "warning" ? "bg-yellow-500" : "bg-gradient-to-r from-primary to-primary-container"}`} style={{ width: `${Math.min(pctUsed, 100)}%` }} />
           </div>
-          <p className="text-xs text-on-surface-variant mt-2">45 GB / 100 GB used</p>
+          <p className="text-xs text-on-surface-variant mt-2">{loading ? "Loading..." : `${usedDisplay} / ${quotaDisplay} used`}</p>
         </div>
 
         {/* ────────── BYOS Section (enterprise only) ────────── */}
@@ -192,31 +225,52 @@ export default function StorageSettingsPage() {
         <div className="grid grid-cols-2 gap-6">
           <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-5">
             <h3 className="text-sm font-medium mb-4">Top Galleries by Size</h3>
-            {[
-              { name: "Sharma Wedding", size: 12.4, pct: 100 },
-              { name: "Patel Reception", size: 8.7, pct: 70 },
-              { name: "Studio Portraits", size: 6.2, pct: 50 },
-              { name: "Mehta Engagement", size: 4.1, pct: 33 },
-              { name: "Brand Shoot", size: 2.8, pct: 23 },
-            ].map((g) => (
-              <div key={g.name} className="mb-3">
-                <div className="flex justify-between text-xs mb-1"><span>{g.name}</span><span className="text-on-surface-variant">{g.size} GB</span></div>
-                <div className="h-1.5 rounded-full bg-surface-container"><div className="h-full rounded-full bg-primary/60" style={{ width: `${g.pct}%` }} /></div>
-              </div>
-            ))}
+            {analytics?.top_galleries && analytics.top_galleries.length > 0 ? (
+              analytics.top_galleries.map((g) => {
+                const maxBytes = analytics.top_galleries[0]?.used_bytes || 1;
+                const pct = Math.round((g.used_bytes / maxBytes) * 100);
+                return (
+                  <div key={g.gallery_id} className="mb-3">
+                    <div className="flex justify-between text-xs mb-1"><span>{g.gallery_name}</span><span className="text-on-surface-variant">{formatBytes(g.used_bytes)}</span></div>
+                    <div className="h-1.5 rounded-full bg-surface-container"><div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-xs text-on-surface-variant">{loading ? "Loading..." : "No gallery data yet"}</p>
+            )}
           </div>
           <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-5">
             <h3 className="text-sm font-medium mb-4">Storage Distribution</h3>
-            <div className="flex items-center justify-center h-32">
-              <div className="w-28 h-28 rounded-full border-[12px] border-primary/60 border-t-secondary/60 border-r-tertiary/40" />
-            </div>
-            <div className="space-y-2 mt-4">
-              {[{ label: "Originals", pct: "62%", color: "bg-primary/60" }, { label: "Derivatives", pct: "28%", color: "bg-secondary/60" }, { label: "Thumbnails", pct: "10%", color: "bg-tertiary/40" }].map((t) => (
-                <div key={t.label} className="flex items-center gap-2 text-xs">
-                  <div className={`w-2.5 h-2.5 rounded-full ${t.color}`} /><span className="text-on-surface-variant">{t.label}</span><span className="ml-auto">{t.pct}</span>
-                </div>
-              ))}
-            </div>
+            {(() => {
+              const tb = analytics?.type_breakdown;
+              const total = (tb?.originals_bytes ?? 0) + (tb?.derivatives_bytes ?? 0) + (tb?.thumbnails_bytes ?? 0);
+              const origPct = total > 0 ? Math.round(((tb?.originals_bytes ?? 0) / total) * 100) : 0;
+              const derivPct = total > 0 ? Math.round(((tb?.derivatives_bytes ?? 0) / total) * 100) : 0;
+              const thumbPct = total > 0 ? 100 - origPct - derivPct : 0;
+              return (
+                <>
+                  <div className="flex items-center justify-center h-32">
+                    <div className="w-28 h-28 rounded-full border-[12px] border-primary/60 border-t-secondary/60 border-r-tertiary/40" />
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    {[
+                      { label: "Originals", value: formatBytes(tb?.originals_bytes ?? 0), pct: `${origPct}%`, color: "bg-primary/60" },
+                      { label: "Derivatives", value: formatBytes(tb?.derivatives_bytes ?? 0), pct: `${derivPct}%`, color: "bg-secondary/60" },
+                      { label: "Thumbnails", value: formatBytes(tb?.thumbnails_bytes ?? 0), pct: `${thumbPct}%`, color: "bg-tertiary/40" },
+                    ].map((t) => (
+                      <div key={t.label} className="flex items-center gap-2 text-xs">
+                        <div className={`w-2.5 h-2.5 rounded-full ${t.color}`} />
+                        <span className="text-on-surface-variant">{t.label}</span>
+                        <span className="ml-auto text-on-surface-variant">{t.value}</span>
+                        <span className="w-8 text-right">{t.pct}</span>
+                      </div>
+                    ))}
+                    {total === 0 && !loading && <p className="text-xs text-on-surface-variant text-center mt-2">No storage data yet</p>}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
