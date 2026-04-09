@@ -224,6 +224,13 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc)
 			r.Post("/galleries/{slug}/verify-password", accessHandler.VerifyPassword)
 		}
+
+		// M15: Consent management (public)
+		if deps.ConsentSvc != nil {
+			consentHandler := NewConsentHandler(deps.ConsentSvc)
+			r.Post("/galleries/{slug}/consent", consentHandler.RecordConsent)
+			r.Post("/consent/withdraw", consentHandler.WithdrawConsent)
+		}
 	})
 }
 
@@ -255,4 +262,6 @@ type M2Dependencies struct {
 	DownloadService      *service.DownloadService
 	GalleryAnalyticsSvc  *service.GalleryAnalyticsService
 	WebhookSvc           *service.WebhookService
+	// M15 dependencies (nil-safe)
+	ConsentSvc           *service.ConsentService
 }

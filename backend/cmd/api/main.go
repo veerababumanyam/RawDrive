@@ -320,6 +320,10 @@ func main() {
 	webhookSvc := service.NewWebhookService(webhookRepo)
 	downloadSvc := service.NewDownloadService(assetRepo, galleryAssetRepo, storageProvider).WithDownloadRepo(downloadRepo)
 
+	// M15 Services: Consent
+	consentRepo := repository.NewConsentRepo(dbPool)
+	consentSvc := service.NewConsentService(consentRepo)
+
 	// M11 Services: Lifecycle
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
 
@@ -363,6 +367,8 @@ func main() {
 			DownloadService:      downloadSvc,
 			GalleryAnalyticsSvc:  galleryAnalyticsSvc,
 			WebhookSvc:           webhookSvc,
+			// M15
+			ConsentSvc:           consentSvc,
 		})
 
 		// Chunked upload routes
