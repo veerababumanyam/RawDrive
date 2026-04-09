@@ -126,29 +126,62 @@ export default function DashboardPage() {
     [galleries],
   );
 
+  // Fetch real storage usage from API
+  const [storageUsed, setStorageUsed] = useState<string>("— / —");
+  const [storageMeta, setStorageMeta] = useState<string>("loading");
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+    fetch(`${apiUrl}/api/v1/storage/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.data) {
+          const used = data.data.used_bytes || 0;
+          const quota = data.data.quota_bytes || 0;
+          const pct = data.data.percent_used || 0;
+          const fmt = (b: number) => {
+            if (b === 0) return "0 B";
+            const u = ["B", "KB", "MB", "GB", "TB"];
+            const i = Math.floor(Math.log(b) / Math.log(1024));
+            return `${(b / Math.pow(1024, i)).toFixed(1)} ${u[i]}`;
+          };
+          setStorageUsed(`${fmt(used)} / ${fmt(quota)}`);
+          setStorageMeta(`${Math.round(pct)}% used`);
+        }
+      })
+      .catch(() => {
+        setStorageUsed("— / —");
+        setStorageMeta("unavailable");
+      });
+  }, []);
+
   const stats = useMemo(
     () => [
       {
         label: "Total Galleries",
-        value: galleries.length > 0 ? galleries.length.toString() : "24",
-        meta: "+12%",
+        value: galleries.length > 0 ? galleries.length.toString() : "0",
+        meta: "",
         toneClass: "text-accent",
       },
-      { label: "Active Clients", value: "156", meta: "+4 new", toneClass: "text-accent-primary" },
+      { label: "Active Clients", value: "—", meta: "", toneClass: "text-accent-primary" },
       {
         label: "Storage Used",
-        value: "85.2 / 200 GB",
-        meta: "42% used",
+        value: storageUsed,
+        meta: storageMeta,
         toneClass: "text-accent-secondary",
       },
       {
         label: "Revenue This Month",
-        value: "Rs. 2,45,000",
-        meta: "Top Month",
+        value: "—",
+        meta: "",
         toneClass: "text-accent-tertiary",
       },
     ],
-    [galleries.length],
+    [galleries.length, storageUsed, storageMeta],
   );
 
   return (
