@@ -95,3 +95,90 @@ func (s *ShareLinkService) ListByGallery(ctx context.Context, galleryID uuid.UUI
 func (s *ShareLinkService) Revoke(ctx context.Context, id uuid.UUID) error {
 	return s.repo.Revoke(ctx, id)
 }
+
+// ──────────────────────── Access Mode Enforcement (ISS-002) ────────────────────────
+
+// AccessMode represents the share link access control type.
+type AccessMode string
+
+const (
+	AccessPublic   AccessMode = "public"
+	AccessPIN      AccessMode = "pin"
+	AccessPassword AccessMode = "password"
+	AccessEmail    AccessMode = "email"
+)
+
+// ValidateAccess checks if the given credentials satisfy the share link's access mode.
+func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, credential string) (bool, error) {
+	sl, err := s.repo.GetByToken(ctx, token)
+	if err != nil || sl == nil {
+		return false, fmt.Errorf("share link not found")
+	}
+
+	// Check revocation
+	if sl.RevokedAt != nil {
+		return false, fmt.Errorf("share link revoked")
+	}
+
+	// Check expiry
+	if sl.ExpiresAt != nil && sl.ExpiresAt.Before(time.Now()) {
+		return false, fmt.Errorf("share link expired")
+	}
+
+	// Determine access mode from permissions
+	mode := AccessMode("public")
+	if modeStr, ok := sl.Permissions["access_mode"].(string); ok {
+		mode = AccessMode(modeStr)
+	} else if sl.PinHash != nil {
+		mode = AccessPIN
+	}
+
+	switch mode {
+	case AccessPublic:
+		return true, nil
+	case AccessPIN:
+		if sl.PinHash == nil {
+			return true, nil
+		}
+		err := bcrypt.CompareHashAndPassword([]byte(*sl.PinHash), []byte(credential))
+		return err == nil, nil
+	case AccessPassword:
+		if sl.PinHash == nil {
+			return true, nil
+		}
+		err := bcrypt.CompareHashAndPassword([]byte(*sl.PinHash), []byte(credential))
+		return err == nil, nil
+	case AccessEmail:
+		allowedEmails, ok := sl.Permissions["allowed_emails"].([]interface{})
+		if !ok {
+			return true, nil
+		}
+		for _, e := range allowedEmails {
+			if email, ok := e.(string); ok && email == credential {
+				return true, nil
+			}
+		}
+		return false, fmt.Errorf("email not authorized")
+	default:
+		return true, nil
+	}
+}
+
+// TrackView increments view analytics for a share link.
+func (s *ShareLinkService) TrackView(ctx context.Context, token string, visitorIP string) error {
+	return s.repo.IncrementViewCount(ctx, token)
+}
+
+// TrackDownload increments download count for a share link.
+func (s *ShareLinkService) TrackDownload(ctx context.Context, token string) error {
+	return s.repo.IncrementDownloadCount(ctx, token)
+}
+
+// IsDownloadAllowed checks if the share link permits downloads.
+func (s *ShareLinkService) IsDownloadAllowed(ctx context.Context, token string) (bool, error) {
+	sl, err := s.repo.GetByToken(ctx, token)
+	if err != nil || sl == nil {
+		return false, err
+	}
+	return sl.DownloadAllowed, nil
+}

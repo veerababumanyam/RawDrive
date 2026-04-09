@@ -20,7 +20,17 @@ import (
 	"github.com/rawdrive/backend/internal/storage"
 )
 
-// ChunkedUploadHandler implements a simple chunked upload protocol.
+const tusVersion = "1.0.0"
+
+// setTUSHeaders adds standard TUS protocol headers to every response.
+func setTUSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Tus-Resumable", tusVersion)
+	w.Header().Set("Tus-Version", tusVersion)
+	w.Header().Set("Tus-Extension", "creation,termination")
+	w.Header().Set("Tus-Max-Size", "2147483648") // 2GB
+}
+
+// ChunkedUploadHandler implements the TUS v1.0.0 resumable upload protocol.
 // Clients POST to /uploads to create an upload session, then PATCH chunks.
 type ChunkedUploadHandler struct {
 	uploadSvc *service.UploadService
@@ -113,7 +123,10 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	}
 	h.sessions.Store(uploadID, session)
 
+	setTUSHeaders(w)
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/uploads/%s", uploadID))
+	w.Header().Set("Upload-Offset", "0")
+	w.Header().Set("Upload-Length", strconv.FormatInt(input.TotalSize, 10))
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"upload_id":  uploadID,
 		"chunk_size": input.ChunkSize,
@@ -157,6 +170,7 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 
 	session.Offset += written
 
+	setTUSHeaders(w)
 	w.Header().Set("Upload-Offset", strconv.FormatInt(session.Offset, 10))
 
 	// Check if upload is complete
@@ -190,6 +204,7 @@ func (h *ChunkedUploadHandler) GetOffset(w http.ResponseWriter, r *http.Request)
 	}
 	session := val.(*uploadSession)
 
+	setTUSHeaders(w)
 	w.Header().Set("Upload-Offset", strconv.FormatInt(session.Offset, 10))
 	w.Header().Set("Upload-Length", strconv.FormatInt(session.TotalSize, 10))
 	w.WriteHeader(http.StatusOK)

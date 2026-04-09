@@ -116,3 +116,35 @@ func (r *ShareLinkRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 	}
 	return nil
 }
+
+// IncrementViewCount atomically increments the view counter for a share link.
+func (r *ShareLinkRepo) IncrementViewCount(ctx context.Context, token string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE share_links SET permissions = jsonb_set(
+			COALESCE(permissions, '{}'::jsonb),
+			'{view_count}',
+			to_jsonb(COALESCE((permissions->>'view_count')::int, 0) + 1)
+		) WHERE token = $1 AND revoked_at IS NULL`,
+		token,
+	)
+	if err != nil {
+		return fmt.Errorf("share link increment views: %w", err)
+	}
+	return nil
+}
+
+// IncrementDownloadCount atomically increments the download counter for a share link.
+func (r *ShareLinkRepo) IncrementDownloadCount(ctx context.Context, token string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE share_links SET permissions = jsonb_set(
+			COALESCE(permissions, '{}'::jsonb),
+			'{download_count}',
+			to_jsonb(COALESCE((permissions->>'download_count')::int, 0) + 1)
+		) WHERE token = $1 AND revoked_at IS NULL`,
+		token,
+	)
+	if err != nil {
+		return fmt.Errorf("share link increment downloads: %w", err)
+	}
+	return nil
+}
