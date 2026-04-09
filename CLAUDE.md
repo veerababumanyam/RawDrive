@@ -21,6 +21,31 @@
 - `.env.cobolt` is for user-provided infrastructure and must stay gitignored.
 - `e2e/playwright.config.js` is seeded during init so browser smoke can run at build time.
 
+## Hardcode Laws — MANDATORY FOR ALL AGENTS
+
+### No Local Storage (ABSOLUTE)
+- The application **MUST NEVER** store files on local filesystem. Cloudflare R2 is the ONLY storage driver.
+- `STORAGE_DRIVER=local` causes a **FATAL exit**. No fallback, no dev mode, no exceptions.
+- All file storage goes to R2 via S3-compatible API.
+
+### No Hardcoded Credentials (ABSOLUTE)
+- **NEVER** hardcode API keys, secrets, passwords, or credentials in Go code.
+- All secrets come from: (1) `platform_settings` database table → (2) environment variables → (3) fail with clear error.
+- No "dev default" secrets. If an env var is missing, log a warning and disable that feature.
+- `.env.cobolt` contains all env vars. It is gitignored. Never commit it.
+
+### WebP Conversion (MANDATORY)
+- Every uploaded image **MUST** produce WebP derivatives for in-app display.
+- Originals are preserved for download. The application UI uses WebP variants only.
+- The processing pipeline generates: thumb_sm/md/lg_webp + display_webp (2400px) via cwebp.
+- Download API offers: original, WebP optimized, or thumbnail format selection.
+
+### Service Configuration
+- `platform_settings` table (migration 039) stores admin-editable service configs.
+- Categories: storage, auth, payments, ai, email, messaging.
+- Secrets encrypted at rest. Super admin CRUD via /api/v1/admin/settings/.
+- R2 env vars: R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_REGION, R2_PUBLIC_URL
+
 ## Design Token System — MANDATORY FOR ALL AGENTS
 
 ### Single Source of Truth

@@ -113,6 +113,28 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 	return ws.ID, nil
 }
 
+// envOrFatal tries multiple env var names in order. Returns the first non-empty value.
+// Logs fatal if none are set.
+func envOrFatal(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	log.Fatalf("FATAL: required environment variable not set. Tried: %v", names)
+	return ""
+}
+
+// envOr tries multiple env var names, returns defaultVal if none set.
+func envOr(defaultVal string, names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return defaultVal
+}
+
 func main() {
 	r := chi.NewRouter()
 
@@ -234,25 +256,28 @@ func main() {
 
 	// ──────────────────────── M2: Asset Management & Gallery ────────────────────────
 
-	// Storage provider
+	// ──────────────────────── Storage Provider (Cloudflare R2 — MANDATORY) ────────────────
+	// Local storage is NOT supported. R2 credentials MUST be in environment variables.
+	// Never hardcode credentials. Never fall back to local filesystem.
 	storageCfg := storage.Config{
 		Driver:    os.Getenv("STORAGE_DRIVER"),
-		LocalDir:  os.Getenv("STORAGE_LOCAL_DIR"),
-		Bucket:    os.Getenv("R2_BUCKET"),
-		Region:    os.Getenv("R2_REGION"),
+		Bucket:    envOrFatal("R2_BUCKET_NAME", "R2_BUCKET"),      // try R2_BUCKET_NAME first, fallback to R2_BUCKET
+		Region:    envOr("auto", "R2_REGION"),
 		Endpoint:  os.Getenv("R2_ENDPOINT"),
-		AccessKey: os.Getenv("R2_ACCESS_KEY"),
-		SecretKey: os.Getenv("R2_SECRET_KEY"),
+		AccessKey: envOrFatal("R2_ACCESS_KEY_ID", "R2_ACCESS_KEY"), // try R2_ACCESS_KEY_ID first, fallback to R2_ACCESS_KEY
+		SecretKey: envOrFatal("R2_SECRET_ACCESS_KEY", "R2_SECRET_KEY"),
 	}
 	if storageCfg.Driver == "" {
-		storageCfg.Driver = "local"
-		storageCfg.LocalDir = ".storage"
-		log.Println("M2: no STORAGE_DRIVER set, using local filesystem at .storage/")
+		storageCfg.Driver = "s3" // R2 uses S3-compatible API
+	}
+	if storageCfg.Driver == "local" {
+		log.Fatal("FATAL: STORAGE_DRIVER=local is not allowed. Use Cloudflare R2 (s3). Set R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT in environment.")
 	}
 	storageProvider, err := storage.NewProvider(storageCfg)
 	if err != nil {
-		log.Fatalf("M2: failed to create storage provider: %v", err)
+		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT are set.", err)
 	}
+	log.Printf("Storage: Cloudflare R2 initialized (bucket: %s, endpoint: %s)", storageCfg.Bucket, storageCfg.Endpoint)
 
 	// M2 Repositories
 	assetRepo := repository.NewAssetRepo(dbPool)
@@ -330,11 +355,11 @@ func main() {
 
 		// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────
 
-		// AI encryption key (32 bytes from env, or dev default)
+		// AI encryption key (32 bytes from env — REQUIRED, no hardcoded default)
 		aiEncKeyStr := os.Getenv("AI_ENCRYPTION_KEY")
 		if aiEncKeyStr == "" {
-			aiEncKeyStr = "rawdrive-dev-key-32bytes-pad!!" // 32 bytes, dev only
-			log.Println("M3: WARNING - using dev AI encryption key. Set AI_ENCRYPTION_KEY in production.")
+			log.Println("WARNING: AI_ENCRYPTION_KEY not set. AI features that require encryption will be disabled.")
+			aiEncKeyStr = "" // Empty key disables encrypted AI config storage
 		}
 		aiEncKey := []byte(aiEncKeyStr)
 
@@ -451,7 +476,8 @@ func main() {
 		auditLogSvc := service.NewAuditLogService(auditLogRepo)
 		jwtSecret := []byte(os.Getenv("JWT_IMPERSONATION_SECRET"))
 		if len(jwtSecret) == 0 {
-			jwtSecret = []byte("rawdrive-impersonation-dev-key")
+			log.Println("WARNING: JWT_IMPERSONATION_SECRET not set. Admin impersonation will be disabled.")
+			jwtSecret = nil
 		}
 
 		handler.RegisterAdminRoutes(api, handler.AdminDeps{
@@ -466,6 +492,11 @@ func main() {
 		})
 
 		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")
+
+		// ──────────────────────── Platform Settings (Super Admin) ──────────────────
+		platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
+		handler.RegisterAdminSettingsRoutes(api, platformSettingsRepo)
+		log.Println("Admin: Platform settings CRUD registered (storage, auth, payments, ai, email)")
 
 	}) // end protected API group
 
@@ -483,21 +514,22 @@ func main() {
 
 	log.Println("Public lead form endpoint registered")
 
-	// ──────────────────────── Authenticated Storage File Serving ────────────────
-	// Serves files from local storage with JWT verification.
-	// In production, R2/S3 files are served via signed URLs — this is for dev/local only.
-	if storageCfg.Driver == "local" {
-		storageDir := storageCfg.LocalDir
-		r.Route("/storage", func(sr chi.Router) {
-			sr.Use(middleware.JWTAuth(jwtSvc)) // Require valid JWT
-			sr.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-				filePath := chi.URLParam(r, "*")
-				fullPath := storageDir + "/" + filePath
-				http.ServeFile(w, r, fullPath)
-			})
+	// ──────────────────────── Authenticated Storage Proxy ────────────────
+	// Proxies storage file requests through JWT auth + R2 presigned URLs.
+	// Photos are stored in R2 only — never on local filesystem.
+	r.Route("/storage", func(sr chi.Router) {
+		sr.Use(middleware.JWTAuth(jwtSvc))
+		sr.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			key := chi.URLParam(r, "*")
+			presigned, err := storageProvider.PresignURL(r.Context(), key, storage.PresignOptions{ExpiresInSeconds: 3600})
+			if err != nil {
+				http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
+				return
+			}
+			http.Redirect(w, r, presigned, http.StatusTemporaryRedirect)
 		})
-		log.Printf("Storage: local file serving with JWT auth on /storage/* (dir: %s)", storageDir)
-	}
+	})
+	log.Println("Storage: R2 proxy with JWT auth on /storage/*")
 
 	// ──────────────────────── Health Check ────────────────────────
 
