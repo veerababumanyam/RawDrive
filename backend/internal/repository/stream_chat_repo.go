@@ -44,6 +44,9 @@ func (r *StreamChatRepo) ListByStream(ctx context.Context, streamID uuid.UUID, l
 	if limit <= 0 {
 		limit = 50
 	}
+	if limit > 200 {
+		limit = 200
+	}
 	rows, err := r.DB.Query(ctx,
 		`SELECT id, stream_id, user_name, user_id, message, message_type, is_muted, created_at
 		 FROM stream_chats

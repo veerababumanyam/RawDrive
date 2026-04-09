@@ -100,6 +100,9 @@ func (r *VideoRepo) ListByWorkspace(ctx context.Context, workspaceID uuid.UUID, 
 	if limit <= 0 {
 		limit = 20
 	}
+	if limit > 100 {
+		limit = 100
+	}
 	rows, err := r.DB.Query(ctx,
 		`SELECT `+videoCols+` FROM video_assets WHERE workspace_id = $1
 		 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,

@@ -27,6 +27,26 @@ export interface Stream {
   updated_at: string;
 }
 
+// PublicStream is the sanitized version returned by /api/v1/public/streams/{id}
+// Does NOT include cf_rtmps_key, cf_rtmps_url, or pin_code
+export interface PublicStream {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  scheduled_at?: string;
+  started_at?: string;
+  ended_at?: string;
+  cf_playback_url?: string;
+  max_quality: string;
+  chat_enabled: boolean;
+  chat_slow_mode_seconds: number;
+  peak_viewers: number;
+  total_views: number;
+  duration_seconds: number;
+  pin_required: boolean;
+}
+
 export interface StreamChat {
   id: string;
   stream_id: string;
@@ -122,7 +142,7 @@ export async function sendChatMessage(streamId: string, data: { user_name: strin
   return res.json();
 }
 
-export async function getPublicStream(id: string): Promise<Stream> {
+export async function getPublicStream(id: string): Promise<PublicStream> {
   const res = await fetch(`${API_BASE}/api/v1/public/streams/${id}`);
   if (!res.ok) throw new Error(`Stream not found: ${res.status}`);
   return res.json();

@@ -53,7 +53,7 @@ func (h *VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Resolution:    req.Resolution,
 	})
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to create video asset"}`, http.StatusInternalServerError)
 		return
 	}
 	respondJSON(w, http.StatusCreated, video)

@@ -50,7 +50,7 @@ func (h *DesktopHandler) RegisterSession(w http.ResponseWriter, r *http.Request)
 		AppVersion:  req.AppVersion,
 	})
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"failed to register session"}`, http.StatusBadRequest)
 		return
 	}
 	respondJSON(w, http.StatusCreated, session)
@@ -73,9 +73,20 @@ func (h *DesktopHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 // Heartbeat handles PUT /api/v1/desktop/sessions/{id}/heartbeat
 func (h *DesktopHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid session id"}`, http.StatusBadRequest)
+		return
+	}
+	// Verify session belongs to the authenticated user
+	session, err := h.svc.GetSession(r.Context(), id)
+	if err != nil || session.UserID != userID {
+		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
 		return
 	}
 	var req struct {
@@ -114,9 +125,20 @@ func (h *DesktopHandler) UpdateStats(w http.ResponseWriter, r *http.Request) {
 
 // Deactivate handles DELETE /api/v1/desktop/sessions/{id}
 func (h *DesktopHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid session id"}`, http.StatusBadRequest)
+		return
+	}
+	// Verify session belongs to the authenticated user
+	session, err := h.svc.GetSession(r.Context(), id)
+	if err != nil || session.UserID != userID {
+		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
 		return
 	}
 	if err := h.svc.DeactivateSession(r.Context(), id); err != nil {

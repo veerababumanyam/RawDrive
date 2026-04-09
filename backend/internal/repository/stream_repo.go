@@ -96,6 +96,9 @@ func (r *StreamRepo) List(ctx context.Context, f StreamFilter) ([]Stream, error)
 	if limit <= 0 {
 		limit = 20
 	}
+	if limit > 100 {
+		limit = 100
+	}
 	rows, err := r.DB.Query(ctx,
 		`SELECT `+streamCols+` FROM streams
 		 WHERE workspace_id = $1

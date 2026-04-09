@@ -1,11 +1,11 @@
 "use client";
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { getPublicStream, sendChatMessage, verifyStreamPin, type Stream, type StreamChat } from "@/lib/api/streams";
+import { getPublicStream, sendChatMessage, verifyStreamPin, type PublicStream, type StreamChat } from "@/lib/api/streams";
 
 export default function StreamViewerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [stream, setStream] = useState<Stream | null>(null);
+  const [stream, setStream] = useState<PublicStream | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pinRequired, setPinRequired] = useState(false);
@@ -21,7 +21,7 @@ export default function StreamViewerPage({ params }: { params: Promise<{ id: str
     getPublicStream(id)
       .then((s) => {
         setStream(s);
-        if (s.pin_code) {
+        if (s.pin_required) {
           setPinRequired(true);
         }
       })

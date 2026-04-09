@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -81,7 +82,8 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	stream, err := h.svc.CreateStream(r.Context(), input)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		log.Printf("stream create error: %v", err)
+		http.Error(w, `{"error":"failed to create stream"}`, http.StatusInternalServerError)
 		return
 	}
 	respondJSON(w, http.StatusCreated, stream)
