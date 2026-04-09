@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import {
@@ -18,6 +18,7 @@ import {
   proofingStatusClasses,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { useUpload } from "@/hooks/use-upload";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -91,6 +92,32 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       cancelled = true;
     };
   }, [id]);
+
+  // ──────── Upload Integration ────────
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+  const token = getStoredAccessToken();
+  const upload = useUpload(apiUrl, token);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+      f.type.startsWith("image/") || /\.(cr2|nef|arw|dng|raf|cr3|tiff?)$/i.test(f.name)
+    );
+    if (files.length > 0) upload.addFiles(files);
+  }, [upload]);
+
+  const handleFileSelect = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = "image/*,.cr2,.nef,.arw,.dng,.raf,.cr3,.tif,.tiff";
+    input.onchange = () => {
+      if (input.files) upload.addFiles(Array.from(input.files));
+    };
+    input.click();
+  }, [upload]);
 
   const selectionCounts = useMemo(() => {
     return selections.reduce<Record<string, number>>((counts, selection) => {
@@ -187,18 +214,76 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
+          {/* Upload progress (shown when uploading) */}
+          {upload.items.length > 0 && (
+            <div className="surface-panel space-y-3 p-5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-text-primary">
+                  Uploading {upload.items.filter(i => i.status === "uploading" || i.status === "pending").length} files
+                </h2>
+                <div className="flex gap-2">
+                  {upload.isPaused ? (
+                    <button onClick={upload.resumeAll} className="text-xs text-accent hover:underline">Resume All</button>
+                  ) : (
+                    <button onClick={upload.pauseAll} className="text-xs text-text-secondary hover:underline">Pause All</button>
+                  )}
+                  <button onClick={upload.cancelAll} className="text-xs text-danger hover:underline">Cancel All</button>
+                </div>
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {upload.items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 text-xs">
+                    <span className="truncate flex-1 text-text-primary">{item.file.name}</span>
+                    <div className="w-24 h-1.5 rounded-full bg-surface-sunken overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-danger" : "bg-accent"}`} style={{ width: `${item.progress}%` }} />
+                    </div>
+                    <span className="w-8 text-right text-text-tertiary">{item.progress}%</span>
+                    <span className={`w-16 text-right ${item.status === "complete" ? "text-success" : item.status === "error" ? "text-danger" : "text-text-secondary"}`}>{item.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Assets</h2>
-              <p className="text-sm text-text-secondary">
-                {assets.length === 0 ? "No linked assets yet" : `${assets.length} linked assets`}
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-text-secondary">
+                  {assets.length === 0 ? "No assets yet" : `${assets.length} assets`}
+                </p>
+                <button
+                  onClick={handleFileSelect}
+                  className="btn-primary px-3 py-1.5 text-xs"
+                >
+                  Upload Photos
+                </button>
+              </div>
+            </div>
+
+            {/* Drop zone — always visible, acts as upload target */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={handleDrop}
+              className={cn(
+                "rounded-2xl border-2 border-dashed px-6 py-8 text-center text-sm transition-colors cursor-pointer",
+                isDragOver
+                  ? "border-accent bg-accent/5 text-accent"
+                  : "border-border-default bg-surface-sunken/40 text-text-secondary hover:border-accent/50 hover:bg-accent/[0.02]",
+              )}
+              onClick={handleFileSelect}
+            >
+              <p className="font-medium">{isDragOver ? "Drop photos here" : "Drag photos here or click to browse"}</p>
+              <p className="text-xs text-text-tertiary mt-1">
+                JPEG, PNG, TIFF, RAW (CR2, NEF, ARW, DNG, RAF) — up to 2GB per file
               </p>
             </div>
 
-            {assets.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border-default bg-surface-sunken/40 px-6 py-12 text-center text-sm text-text-secondary">
-                This gallery does not have any linked assets yet.
-              </div>
+            {assets.length === 0 && upload.items.length === 0 ? (
+              <p className="text-center text-xs text-text-tertiary py-4">
+                Upload your first photos to get started with this gallery.
+              </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {assets.map((entry) => {

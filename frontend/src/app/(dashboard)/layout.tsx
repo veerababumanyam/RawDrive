@@ -29,7 +29,6 @@ import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/galleries", label: "Galleries", icon: ImageIcon },
-  { href: "/upload", label: "Upload", icon: Upload },
   { href: "/crm/contacts", label: "Clients", icon: Users },
   { href: "/crm", label: "CRM", icon: BarChart3 },
   { href: "/calendar", label: "Bookings", icon: CalendarDays },
