@@ -87,6 +87,18 @@ const GRID_LAYOUTS = [
 type PreviewDevice = "desktop" | "tablet" | "mobile";
 const PREVIEW_WIDTHS: Record<PreviewDevice, string> = { desktop: "100%", tablet: "768px", mobile: "375px" };
 
+// Dynamic Google Fonts loader — loads premium fonts on demand (GAL-FR-065)
+const loadedFonts = new Set<string>();
+function loadGoogleFont(fontFamily: string) {
+  if (loadedFonts.has(fontFamily) || fontFamily === "Inter" || fontFamily === "Manrope") return;
+  loadedFonts.add(fontFamily);
+  const encoded = fontFamily.replace(/ /g, "+");
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${encoded}:wght@400;500;600;700&display=swap`;
+  document.head.appendChild(link);
+}
+
 // ──────────────────────── Draft Persistence ────────────────────────
 
 function useDraftPersistence(galleryId: string, config: DesignConfig) {
@@ -333,7 +345,7 @@ export default function GalleryDesignStudioPage() {
           <Section id="typography" title="Typography">
             <div className="space-y-2">
               {FONT_PAIRINGS.map((fp) => (
-                <button key={fp.id} onClick={() => wrappedDispatch({ type: "SET_TYPOGRAPHY", payload: { pairingId: fp.id, headingFont: fp.heading, bodyFont: fp.body } })} className={`w-full p-3 rounded-xl text-left transition-all ${config.typography.pairingId === fp.id ? "ring-1 ring-accent-primary bg-accent-subtle" : "bg-surface-container hover:bg-surface-container-high"}`}>
+                <button key={fp.id} onClick={() => { loadGoogleFont(fp.heading); loadGoogleFont(fp.body); wrappedDispatch({ type: "SET_TYPOGRAPHY", payload: { pairingId: fp.id, headingFont: fp.heading, bodyFont: fp.body } }); }} className={`w-full p-3 rounded-xl text-left transition-all ${config.typography.pairingId === fp.id ? "ring-1 ring-accent-primary bg-accent-subtle" : "bg-surface-container hover:bg-surface-container-high"}`}>
                   <p className="text-sm font-semibold">{fp.heading}</p>
                   <p className="text-xs text-text-tertiary">{fp.body} — {fp.label}</p>
                 </button>
