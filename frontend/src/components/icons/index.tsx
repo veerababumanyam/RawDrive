@@ -1,0 +1,52 @@
+/**
+ * iOS-style SVG icons — SF Symbols aesthetic.
+ * Consistent 24x24 viewBox, 1.5px stroke, round caps/joins.
+ * Used with GlassIconButton for liquid glass UI.
+ */
+
+import type { SVGProps } from "react";
+
+type IconProps = SVGProps<SVGSVGElement>;
+
+const defaults: IconProps = {
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.5,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+const Icon = (props: IconProps & { children: React.ReactNode }) => (
+  <svg {...defaults} {...props}>{props.children}</svg>
+);
+
+// Navigation
+export const ChevronLeft = (p: IconProps) => <Icon {...p}><path d="M15 19l-7-7 7-7" /></Icon>;
+export const ChevronRight = (p: IconProps) => <Icon {...p}><path d="M9 5l7 7-7 7" /></Icon>;
+
+// Actions
+export const XMark = (p: IconProps) => <Icon {...p}><path d="M6 18L18 6M6 6l12 12" /></Icon>;
+export const Download = (p: IconProps) => <Icon {...p}><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></Icon>;
+export const Expand = (p: IconProps) => <Icon {...p}><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></Icon>;
+export const Compress = (p: IconProps) => <Icon {...p}><path d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" /></Icon>;
+
+// Zoom
+export const ZoomIn = (p: IconProps) => <Icon {...p}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" /></Icon>;
+export const ZoomOut = (p: IconProps) => <Icon {...p}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" /></Icon>;
+
+// Info & Metadata
+export const InfoCircle = (p: IconProps) => <Icon {...p}><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></Icon>;
+
+// Communication
+export const ChatBubble = (p: IconProps) => <Icon {...p}><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></Icon>;
+
+// Proofing
+export const CheckCircle = (p: IconProps) => <Icon {...p}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></Icon>;
+export const ThumbsUp = (p: IconProps) => <Icon {...p}><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14zM4 21H2V10h2v11z" /></Icon>;
+export const XCircle = (p: IconProps) => <Icon {...p}><path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></Icon>;
+
+// Star / Favorite
+export const Star = (p: IconProps) => <Icon {...p}><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></Icon>;
