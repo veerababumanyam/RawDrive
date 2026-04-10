@@ -720,6 +720,15 @@ func main() {
 			auditLogSvc,
 		)
 
+		// M16-BUG-02 fix: inject auditLogSvc into the workspace policy
+		// service now that auditLogSvc exists. workspacePolicySvc was
+		// constructed in the M16 init block (well above) with a nil audit
+		// log because auditLogSvc didn't exist yet at that point in the
+		// init graph. Without this wiring every workspace.policy.changed
+		// event was silently dropped — verified empirically by counting
+		// rows in audit_logs after a PUT /upload-policy request.
+		workspacePolicySvc.WithAuditLog(auditLogSvc)
+
 		handler.RegisterAdminRoutes(api, handler.AdminDeps{
 			UserSvc:       service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret),
 			ModerationSvc: service.NewAdminModerationService(adminModerationRepo, auditLogSvc),

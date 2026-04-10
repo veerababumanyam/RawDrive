@@ -86,8 +86,24 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 				return
 			}
 
-			// Cross-workspace protection: if the URL targets a different workspace, deny
-			if strings.Contains(r.URL.Path, "/workspaces/") {
+			// Cross-workspace protection: if the URL targets a different workspace, deny.
+			// EXCEPTION: platform admins (super_admin / admin) operating on the
+			// /api/v1/admin/* surface are explicitly allowed to act on workspaces
+			// other than their own — that IS the point of the admin surface
+			// (impersonation, moderation, policy management). Without this
+			// exception M16's admin workspace policy + upload moderation endpoints
+			// were architecturally unreachable: a super_admin's JWT carries their
+			// own personal workspace_id, never the workspace they are managing,
+			// so the strict same-workspace check would 403 every cross-workspace
+			// admin request. (M16-BUG-01 — caught during functional testing.)
+			isPlatformAdminOnAdminPath := false
+			if platformRole, _ := claims["platform_role"].(string); platformRole == "super_admin" || platformRole == "admin" {
+				if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") {
+					isPlatformAdminOnAdminPath = true
+				}
+			}
+
+			if !isPlatformAdminOnAdminPath && strings.Contains(r.URL.Path, "/workspaces/") {
 				parts := strings.Split(r.URL.Path, "/workspaces/")
 				if len(parts) > 1 {
 					urlWS := strings.Split(parts[1], "/")[0]

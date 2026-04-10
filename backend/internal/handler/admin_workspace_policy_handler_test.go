@@ -52,12 +52,17 @@ func setupAdminRouterWithPolicy() *chi.Mux {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-	testWorkspaceID    = "11111111-1111-1111-1111-111111111111"
-	uploadPolicyPath   = "/api/v1/admin/workspaces/" + testWorkspaceID + "/upload-policy"
-	platformAdminRole  = "admin"
-	platformPhotoRole  = "photographer"
-	jwtSubAdminUser    = "admin-actor-1"
-	jwtSubPhotoUser    = "photographer-actor-1"
+	testWorkspaceID = "11111111-1111-1111-1111-111111111111"
+	uploadPolicyPath = "/api/v1/admin/workspaces/" + testWorkspaceID + "/upload-policy"
+	platformAdminRole = "admin"
+	platformPhotoRole = "photographer"
+	// M16-BUG-04 follow-up: sub claims must be real UUIDs because the
+	// production handler now reads the actor id from JWT claims and parses
+	// it as a UUID before writing audit log entries. Previously the
+	// placeholder actorIDFromContext() returned uuid.Nil regardless of
+	// input so any string worked here.
+	jwtSubAdminUser = "22222222-2222-2222-2222-222222222222"
+	jwtSubPhotoUser = "33333333-3333-3333-3333-333333333333"
 )
 
 // adminClaims returns a JWT-claims map for a platform admin actor.

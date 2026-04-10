@@ -86,6 +86,23 @@ func newWorkspacePolicyServiceWithRecorder(db WorkspacePolicyDB, rec auditRecord
 	}
 }
 
+// WithAuditLog injects an audit log service after construction. Used by
+// cmd/api/main.go to wire the service before auditLogSvc is constructed
+// (the latter depends on auditLogRepo which is initialized in the admin
+// block, well below where this service is built). Returns the service for
+// chainable construction. Pass nil to disable audit emission.
+//
+// M16-BUG-02 fix: prior to this setter, main.go passed nil for auditLog
+// and the comment said "wired below after auditLogSvc" but the wiring
+// never happened — every workspace.policy.changed audit was silently
+// dropped because the service held a nil recorder.
+func (s *WorkspacePolicyService) WithAuditLog(auditLog *AuditLogService) *WorkspacePolicyService {
+	if auditLog != nil {
+		s.auditLog = auditLog
+	}
+	return s
+}
+
 // Get returns the workspace's configured policy mode. Falls back to
 // PolicyModeStandard if the workspace has no row in the cache AND the DB
 // is nil (unit test path) — callers that need strict behaviour should

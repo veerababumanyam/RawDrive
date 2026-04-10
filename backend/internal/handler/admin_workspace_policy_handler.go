@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -109,9 +108,15 @@ func (h *AdminWorkspacePolicyHandler) SetWorkspacePolicy(w http.ResponseWriter, 
 		return
 	}
 
-	actorID, err := actorIDFromContext(r.Context())
-	if err != nil {
-		writeJSONError(w, http.StatusUnauthorized, "MISSING_ACTOR_ID", "unable to resolve admin actor id")
+	// M16-BUG-04 fix: read the real super_admin/admin UUID from JWT claims
+	// instead of the placeholder actorIDFromContext() helper which always
+	// returned uuid.Nil. The audit log entry's actor_id needs the real UUID
+	// otherwise the workspace.policy.changed audit row would be anonymous
+	// (and may violate FK constraints on audit_logs.actor_id in some
+	// schemas).
+	actorID := adminActorID(r)
+	if actorID == uuid.Nil {
+		writeJSONError(w, http.StatusUnauthorized, "MISSING_ACTOR_ID", "unable to resolve admin actor id from JWT claims")
 		return
 	}
 
@@ -124,16 +129,6 @@ func (h *AdminWorkspacePolicyHandler) SetWorkspacePolicy(w http.ResponseWriter, 
 		WorkspaceID: wsID.String(),
 		Mode:        req.Mode,
 	})
-}
-
-// actorIDFromContext extracts the admin's UUID from the JWT claims set by
-// the auth middleware. Defined here as a small helper instead of in a shared
-// utils file to keep the M16 surface area localized.
-func actorIDFromContext(ctx interface{ Value(any) any }) (uuid.UUID, error) {
-	// Round 3 GREEN will swap this for a proper context.Context lookup
-	// once we wire the JWT claims through. For now this is a placeholder
-	// helper — never called in RED tests because the skeleton returns 501.
-	return uuid.Nil, nil
 }
 
 // writeJSON serializes payload and writes the response with the given status.
@@ -153,7 +148,3 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
-// _ is a compile-time guard that the middleware package is referenced even if
-// the skeleton doesn't yet use any helpers from it. Round 3 GREEN will replace
-// this with real JWTClaimsFromContext lookups.
-var _ = middleware.JWTClaimsFromContext
