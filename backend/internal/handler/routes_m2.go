@@ -198,6 +198,18 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		})
 		r.Get("/api/v1/galleries/{id}/download-zip", dlHandler.DownloadZIP)
 		r.Get("/api/v1/galleries/{id}/download-audit", dlHandler.GetAudit)
+		// GAL-FR-161: CSV export for delivery audit reconciliation
+		r.Get("/api/v1/galleries/{id}/download-audit.csv", dlHandler.GetAuditCSV)
+	}
+
+	// M14: Print DPI preflight (GAL-FR-160) — pure-logic endpoint, no deps
+	preflightHandler := NewPrintPreflightHandler()
+	r.Post("/api/v1/commerce/print-preflight", preflightHandler.Evaluate)
+
+	// M14: Proofing → fulfillment bridge (GAL-FR-159)
+	if deps.FulfillmentBridge != nil {
+		bridgeHandler := NewProofingBridgeHandler(deps.FulfillmentBridge)
+		r.Post("/api/v1/galleries/{id}/proofing/bridge", bridgeHandler.BridgeSelections)
 	}
 
 	// M14: Analytics routes (includes GAL-FR-185/186/187 breakdowns)
@@ -330,6 +342,7 @@ type M2Dependencies struct {
 	WebhookSvc           *service.WebhookService
 	ProductService       *service.ProductService
 	CartService          *service.CartService
+	FulfillmentBridge    *service.ProofingFulfillmentBridge
 	// M15 dependencies (nil-safe)
 	ConsentSvc           *service.ConsentService
 }

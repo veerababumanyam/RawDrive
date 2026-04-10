@@ -329,6 +329,14 @@ func main() {
 	// Cart service uses productRepo for price snapshotting. Coupon discounts
 	// are disabled until a GalleryDiscountCalculator adapter is wired in.
 	cartSvc := service.NewCartService(cartRepo, productRepo, nil)
+	// M14 GAL-FR-159: proofing → fulfillment bridge. Pricer is nil so
+	// bridged orders start at zero subtotal; a subsequent phase will
+	// wire a PriceProofingSelections adapter that computes digital
+	// delivery fees or auto-selects bundled products. proofingRepo is
+	// already declared earlier in the file, so we only construct
+	// orderRepo and the bridge here.
+	orderRepo := repository.NewOrderRepo(dbPool)
+	fulfillmentBridge := service.NewProofingFulfillmentBridge(proofingRepo, orderRepo, nil)
 
 	// M15 Services: Consent
 	consentRepo := repository.NewConsentRepo(dbPool)
@@ -383,6 +391,7 @@ func main() {
 			WebhookSvc:           webhookSvc,
 			ProductService:       productSvc,
 			CartService:          cartSvc,
+			FulfillmentBridge:    fulfillmentBridge,
 			// M15
 			ConsentSvc:           consentSvc,
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
@@ -757,6 +766,12 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	// M14 GAL-FR-205: deep health check — probes database, storage, and
+	// Valkey. Valkey is nil for now (rate limiter is in-memory); the
+	// probe reports "disabled" for it.
+	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, nil)
+	r.Get("/health/deep", deepHealth.Deep)
 
 	// ──────────────────────── Start Server ────────────────────────
 	//

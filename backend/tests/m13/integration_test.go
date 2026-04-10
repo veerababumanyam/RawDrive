@@ -2,6 +2,7 @@ package m13_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -13,17 +14,54 @@ import (
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/tests/testsupport"
 )
+
+// testDSN is resolved once by TestMain. It is either DATABASE_URL (preserving
+// the escape hatch to point at an existing migrated database for post-mortem
+// inspection) or the DSN of a throwaway pgvector testcontainer provisioned
+// by testsupport.
+var testDSN string
+
+// TestMain replaces the previous hardcoded localhost:55070 fallback. Audit
+// notes for future maintainers:
+//
+//   - m13 uses internal/repository and internal/service, but only the parts
+//     that are purely DB-backed. No Redis, NATS, R2, or HTTP clients are
+//     reachable through the constructors the tests use.
+//   - Every test creates its own workspace + gallery with fresh uuid.New()
+//     values and has explicit cleanup, so per-package container sharing is
+//     safe — no cross-test state leakage.
+//   - TestAlbumApprovalAppendOnly drops and recreates a trigger during
+//     cleanup. This is safe only because Go runs tests in a package
+//     sequentially by default; if someone adds t.Parallel() to any test in
+//     this package, that dance becomes a race.
+//
+// Like m6, m13 does NOT run migrations itself in the env-var path — it
+// assumes the DATABASE_URL target is already at the correct schema version.
+// The testcontainer path gets migrations automatically via testsupport.
+func TestMain(m *testing.M) {
+	if envDSN := os.Getenv("DATABASE_URL"); envDSN != "" {
+		testDSN = envDSN
+	} else {
+		dsn, err := testsupport.EnsureDSN()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "m13_test: failed to start testcontainer: %v\n", err)
+			os.Exit(1)
+		}
+		testDSN = dsn
+	}
+
+	code := m.Run()
+	testsupport.Shutdown()
+	os.Exit(code)
+}
 
 func getTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://rawdrive_user:e706fbd6b28d036aa80379447729737b@localhost:55070/rawdrive_db?sslmode=disable"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := pgxpool.New(ctx, testDSN)
 	require.NoError(t, err, "Failed to connect to test database")
 	t.Cleanup(func() { pool.Close() })
 	return pool

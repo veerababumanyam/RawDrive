@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -121,6 +123,54 @@ func (h *DownloadHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, events)
+}
+
+// GetAuditCSV handles GET /galleries/{id}/download-audit.csv — M14 GAL-FR-161
+// Streams the download event log as a CSV attachment so studios can
+// reconcile deliveries with client-reported receipts.
+func (h *DownloadHandler) GetAuditCSV(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+
+	events, err := h.downloadSvc.GetDownloadAudit(r.Context(), galleryID, 5000)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "audit_failed", err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=download-audit.csv")
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	_ = cw.Write([]string{
+		"event_id", "created_at", "asset_id", "download_job_id",
+		"downloader_email", "downloader_name", "downloader_ip", "variant", "file_size_bytes",
+	})
+	for _, e := range events {
+		assetID := ""
+		if e.AssetID != nil {
+			assetID = e.AssetID.String()
+		}
+		jobID := ""
+		if e.DownloadJobID != nil {
+			jobID = e.DownloadJobID.String()
+		}
+		_ = cw.Write([]string{
+			e.ID.String(),
+			e.CreatedAt.UTC().Format(time.RFC3339),
+			assetID,
+			jobID,
+			e.DownloaderEmail,
+			e.DownloaderName,
+			e.DownloaderIP,
+			e.Variant,
+			strconv.FormatInt(e.FileSizeBytes, 10),
+		})
+	}
 }
 
 // DownloadZIP handles GET /galleries/{id}/download-zip — streams a ZIP file
