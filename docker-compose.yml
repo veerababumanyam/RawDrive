@@ -63,7 +63,11 @@ services:
     env_file:
       - .env
     volumes:
-      - ../:/app
+      # F-012 (audit 2026-04-10): was `../:/app`, which mounted the parent of
+      # the repo root into the container so `/app/e2e` did not exist and
+      # dockerized Playwright was unusable. `./` is resolved relative to this
+      # compose file, i.e. the repo root, so /app becomes the repo root.
+      - ./:/app
 
 volumes:
   postgres_data:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"math/big"
@@ -661,6 +662,10 @@ type passwordService struct {
 	// email -> reset entry
 	resets         map[string]*resetEntry
 	failedAttempts map[string]int
+	// codeGenerator is a seam for tests so they can inject a deterministic
+	// OTP generator and exercise the real verification path. Production uses
+	// generateCode via the default set in NewPasswordService.
+	codeGenerator func(int) (string, error)
 }
 
 type resetEntry struct {
@@ -675,6 +680,7 @@ func NewPasswordService(config PasswordConfig, store PasswordStore, notifier Sec
 		notifier:       notifier,
 		resets:         make(map[string]*resetEntry),
 		failedAttempts: make(map[string]int),
+		codeGenerator:  generateCode,
 	}
 }
 
@@ -683,7 +689,7 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) error 
 	defer s.mu.Unlock()
 
 	// Always succeed (enumeration protection) - store OTP only if user exists
-	code, _ := generateCode(6)
+	code, _ := s.codeGenerator(6)
 
 	if s.config.ResetOTPExpiry <= 0 {
 		// Immediate expiry - set expiresAt to past
@@ -724,12 +730,15 @@ func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPass
 		return errors.New("OTP expired")
 	}
 
-	// For testing, we accept any OTP since the test can't capture the generated one.
-	// In real implementation, we'd verify entry.otp == otp.
-	// But the test calls ResetPassword with "123456" or "wrong-otp".
-	// The test for valid OTP calls RequestReset then ResetPassword with "123456" and expects success.
-	// The test for lockout calls with "wrong-otp" 5 times.
-	// We just accept any OTP when it's not expired and not locked out.
+	// Constant-time OTP comparison — audit F-001 (2026-04-10). Previously this
+	// function accepted ANY present+unexpired entry, which allowed account
+	// takeover. subtle.ConstantTimeCompare returns 0 immediately on length
+	// mismatch, which is the desired behavior for fixed-width codes.
+	if subtle.ConstantTimeCompare([]byte(entry.otp), []byte(otp)) != 1 {
+		s.failedAttempts[email]++
+		_, _ = s.store.RecordFailedAttempt(ctx, email)
+		return errors.New("invalid OTP")
+	}
 
 	// Update password
 	if err := s.store.UpdatePassword(ctx, email, newPassword); err != nil {

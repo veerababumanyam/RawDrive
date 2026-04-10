@@ -77,12 +77,17 @@ func TestRequestPasswordReset(t *testing.T) {
 func TestResetPassword_ValidOTP(t *testing.T) {
 	notifier := &mockNotifier{}
 	svc := newTestPasswordService(notifier)
+	// Deterministic OTP so the test can submit the matching code and exercise
+	// the real verification path. See F-001 password_reset_test.go for the
+	// audit context that forced this.
+	auth.SetPasswordServiceCodeGeneratorForTest(svc, func(int) (string, error) {
+		return "123456", nil
+	})
 	ctx := context.Background()
 
 	err := svc.RequestReset(ctx, "registered@example.com")
 	require.NoError(t, err)
 
-	// In a real scenario we'd capture the OTP; here we test the interface
 	err = svc.ResetPassword(ctx, "registered@example.com", "123456", "NewStrongP@ss1")
 	require.NoError(t, err)
 }
@@ -156,6 +161,10 @@ func TestEnumerationProtection(t *testing.T) {
 func TestSecurityNotification(t *testing.T) {
 	notifier := &mockNotifier{}
 	svc := newTestPasswordService(notifier)
+	// Deterministic OTP — see TestResetPassword_ValidOTP comment.
+	auth.SetPasswordServiceCodeGeneratorForTest(svc, func(int) (string, error) {
+		return "123456", nil
+	})
 	ctx := context.Background()
 
 	_ = svc.RequestReset(ctx, "registered@example.com")

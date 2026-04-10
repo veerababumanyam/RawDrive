@@ -30,6 +30,18 @@ type Asset struct {
 	CreatedAt     time.Time              `json:"created_at"`
 	UpdatedAt     time.Time              `json:"updated_at"`
 	DeletedAt     *time.Time             `json:"deleted_at,omitempty"`
+
+	// F-004 (audit 2026-04-10): M16 Tier D upload-scan metadata. These fields
+	// are persisted on Create when the upload came through a path that has a
+	// verified scan manifest attached (e.g. chunked upload with Tier D wired).
+	// Zero values (nil pointers) mean "no manifest" — the moderation dashboard
+	// treats that as unscanned legacy data.
+	UploadScanStatus        *string                  `json:"upload_scan_status,omitempty"`
+	UploadScanEngine        *string                  `json:"upload_scan_engine,omitempty"`
+	UploadScanPolicyVersion *string                  `json:"upload_scan_policy_version,omitempty"`
+	UploadScanRiskScore     *float64                 `json:"upload_scan_risk_score,omitempty"`
+	UploadScanFindings      []map[string]interface{} `json:"upload_scan_findings,omitempty"`
+	UploadScanManifestHash  *string                  `json:"upload_scan_manifest_hash,omitempty"`
 }
 
 // AssetFilter contains composable filters for listing assets.
@@ -79,11 +91,15 @@ func (r *AssetRepo) Create(ctx context.Context, a *Asset) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO assets (id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status,
-		 created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+		 created_at, updated_at,
+		 upload_scan_status, upload_scan_engine, upload_scan_policy_version,
+		 upload_scan_risk_score, upload_scan_findings, upload_scan_manifest_hash)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
 		a.ID, a.WorkspaceID, a.Filename, a.ContentType, a.SizeBytes, a.StorageKey,
 		a.StorageDriver, a.Width, a.Height, a.Blurhash, a.ExifData, a.ThumbnailURLs,
 		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt,
+		a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
+		a.UploadScanRiskScore, a.UploadScanFindings, a.UploadScanManifestHash,
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo create: %w", err)

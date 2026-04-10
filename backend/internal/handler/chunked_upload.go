@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -245,6 +247,17 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 		// Finalize: compute hash, store in storage provider, create asset
 		result, err := h.finalizeUpload(r, session)
 		if err != nil {
+			// F-003 (audit 2026-04-10): map M16 Tier D scan errors to 422 so
+			// clients can distinguish "bytes tampered" / "format corrupt" from
+			// generic server failures. Any other finalize error stays 500.
+			if errors.Is(err, service.ErrScanHashMismatch) {
+				http.Error(w, `{"error":"SCAN_HASH_MISMATCH"}`, http.StatusUnprocessableEntity)
+				return
+			}
+			if errors.Is(err, service.ErrScanManifestInvalid) {
+				http.Error(w, `{"error":"SCAN_MANIFEST_INVALID"}`, http.StatusUnprocessableEntity)
+				return
+			}
 			http.Error(w, fmt.Sprintf(`{"error":"finalize failed: %s"}`, err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -322,6 +335,19 @@ func (h *ChunkedUploadHandler) finalizeUpload(r *http.Request, session *uploadSe
 
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
+	// F-003 (audit 2026-04-10): Enforce M16 Tier D final-byte assertion.
+	// Previously the manifest was accepted at session-create and then never
+	// verified against the actual bytes — the helpers existed but had no
+	// production callsite, which is how "upload screening" became trust-the-
+	// client in the live path. Now: if the session carries a manifest AND the
+	// validation service is wired, verify the hash against the temp file and
+	// run the cheap header/trailer spot-check. On any mismatch, roll back the
+	// stored bytes and return a sentinel error that the caller maps to 422.
+	if err := h.verifyManifestAtFinalize(r.Context(), session); err != nil {
+		_ = h.store.Delete(r.Context(), storageKey)
+		return nil, err
+	}
+
 	// Create asset record
 	asset := &repository.Asset{
 		ID:            assetID,
@@ -336,15 +362,82 @@ func (h *ChunkedUploadHandler) finalizeUpload(r *http.Request, session *uploadSe
 		ExifData:      map[string]interface{}{},
 		ThumbnailURLs: map[string]string{},
 	}
+	// F-004 (audit 2026-04-10): persist M16 Tier D scan metadata on the asset
+	// row so the moderation dashboard and audit trail can reason about the
+	// upload's scan verdict. Schema columns live in migration 053. Only
+	// populated when a manifest was attached AND verified (above) — otherwise
+	// the fields stay nil and the moderation UI treats the asset as unscanned
+	// legacy data.
+	applyScanMetadata(asset, session.Manifest)
 	if err := h.assetRepo.Create(r.Context(), asset); err != nil {
 		return nil, fmt.Errorf("create asset: %w", err)
 	}
 
 	return map[string]interface{}{
-		"asset":      asset,
-		"upload_id":  session.ID,
-		"sha256":     hash,
-		"complete":   true,
+		"asset":       asset,
+		"upload_id":   session.ID,
+		"sha256":      hash,
+		"complete":    true,
 		"storage_key": storageKey,
 	}, nil
+}
+
+// verifyManifestAtFinalize runs the Tier D final-byte assertion. Returns nil
+// when there is no manifest or no validator wired (legacy behavior), else
+// delegates to validationSvc.VerifyAgainstBytes and also runs the cheap
+// structural spot-check. Extracted as a method so it can be unit-tested
+// without spinning up the full finalize path (F-003).
+func (h *ChunkedUploadHandler) verifyManifestAtFinalize(ctx context.Context, session *uploadSession) error {
+	if session == nil || session.Manifest == nil || h.validationSvc == nil {
+		return nil
+	}
+	if err := h.validationSvc.VerifyAgainstBytes(ctx, session.Manifest.SHA256, session.TmpPath); err != nil {
+		return fmt.Errorf("verify manifest hash: %w", err)
+	}
+	// Extra belt-and-suspenders: the file header/trailer must also look like
+	// the declared format. This catches bytes that happen to hash-match but
+	// are otherwise corrupt.
+	if err := service.VerifyHeaderTrailer(session.TmpPath, session.Manifest.DetectedFormat); err != nil {
+		return fmt.Errorf("verify header/trailer: %w", err)
+	}
+	return nil
+}
+
+// applyScanMetadata copies verified scan manifest fields onto the asset row.
+// Extracted so the per-field mapping is unit-testable and so finalizeUpload
+// stays readable. Nil manifest = no-op (legacy uploads).
+func applyScanMetadata(asset *repository.Asset, manifest *service.UploadScanManifest) {
+	if asset == nil || manifest == nil {
+		return
+	}
+	// A verified manifest means the client's decision was "pass" — the
+	// "block" case is rejected at session-create, not finalize. Anything we
+	// persist here has cleared Tier D.
+	status := "passed"
+	engine := string(manifest.Engine)
+	policy := manifest.PolicyVersion
+	risk := manifest.RiskScore
+	manifestHash := manifest.SHA256
+
+	asset.UploadScanStatus = &status
+	asset.UploadScanEngine = &engine
+	asset.UploadScanPolicyVersion = &policy
+	asset.UploadScanRiskScore = &risk
+	asset.UploadScanManifestHash = &manifestHash
+
+	if len(manifest.Findings) > 0 {
+		findings := make([]map[string]interface{}, 0, len(manifest.Findings))
+		for _, f := range manifest.Findings {
+			entry := map[string]interface{}{
+				"category": f.Category,
+				"severity": f.Severity,
+				"message":  f.Message,
+			}
+			if f.Offset != nil {
+				entry["offset"] = *f.Offset
+			}
+			findings = append(findings, entry)
+		}
+		asset.UploadScanFindings = findings
+	}
 }
