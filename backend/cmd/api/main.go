@@ -730,8 +730,18 @@ func main() {
 	r.Group(func(dp chi.Router) {
 		dp.Use(middleware.APIKeyAuth(apiKeySvcForAuth))
 		if valkeyClient != nil {
-			dp.Use(middleware.ValkeyRateLimit(valkeyClient, middleware.APIKeyRateLimitKeyFunc, 1000, time.Minute))
-			log.Println("M14: API key dataplane rate limiter enabled (1000/min per key)")
+			// Per-key dynamic budget: APIKey.RateLimit (from the
+			// api_keys table) overrides the default on a request-by-
+			// request basis. Keys with rate_limit unset (0) fall back
+			// to 1000/min so existing keys keep working unchanged.
+			dp.Use(middleware.ValkeyRateLimitDynamic(
+				valkeyClient,
+				middleware.APIKeyRateLimitKeyFunc,
+				middleware.APIKeyRateLimitMaxFunc,
+				1000,
+				time.Minute,
+			))
+			log.Println("M14: API key dataplane rate limiter enabled (per-key rate_limit; fallback 1000/min)")
 		} else {
 			log.Println("M14: API key dataplane group mounted (rate limiter no-op — VALKEY_URL unset)")
 		}

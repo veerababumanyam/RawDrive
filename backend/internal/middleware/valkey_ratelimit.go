@@ -98,3 +98,80 @@ func APIKeyRateLimitKeyFunc(r *http.Request) string {
 	}
 	return "apikey:" + key.ID.String()
 }
+
+// MaxRequestsFunc resolves the per-request rate-limit budget. Returning
+// zero (or a negative value) signals "no override" and the middleware
+// applies its configured fallback budget instead.
+type MaxRequestsFunc func(r *http.Request) int
+
+// APIKeyRateLimitMaxFunc reads the rate_limit column from the API key
+// in context. Intended to be passed as the maxFunc argument to
+// ValkeyRateLimitDynamic so each developer-platform key can enforce
+// its own budget (api_keys.rate_limit).
+func APIKeyRateLimitMaxFunc(r *http.Request) int {
+	key := APIKeyFromContext(r.Context())
+	if key == nil {
+		return 0
+	}
+	return key.RateLimit
+}
+
+// ValkeyRateLimitDynamic is like ValkeyRateLimit but resolves the
+// budget per-request via maxFunc. When maxFunc returns <=0 the
+// fallbackMax is applied instead, so callers can still enforce a
+// default for keys whose rate_limit column is unset. When client is
+// nil the middleware is a no-op (same as ValkeyRateLimit) so callers
+// can wire it unconditionally and the build system decides whether
+// to enable it.
+func ValkeyRateLimitDynamic(
+	client ValkeyClient,
+	keyFunc func(r *http.Request) string,
+	maxFunc MaxRequestsFunc,
+	fallbackMax int,
+	window time.Duration,
+) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if client == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			id := keyFunc(r)
+			if id == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Resolve the per-request budget. 0 / negative means
+			// "use the fallback" — this keeps the semantics simple
+			// for maxFunc implementations that don't have an override.
+			maxRequests := maxFunc(r)
+			if maxRequests <= 0 {
+				maxRequests = fallbackMax
+			}
+
+			nowMs := time.Now().UnixMilli()
+			windowMs := window.Milliseconds()
+			count, allowed, err := client.IncrementSlidingWindow(r.Context(), "rl:"+id, maxRequests, windowMs, nowMs)
+			if err != nil {
+				// Preserve fail-open semantics of the scalar variant.
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(maxRequests))
+			remaining := maxRequests - count
+			if remaining < 0 {
+				remaining = 0
+			}
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+
+			if !allowed {
+				w.Header().Set("Retry-After", strconv.FormatInt(window.Milliseconds()/1000, 10))
+				http.Error(w, `{"error":"rate_limit_exceeded"}`, http.StatusTooManyRequests)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

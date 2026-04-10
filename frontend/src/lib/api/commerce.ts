@@ -185,6 +185,42 @@ export async function listPublicBanners(slug: string): Promise<GalleryBanner[]> 
   return res.json();
 }
 
+// listPublicProducts returns the active product catalog for a public
+// gallery slug. Empty array on 404/error so the public page can render
+// without products gracefully (many galleries don't sell anything).
+export async function listPublicProducts(slug: string): Promise<GalleryProduct[]> {
+  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/products`);
+  if (!res.ok) return [];
+  const products = (await res.json()) as GalleryProduct[] | null;
+  return Array.isArray(products) ? products.filter((p) => p.is_active) : [];
+}
+
+// trackGalleryEvent posts an anonymous telemetry event for a public
+// gallery. Fire-and-forget — the promise resolves to a boolean so
+// callers can log failures in dev, but a rejection here must never
+// break the surrounding render (analytics is best-effort).
+export type PublicGalleryEventType = "banner_impression" | "banner_click" | "product_view";
+
+export async function trackGalleryEvent(
+  slug: string,
+  eventType: PublicGalleryEventType,
+  metadata?: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_type: eventType, metadata }),
+      // `keepalive` lets the request survive a page unload — important
+      // for banner_click events that fire immediately before navigation.
+      keepalive: true,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Commerce helpers (no auth) ──────────────────────────────────────
 
 export async function evaluatePrintPreflight(

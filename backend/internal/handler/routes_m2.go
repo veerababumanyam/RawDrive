@@ -311,6 +311,27 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 			r.Get("/galleries/{slug}/banners", bannerHandler.ListLiveBySlug(resolver))
 		}
 
+		// M14 GAL-FR-155 (public): read-only product catalog for the
+		// public gallery page. ProductHandler.ListPublicBySlug was
+		// defined in handler but previously orphaned — mounting it
+		// here unblocks ProductPreview rendering on /g/[slug].
+		if deps.ProductService != nil && deps.GalleryService != nil {
+			productHandler := NewProductHandler(deps.ProductService)
+			resolver := &gallerySlugResolverAdapter{svc: deps.GalleryService}
+			r.Get("/galleries/{slug}/products", productHandler.ListPublicBySlug(resolver))
+		}
+
+		// M14 GAL-FR-157 follow-up: anonymous event tracking for
+		// banner impressions/clicks and other low-sensitivity
+		// client-side telemetry. Allow-listed event types only;
+		// service is nil-safe so this mounts unconditionally when
+		// the gallery service is available.
+		if deps.GalleryService != nil {
+			analyticsHandler := NewPublicAnalyticsHandler(deps.GalleryAnalyticsSvc)
+			resolver := &gallerySlugResolverAdapter{svc: deps.GalleryService}
+			r.Post("/galleries/{slug}/events", analyticsHandler.TrackPublicEvent(resolver))
+		}
+
 		// M14 GAL-FR-158 (public): anonymous cart routes addressed by slug.
 		// Wired alongside M13 verify-password so a password-gated gallery
 		// can still expose its cart to authenticated visitors via the

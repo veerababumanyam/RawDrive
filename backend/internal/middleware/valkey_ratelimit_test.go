@@ -131,3 +131,124 @@ func TestValkeyRateLimit_FailOpenOnBackendError(t *testing.T) {
 		t.Errorf("backend errors should fail open, got %d", rr.Code)
 	}
 }
+
+// ──────────────────────── Per-key dynamic limit ────────────────────────
+//
+// ValkeyRateLimitDynamic honors a per-request budget resolver so each
+// API key can enforce its own rate_limit column value. The scalar
+// ValkeyRateLimit stays in place for callers that want a single
+// shared budget (e.g. anonymous public routes).
+
+func TestValkeyRateLimitDynamic_HonorsPerKeyMax(t *testing.T) {
+	fv := newFakeValkey()
+	// maxFunc returns 2 for this request — below the fallback of 100.
+	maxFunc := func(_ *http.Request) int { return 2 }
+	handler := middleware.ValkeyRateLimitDynamic(
+		fv,
+		func(_ *http.Request) string { return "apikey:low" },
+		maxFunc,
+		100, // fallback
+		time.Minute,
+	)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	// First 2 succeed, third is 429.
+	for i := 0; i < 2; i++ {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d should succeed at per-key max=2, got %d", i, rr.Code)
+		}
+		if rr.Header().Get("X-RateLimit-Limit") != "2" {
+			t.Errorf("X-RateLimit-Limit should reflect per-key max=2, got %q", rr.Header().Get("X-RateLimit-Limit"))
+		}
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Errorf("third request at per-key max=2 should be 429, got %d", rr.Code)
+	}
+}
+
+func TestValkeyRateLimitDynamic_FallsBackWhenMaxFuncReturnsZero(t *testing.T) {
+	fv := newFakeValkey()
+	// maxFunc returns 0 — meaning "no override" — so fallback applies.
+	maxFunc := func(_ *http.Request) int { return 0 }
+	handler := middleware.ValkeyRateLimitDynamic(
+		fv,
+		func(_ *http.Request) string { return "apikey:default" },
+		maxFunc,
+		3, // fallback
+		time.Minute,
+	)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	// First 3 succeed at fallback budget, fourth is 429.
+	for i := 0; i < 3; i++ {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d should succeed at fallback max=3, got %d", i, rr.Code)
+		}
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Errorf("fourth request at fallback max=3 should be 429, got %d", rr.Code)
+	}
+	if rr.Header().Get("X-RateLimit-Limit") != "3" {
+		t.Errorf("X-RateLimit-Limit should reflect fallback max=3, got %q", rr.Header().Get("X-RateLimit-Limit"))
+	}
+}
+
+func TestValkeyRateLimitDynamic_NegativeMaxFuncFallsBack(t *testing.T) {
+	fv := newFakeValkey()
+	maxFunc := func(_ *http.Request) int { return -1 }
+	handler := middleware.ValkeyRateLimitDynamic(
+		fv,
+		func(_ *http.Request) string { return "apikey:neg" },
+		maxFunc,
+		5, // fallback
+		time.Minute,
+	)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+	if rr.Code != http.StatusOK {
+		t.Errorf("negative maxFunc should fall back, got %d", rr.Code)
+	}
+	if rr.Header().Get("X-RateLimit-Limit") != "5" {
+		t.Errorf("X-RateLimit-Limit should reflect fallback max=5, got %q", rr.Header().Get("X-RateLimit-Limit"))
+	}
+}
+
+func TestValkeyRateLimitDynamic_FailOpenOnBackendError(t *testing.T) {
+	fv := &fakeValkey{counts: make(map[string]int), incError: context.DeadlineExceeded}
+	handler := middleware.ValkeyRateLimitDynamic(
+		fv,
+		func(_ *http.Request) string { return "apikey:err" },
+		func(_ *http.Request) int { return 1 },
+		100,
+		time.Minute,
+	)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+	if rr.Code != http.StatusOK {
+		t.Errorf("dynamic variant should preserve fail-open, got %d", rr.Code)
+	}
+}
+
+func TestValkeyRateLimitDynamic_NilClientIsNoOp(t *testing.T) {
+	handler := middleware.ValkeyRateLimitDynamic(
+		nil,
+		func(_ *http.Request) string { return "apikey:nil" },
+		func(_ *http.Request) int { return 1 },
+		100,
+		time.Minute,
+	)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+	if rr.Code != http.StatusOK {
+		t.Errorf("nil client should be a no-op, got %d", rr.Code)
+	}
+}

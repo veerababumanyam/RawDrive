@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,6 +71,39 @@ func TestM2Routes_PublicEndpoints(t *testing.T) {
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug/assets"), "GET public assets")
 	assert.True(t, routeExists(r, "POST", "/api/v1/public/galleries/test-slug/verify-pin"), "POST verify-pin")
 	assert.True(t, routeExists(r, "POST", "/api/v1/public/galleries/test-slug/proof"), "POST proof")
+}
+
+// setupM2RouterWithStubs builds a router with non-nil service stubs so
+// tests that exercise nil-guarded route mounts can verify registration.
+// The underlying repos are nil — handlers would panic if called, but
+// routeExists recovers from panics, which is fine for mount-only tests.
+func setupM2RouterWithStubs() *chi.Mux {
+	r := chi.NewRouter()
+	deps := M2Dependencies{
+		GalleryService:      service.NewGalleryService(nil, nil, nil),
+		ProductService:      service.NewProductService(nil),
+		BannerService:       service.NewBannerService(nil),
+		CartService:         service.NewCartService(nil, nil, nil),
+		GalleryAnalyticsSvc: service.NewGalleryAnalyticsService(nil),
+	}
+	RegisterM2Routes(r, deps)
+	RegisterPublicGalleryRoutes(r, deps)
+	return r
+}
+
+// TestM2Routes_PublicEndpoints_DeferredFollowups asserts routes whose
+// handlers were orphaned (defined but never mounted). Mounting these
+// closes M14 public-surface gaps for ProductPreview rendering and
+// banner/product analytics tracking.
+func TestM2Routes_PublicEndpoints_DeferredFollowups(t *testing.T) {
+	r := setupM2RouterWithStubs()
+	// Public product listing — required so ProductPreview can render on
+	// the public gallery page without authentication.
+	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug/products"),
+		"GET /public/galleries/{slug}/products must be mounted")
+	// Public event tracking — required for banner impression/click analytics.
+	assert.True(t, routeExists(r, "POST", "/api/v1/public/galleries/test-slug/events"),
+		"POST /public/galleries/{slug}/events must be mounted")
 }
 
 func TestM2Dependencies_ZeroValue(t *testing.T) {

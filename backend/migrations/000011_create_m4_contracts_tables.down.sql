@@ -1,2 +1,0 @@
-DROP TABLE IF EXISTS contracts CASCADE;
-DROP TABLE IF EXISTS contract_templates CASCADE;
