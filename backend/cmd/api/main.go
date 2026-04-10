@@ -19,6 +19,7 @@ import (
 
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/auth"
+	backendcrypto "github.com/rawdrive/backend/internal/crypto"
 	"github.com/rawdrive/backend/internal/handler"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/onboarding"
@@ -747,7 +748,35 @@ func main() {
 		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")
 
 		// ──────────────────────── Platform Settings (Super Admin) ──────────────────
+		//
+		// F-005 (audit 2026-04-10): platform_settings secret rows are now
+		// encrypted at rest via envelope encryption. The KEK is loaded from
+		// PLATFORM_SETTINGS_KEK (32 bytes, hex-encoded). In production
+		// (APP_ENV=production|prod) a missing KEK is fatal — we refuse to
+		// silently fall back to plaintext storage of secrets. In non-production
+		// environments a missing KEK logs a warning and the repo runs in
+		// legacy plaintext mode so local dev still works without bootstrap
+		// overhead.
 		platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
+		{
+			kekHex := os.Getenv("PLATFORM_SETTINGS_KEK")
+			if kekHex != "" {
+				envelope, err := backendcrypto.NewEnvelopeFromHex(kekHex)
+				if err != nil {
+					log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is invalid: %v", err)
+				}
+				platformSettingsRepo = platformSettingsRepo.WithEnvelope(envelope)
+				log.Println("F-005: platform_settings at-rest encryption ENABLED (envelope wired)")
+			} else {
+				appEnv := strings.ToLower(os.Getenv("APP_ENV"))
+				if appEnv == "production" || appEnv == "prod" {
+					log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required in production (APP_ENV=%s). " +
+						"Generate a 32-byte hex KEK and set it in your secret store. " +
+						"See F-005 in docs/audits/rawdrive-v0.0.35-m16-360-audit-2026-04-10.md.", appEnv)
+				}
+				log.Println("WARNING: PLATFORM_SETTINGS_KEK not set — platform settings secrets will be stored in PLAINTEXT. This is only acceptable in non-production environments.")
+			}
+		}
 		handler.RegisterAdminSettingsRoutes(api, platformSettingsRepo)
 		log.Println("Admin: Platform settings CRUD registered (storage, auth, payments, ai, email)")
 
