@@ -210,7 +210,14 @@ type TokenClaims struct {
 	Role         string // Workspace role: Owner/Admin/Editor/Viewer
 	PlatformRole string // Platform role: super_admin/admin/dealer/photographer/team_member/client
 	StateID      string
-	ExpiresAt    time.Time
+	// F-007 (M17 hardening wave 1): MFAVerified is true iff this access token
+	// was issued after a successful TOTP verification in the login flow.
+	// Middleware gates TOTP-mandatory roles (platform_admin, platform_staff,
+	// workspace_owner, workspace_admin, workspace_member) on MFAVerified==true
+	// OR an active grace window (users.mfa_grace_until).
+	// Zero value (false) is the safe default for legacy tokens without the claim.
+	MFAVerified bool
+	ExpiresAt   time.Time
 }
 
 type RefreshTokenInfo struct {
@@ -288,6 +295,7 @@ func (s *jwtService) GenerateAccessToken(ctx context.Context, claims TokenClaims
 		"role":          claims.Role,
 		"platform_role": claims.PlatformRole,
 		"state_id":      claims.StateID,
+		"mfa_verified":  claims.MFAVerified, // F-007 (M17 wave 1): second-factor state for mandatory-MFA roles
 		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
 		"iat":           now.Unix(),
 	})
@@ -322,12 +330,18 @@ func (s *jwtService) ParseAccessToken(ctx context.Context, tokenStr string) (*To
 		platformRole = "photographer"
 	}
 
+	// F-007 (M17 wave 1): mfa_verified is optional — legacy tokens without the
+	// claim parse as false. The type assertion pattern is the same as the other
+	// optional fields above.
+	mfaVerified, _ := mapClaims["mfa_verified"].(bool)
+
 	return &TokenClaims{
 		Sub:          mapClaims["sub"].(string),
 		WorkspaceID:  mapClaims["workspace_id"].(string),
 		Role:         mapClaims["role"].(string),
 		PlatformRole: platformRole,
 		StateID:      mapClaims["state_id"].(string),
+		MFAVerified:  mfaVerified,
 		ExpiresAt:    expiresAt,
 	}, nil
 }
@@ -511,6 +525,7 @@ func (s *jwtService) generateAccessTokenUnlocked(claims TokenClaims) (string, er
 		"role":          claims.Role,
 		"platform_role": claims.PlatformRole,
 		"state_id":      claims.StateID,
+		"mfa_verified":  claims.MFAVerified, // F-007 (M17 wave 1): carried from caller (RotateRefreshToken sets false until wave 2 adds session-level persistence)
 		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
 		"iat":           now.Unix(),
 	})
