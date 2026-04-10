@@ -2,6 +2,7 @@
 .env.cobolt
 .env.mcp
 _cobolt-output/
+.worktrees/
 _cobolt-docker/.env
 node_modules/
 dist/
