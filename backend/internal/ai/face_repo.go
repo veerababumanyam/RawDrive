@@ -170,6 +170,35 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 	return clusters, rows.Err()
 }
 
+// ListClusterAssetIDs returns distinct asset IDs that contain at least one
+// face assigned to the given cluster label, scoped to the workspace so
+// cross-workspace leakage is impossible at the DB layer.
+//
+// Used by the face filter endpoint (E8-S3 "FaceID filter") and the smart
+// album smart-filter evaluator to resolve face_cluster_label → asset list.
+func (r *FaceRepo) ListClusterAssetIDs(ctx context.Context, workspaceID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT asset_id
+		 FROM face_clusters
+		 WHERE workspace_id = $1 AND cluster_label = $2
+		 ORDER BY asset_id`,
+		workspaceID, clusterLabel)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: list cluster assets: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("face repo: scan cluster asset: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // DeleteFacesByAsset removes all face rows for an asset.
 func (r *FaceRepo) DeleteFacesByAsset(ctx context.Context, assetID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM face_clusters WHERE asset_id = $1`, assetID)

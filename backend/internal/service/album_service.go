@@ -70,6 +70,28 @@ func (s *AlbumService) RemoveAsset(ctx context.Context, albumID, assetID uuid.UU
 	return s.albumRepo.RemoveAsset(ctx, albumID, assetID)
 }
 
+// CreateSmartAlbum creates an album with a smart filter that is evaluated
+// lazily by GetSmartAlbumAssets. Used by M3 E8-S3 to turn a face cluster
+// into a gallery-scoped smart album ("All photos with Veera in them").
+// Returns the new album ID.
+func (s *AlbumService) CreateSmartAlbum(ctx context.Context, galleryID uuid.UUID, name string, smartFilter map[string]any) (uuid.UUID, error) {
+	if name == "" {
+		return uuid.Nil, fmt.Errorf("album name is required")
+	}
+	if smartFilter == nil {
+		return uuid.Nil, fmt.Errorf("smart_filter required for smart album")
+	}
+	album := &repository.Album{
+		GalleryID:   galleryID,
+		Name:        name,
+		SmartFilter: smartFilter,
+	}
+	if err := s.albumRepo.Create(ctx, album); err != nil {
+		return uuid.Nil, fmt.Errorf("album service create smart album: %w", err)
+	}
+	return album.ID, nil
+}
+
 // Delete removes an album.
 func (s *AlbumService) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.albumRepo.Delete(ctx, id)

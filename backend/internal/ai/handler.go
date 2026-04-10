@@ -1,12 +1,21 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
+
+// AlbumCreator is the narrow surface the AI handler needs to create a
+// smart album from a face cluster. Implemented by *service.AlbumService;
+// tests use a fake. Keeping it as an interface here avoids an ai → service
+// import cycle.
+type AlbumCreator interface {
+	CreateSmartAlbum(ctx context.Context, galleryID uuid.UUID, name string, smartFilter map[string]any) (uuid.UUID, error)
+}
 
 // Handler handles all /api/v1/ai/* HTTP routes.
 type Handler struct {
@@ -17,6 +26,14 @@ type Handler struct {
 	configRepo   *ConfigRepo
 	spendRepo    *SpendRepo
 	jobRepo      *JobRepo
+	albumCreator AlbumCreator // optional — only the face smart-album endpoint uses this
+}
+
+// WithAlbumCreator wires in a smart-album creator for the face cluster
+// → smart album endpoint. Returns the handler for fluent chaining.
+func (h *Handler) WithAlbumCreator(ac AlbumCreator) *Handler {
+	h.albumCreator = ac
+	return h
 }
 
 // NewHandler creates an AI handler with all service dependencies.
@@ -150,6 +167,105 @@ func (h *Handler) SplitCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{"new_cluster_label": newLabel})
+}
+
+// GetClusterAssets handles GET /api/v1/ai/clusters/{id}/assets (M3 E8-S3).
+// Returns distinct asset IDs in a face cluster, scoped to the caller's
+// workspace. Frontend FaceFilter component calls this to render a
+// filtered gallery view.
+func (h *Handler) GetClusterAssets(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
+
+	assetIDs, err := h.faceSvc.FilterByCluster(r.Context(), wsID, clusterID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if assetIDs == nil {
+		assetIDs = []uuid.UUID{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"cluster_label": clusterID,
+		"asset_ids":     assetIDs,
+		"count":         len(assetIDs),
+	})
+}
+
+// CreateClusterSmartAlbum handles POST /api/v1/ai/clusters/{id}/create-album
+// (M3 E8-S3 smart album from face). Creates a gallery-scoped smart album
+// whose smart_filter resolves to all assets containing the given face
+// cluster. Body: {"gallery_id": "...", "name": "Optional override"}.
+func (h *Handler) CreateClusterSmartAlbum(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	if h.albumCreator == nil {
+		respondError(w, http.StatusServiceUnavailable, "album creator not wired")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
+
+	var body struct {
+		GalleryID uuid.UUID `json:"gallery_id"`
+		Name      string    `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.GalleryID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "gallery_id required")
+		return
+	}
+
+	name := body.Name
+	if name == "" {
+		// Fall back to the cluster's stored name if we can look it up,
+		// otherwise a short tag of the cluster UUID.
+		clusters, lerr := h.faceSvc.GetClusters(r.Context(), wsID, &body.GalleryID)
+		if lerr == nil {
+			for _, c := range clusters {
+				if c.ClusterLabel == clusterID && c.ClusterName != "" {
+					name = "Face: " + c.ClusterName
+					break
+				}
+			}
+		}
+		if name == "" {
+			name = "Face: " + clusterID.String()[:8]
+		}
+	}
+
+	smartFilter := map[string]any{
+		"face_cluster_label": clusterID.String(),
+	}
+
+	albumID, err := h.albumCreator.CreateSmartAlbum(r.Context(), body.GalleryID, name, smartFilter)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, map[string]any{
+		"album_id":      albumID,
+		"name":          name,
+		"cluster_label": clusterID,
+		"gallery_id":    body.GalleryID,
+	})
 }
 
 // ---- Search & Tagging Endpoints ----

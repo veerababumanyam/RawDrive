@@ -18,6 +18,9 @@ func RegisterM3Routes(r chi.Router, deps M3Dependencies) {
 		r.Post("/clusters/merge", h.MergeClusters)
 		r.Patch("/clusters/{id}", h.UpdateCluster)
 		r.Post("/clusters/{id}/split", h.SplitCluster)
+		// M3 E8-S3: face filter + smart album from cluster
+		r.Get("/clusters/{id}/assets", h.GetClusterAssets)
+		r.Post("/clusters/{id}/create-album", h.CreateClusterSmartAlbum)
 		r.Post("/search", h.SemanticSearch)
 		r.Post("/tags", h.TriggerTags)
 		r.Get("/tags/{assetId}", h.GetTags)

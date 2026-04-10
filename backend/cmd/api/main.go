@@ -423,7 +423,8 @@ func main() {
 		cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
 
 		// AI handler (all endpoints in one handler)
-		aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo)
+		aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo).
+			WithAlbumCreator(albumSvc)
 
 		// M3 routes (FR-012, FR-013, FR-020)
 		watermarkSvc := service.NewWatermarkService()

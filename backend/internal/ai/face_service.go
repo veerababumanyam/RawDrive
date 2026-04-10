@@ -141,6 +141,13 @@ func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, wo
 	return nil
 }
 
+// FilterByCluster returns distinct asset IDs that match a face cluster
+// (M3 E8-S3 FaceID filter). The caller uses these IDs to further filter
+// gallery listings or to populate a smart album.
+func (s *FaceService) FilterByCluster(ctx context.Context, workspaceID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	return s.faceRepo.ListClusterAssetIDs(ctx, workspaceID, clusterLabel)
+}
+
 // GetClusters returns cluster summaries for a workspace/gallery.
 func (s *FaceService) GetClusters(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]*ClusterSummary, error) {
 	return s.faceRepo.ListClusters(ctx, workspaceID, galleryID)

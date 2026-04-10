@@ -53,6 +53,142 @@ func TestHandler_ListClusters_Empty(t *testing.T) {
 	t.Skip("requires FaceService with DB")
 }
 
+// fakeAlbumCreator captures CreateSmartAlbum calls.
+type fakeAlbumCreator struct {
+	called      bool
+	galleryID   uuid.UUID
+	name        string
+	smartFilter map[string]any
+	returnID    uuid.UUID
+}
+
+func (f *fakeAlbumCreator) CreateSmartAlbum(_ context.Context, galleryID uuid.UUID, name string, smartFilter map[string]any) (uuid.UUID, error) {
+	f.called = true
+	f.galleryID = galleryID
+	f.name = name
+	f.smartFilter = smartFilter
+	if f.returnID == uuid.Nil {
+		f.returnID = uuid.New()
+	}
+	return f.returnID, nil
+}
+
+// TestHandler_GetClusterAssets_MissingWorkspace verifies workspace guard.
+func TestHandler_GetClusterAssets_MissingWorkspace(t *testing.T) {
+	h := &Handler{}
+	r := chi.NewRouter()
+	r.Get("/api/v1/ai/clusters/{id}/assets", h.GetClusterAssets)
+
+	req := httptest.NewRequest("GET", "/api/v1/ai/clusters/"+uuid.New().String()+"/assets", nil)
+	// NOTE: no workspace context injected
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 without workspace, got %d", w.Code)
+	}
+}
+
+// TestHandler_GetClusterAssets_InvalidClusterID verifies 400 on bad UUID.
+func TestHandler_GetClusterAssets_InvalidClusterID(t *testing.T) {
+	h := &Handler{}
+	r := chi.NewRouter()
+	r.Get("/api/v1/ai/clusters/{id}/assets", h.GetClusterAssets)
+
+	req := httptest.NewRequest("GET", "/api/v1/ai/clusters/not-a-uuid/assets", nil)
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for bad cluster id, got %d", w.Code)
+	}
+}
+
+// TestHandler_CreateClusterSmartAlbum_NoAlbumCreator verifies 503 when
+// the album creator dep is not wired.
+func TestHandler_CreateClusterSmartAlbum_NoAlbumCreator(t *testing.T) {
+	h := &Handler{} // no WithAlbumCreator
+	r := chi.NewRouter()
+	r.Post("/api/v1/ai/clusters/{id}/create-album", h.CreateClusterSmartAlbum)
+
+	body := `{"gallery_id":"` + uuid.New().String() + `","name":"Test"}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/clusters/"+uuid.New().String()+"/create-album",
+		bytes.NewBufferString(body))
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 without album creator, got %d", w.Code)
+	}
+}
+
+// TestHandler_CreateClusterSmartAlbum_HappyPath verifies the handler
+// forwards to the album creator with face_cluster_label stamped into
+// smart_filter.
+func TestHandler_CreateClusterSmartAlbum_HappyPath(t *testing.T) {
+	fake := &fakeAlbumCreator{}
+	h := (&Handler{}).WithAlbumCreator(fake)
+	r := chi.NewRouter()
+	r.Post("/api/v1/ai/clusters/{id}/create-album", h.CreateClusterSmartAlbum)
+
+	clusterID := uuid.New()
+	galleryID := uuid.New()
+	body := `{"gallery_id":"` + galleryID.String() + `","name":"Veera"}`
+
+	req := httptest.NewRequest("POST", "/api/v1/ai/clusters/"+clusterID.String()+"/create-album",
+		bytes.NewBufferString(body))
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if !fake.called {
+		t.Fatal("album creator was not called")
+	}
+	if fake.galleryID != galleryID {
+		t.Errorf("gallery_id mismatch: want %s, got %s", galleryID, fake.galleryID)
+	}
+	if fake.name != "Veera" {
+		t.Errorf("name: want Veera, got %q", fake.name)
+	}
+	if fake.smartFilter["face_cluster_label"] != clusterID.String() {
+		t.Errorf("smart_filter.face_cluster_label: want %s, got %v",
+			clusterID, fake.smartFilter["face_cluster_label"])
+	}
+
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["album_id"] == nil {
+		t.Error("response missing album_id")
+	}
+}
+
+// TestHandler_CreateClusterSmartAlbum_MissingGalleryID verifies validation.
+func TestHandler_CreateClusterSmartAlbum_MissingGalleryID(t *testing.T) {
+	fake := &fakeAlbumCreator{}
+	h := (&Handler{}).WithAlbumCreator(fake)
+	r := chi.NewRouter()
+	r.Post("/api/v1/ai/clusters/{id}/create-album", h.CreateClusterSmartAlbum)
+
+	body := `{"name":"Test"}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/clusters/"+uuid.New().String()+"/create-album",
+		bytes.NewBufferString(body))
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+	if fake.called {
+		t.Error("album creator should not have been called")
+	}
+}
+
 // TestHandler_GetTags_InvalidUUID verifies 400 on bad asset ID.
 func TestHandler_GetTags_InvalidUUID(t *testing.T) {
 	h := &Handler{}
