@@ -190,6 +190,10 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 	r.Route("/api/v1/workspaces/{workspaceId}/storage-config", func(r chi.Router) {
 		r.Post("/test", storageConfigHandler.TestConnection)
 	})
+	// F-011 (audit 2026-04-10): authoritative plan tier lookup for the
+	// settings UI. Uses "current" as the literal path segment because the
+	// handler reads workspace_id from JWT claims (so clients can't spoof).
+	r.Get("/api/v1/workspaces/current/plan", storageConfigHandler.GetCurrentPlan)
 
 	// M14: Download routes
 	if deps.DownloadService != nil {

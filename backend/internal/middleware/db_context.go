@@ -18,9 +18,17 @@ func NewPgDBContext(pool *pgxpool.Pool) *PgDBContext {
 }
 
 // SetWorkspaceID sets the app.workspace_id session variable for RLS enforcement.
+//
+// F-009 (audit 2026-04-10): this function used to interpolate workspaceID
+// directly into the SQL string via fmt.Sprintf, which was a textbook SQL
+// injection vector because workspaceID flows in from JWT claims — if an
+// attacker ever influenced the JWT payload they could inject arbitrary SQL
+// at tenant-context-set time. The fix is boring: use a parameterized query
+// so pgx escapes the value at the wire protocol level. set_config()'s second
+// argument accepts a placeholder, so this is a drop-in replacement.
 func (d *PgDBContext) SetWorkspaceID(ctx context.Context, workspaceID string) error {
 	_, err := d.pool.Exec(ctx,
-		fmt.Sprintf("SELECT set_config('app.workspace_id', '%s', false)", workspaceID),
+		"SELECT set_config('app.workspace_id', $1, false)", workspaceID,
 	)
 	if err != nil {
 		return fmt.Errorf("set workspace context: %w", err)

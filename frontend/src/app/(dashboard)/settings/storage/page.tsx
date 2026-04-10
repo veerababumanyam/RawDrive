@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getStoredWorkspaceId } from "@/lib/auth";
 
 // ──────────────────────── Types ────────────────────────
 
 type Provider = "r2" | "s3" | "minio" | "b2";
 type WizardStep = 1 | 2 | 3;
-type PlanTier = "free" | "starter" | "professional" | "enterprise";
+type PlanTier = "free" | "starter" | "professional" | "enterprise" | "standard";
 
 interface StorageConfig {
   provider: Provider;
@@ -39,9 +40,15 @@ function formatBytes(bytes: number): string {
 }
 
 export default function StorageSettingsPage() {
-  // TODO: Read from auth context / workspace API
-  const [planTier] = useState<PlanTier>("professional");
+  // F-011 (audit 2026-04-10): plan tier was previously hardcoded to
+  // "professional" with a TODO, which hid the BYOS wizard from enterprise
+  // users AND showed a misleading "Upgrade" prompt to everyone else. Source
+  // it from the authoritative backend endpoint that reads from the DB.
+  // While plan tier is unknown we render neither the wizard nor the upgrade
+  // prompt — prevents a visible flip when the fetch resolves.
+  const [planTier, setPlanTier] = useState<PlanTier | null>(null);
   const isEnterprise = planTier === "enterprise";
+  const planLoaded = planTier !== null;
 
   const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +60,21 @@ export default function StorageSettingsPage() {
       .then((data) => { if (data?.data) setAnalytics(data.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  // F-011: fetch authoritative plan tier. This is a separate effect so
+  // analytics and plan-tier load independently — one failing does not
+  // block the other. On failure we fall through to the safest default
+  // ("standard") which hides the BYOS wizard and shows the upgrade prompt.
+  useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+    fetch(`${apiUrl}/api/v1/workspaces/current/plan`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        const tier = data?.plan_tier as PlanTier | undefined;
+        setPlanTier(tier ?? "standard");
+      })
+      .catch(() => setPlanTier("standard"));
   }, []);
 
   const usage = analytics?.usage;
@@ -70,9 +92,21 @@ export default function StorageSettingsPage() {
   const handleTestConnection = async () => {
     setTestResult("testing");
     try {
+      // F-011 (audit 2026-04-10): the URL previously used the literal
+      // "current" as the workspace id segment, which doesn't match the
+      // backend route shape (/api/v1/workspaces/{workspaceId}/storage-config/test
+      // where {workspaceId} must be a real UUID — see routes_m2.go and
+      // storage_config_handler.go TestConnection). The correct workspace
+      // ID lives in the JWT access token.
+      const wsId = getStoredWorkspaceId();
+      if (!wsId) {
+        setTestResult("error");
+        return;
+      }
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-      const res = await fetch(`${apiUrl}/api/v1/workspaces/current/storage-config/test`, {
+      const res = await fetch(`${apiUrl}/api/v1/workspaces/${wsId}/storage-config/test`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });
@@ -107,7 +141,14 @@ export default function StorageSettingsPage() {
         </div>
 
         {/* ────────── BYOS Section (enterprise only) ────────── */}
-        {!isEnterprise ? (
+        {/* F-011: while the plan tier is loading we render nothing here so
+            the UI doesn't briefly flash the upgrade prompt and then swap
+            to the wizard for enterprise users. */}
+        {!planLoaded ? (
+          <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8 text-xs text-on-surface-variant">
+            Loading storage plan…
+          </div>
+        ) : !isEnterprise ? (
           /* Non-enterprise: show upgrade prompt */
           <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
             <div className="flex items-center gap-3 mb-3">
