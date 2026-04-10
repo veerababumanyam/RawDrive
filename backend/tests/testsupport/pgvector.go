@@ -82,6 +82,18 @@ func DSN(t *testing.T) string {
 	return sharedDSN
 }
 
+// EnsureDSN initialises the shared container if needed and returns the DSN.
+// Unlike DSN(t), it does not require a *testing.T — use it from TestMain or
+// any other context that only has *testing.M. Returns an error instead of
+// calling t.Fatalf so the caller can decide how to report the failure.
+func EnsureDSN() (string, error) {
+	sharedOnce.Do(initSharedContainer)
+	if sharedInitErr != nil {
+		return "", sharedInitErr
+	}
+	return sharedDSN, nil
+}
+
 // Shutdown terminates the shared container if one was started. Safe to call
 // multiple times and safe to call when no container was started. Intended
 // for use in TestMain:

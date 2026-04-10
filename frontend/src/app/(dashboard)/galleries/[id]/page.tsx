@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useUpload } from "@/hooks/use-upload";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
+import { FaceFilter } from "@/components/gallery/face-filter";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -33,6 +34,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Face-filter state: when non-null, only assets whose id is in this
+  // set are rendered in the grid. Populated by the rawdrive:face-filter
+  // event that FaceFilter dispatches after fetching cluster assets.
+  const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
+  const [authToken, setAuthToken] = useState<string>("");
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -42,6 +48,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setLoading(false);
       return;
     }
+    setAuthToken(token);
 
     let cancelled = false;
 
@@ -94,6 +101,36 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       cancelled = true;
     };
   }, [id]);
+
+  // Subscribe to face-filter events from the FaceFilter component. The
+  // component doesn't know anything about the page's asset list — it
+  // just dispatches the matched ID set via a window CustomEvent, and
+  // the page reduces the rendered list to those IDs. Same contract
+  // PublicGalleryGrid already uses for the public gallery view.
+  useEffect(() => {
+    function onFilter(e: Event) {
+      const detail = (e as CustomEvent<{ assetIds: string[] }>).detail;
+      if (!detail || !Array.isArray(detail.assetIds)) return;
+      setFaceFilterIds(new Set(detail.assetIds));
+    }
+    function onFilterClear() {
+      setFaceFilterIds(null);
+    }
+    window.addEventListener("rawdrive:face-filter", onFilter as EventListener);
+    window.addEventListener("rawdrive:face-filter-clear", onFilterClear);
+    return () => {
+      window.removeEventListener("rawdrive:face-filter", onFilter as EventListener);
+      window.removeEventListener("rawdrive:face-filter-clear", onFilterClear);
+    };
+  }, []);
+
+  // Reduce the hydrated asset list to the face-filter match set when a
+  // filter is active. useMemo keeps this stable when unrelated state
+  // (upload progress, selections) changes.
+  const visibleAssets = useMemo(() => {
+    if (!faceFilterIds) return assets;
+    return assets.filter((a) => a.asset && faceFilterIds.has(a.asset.id));
+  }, [assets, faceFilterIds]);
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
@@ -273,7 +310,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               <h2 className="text-lg font-semibold text-text-primary">Assets</h2>
               <div className="flex items-center gap-3">
                 <p className="text-sm text-text-secondary">
-                  {assets.length === 0 ? "No assets yet" : `${assets.length} assets`}
+                  {assets.length === 0
+                    ? "No assets yet"
+                    : faceFilterIds
+                      ? `${visibleAssets.length} of ${assets.length} assets`
+                      : `${assets.length} assets`}
                 </p>
                 <button
                   onClick={handleFileSelect}
@@ -283,6 +324,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </button>
               </div>
             </div>
+
+            {/* FaceFilter surfaces only when we have an auth token and at
+                least one asset — before uploads there's nothing to
+                cluster, and without a token the API calls would 401. */}
+            {authToken && assets.length > 0 && (
+              <FaceFilter token={authToken} galleryId={id} />
+            )}
 
             {/* Drop zone — always visible, acts as upload target */}
             <div
@@ -307,9 +355,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-center text-xs text-text-tertiary py-4">
                 Upload your first photos to get started with this gallery.
               </p>
+            ) : visibleAssets.length === 0 ? (
+              <p className="text-center text-xs text-text-tertiary py-4">
+                No photos match the selected face filter.
+              </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {assets.map((entry) => {
+                {visibleAssets.map((entry) => {
                   const previewUrl = getAssetPreviewUrl(entry.asset || undefined);
 
                   return (

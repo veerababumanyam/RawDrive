@@ -2,6 +2,7 @@ package m6_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -9,17 +10,46 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/tests/testsupport"
 )
+
+// testDSN is resolved once by TestMain. It is either DATABASE_URL (when set,
+// preserving the escape hatch to point at an existing migrated database) or
+// the DSN of a throwaway pgvector testcontainer provisioned by testsupport.
+var testDSN string
+
+// TestMain replaces the previous hardcoded localhost:55070 fallback with a
+// testsupport-managed testcontainer. The DATABASE_URL override is preserved
+// so the existing docker-compose workflow keeps working for developers who
+// prefer to inspect test data manually after a run.
+//
+// Unlike m5, m6 does NOT run migrations itself — it assumes the target DB is
+// already at the correct schema version. testsupport.EnsureDSN() runs the
+// production Migrator as part of container init, so the testcontainer path
+// is self-sufficient.
+func TestMain(m *testing.M) {
+	if envDSN := os.Getenv("DATABASE_URL"); envDSN != "" {
+		testDSN = envDSN
+	} else {
+		dsn, err := testsupport.EnsureDSN()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "m6_test: failed to start testcontainer: %v\n", err)
+			os.Exit(1)
+		}
+		testDSN = dsn
+	}
+
+	code := m.Run()
+	testsupport.Shutdown()
+	os.Exit(code)
+}
 
 func getTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://rawdrive_user:e706fbd6b28d036aa80379447729737b@localhost:55070/rawdrive_db?sslmode=disable"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := pgxpool.New(ctx, testDSN)
 	require.NoError(t, err, "Failed to connect to test database")
 	t.Cleanup(func() { pool.Close() })
 	return pool

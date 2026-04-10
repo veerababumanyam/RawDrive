@@ -2,37 +2,64 @@ package m5_test
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/database"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/database"
+	"github.com/rawdrive/backend/tests/testsupport"
 )
 
-var (
-	m5MigrationsOnce sync.Once
-	m5MigrationsErr  error
-)
+// testDSN is resolved by TestMain to either DATABASE_URL (preserved escape
+// hatch for running against a real DB for forensics) or the DSN of a
+// throwaway pgvector testcontainer managed by testsupport.
+var testDSN string
 
-func getTestDB(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgresql://rawdrive_user:e706fbd6b28d036aa80379447729737b@localhost:55070/rawdrive_db?sslmode=disable"
+// TestMain resolves the DSN for this test binary and cleans up the
+// testcontainer (if one was started) at exit.
+//
+// The previous version hardcoded postgresql://...@localhost:55070/... and
+// required docker-compose to be running. It also kept its own sync.Once
+// around migrator.Up() — now redundant because testsupport guarantees
+// exactly-once migration as part of container init.
+func TestMain(m *testing.M) {
+	if envDSN := os.Getenv("DATABASE_URL"); envDSN != "" {
+		// Strict parity with the previous version: run migrations against
+		// the env-supplied DSN. Migrations are idempotent (gated by
+		// schema_migrations), so this is a no-op against an already-migrated
+		// target but protects fresh ones.
+		if err := database.NewMigrator(envDSN).Up(); err != nil {
+			fmt.Fprintf(os.Stderr, "m5_test: failed to migrate DATABASE_URL target: %v\n", err)
+			os.Exit(1)
+		}
+		testDSN = envDSN
+	} else {
+		dsn, err := testsupport.EnsureDSN()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "m5_test: failed to start testcontainer: %v\n", err)
+			os.Exit(1)
+		}
+		testDSN = dsn
 	}
 
-	m5MigrationsOnce.Do(func() {
-		m5MigrationsErr = database.NewMigrator(dsn).Up()
-	})
-	require.NoError(t, m5MigrationsErr, "failed to apply migrations for M5 tests")
+	code := m.Run()
+	testsupport.Shutdown()
+	os.Exit(code)
+}
+
+// getTestDB returns a pool connected to the DSN resolved by TestMain. It
+// does NOT re-run migrations — testsupport.EnsureDSN already did that.
+func getTestDB(t *testing.T) *pgxpool.Pool {
+	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := pgxpool.New(ctx, testDSN)
 	require.NoError(t, err, "Failed to connect to test database")
 	t.Cleanup(func() { pool.Close() })
 	return pool

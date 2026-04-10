@@ -200,11 +200,38 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Get("/api/v1/galleries/{id}/download-audit", dlHandler.GetAudit)
 	}
 
-	// M14: Analytics routes
+	// M14: Analytics routes (includes GAL-FR-185/186/187 breakdowns)
 	if deps.GalleryAnalyticsSvc != nil {
 		analyticsHandler := NewGalleryAnalyticsHandler(deps.GalleryAnalyticsSvc)
 		r.Get("/api/v1/galleries/{id}/analytics/summary", analyticsHandler.GetSummary)
 		r.Get("/api/v1/galleries/{id}/analytics/daily", analyticsHandler.GetDailyStats)
+		r.Get("/api/v1/galleries/{id}/analytics/devices", analyticsHandler.GetDeviceBreakdown)
+		r.Get("/api/v1/galleries/{id}/analytics/download-velocity", analyticsHandler.GetDownloadVelocity)
+		r.Get("/api/v1/galleries/{id}/analytics/share-channels", analyticsHandler.GetShareChannels)
+	}
+
+	// M14: Product catalog routes (GAL-FR-155)
+	if deps.ProductService != nil {
+		productHandler := NewProductHandler(deps.ProductService)
+		r.Route("/api/v1/galleries/{id}/products", func(r chi.Router) {
+			r.Get("/", productHandler.List)
+			r.Post("/", productHandler.Create)
+			r.Get("/{productId}", productHandler.Get)
+			r.Put("/{productId}", productHandler.Update)
+			r.Delete("/{productId}", productHandler.Delete)
+		})
+	}
+
+	// M14: Gallery cart routes (GAL-FR-158). Mounted under the protected
+	// group so studios can preview cart state; a public slug-addressed
+	// variant is added under RegisterPublicGalleryRoutes for client use.
+	if deps.CartService != nil {
+		cartHandler := NewCartHandler(deps.CartService)
+		r.Route("/api/v1/galleries/{id}/cart", func(r chi.Router) {
+			r.Post("/", cartHandler.Upsert)
+			r.Get("/", cartHandler.Get)
+			r.Delete("/", cartHandler.Clear)
+		})
 	}
 
 	// M14: Webhook routes
@@ -301,6 +328,8 @@ type M2Dependencies struct {
 	DownloadService      *service.DownloadService
 	GalleryAnalyticsSvc  *service.GalleryAnalyticsService
 	WebhookSvc           *service.WebhookService
+	ProductService       *service.ProductService
+	CartService          *service.CartService
 	// M15 dependencies (nil-safe)
 	ConsentSvc           *service.ConsentService
 }

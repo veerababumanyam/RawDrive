@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
@@ -12,9 +13,37 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/rawdrive/backend/internal/database"
+	"github.com/rawdrive/backend/tests/testsupport"
 )
 
-const testDSN = "postgres://rawdrive_user:e706fbd6b28d036aa80379447729737b@localhost:55070/rawdrive_db?sslmode=disable"
+// testDSN is set by TestMain to the DSN of the shared pgvector testcontainer
+// booted for this test binary. It replaces the previous hardcoded
+// `localhost:55070` connection string so the database package tests are
+// portable across machines and CI runners — no docker-compose dependency.
+//
+// It is a var (not a const) because its value is resolved at runtime from
+// the testcontainer's randomly-assigned host port.
+var testDSN string
+
+// TestMain owns the package-wide lifecycle for the shared testcontainer.
+// It boots the container (or reuses a running one in-process), runs the
+// production Migrator against it once, stores the DSN for all tests in the
+// package to reuse, and terminates the container cleanly at exit.
+//
+// All test helpers in this package (testPool, tempDatabaseDSN, setupRLSTest,
+// setupSchemaTest) read from testDSN and therefore need no changes.
+func TestMain(m *testing.M) {
+	dsn, err := testsupport.EnsureDSN()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "database_test: failed to start testcontainer: %v\n", err)
+		os.Exit(1)
+	}
+	testDSN = dsn
+
+	code := m.Run()
+	testsupport.Shutdown()
+	os.Exit(code)
+}
 
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()

@@ -127,6 +127,28 @@ export async function mergeClusters(token: string, sourceId: string, targetId: s
   if (!res.ok) throw new Error(`Merge clusters failed: ${res.status}`);
 }
 
+// ClusterAssets is the response shape of GET /api/v1/ai/clusters/{id}/assets.
+// The backend returns distinct asset IDs in the cluster, scoped to the
+// caller's workspace. The FaceFilter component feeds these IDs into a
+// gallery grid filter event so the user sees only photos containing the
+// selected face.
+export interface ClusterAssetsResponse {
+  cluster_label: string;
+  asset_ids: string[];
+  count: number;
+}
+
+export async function getClusterAssets(
+  token: string,
+  clusterId: string,
+): Promise<ClusterAssetsResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/clusters/${clusterId}/assets`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Get cluster assets failed: ${res.status}`);
+  return res.json();
+}
+
 // ---- Semantic Search ----
 
 export async function searchAssets(token: string, query: string, galleryId?: string, limit?: number): Promise<{ results: SearchResult[]; total: number }> {

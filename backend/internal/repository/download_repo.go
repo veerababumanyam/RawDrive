@@ -99,6 +99,57 @@ func (r *DownloadRepo) UpdateJobStatus(ctx context.Context, id uuid.UUID, status
 	return nil
 }
 
+// ListPendingJobs returns download jobs in status "pending" ordered by
+// oldest first. Used by the download worker to pick up backlog.
+// SELECT … FOR UPDATE SKIP LOCKED means multiple worker instances are
+// safe: each run claims a different set of jobs atomically.
+func (r *DownloadRepo) ListPendingJobs(ctx context.Context, limit int) ([]DownloadJob, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, gallery_id, workspace_id, requested_by_name, requested_by_email,
+		        requested_by_user_id, asset_ids, variant, status, progress, total_assets,
+		        download_url, file_size_bytes, error_message, expires_at, created_at, completed_at
+		 FROM download_jobs
+		 WHERE status = 'pending'
+		 ORDER BY created_at ASC
+		 LIMIT $1
+		 FOR UPDATE SKIP LOCKED`, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("download job list pending: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []DownloadJob
+	for rows.Next() {
+		var j DownloadJob
+		if err := rows.Scan(&j.ID, &j.GalleryID, &j.WorkspaceID, &j.RequestedByName,
+			&j.RequestedByEmail, &j.RequestedByUserID, &j.AssetIDs, &j.Variant,
+			&j.Status, &j.Progress, &j.TotalAssets, &j.DownloadURL,
+			&j.FileSizeBytes, &j.ErrorMessage, &j.ExpiresAt, &j.CreatedAt,
+			&j.CompletedAt); err != nil {
+			return nil, fmt.Errorf("download job scan: %w", err)
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, nil
+}
+
+// MarkJobFailed records an error message and sets status=failed.
+// Used by the worker on terminal failures.
+func (r *DownloadRepo) MarkJobFailed(ctx context.Context, id uuid.UUID, errMsg string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE download_jobs
+		 SET status='failed', error_message=$2, completed_at=now()
+		 WHERE id=$1`, id, errMsg)
+	if err != nil {
+		return fmt.Errorf("download job mark failed: %w", err)
+	}
+	return nil
+}
+
 // ListJobsByGallery returns download jobs for a gallery.
 func (r *DownloadRepo) ListJobsByGallery(ctx context.Context, galleryID uuid.UUID) ([]DownloadJob, error) {
 	rows, err := r.pool.Query(ctx,

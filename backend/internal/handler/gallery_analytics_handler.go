@@ -45,7 +45,7 @@ func (h *GalleryAnalyticsHandler) GetSummary(w http.ResponseWriter, r *http.Requ
 func (h *GalleryAnalyticsHandler) GetDailyStats(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
 		return
 	}
 
@@ -56,9 +56,57 @@ func (h *GalleryAnalyticsHandler) GetDailyStats(w http.ResponseWriter, r *http.R
 
 	stats, err := h.analyticsSvc.GetDailyStats(r.Context(), galleryID, days)
 	if err != nil {
-		http.Error(w, `{"error":"analytics failed"}`, http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
 		return
 	}
 
 	respondJSON(w, http.StatusOK, stats)
+}
+
+// GetDeviceBreakdown handles GET /galleries/{id}/analytics/devices — GAL-FR-185
+func (h *GalleryAnalyticsHandler) GetDeviceBreakdown(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	points, err := h.analyticsSvc.DeviceBreakdown(r.Context(), galleryID, days)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, points)
+}
+
+// GetDownloadVelocity handles GET /galleries/{id}/analytics/download-velocity — GAL-FR-186
+func (h *GalleryAnalyticsHandler) GetDownloadVelocity(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	points, err := h.analyticsSvc.DownloadVelocity(r.Context(), galleryID, days)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, points)
+}
+
+// GetShareChannels handles GET /galleries/{id}/analytics/share-channels — GAL-FR-187
+func (h *GalleryAnalyticsHandler) GetShareChannels(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	points, err := h.analyticsSvc.ShareChannelBreakdown(r.Context(), galleryID, days)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, points)
 }

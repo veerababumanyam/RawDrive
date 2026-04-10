@@ -316,13 +316,19 @@ func main() {
 	proofingCommentSvc := service.NewProofingCommentService(proofingCommentRepo)
 	albumApprovalSvc := service.NewAlbumApprovalService(albumApprovalRepo)
 
-	// M14 Services: Downloads, Analytics, Webhooks
+	// M14 Services: Downloads, Analytics, Webhooks, Product Catalog, Cart
 	downloadRepo := repository.NewDownloadRepo(dbPool)
 	galleryAnalyticsRepo := repository.NewGalleryAnalyticsRepo(dbPool)
 	webhookRepo := repository.NewWebhookRepo(dbPool)
+	productRepo := repository.NewProductRepo(dbPool)
+	cartRepo := repository.NewCartRepo(dbPool)
 	galleryAnalyticsSvc := service.NewGalleryAnalyticsService(galleryAnalyticsRepo)
 	webhookSvc := service.NewWebhookService(webhookRepo)
 	downloadSvc := service.NewDownloadService(assetRepo, galleryAssetRepo, storageProvider).WithDownloadRepo(downloadRepo)
+	productSvc := service.NewProductService(productRepo)
+	// Cart service uses productRepo for price snapshotting. Coupon discounts
+	// are disabled until a GalleryDiscountCalculator adapter is wired in.
+	cartSvc := service.NewCartService(cartRepo, productRepo, nil)
 
 	// M15 Services: Consent
 	consentRepo := repository.NewConsentRepo(dbPool)
@@ -375,6 +381,8 @@ func main() {
 			DownloadService:      downloadSvc,
 			GalleryAnalyticsSvc:  galleryAnalyticsSvc,
 			WebhookSvc:           webhookSvc,
+			ProductService:       productSvc,
+			CartService:          cartSvc,
 			// M15
 			ConsentSvc:           consentSvc,
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
@@ -704,20 +712,29 @@ func main() {
 	webhookDeliveryWorker := worker.NewWebhookDeliveryWorker(dbPool)
 	workerRegistry.Register("webhook-delivery", webhookDeliveryWorker)
 
+	// M14 GAL-FR-150/151/152: background ZIP download worker. Polls
+	// download_jobs for pending rows, builds the ZIP in memory, uploads
+	// to R2 under downloads/<gallery>/<job>.zip, and records progress
+	// so clients can poll for completion.
+	downloadWorker := worker.NewDownloadWorker(dbPool, downloadSvc)
+	workerRegistry.Register("download", downloadWorker)
+
 	// M10 E27-S3: DSR purge worker — polls dsr_requests for pending rows
 	// and dispatches by request_type. Access requests delegate to the
-	// DSRService.ProcessAccessRequest path; erasure requests need an
-	// operator-configured eraser callback (left nil for now — when nil,
-	// erasure rows are marked failed with a clear reason rather than
-	// silently completing). The DSR service is constructed inside the
-	// protected API group above; we re-construct the repo + service here
-	// since the worker runs outside that closure.
+	// DSRService.ProcessAccessRequest path; erasure requests are handled
+	// by the production DSREraser (service/dsr_eraser.go), which walks
+	// the subject's assets, deletes R2 objects, cascades DB rows, and
+	// redacts audit log entries via the migration-050 helper functions.
+	// The DSR service is constructed inside the protected API group
+	// above; we re-construct the repo + service here since the worker
+	// runs outside that closure.
 	dsrPurgeRepo := repository.NewDSRRepo(dbPool)
 	dsrPurgeSvc := service.NewDSRService(service.NewPostgresDSRStore(dsrPurgeRepo))
+	dsrEraser := service.NewDSREraser(dbPool, storageProvider)
 	dsrPurgeWorker := worker.NewDSRPurgeWorker(dbPool, func(ctx context.Context, id uuid.UUID) error {
 		_, err := dsrPurgeSvc.ProcessAccessRequest(ctx, id)
 		return err
-	})
+	}).WithEraser(dsrEraser.Erase)
 	workerRegistry.Register("dsr-purge", dsrPurgeWorker)
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()

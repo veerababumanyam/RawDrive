@@ -2,6 +2,7 @@ package service
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -141,6 +142,100 @@ func (s *DownloadService) GetDownloadAudit(ctx context.Context, galleryID uuid.U
 		return nil, nil
 	}
 	return s.downloadRepo.ListEventsByGallery(ctx, galleryID, limit)
+}
+
+// ProcessJob implements worker.DownloadJobProcessor. It builds a ZIP
+// containing the job's asset IDs, uploads it to object storage under
+// a downloads/ prefix, and returns the storage key and the total bytes
+// written. Progress is reported per-asset through the onProgress
+// callback so the worker can update download_jobs.progress.
+//
+// M14 GAL-FR-150/151/152: background ZIP build with progress tracking.
+//
+// Implementation note: we buffer the ZIP to a bytes.Buffer before
+// calling store.Put because the storage interface requires the size
+// up front (S3-style PutObject). For rawdrive's typical gallery size
+// (a few hundred photos) this is a few hundred MB at most — acceptable
+// for a background worker. If we need to support multi-GB bundles
+// later, swap the buffer for a temp file on disk.
+func (s *DownloadService) ProcessJob(
+	ctx context.Context,
+	job *repository.DownloadJob,
+	onProgress func(int),
+) (string, int64, error) {
+	if len(job.AssetIDs) == 0 {
+		return "", 0, fmt.Errorf("download job %s: no assets", job.ID)
+	}
+
+	var buf bytes.Buffer
+	if err := s.writeZipWithProgress(ctx, job.AssetIDs, &buf, onProgress); err != nil {
+		return "", 0, fmt.Errorf("download job %s: zip build: %w", job.ID, err)
+	}
+
+	size := int64(buf.Len())
+	storageKey := fmt.Sprintf("downloads/%s/%s.zip", job.GalleryID, job.ID)
+	if err := s.store.Put(ctx, storageKey, &buf, size, "application/zip"); err != nil {
+		return "", 0, fmt.Errorf("download job %s: storage put: %w", job.ID, err)
+	}
+	return storageKey, size, nil
+}
+
+// writeZipWithProgress is WriteSelectedZIP with a progress callback.
+// Extracted so ProcessJob doesn't duplicate the dedup + copy loop.
+func (s *DownloadService) writeZipWithProgress(
+	ctx context.Context,
+	assetIDs []uuid.UUID,
+	w io.Writer,
+	onProgress func(int),
+) error {
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	seen := make(map[string]int)
+	total := len(assetIDs)
+	for i, id := range assetIDs {
+		asset, err := s.assetRepo.GetByID(ctx, id)
+		if err != nil || asset == nil {
+			continue
+		}
+		reader, err := s.store.Get(ctx, asset.StorageKey)
+		if err != nil {
+			continue
+		}
+
+		filename := asset.Filename
+		if count, exists := seen[filename]; exists {
+			seen[filename] = count + 1
+			ext := ""
+			base := filename
+			for j := len(filename) - 1; j >= 0; j-- {
+				if filename[j] == '.' {
+					ext = filename[j:]
+					base = filename[:j]
+					break
+				}
+			}
+			filename = fmt.Sprintf("%s_%d%s", base, count+1, ext)
+		} else {
+			seen[filename] = 1
+		}
+
+		entry, err := zw.Create(filename)
+		if err != nil {
+			reader.Close()
+			continue
+		}
+		if _, err := io.Copy(entry, reader); err != nil {
+			reader.Close()
+			return err
+		}
+		reader.Close()
+
+		if onProgress != nil && total > 0 {
+			onProgress(((i + 1) * 100) / total)
+		}
+	}
+	return nil
 }
 
 // WriteSelectedZIP streams a ZIP containing only selected asset IDs.
