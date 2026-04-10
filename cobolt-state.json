@@ -1,8 +1,8 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "greenfield",
-  "currentStage": "M8-complete",
-  "version": "0.0.26",
+  "currentStage": "M13-deferred-closure",
+  "version": "0.0.29",
   "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
   "flags": {
     "generateSkills": false,

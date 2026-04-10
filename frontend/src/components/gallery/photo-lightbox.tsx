@@ -1,12 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+/**
+ * PhotoLightbox — enhanced for M13 deferred FR closure (v0.0.29)
+ *
+ * Closes the following FRs in one place (all are viewer-surface features
+ * that naturally live in the lightbox shell):
+ *   - GAL-FR-088: Watermark overlays on viewer
+ *   - GAL-FR-089: Face-detection bounding box overlays
+ *   - GAL-FR-091: Scroll position restore on lightbox close
+ *   - GAL-FR-092: Compare mode (side-by-side)
+ *   - GAL-FR-093: Filmstrip in lightbox
+ *   - GAL-FR-094: Burst expansion / top-pick display
+ *   - GAL-FR-095: Video playback (poster, volume, speed, fullscreen)
+ *   - GAL-FR-097: Touch gestures (pinch-zoom, swipe-next, swipe-up-close)
+ *
+ * Each feature is implemented in its own file to keep this shell focused on
+ * orchestration. The lightbox reads `props.allAssets` so it can power the
+ * filmstrip and compare mode; callers that don't need those features can
+ * pass a single-item array.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
+import type { Gallery } from "@/lib/api/galleries";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   ChevronLeft, ChevronRight, XMark, Download, Expand, Compress,
   ZoomIn, ZoomOut, InfoCircle, ChatBubble, CheckCircle, ThumbsUp, XCircle,
 } from "@/components/icons";
+import { WatermarkOverlay } from "./watermark-overlay";
+import { FaceBoxesOverlay } from "./face-boxes-overlay";
+import { VideoPlayer } from "./video-player";
+import { Filmstrip } from "./filmstrip";
+import { CompareMode } from "./compare-mode";
+import { useTouchGestures } from "@/hooks/use-touch-gestures";
+import { useScrollRestore } from "@/hooks/use-scroll-restore";
 
 interface PhotoLightboxProps {
   asset: Asset;
@@ -18,6 +46,13 @@ interface PhotoLightboxProps {
   isProofing?: boolean;
   onProofingAction?: (assetId: string, action: "select" | "approve" | "reject") => void;
   onComment?: (assetId: string, comment: string) => void;
+  // M13 deferred-FR additions — all optional so existing callers still work.
+  allAssets?: Asset[];     // powers filmstrip and compare mode (GAL-FR-093, 092)
+  gallery?: Gallery;       // powers watermark overlay (GAL-FR-088)
+  showFilmstrip?: boolean; // default true when allAssets provided
+  /** Jump to a specific asset by ID — enables random-access filmstrip nav.
+   *  When omitted, the filmstrip only supports ±1 navigation via onPrev/onNext. */
+  onJumpTo?: (assetId: string) => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -27,9 +62,14 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+function isVideo(a: Asset): boolean {
+  return a.content_type?.startsWith("video/") ?? false;
+}
+
 export function PhotoLightbox({
   asset, onClose, onPrev, onNext, hasPrev, hasNext,
   isProofing = false, onProofingAction, onComment,
+  allAssets, gallery, showFilmstrip, onJumpTo,
 }: PhotoLightboxProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
@@ -37,17 +77,66 @@ export function PhotoLightbox({
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [zoom, setZoom] = useState(1);
+  const [showFaces, setShowFaces] = useState(false);              // GAL-FR-089
+  const [compareMode, setCompareMode] = useState(false);          // GAL-FR-092
+  const [burstExpanded, setBurstExpanded] = useState(false);      // GAL-FR-094
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // GAL-FR-091: save scroll position on mount, restore on unmount.
+  const { save: saveScroll, restore: restoreScroll } = useScrollRestore();
+  useEffect(() => {
+    saveScroll();
+    return () => restoreScroll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // GAL-FR-097: touch gestures — swipe next/prev/close + pinch zoom.
+  const touchHandlers = useTouchGestures({
+    onSwipeLeft: () => {
+      if (hasNext) onNext?.();
+    },
+    onSwipeRight: () => {
+      if (hasPrev) onPrev?.();
+    },
+    onSwipeUp: () => onClose(),
+    onPinch: (delta) => {
+      setZoom((z) => {
+        const next = z + delta / 200; // 200 px of spread = 1x zoom
+        return Math.max(0.5, Math.min(3, next));
+      });
+    },
+  });
+
+  // GAL-FR-094: burst membership — if this asset has a burst_id, find
+  // siblings in allAssets.
+  const burstSiblings = useMemo(() => {
+    if (!asset.burst_id || !allAssets) return [];
+    return allAssets.filter((a) => a.burst_id === asset.burst_id);
+  }, [asset.burst_id, allAssets]);
+  const inBurst = burstSiblings.length > 1;
+
+  // GAL-FR-092: compare mode pairs the current asset with the next one.
+  const compareRight = useMemo(() => {
+    if (!compareMode || !allAssets) return null;
+    const idx = allAssets.findIndex((a) => a.id === asset.id);
+    if (idx < 0 || idx >= allAssets.length - 1) return null;
+    return allAssets[idx + 1];
+  }, [compareMode, allAssets, asset.id]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
     switch (e.key) {
-      case "Escape": isFullscreen ? document.exitFullscreen?.() : onClose(); break;
+      case "Escape":
+        if (compareMode) setCompareMode(false);
+        else if (isFullscreen) document.exitFullscreen?.();
+        else onClose();
+        break;
       case "ArrowLeft": if (hasPrev && onPrev) onPrev(); break;
       case "ArrowRight": if (hasNext && onNext) onNext(); break;
       case "f": case "F": toggleFullscreen(); break;
       case "i": case "I": setShowInfo(s => !s); break;
       case "c": case "C": setShowComments(s => !s); break;
+      case "b": case "B": setShowFaces(s => !s); break; // "boxes"
       case "+": case "=": setZoom(z => Math.min(z + 0.25, 3)); break;
       case "-": setZoom(z => Math.max(z - 0.25, 0.5)); break;
       case "0": setZoom(1); break;
@@ -55,7 +144,7 @@ export function PhotoLightbox({
       case "2": if (isProofing) onProofingAction?.(asset.id, "approve"); break;
       case "3": if (isProofing) onProofingAction?.(asset.id, "reject"); break;
     }
-  }, [onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, isProofing, asset.id, onProofingAction]);
+  }, [onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, compareMode, isProofing, asset.id, onProofingAction]);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -63,7 +152,7 @@ export function PhotoLightbox({
     return () => { document.removeEventListener("keydown", handleKeyDown); document.body.style.overflow = ""; };
   }, [handleKeyDown]);
 
-  useEffect(() => { setZoom(1); }, [asset.id]);
+  useEffect(() => { setZoom(1); setBurstExpanded(false); }, [asset.id]);
 
   useEffect(() => {
     const h = () => setIsFullscreen(!!document.fullscreenElement);
@@ -80,9 +169,17 @@ export function PhotoLightbox({
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
     let url: string; let filename: string;
     switch (format) {
-      case "webp": url = asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp || ""; filename = asset.filename.replace(/\.[^.]+$/, ".webp"); break;
-      case "thumbnail": url = asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg || ""; filename = "thumb_" + asset.filename; break;
-      default: url = asset.download_url || asset.storage_key || ""; filename = asset.filename;
+      case "webp":
+        url = asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp || "";
+        filename = asset.filename.replace(/\.[^.]+$/, ".webp");
+        break;
+      case "thumbnail":
+        url = asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg || "";
+        filename = "thumb_" + asset.filename;
+        break;
+      default:
+        url = asset.download_url || asset.storage_key || "";
+        filename = asset.filename;
     }
     if (!url) return;
     if (!url.startsWith("http")) url = `${API_BASE}/storage/${url}`;
@@ -96,8 +193,18 @@ export function PhotoLightbox({
   const largeUrl = asset.thumbnail_urls?.lg || asset.thumbnail_urls?.cover_1920 || asset.download_url || Object.values(asset.thumbnail_urls || {})[0] || "";
   const exif = asset.exif_data || {};
 
+  const filmstripVisible = (showFilmstrip ?? !!allAssets) && !compareMode && !!allAssets && allAssets.length > 1;
+
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 flex flex-col bg-black/95" onClick={e => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label={`Photo: ${asset.filename}`}>
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-50 flex flex-col bg-black/95"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo: ${asset.filename}`}
+      {...touchHandlers}
+    >
 
       {/* ─── Top Toolbar ─── */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
@@ -105,11 +212,38 @@ export function PhotoLightbox({
           <span className="font-medium truncate max-w-[200px] sm:max-w-[400px]">{asset.filename}</span>
           {asset.width && asset.height && <span className="hidden sm:inline text-white/40 text-xs">{asset.width} x {asset.height}</span>}
           {zoom !== 1 && <span className="text-white/40 text-xs">{Math.round(zoom * 100)}%</span>}
+          {asset.burst_is_top_pick && (
+            <span className="hidden sm:inline rounded-full bg-accent-primary/20 border border-accent-primary/30 px-2 py-0.5 text-[10px] font-semibold text-accent-primary uppercase tracking-wider">
+              Top pick
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <GlassIconButton size="sm" label="Zoom out (-)" onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
           <GlassIconButton size="sm" label="Zoom in (+)" onClick={() => setZoom(z => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
           <div className="w-px h-6 bg-white/10 mx-1" />
+          {asset.face_boxes && asset.face_boxes.length > 0 && (
+            <GlassIconButton
+              size="sm"
+              label={showFaces ? "Hide faces (B)" : "Show faces (B)"}
+              active={showFaces}
+              onClick={() => setShowFaces(s => !s)}
+            >
+              {/* Square outline icon reused from CheckCircle as face marker */}
+              <CheckCircle />
+            </GlassIconButton>
+          )}
+          {allAssets && allAssets.length > 1 && hasNext && (
+            <GlassIconButton
+              size="sm"
+              label={compareMode ? "Exit compare" : "Compare with next"}
+              active={compareMode}
+              onClick={() => setCompareMode(s => !s)}
+            >
+              {/* Reuses ChevronRight as "split" marker */}
+              <ChevronRight />
+            </GlassIconButton>
+          )}
           <GlassIconButton size="sm" label="Comments (C)" active={showComments} onClick={() => setShowComments(s => !s)}><ChatBubble /></GlassIconButton>
           <GlassIconButton size="sm" label="Info (I)" active={showInfo} onClick={() => setShowInfo(s => !s)}><InfoCircle /></GlassIconButton>
           <div className="relative">
@@ -141,14 +275,59 @@ export function PhotoLightbox({
 
       {/* ─── Main Content ─── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Image area */}
+        {/* Image/video area */}
         <div className="relative flex flex-1 items-center justify-center overflow-auto">
-          {hasPrev && (
-            <GlassIconButton size="lg" label="Previous (Left arrow)" className="absolute left-4 z-10" onClick={e => { e.stopPropagation(); onPrev?.(); }}><ChevronLeft /></GlassIconButton>
-          )}
-          <img src={largeUrl} alt={asset.filename} className="max-h-full max-w-full object-contain p-4 transition-transform duration-200" style={{ transform: `scale(${zoom})` }} draggable={false} />
-          {hasNext && (
-            <GlassIconButton size="lg" label="Next (Right arrow)" className="absolute right-4 z-10" onClick={e => { e.stopPropagation(); onNext?.(); }}><ChevronRight /></GlassIconButton>
+          {compareMode && compareRight ? (
+            // GAL-FR-092: compare mode takes over the main area.
+            <CompareMode left={asset} right={compareRight} onExit={() => setCompareMode(false)} />
+          ) : (
+            <>
+              {hasPrev && !compareMode && (
+                <GlassIconButton
+                  size="lg"
+                  label="Previous (Left arrow)"
+                  className="absolute left-4 z-10"
+                  onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+                >
+                  <ChevronLeft />
+                </GlassIconButton>
+              )}
+
+              {isVideo(asset) ? (
+                // GAL-FR-095: video playback with poster, controls, trim.
+                <VideoPlayer
+                  src={asset.download_url || (asset.storage_key ? `/storage/${asset.storage_key}` : "")}
+                  poster={asset.poster_url || asset.thumbnail_urls?.lg}
+                  showTrim={isProofing}
+                  className="flex max-h-full max-w-full items-center justify-center p-4"
+                />
+              ) : (
+                <div className="relative">
+                  <img
+                    src={largeUrl}
+                    alt={asset.filename}
+                    className="max-h-full max-w-full object-contain p-4 transition-transform duration-200"
+                    style={{ transform: `scale(${zoom})` }}
+                    draggable={false}
+                  />
+                  {/* GAL-FR-088 — watermark overlay */}
+                  <WatermarkOverlay config={gallery?.watermark_config} />
+                  {/* GAL-FR-089 — face bounding boxes */}
+                  <FaceBoxesOverlay boxes={asset.face_boxes} visible={showFaces} />
+                </div>
+              )}
+
+              {hasNext && !compareMode && (
+                <GlassIconButton
+                  size="lg"
+                  label="Next (Right arrow)"
+                  className="absolute right-4 z-10"
+                  onClick={(e) => { e.stopPropagation(); onNext?.(); }}
+                >
+                  <ChevronRight />
+                </GlassIconButton>
+              )}
+            </>
           )}
         </div>
 
@@ -165,6 +344,71 @@ export function PhotoLightbox({
         )}
       </div>
 
+      {/* ─── Burst expansion strip (GAL-FR-094) ─── */}
+      {inBurst && !compareMode && (
+        <div className="px-4 shrink-0">
+          <button
+            type="button"
+            onClick={() => setBurstExpanded(s => !s)}
+            className="text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            {burstExpanded ? "Hide" : "Show"} burst ({burstSiblings.length} photos)
+          </button>
+          {burstExpanded && (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+              {burstSiblings.map((sib) => {
+                const thumb =
+                  sib.thumbnail_urls?.thumb_sm ||
+                  sib.thumbnail_urls?.sm ||
+                  sib.thumbnail_urls?.thumb_md || "";
+                return (
+                  <div
+                    key={sib.id}
+                    className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
+                      sib.id === asset.id ? "border-white" : "border-white/20"
+                    }`}
+                  >
+                    {thumb && <img src={thumb} alt={sib.filename} className="h-full w-full object-cover" />}
+                    {sib.burst_is_top_pick && (
+                      <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent-primary" title="Top pick" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Filmstrip (GAL-FR-093) ─── */}
+      {filmstripVisible && allAssets && (
+        <Filmstrip
+          assets={allAssets}
+          activeId={asset.id}
+          onSelect={(id) => {
+            if (id === asset.id) return;
+            // Prefer random-access jump when the caller supports it. Fall
+            // back to ±1 navigation only — a non-adjacent click with no
+            // onJumpTo is silently ignored and we log a warning so the
+            // caller notices they forgot to wire it.
+            if (onJumpTo) {
+              onJumpTo(id);
+              return;
+            }
+            const idx = allAssets.findIndex((a) => a.id === asset.id);
+            const targetIdx = allAssets.findIndex((a) => a.id === id);
+            if (idx < 0 || targetIdx < 0) return;
+            if (targetIdx === idx + 1) onNext?.();
+            else if (targetIdx === idx - 1) onPrev?.();
+            else {
+              console.warn(
+                "[PhotoLightbox] filmstrip jump ignored — caller did not pass onJumpTo",
+              );
+            }
+          }}
+        />
+      )}
+
       {/* ─── Bottom Bar ─── */}
       <div className="px-4 pb-4 shrink-0">
         {/* Proofing toolbar */}
@@ -177,8 +421,10 @@ export function PhotoLightbox({
         )}
 
         {/* Keyboard hints */}
-        <div className="mb-2 flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide">
-          <span>← → Navigate</span><span>F Fullscreen</span><span>I Info</span><span>C Comments</span><span>+/- Zoom</span><span>Esc Close</span>
+        <div className="mb-2 flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide flex-wrap">
+          <span>← → Navigate</span><span>F Fullscreen</span><span>I Info</span><span>C Comments</span>
+          {asset.face_boxes && asset.face_boxes.length > 0 && <span>B Faces</span>}
+          <span>+/- Zoom</span><span>Esc Close</span>
           {isProofing && <span>1/2/3 Select/Approve/Reject</span>}
         </div>
 

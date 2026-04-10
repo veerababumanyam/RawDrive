@@ -1,5 +1,13 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+// Normalised face bounding box in [0,1] image-space (matches backend ai.BoundingBox).
+export interface FaceBBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface Asset {
   id: string;
   workspace_id: string;
@@ -15,6 +23,14 @@ export interface Asset {
   status: string;
   created_at: string;
   download_url?: string;
+  // M13 deferred-FR fields (optional — unpopulated on older endpoints)
+  burst_id?: string | null;         // GAL-FR-094 — burst group membership
+  burst_is_top_pick?: boolean;      // GAL-FR-094 — top-pick of its burst
+  face_boxes?: FaceBBox[];          // GAL-FR-089 — face bounding box overlay
+  video_duration_ms?: number;       // GAL-FR-095 — video asset total duration
+  poster_url?: string;              // GAL-FR-095 — video poster frame
+  gps_latitude?: number;            // GAL-FR-099 — map view
+  gps_longitude?: number;           // GAL-FR-099 — map view
 }
 
 export async function listAssets(token: string, params?: { status?: string; content_type?: string }): Promise<Asset[]> {

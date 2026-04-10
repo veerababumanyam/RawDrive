@@ -1,5 +1,7 @@
 import { getPublicGallery, getPublicGalleryAssets } from "@/lib/api/galleries";
 import { notFound } from "next/navigation";
+import { PublicGalleryEnhancements } from "@/components/gallery/public-gallery-enhancements";
+import { PublicGalleryGrid } from "@/components/gallery/public-gallery-grid";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -30,55 +32,17 @@ export default async function PublicGalleryPage({ params }: Props) {
         </p>
       </header>
 
-      {/* Masonry grid */}
+      {/* Masonry grid + FaceID filter + Map toggle (client component so
+          the face filter event listener and view toggle actually work). */}
       <div className="max-w-6xl mx-auto px-4 pb-16">
-        {assets.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-text-secondary">This gallery is empty.</p>
-          </div>
-        ) : (
-          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
-            {assets.map((asset) => {
-              const thumbUrl =
-                asset.thumbnail_urls?.lg ||
-                asset.thumbnail_urls?.md ||
-                asset.thumbnail_urls?.sm;
-
-              return (
-                <div
-                  key={asset.id}
-                  className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken"
-                >
-                  {thumbUrl ? (
-                    <img
-                      src={thumbUrl}
-                      alt={asset.filename}
-                      width={asset.width || undefined}
-                      height={asset.height || undefined}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-auto object-cover"
-                      style={
-                        asset.blurhash
-                          ? { backgroundSize: "cover", backgroundPosition: "center" }
-                          : undefined
-                      }
-                    />
-                  ) : (
-                    <div
-                      className="w-full aspect-[4/3] bg-surface-sunken flex items-center justify-center"
-                      role="img"
-                      aria-label={asset.filename}
-                    >
-                      <span className="text-xs text-text-tertiary">Processing...</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <PublicGalleryGrid slug={slug} assets={assets} />
       </div>
+
+      {/* M13 deferred-FR closure: registration prompt, FaceID, branding, view-as-client */}
+      <PublicGalleryEnhancements
+        slug={slug}
+        faceIdEnabled={Boolean(gallery.faceid_enabled)}
+      />
     </div>
   );
 }

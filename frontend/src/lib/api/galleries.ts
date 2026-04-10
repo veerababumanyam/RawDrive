@@ -13,6 +13,78 @@ export interface Gallery {
   status: string;
   created_at: string;
   updated_at: string;
+  // M13 deferred-FR fields (optional)
+  watermark_config?: {
+    text?: string;
+    position?: "center" | "tiled" | "bottom-right" | "bottom-left";
+    opacity?: number; // 0.0–1.0
+  };
+  faceid_enabled?: boolean;
+  settings?: Record<string, unknown>;
+}
+
+// GAL-FR-115: plan-aware white-label branding response
+export interface GalleryBranding {
+  tier_slug: string;
+  can_customize: boolean;
+  brand_name: string;
+  logo_url?: string | null;
+  accent_color?: string | null;
+  hide_footer: boolean;
+}
+
+export async function getPublicGalleryBranding(slug: string): Promise<GalleryBranding> {
+  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/branding`);
+  if (!res.ok) throw new Error(`Failed to get branding: ${res.status}`);
+  return res.json();
+}
+
+// GAL-FR-107/108: FaceID gallery entry
+export interface FaceMatchResult {
+  gallery_id: string;
+  asset_ids: string[];
+  match_count: number;
+  threshold: number;
+  fallback_available: boolean;
+}
+
+export async function postFaceMatch(
+  slug: string,
+  embedding: number[],
+  consentGiven: boolean,
+  threshold?: number,
+): Promise<FaceMatchResult> {
+  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/face-match`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ embedding, consent_given: consentGiven, threshold }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "face match failed" }));
+    throw new Error(err.error || `face match ${res.status}`);
+  }
+  return res.json();
+}
+
+// GAL-FR-112: share link verification with access-count enforcement
+// Calls POST /api/v1/public/share/{token}/verify. The backend atomically
+// increments access_count under the max_access_count predicate and returns
+// 403 access_limit_exceeded when a capped link is exhausted. Currently the
+// password-gate flow uses verifyGalleryPassword (slug-based) so this helper
+// is used only by PIN-gated share link entry, which is wired on a per-
+// deployment basis by studios linking to /g/{slug}?share={token}.
+export async function verifyShareLink(
+  token: string,
+  credential?: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/public/share/${token}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential: credential || "" }),
+  });
+  if (res.ok) return { ok: true };
+  const body = await res.json().catch(() => ({}));
+  return { ok: false, reason: body.error || `http_${res.status}` };
 }
 
 export interface GalleryAsset {

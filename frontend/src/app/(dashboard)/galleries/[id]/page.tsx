@@ -192,6 +192,26 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           <Link href={`/galleries/${gallery.id}/proofing`} className="btn-primary px-4 py-2.5 text-sm">
             Review proofing
           </Link>
+          {/* GAL-FR-130: CSV export of selections */}
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/galleries/${gallery.id}/proofing/export.csv`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tertiary px-4 py-2.5 text-sm"
+          >
+            Export selections (CSV)
+          </a>
+          {/* GAL-FR-118: view-as-client — opens the public gallery in client mode */}
+          {gallery.slug && (
+            <a
+              href={`/g/${gallery.slug}?mode=client`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-tertiary px-4 py-2.5 text-sm"
+            >
+              View as client
+            </a>
+          )}
           <span className="status-badge status-badge--accent">
             Created {new Date(gallery.created_at).toLocaleDateString("en-IN")}
           </span>
@@ -401,6 +421,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < assets.length - 1}
           isProofing={gallery?.gallery_type === "proofing"}
+          // M13: feed filmstrip + compare mode + watermark overlay (FR-088,092,093,094)
+          allAssets={assets.map((a) => a.asset).filter((a): a is Asset => a !== null)}
+          gallery={gallery ?? undefined}
+          onJumpTo={(targetId) => {
+            const idx = assets.findIndex((a) => a.asset?.id === targetId);
+            if (idx >= 0) setLightboxIndex(idx);
+          }}
         />
       )}
     </div>
