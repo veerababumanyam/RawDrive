@@ -59,6 +59,44 @@ func (p *logEmailSender) SendInvitation(_ context.Context, email, link string) e
 	return nil
 }
 
+// platformSettingsJWTKeyStore adapts *repository.PlatformSettingsRepo to
+// the auth.JWTKeyStore interface so the JWT signing key can be persisted
+// alongside other platform secrets. When the F-005 envelope is wired on
+// the repo, writes through this adapter are encrypted at rest (because
+// we always pass is_secret=true).
+//
+// F-006 Part A (audit 2026-04-10): prevents the JWT signing key from
+// being regenerated on every restart, which was invalidating every
+// outstanding access token and forcing every authenticated user to
+// log in again whenever the API container cycled.
+type platformSettingsJWTKeyStore struct {
+	repo *repository.PlatformSettingsRepo
+}
+
+const (
+	jwtKeyCategory = "auth"
+	jwtKeyName     = "jwt_signing_key_pem"
+)
+
+func (s *platformSettingsJWTKeyStore) GetSigningKeyPEM(ctx context.Context) (string, error) {
+	row, err := s.repo.GetByKey(ctx, jwtKeyCategory, jwtKeyName)
+	if err != nil {
+		return "", err
+	}
+	if row == nil {
+		return "", nil // first boot — let the caller generate + persist
+	}
+	return row.Value, nil
+}
+
+func (s *platformSettingsJWTKeyStore) PutSigningKeyPEM(ctx context.Context, pemStr string) error {
+	// Pass is_secret=true so the F-005 envelope encrypts this row at rest
+	// when the envelope is wired. Pass updatedBy=nil — this is a
+	// system-initiated write during bootstrap, not a user action.
+	return s.repo.Upsert(ctx, jwtKeyCategory, jwtKeyName, pemStr, true,
+		"F-006: JWT signing key (PKCS8 PEM). Auto-generated on first boot and reused across restarts.", nil)
+}
+
 // logOTPDelivery logs OTP codes to stdout (dev mode — DO NOT USE IN PRODUCTION).
 type logOTPDelivery struct{}
 
@@ -779,6 +817,19 @@ func main() {
 		}
 		handler.RegisterAdminSettingsRoutes(api, platformSettingsRepo)
 		log.Println("Admin: Platform settings CRUD registered (storage, auth, payments, ai, email)")
+
+		// F-006 Part A (audit 2026-04-10): replace the JWT service's
+		// ephemeral in-memory RSA signing key with one persisted through
+		// the platform_settings repo (which now encrypts it at rest via
+		// F-005 when the envelope is wired). On first boot this generates
+		// and persists a new key; on subsequent boots it loads the
+		// existing one. Either way, access tokens signed by the previous
+		// run are still valid after the restart.
+		jwtKeyStore := &platformSettingsJWTKeyStore{repo: platformSettingsRepo}
+		if err := auth.LoadPersistedSigningKey(context.Background(), jwtSvc, jwtKeyStore); err != nil {
+			log.Fatalf("F-006: failed to load persisted JWT signing key: %v", err)
+		}
+		log.Println("F-006: JWT signing key loaded from platform_settings (stable across restarts)")
 
 		// ──────────────────────── M8: Live Streaming & Desktop Companion ──────────────
 		streamRepo := repository.NewStreamRepo(dbPool)
