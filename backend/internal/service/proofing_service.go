@@ -12,11 +12,21 @@ import (
 type ProofingService struct {
 	proofingRepo *repository.ProofingRepo
 	galleryRepo  *repository.GalleryRepo
+	// Optional photographer notification sink (GAL-FR-134). When nil, the
+	// service logs the event but does not persist a notification row.
+	notifRepo *repository.NotificationRepo
 }
 
 // NewProofingService creates a new ProofingService.
 func NewProofingService(pr *repository.ProofingRepo, gr *repository.GalleryRepo) *ProofingService {
 	return &ProofingService{proofingRepo: pr, galleryRepo: gr}
+}
+
+// WithNotifications attaches a notification repo so proofing events trigger
+// photographer notifications (GAL-FR-134). Returns the receiver for chaining.
+func (s *ProofingService) WithNotifications(nr *repository.NotificationRepo) *ProofingService {
+	s.notifRepo = nr
+	return s
 }
 
 // SubmitSelectionInput holds parameters for submitting a selection.
@@ -63,7 +73,40 @@ func (s *ProofingService) SubmitSelections(ctx context.Context, input SubmitSele
 			return fmt.Errorf("proofing: create selection: %w", err)
 		}
 	}
+
+	// GAL-FR-134: notify the photographer (gallery owner) of client proofing
+	// activity. We write a single aggregated in-app notification — one per
+	// submission batch, not one per asset — so the photographer isn't spammed
+	// when a client picks 50 photos at once. Failures here are non-fatal:
+	// the selections are already committed and the notification is a
+	// side-effect the client need not wait for.
+	s.notifyPhotographerOfSubmission(ctx, gallery, input)
+
 	return nil
+}
+
+// notifyPhotographerOfSubmission writes an in-app notification to the gallery
+// owner when a client submits proofing selections. The notification points to
+// the gallery's proofing dashboard via action_url so the photographer can
+// jump straight into reviewing the picks.
+func (s *ProofingService) notifyPhotographerOfSubmission(ctx context.Context, gallery *repository.Gallery, input SubmitSelectionInput) {
+	if s.notifRepo == nil || gallery == nil || gallery.CreatedBy == nil {
+		return
+	}
+	actionURL := fmt.Sprintf("/galleries/%s/proofing", gallery.ID.String())
+	body := fmt.Sprintf("%s (%s) selected %d photo(s) in \"%s\"",
+		input.ClientName, input.ClientEmail, len(input.AssetIDs), gallery.Title)
+	wsID := gallery.WorkspaceID
+	notif := &repository.Notification{
+		UserID:           *gallery.CreatedBy,
+		WorkspaceID:      &wsID,
+		NotificationType: "proofing.client_submission",
+		Title:            "New proofing selections",
+		Body:             &body,
+		ActionURL:        &actionURL,
+		Channel:          "in_app",
+	}
+	_ = s.notifRepo.Create(ctx, notif) // non-fatal
 }
 
 // ListByGallery returns all proofing selections for a gallery.

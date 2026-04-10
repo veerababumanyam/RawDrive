@@ -17,8 +17,17 @@ type ThumbnailWorker struct {
 	assetRepo    *repository.AssetRepo
 	thumbnailSvc *service.ThumbnailService
 	store        storage.Provider
+	publisher    Publisher // optional — emits asset.ready events when set
 	pollInterval time.Duration
 	stopCh       chan struct{}
+}
+
+// WithPublisher wires an event publisher for asset.ready notifications.
+// Returns the worker for fluent chaining. When not set, the worker does
+// not emit events but otherwise operates identically.
+func (w *ThumbnailWorker) WithPublisher(p Publisher) *ThumbnailWorker {
+	w.publisher = p
+	return w
 }
 
 // NewThumbnailWorker creates a new ThumbnailWorker.
@@ -120,6 +129,12 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	if err := w.assetRepo.UpdateStatus(ctx, asset.ID, "ready"); err != nil {
 		return fmt.Errorf("update status: %w", err)
 	}
+
+	// Publish asset.ready so downstream consumers (analytics, notifications,
+	// webhooks) can react. AI auto-tag/auto-index still runs via the existing
+	// status-polling path in search_worker — this event is for OTHER
+	// subscribers that would otherwise need their own polling logic.
+	PublishAssetReady(ctx, w.publisher, asset.ID, asset.WorkspaceID)
 
 	log.Printf("thumbnail worker: processed %s (%dx%d, %d thumbnails)",
 		asset.ID, result.Width, result.Height, len(result.URLs))

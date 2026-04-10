@@ -299,7 +299,8 @@ func main() {
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
 	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo).WithAlbumService(albumSvc)
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
-	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo)
+	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo).
+		WithNotifications(repository.NewNotificationRepo(dbPool)) // GAL-FR-134
 	storageConfigSvc := service.NewStorageConfigService(dbPool)
 
 	// M13 Services: Gallery Access, Proofing Sessions, Comments, Album Approval
@@ -598,7 +599,7 @@ func main() {
 	log.Println("Storage: R2 proxy with JWT auth on /storage/*")
 
 	// ──────────────────────── Background Workers (start after all routes) ────────────────
-	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider)
+	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).WithPublisher(eventBroker)
 	workerRegistry.Register("thumbnail", thumbWorker)
 	purgeWorker := worker.NewAssetPurgeWorker(dbPool, storageProvider)
 	workerRegistry.Register("asset-purge", purgeWorker)
