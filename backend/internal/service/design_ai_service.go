@@ -2,24 +2,36 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
+// DesignReasoner is the narrow interface the DesignAIService needs from a
+// language model. Extracted so tests can swap in a fake without touching the
+// Gemini HTTP layer.
+type DesignReasoner interface {
+	GenerateText(ctx context.Context, apiKey, prompt string) (string, int, int, error)
+}
+
+// Compile-time assertion that the real Gemini client satisfies the interface.
+var _ DesignReasoner = (*ai.GeminiClient)(nil)
+
 // DesignAIService provides AI-powered design recommendations.
 type DesignAIService struct {
 	assetRepo  *repository.AssetRepo
-	gemini     *ai.GeminiClient
+	gemini     DesignReasoner
 	configRepo *ai.ConfigRepo
 }
 
 // NewDesignAIService creates a new DesignAIService.
-func NewDesignAIService(ar *repository.AssetRepo, g *ai.GeminiClient, cr *ai.ConfigRepo) *DesignAIService {
+func NewDesignAIService(ar *repository.AssetRepo, g DesignReasoner, cr *ai.ConfigRepo) *DesignAIService {
 	return &DesignAIService{assetRepo: ar, gemini: g, configRepo: cr}
 }
 
@@ -45,46 +57,42 @@ var themeProfiles = map[string][]string{
 	"slate":        {"architecture", "urban", "minimal", "concrete"},
 }
 
-// fontProfiles maps font pairings to their content affinity.
-var fontProfiles = map[string]string{
-	"elegant":   "wedding,luxury,formal",
-	"editorial": "magazine,fashion,editorial",
-	"minimal":   "product,tech,clean",
-	"bold":      "sports,action,event",
-	"soft":      "baby,family,soft",
-	"modern":    "tech,startup,modern",
+// validThemeList is the set of theme IDs we will accept in a model response.
+var validThemeList = []string{
+	"liquid-glass", "heritage", "noir", "botanical", "sunset",
+	"arctic", "lavender", "champagne", "slate",
 }
 
-// Suggest analyzes gallery content and returns design recommendations.
+// validFontPairings is the set of font pairing IDs we accept.
+var validFontPairings = []string{"elegant", "editorial", "minimal", "bold", "soft", "modern"}
+
+// validCoverStyleList mirrors the 30 cover styles exposed in the frontend.
+var validCoverStyleList = []string{
+	"classic-full", "classic-split", "classic-minimal",
+	"hero-overlay", "hero-gradient", "hero-blur",
+	"editorial-left", "editorial-right", "editorial-center",
+	"magazine-cover", "magazine-spread", "magazine-minimal",
+	"cinematic-wide", "cinematic-dark", "cinematic-grain",
+	"elegant-border", "elegant-frame", "elegant-vignette",
+	"modern-grid", "modern-asymmetric", "modern-overlap",
+	"vintage-polaroid", "vintage-film", "vintage-sepia",
+	"bold-typography", "bold-color-block", "bold-geometric",
+	"nature-earth", "nature-botanical", "nature-panoramic",
+}
+
+// Suggest analyzes gallery content and returns design recommendations. When
+// an API key is configured for the workspace, the actual Gemini model is
+// called (GAL-FR-078). When the key is absent or the Gemini call fails, the
+// deterministic heuristic ranker is used so the endpoint never hard-fails.
 func (s *DesignAIService) Suggest(ctx context.Context, workspaceID, galleryID uuid.UUID) ([]DesignSuggestion, error) {
-	// Check if AI is configured
-	apiKey, _, err := s.configRepo.GetDecryptedKey(ctx, workspaceID)
-	if err != nil || apiKey == "" {
-		// Fall back to heuristic-based suggestions (no API key needed)
-		return s.heuristicSuggest(ctx, galleryID)
+	apiKey := ""
+	if s.configRepo != nil {
+		key, _, err := s.configRepo.GetDecryptedKey(ctx, workspaceID)
+		if err == nil {
+			apiKey = key
+		}
 	}
 
-	// Get gallery assets for analysis
-	assets, err := s.assetRepo.List(ctx, repository.AssetFilter{
-		GalleryID: &galleryID,
-		Limit:     10,
-		Sort:      "created_at",
-		Order:     "desc",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list assets: %w", err)
-	}
-
-	if len(assets) == 0 {
-		return s.defaultSuggestions(), nil
-	}
-
-	// Use Gemini to analyze asset metadata for content type
-	contentHints := extractContentHints(assets)
-	return s.rankSuggestions(contentHints), nil
-}
-
-func (s *DesignAIService) heuristicSuggest(ctx context.Context, galleryID uuid.UUID) ([]DesignSuggestion, error) {
 	assets, err := s.assetRepo.List(ctx, repository.AssetFilter{
 		GalleryID: &galleryID,
 		Limit:     20,
@@ -92,24 +100,128 @@ func (s *DesignAIService) heuristicSuggest(ctx context.Context, galleryID uuid.U
 		Order:     "desc",
 	})
 	if err != nil {
+		return nil, fmt.Errorf("list assets: %w", err)
+	}
+	if len(assets) == 0 {
 		return s.defaultSuggestions(), nil
 	}
 
 	contentHints := extractContentHints(assets)
+
+	// Real Gemini path: only when key is configured AND a reasoner is wired.
+	if apiKey != "" && s.gemini != nil {
+		if suggestions, err := s.geminiSuggest(ctx, apiKey, assets, contentHints); err == nil {
+			return suggestions, nil
+		} else {
+			log.Printf("design-ai: gemini call failed, falling back to heuristic: %v", err)
+		}
+	}
+
+	// Deterministic heuristic fallback.
 	return s.rankSuggestions(contentHints), nil
+}
+
+// geminiSuggest builds a prompt from gallery metadata, calls the model, and
+// parses a structured JSON response. The prompt constrains the model to the
+// whitelisted theme / cover style / font pairing IDs so results are safe to
+// pass straight to the frontend.
+func (s *DesignAIService) geminiSuggest(ctx context.Context, apiKey string, assets []repository.Asset, hints map[string]int) ([]DesignSuggestion, error) {
+	prompt := buildDesignPrompt(assets, hints)
+
+	raw, _, _, err := s.gemini.GenerateText(ctx, apiKey, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("gemini generate: %w", err)
+	}
+
+	var payload struct {
+		Suggestions []DesignSuggestion `json:"suggestions"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal gemini response: %w", err)
+	}
+
+	validated := make([]DesignSuggestion, 0, len(payload.Suggestions))
+	for _, sug := range payload.Suggestions {
+		if !contains(validThemeList, sug.Theme) {
+			continue
+		}
+		if !contains(validCoverStyleList, sug.CoverStyle) {
+			sug.CoverStyle = pickCoverStyle(sug.Theme)
+		}
+		if !contains(validFontPairings, sug.FontPairing) {
+			sug.FontPairing = pickFontPairing(sug.Theme)
+		}
+		if strings.TrimSpace(sug.Reasoning) == "" {
+			continue // reasoning is the whole point of FR-078
+		}
+		if sug.Confidence < 0 || sug.Confidence > 1 {
+			sug.Confidence = math.Max(0.3, math.Min(1.0, sug.Confidence))
+		}
+		validated = append(validated, sug)
+		if len(validated) == 3 {
+			break
+		}
+	}
+
+	if len(validated) == 0 {
+		return nil, fmt.Errorf("gemini returned no valid suggestions")
+	}
+	return validated, nil
+}
+
+// buildDesignPrompt assembles a deterministic prompt from gallery metadata.
+func buildDesignPrompt(assets []repository.Asset, hints map[string]int) string {
+	var sb strings.Builder
+	sb.WriteString("You are a photography gallery design expert. Given the metadata below, pick the three best matching themes and explain why in one sentence each.\n\n")
+	sb.WriteString(fmt.Sprintf("Gallery contains %d photos. Recent filenames:\n", len(assets)))
+	maxList := 10
+	if len(assets) < maxList {
+		maxList = len(assets)
+	}
+	for i := 0; i < maxList; i++ {
+		sb.WriteString("  - ")
+		sb.WriteString(assets[i].Filename)
+		sb.WriteString("\n")
+	}
+	if len(hints) > 0 {
+		sb.WriteString("\nDetected content hints: ")
+		first := true
+		for k, v := range hints {
+			if !first {
+				sb.WriteString(", ")
+			}
+			first = false
+			sb.WriteString(fmt.Sprintf("%s=%d", k, v))
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\nRespond with ONLY valid JSON (no markdown, no code fences) in this exact shape:\n")
+	sb.WriteString(`{"suggestions":[{"theme":"<id>","cover_style":"<id>","font_pairing":"<id>","reasoning":"<one sentence>","confidence":<0.0-1.0>}]}` + "\n\n")
+	sb.WriteString("Valid theme IDs: " + strings.Join(validThemeList, ", ") + "\n")
+	sb.WriteString("Valid cover_style IDs: " + strings.Join(validCoverStyleList, ", ") + "\n")
+	sb.WriteString("Valid font_pairing IDs: " + strings.Join(validFontPairings, ", ") + "\n")
+	sb.WriteString("Return exactly 3 suggestions ordered best to worst.\n")
+	return sb.String()
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func extractContentHints(assets []repository.Asset) map[string]int {
 	hints := make(map[string]int)
 	for _, a := range assets {
-		// Analyze filename for content type
 		name := a.Filename
 		for _, kw := range []string{"wedding", "portrait", "landscape", "product", "baby", "fashion", "event", "food", "architecture", "travel"} {
 			if containsIgnoreCase(name, kw) {
 				hints[kw]++
 			}
 		}
-		// Analyze EXIF for outdoor/indoor hints
 		if a.ExifData != nil {
 			if _, ok := a.ExifData["GPSLatitude"]; ok {
 				hints["outdoor"]++
@@ -127,20 +239,7 @@ func extractContentHints(assets []repository.Asset) map[string]int {
 }
 
 func containsIgnoreCase(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			a, b := s[i+j], substr[j]
-			if a != b && a != b+32 && a != b-32 {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 func (s *DesignAIService) rankSuggestions(hints map[string]int) []DesignSuggestion {
@@ -158,7 +257,6 @@ func (s *DesignAIService) rankSuggestions(hints map[string]int) []DesignSuggesti
 		}
 		scores = append(scores, scored{theme, score})
 	}
-	// Sort by score descending
 	for i := 0; i < len(scores); i++ {
 		for j := i + 1; j < len(scores); j++ {
 			if scores[j].score > scores[i].score {
@@ -173,23 +271,23 @@ func (s *DesignAIService) rankSuggestions(hints map[string]int) []DesignSuggesti
 	}
 
 	var suggestions []DesignSuggestion
-	for i, s := range scores {
+	for i, sc := range scores {
 		if i >= 3 {
 			break
 		}
-		confidence := math.Max(0.3, s.score/maxScore)
-		coverStyle := pickCoverStyle(s.theme)
-		fontPairing := pickFontPairing(s.theme)
-		reasoning := fmt.Sprintf("Based on your gallery content, the %s theme complements your photos with its %s aesthetic.", s.theme, themeProfiles[s.theme][0])
+		confidence := math.Max(0.3, sc.score/maxScore)
+		coverStyle := pickCoverStyle(sc.theme)
+		fontPairing := pickFontPairing(sc.theme)
+		reasoning := fmt.Sprintf("Heuristic match: %s keywords dominate your filenames, which suits the %s aesthetic.", themeProfiles[sc.theme][0], sc.theme)
 
 		suggestions = append(suggestions, DesignSuggestion{
-			Theme: s.theme, CoverStyle: coverStyle, FontPairing: fontPairing,
+			Theme: sc.theme, CoverStyle: coverStyle, FontPairing: fontPairing,
 			Reasoning: reasoning, Confidence: confidence,
 		})
 	}
 
 	if len(suggestions) == 0 {
-		return s.defaultSuggestions()
+		return (*DesignAIService)(nil).defaultSuggestions()
 	}
 	return suggestions
 }

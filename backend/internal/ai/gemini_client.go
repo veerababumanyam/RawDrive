@@ -285,6 +285,26 @@ All values 0.0-1.0 where 1.0 is perfect.`
 		nil
 }
 
+// GenerateText calls Gemini with a text-only prompt and returns the raw text
+// response along with prompt and candidate token counts. Used by features
+// that analyse metadata rather than image bytes, such as design
+// recommendations (GAL-FR-078).
+func (c *GeminiClient) GenerateText(ctx context.Context, apiKey, prompt string) (string, int, int, error) {
+	parts := []geminiPart{{Text: prompt}}
+	resp, err := c.callAPI(ctx, apiKey, c.modelID, parts)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	text, err := c.extractText(resp)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	return stripCodeFences(text),
+		resp.UsageMetadata.PromptTokenCount,
+		resp.UsageMetadata.CandidatesTokenCount,
+		nil
+}
+
 // stripCodeFences removes ```json ... ``` wrappers from Gemini output.
 func stripCodeFences(s string) string {
 	// Remove ```json prefix

@@ -6,6 +6,7 @@ import { COVER_STYLES, COVER_CATEGORIES } from "@/components/gallery/cover-style
 import { DesignTemplates } from "@/components/gallery/design-templates";
 import { AIDesignSuggest } from "@/components/gallery/ai-design-suggest";
 import { useDesignHistory } from "@/hooks/use-design-history";
+import { useDesignLatency, LATENCY_BUDGET_MS } from "@/hooks/use-design-latency";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -142,12 +143,34 @@ export default function GalleryDesignStudioPage() {
   // Undo/redo
   const history = useDesignHistory(config);
 
+  // GAL-FR-079 — sub-frame latency instrumentation
+  const latency = useDesignLatency();
+
   // Sync history when config changes via dispatch (not undo/redo)
   const lastDispatchRef = useRef(false);
-  const wrappedDispatch = useCallback((action: DesignAction) => {
-    lastDispatchRef.current = true;
-    dispatch(action);
-  }, []);
+  const pendingLatencyCommitRef = useRef<((label: string) => unknown) | null>(null);
+  const pendingLabelRef = useRef<string>("unknown");
+  const wrappedDispatch = useCallback(
+    (action: DesignAction) => {
+      lastDispatchRef.current = true;
+      // GAL-FR-079: open a latency sample; finalize on the next animation
+      // frame so the measurement covers React commit + paint.
+      const commit = latency.begin();
+      pendingLatencyCommitRef.current = commit;
+      pendingLabelRef.current = action.type.toLowerCase();
+      dispatch(action);
+      if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => {
+          const c = pendingLatencyCommitRef.current;
+          if (c) {
+            c(pendingLabelRef.current);
+            pendingLatencyCommitRef.current = null;
+          }
+        });
+      }
+    },
+    [latency]
+  );
   useEffect(() => {
     if (lastDispatchRef.current) {
       history.push(config);
@@ -263,6 +286,23 @@ export default function GalleryDesignStudioPage() {
           <h1 className="text-lg font-semibold">Gallery Design Studio</h1>
           <span className="text-xs text-text-tertiary">{draftAge}</span>
           {history.canUndo && <span className="text-xs text-text-tertiary">· {history.historySize} changes</span>}
+          {latency.stats.count > 0 && (
+            <span
+              className="text-xs font-mono"
+              title={`p50 ${latency.stats.p50Ms.toFixed(1)}ms, max ${latency.stats.maxMs.toFixed(1)}ms, ${latency.stats.overBudgetCount}/${latency.stats.count} over ${LATENCY_BUDGET_MS}ms`}
+              data-testid="design-latency-badge"
+              style={{
+                color:
+                  latency.stats.p95Ms <= LATENCY_BUDGET_MS
+                    ? "var(--feedback-success)"
+                    : latency.stats.p95Ms <= LATENCY_BUDGET_MS * 2
+                    ? "var(--feedback-warning)"
+                    : "var(--feedback-error)",
+              }}
+            >
+              · p95 {latency.stats.p95Ms.toFixed(1)}ms
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { history.undo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canUndo} className="px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Undo (Ctrl+Z)">↩</button>
