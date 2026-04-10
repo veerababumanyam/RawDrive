@@ -6,16 +6,27 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/tests/testsupport"
 )
+
+// TestMain owns the package-wide lifecycle for the shared pgvector container.
+// It calls testsupport.Shutdown after all tests run so the container is
+// terminated cleanly instead of being reaped by Ryuk at process exit.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	testsupport.Shutdown()
+	os.Exit(code)
+}
 
 // ──────────────────────────── Health Endpoint ────────────────────────────
 
@@ -44,18 +55,43 @@ func TestHealthEndpoint(t *testing.T) {
 
 // ──────────────────────────── PostgreSQL Connectivity ────────────────────────────
 
+// TestPostgresConnectivity verifies that the shared pgvector container is
+// reachable and that the production migrations ran successfully against it.
+//
+// Before testcontainers-go this test connected to a hardcoded localhost:55070
+// URL with a committed dev password, and only asserted SELECT 1 — which
+// silently passed whether migrations were applied or not. The new version
+// provisions its own container via testsupport.PgvectorPool, proving:
+//
+//  1. The container boots and accepts connections.
+//  2. The canonical Migrator (internal/database) ran end-to-end.
+//  3. The pgvector extension is installed and queryable.
 func TestPostgresConnectivity(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, "postgres://rawdrive_user:e706fbd6b28d036aa80379447729737b@localhost:55070/rawdrive_db?sslmode=disable")
-	require.NoError(t, err, "failed to connect to PostgreSQL")
-	defer conn.Close(ctx)
+	pool := testsupport.PgvectorPool(t)
 
-	var result int
-	err = conn.QueryRow(ctx, "SELECT 1").Scan(&result)
-	require.NoError(t, err, "failed to query PostgreSQL")
-	assert.Equal(t, 1, result)
+	// Basic liveness: plain SQL.
+	var one int
+	require.NoError(t, pool.QueryRow(ctx, "SELECT 1").Scan(&one))
+	assert.Equal(t, 1, one)
+
+	// Migrations ran: the schema_migrations table exists and is non-empty.
+	// If this assertion fails, it means the helper's Migrator.Up() did not
+	// execute — which would make every other integration test meaningless.
+	var appliedCount int
+	require.NoError(t, pool.QueryRow(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&appliedCount))
+	assert.Greater(t, appliedCount, 0, "no migrations were applied to the container")
+
+	// pgvector is available: the extension is queryable via pg_extension.
+	// This is what distinguishes pgvector/pgvector:pg16 from a plain postgres
+	// image and is the whole reason we pinned that specific image.
+	var hasVector bool
+	require.NoError(t, pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector')",
+	).Scan(&hasVector))
+	assert.True(t, hasVector, "pgvector extension missing — wrong container image?")
 }
 
 // ──────────────────────────── Valkey Connectivity ────────────────────────────
