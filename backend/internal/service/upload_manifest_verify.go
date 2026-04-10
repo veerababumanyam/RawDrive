@@ -1,0 +1,244 @@
+package service
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M16 E47-S5 Round 2: Real hash verification + cheap header/trailer spot-check.
+//
+// VerifyAgainstBytes re-hashes the temp file a client just finished uploading
+// and compares the hash against manifest.sha256. The manifest was validated
+// at session-create time (see upload_manifest_validation.go), but the client
+// might still swap bytes mid-upload — this is the Tier D backstop.
+//
+// The spot-check is a DELIBERATELY cheap format sanity test. It is NOT a full
+// parse — that would defeat the "keep backend compute cheap" design. It reads
+// the first 64 bytes and last 64 bytes of the file and verifies:
+//   - JPEG: first 2 bytes are FFD8 (SOI), last 2 bytes are FFD9 (EOI)
+//   - PNG:  first 8 bytes match the PNG signature, last 8 bytes end with IEND CRC
+//   - WebP: first 12 bytes start with "RIFF....WEBP"
+//   - GIF:  first 6 bytes are GIF87a or GIF89a, last byte is 0x3B (trailer)
+//
+// If the spot-check fails, we return ErrScanHashMismatch (not a separate
+// error code) because the user-facing meaning is the same: "the bytes on
+// disk don't match what your manifest said".
+//
+// Spec: feature-prd.md §4.4 FR-UPS-022, FR-UPS-025
+// ─────────────────────────────────────────────────────────────────────────────
+
+// VerifyAgainstBytes replaces the Round 1 stub. Computes a streaming SHA-256
+// of the temp file and compares to manifestHash.
+//
+// The cheap header/trailer spot-check is available as a standalone function
+// (VerifyHeaderTrailer) that handlers can call alongside this method if they
+// want belt-and-suspenders structural sanity. It is not called from here
+// because the method signature — defined by the UploadManifestValidation
+// interface — only accepts a hash. A future interface addition can thread the
+// detected format through if we decide the spot-check is mandatory at the
+// service layer.
+//
+// Returns ErrScanHashMismatch if the hash check fails.
+// Returns a wrapped error if the file cannot be opened/read.
+func (s *uploadManifestValidationImpl) VerifyAgainstBytes(
+	ctx context.Context,
+	manifestHash string,
+	tempFilePath string,
+) error {
+	_ = ctx // future: use ctx for cancellation during large-file hashing
+	// Sentinel: empty hash means the manifest itself was invalid. Return a
+	// consistent error so callers can treat "manifest was missing/blank" and
+	// "manifest had bad fields" the same way.
+	if manifestHash == "" {
+		return ErrScanManifestInvalid
+	}
+
+	// Open the temp file for reading.
+	f, err := os.Open(tempFilePath)
+	if err != nil {
+		return fmt.Errorf("opening temp file for hash verify: %w", err)
+	}
+	defer f.Close()
+
+	// Streaming SHA-256 — never load the whole file into memory.
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("hashing temp file: %w", err)
+	}
+	actual := hex.EncodeToString(h.Sum(nil))
+
+	// Normalize: accept both lowercase and uppercase hex from the client.
+	if !strings.EqualFold(actual, manifestHash) {
+		return ErrScanHashMismatch
+	}
+
+	return nil
+}
+
+// VerifyHeaderTrailer is the cheap format spot-check. Exposed as a standalone
+// function so handler-level code can run it independently of the full
+// verification flow (e.g. during finalize before calling VerifyAgainstBytes,
+// to fail fast on obviously corrupt uploads).
+//
+// Returns nil on success, ErrScanHashMismatch on structural mismatch, or a
+// wrapped error on I/O failure.
+func VerifyHeaderTrailer(tempFilePath string, detectedFormat string) error {
+	format := strings.ToLower(strings.TrimSpace(detectedFormat))
+	if format == "" {
+		// No format hint — skip the check.
+		return nil
+	}
+
+	f, err := os.Open(tempFilePath)
+	if err != nil {
+		return fmt.Errorf("opening temp file for spot-check: %w", err)
+	}
+	defer f.Close()
+
+	// Read the first 64 bytes.
+	head := make([]byte, 64)
+	headRead, err := io.ReadFull(f, head)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return fmt.Errorf("reading file head: %w", err)
+	}
+	head = head[:headRead]
+
+	// Get file size to seek to the tail.
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("stating temp file: %w", err)
+	}
+	size := info.Size()
+
+	// Read the last 64 bytes (or fewer if the file is tiny).
+	tailSize := int64(64)
+	if size < tailSize {
+		tailSize = size
+	}
+	tail := make([]byte, tailSize)
+	if _, err := f.ReadAt(tail, size-tailSize); err != nil {
+		return fmt.Errorf("reading file tail: %w", err)
+	}
+
+	switch format {
+	case "jpeg", "jpg":
+		if !hasJpegSignature(head) || !hasJpegEnd(tail) {
+			return ErrScanHashMismatch
+		}
+	case "png":
+		if !hasPngSignature(head) || !hasPngEnd(tail) {
+			return ErrScanHashMismatch
+		}
+	case "webp":
+		if !hasWebpSignature(head) {
+			return ErrScanHashMismatch
+		}
+	case "gif":
+		if !hasGifSignature(head) || !hasGifEnd(tail) {
+			return ErrScanHashMismatch
+		}
+	default:
+		// Unknown format — do not reject. The backend is not in the business
+		// of blocking novel formats; that's the client scanner's job.
+		return nil
+	}
+
+	return nil
+}
+
+// ─── Format signature helpers (bounded, cheap, stateless) ──────────────────
+
+func hasJpegSignature(head []byte) bool {
+	// JPEG SOI marker is FFD8 at offset 0.
+	return len(head) >= 2 && head[0] == 0xFF && head[1] == 0xD8
+}
+
+func hasJpegEnd(tail []byte) bool {
+	// JPEG EOI marker is FFD9 at the very end of the file. Scanners sometimes
+	// leave a couple of padding bytes after EOI (seen in some phone cameras),
+	// so we look for FFD9 anywhere in the last 16 bytes rather than forcing
+	// it to be the absolute last 2 bytes. The browser worker's stricter check
+	// (FR-UPS-002) will catch payloads appended further out.
+	if len(tail) < 2 {
+		return false
+	}
+	limit := 16
+	if len(tail) < limit {
+		limit = len(tail)
+	}
+	window := tail[len(tail)-limit:]
+	for i := 0; i < len(window)-1; i++ {
+		if window[i] == 0xFF && window[i+1] == 0xD9 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPngSignature(head []byte) bool {
+	// PNG signature: 89 50 4E 47 0D 0A 1A 0A
+	if len(head) < 8 {
+		return false
+	}
+	sig := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	for i, b := range sig {
+		if head[i] != b {
+			return false
+		}
+	}
+	return true
+}
+
+func hasPngEnd(tail []byte) bool {
+	// PNG ends with an IEND chunk. The IEND chunk body is zero bytes, so the
+	// last 12 bytes are: length (4) + "IEND" (4) + CRC (4). We look for the
+	// literal "IEND" in the last 16 bytes.
+	if len(tail) < 8 {
+		return false
+	}
+	limit := 16
+	if len(tail) < limit {
+		limit = len(tail)
+	}
+	window := tail[len(tail)-limit:]
+	iend := []byte{'I', 'E', 'N', 'D'}
+	for i := 0; i <= len(window)-4; i++ {
+		if window[i] == iend[0] && window[i+1] == iend[1] && window[i+2] == iend[2] && window[i+3] == iend[3] {
+			return true
+		}
+	}
+	return false
+}
+
+func hasWebpSignature(head []byte) bool {
+	// WebP header: "RIFF" at offset 0, then 4 bytes of RIFF size, then "WEBP"
+	// at offset 8.
+	if len(head) < 12 {
+		return false
+	}
+	return head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F' &&
+		head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P'
+}
+
+func hasGifSignature(head []byte) bool {
+	// GIF starts with GIF87a or GIF89a.
+	if len(head) < 6 {
+		return false
+	}
+	if !(head[0] == 'G' && head[1] == 'I' && head[2] == 'F' && head[3] == '8') {
+		return false
+	}
+	return (head[4] == '7' || head[4] == '9') && head[5] == 'a'
+}
+
+func hasGifEnd(tail []byte) bool {
+	// GIF trailer is 0x3B (;). It should be the very last byte of the file.
+	return len(tail) > 0 && tail[len(tail)-1] == 0x3B
+}

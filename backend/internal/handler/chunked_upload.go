@@ -32,12 +32,24 @@ func setTUSHeaders(w http.ResponseWriter) {
 
 // ChunkedUploadHandler implements the TUS v1.0.0 resumable upload protocol.
 // Clients POST to /uploads to create an upload session, then PATCH chunks.
+//
+// M16 Round 3: validationSvc is an optional dependency wired via
+// WithValidation(). When unset (nil), the handler skips Tier D validation
+// entirely — the existing pre-M16 behavior. When set, the handler enforces
+// upload manifests at session-create (via ValidateForSessionCreate) and
+// verifies the final SHA-256 against the manifest at finalize time. The
+// validation service owns its own WorkspacePolicyReader internally, so the
+// handler does not need a separate policy service dependency.
 type ChunkedUploadHandler struct {
 	uploadSvc *service.UploadService
 	assetRepo *repository.AssetRepo
 	store     storage.Provider
 	tmpDir    string
 	sessions  sync.Map // uploadID -> *uploadSession
+
+	// M16 E47-S5: optional Tier D validation hook. Wired via WithValidation().
+	// Nil means validation is disabled (legacy behavior).
+	validationSvc service.UploadManifestValidation
 }
 
 type uploadSession struct {
@@ -50,6 +62,11 @@ type uploadSession struct {
 	ChunkSize   int64  `json:"chunk_size"`
 	Offset      int64  `json:"offset"`
 	TmpPath     string `json:"-"`
+
+	// M16 E47-S5: optional scan manifest provided by the client at session
+	// create time. Stored verbatim so the finalize step can verify the
+	// declared SHA-256 against the actual uploaded bytes.
+	Manifest *service.UploadScanManifest `json:"manifest,omitempty"`
 }
 
 // NewChunkedUploadHandler creates a new handler for chunked uploads.
@@ -61,6 +78,24 @@ func NewChunkedUploadHandler(uploadSvc *service.UploadService, assetRepo *reposi
 		store:     store,
 		tmpDir:    tmpDir,
 	}
+}
+
+// WithValidation wires the M16 E47-S5 Tier D validation hook. Returns the
+// same handler for chainable construction (so cmd/api/main.go can write
+// `NewChunkedUploadHandler(...).WithValidation(validationSvc)` without
+// changing the constructor signature). Pass nil to disable validation.
+//
+// Rationale: a setter pattern keeps the constructor backwards-compatible
+// with existing test fixtures that don't care about scan manifests, while
+// letting M16 wiring opt in explicitly. Round 3 GREEN will call this from
+// main.go after instantiating the validation service. The validation
+// service owns its own WorkspacePolicyReader, so callers don't need to
+// pass a separate policy service.
+func (h *ChunkedUploadHandler) WithValidation(
+	validationSvc service.UploadManifestValidation,
+) *ChunkedUploadHandler {
+	h.validationSvc = validationSvc
+	return h
 }
 
 // RegisterRoutes adds chunked upload routes.
@@ -81,14 +116,45 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	userID, _ := getUserID(r)
 
 	var input struct {
-		Filename    string `json:"filename"`
-		ContentType string `json:"content_type"`
-		TotalSize   int64  `json:"total_size"`
-		ChunkSize   int64  `json:"chunk_size"`
+		Filename    string                       `json:"filename"`
+		ContentType string                       `json:"content_type"`
+		TotalSize   int64                        `json:"total_size"`
+		ChunkSize   int64                        `json:"chunk_size"`
+		ScanManifest *service.UploadScanManifest `json:"scan_manifest,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
+	}
+
+	// M16 E47-S5 Round 3 GREEN: enforce the Tier D upload manifest gate.
+	// When validationSvc is nil (legacy / non-M16 wiring), we skip validation
+	// entirely — preserves the pre-M16 behavior for any caller that hasn't
+	// wired WithValidation. When set, the validator looks up the workspace's
+	// configured policy mode and applies the rule matrix from
+	// upload_manifest_validation.ValidateForSessionCreate.
+	//
+	// Sentinel errors (ErrScanDecisionBlock, ErrScanManifestRequired, etc.)
+	// are returned as 400 Bad Request with the error code as the response
+	// "error" field. The code IS the error message because the sentinels are
+	// defined as `errors.New("SCAN_DECISION_BLOCK")` etc. — the test plan
+	// asserts on substring presence of these codes.
+	if h.validationSvc != nil {
+		mode, err := h.validationSvc.WorkspacePolicyMode(r.Context(), workspaceID)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"error":   "POLICY_LOOKUP_FAILED",
+				"message": err.Error(),
+			})
+			return
+		}
+		if err := h.validationSvc.ValidateForSessionCreate(r.Context(), mode, input.ScanManifest); err != nil {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"error":   err.Error(),
+				"message": "upload manifest validation failed",
+			})
+			return
+		}
 	}
 
 	if input.TotalSize <= 0 || input.TotalSize > 2*1024*1024*1024 { // 2GB limit
@@ -120,6 +186,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		ChunkSize:   input.ChunkSize,
 		Offset:      0,
 		TmpPath:     tmpPath,
+		Manifest:    input.ScanManifest, // M16: stored for finalize hash check
 	}
 	h.sessions.Store(uploadID, session)
 

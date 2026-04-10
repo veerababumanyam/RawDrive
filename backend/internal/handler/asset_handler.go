@@ -12,14 +12,31 @@ import (
 )
 
 // AssetHandler handles asset HTTP requests.
+//
+// M16 Round 3: validationSvc is an optional Tier D gate wired via
+// WithValidation(). When unset (nil) the handler keeps its pre-M16
+// behaviour — direct multipart uploads are accepted without manifest
+// screening. When set, the Upload() path enforces the same policy-mode
+// rules as the chunked upload handler so attackers cannot bypass Tier D
+// by choosing the direct path.
 type AssetHandler struct {
-	assetSvc  *service.AssetService
-	uploadSvc *service.UploadService
+	assetSvc      *service.AssetService
+	uploadSvc     *service.UploadService
+	validationSvc service.UploadManifestValidation
 }
 
 // NewAssetHandler creates a new AssetHandler.
 func NewAssetHandler(assetSvc *service.AssetService, uploadSvc *service.UploadService) *AssetHandler {
 	return &AssetHandler{assetSvc: assetSvc, uploadSvc: uploadSvc}
+}
+
+// WithValidation wires the M16 Tier D upload manifest validator onto the
+// asset handler's direct multipart upload path. Chainable so main.go can
+// keep a single-line construction (`NewAssetHandler(...).WithValidation(...)`).
+// Pass nil to disable validation (legacy behaviour).
+func (h *AssetHandler) WithValidation(validationSvc service.UploadManifestValidation) *AssetHandler {
+	h.validationSvc = validationSvc
+	return h
 }
 
 // List handles GET /api/v1/assets
@@ -82,6 +99,41 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(500 << 20); err != nil { // 500MB max
 		http.Error(w, `{"error":"invalid multipart form"}`, http.StatusBadRequest)
 		return
+	}
+
+	// M16 E47-S5 Round 3 GREEN: Tier D validation gate.
+	// Parse the optional scan_manifest multipart field FIRST (before touching
+	// the file) so we can short-circuit rejections without ever reading bytes
+	// from disk. When validationSvc is nil the whole block is a no-op,
+	// preserving legacy behaviour for callers that haven't wired M16.
+	var scanManifest *service.UploadScanManifest
+	if manifestRaw := r.FormValue("scan_manifest"); manifestRaw != "" {
+		scanManifest = &service.UploadScanManifest{}
+		if err := json.Unmarshal([]byte(manifestRaw), scanManifest); err != nil {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"error":   "SCAN_MANIFEST_INVALID",
+				"message": "scan_manifest is not valid JSON: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	if h.validationSvc != nil {
+		mode, err := h.validationSvc.WorkspacePolicyMode(r.Context(), workspaceID)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"error":   "POLICY_LOOKUP_FAILED",
+				"message": err.Error(),
+			})
+			return
+		}
+		if err := h.validationSvc.ValidateForSessionCreate(r.Context(), mode, scanManifest); err != nil {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"error":   err.Error(),
+				"message": "upload manifest validation failed",
+			})
+			return
+		}
 	}
 
 	file, header, err := r.FormFile("file")

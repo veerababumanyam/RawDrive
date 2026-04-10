@@ -10,7 +10,10 @@ import (
 
 // RegisterM2Routes registers all M2 (Asset Management & Gallery) and M11 (Processing, Storage, Organization) routes.
 func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
-	assetHandler := NewAssetHandler(deps.AssetService, deps.UploadService)
+	// M16 E47-S5: chain the Tier D validation service onto the asset handler
+	// when it is wired (nil-safe — pre-M16 callers continue to work).
+	assetHandler := NewAssetHandler(deps.AssetService, deps.UploadService).
+		WithValidation(deps.UploadValidationSvc)
 	galleryHandler := NewGalleryHandler(deps.GalleryService)
 	shareHandler := NewShareLinkHandler(deps.ShareLinkService)
 	proofingHandler := NewProofingHandler(deps.ProofingService)
@@ -404,4 +407,6 @@ type M2Dependencies struct {
 	BannerService        *service.BannerService
 	// M15 dependencies (nil-safe)
 	ConsentSvc           *service.ConsentService
+	// M16 dependencies (nil-safe)
+	UploadValidationSvc  service.UploadManifestValidation
 }

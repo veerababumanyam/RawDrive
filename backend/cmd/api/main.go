@@ -13,6 +13,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/rawdrive/backend/internal/ai"
@@ -170,6 +171,14 @@ func main() {
 	defer dbPool.Close()
 	log.Println("Database pool connected")
 
+	// M16 E47-S5 / E49-S1: database/sql adapter over the pgx pool. Several
+	// Tier D services (UploadPolicyCatalog, WorkspacePolicyService,
+	// UploadAllowlistRepo, UploadModerationRepo) use the database/sql
+	// signature; stdlib.OpenDBFromPool gives us a *sql.DB backed by the
+	// existing pgx pool so we don't duplicate connection pooling.
+	sqlDB := stdlib.OpenDBFromPool(dbPool)
+	defer sqlDB.Close()
+
 	// ──────────────────────── M1: Auth, Users, Workspaces, Teams ──────────────────
 
 	// Real user service backed by DB
@@ -265,7 +274,7 @@ func main() {
 	// Never hardcode credentials. Never fall back to local filesystem.
 	storageCfg := storage.Config{
 		Driver:    os.Getenv("STORAGE_DRIVER"),
-		Bucket:    envOrFatal("R2_BUCKET_NAME", "R2_BUCKET"),      // try R2_BUCKET_NAME first, fallback to R2_BUCKET
+		Bucket:    envOrFatal("R2_BUCKET_NAME", "R2_BUCKET"), // try R2_BUCKET_NAME first, fallback to R2_BUCKET
 		Region:    envOr("auto", "R2_REGION"),
 		Endpoint:  os.Getenv("R2_ENDPOINT"),
 		AccessKey: envOrFatal("R2_ACCESS_KEY_ID", "R2_ACCESS_KEY"), // try R2_ACCESS_KEY_ID first, fallback to R2_ACCESS_KEY
@@ -298,6 +307,37 @@ func main() {
 	// M2 Services
 	exifSvc := service.NewExifService()
 	uploadSvc := service.NewUploadService(storageProvider, assetRepo, exifSvc).WithStorageAccounting(storageAccountingSvc)
+
+	// ──────────────────────── M16 Tier D Upload Screening ──────────────────
+	// Build the validation stack up-front so it can be wired into both the
+	// chunked upload handler (M2) and the asset handler (M2). The services
+	// here depend on sqlDB (the stdlib adapter over the pgx pool).
+	//
+	// Enforcement mode is opt-in via TIER_D_ENFORCE_MODE=1 so we can roll
+	// out in telemetry-only mode first, observe the real reject rate, and
+	// flip the switch once we are confident. Missing env var → telemetry-only.
+	m16EnforceMode := os.Getenv("TIER_D_ENFORCE_MODE") == "1"
+	uploadPolicyCatalog := service.NewUploadPolicyCatalog(sqlDB)
+	workspacePolicySvc := service.NewWorkspacePolicyService(sqlDB, nil) // audit log wired below after auditLogSvc
+	// UploadAllowlist: token issue/consume for FP override flow.
+	uploadAllowlistRepo := service.NewPgUploadAllowlistRepo(sqlDB)
+	uploadAllowlistSvc := service.NewUploadAllowlistService(uploadAllowlistRepo)
+	// UploadModeration: admin queue + override + analytics.
+	uploadModerationRepo := service.NewPgUploadModerationRepo(sqlDB)
+	// NOTE: uploadModerationSvc is constructed later (inside the admin init
+	// block) so it can reference the audit log service. The allowlist
+	// service and moderation repo are hoisted here so the validation
+	// service can be built before M2 routes register.
+	_ = uploadModerationRepo // suppress unused warning until admin block
+	// UploadManifestValidation: the runtime enforcement surface called by
+	// ChunkedUploadHandler.CreateSession and AssetHandler.Upload.
+	uploadValidationSvc := service.NewUploadManifestValidation(
+		uploadPolicyCatalog,
+		workspacePolicySvc,
+		nil, // audit log — wired through WorkspacePolicyService instead
+		m16EnforceMode,
+	)
+	log.Printf("M16 Tier D: upload screening service initialized (enforce=%v)", m16EnforceMode)
 	assetSvc := service.NewAssetService(assetRepo, storageProvider)
 	thumbnailSvc := service.NewThumbnailService(storageProvider)
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
@@ -393,8 +433,8 @@ func main() {
 	// In-process event broker for real-time SSE delivery to frontend
 	eventBroker := handler.NewEventBroker()
 
-	var m8Deps handler.M8Dependencies // declared here so public routes can reference
-	var m6Scheduler *scheduler.Scheduler // declared here so it can be started below next to workers
+	var m8Deps handler.M8Dependencies                        // declared here so public routes can reference
+	var m6Scheduler *scheduler.Scheduler                     // declared here so it can be started below next to workers
 	var publicLeadDispatcher *handler.NotificationDispatcher // set inside protected block, consumed by public lead embed below
 
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
@@ -417,26 +457,30 @@ func main() {
 			LifecycleService:     lifecycleSvc,
 			AssetRepo:            assetRepo,
 			// M12
-			GalleryDesignSvc:     service.NewGalleryDesignService(galleryRepo),
-			GalleryRepo:          galleryRepo,
-			DesignTemplateSvc:    service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
-			DesignCollabSvc:      service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence
-			DesignAISvc:          nil, // set after AI init below
+			GalleryDesignSvc:  service.NewGalleryDesignService(galleryRepo),
+			GalleryRepo:       galleryRepo,
+			DesignTemplateSvc: service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
+			DesignCollabSvc:   service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence
+			DesignAISvc:       nil,                                 // set after AI init below
 			// M13
-			GalleryAccessSvc:     galleryAccessSvc,
-			ProofingSessionSvc:   proofingSessionSvc,
-			ProofingCommentSvc:   proofingCommentSvc,
-			AlbumApprovalSvc:     albumApprovalSvc,
+			GalleryAccessSvc:   galleryAccessSvc,
+			ProofingSessionSvc: proofingSessionSvc,
+			ProofingCommentSvc: proofingCommentSvc,
+			AlbumApprovalSvc:   albumApprovalSvc,
 			// M14
-			DownloadService:      downloadSvc,
-			GalleryAnalyticsSvc:  galleryAnalyticsSvc,
-			WebhookSvc:           webhookSvc,
-			ProductService:       productSvc,
-			CartService:          cartSvc,
-			FulfillmentBridge:    fulfillmentBridge,
-			BannerService:        bannerSvc,
+			DownloadService:     downloadSvc,
+			GalleryAnalyticsSvc: galleryAnalyticsSvc,
+			WebhookSvc:          webhookSvc,
+			ProductService:      productSvc,
+			CartService:         cartSvc,
+			FulfillmentBridge:   fulfillmentBridge,
+			BannerService:       bannerSvc,
 			// M15
-			ConsentSvc:           consentSvc,
+			ConsentSvc: consentSvc,
+			// M16 Tier D upload screening — enforces scan manifest gate on
+			// both the direct multipart upload path (AssetHandler.Upload)
+			// and the chunked upload path (ChunkedUploadHandler.CreateSession).
+			UploadValidationSvc: uploadValidationSvc,
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
 			// ai.NewFaceRepo is stateless — constructing it twice (here and in
 			// the AI init block below) is safe and keeps this block self-contained.
@@ -448,12 +492,21 @@ func main() {
 		// Public gallery routes — registered on outer router (no auth required)
 		handler.RegisterPublicGalleryRoutes(r, m2Deps)
 
+		// M16 E49-S1: public upload-policy versions endpoint. Mounted on
+		// the outer router so the browser screening worker can fetch it
+		// BEFORE the user is authenticated (the upload page loads the
+		// worker as one of its first resources). Closes M16-GAP-02 from
+		// the Step 03A code gap analysis.
+		uploadPolicyHandler := handler.NewUploadPolicyHandler(uploadPolicyCatalog)
+		uploadPolicyHandler.RegisterRoutes(r)
+
 		// Chunked upload routes
 		tmpDir := os.Getenv("UPLOAD_TMP_DIR")
 		if tmpDir == "" {
 			tmpDir = ".tmp/uploads"
 		}
-		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir)
+		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir).
+			WithValidation(uploadValidationSvc)
 		chunkedHandler.RegisterRoutes(api)
 
 		log.Println("M2: routes registered")
@@ -658,6 +711,15 @@ func main() {
 			jwtSecret = nil
 		}
 
+		// M16 E50-S1 / E50-S3: upload moderation service. Needs the audit log
+		// service (declared above), so it is constructed here rather than up
+		// by the other upload services.
+		uploadModerationSvc := service.NewUploadModerationService(
+			uploadModerationRepo,
+			uploadAllowlistSvc,
+			auditLogSvc,
+		)
+
 		handler.RegisterAdminRoutes(api, handler.AdminDeps{
 			UserSvc:       service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret),
 			ModerationSvc: service.NewAdminModerationService(adminModerationRepo, auditLogSvc),
@@ -667,6 +729,9 @@ func main() {
 			ExportSvc:     service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
 			HealthSvc:     service.NewAdminHealthService(adminHealthRepo),
 			AuditLogSvc:   auditLogSvc,
+			// M16 Tier D admin surfaces
+			WorkspacePolicySvc:  workspacePolicySvc,
+			UploadModerationSvc: uploadModerationSvc,
 		})
 
 		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")

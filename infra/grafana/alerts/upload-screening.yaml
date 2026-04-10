@@ -1,0 +1,130 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# M16 E50-S4 — Upload screening alert rules (Grafana / Prometheus)
+#
+# Four rules covering the Tier D surface:
+#   1. UploadScanBlockRateHigh   — block rate > 5% sustained for 10 min
+#   2. UploadScanTierDSpike      — Tier D rejects jump > 3x baseline
+#   3. UploadScanEngineFailures  — backend validator erroring (not "blocked", actual 5xx)
+#   4. UploadAllowlistTokenAbuse — allowlist token issuance > 10 / hour per admin
+#
+# Each rule links to docs/runbooks/upload-screening-alerts.md for the
+# response playbook.
+#
+# Loaded by the alertmanager via the Grafana provisioning directory:
+#   infra/grafana/alerts/ → mounted at /etc/grafana/provisioning/alerting
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: upload-screening
+    folder: RawDrive
+    interval: 1m
+    rules:
+      - uid: upload-scan-block-rate-high
+        title: Upload scan block rate high
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(rate(rawdrive_upload_scan_blocked_total[10m]))
+                / clamp_min(sum(rate(rawdrive_upload_scan_total[10m])), 1)
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: Upload scan block rate above 5% for 10 minutes
+          runbook_url: docs/runbooks/upload-screening-alerts.md#block-rate-high
+          description: |
+            Block rate is {{ $value | humanizePercentage }}. Investigate whether
+            a new attack campaign is in progress or the client screener has
+            regressed and is flagging legitimate files.
+        labels:
+          severity: warning
+          component: upload-screening
+          tier: d
+
+      - uid: upload-scan-tier-d-spike
+        title: Tier D reject spike
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(rate(rawdrive_upload_scan_blocked_total{cause="tier_d"}[15m]))
+                / clamp_min(sum(rate(rawdrive_upload_scan_blocked_total{cause="tier_d"}[6h] offset 1d)), 0.0001)
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Tier D rejects are 3x the 6-hour baseline
+          runbook_url: docs/runbooks/upload-screening-alerts.md#tier-d-spike
+        labels:
+          severity: warning
+          component: upload-screening
+
+      - uid: upload-scan-engine-errors
+        title: Upload validator 5xx errors
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(rate(rawdrive_upload_scan_errors_total[5m])) > 0
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: Upload validator is erroring on requests
+          runbook_url: docs/runbooks/upload-screening-alerts.md#engine-errors
+        labels:
+          severity: critical
+          component: upload-screening
+
+      - uid: upload-allowlist-token-abuse
+        title: Allowlist token issuance abnormal
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum by (actor_id) (rate(rawdrive_upload_allowlist_tokens_issued_total[1h])) > 10
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Admin issuing > 10 allowlist tokens per hour
+          runbook_url: docs/runbooks/upload-screening-alerts.md#allowlist-abuse
+          description: |
+            One admin account is issuing allowlist override tokens at an
+            unusual rate. Possible account takeover or policy misconfiguration.
+        labels:
+          severity: warning
+          component: upload-screening
+          security_relevant: "true"

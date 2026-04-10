@@ -39,6 +39,17 @@ func WorkspaceIDFromContext(ctx context.Context) string {
 	return ""
 }
 
+// WithWorkspaceID sets the workspace ID on the context using the typed key
+// that WorkspaceIDFromContext reads. Intended for tests and any code path
+// that needs to inject workspace context without going through the full
+// TenantContext middleware chain (which requires DBContext + AuditLog deps).
+//
+// Production code should normally enter the workspace ID via TenantContext
+// from JWT claims, not by calling this directly.
+func WithWorkspaceID(ctx context.Context, workspaceID string) context.Context {
+	return context.WithValue(ctx, workspaceIDKey, workspaceID)
+}
+
 func StateIDFromContext(ctx context.Context) string {
 	if v, ok := ctx.Value(stateIDKey).(string); ok {
 		return v

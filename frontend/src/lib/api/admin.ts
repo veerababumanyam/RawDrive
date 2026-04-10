@@ -123,9 +123,9 @@ export interface WorkspaceOverview {
 }
 
 export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  cursor?: string;
+  items: T[];
+  total_count: number;
+  next_cursor?: string;
 }
 
 // ── Helpers ──
@@ -185,7 +185,9 @@ export async function impersonateUser(token: string, id: string): Promise<{ toke
 }
 
 export async function changeUserRole(token: string, id: string, role: string): Promise<void> {
-  await put(token, `/users/${id}/role`, { platform_role: role });
+  // Backend handler (admin_users.go ChangeRole) expects { role: string }.
+  // The body was previously { platform_role } which returned 400 "role is required".
+  await put(token, `/users/${id}/role`, { role });
 }
 
 // ── Moderation ──
@@ -274,4 +276,112 @@ export async function listAuditLogs(token: string, params?: Record<string, strin
 
 export async function getAuditLogDetail(token: string, id: string): Promise<AuditLogEntry> {
   return get(token, `/audit-logs/${id}`);
+}
+
+// ── M16: Workspace Upload Policy + Moderation ──
+
+export type UploadPolicyMode =
+  | "standard"
+  | "strict_client_scan"
+  | "strict_original_preservation";
+
+export interface WorkspacePolicyResponse {
+  workspace_id: string;
+  mode: UploadPolicyMode;
+}
+
+export async function getWorkspaceUploadPolicy(
+  token: string,
+  workspaceId: string
+): Promise<WorkspacePolicyResponse> {
+  return get(token, `/workspaces/${workspaceId}/upload-policy`);
+}
+
+export async function setWorkspaceUploadPolicy(
+  token: string,
+  workspaceId: string,
+  mode: UploadPolicyMode
+): Promise<WorkspacePolicyResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/workspaces/${workspaceId}/upload-policy`,
+    {
+      method: "PUT",
+      headers: headers(token),
+      body: JSON.stringify({ mode }),
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to set policy: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface BlockedAssetRow {
+  asset_id: string;
+  workspace_id: string;
+  filename: string;
+  scan_status: string;
+  scan_engine: string;
+  policy_version: string;
+  risk_score: number;
+  findings?: string;
+  manifest_hash: string;
+  created_at: string;
+}
+
+export async function listUploadModerationQueue(
+  token: string,
+  workspaceId: string,
+  params?: { limit?: number; offset?: number }
+): Promise<{ queue: BlockedAssetRow[] }> {
+  const q: Record<string, string> = { workspace_id: workspaceId };
+  if (params?.limit !== undefined) q.limit = String(params.limit);
+  if (params?.offset !== undefined) q.offset = String(params.offset);
+  return get(token, "/upload-moderation", q);
+}
+
+export interface OverrideResponse {
+  asset_id: string;
+  token: string;
+  expires_at: string;
+}
+
+export async function overrideUploadBlock(
+  token: string,
+  assetId: string,
+  justification: string,
+  ttlHours = 24
+): Promise<OverrideResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/upload-moderation/${assetId}/override`,
+    {
+      method: "POST",
+      headers: headers(token),
+      body: JSON.stringify({ justification, ttl_hours: ttlHours }),
+    }
+  );
+  if (!res.ok) throw new Error(`Override failed: ${res.status}`);
+  return res.json();
+}
+
+export interface UploadModerationAnalytics {
+  total_scanned: number;
+  total_passed: number;
+  total_blocked: number;
+  total_needs_desktop: number;
+  total_override: number;
+  block_rate: number;
+  tier_d_causes: Record<string, number>;
+  window_start: string;
+  window_end: string;
+}
+
+export async function getUploadModerationAnalytics(
+  token: string,
+  workspaceId: string,
+  since?: string
+): Promise<UploadModerationAnalytics> {
+  const q: Record<string, string> = { workspace_id: workspaceId };
+  if (since) q.since = since;
+  return get(token, "/upload-moderation/analytics", q);
 }

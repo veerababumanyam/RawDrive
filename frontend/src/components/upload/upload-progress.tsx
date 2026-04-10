@@ -1,11 +1,30 @@
 "use client";
 
+import type { ScanManifest } from "@/lib/upload-screening/types";
+
 export interface UploadItem {
   id: string;
   file: File;
   progress: number;
-  status: "pending" | "uploading" | "complete" | "error";
+  /**
+   * M16 E47-S4: added "screening", "blocked", "needs_desktop" states so
+   * the UI can distinguish the local pre-flight from the network upload
+   * phase and show a different message for each rejection mode.
+   */
+  status:
+    | "pending"
+    | "screening"
+    | "uploading"
+    | "complete"
+    | "error"
+    | "blocked"
+    | "needs_desktop";
   error?: string;
+  /** M16: the scan manifest produced by the local screener. Present once
+   *  screening finishes regardless of decision. Used by the UI to render
+   *  finding details and by the upload hook to attach to the session
+   *  create payload. */
+  scanManifest?: ScanManifest;
 }
 
 interface UploadProgressProps {
@@ -50,8 +69,18 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
               </p>
               <p className="text-xs text-text-secondary">
                 {(item.file.size / 1024 / 1024).toFixed(1)} MB
+                {item.status === "screening" && " • screening…"}
+                {item.status === "blocked" && item.error && ` • ${item.error}`}
+                {item.status === "needs_desktop" &&
+                  " • requires RawDrive Desktop (M17)"}
               </p>
             </div>
+
+            {item.status === "screening" && (
+              <span className="text-xs font-medium text-text-secondary">
+                Screening
+              </span>
+            )}
 
             {item.status === "uploading" && (
               <div className="w-20">
@@ -68,6 +97,21 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
               <span className="text-xs font-medium text-success">Done</span>
             )}
 
+            {item.status === "blocked" && (
+              <span
+                className="text-xs font-medium text-error"
+                title={item.error}
+              >
+                Blocked
+              </span>
+            )}
+
+            {item.status === "needs_desktop" && (
+              <span className="text-xs font-medium text-warning">
+                Desktop required
+              </span>
+            )}
+
             {item.status === "error" && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-error">Failed</span>
@@ -82,14 +126,17 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
               </div>
             )}
 
-            {(item.status === "pending" || item.status === "uploading") && onCancel && (
-              <button
-                onClick={() => onCancel(item.id)}
-                className="text-xs text-text-secondary hover:text-error"
-              >
-                Cancel
-              </button>
-            )}
+            {(item.status === "pending" ||
+              item.status === "screening" ||
+              item.status === "uploading") &&
+              onCancel && (
+                <button
+                  onClick={() => onCancel(item.id)}
+                  className="text-xs text-text-secondary hover:text-error"
+                >
+                  Cancel
+                </button>
+              )}
           </div>
         ))}
       </div>

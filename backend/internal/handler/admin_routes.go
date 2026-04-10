@@ -15,6 +15,16 @@ type AdminDeps struct {
 	ExportSvc     *service.AdminExportService
 	HealthSvc     *service.AdminHealthService
 	AuditLogSvc   *service.AuditLogService
+	// M16 E49-S1 / E49-S2: workspace upload-policy admin handlers.
+	// Nil-safe: route registration succeeds even when the service is unset
+	// (the handler returns 501 in that path), so existing AdminDeps{} call
+	// sites in tests do not need to be updated for Round 3 RED.
+	WorkspacePolicySvc *service.WorkspacePolicyService
+
+	// M16 E50-S1 / E50-S3: upload moderation admin handler. Nil-safe: the
+	// handler returns 501 when the service is unset so existing test call
+	// sites continue to compile without modification.
+	UploadModerationSvc *service.UploadModerationService
 }
 
 func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
@@ -26,6 +36,11 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 	export := NewAdminExportHandler(deps.ExportSvc)
 	health := NewAdminSystemHealthHandler(deps.HealthSvc)
 	auditLogs := NewAdminAuditLogsHandler(deps.AuditLogSvc)
+	// M16 E49-S1 / E49-S2: workspace upload-policy admin handler.
+	uploadPolicy := NewAdminWorkspacePolicyHandler(deps.WorkspacePolicySvc)
+
+	// M16 E50-S1 / E50-S3: upload moderation admin handler.
+	uploadModeration := NewAdminUploadModerationHandler(deps.UploadModerationSvc)
 
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
@@ -69,5 +84,16 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 
 		r.Get("/audit-logs", auditLogs.List)
 		r.Get("/audit-logs/{id}", auditLogs.GetDetail)
+
+		// M16 E49-S1 / E49-S2: workspace upload-policy admin endpoints.
+		// Read returns the active mode for a workspace.
+		// Write updates the mode and emits an audit event with before/after.
+		r.Get("/workspaces/{id}/upload-policy", uploadPolicy.GetWorkspacePolicy)
+		r.Put("/workspaces/{id}/upload-policy", uploadPolicy.SetWorkspacePolicy)
+
+		// M16 E50-S1 / E50-S3: upload moderation endpoints (queue/override/analytics).
+		r.Get("/upload-moderation", uploadModeration.ListQueue)
+		r.Post("/upload-moderation/{assetId}/override", uploadModeration.Override)
+		r.Get("/upload-moderation/analytics", uploadModeration.Analytics)
 	})
 }
