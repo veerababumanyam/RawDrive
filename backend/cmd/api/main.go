@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -413,6 +414,12 @@ func main() {
 		aiJobRepo := ai.NewJobRepo(dbPool)
 		aiFaceRepo := ai.NewFaceRepo(dbPool)
 
+		// M3 E8-S3: wire the face cluster resolver into the album service
+		// so smart albums with smart_filter.face_cluster_label resolve to
+		// the actual asset list at render time. *ai.FaceRepo implements
+		// service.FaceClusterResolver via its ListClusterAssetIDs method.
+		albumSvc.WithFaceResolver(galleryRepo, aiFaceRepo)
+
 		// Gemini client
 		geminiModelID := os.Getenv("GEMINI_MODEL_ID")
 		if geminiModelID == "" {
@@ -621,6 +628,33 @@ func main() {
 		handler.RegisterM8Routes(api, m8Deps)
 		log.Println("M8: Live Streaming, Video, Desktop routes registered")
 
+		// ──────────────────────── M9: Developer Platform — API Keys ──────────────────
+		// API key management lives under the JWT-protected dashboard group:
+		// users authenticate with their session JWT, then create/list/revoke
+		// API keys for programmatic access. The keys themselves are
+		// authenticated via middleware.APIKeyAuth on a separate dataplane
+		// group when that group is opened.
+		apiKeyRepo := repository.NewAPIKeyRepo(dbPool)
+		apiKeySvc := service.NewAPIKeyService(apiKeyRepo)
+		apiKeyHandler := handler.NewAPIKeyHandler(apiKeySvc)
+		api.Post("/api/v1/api-keys", apiKeyHandler.Create)
+		api.Get("/api/v1/api-keys", apiKeyHandler.List)
+		api.Delete("/api/v1/api-keys/{id}", apiKeyHandler.Revoke)
+		log.Println("M9: API key management routes registered (POST/GET/DELETE /api/v1/api-keys)")
+
+		// ──────────────────────── M10: DSR Workflow ──────────────────────
+		// Data Subject Request endpoints (DPDPA + GDPR access/erasure/rectify).
+		// Mounted inside the protected group so the submitting user is
+		// identifiable from JWT claims; anonymous public submissions can be
+		// added later via a separate public route group.
+		dsrRepo := repository.NewDSRRepo(dbPool)
+		dsrSvc := service.NewDSRService(service.NewPostgresDSRStore(dsrRepo))
+		dsrHandler := handler.NewDSRHandler(dsrSvc)
+		api.Post("/api/v1/dsr", dsrHandler.Submit)
+		api.Get("/api/v1/dsr/{id}", dsrHandler.Get)
+		api.Post("/api/v1/dsr/{id}/process-access", dsrHandler.ProcessAccess)
+		log.Println("M10: DSR workflow routes registered (Submit, Get, ProcessAccess)")
+
 	}) // end protected API group
 
 	// M8 public routes (stream viewer, desktop download — no auth)
@@ -665,6 +699,26 @@ func main() {
 	workerRegistry.Register("asset-purge", purgeWorker)
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
+	// M9 E26-S2: outbound webhook delivery — POSTs payloads to subscribers
+	// with HMAC signing, retries up to 5x, dead-letters on terminal failure.
+	webhookDeliveryWorker := worker.NewWebhookDeliveryWorker(dbPool)
+	workerRegistry.Register("webhook-delivery", webhookDeliveryWorker)
+
+	// M10 E27-S3: DSR purge worker — polls dsr_requests for pending rows
+	// and dispatches by request_type. Access requests delegate to the
+	// DSRService.ProcessAccessRequest path; erasure requests need an
+	// operator-configured eraser callback (left nil for now — when nil,
+	// erasure rows are marked failed with a clear reason rather than
+	// silently completing). The DSR service is constructed inside the
+	// protected API group above; we re-construct the repo + service here
+	// since the worker runs outside that closure.
+	dsrPurgeRepo := repository.NewDSRRepo(dbPool)
+	dsrPurgeSvc := service.NewDSRService(service.NewPostgresDSRStore(dsrPurgeRepo))
+	dsrPurgeWorker := worker.NewDSRPurgeWorker(dbPool, func(ctx context.Context, id uuid.UUID) error {
+		_, err := dsrPurgeSvc.ProcessAccessRequest(ctx, id)
+		return err
+	})
+	workerRegistry.Register("dsr-purge", dsrPurgeWorker)
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 	workerRegistry.StartAll(workerCtx)
@@ -688,13 +742,54 @@ func main() {
 	})
 
 	// ──────────────────────── Start Server ────────────────────────
+	//
+	// M10 E27-S1: TLS 1.3 enforcement.
+	//
+	// Production must terminate TLS 1.3 inside the Go process so the
+	// app's security posture doesn't depend on a specific load balancer
+	// configuration. Three modes are supported:
+	//
+	//   1. TLS_CERT_PATH + TLS_KEY_PATH set → ListenAndServeTLS with
+	//      MinVersion=TLS 1.3 and a curated cipher suite list.
+	//   2. TLS_CERT_PATH unset → fall back to plaintext (dev / behind
+	//      a TLS-terminating reverse proxy that handles certs externally).
+	//      A WARNING is logged so the operator can't accidentally ship
+	//      this mode to production unnoticed.
+	//   3. Both set but file unreadable → log.Fatalf with the error so
+	//      misconfigurations are caught at boot, not at first request.
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	fmt.Printf("RawDrive API starting on :%s\n", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
+
+	certPath := os.Getenv("TLS_CERT_PATH")
+	keyPath := os.Getenv("TLS_KEY_PATH")
+
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 15 * time.Second, // mitigates Slowloris (CVE-2016-1000218 family)
+	}
+
+	if certPath != "" && keyPath != "" {
+		// TLS 1.3 only. The cipher suite list is implicitly the TLS 1.3
+		// ciphers (TLS_AES_*_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256)
+		// because Go's crypto/tls ignores CipherSuites for TLS 1.3.
+		srv.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS13,
+		}
+		fmt.Printf("RawDrive API starting on :%s with TLS 1.3 enforcement\n", port)
+		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil {
+			log.Fatalf("server error (TLS): %v", err)
+		}
+		return
+	}
+
+	log.Println("WARNING: TLS_CERT_PATH/TLS_KEY_PATH not set — serving plaintext HTTP. " +
+		"Production deployments MUST terminate TLS 1.3 (either here or at a trusted reverse proxy).")
+	fmt.Printf("RawDrive API starting on :%s (plaintext)\n", port)
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }
