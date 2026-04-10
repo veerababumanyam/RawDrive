@@ -10,16 +10,44 @@ interface FaceClusterDetailProps {
 }
 
 export function FaceClusterDetail({ token, clusterLabel, clusterName }: FaceClusterDetailProps) {
-  const [assets, setAssets] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(true);
+  const requestKey = clusterLabel;
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    assets: SearchResult[];
+  }>({
+    key: "",
+    assets: [],
+  });
+
+  const assets = requestState.key === requestKey ? requestState.assets : [];
+  const loading = requestState.key !== requestKey;
 
   useEffect(() => {
-    setLoading(true);
+    let ignore = false;
+
     searchAssets(token, `face:${clusterLabel}`)
-      .then((data) => setAssets(data.results))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token, clusterLabel]);
+      .then((data) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            assets: data.results,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            assets: [],
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [clusterLabel, requestKey, token]);
 
   return (
     <div>

@@ -48,7 +48,7 @@ func (s *AdminUserService) SuspendUser(ctx context.Context, id uuid.UUID, reason
 	if user == nil {
 		return ErrUserNotFound
 	}
-	if user.Role == "super_admin" {
+	if user.PlatformRole == "super_admin" {
 		return ErrCannotSuspendSuperAdmin
 	}
 	if err := s.userRepo.UpdateStatus(ctx, id, "suspended", reason, actorID); err != nil {
@@ -80,12 +80,12 @@ func (s *AdminUserService) ImpersonateUser(ctx context.Context, targetID uuid.UU
 	if user == nil {
 		return "", ErrUserNotFound
 	}
-	if user.Role == "super_admin" {
+	if user.PlatformRole == "super_admin" {
 		return "", ErrCannotImpersonateSuperAdmin
 	}
 	claims := jwt.MapClaims{
 		"sub": targetID.String(), "impersonator": adminID.String(),
-		"impersonation": true, "role": user.Role,
+		"impersonation": true, "role": user.PlatformRole,
 		"exp": time.Now().Add(1 * time.Hour).Unix(), "iat": time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -136,7 +136,7 @@ func (s *AdminUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID
 	if user == nil {
 		return ErrUserNotFound
 	}
-	if user.Role == "super_admin" {
+	if user.PlatformRole == "super_admin" {
 		return errors.New("cannot delete a super_admin")
 	}
 	if err := s.userRepo.UpdateStatus(ctx, id, "deleted", "gdpr_erasure", actorID); err != nil {

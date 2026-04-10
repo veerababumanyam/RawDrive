@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/api/admin", () => ({
   listAuditLogs: vi.fn(),
@@ -15,7 +15,7 @@ import AdminAuditLogsPage from "../audit-logs/page";
 const mockListLogs = vi.mocked(listAuditLogs);
 
 const sampleLogs = {
-  data: [
+  items: [
     {
       id: "log1", actor_id: "u1", actor_email: "admin@rawdrive.in",
       action: "user.suspended", resource_type: "user", resource_id: "u5",
@@ -32,7 +32,7 @@ const sampleLogs = {
       ip_address: "10.0.0.5", severity: "high", inserted_at: "2026-04-07T16:00:00Z",
     },
   ],
-  total: 3,
+  total_count: 3,
 };
 
 beforeEach(() => {
@@ -93,7 +93,7 @@ describe("AdminAuditLogsPage", () => {
   });
 
   it("shows empty state", async () => {
-    mockListLogs.mockResolvedValue({ data: [], total: 0 });
+    mockListLogs.mockResolvedValue({ items: [], total_count: 0 });
     render(<AdminAuditLogsPage />);
     await waitFor(() => {
       expect(screen.getByText(/no.*logs/i)).toBeTruthy();

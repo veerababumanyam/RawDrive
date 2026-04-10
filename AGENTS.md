@@ -1,82 +1,76 @@
-# AGENTS.md
+# RawDrive — Root Agent Guide
 
-## Project Overview
-- Name: rawdrive
-- Type: greenfield
-- Project ID: cobolt-rawdrive-f651e4
-- Root: C:/Users/admin/Desktop/RawDriveCobolt
-- Runtime: Codex IDE and compatible agent runtimes
+Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.35
+(milestone M16). **Read `frontend/AGENTS.md` before touching anything under `frontend/`**
+— Next.js here has breaking changes from public docs.
 
-## Tech Stack
-- Detected stack: TBD during planning
-- Confirm framework and runtime choices during `/cobolt-plan project`.
+> The top-level `README.md` is stale (says "React 19 + Vite, Go planned"). Reality is
+> Next.js 15 + shipped Go API. Trust this file and the code, not README marketing copy.
 
-## Compliance Requirements
-- None captured during init. Record compliance needs during planning if applicable.
+## Stack
 
-## Key Conventions
-- `cobolt-state.json` is the pipeline state source of truth.
-- `_cobolt-output/` stores reports, audit logs, evidence, and init readiness artifacts.
-- `_cobolt-docker/` contains project-scoped Docker Compose assets.
-- `.env.cobolt` is for user-provided infrastructure and must stay gitignored.
-- `e2e/playwright.config.js` is seeded during init so browser smoke can run at build time.
+- **Backend:** Go (`backend/cmd`, `backend/internal`) — Chi router, JWT, pgvector
+- **Frontend:** Next.js 15 + TS 5 + Tailwind v4 + pnpm (`frontend/`)
+- **Data plane:** Postgres 16 + pgvector, Valkey 8, NATS JetStream, Mailpit (dev SMTP)
+- **Storage:** Cloudflare R2 (default, standard/pro tiers); BYOS is enterprise-only
+- **E2E:** Playwright runs **inside the `playwright` docker service**, not Windows host
 
-## Test Photos — MANDATORY FOR ALL TESTING
+## Layout
 
-### Test Asset Directory
-`tests/photos/` contains 17 real JPEG files for integration, E2E, and UI testing:
-- **Wedding photos**: `Wedding (42).jpg` through `Wedding (259).jpg` (8 files)
-- **Portrait photos**: `veera.jpg`, `veera3.jpg`, `reethu.jpg`
-- **Social/event**: `493851581_*.jpg`, `WhatsApp Image *.jpeg`
-- **Reference cards**: `vCard.jpeg`, `Image.jpeg`
+```
+backend/     Go API — cmd/, internal/{handler,service,repository,middleware}
+frontend/    Next.js app — see frontend/AGENTS.md
+docs/        PRDs, TRDs, milestone plans
+e2e/         Playwright specs (executed via docker playwright container)
+infra/       Deployment / infra scripts
+tests/       Shared test assets, incl. tests/photos/ (17 real JPEGs)
+_cobolt-docker/  Docker tooling incl. playwright runner
+docker-compose.yml  postgres + valkey + nats + mailpit + playwright
+```
 
-### Usage Rules
-1. **Always use `tests/photos/` for upload, processing, and gallery tests.** Never generate synthetic test images.
-2. Real Indian wedding photography samples — ideal for AI pipeline testing (face detection, auto-tagging, duplicate detection).
-3. For E2E upload tests, pick 2–3 files to keep tests fast.
-4. Files with spaces in names are intentional — tests MUST handle filenames with spaces and parentheses.
+## Commands
 
-## MCP Tools — MANDATORY FOR ALL AGENTS
+```bash
+# Dev
+pnpm --dir frontend dev           # or: npm run dev
+go run ./backend/cmd/api          # backend dev
 
-### Playwright MCP (UI/UX Testing)
-- Browser-based E2E testing, visual regression, and interactive UI validation.
-- Config: `e2e/playwright.config.js` — base URL `http://localhost:8229`.
-- E2E auth: Dashboard tests require `storageState` or `addInitScript` for auth tokens.
-- Playwright runs in Docker, not the Windows host.
+# Tests (from repo root)
+npm run test                      # backend + frontend
+npm run test:backend              # go test ./... -count=1 -timeout 120s
+npm run test:frontend             # vitest (frontend)
+npm run lint                      # frontend eslint
 
-### Chrome DevTools MCP (Browser Debugging)
-- Live browser inspection: DOM snapshots, console logs, network requests, performance traces, accessibility audits, Lighthouse.
-- Tools: `take_screenshot`, `take_snapshot`, `evaluate_script`, `lighthouse_audit`, `list_network_requests`, `click`, `fill`, `navigate_page`.
+# Services (Postgres, Valkey, NATS, Mailpit, Playwright)
+docker compose up -d
+```
 
-### Figma MCP (Design Reference)
-- Read Figma design files for component specs, spacing, colors, and layout intent.
-- Tools: `figma_get_file`, `figma_get_file_nodes`, `figma_get_file_styles`, `figma_get_file_components`, `figma_get_images`.
-- Cross-reference with `design-tokens.json`.
+## Non-obvious project rules
 
-### Stitch MCP (Frontend Design Generation)
-- AI-powered screen generation, design system application, and variant exploration.
-- Tools: `generate_screen_from_text`, `edit_screens`, `generate_variants`, `apply_design_system`.
-- Design system at `.stitch/DESIGN.md`, synced from `design-tokens.json`.
+These are load-bearing — breaking them causes real bugs and has burned us before.
 
-### Context7 MCP (Library Documentation)
-Use Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service, including setup, version migrations, configuration, or library-specific debugging.
+- **Auth model:** OTP is **registration-only**. All subsequent logins are password-only.
+  Do not add OTP paths to login flows.
+- **Upload UX:** Upload lives **inside a gallery / sub-gallery**. There is no standalone
+  `/upload` route in the sidebar — do not add one.
+- **Storage:** Cloudflare R2 is the sole storage backend for standard/pro tiers.
+  BYOS (bring-your-own-storage) is enterprise-only. No local disk storage, no
+  hardcoded credentials — service creds live in admin settings CRUD.
+- **Derivatives:** All uploads must produce **WebP** derivatives. Storage auth is
+  required; download offers format choice.
+- **JWT claims:** Handlers must call `middleware.JWTClaimsFromContext(ctx)`. Never
+  define a local context-key type — it silently fails to match the middleware's key.
+- **Platform roles (M7.5):** Two-tier model. Use `RequirePlatformRole` middleware;
+  see `backend/seeds/` for test users.
+- **Icons & buttons:** All buttons use `GlassIconButton` + SF Symbol icons
+  (iOS 26 liquid-glass style). Do not introduce ad-hoc `<button>` elements for icons.
+- **Test photos:** UI/gallery tests use `tests/photos/` (17 real wedding JPEGs).
+  Never placeholders, never external URLs.
+- **E2E auth:** Dashboard E2E tests need auth-token injection via Playwright
+  `storageState` or `addInitScript` — no UI login flow in tests.
 
-Do not use it for refactoring, writing scripts from scratch, debugging business logic, code review, or general programming concepts.
+## When in doubt
 
-When using Context7 MCP:
-1. Start with `resolve-library-id` unless the user already provided an exact `/org/project` library ID.
-2. Pick the best match using exact name, description relevance, snippet coverage, source reputation, and benchmark score.
-3. Query docs with the selected library ID and the user's full question.
-4. Answer from the fetched docs.
-
-### Agent Checklist (Before Writing Any Test)
-- [ ] Use `tests/photos/` assets — never synthetic images
-- [ ] E2E tests use Playwright MCP or Chrome DevTools MCP for browser interaction
-- [ ] Visual validation uses `take_screenshot` or `take_snapshot`
-- [ ] Accessibility checks use Lighthouse audit
-- [ ] All tests handle filenames with spaces/parentheses
-
-## Next Steps
-- Update `.env.cobolt` if you already have infrastructure.
-- Start local services from `_cobolt-docker/` with `docker compose up -d` when needed.
-- Run `/cobolt-plan project .` to begin planning.
+- Frontend specifics → `frontend/AGENTS.md`
+- Milestone context → `docs/TechnicalRequirements/` and `cobolt-state.json`
+- Don't trust `README.md` for tech stack

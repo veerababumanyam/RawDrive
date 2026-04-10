@@ -10,7 +10,6 @@ vi.mock("@/lib/api/ai", () => ({
   getClusterAssets: vi.fn(),
 }));
 
-// eslint-disable-next-line import/first
 import { getFaceClusters, getClusterAssets } from "@/lib/api/ai";
 
 const mockGetClusters = vi.mocked(getFaceClusters);

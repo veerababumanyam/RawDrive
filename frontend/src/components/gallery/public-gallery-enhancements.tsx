@@ -45,8 +45,9 @@ export function PublicGalleryEnhancements({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [branding, setBranding] = useState<GalleryBranding | null>(null);
-  const [faceIdOpen, setFaceIdOpen] = useState(false);
+  const [faceIdDismissed, setFaceIdDismissed] = useState(false);
   const [facePinnedAssetIds, setFacePinnedAssetIds] = useState<string[] | null>(null);
+  const faceIdOpen = searchParams.get("faceid") === "1" && faceIdEnabled && !faceIdDismissed;
 
   // GAL-FR-118: View-as-Client mode — applies a body class the CSS can hook
   // into (`.view-as-client` selector) so the same component tree reads as
@@ -82,19 +83,12 @@ export function PublicGalleryEnhancements({
     };
   }, [slug]);
 
-  // GAL-FR-107: open FaceID gate when explicitly requested via ?faceid=1.
-  useEffect(() => {
-    if (searchParams.get("faceid") === "1" && faceIdEnabled) {
-      setFaceIdOpen(true);
-    }
-  }, [searchParams, faceIdEnabled]);
-
   const onFaceMatched = (assetIds: string[]) => {
     // Dispatch a window event that PublicGalleryGrid listens to. The grid
     // filters the rendered assets to the matched set — the filter chip
     // below is purely cosmetic, the grid is the source of truth.
     setFacePinnedAssetIds(assetIds);
-    setFaceIdOpen(false);
+    setFaceIdDismissed(true);
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("rawdrive:face-filter", { detail: { assetIds } }),
@@ -106,7 +100,7 @@ export function PublicGalleryEnhancements({
     // GAL-FR-109: full browsing fallback — close the gate, clear the grid
     // filter via the clear event, strip ?faceid=1 from the URL so reloads
     // don't reopen the modal.
-    setFaceIdOpen(false);
+    setFaceIdDismissed(true);
     setFacePinnedAssetIds(null);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("rawdrive:face-filter-clear"));

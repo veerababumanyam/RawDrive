@@ -234,3 +234,4 @@ The desktop companion is an **operator tool**, not a viewer app. Viewer and shar
 - Uploaded-video delivery and cloud playback constraints must align with [Video_Transcoding_Delivery.md](Video_Transcoding_Delivery.md).
 - Headless automation and bulk-ingest command-line workflows must align with [CLI_Tooling_Automation.md](../CLI_Tooling_Automation.md).
 - Shared-gallery and client-viewer PWA flows must align with [Client_Galleries_PWA.md](../Client_Galleries_PWA.md).
+- Client-side upload abuse prevention and deep local scan responsibilities must align with [../Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md](../Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md).

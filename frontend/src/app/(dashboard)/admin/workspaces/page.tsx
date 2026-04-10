@@ -20,7 +20,7 @@ export default function AdminWorkspacesPage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     listWorkspaces(token)
-      .then((res) => { setWorkspaces(res.data); setTotal(res.total); setError(null); })
+      .then((res) => { setWorkspaces(res.items); setTotal(res.total_count); setError(null); })
       .catch(() => setError("Failed to load workspaces"))
       .finally(() => setLoading(false));
   }, []);

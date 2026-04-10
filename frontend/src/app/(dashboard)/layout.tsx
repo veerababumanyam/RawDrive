@@ -103,19 +103,30 @@ function RoleSidebar({ role, userInfo }: { role: string; userInfo: { display_nam
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [role, setRole] = useState<string>(() => {
+  const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+  const [authenticated] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null;
+    const token = getStoredAccessToken();
+    if (!token) return false;
+    if (!isOnboarding) {
+      const claims = getStoredAccessTokenClaims();
+      if (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id) {
+        return false;
+      }
+    }
+    return true;
+  });
+  const [role] = useState<string>(() => {
     if (typeof window === "undefined") return "photographer";
     return getStoredPlatformRole();
   });
-  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string }>(() => {
+  const [userInfo] = useState<{ display_name?: string; email?: string }>(() => {
     if (typeof window === "undefined") return {};
     try {
       const stored = localStorage.getItem("user");
       return stored ? JSON.parse(stored) : {};
     } catch { return {}; }
   });
-  const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -132,13 +143,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         return;
       }
     }
-
-    setRole(getStoredPlatformRole());
-    try {
-      const stored = localStorage.getItem("user");
-      if (stored) setUserInfo(JSON.parse(stored));
-    } catch { /* fallback */ }
-    setAuthenticated(true);
   }, [isOnboarding]);
 
   if (authenticated === null) {

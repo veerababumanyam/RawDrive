@@ -66,7 +66,7 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
         await videoRef.current.play();
       }
       setStep("camera");
-    } catch (err) {
+    } catch {
       setError("Camera access denied. You can still browse all photos.");
       setStep("error");
     }

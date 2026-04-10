@@ -20,7 +20,7 @@ const mockSuspendUser = vi.mocked(suspendUser);
 const mockReactivateUser = vi.mocked(reactivateUser);
 
 const sampleUsers = {
-  data: [
+  items: [
     {
       id: "u1", email: "alice@example.com", full_name: "Alice Sharma",
       platform_role: "photographer", status: "active" as const, workspace_count: 2,
@@ -32,7 +32,7 @@ const sampleUsers = {
       state_name: "Maharashtra", tier_name: "Free", created_at: "2026-02-20T00:00:00Z",
     },
   ],
-  total: 2,
+  total_count: 2,
 };
 
 beforeEach(() => {
@@ -87,7 +87,7 @@ describe("AdminUsersPage", () => {
   });
 
   it("handles empty user list", async () => {
-    mockListUsers.mockResolvedValue({ data: [], total: 0 });
+    mockListUsers.mockResolvedValue({ items: [], total_count: 0 });
     render(<AdminUsersPage />);
     await waitFor(() => {
       expect(screen.getByText(/no users/i)).toBeTruthy();

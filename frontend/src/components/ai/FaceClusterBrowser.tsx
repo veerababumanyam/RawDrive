@@ -10,25 +10,58 @@ interface FaceClusterBrowserProps {
 }
 
 export function FaceClusterBrowser({ token, galleryId, onSelectCluster }: FaceClusterBrowserProps) {
-  const [clusters, setClusters] = useState<ClusterSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const requestKey = galleryId || "__all__";
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    clusters: ClusterSummary[];
+  }>({
+    key: "",
+    clusters: [],
+  });
+
+  const clusters = requestState.key === requestKey ? requestState.clusters : [];
+  const loading = requestState.key !== requestKey;
 
   useEffect(() => {
-    setLoading(true);
+    let ignore = false;
+
     getFaceClusters(token, galleryId)
-      .then(setClusters)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token, galleryId]);
+      .then((data) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            clusters: data,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            clusters: [],
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [galleryId, requestKey, token]);
 
   const handleRename = async (clusterLabel: string) => {
     if (!editName.trim()) return;
     await renameCluster(token, clusterLabel, editName.trim());
-    setClusters((prev) =>
-      prev.map((c) => (c.cluster_label === clusterLabel ? { ...c, cluster_name: editName.trim() } : c))
-    );
+    setRequestState((prev) => ({
+      ...prev,
+      clusters: prev.clusters.map((cluster) =>
+        cluster.cluster_label === clusterLabel
+          ? { ...cluster, cluster_name: editName.trim() }
+          : cluster,
+      ),
+    }));
     setEditingId(null);
     setEditName("");
   };

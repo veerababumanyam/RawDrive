@@ -8,29 +8,63 @@ import { getAnalyticsSummary, getAnalyticsDaily, type AnalyticsSummary, type Ana
 
 export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [gallery, setGallery] = useState<Gallery | null>(null);
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [daily, setDaily] = useState<AnalyticsDaily[]>([]);
   const [days, setDays] = useState(30);
-  const [loading, setLoading] = useState(true);
+  const token = getStoredAccessToken();
+  const requestKey = token ? `${id}:${days}` : "unauthenticated";
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    gallery: Gallery | null;
+    summary: AnalyticsSummary | null;
+    daily: AnalyticsDaily[];
+  }>({
+    key: "",
+    gallery: null,
+    summary: null,
+    daily: [],
+  });
+
+  const gallery = requestState.key === requestKey ? requestState.gallery : null;
+  const summary = requestState.key === requestKey ? requestState.summary : null;
+  const daily = requestState.key === requestKey ? requestState.daily : [];
+  const loading = Boolean(token) && requestState.key !== requestKey;
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token) {
+      return;
+    }
 
-    setLoading(true);
+    let ignore = false;
+
     Promise.all([
       getGallery(token, id),
       getAnalyticsSummary(token, id, days),
       getAnalyticsDaily(token, id, days),
-    ]).then(([g, s, d]) => {
-      setGallery(g);
-      setSummary(s);
-      setDaily(d || []);
-    }).catch(() => {
-      setSummary({ views: 0, unique_visitors: 0, downloads: 0, favorites: 0, shares: 0 });
-    }).finally(() => setLoading(false));
-  }, [id, days]);
+    ])
+      .then(([nextGallery, nextSummary, nextDaily]) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            gallery: nextGallery,
+            summary: nextSummary,
+            daily: nextDaily || [],
+          });
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            gallery: null,
+            summary: { views: 0, unique_visitors: 0, downloads: 0, favorites: 0, shares: 0 },
+            daily: [],
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [days, id, requestKey, token]);
 
   if (loading) {
     return (
@@ -38,7 +72,7 @@ export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id:
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-72 rounded bg-surface-sunken" />
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-24 rounded-2xl bg-surface-sunken" />)}
+            {[1, 2, 3, 4, 5].map((item) => <div key={item} className="h-24 rounded-2xl bg-surface-sunken" />)}
           </div>
         </div>
       </div>
@@ -59,22 +93,21 @@ export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id:
             )}
           </div>
           <div className="flex gap-2">
-            {[7, 30, 90].map(d => (
+            {[7, 30, 90].map((dayCount) => (
               <button
-                key={d}
-                onClick={() => setDays(d)}
+                key={dayCount}
+                onClick={() => setDays(dayCount)}
                 className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  days === d ? "bg-accent/20 text-accent font-medium" : "text-text-secondary hover:text-text-primary"
+                  days === dayCount ? "bg-accent/20 text-accent font-medium" : "text-text-secondary hover:text-text-primary"
                 }`}
               >
-                {d}d
+                {dayCount}d
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="Views" value={summary.views} />
@@ -85,20 +118,19 @@ export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      {/* Daily Chart (simple bar visualization) */}
       {daily.length > 0 && (
         <div className="surface-panel p-6">
           <h2 className="text-lg font-medium text-text-primary mb-4">Daily Views</h2>
           <div className="flex items-end gap-1 h-40">
-            {daily.map((d, i) => {
-              const maxViews = Math.max(...daily.map(x => x.views), 1);
-              const height = (d.views / maxViews) * 100;
+            {daily.map((entry, index) => {
+              const maxViews = Math.max(...daily.map((item) => item.views), 1);
+              const height = (entry.views / maxViews) * 100;
               return (
                 <div
-                  key={i}
+                  key={index}
                   className="flex-1 bg-accent/60 rounded-t-sm hover:bg-accent transition-colors"
                   style={{ height: `${Math.max(height, 2)}%` }}
-                  title={`${new Date(d.date).toLocaleDateString()}: ${d.views} views`}
+                  title={`${new Date(entry.date).toLocaleDateString()}: ${entry.views} views`}
                 />
               );
             })}

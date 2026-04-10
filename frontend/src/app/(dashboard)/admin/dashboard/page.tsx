@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
+  listUsers,
+  listWorkspaces,
+  getRevenueDashboard,
+  getSystemMetrics,
+} from "@/lib/api/admin";
+import {
   Users,
   LayoutGrid,
   TrendingUp,
@@ -39,30 +45,77 @@ interface DashboardData {
 }
 
 export default function AdminDashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState(false);
+  const token = getStoredAccessToken();
+  const requestKey = token ? "dashboard" : "unauthenticated";
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    data: DashboardData | null;
+    error: boolean;
+  }>({
+    key: "",
+    data: null,
+    error: false,
+  });
+
+  const data = requestState.key === requestKey ? requestState.data : null;
+  const error = token
+    ? requestState.key === requestKey
+      ? requestState.error
+      : false
+    : true;
+  const loading = Boolean(token) && requestState.key !== requestKey;
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    const headers = { Authorization: `Bearer ${token}` };
+    if (!token) {
+      return;
+    }
 
-    // Aggregate from existing admin endpoints
+    let ignore = false;
+
     Promise.all([
-      fetch("/api/v1/admin/users?limit=1", { headers }).then((r) => r.ok ? r.json() : null),
-      fetch("/api/v1/admin/workspaces?limit=1", { headers }).then((r) => r.ok ? r.json() : null),
-      fetch("/api/v1/admin/revenue", { headers }).then((r) => r.ok ? r.json() : null),
-      fetch("/api/v1/admin/system/metrics", { headers }).then((r) => r.ok ? r.json() : null),
+      listUsers(token, { limit: "1" }).catch(() => null),
+      listWorkspaces(token, { limit: "1" }).catch(() => null),
+      getRevenueDashboard(token).catch(() => null),
+      getSystemMetrics(token).catch(() => null),
     ])
       .then(([users, workspaces, revenue, system]) => {
-        setData({
-          totalUsers: users?.total != null ? Number(users.total).toLocaleString("en-IN") : "--",
-          activeWorkspaces: workspaces?.total != null ? Number(workspaces.total).toLocaleString("en-IN") : "--",
-          monthlyRevenue: revenue?.mrr != null ? `\u20B9${Number(revenue.mrr).toLocaleString("en-IN")}` : "--",
-          systemStatus: system?.api_latency_ms != null ? "Healthy" : "--",
+        if (ignore) {
+          return;
+        }
+
+        setRequestState({
+          key: requestKey,
+          data: {
+            totalUsers: users
+              ? users.total_count.toLocaleString("en-IN")
+              : "--",
+            activeWorkspaces: workspaces
+              ? workspaces.total_count.toLocaleString("en-IN")
+              : "--",
+            monthlyRevenue: revenue
+              ? `\u20B9${(revenue.mrr_paisa / 100).toLocaleString("en-IN")}`
+              : "--",
+            systemStatus: system
+              ? system.api_latency_p95_ms < 500 ? "Healthy" : "Degraded"
+              : "--",
+          },
+          error: !users && !workspaces && !revenue && !system,
         });
       })
-      .catch(() => setError(true));
-  }, []);
+      .catch(() => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            data: null,
+            error: true,
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [requestKey, token]);
 
   return (
     <div className="space-y-8">
@@ -81,12 +134,11 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* KPI Cards — aggregated from existing admin API endpoints */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Users} label="Total Users" value={data?.totalUsers ?? "--"} />
-        <StatCard icon={LayoutGrid} label="Active Workspaces" value={data?.activeWorkspaces ?? "--"} />
-        <StatCard icon={TrendingUp} label="Monthly Revenue" value={data?.monthlyRevenue ?? "--"} />
-        <StatCard icon={Server} label="System Status" value={data?.systemStatus ?? "--"} />
+        <StatCard icon={Users} label="Total Users" value={loading ? "..." : data?.totalUsers ?? "--"} />
+        <StatCard icon={LayoutGrid} label="Active Workspaces" value={loading ? "..." : data?.activeWorkspaces ?? "--"} />
+        <StatCard icon={TrendingUp} label="Monthly Revenue" value={loading ? "..." : data?.monthlyRevenue ?? "--"} />
+        <StatCard icon={Server} label="System Status" value={loading ? "..." : data?.systemStatus ?? "--"} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

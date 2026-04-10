@@ -12,9 +12,9 @@
 import type { ScanFinding, ScanResult } from "../types";
 import { scanForArchiveSignatures } from "./archive-signatures";
 
-const SOI = 0xffd8;
-const EOI = 0xffd9;
-const SOS = 0xffda; // Start of Scan — after this marker, payload is raw
+const SOI = 0xd8;
+const EOI = 0xd9;
+const SOS = 0xda; // Start of Scan — after this marker, payload is raw
                     //                 entropy-coded data until EOI.
 
 interface JpegConfig {
@@ -37,7 +37,7 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
   if (
     bytes.byteLength < 2 ||
     bytes[0] !== 0xff ||
-    bytes[1] !== 0xd8
+    bytes[1] !== SOI
   ) {
     findings.push({
       category: "malformed_structure",
@@ -78,8 +78,8 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
     offset++;
 
     // Standalone markers (no length) — SOI, EOI, RSTn, TEM.
-    if (marker === 0xd8 /* SOI */) continue;
-    if (marker === 0xd9 /* EOI */) {
+    if (marker === SOI) continue;
+    if (marker === EOI) {
       eoiOffset = offset;
       break;
     }
@@ -117,7 +117,7 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
 
     // SOS marker: from here on, the data is entropy-coded — break out of
     // the marker walker and scan forward for EOI.
-    if (marker === 0xda /* SOS */) {
+    if (marker === SOS) {
       reachedSOS = true;
       offset += segLen;
       break;
@@ -138,7 +138,7 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
   // Scan forward from SOS to find EOI.
   if (reachedSOS && eoiOffset < 0) {
     for (let i = offset; i < bytes.byteLength - 1; i++) {
-      if (bytes[i] === 0xff && bytes[i + 1] === 0xd9) {
+      if (bytes[i] === 0xff && bytes[i + 1] === EOI) {
         eoiOffset = i + 2;
         break;
       }

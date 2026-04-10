@@ -75,8 +75,16 @@ func (h *AdminModerationHandler) Escalate(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
+	// Body is optional — escalation with no notes is still valid, so we
+	// don't 400 when the body is absent or malformed.
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
 	actorID := middleware.GetActorID(r.Context())
-	if err := h.svc.EscalateContent(r.Context(), id, actorID); err != nil {
+	if err := h.svc.EscalateContent(r.Context(), id, body.Notes, actorID); err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

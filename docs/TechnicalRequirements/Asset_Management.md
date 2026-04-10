@@ -19,6 +19,8 @@ Every upload in RawDrive must use the **TUS (The Upload Solution) 1.0.0** protoc
 - **CLI Native Support:** The `rawdrive` CLI implements a concurrent TUS client for mass ingestion (>100 batches), bypassing browser memory/thread limits.
 
 ### 2.2 Pre-Processing & Async Pipeline
+Before upload session creation, RawDrive should perform client-side structural abuse screening on the source machine for supported formats, with stronger desktop-local screening for high-risk original-preservation formats. The detailed architecture is defined in **[Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md](Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md)**.
+
 Immediately after a chunk is uploaded:
 1.  **Integrity Check:** `Content-MD5` header verification for ہر chunk.
 2.  **EXIF Extraction:** Extract camera model, lens, exposure, GPS, and timestamp.

@@ -15,7 +15,6 @@ vi.mock("@/lib/api/commerce", async () => {
   };
 });
 
-// eslint-disable-next-line import/first
 import { listPublicBanners, trackGalleryEvent } from "@/lib/api/commerce";
 
 const mockList = vi.mocked(listPublicBanners);

@@ -7,19 +7,48 @@ import { getStoredAccessToken } from "@/lib/auth";
 
 export default function AIDuplicatesPage() {
   const token = getStoredAccessToken();
-  const [groups, setGroups] = useState<DuplicateGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const requestKey = token ? "duplicates" : "unauthenticated";
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    groups: DuplicateGroup[];
+  }>({
+    key: "",
+    groups: [],
+  });
+
+  const groups = requestState.key === requestKey ? requestState.groups : [];
+  const loading = Boolean(token) && requestState.key !== requestKey;
 
   useEffect(() => {
     if (!token) {
-      setLoading(false);
       return;
     }
+
+    let ignore = false;
+
     getDuplicates(token, "pending")
-      .then((data) => setGroups(data.groups))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token]);
+      .then((data) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            groups: data.groups,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            groups: [],
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [requestKey, token]);
 
   if (loading) {
     return (

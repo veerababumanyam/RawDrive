@@ -33,8 +33,8 @@ export default function AdminAuditLogsPage() {
       const params: Record<string, string> = {};
       if (actionFilter) params.action = actionFilter;
       const res = await listAuditLogs(token, params);
-      setLogs(res.data);
-      setTotal(res.total);
+      setLogs(res.items);
+      setTotal(res.total_count);
       setError(null);
     } catch {
       setError("Failed to load audit logs");

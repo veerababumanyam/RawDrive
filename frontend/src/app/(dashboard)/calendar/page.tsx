@@ -19,27 +19,66 @@ interface CalendarEvent {
 }
 
 export default function CalendarPage() {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const token = getStoredAccessToken();
 
   const monthStart = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]);
   const monthEnd = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), [currentDate]);
+  const requestKey = `${monthStart.toISOString()}:${monthEnd.toISOString()}`;
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    events: CalendarEvent[];
+    error: string | null;
+  }>({
+    key: "",
+    events: [],
+    error: null,
+  });
+
+  const events = requestState.key === requestKey ? requestState.events : [];
+  const error = token
+    ? requestState.key === requestKey
+      ? requestState.error
+      : null
+    : "Missing access token";
+  const loading = Boolean(token) && requestState.key !== requestKey;
 
   useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    let ignore = false;
     const from = monthStart.toISOString();
     const to = monthEnd.toISOString();
-    const token = getStoredAccessToken();
-    setLoading(true);
+
     fetch(`${API_BASE}/api/v1/calendar/events?from=${from}&to=${to}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
-      .then(setEvents)
-      .catch((err) => { setError(err?.message || "Failed to load events"); setEvents([]); })
-      .finally(() => setLoading(false));
-  }, [monthStart, monthEnd]);
+      .then((data) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            events: data,
+            error: null,
+          });
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            events: [],
+            error: err?.message || "Failed to load events",
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [monthEnd, monthStart, requestKey, token]);
 
   const daysInMonth = monthEnd.getDate();
   const firstDayOfWeek = monthStart.getDay();
@@ -47,7 +86,7 @@ export default function CalendarPage() {
 
   const eventsOnDay = (day: number) => {
     const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return events.filter((e) => e.start_at.startsWith(dayStr));
+    return events.filter((event) => event.start_at.startsWith(dayStr));
   };
 
   const monthName = currentDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
@@ -90,18 +129,15 @@ export default function CalendarPage() {
         <div className="animate-pulse h-96 bg-surface-sunken rounded-xl" />
       ) : (
         <div className="bg-surface-raised rounded-xl border border-border-default overflow-hidden">
-          {/* Day headers */}
           <div className="grid grid-cols-7 text-center text-xs font-medium text-text-tertiary py-2 border-b border-border-default">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d}>{d}</div>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div key={day}>{day}</div>
             ))}
           </div>
 
-          {/* Calendar grid */}
           <div className="grid grid-cols-7">
-            {/* Empty cells for offset */}
-            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-              <div key={`empty-${i}`} className="h-24 border-b border-r border-border-default bg-surface-sunken/30" />
+            {Array.from({ length: firstDayOfWeek }).map((_, index) => (
+              <div key={`empty-${index}`} className="h-24 border-b border-r border-border-default bg-surface-sunken/30" />
             ))}
             {days.map((day) => {
               const dayEvents = eventsOnDay(day);
@@ -123,15 +159,15 @@ export default function CalendarPage() {
                     {day}
                   </span>
                   <div className="mt-1 space-y-0.5">
-                    {dayEvents.slice(0, 2).map((e) => (
+                    {dayEvents.slice(0, 2).map((event) => (
                       <div
-                        key={e.id}
+                        key={event.id}
                         className={cn(
                           "w-full justify-start rounded-md px-1 py-0.5 text-[10px] font-medium truncate",
-                          calendarEventClasses[e.event_type] || "status-badge status-badge--neutral",
+                          calendarEventClasses[event.event_type] || "status-badge status-badge--neutral",
                         )}
                       >
-                        {e.title}
+                        {event.title}
                       </div>
                     ))}
                     {dayEvents.length > 2 && (

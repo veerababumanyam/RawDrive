@@ -38,8 +38,8 @@ export default function AdminUsersPage() {
       const params: Record<string, string> = {};
       if (searchQuery) params.search = searchQuery;
       const res = await listUsers(token, params);
-      setUsers(res.data);
-      setTotal(res.total);
+      setUsers(res.items);
+      setTotal(res.total_count);
       setError(null);
     } catch {
       setError("Failed to load users");

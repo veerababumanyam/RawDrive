@@ -1,6 +1,13 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import type { NextConfig } from "next";
 
+const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
+
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: frontendRoot,
+  },
   async rewrites() {
     return [
       {

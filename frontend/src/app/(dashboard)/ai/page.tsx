@@ -5,22 +5,54 @@ import { getCredits, getFaceClusters, type CreditSummary, type ClusterSummary } 
 import { getStoredAccessToken } from "@/lib/auth";
 
 export default function AIOverviewPage() {
-  const [credits, setCredits] = useState<CreditSummary | null>(null);
-  const [clusters, setClusters] = useState<ClusterSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const token = getStoredAccessToken();
+  const requestKey = token ? "overview" : "unauthenticated";
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    credits: CreditSummary | null;
+    clusters: ClusterSummary[];
+  }>({
+    key: "",
+    credits: null,
+    clusters: [],
+  });
+
+  const credits = requestState.key === requestKey ? requestState.credits : null;
+  const clusters = requestState.key === requestKey ? requestState.clusters : [];
+  const loading = Boolean(token) && requestState.key !== requestKey;
 
   useEffect(() => {
     if (!token) {
-      setLoading(false);
       return;
     }
+
+    let ignore = false;
+
     Promise.all([getCredits(token), getFaceClusters(token)])
-      .then(([c, cl]) => { setCredits(c); setClusters(cl); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token]);
+      .then(([nextCredits, nextClusters]) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            credits: nextCredits,
+            clusters: nextClusters,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            credits: null,
+            clusters: [],
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [requestKey, token]);
 
   if (loading) {
     return (
@@ -30,7 +62,8 @@ export default function AIOverviewPage() {
     );
   }
 
-  const formatPaisa = (p: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(p / 100);
+  const formatPaisa = (p: number) =>
+    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(p / 100);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

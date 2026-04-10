@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export const MAX_HISTORY_SIZE = 50;
 
@@ -68,18 +68,19 @@ export function useDesignHistory<T>(initialState: T) {
     });
   }, []);
 
-  // Keyboard shortcuts ref
   const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(undefined);
-  keyHandlerRef.current = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-      e.preventDefault();
-      undo();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
-      e.preventDefault();
-      redo();
-    }
-  };
+  useEffect(() => {
+    keyHandlerRef.current = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      }
+    };
+  }, [redo, undo]);
 
   return {
     state: history.present,

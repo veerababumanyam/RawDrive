@@ -39,18 +39,21 @@ func TestMetricPoint_Fields(t *testing.T) {
 }
 
 func TestAlertThreshold_Fields(t *testing.T) {
+	// Struct now mirrors migration 033 alert_thresholds — warning/critical
+	// thresholds rather than the prior operator/threshold/severity triple
+	// which did not exist as columns in the database.
+	svc := "api"
 	a := AlertThreshold{
-		ID:          uuid.New(),
-		ServiceName: "api",
-		MetricType:  "cpu_usage",
-		Operator:    ">",
-		Threshold:   90.0,
-		Severity:    "critical",
-		Enabled:     true,
+		ID:                uuid.New(),
+		ServiceName:       &svc,
+		MetricType:        "cpu",
+		WarningThreshold:  75.0,
+		CriticalThreshold: 90.0,
+		Enabled:           true,
 	}
-	assert.Equal(t, "cpu_usage", a.MetricType)
-	assert.InDelta(t, 90.0, a.Threshold, 0.01)
-	assert.Equal(t, "critical", a.Severity)
+	assert.Equal(t, "cpu", a.MetricType)
+	assert.InDelta(t, 75.0, a.WarningThreshold, 0.01)
+	assert.InDelta(t, 90.0, a.CriticalThreshold, 0.01)
 	assert.True(t, a.Enabled)
 }
 

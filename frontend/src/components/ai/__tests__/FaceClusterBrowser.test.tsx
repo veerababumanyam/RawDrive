@@ -7,10 +7,9 @@ vi.mock("@/lib/api/ai", () => ({
   renameCluster: vi.fn(),
 }));
 
-import { getFaceClusters, renameCluster } from "@/lib/api/ai";
+import { getFaceClusters } from "@/lib/api/ai";
 
 const mockGetFaceClusters = vi.mocked(getFaceClusters);
-const mockRenameCluster = vi.mocked(renameCluster);
 
 beforeEach(() => {
   vi.clearAllMocks();

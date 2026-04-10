@@ -26,11 +26,11 @@ func (s *AdminExportService) ExportUsersCSV(ctx context.Context, filter reposito
 	}
 	w := csv.NewWriter(writer)
 	defer w.Flush()
-	if err := w.Write([]string{"ID", "Email", "FullName", "Role", "Status", "CreatedAt"}); err != nil {
+	if err := w.Write([]string{"ID", "Email", "FullName", "PlatformRole", "Status", "CreatedAt"}); err != nil {
 		return err
 	}
 	for _, u := range result.Items {
-		if err := w.Write([]string{u.ID.String(), u.Email, u.FullName, u.Role, u.Status, u.CreatedAt.Format(time.RFC3339)}); err != nil {
+		if err := w.Write([]string{u.ID.String(), u.Email, u.FullName, u.PlatformRole, u.Status, u.CreatedAt.Format(time.RFC3339)}); err != nil {
 			return err
 		}
 	}

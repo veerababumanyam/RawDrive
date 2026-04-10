@@ -1,4 +1,5 @@
 # CoBolt managed
+.env
 .env.cobolt
 .env.mcp
 _cobolt-output/

@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,8 +39,10 @@ func TestRevenueTimeSeries_Fields(t *testing.T) {
 }
 
 func TestStateRevenue_Fields(t *testing.T) {
+	// state_id removed from the struct — states.id is INT in the real
+	// schema (migration 005), and the frontend state breakdown card
+	// does not render state_id anyway.
 	sr := StateRevenue{
-		StateID:         uuid.New(),
 		StateName:       "Karnataka",
 		Revenue:         2000000,
 		SubscriberCount: 150,

@@ -24,22 +24,23 @@ func TestAdminWorkspaceRow_Fields(t *testing.T) {
 	state := "Maharashtra"
 	tier := "agency"
 	row := AdminWorkspaceRow{
-		ID:          uuid.New(),
-		Name:        "Studio Kala",
-		OwnerID:     uuid.New(),
-		OwnerName:   "Rahul Sharma",
-		Status:      "active",
-		StateName:   &state,
-		TierSlug:    &tier,
-		MemberCount: 5,
-		StorageUsed: 5368709120,
-		GalleryCount: 250,
-		CreatedAt:   now,
+		ID:               uuid.New(),
+		Name:             "Studio Kala",
+		OwnerID:          uuid.New(),
+		OwnerName:        "Rahul Sharma",
+		Status:           "active",
+		StateName:        &state,
+		SubscriptionTier: &tier,
+		MemberCount:      5,
+		StorageUsedBytes: 5368709120,
+		GalleryCount:     250,
+		CreatedAt:        now,
 	}
 	assert.Equal(t, "Studio Kala", row.Name)
 	assert.Equal(t, "Rahul Sharma", row.OwnerName)
 	assert.Equal(t, "Maharashtra", *row.StateName)
-	assert.Equal(t, int64(5368709120), row.StorageUsed)
+	assert.Equal(t, "agency", *row.SubscriptionTier)
+	assert.Equal(t, int64(5368709120), row.StorageUsedBytes)
 	assert.Equal(t, int64(250), row.GalleryCount)
 }
 

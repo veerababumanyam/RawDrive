@@ -25,49 +25,59 @@ type AdminWorkspaceFilter struct {
 	Sort     string // "created_at", "storage_used", "member_count"
 }
 
+// AdminWorkspaceRow is the wire shape returned by GET /api/v1/admin/workspaces.
+// JSON tags match the frontend WorkspaceOverview interface in
+// frontend/src/lib/api/admin.ts exactly.
+//
+// Field sources (see admin_workspace_repo.List for the full SELECT):
+// - owner_name: users.display_name (there is no users.full_name column)
+// - storage_used_bytes: SUM(assets.size_bytes) where workspace_id matches
+// - asset_count: COUNT(assets) where workspace_id matches
+// - subscription_tier: reserved for future subscriptions integration, null today
 type AdminWorkspaceRow struct {
-	ID              uuid.UUID  `db:"id"`
-	Name            string     `db:"name"`
-	Slug            string     `db:"slug"`
-	OwnerID         uuid.UUID  `db:"owner_id"`
-	OwnerName       string     `db:"owner_name"`
-	Status          string     `db:"status"`
-	StateID         *uuid.UUID `db:"state_id"`
-	StateName       *string    `db:"state_name"`
-	TierSlug        *string    `db:"tier_slug"`
-	StorageUsed     int64      `db:"storage_used"`
-	StorageLimit    int64      `db:"storage_limit"`
-	MemberCount     int64      `db:"member_count"`
-	GalleryCount    int64      `db:"gallery_count"`
-	CreatedAt       time.Time  `db:"created_at"`
+	ID               uuid.UUID `db:"id" json:"id"`
+	Name             string    `db:"name" json:"name"`
+	OwnerID          uuid.UUID `db:"owner_id" json:"owner_id"`
+	OwnerName        string    `db:"owner_name" json:"owner_name"`
+	Status           string    `db:"status" json:"status"`
+	StateID          *int      `db:"state_id" json:"state_id,omitempty"`
+	StateName        *string   `db:"state_name" json:"state_name,omitempty"`
+	SubscriptionTier *string   `db:"subscription_tier" json:"subscription_tier,omitempty"`
+	StorageUsedBytes int64     `db:"storage_used_bytes" json:"storage_used_bytes"`
+	MemberCount      int64     `db:"member_count" json:"member_count"`
+	GalleryCount     int64     `db:"gallery_count" json:"gallery_count"`
+	AssetCount       int64     `db:"asset_count" json:"asset_count"`
+	CreatedAt        time.Time `db:"created_at" json:"created_at"`
 }
 
 type AdminWorkspaceDetail struct {
-	ID              uuid.UUID  `db:"id"`
-	Name            string     `db:"name"`
-	Slug            string     `db:"slug"`
-	OwnerID         uuid.UUID  `db:"owner_id"`
-	OwnerName       string     `db:"owner_name"`
-	Status          string     `db:"status"`
-	StateID         *uuid.UUID `db:"state_id"`
-	StateName       *string    `db:"state_name"`
-	TierSlug        *string    `db:"tier_slug"`
-	StorageUsed     int64      `db:"storage_used"`
-	StorageLimit    int64      `db:"storage_limit"`
-	MemberCount     int64      `db:"member_count"`
-	GalleryCount    int64      `db:"gallery_count"`
-	AssetCount      int64      `db:"asset_count"`
-	CreatedAt       time.Time  `db:"created_at"`
-	UpdatedAt       time.Time  `db:"updated_at"`
-	Members         []WorkspaceMemberRow
+	ID               uuid.UUID            `db:"id" json:"id"`
+	Name             string               `db:"name" json:"name"`
+	OwnerID          uuid.UUID            `db:"owner_id" json:"owner_id"`
+	OwnerName        string               `db:"owner_name" json:"owner_name"`
+	Status           string               `db:"status" json:"status"`
+	StateID          *int                 `db:"state_id" json:"state_id,omitempty"`
+	StateName        *string              `db:"state_name" json:"state_name,omitempty"`
+	SubscriptionTier *string              `db:"subscription_tier" json:"subscription_tier,omitempty"`
+	StorageUsedBytes int64                `db:"storage_used_bytes" json:"storage_used_bytes"`
+	MemberCount      int64                `db:"member_count" json:"member_count"`
+	GalleryCount     int64                `db:"gallery_count" json:"gallery_count"`
+	AssetCount       int64                `db:"asset_count" json:"asset_count"`
+	CreatedAt        time.Time            `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time            `db:"updated_at" json:"updated_at"`
+	Members          []WorkspaceMemberRow `json:"members"`
 }
 
+// WorkspaceMemberRow shape for the members panel on the workspace detail
+// page. role is resolved from workspace_members.role_id → roles.name
+// (migration 005 stores the FK, not the string). joined_at is the real
+// column name, not created_at.
 type WorkspaceMemberRow struct {
-	UserID    uuid.UUID `db:"user_id"`
-	FullName  string    `db:"full_name"`
-	Email     string    `db:"email"`
-	Role      string    `db:"role"`
-	JoinedAt  time.Time `db:"joined_at"`
+	UserID   uuid.UUID `db:"user_id" json:"user_id"`
+	FullName string    `db:"full_name" json:"full_name"`
+	Email    string    `db:"email" json:"email"`
+	Role     string    `db:"role" json:"role"`
+	JoinedAt time.Time `db:"joined_at" json:"joined_at"`
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +91,40 @@ type AdminWorkspaceRepo struct {
 func NewAdminWorkspaceRepo(pool *pgxpool.Pool) *AdminWorkspaceRepo {
 	return &AdminWorkspaceRepo{pool: pool}
 }
+
+// adminWorkspaceSelectColumns is the shared SELECT list used by List and
+// GetByID. All storage/count metrics are computed on-the-fly via LATERAL
+// subqueries against the real tables — there are no denormalized
+// storage_used/storage_limit columns on the workspaces table, despite
+// what earlier versions of this repo assumed.
+const adminWorkspaceSelectColumns = `
+		w.id,
+		w.name,
+		w.owner_id,
+		COALESCE(u.display_name, '') AS owner_name,
+		w.status,
+		w.state_id,
+		st.name AS state_name,
+		CAST(NULL AS text) AS subscription_tier,
+		COALESCE(
+			(SELECT SUM(size_bytes) FROM assets
+			 WHERE workspace_id = w.id AND deleted_at IS NULL),
+			0
+		) AS storage_used_bytes,
+		COALESCE(
+			(SELECT COUNT(*) FROM workspace_members WHERE workspace_id = w.id),
+			0
+		) AS member_count,
+		COALESCE(
+			(SELECT COUNT(*) FROM galleries WHERE workspace_id = w.id),
+			0
+		) AS gallery_count,
+		COALESCE(
+			(SELECT COUNT(*) FROM assets
+			 WHERE workspace_id = w.id AND deleted_at IS NULL),
+			0
+		) AS asset_count,
+		w.created_at`
 
 func (r *AdminWorkspaceRepo) List(ctx context.Context, f AdminWorkspaceFilter) (*PaginatedResult[AdminWorkspaceRow], error) {
 	if f.Limit <= 0 || f.Limit > 100 {
@@ -97,11 +141,6 @@ func (r *AdminWorkspaceRepo) List(ctx context.Context, f AdminWorkspaceFilter) (
 		where = append(where, fmt.Sprintf(
 			"(to_tsvector('english', w.name) @@ plainto_tsquery('english', $%d))", idx))
 		args = append(args, f.Search)
-		idx++
-	}
-	if f.PlanTier != "" {
-		where = append(where, fmt.Sprintf("s.tier_slug = $%d", idx))
-		args = append(args, f.PlanTier)
 		idx++
 	}
 	if f.Status != "" {
@@ -127,13 +166,13 @@ func (r *AdminWorkspaceRepo) List(ctx context.Context, f AdminWorkspaceFilter) (
 
 	sortCol := "w.created_at"
 	switch f.Sort {
-	case "storage_used":
-		sortCol = "COALESCE(w.storage_used, 0)"
+	case "storage_used", "storage_used_bytes":
+		sortCol = "storage_used_bytes"
 	case "member_count":
-		sortCol = "mc.member_count"
+		sortCol = "member_count"
 	}
 
-	// Count
+	// Count (without cursor condition).
 	countWhere := whereClause
 	countArgs := args
 	if f.Cursor != nil && len(where) > 0 {
@@ -146,41 +185,25 @@ func (r *AdminWorkspaceRepo) List(ctx context.Context, f AdminWorkspaceFilter) (
 		countArgs = args[:len(args)-1]
 	}
 
-	var totalCount int64
-	err := r.pool.QueryRow(ctx, fmt.Sprintf(`
+	countSQL := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM workspaces w
-		LEFT JOIN subscriptions s ON s.workspace_id = w.id AND s.status = 'active'
-		%s`, countWhere), countArgs...).Scan(&totalCount)
-	if err != nil {
+		%s`, countWhere)
+
+	var totalCount int64
+	if err := r.pool.QueryRow(ctx, countSQL, countArgs...).Scan(&totalCount); err != nil {
 		return nil, fmt.Errorf("admin workspace count: %w", err)
 	}
 
 	query := fmt.Sprintf(`
-		SELECT
-			w.id, w.name, w.slug, w.owner_id,
-			COALESCE(u.full_name, '') AS owner_name,
-			w.status, w.state_id,
-			st.name AS state_name,
-			s.tier_slug,
-			COALESCE(w.storage_used, 0) AS storage_used,
-			COALESCE(w.storage_limit, 0) AS storage_limit,
-			COALESCE(mc.member_count, 0) AS member_count,
-			COALESCE(gc.gallery_count, 0) AS gallery_count,
-			w.created_at
+		SELECT%s
 		FROM workspaces w
 		LEFT JOIN users u ON u.id = w.owner_id
 		LEFT JOIN states st ON st.id = w.state_id
-		LEFT JOIN subscriptions s ON s.workspace_id = w.id AND s.status = 'active'
-		LEFT JOIN LATERAL (
-			SELECT COUNT(*) AS member_count FROM workspace_members WHERE workspace_id = w.id
-		) mc ON true
-		LEFT JOIN LATERAL (
-			SELECT COUNT(*) AS gallery_count FROM galleries WHERE workspace_id = w.id
-		) gc ON true
 		%s
-		ORDER BY %s DESC, w.id ASC
-		LIMIT $%d`, whereClause, sortCol, idx)
+		ORDER BY %s DESC NULLS LAST, w.id ASC
+		LIMIT $%d`,
+		adminWorkspaceSelectColumns, whereClause, sortCol, idx)
 
 	args = append(args, f.Limit+1)
 
@@ -210,33 +233,15 @@ func (r *AdminWorkspaceRepo) List(ctx context.Context, f AdminWorkspaceFilter) (
 }
 
 func (r *AdminWorkspaceRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminWorkspaceDetail, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT
-			w.id, w.name, w.slug, w.owner_id,
-			COALESCE(u.full_name, '') AS owner_name,
-			w.status, w.state_id,
-			st.name AS state_name,
-			s.tier_slug,
-			COALESCE(w.storage_used, 0) AS storage_used,
-			COALESCE(w.storage_limit, 0) AS storage_limit,
-			COALESCE(mc.member_count, 0) AS member_count,
-			COALESCE(gc.gallery_count, 0) AS gallery_count,
-			COALESCE(ac.asset_count, 0) AS asset_count,
-			w.created_at, w.updated_at
+	query := fmt.Sprintf(`
+		SELECT%s,
+			w.updated_at
 		FROM workspaces w
 		LEFT JOIN users u ON u.id = w.owner_id
 		LEFT JOIN states st ON st.id = w.state_id
-		LEFT JOIN subscriptions s ON s.workspace_id = w.id AND s.status = 'active'
-		LEFT JOIN LATERAL (
-			SELECT COUNT(*) AS member_count FROM workspace_members WHERE workspace_id = w.id
-		) mc ON true
-		LEFT JOIN LATERAL (
-			SELECT COUNT(*) AS gallery_count FROM galleries WHERE workspace_id = w.id
-		) gc ON true
-		LEFT JOIN LATERAL (
-			SELECT COUNT(*) AS asset_count FROM assets a JOIN galleries g ON g.id = a.gallery_id WHERE g.workspace_id = w.id
-		) ac ON true
-		WHERE w.id = $1`, id)
+		WHERE w.id = $1`, adminWorkspaceSelectColumns)
+
+	rows, err := r.pool.Query(ctx, query, id)
 	if err != nil {
 		return nil, fmt.Errorf("admin workspace get: %w", err)
 	}
@@ -248,13 +253,20 @@ func (r *AdminWorkspaceRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminW
 		return nil, fmt.Errorf("admin workspace scan: %w", err)
 	}
 
-	// Fetch members
+	// Members. The role column is resolved from workspace_members.role_id
+	// via the roles table (migration 005 stores the FK, not the string).
+	// joined_at is the real column name.
 	mRows, err := r.pool.Query(ctx, `
-		SELECT wm.user_id, u.full_name, u.email, wm.role, wm.created_at AS joined_at
+		SELECT wm.user_id,
+		       COALESCE(u.display_name, '') AS full_name,
+		       u.email,
+		       r.name AS role,
+		       wm.joined_at
 		FROM workspace_members wm
 		JOIN users u ON u.id = wm.user_id
+		JOIN roles r ON r.id = wm.role_id
 		WHERE wm.workspace_id = $1
-		ORDER BY wm.created_at ASC`, id)
+		ORDER BY wm.joined_at ASC`, id)
 	if err != nil {
 		return nil, fmt.Errorf("admin workspace members: %w", err)
 	}
@@ -276,7 +288,8 @@ func (r *AdminWorkspaceRepo) Suspend(ctx context.Context, id uuid.UUID, reason s
 		 SET status = 'suspended',
 		     suspended_at = now(),
 		     suspended_reason = $2,
-		     suspended_by = $3
+		     suspended_by = $3,
+		     updated_at = now()
 		 WHERE id = $1 AND deleted_at IS NULL AND status != 'deleted'`,
 		id, reason, actorID)
 	if err != nil {
@@ -295,7 +308,8 @@ func (r *AdminWorkspaceRepo) Unsuspend(ctx context.Context, id uuid.UUID) error 
 		 SET status = 'active',
 		     suspended_at = NULL,
 		     suspended_reason = NULL,
-		     suspended_by = NULL
+		     suspended_by = NULL,
+		     updated_at = now()
 		 WHERE id = $1 AND status = 'suspended' AND deleted_at IS NULL`,
 		id)
 	if err != nil {
@@ -316,7 +330,8 @@ func (r *AdminWorkspaceRepo) SoftDelete(ctx context.Context, id uuid.UUID, actor
 		`UPDATE workspaces
 		 SET status = 'deleted',
 		     deleted_at = now(),
-		     deleted_by = $2
+		     deleted_by = $2,
+		     updated_at = now()
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		id, actorID)
 	if err != nil {

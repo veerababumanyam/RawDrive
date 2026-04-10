@@ -56,6 +56,12 @@ Establish RawDrive as a "Fortress of Trust" for professional photographers and t
 - **In Transit:** TLS 1.3 mandatory for all API and web traffic.
 - **Key Management:** Use of Cloud-HSM (Hardware Security Modules) for root certificate management.
 
+### 4.4 Upload Abuse Prevention
+- **Client-Side Gate First:** Suspicious image uploads should be screened on the client machine before TUS session creation or multipart upload begins.
+- **Strict Original Protection:** Workspaces retaining exact originals should support stronger local screening requirements for TIFF, HEIC, and RAW-family formats.
+- **Minimal Server Assertion:** RawDrive servers should verify that required client-side screening occurred without becoming a full central scanning bottleneck.
+- **Architecture Reference:** See **[Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md](Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md)**.
+
 ---
 
 ## 5. AI & Biometric Privacy (FaceID)

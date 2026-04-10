@@ -15,7 +15,6 @@ vi.mock("@/lib/api/commerce", async () => {
   };
 });
 
-// eslint-disable-next-line import/first
 import { evaluatePrintPreflight, upsertPublicCart } from "@/lib/api/commerce";
 
 const mockPreflight = vi.mocked(evaluatePrintPreflight);

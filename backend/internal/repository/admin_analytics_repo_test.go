@@ -19,31 +19,21 @@ func TestActiveUserMetrics_Fields(t *testing.T) {
 	assert.Equal(t, int64(18000), m.MAU)
 }
 
-func TestEngagementMetrics_Fields(t *testing.T) {
-	m := EngagementMetrics{
-		Uploads:           3500,
-		GalleriesCreated:  120,
-		ClientInvitations: 45,
+func TestAnalyticsFeatureAdoption_Fields(t *testing.T) {
+	f := AnalyticsFeatureAdoption{
+		Feature:     "Client Galleries",
+		AdoptionPct: 72.0,
+		ActiveUsers: 13000,
 	}
-	assert.Equal(t, int64(3500), m.Uploads)
-	assert.Equal(t, int64(120), m.GalleriesCreated)
-	assert.Equal(t, int64(45), m.ClientInvitations)
+	assert.Equal(t, "Client Galleries", f.Feature)
+	assert.InDelta(t, 72.0, f.AdoptionPct, 0.01)
+	assert.Equal(t, int64(13000), f.ActiveUsers)
 }
 
-func TestFeatureAdoption_Fields(t *testing.T) {
-	f := FeatureAdoption{
-		FeatureName: "AI Tagging",
-		Percentage:  72.0,
-		UserCount:   13000,
-	}
-	assert.Equal(t, "AI Tagging", f.FeatureName)
-	assert.InDelta(t, 72.0, f.Percentage, 0.01)
-	assert.Equal(t, int64(13000), f.UserCount)
-}
-
-func TestTimeSeriesPoint_Fields(t *testing.T) {
+func TestGrowthTimeSeriesPoint_Fields(t *testing.T) {
 	now := time.Now()
-	p := TimeSeriesPoint{Date: now, Value: 42}
+	p := GrowthTimeSeriesPoint{Date: now, NewUsers: 42, Cumulative: 10042}
 	assert.Equal(t, now, p.Date)
-	assert.Equal(t, int64(42), p.Value)
+	assert.Equal(t, int64(42), p.NewUsers)
+	assert.Equal(t, int64(10042), p.Cumulative)
 }

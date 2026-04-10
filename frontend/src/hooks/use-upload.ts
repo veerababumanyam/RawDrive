@@ -8,33 +8,12 @@ import { sha256HexChunked } from "@/lib/upload-screening/hash";
 import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
 
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-
-// M16 E47-S1/S3: metadata budget for browser screening. Kept in sync with
-// the policy row seeded in migration 054. If the backend publishes a new
-// policy with a different budget the worker picks it up automatically via
-// the policy catalog — this constant is only the fallback.
+const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
 
-/**
- * M16 E47-S1: Run the upload screening pipeline for a single File.
- *
- * We run the screener on the main thread (instead of dispatching to a
- * Web Worker) because the browser's <ImageBitmap> decode path already
- * runs off-thread inside the browser, and our pure-function screener
- * is O(file.size) with very small constants. The Web Worker variant
- * (src/workers/upload-screening.worker.ts) exists for future scale-up
- * and for environments where the main thread is budget-constrained.
- *
- * The screening pipeline is:
- *   1. Fetch the active policy version (10-minute cached)
- *   2. Structural screen via screen() — decides pass/block/needs_desktop_scan
- *   3. SHA-256 the file (chunked)
- *   4. Build the canonical manifest
- */
 async function runScreener(
   file: File,
-  apiUrl: string
+  apiUrl: string,
 ): Promise<ScanManifest> {
   const policyVersion = await activePolicyVersion(apiUrl);
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -52,40 +31,17 @@ export function useUpload(apiUrl: string, token: string) {
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
   const pausedRef = useRef(false);
 
-  const updateItem = (id: string, updates: Partial<UploadItem>) => {
+  const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, ...updates } : i))
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item)),
     );
-  };
+  }, []);
 
-  const addFiles = useCallback(
-    (files: File[]) => {
-      const newItems: UploadItem[] = files.map((file) => ({
-        id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        file,
-        progress: 0,
-        status: "pending" as const,
-      }));
-
-      setItems((prev) => [...prev, ...newItems]);
-
-      for (const item of newItems) {
-        chunkedUpload(item);
-      }
-    },
-    [apiUrl, token]
-  );
-
-  const chunkedUpload = async (item: UploadItem) => {
+  const chunkedUpload = useCallback(async (item: UploadItem) => {
     const controller = new AbortController();
     abortControllers.current.set(item.id, controller);
 
     try {
-      // ──────────────── M16 E47-S4: Tier D pre-flight screening ────────────
-      // Run the local structural screener BEFORE opening a TUS session so
-      // that a blocked file never sends bytes over the wire. This is the
-      // happy path; the backend re-validates at session create for the
-      // trust boundary.
       updateItem(item.id, { status: "screening" });
       let manifest: ScanManifest;
       try {
@@ -110,8 +66,7 @@ export function useUpload(apiUrl: string, token: string) {
       if (manifest.decision === "needs_desktop_scan") {
         updateItem(item.id, {
           status: "needs_desktop",
-          error:
-            "this format requires the RawDrive Desktop companion (M17)",
+          error: "this format requires the RawDrive Desktop companion (M17)",
           scanManifest: manifest,
         });
         return;
@@ -119,7 +74,6 @@ export function useUpload(apiUrl: string, token: string) {
 
       updateItem(item.id, { status: "uploading", scanManifest: manifest });
 
-      // Step 1: Create upload session (with scan manifest attached).
       const createRes = await fetch(`${apiUrl}/api/v1/uploads`, {
         method: "POST",
         headers: {
@@ -137,8 +91,6 @@ export function useUpload(apiUrl: string, token: string) {
       });
 
       if (!createRes.ok) {
-        // Server-side validation rejected the manifest. Map the error code
-        // to a user-facing status so the UI can surface the right message.
         let errorBody: { error?: string; message?: string } = {};
         try {
           errorBody = await createRes.json();
@@ -156,12 +108,11 @@ export function useUpload(apiUrl: string, token: string) {
         }
         throw new Error(`Create session failed: ${createRes.status}`);
       }
-      const { upload_id } = await createRes.json();
 
-      // Step 2: Upload chunks
+      const { upload_id } = await createRes.json();
       let offset = 0;
+
       while (offset < item.file.size) {
-        // Check pause
         while (pausedRef.current) {
           await new Promise((resolve) => setTimeout(resolve, 500));
           if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -181,16 +132,21 @@ export function useUpload(apiUrl: string, token: string) {
           signal: controller.signal,
         });
 
-        if (!patchRes.ok) throw new Error(`Chunk upload failed: ${patchRes.status}`);
+        if (!patchRes.ok) {
+          throw new Error(`Chunk upload failed: ${patchRes.status}`);
+        }
 
         offset = end;
-        const progress = Math.round((offset / item.file.size) * 100);
-        updateItem(item.id, { progress });
+        updateItem(item.id, {
+          progress: Math.round((offset / item.file.size) * 100),
+        });
       }
 
       updateItem(item.id, { status: "complete", progress: 100 });
     } catch (err) {
-      if ((err as Error).name === "AbortError") return;
+      if ((err as Error).name === "AbortError") {
+        return;
+      }
       updateItem(item.id, {
         status: "error",
         error: (err as Error).message,
@@ -198,24 +154,38 @@ export function useUpload(apiUrl: string, token: string) {
     } finally {
       abortControllers.current.delete(item.id);
     }
-  };
+  }, [apiUrl, token, updateItem]);
+
+  const addFiles = useCallback((files: File[]) => {
+    const newItems: UploadItem[] = files.map((file) => ({
+      id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      progress: 0,
+      status: "pending" as const,
+    }));
+
+    setItems((prev) => [...prev, ...newItems]);
+
+    for (const item of newItems) {
+      void chunkedUpload(item);
+    }
+  }, [chunkedUpload]);
 
   const cancel = useCallback((id: string) => {
     const controller = abortControllers.current.get(id);
     if (controller) controller.abort();
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
-  const retry = useCallback(
-    (id: string) => {
-      const item = items.find((i) => i.id === id);
-      if (item) chunkedUpload({ ...item, status: "pending", progress: 0 });
-    },
-    [items]
-  );
+  const retry = useCallback((id: string) => {
+    const item = items.find((entry) => entry.id === id);
+    if (item) {
+      void chunkedUpload({ ...item, status: "pending", progress: 0 });
+    }
+  }, [chunkedUpload, items]);
 
   const cancelAll = useCallback(() => {
-    abortControllers.current.forEach((c) => c.abort());
+    abortControllers.current.forEach((controller) => controller.abort());
     abortControllers.current.clear();
     setItems([]);
   }, []);

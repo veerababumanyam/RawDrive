@@ -16,22 +16,28 @@ import (
 // Types
 // ---------------------------------------------------------------------------
 
+// AuditLogEntry is the wire shape returned by GET /api/v1/admin/audit-logs.
+// JSON tags match the frontend AuditLogEntry TypeScript interface in
+// frontend/src/lib/api/admin.ts. Note the CreatedAt → inserted_at JSON
+// alias: the database column is created_at (migration 034) but the
+// frontend and original admin spec used inserted_at, so we project that
+// name at the wire layer to keep both sides stable.
 type AuditLogEntry struct {
-	ID           uuid.UUID        `db:"id"`
-	ActorID      uuid.UUID        `db:"actor_id"`
-	ActorType    string           `db:"actor_type"`
-	Action       string           `db:"action"`
-	ResourceType string           `db:"resource_type"`
-	ResourceID   string           `db:"resource_id"`
-	Metadata     json.RawMessage  `db:"metadata"`
-	BeforeState  json.RawMessage  `db:"before_state"`
-	AfterState   json.RawMessage  `db:"after_state"`
-	IPAddress    *string          `db:"ip_address"`
-	UserAgent    *string          `db:"user_agent"`
-	WorkspaceID  *uuid.UUID       `db:"workspace_id"`
-	StateID      *uuid.UUID       `db:"state_id"`
-	Severity     string           `db:"severity"`
-	CreatedAt    time.Time        `db:"created_at"`
+	ID           uuid.UUID       `db:"id" json:"id"`
+	ActorID      uuid.UUID       `db:"actor_id" json:"actor_id"`
+	ActorType    string          `db:"actor_type" json:"actor_type"`
+	Action       string          `db:"action" json:"action"`
+	ResourceType string          `db:"resource_type" json:"resource_type"`
+	ResourceID   string          `db:"resource_id" json:"resource_id,omitempty"`
+	Metadata     json.RawMessage `db:"metadata" json:"metadata,omitempty"`
+	BeforeState  json.RawMessage `db:"before_state" json:"before,omitempty"`
+	AfterState   json.RawMessage `db:"after_state" json:"after,omitempty"`
+	IPAddress    *string         `db:"ip_address" json:"ip_address,omitempty"`
+	UserAgent    *string         `db:"user_agent" json:"user_agent,omitempty"`
+	WorkspaceID  *uuid.UUID      `db:"workspace_id" json:"workspace_id,omitempty"`
+	StateID      *uuid.UUID      `db:"state_id" json:"state_id,omitempty"`
+	Severity     string          `db:"severity" json:"severity"`
+	CreatedAt    time.Time       `db:"created_at" json:"inserted_at"`
 }
 
 type AuditLogFilter struct {
@@ -219,10 +225,19 @@ func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedRe
 		return nil, fmt.Errorf("audit log count: %w", err)
 	}
 
+	// resource_type / resource_id / before_state / after_state are
+	// nullable columns (migration 034) but the AuditLogEntry struct
+	// declares them as non-pointer. COALESCE them to safe zero values
+	// so pgx's StructByName scan succeeds on rows with NULLs.
 	query := fmt.Sprintf(`
 		SELECT
-			a.id, a.actor_id, a.actor_type, a.action, a.resource_type, a.resource_id,
-			a.metadata, a.before_state, a.after_state, a.ip_address, a.user_agent,
+			a.id, a.actor_id, a.actor_type, a.action,
+			COALESCE(a.resource_type, '') AS resource_type,
+			COALESCE(a.resource_id, '')   AS resource_id,
+			COALESCE(a.metadata, '{}'::jsonb)     AS metadata,
+			COALESCE(a.before_state, '{}'::jsonb) AS before_state,
+			COALESCE(a.after_state, '{}'::jsonb)  AS after_state,
+			a.ip_address, a.user_agent,
 			a.workspace_id, a.state_id, a.severity, a.created_at
 		FROM audit_logs a
 		%s
@@ -258,8 +273,13 @@ func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedRe
 
 func (r *AuditLogRepo) GetByID(ctx context.Context, id uuid.UUID) (*AuditLogEntry, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, actor_id, actor_type, action, resource_type, resource_id,
-			   metadata, before_state, after_state, ip_address, user_agent,
+		SELECT id, actor_id, actor_type, action,
+			   COALESCE(resource_type, '') AS resource_type,
+			   COALESCE(resource_id, '')   AS resource_id,
+			   COALESCE(metadata, '{}'::jsonb)     AS metadata,
+			   COALESCE(before_state, '{}'::jsonb) AS before_state,
+			   COALESCE(after_state, '{}'::jsonb)  AS after_state,
+			   ip_address, user_agent,
 			   workspace_id, state_id, severity, created_at
 		FROM audit_logs
 		WHERE id = $1`, id)

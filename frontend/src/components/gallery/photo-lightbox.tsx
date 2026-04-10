@@ -123,6 +123,11 @@ export function PhotoLightbox({
     return allAssets[idx + 1];
   }, [compareMode, allAssets, asset.id]);
 
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
     switch (e.key) {
@@ -144,7 +149,7 @@ export function PhotoLightbox({
       case "2": if (isProofing) onProofingAction?.(asset.id, "approve"); break;
       case "3": if (isProofing) onProofingAction?.(asset.id, "reject"); break;
     }
-  }, [onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, compareMode, isProofing, asset.id, onProofingAction]);
+  }, [onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, compareMode, isProofing, asset.id, onProofingAction, toggleFullscreen]);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -158,11 +163,6 @@ export function PhotoLightbox({
     const h = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", h);
     return () => document.removeEventListener("fullscreenchange", h);
-  }, []);
-
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
-    else document.exitFullscreen?.();
   }, []);
 
   const handleDownloadFormat = (format: "original" | "webp" | "thumbnail") => {

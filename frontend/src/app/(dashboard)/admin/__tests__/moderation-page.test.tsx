@@ -12,16 +12,15 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { listModerationQueue, approveModeration, rejectModeration, escalateModeration } from "@/lib/api/admin";
+import { listModerationQueue, approveModeration, rejectModeration } from "@/lib/api/admin";
 import AdminModerationPage from "../moderation/page";
 
 const mockListQueue = vi.mocked(listModerationQueue);
 const mockApprove = vi.mocked(approveModeration);
 const mockReject = vi.mocked(rejectModeration);
-const mockEscalate = vi.mocked(escalateModeration);
 
 const sampleQueue = {
-  data: [
+  items: [
     {
       id: "mod1", content_type: "gallery", content_id: "g1", workspace_id: "ws1",
       reason: "auto_flagged", status: "pending", created_at: "2026-04-01T12:00:00Z",
@@ -31,7 +30,7 @@ const sampleQueue = {
       reason: "reported", reporter_id: "u5", status: "pending", created_at: "2026-04-02T14:00:00Z",
     },
   ],
-  total: 2,
+  total_count: 2,
 };
 
 beforeEach(() => {
@@ -106,7 +105,7 @@ describe("AdminModerationPage", () => {
   });
 
   it("shows empty state when no items", async () => {
-    mockListQueue.mockResolvedValue({ data: [], total: 0 });
+    mockListQueue.mockResolvedValue({ items: [], total_count: 0 });
     render(<AdminModerationPage />);
     await waitFor(() => {
       expect(screen.getByText(/no items/i)).toBeTruthy();

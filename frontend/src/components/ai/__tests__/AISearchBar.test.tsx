@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { AISearchBar } from "../AISearchBar";
 
@@ -90,7 +90,18 @@ describe("AISearchBar", () => {
 
   it("calls onResults callback", async () => {
     const onResults = vi.fn();
-    mockSearchAssets.mockResolvedValue({ results: [{ asset_id: "a1" }], total: 1 });
+    mockSearchAssets.mockResolvedValue({
+      results: [
+        {
+          asset_id: "a1",
+          filename: "test.jpg",
+          content_type: "image/jpeg",
+          thumbnail_urls: { md: "/thumb/a1.jpg" },
+          similarity: 0.91,
+        },
+      ],
+      total: 1,
+    });
     render(<AISearchBar token="test" onResults={onResults} />);
 
     const input = screen.getByPlaceholderText(/Search photos/);

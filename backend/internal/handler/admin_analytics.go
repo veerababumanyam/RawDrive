@@ -17,7 +17,7 @@ func NewAdminAnalyticsHandler(svc *service.AdminAnalyticsService) *AdminAnalytic
 
 func (h *AdminAnalyticsHandler) GetEngagement(w http.ResponseWriter, r *http.Request) {
 	date := time.Now()
-	result, err := h.svc.GetEngagement(r.Context(), date, nil)
+	result, err := h.svc.GetEngagement(r.Context(), date)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return

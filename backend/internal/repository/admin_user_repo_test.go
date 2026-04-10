@@ -71,24 +71,26 @@ func TestAdminUserFilter_LimitClamping(t *testing.T) {
 }
 
 func TestAdminUserFilter_SortMapping(t *testing.T) {
-	// Replicate the sort column mapping from List method
+	// Replicate the sort column mapping from List method. "full_name" at
+	// the API level maps to the real column u.display_name; "last_login_at"
+	// maps to u.last_login_at (added in migration 058).
 	tests := []struct {
 		sort     string
 		expected string
 	}{
 		{"", "u.created_at"},
 		{"created_at", "u.created_at"},
-		{"last_active_at", "u.last_active_at"},
-		{"full_name", "u.full_name"},
+		{"last_login_at", "u.last_login_at"},
+		{"full_name", "u.display_name"},
 		{"invalid", "u.created_at"},
 	}
 	for _, tt := range tests {
 		sortCol := "u.created_at"
 		switch tt.sort {
-		case "last_active_at":
-			sortCol = "u.last_active_at"
+		case "last_login_at":
+			sortCol = "u.last_login_at"
 		case "full_name":
-			sortCol = "u.full_name"
+			sortCol = "u.display_name"
 		}
 		assert.Equal(t, tt.expected, sortCol, "sort=%q", tt.sort)
 	}
@@ -101,50 +103,80 @@ func TestAdminUserRow_Fields(t *testing.T) {
 	stateID := uuid.New()
 	stateName := "Karnataka"
 	tier := "pro"
+	tierName := "Pro"
 	row := AdminUserRow{
-		ID:           uuid.New(),
-		FullName:     "Alice Sharma",
-		Email:        "alice@example.com",
-		Role:         "photographer",
-		Status:       "active",
-		StateID:      &stateID,
-		StateName:    &stateName,
-		TierSlug:     &tier,
-		StorageUsed:  1024000,
-		GalleryCount: 42,
-		AssetCount:   1200,
-		CreatedAt:    now,
+		ID:             uuid.New(),
+		FullName:       "Alice Sharma",
+		Email:          "alice@example.com",
+		PlatformRole:   "photographer",
+		Status:         "active",
+		StateID:        &stateID,
+		StateName:      &stateName,
+		TierSlug:       &tier,
+		TierName:       &tierName,
+		StorageUsed:    1024000,
+		WorkspaceCount: 2,
+		CreatedAt:      now,
 	}
 	assert.Equal(t, "Alice Sharma", row.FullName)
 	assert.Equal(t, "alice@example.com", row.Email)
-	assert.Equal(t, int64(42), row.GalleryCount)
+	assert.Equal(t, "photographer", row.PlatformRole)
+	assert.Equal(t, int64(2), row.WorkspaceCount)
 	assert.Equal(t, "Karnataka", *row.StateName)
 }
 
 func TestAdminUserRow_NullableFields(t *testing.T) {
 	row := AdminUserRow{
-		ID:       uuid.New(),
-		FullName: "Bob",
-		Email:    "bob@test.com",
-		Role:     "photographer",
-		Status:   "active",
+		ID:           uuid.New(),
+		FullName:     "Bob",
+		Email:        "bob@test.com",
+		PlatformRole: "photographer",
+		Status:       "active",
 	}
 	assert.Nil(t, row.Phone)
 	assert.Nil(t, row.StateID)
 	assert.Nil(t, row.StateName)
 	assert.Nil(t, row.TierSlug)
-	assert.Nil(t, row.LastActiveAt)
+	assert.Nil(t, row.TierName)
+	assert.Nil(t, row.LastLoginAt)
+}
+
+func TestAdminUserRow_JSONFieldNames(t *testing.T) {
+	// Asserts that the JSON wire shape matches the frontend AdminUser
+	// TypeScript interface (frontend/src/lib/api/admin.ts). Without these
+	// tags the default encoder would emit PascalCase keys that the
+	// frontend cannot read — every admin user row would be blank.
+	row := AdminUserRow{
+		ID:             uuid.New(),
+		FullName:       "Test",
+		Email:          "test@example.com",
+		PlatformRole:   "photographer",
+		Status:         "active",
+		StorageUsed:    1000,
+		WorkspaceCount: 3,
+		CreatedAt:      time.Now(),
+	}
+	data, err := json.Marshal(row)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+
+	expected := []string{"id", "full_name", "email", "platform_role", "status", "storage_used", "workspace_count", "created_at"}
+	for _, key := range expected {
+		assert.Contains(t, decoded, key, "expected snake_case JSON key %q on AdminUserRow", key)
+	}
 }
 
 // ──────────────────────── AdminUserDetail ────────────────────────
 
 func TestAdminUserDetail_WorkspacesSlice(t *testing.T) {
 	detail := AdminUserDetail{
-		ID:       uuid.New(),
-		FullName: "Test User",
-		Email:    "test@test.com",
-		Role:     "studio_admin",
-		Status:   "active",
+		ID:           uuid.New(),
+		FullName:     "Test User",
+		Email:        "test@test.com",
+		PlatformRole: "studio_admin",
+		Status:       "active",
 		Workspaces: []AdminUserWorkspace{
 			{ID: uuid.New(), Name: "Studio A", Role: "owner"},
 			{ID: uuid.New(), Name: "Studio B", Role: "member"},

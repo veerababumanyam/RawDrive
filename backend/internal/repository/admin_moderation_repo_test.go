@@ -46,7 +46,7 @@ func TestAdminModerationItem_Fields(t *testing.T) {
 	assert.Equal(t, "reported", item.Reason)
 	assert.Equal(t, "pending", item.Status)
 	assert.Nil(t, item.ReporterID)
-	assert.Nil(t, item.ReviewerID)
+	assert.Nil(t, item.ReviewedBy)
 	assert.Nil(t, item.ReviewedAt)
 }
 

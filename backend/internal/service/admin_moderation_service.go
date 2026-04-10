@@ -47,8 +47,11 @@ func (s *AdminModerationService) RejectContent(ctx context.Context, id uuid.UUID
 	return nil
 }
 
-func (s *AdminModerationService) EscalateContent(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
-	if err := s.moderationRepo.UpdateStatus(ctx, id, "escalated", "", actorID); err != nil {
+func (s *AdminModerationService) EscalateContent(ctx context.Context, id uuid.UUID, notes string, actorID uuid.UUID) error {
+	// Notes are persisted through the repo's existing review_note column via
+	// the UpdateStatus reason parameter. Notes are optional — an empty string
+	// is a valid escalation body.
+	if err := s.moderationRepo.UpdateStatus(ctx, id, "escalated", notes, actorID); err != nil {
 		return fmt.Errorf("escalating content: %w", err)
 	}
 	s.auditLog.RecordAction(ctx, repository.AuditLogCreate{

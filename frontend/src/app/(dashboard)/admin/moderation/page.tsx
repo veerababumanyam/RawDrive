@@ -30,8 +30,8 @@ export default function AdminModerationPage() {
     const token = getStoredAccessToken();
     try {
       const res = await listModerationQueue(token, { status: "pending" });
-      setItems(res.data);
-      setTotal(res.total);
+      setItems(res.items);
+      setTotal(res.total_count);
       setError(null);
     } catch {
       setError("Failed to load moderation queue");

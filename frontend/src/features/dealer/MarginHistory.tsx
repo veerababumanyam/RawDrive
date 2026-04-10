@@ -5,14 +5,25 @@ import { useState, useEffect } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-interface HistoryEntry { id: string; state_id: number | null; dealer_pct: number; platform_pct: number; effective_from: string; created_at: string; }
+interface HistoryEntry {
+  id: string;
+  state_id: number | null;
+  dealer_pct: number;
+  platform_pct: number;
+  effective_from: string;
+  created_at: string;
+}
 
 export default function MarginHistory() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/api/v1/admin/margins/history`).then(r => r.ok ? r.json() : { data: [] }).then(d => setHistory(d.data || d || [])).catch(() => setHistory([])).finally(() => setLoading(false));
+    fetch(`${API}/api/v1/admin/margins/history`)
+      .then((response) => (response.ok ? response.json() : { data: [] }))
+      .then((data) => setHistory(data.data || data || []))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="animate-pulse h-40 bg-surface-sunken rounded-xl" />;
@@ -23,7 +34,7 @@ export default function MarginHistory() {
       <h2 className="text-lg font-medium text-text-primary">Change History</h2>
       <div className="relative pl-6">
         <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-accent-primary/20" />
-        {history.map((entry, i) => (
+        {history.map((entry) => (
           <div key={entry.id} className="relative mb-4">
             <div className="absolute -left-4 top-3 w-3 h-3 rounded-full bg-accent-primary" />
             <div className="glass-card p-4 rounded-xl ml-2">

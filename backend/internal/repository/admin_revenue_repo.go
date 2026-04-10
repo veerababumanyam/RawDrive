@@ -29,11 +29,16 @@ type RevenueTimeSeries struct {
 	Churn         int64     `db:"churn"`
 }
 
+// StateRevenue is the JSON shape the frontend revenue page renders
+// under state_breakdown — matches frontend RevenueData.state_breakdown
+// in lib/api/admin.ts (state_name + revenue_paisa + subscriber_count).
+// state_id is intentionally omitted: states.id is INT in the real
+// schema (migration 005), the frontend does not read it, and keeping
+// it on the struct would force an INT → UUID scan which fails.
 type StateRevenue struct {
-	StateID         uuid.UUID `db:"state_id"`
-	StateName       string    `db:"state_name"`
-	Revenue         int64     `db:"revenue"` // paisa
-	SubscriberCount int64     `db:"subscriber_count"`
+	StateName       string `db:"state_name" json:"state_name"`
+	Revenue         int64  `db:"revenue" json:"revenue_paisa"`
+	SubscriberCount int64  `db:"subscriber_count" json:"subscriber_count"`
 }
 
 // ---------------------------------------------------------------------------
@@ -58,11 +63,16 @@ func (r *AdminRevenueRepo) GetMetrics(ctx context.Context, from time.Time, to ti
 		args = append(args, *stateID)
 	}
 
-	// MRR from active subscriptions
+	// Metrics computed from subscriptions only. The legacy version of
+	// this query also joined payments.subscription_id, but the real
+	// payments table (M14 commerce) uses invoice_id — there is no
+	// subscription_id column. LTV is derived from amount_paisa on the
+	// subscription row rather than cumulative payments until the
+	// billing subsystem wires subscription-linked payment history.
 	err := r.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT
-			COALESCE(SUM(s.amount_paisa), 0) AS mrr,
-			COALESCE(SUM(s.amount_paisa), 0) * 12 AS arr,
+			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active'), 0) AS mrr,
+			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active'), 0) * 12 AS arr,
 			CASE
 				WHEN COUNT(*) FILTER (WHERE s.status = 'active') = 0 THEN 0
 				ELSE ROUND(
@@ -70,16 +80,12 @@ func (r *AdminRevenueRepo) GetMetrics(ctx context.Context, from time.Time, to ti
 					NULLIF(COUNT(*) FILTER (WHERE s.created_at < $2), 0)::numeric * 100, 2
 				)
 			END AS churn_rate,
-			CASE
-				WHEN COUNT(*) FILTER (WHERE s.status = 'active') = 0 THEN 0
-				ELSE COALESCE(SUM(p.amount_paisa) / NULLIF(COUNT(DISTINCT s.user_id), 0), 0)
-			END AS ltv,
+			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active'), 0) AS ltv,
 			CASE
 				WHEN COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active') = 0 THEN 0
 				ELSE COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active') / NULLIF(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active'), 0), 0)
 			END AS arpu
 		FROM subscriptions s
-		LEFT JOIN payments p ON p.subscription_id = s.id AND p.status = 'completed'
 		WHERE s.created_at <= $2 %s`, stateFilter), args...).Scan(
 		&metrics.MRR, &metrics.ARR, &metrics.ChurnRate, &metrics.LTV, &metrics.ARPU)
 	if err != nil {
@@ -98,16 +104,18 @@ func (r *AdminRevenueRepo) GetTimeSeries(ctx context.Context, from time.Time, to
 		truncFunc = "month"
 	}
 
+	// Time-series computed from subscription created_at/cancelled_at
+	// rather than joining payments.subscription_id (which does not
+	// exist — see GetMetrics comment). Revenue is bucketed by
+	// subscription start date using the subscription's amount_paisa.
 	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
 		SELECT
-			date_trunc('%s', p.created_at)::date AS date,
-			COALESCE(SUM(p.amount_paisa), 0) AS revenue,
+			date_trunc('%s', s.created_at)::date AS date,
+			COALESCE(SUM(s.amount_paisa), 0) AS revenue,
 			COUNT(DISTINCT s.id) AS subscriptions,
-			COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'churned' AND s.cancelled_at >= date_trunc('%s', p.created_at)) AS churn
-		FROM payments p
-		JOIN subscriptions s ON s.id = p.subscription_id
-		WHERE p.status = 'completed'
-		  AND p.created_at BETWEEN $1 AND $2
+			COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'churned' AND s.cancelled_at >= date_trunc('%s', s.created_at)) AS churn
+		FROM subscriptions s
+		WHERE s.created_at BETWEEN $1 AND $2
 		GROUP BY date
 		ORDER BY date ASC`, truncFunc, truncFunc), from, to)
 	if err != nil {
@@ -117,17 +125,22 @@ func (r *AdminRevenueRepo) GetTimeSeries(ctx context.Context, from time.Time, to
 }
 
 func (r *AdminRevenueRepo) GetByState(ctx context.Context, from time.Time, to time.Time) ([]StateRevenue, error) {
+	// State breakdown computed from active subscriptions only. The
+	// legacy join against payments.subscription_id has been removed
+	// (no such column exists on the M14 commerce payments table).
+	// Signature keeps from/to for stability but this is an active
+	// snapshot, not a time-range query.
+	_ = from
+	_ = to
 	rows, err := r.pool.Query(ctx, `
 		SELECT
-			st.id AS state_id,
 			st.name AS state_name,
-			COALESCE(SUM(p.amount_paisa), 0) AS revenue,
+			COALESCE(SUM(s.amount_paisa), 0) AS revenue,
 			COUNT(DISTINCT s.user_id) AS subscriber_count
 		FROM states st
 		LEFT JOIN subscriptions s ON s.state_id = st.id AND s.status = 'active'
-		LEFT JOIN payments p ON p.subscription_id = s.id AND p.status = 'completed' AND p.created_at BETWEEN $1 AND $2
 		GROUP BY st.id, st.name
-		ORDER BY revenue DESC`, from, to)
+		ORDER BY revenue DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("revenue by state: %w", err)
 	}

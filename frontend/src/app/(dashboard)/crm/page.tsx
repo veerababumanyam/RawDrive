@@ -9,26 +9,65 @@ import { leadStageClasses } from "@/lib/dashboard-ui";
 const STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 
 export default function CRMPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeStage, setActiveStage] = useState<string | "">("");
+  const token = getStoredAccessToken();
+  const requestKey = activeStage || "__all__";
+  const [requestState, setRequestState] = useState<{
+    key: string;
+    leads: Lead[];
+    error: string | null;
+  }>({
+    key: "",
+    leads: [],
+    error: null,
+  });
+
+  const leads = requestState.key === requestKey ? requestState.leads : [];
+  const error = token
+    ? requestState.key === requestKey
+      ? requestState.error
+      : null
+    : "Missing access token";
+  const loading = Boolean(token) && requestState.key !== requestKey;
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    setLoading(true);
+    if (!token) {
+      return;
+    }
+
+    let ignore = false;
+
     listLeads(token, activeStage ? { stage: activeStage } : undefined)
-      .then(setLeads)
-      .catch((err) => { setError(err?.message || "Failed to load leads"); setLeads([]); })
-      .finally(() => setLoading(false));
-  }, [activeStage]);
+      .then((data) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            leads: data,
+            error: null,
+          });
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setRequestState({
+            key: requestKey,
+            leads: [],
+            error: err?.message || "Failed to load leads",
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeStage, requestKey, token]);
 
   const groupedLeads = STAGES.reduce(
     (acc, stage) => {
-      acc[stage] = leads.filter((l) => l.stage === stage);
+      acc[stage] = leads.filter((lead) => lead.stage === stage);
       return acc;
     },
-    {} as Record<string, Lead[]>
+    {} as Record<string, Lead[]>,
   );
 
   if (loading) {
@@ -37,8 +76,8 @@ export default function CRMPage() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 bg-surface-sunken rounded" />
           <div className="flex gap-4 overflow-x-auto">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="min-w-[280px] h-96 bg-surface-sunken rounded-xl" />
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="min-w-[280px] h-96 bg-surface-sunken rounded-xl" />
             ))}
           </div>
         </div>
@@ -62,7 +101,6 @@ export default function CRMPage() {
         </div>
       </div>
 
-      {/* Stage filter tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         <button
           onClick={() => setActiveStage("")}
@@ -91,9 +129,8 @@ export default function CRMPage() {
         ))}
       </div>
 
-      {/* Kanban board */}
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {STAGES.filter((s) => !activeStage || s === activeStage).map((stage) => (
+        {STAGES.filter((stage) => !activeStage || stage === activeStage).map((stage) => (
           <div key={stage} className="min-w-[280px] flex-shrink-0">
             <div className="flex items-center gap-2 mb-3">
               <span

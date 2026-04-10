@@ -128,7 +128,7 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
       )}
 
       {viewMode === "map" ? (
-        <div className="h-[600px]">
+        <div className="h-[600px]" aria-label={`Map view for gallery ${slug}`}>
           <MapView
             assets={mapAssets}
             onSelect={(assetId) => {
@@ -148,7 +148,7 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
           />
         </div>
       ) : (
-        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
+        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4" aria-label={`Grid view for gallery ${slug}`}>
           {visibleAssets.map((asset) => {
             const thumbUrl =
               asset.thumbnail_urls?.lg ||
