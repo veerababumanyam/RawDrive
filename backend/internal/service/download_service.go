@@ -2,10 +2,10 @@ package service
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
@@ -152,12 +152,14 @@ func (s *DownloadService) GetDownloadAudit(ctx context.Context, galleryID uuid.U
 //
 // M14 GAL-FR-150/151/152: background ZIP build with progress tracking.
 //
-// Implementation note: we buffer the ZIP to a bytes.Buffer before
+// Implementation note: we buffer the ZIP to an OS temp file before
 // calling store.Put because the storage interface requires the size
-// up front (S3-style PutObject). For rawdrive's typical gallery size
-// (a few hundred photos) this is a few hundred MB at most — acceptable
-// for a background worker. If we need to support multi-GB bundles
-// later, swap the buffer for a temp file on disk.
+// up front (S3-style PutObject). A temp file keeps memory bounded
+// regardless of gallery size — a 5 GB bundle only costs the
+// filesystem scratch space, not heap. The temp file is cleaned up
+// after the upload finishes or errors out. If the process is killed
+// mid-build the OS will reclaim the file on reboot (or the /tmp
+// tmpfiles cleanup timer on Linux).
 func (s *DownloadService) ProcessJob(
 	ctx context.Context,
 	job *repository.DownloadJob,
@@ -167,14 +169,41 @@ func (s *DownloadService) ProcessJob(
 		return "", 0, fmt.Errorf("download job %s: no assets", job.ID)
 	}
 
-	var buf bytes.Buffer
-	if err := s.writeZipWithProgress(ctx, job.AssetIDs, &buf, onProgress); err != nil {
+	// os.CreateTemp drops the file in $TMPDIR (or /tmp). Named with the
+	// job ID so a half-built file is easy to correlate with a log line
+	// during triage.
+	tmp, err := os.CreateTemp("", fmt.Sprintf("rawdrive-dl-%s-*.zip", job.ID))
+	if err != nil {
+		return "", 0, fmt.Errorf("download job %s: create temp: %w", job.ID, err)
+	}
+	tmpPath := tmp.Name()
+	// Double-cleanup pattern: defer an unconditional Remove so crashes
+	// past this point never leak, plus an explicit Close below for
+	// the happy path.
+	defer func() {
+		_ = tmp.Close() // idempotent — safe even if already closed
+		_ = os.Remove(tmpPath)
+	}()
+
+	if err := s.writeZipWithProgress(ctx, job.AssetIDs, tmp, onProgress); err != nil {
 		return "", 0, fmt.Errorf("download job %s: zip build: %w", job.ID, err)
 	}
 
-	size := int64(buf.Len())
+	// Stat the completed file for the exact byte count — writeZipWithProgress
+	// closes the zip.Writer before returning so the trailer is already flushed.
+	info, err := tmp.Stat()
+	if err != nil {
+		return "", 0, fmt.Errorf("download job %s: stat temp: %w", job.ID, err)
+	}
+	size := info.Size()
+
+	// Rewind so store.Put reads from the beginning.
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return "", 0, fmt.Errorf("download job %s: seek temp: %w", job.ID, err)
+	}
+
 	storageKey := fmt.Sprintf("downloads/%s/%s.zip", job.GalleryID, job.ID)
-	if err := s.store.Put(ctx, storageKey, &buf, size, "application/zip"); err != nil {
+	if err := s.store.Put(ctx, storageKey, tmp, size, "application/zip"); err != nil {
 		return "", 0, fmt.Errorf("download job %s: storage put: %w", job.ID, err)
 	}
 	return storageKey, size, nil

@@ -212,6 +212,17 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Post("/api/v1/galleries/{id}/proofing/bridge", bridgeHandler.BridgeSelections)
 	}
 
+	// M14: Gallery sale banners (GAL-FR-157) — studio admin routes.
+	if deps.BannerService != nil {
+		bannerHandler := NewBannerHandler(deps.BannerService)
+		r.Route("/api/v1/galleries/{id}/banners", func(r chi.Router) {
+			r.Get("/", bannerHandler.List)
+			r.Post("/", bannerHandler.Create)
+			r.Put("/{bannerId}", bannerHandler.Update)
+			r.Delete("/{bannerId}", bannerHandler.Delete)
+		})
+	}
+
 	// M14: Analytics routes (includes GAL-FR-185/186/187 breakdowns)
 	if deps.GalleryAnalyticsSvc != nil {
 		analyticsHandler := NewGalleryAnalyticsHandler(deps.GalleryAnalyticsSvc)
@@ -293,6 +304,25 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 			r.Post("/share/{token}/verify", shareHandler.Verify)
 		}
 
+		// M14 GAL-FR-157 (public): live sale banners for a gallery slug.
+		if deps.BannerService != nil && deps.GalleryService != nil {
+			bannerHandler := NewBannerHandler(deps.BannerService)
+			resolver := &gallerySlugResolverAdapter{svc: deps.GalleryService}
+			r.Get("/galleries/{slug}/banners", bannerHandler.ListLiveBySlug(resolver))
+		}
+
+		// M14 GAL-FR-158 (public): anonymous cart routes addressed by slug.
+		// Wired alongside M13 verify-password so a password-gated gallery
+		// can still expose its cart to authenticated visitors via the
+		// same session cookie flow.
+		if deps.CartService != nil && deps.GalleryService != nil {
+			cartHandler := NewCartHandler(deps.CartService)
+			resolver := &gallerySlugResolverAdapter{svc: deps.GalleryService}
+			r.Get("/galleries/{slug}/cart", cartHandler.GetBySlug(resolver))
+			r.Post("/galleries/{slug}/cart", cartHandler.UpsertBySlug(resolver))
+			r.Delete("/galleries/{slug}/cart", cartHandler.ClearBySlug(resolver))
+		}
+
 		// M13: Public gallery access verification
 		if deps.GalleryAccessSvc != nil {
 			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc).WithGalleryService(deps.GalleryService)
@@ -343,6 +373,7 @@ type M2Dependencies struct {
 	ProductService       *service.ProductService
 	CartService          *service.CartService
 	FulfillmentBridge    *service.ProofingFulfillmentBridge
+	BannerService        *service.BannerService
 	// M15 dependencies (nil-safe)
 	ConsentSvc           *service.ConsentService
 }

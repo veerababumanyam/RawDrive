@@ -13,7 +13,7 @@ import (
 
 func TestLoadConfigFromEnv(t *testing.T) {
 	// Set all required env vars
-	t.Setenv("DATABASE_URL", "postgres://rawdrive_user:pass@localhost:55070/rawdrive_db?sslmode=disable")
+	t.Setenv("DATABASE_URL", "postgres://rawdrive_user:test@localhost:55070/rawdrive_db?sslmode=disable")
 	t.Setenv("VALKEY_URL", "localhost:64089")
 	t.Setenv("NATS_URL", "nats://localhost:4222")
 	t.Setenv("JWT_PRIVATE_KEY_PATH", "/tmp/test_private.pem")
@@ -22,7 +22,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err, "config should load when all required env vars are set")
 
-	assert.Equal(t, "postgres://rawdrive_user:pass@localhost:55070/rawdrive_db?sslmode=disable", cfg.DatabaseURL)
+	assert.Equal(t, "postgres://rawdrive_user:test@localhost:55070/rawdrive_db?sslmode=disable", cfg.DatabaseURL)
 	assert.Equal(t, "localhost:64089", cfg.ValkeyURL)
 	assert.Equal(t, "nats://localhost:4222", cfg.NATSURL)
 	assert.Equal(t, "/tmp/test_private.pem", cfg.JWTPrivateKeyPath)

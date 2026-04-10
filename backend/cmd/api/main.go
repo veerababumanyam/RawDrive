@@ -13,6 +13,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/auth"
@@ -325,10 +326,45 @@ func main() {
 	galleryAnalyticsSvc := service.NewGalleryAnalyticsService(galleryAnalyticsRepo)
 	webhookSvc := service.NewWebhookService(webhookRepo)
 	downloadSvc := service.NewDownloadService(assetRepo, galleryAssetRepo, storageProvider).WithDownloadRepo(downloadRepo)
+	// M14 GAL-FR-197: Valkey sliding-window rate limiter. When
+	// VALKEY_URL is set, construct a go-redis client and wrap it in
+	// the RedisValkeyClient. When unset, the limiter middleware is
+	// a no-op (all requests pass) so the build still works in dev
+	// without a Valkey instance. A startup ping is attempted and
+	// logged — a failed ping is not fatal because the middleware
+	// fails open on backend errors.
+	var valkeyClient middleware.ValkeyClient
+	if vurl := os.Getenv("VALKEY_URL"); vurl != "" {
+		opts, parseErr := redis.ParseURL(vurl)
+		if parseErr != nil {
+			log.Printf("valkey: invalid VALKEY_URL %q: %v — rate limiter disabled", vurl, parseErr)
+		} else {
+			rdb := redis.NewClient(opts)
+			pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if err := rdb.Ping(pingCtx).Err(); err != nil {
+				log.Printf("valkey: ping failed: %v — rate limiter enabled but will fail-open until backend recovers", err)
+			} else {
+				log.Printf("valkey: connected, sliding-window rate limiter enabled")
+			}
+			pingCancel()
+			valkeyClient = middleware.NewRedisValkeyClient(rdb)
+		}
+	} else {
+		log.Println("valkey: VALKEY_URL not set — sliding-window rate limiter disabled")
+	}
+
 	productSvc := service.NewProductService(productRepo)
-	// Cart service uses productRepo for price snapshotting. Coupon discounts
-	// are disabled until a GalleryDiscountCalculator adapter is wired in.
-	cartSvc := service.NewCartService(cartRepo, productRepo, nil)
+	// Cart service uses productRepo for price snapshotting. The
+	// CartCouponAdapter wraps the shared coupon repo and enforces
+	// only the anonymous-client-safe checks (active, not expired,
+	// not exhausted) — per-user and plan/state scopes live in the
+	// full platform CouponValidationService path and don't apply
+	// to public gallery cart previews. Repo is stateless so we can
+	// instantiate it here even though main.go also builds one later
+	// for the M6 platform coupon routes.
+	cartCouponRepo := repository.NewCouponRepo(dbPool)
+	cartCouponAdapter := service.NewCartCouponAdapter(cartCouponRepo)
+	cartSvc := service.NewCartService(cartRepo, productRepo, cartCouponAdapter)
 	// M14 GAL-FR-159: proofing → fulfillment bridge. Pricer is nil so
 	// bridged orders start at zero subtotal; a subsequent phase will
 	// wire a PriceProofingSelections adapter that computes digital
@@ -337,6 +373,9 @@ func main() {
 	// orderRepo and the bridge here.
 	orderRepo := repository.NewOrderRepo(dbPool)
 	fulfillmentBridge := service.NewProofingFulfillmentBridge(proofingRepo, orderRepo, nil)
+	// M14 GAL-FR-157: gallery sale banners
+	bannerRepo := repository.NewBannerRepo(dbPool)
+	bannerSvc := service.NewBannerService(bannerRepo)
 
 	// M15 Services: Consent
 	consentRepo := repository.NewConsentRepo(dbPool)
@@ -392,6 +431,7 @@ func main() {
 			ProductService:       productSvc,
 			CartService:          cartSvc,
 			FulfillmentBridge:    fulfillmentBridge,
+			BannerService:        bannerSvc,
 			// M15
 			ConsentSvc:           consentSvc,
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
@@ -673,6 +713,36 @@ func main() {
 		log.Println("M10: DSR workflow routes registered (Submit, Get, ProcessAccess)")
 
 	}) // end protected API group
+
+	// ──────────────────────── API key dataplane (M14 GAL-FR-194/196/197) ──
+	// Routes here are authenticated via API key (Authorization: Bearer rd_...)
+	// instead of a JWT session, and pass through the Valkey sliding-window
+	// rate limiter so a rogue integration can't DoS the platform. The
+	// limiter key is derived from the verified API key ID; budget is a
+	// flat 1000 req/min for now — a future phase will read per-key
+	// budgets from api_keys.rate_limit and thread them through.
+	//
+	// The group is opened unconditionally so existing dataplane routes
+	// can move under it without another scaffold. Mounted outside the
+	// JWT block above since API keys carry their own workspace context.
+	apiKeyRepoForAuth := repository.NewAPIKeyRepo(dbPool)
+	apiKeySvcForAuth := service.NewAPIKeyService(apiKeyRepoForAuth)
+	r.Group(func(dp chi.Router) {
+		dp.Use(middleware.APIKeyAuth(apiKeySvcForAuth))
+		if valkeyClient != nil {
+			dp.Use(middleware.ValkeyRateLimit(valkeyClient, middleware.APIKeyRateLimitKeyFunc, 1000, time.Minute))
+			log.Println("M14: API key dataplane rate limiter enabled (1000/min per key)")
+		} else {
+			log.Println("M14: API key dataplane group mounted (rate limiter no-op — VALKEY_URL unset)")
+		}
+		// /api/v1/dp/* is reserved for API-key-authenticated consumer
+		// routes (gallery read, webhook test, etc.). A /ping endpoint
+		// is mounted so integrators can smoke-test their credentials.
+		dp.Get("/api/v1/dp/ping", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"ok","auth":"api_key"}`))
+		})
+	})
 
 	// M8 public routes (stream viewer, desktop download — no auth)
 	handler.RegisterM8PublicRoutes(r, m8Deps)
