@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -975,8 +976,31 @@ func main() {
 		return
 	}
 
-	log.Println("WARNING: TLS_CERT_PATH/TLS_KEY_PATH not set — serving plaintext HTTP. " +
-		"Production deployments MUST terminate TLS 1.3 (either here or at a trusted reverse proxy).")
+	// F-010 (audit 2026-04-10): plaintext HTTP is only permitted when the
+	// operator has explicitly declared that a trusted proxy terminates TLS
+	// in front of the API. Previously the server fell back to plaintext
+	// silently with just a log warning, which is exactly the condition the
+	// audit flagged — "production hard-starts in cleartext because someone
+	// forgot TLS_CERT_PATH." The escape hatch is intentional for operators
+	// running behind Caddy/Traefik/ALB/Cloudflare that terminate TLS
+	// upstream; in that mode they must set TRUSTED_PROXY_MODE=true to
+	// acknowledge the risk surface.
+	trustedProxy := strings.EqualFold(os.Getenv("TRUSTED_PROXY_MODE"), "true")
+	env := strings.ToLower(os.Getenv("APP_ENV"))
+	isProduction := env == "production" || env == "prod"
+
+	if !trustedProxy {
+		if isProduction {
+			log.Fatalf("FATAL: TLS_CERT_PATH/TLS_KEY_PATH not set and TRUSTED_PROXY_MODE != true in APP_ENV=%s. "+
+				"Refusing to start plaintext HTTP in production. Set TLS cert paths or explicitly "+
+				"set TRUSTED_PROXY_MODE=true to acknowledge that an upstream proxy terminates TLS.", env)
+		}
+		log.Println("WARNING: TLS_CERT_PATH/TLS_KEY_PATH not set — serving plaintext HTTP. " +
+			"Production deployments MUST terminate TLS 1.3 (either here or at a trusted reverse proxy). " +
+			"In APP_ENV=production this configuration will refuse to start.")
+	} else {
+		log.Println("TRUSTED_PROXY_MODE=true — running plaintext HTTP behind an upstream TLS terminator.")
+	}
 	fmt.Printf("RawDrive API starting on :%s (plaintext)\n", port)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)

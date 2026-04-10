@@ -71,12 +71,17 @@ func TestLocalDriver_PresignURL(t *testing.T) {
 	assert.NotEmpty(t, url)
 }
 
-func TestNewProvider_Local(t *testing.T) {
+// F-008 (audit 2026-04-10) + CLAUDE.md hardcode law #1: NewProvider must
+// REJECT the local driver. This test used to assert the opposite (that
+// NewProvider returned a LocalDriver), which is how STORAGE_DRIVER=local
+// silently shipped to production. Tests that need a local-disk fake call
+// NewLocalDriver directly (see TestLocalDriver_* above). See factory_test.go
+// for the full hardcode-law assertion.
+func TestNewProvider_Local_Rejected(t *testing.T) {
 	cfg := storage.Config{Driver: "local", LocalDir: t.TempDir()}
-	p, err := storage.NewProvider(cfg)
-	require.NoError(t, err)
-	_, ok := p.(*storage.LocalDriver)
-	assert.True(t, ok)
+	_, err := storage.NewProvider(cfg)
+	require.Error(t, err,
+		"NewProvider with Driver=local must fail per hardcode law #1 / F-008")
 }
 
 func TestNewProvider_S3(t *testing.T) {
