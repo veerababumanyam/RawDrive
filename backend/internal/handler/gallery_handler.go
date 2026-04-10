@@ -151,6 +151,37 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, gallery)
 }
 
+// SetFaceDetection handles PATCH /api/v1/galleries/{id}/face-detection
+// Body: {"enabled": true|false}
+// Toggles the privacy opt-out flag that controls whether the face detection
+// ML pipeline runs on assets in this gallery (M3 E8-S1 #6).
+func (h *GalleryHandler) SetFaceDetection(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	var input struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if input.Enabled == nil {
+		http.Error(w, `{"error":"enabled field required"}`, http.StatusBadRequest)
+		return
+	}
+	if err := h.gallerySvc.SetFaceDetectionEnabled(r.Context(), id, *input.Enabled); err != nil {
+		http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"gallery_id":              id,
+		"face_detection_enabled":  *input.Enabled,
+	})
+}
+
 // SoftDelete handles DELETE /api/v1/galleries/{id}
 func (h *GalleryHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

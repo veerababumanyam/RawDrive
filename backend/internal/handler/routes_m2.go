@@ -2,6 +2,8 @@ package handler
 
 import (
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -73,6 +75,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		r.Get("/{id}/assets", galleryHandler.ListAssets)
 		r.Get("/{id}/assets/timeline", galleryHandler.Timeline)
 
+		// M3 E8-S1 #6: privacy opt-out for face detection pipeline
+		r.Patch("/{id}/face-detection", galleryHandler.SetFaceDetection)
+
 		// M11: Albums (sub-galleries)
 		if albumHandler != nil {
 			r.Get("/{id}/albums", albumHandler.List)
@@ -119,6 +124,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 		// Proofing
 		r.Get("/{id}/proofing", proofingHandler.ListByGallery)
 		r.Patch("/{id}/proofing/{selectionId}", proofingHandler.UpdateStatus)
+		// GAL-FR-130: CSV export of proofing selections
+		r.Get("/{id}/proofing/export.csv", proofingHandler.ExportCSV)
 
 		// M13: Gallery Access Control
 		if deps.GalleryAccessSvc != nil {
@@ -218,6 +225,15 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 // MUST be called on the outer router (not inside JWT middleware group).
 func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	publicHandler := NewPublicGalleryHandler(deps.GalleryService, deps.AssetService, deps.ShareLinkService)
+	// GAL-FR-115 + 107/108: inject optional pool + face repo for branding
+	// tier lookup and gallery-scoped FaceID matching.
+	if deps.Pool != nil {
+		var fr *ai.FaceRepo
+		if deps.FaceRepo != nil {
+			fr = deps.FaceRepo
+		}
+		publicHandler = publicHandler.WithM13Deps(deps.Pool, fr)
+	}
 	proofingHandler := NewProofingHandler(deps.ProofingService)
 
 	r.Route("/api/v1/public", func(r chi.Router) {
@@ -225,6 +241,18 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
+
+		// GAL-FR-115: Plan-aware white-label branding for public gallery
+		r.Get("/galleries/{slug}/branding", publicHandler.GetBranding)
+
+		// GAL-FR-107/108: FaceID gallery entry (scoped to current gallery)
+		r.Post("/galleries/{slug}/face-match", publicHandler.FaceMatch)
+
+		// GAL-FR-112: Share link verification with access-count enforcement
+		if deps.ShareLinkService != nil {
+			shareHandler := NewShareLinkHandler(deps.ShareLinkService)
+			r.Post("/share/{token}/verify", shareHandler.Verify)
+		}
 
 		// M13: Public gallery access verification
 		if deps.GalleryAccessSvc != nil {
@@ -243,6 +271,10 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 
 // M2Dependencies holds all service dependencies for M2 and M11 handlers.
 type M2Dependencies struct {
+	// M13 deferred-FR deps (optional — nil-safe)
+	Pool     *pgxpool.Pool // subscription tier lookup (GAL-FR-115)
+	FaceRepo *ai.FaceRepo  // gallery-scoped face match (GAL-FR-107/108)
+
 	AssetService         *service.AssetService
 	UploadService        *service.UploadService
 	GalleryService       *service.GalleryService

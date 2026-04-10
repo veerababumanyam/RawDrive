@@ -99,6 +99,29 @@ func (r *FaceRepo) FindSimilarFaces(ctx context.Context, embedding []float32, wo
 	return scanFaces(rows)
 }
 
+// FindSimilarFacesInGallery matches an embedding against faces scoped to a single gallery.
+// Used by FaceID gallery entry (GAL-FR-107/108): a client uploads a selfie embedding,
+// we return matching asset IDs that appear only inside this gallery.
+func (r *FaceRepo) FindSimilarFacesInGallery(ctx context.Context, embedding []float32, galleryID uuid.UUID, threshold float64, limit int) ([]*FaceCluster, error) {
+	maxDistance := 1.0 - threshold
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, workspace_id, asset_id, gallery_id, face_index, bounding_box,
+		 cluster_label, cluster_name, confidence, source, created_at, updated_at
+		 FROM face_clusters
+		 WHERE gallery_id = $1
+		   AND (embedding <=> $2) <= $3
+		 ORDER BY embedding <=> $2 ASC
+		 LIMIT $4`,
+		galleryID, pgvector.NewVector(embedding), maxDistance, limit)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: find similar in gallery: %w", err)
+	}
+	defer rows.Close()
+
+	return scanFaces(rows)
+}
+
 // UpdateClusterAssignment sets cluster_label and cluster_name for a face.
 func (r *FaceRepo) UpdateClusterAssignment(ctx context.Context, faceID, clusterLabel uuid.UUID, clusterName string) error {
 	_, err := r.pool.Exec(ctx,

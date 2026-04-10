@@ -43,6 +43,21 @@ type CreateGalleryInput struct {
 	CreatedBy   uuid.UUID
 }
 
+// SetFaceDetectionEnabled toggles the privacy opt-out flag for face
+// detection on a gallery (M3 E8-S1 #6). When false, the face worker skips
+// all jobs targeting this gallery. Returns an error if the gallery does
+// not exist.
+func (s *GalleryService) SetFaceDetectionEnabled(ctx context.Context, galleryID uuid.UUID, enabled bool) error {
+	g, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil {
+		return fmt.Errorf("get gallery: %w", err)
+	}
+	if g == nil {
+		return fmt.Errorf("gallery not found")
+	}
+	return s.galleryRepo.UpdateField(ctx, galleryID, "face_detection_enabled", enabled)
+}
+
 // Create creates a new gallery.
 func (s *GalleryService) Create(ctx context.Context, input CreateGalleryInput) (*repository.Gallery, error) {
 	g := &repository.Gallery{

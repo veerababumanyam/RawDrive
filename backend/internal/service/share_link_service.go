@@ -26,6 +26,7 @@ type CreateShareLinkInput struct {
 	PIN             string // plain text PIN (will be hashed)
 	ExpiresIn       *time.Duration
 	DownloadAllowed bool
+	MaxAccessCount  *int // GAL-FR-112: optional access cap
 	Permissions     map[string]interface{}
 }
 
@@ -34,6 +35,7 @@ func (s *ShareLinkService) Create(ctx context.Context, input CreateShareLinkInpu
 	sl := &repository.ShareLink{
 		GalleryID:       input.GalleryID,
 		DownloadAllowed: input.DownloadAllowed,
+		MaxAccessCount:  input.MaxAccessCount,
 		Permissions:     input.Permissions,
 	}
 
@@ -125,6 +127,11 @@ func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, cre
 		return false, fmt.Errorf("share link expired")
 	}
 
+	// GAL-FR-112: enforce max_access_count (pre-flight check; commit happens on successful access).
+	if sl.MaxAccessCount != nil && sl.AccessCount >= *sl.MaxAccessCount {
+		return false, fmt.Errorf("share link access limit reached")
+	}
+
 	// Determine access mode from permissions
 	mode := AccessMode("public")
 	if modeStr, ok := sl.Permissions["access_mode"].(string); ok {
@@ -164,10 +171,22 @@ func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, cre
 	}
 }
 
-// TrackView increments view analytics for a share link.
+// TrackView increments the JSONB view_count analytics counter (kept for legacy reporting).
 func (s *ShareLinkService) TrackView(ctx context.Context, token string, visitorIP string) error {
 	return s.repo.IncrementViewCount(ctx, token)
 }
+
+// TrackAccess atomically increments the authoritative access_count column and
+// returns the new count. Returns ErrAccessLimitExceeded when a capped link has
+// reached its ceiling (GAL-FR-112). Callers should invoke this immediately
+// after ValidateAccess succeeds so the count is committed under a single
+// UPDATE with the cap predicate — the DB is the concurrency arbiter.
+func (s *ShareLinkService) TrackAccess(ctx context.Context, token string) (int, error) {
+	return s.repo.IncrementAccessCount(ctx, token)
+}
+
+// ErrAccessLimitExceeded is re-exported from the repo layer so handlers can match on it.
+var ErrAccessLimitExceeded = repository.ErrAccessLimitExceeded
 
 // TrackDownload increments download count for a share link.
 func (s *ShareLinkService) TrackDownload(ctx context.Context, token string) error {

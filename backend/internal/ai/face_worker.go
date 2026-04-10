@@ -16,6 +16,7 @@ type FaceWorker struct {
 	jobRepo      *JobRepo
 	faceSvc      *FaceService
 	assetRepo    *repository.AssetRepo
+	galleryRepo  *repository.GalleryRepo // optional — when nil, privacy opt-out is skipped
 	store        storage.Provider
 	pollInterval time.Duration
 	stopCh       chan struct{}
@@ -31,6 +32,14 @@ func NewFaceWorker(jobRepo *JobRepo, faceSvc *FaceService, assetRepo *repository
 		pollInterval: 5 * time.Second,
 		stopCh:       make(chan struct{}),
 	}
+}
+
+// WithGalleryRepo wires in a gallery repo for privacy opt-out checks
+// (M3 E8-S1 #6). When set, the worker skips jobs whose gallery has
+// face_detection_enabled=false. Returns the worker for fluent chaining.
+func (w *FaceWorker) WithGalleryRepo(galleryRepo *repository.GalleryRepo) *FaceWorker {
+	w.galleryRepo = galleryRepo
+	return w
 }
 
 // Start implements worker.Worker.
@@ -93,6 +102,29 @@ func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 		gid, err := uuid.Parse(gidStr)
 		if err == nil {
 			galleryID = &gid
+		}
+	}
+
+	// Privacy opt-out (M3 E8-S1 #6): if a gallery-scoped job targets a
+	// gallery with face_detection_enabled=false, skip it entirely and mark
+	// the job done with a clear reason. This runs only when galleryRepo is
+	// wired; workspace-scoped jobs (no gallery_id) are unaffected.
+	if galleryID != nil && w.galleryRepo != nil {
+		enabled, err := w.galleryRepo.IsFaceDetectionEnabled(ctx, *galleryID)
+		if err != nil {
+			log.Printf("face worker: gallery %s opt-out check failed: %v", *galleryID, err)
+			// Fail closed: mark the job failed so an operator can investigate.
+			return w.jobRepo.MarkFailed(ctx, job.ID, "gallery opt-out check failed: "+err.Error())
+		}
+		if !enabled {
+			log.Printf("face worker: gallery %s opted out of face detection; skipping %d asset(s)",
+				*galleryID, len(assetIDs))
+			return w.jobRepo.MarkDone(ctx, job.ID, map[string]any{
+				"processed":   0,
+				"faces_found": 0,
+				"skipped":     len(assetIDs),
+				"reason":      "gallery_face_detection_disabled",
+			})
 		}
 	}
 

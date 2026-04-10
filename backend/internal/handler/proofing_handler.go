@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -32,6 +34,48 @@ func (h *ProofingHandler) ListByGallery(w http.ResponseWriter, r *http.Request) 
 	}
 
 	respondJSON(w, http.StatusOK, selections)
+}
+
+// ExportCSV handles GET /api/v1/galleries/{id}/proofing/export.csv (GAL-FR-130).
+// Streams all proofing selections for a gallery as CSV with stable columns.
+// Studios use this to import picks into Lightroom / Photo Mechanic via their
+// Session Importers. encoding/csv handles commas/quotes in note text; the
+// response is streamed so large galleries do not buffer in memory.
+func (h *ProofingHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	selections, err := h.proofingSvc.ListByGallery(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="proofing-%s.csv"`, galleryID.String()))
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+	_ = cw.Write([]string{
+		"selection_id", "asset_id", "client_name", "client_email",
+		"status", "note", "created_at",
+	})
+	for _, sel := range selections {
+		_ = cw.Write([]string{
+			sel.ID.String(),
+			sel.AssetID.String(),
+			sel.ClientName,
+			sel.ClientEmail,
+			sel.Status,
+			sel.Note,
+			sel.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		})
+	}
 }
 
 func (h *ProofingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {

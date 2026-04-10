@@ -371,6 +371,11 @@ func main() {
 			WebhookSvc:           webhookSvc,
 			// M15
 			ConsentSvc:           consentSvc,
+			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
+			// ai.NewFaceRepo is stateless — constructing it twice (here and in
+			// the AI init block below) is safe and keeps this block self-contained.
+			Pool:     dbPool,
+			FaceRepo: ai.NewFaceRepo(dbPool),
 		}
 		handler.RegisterM2Routes(api, m2Deps)
 
@@ -424,7 +429,7 @@ func main() {
 		edgeHandler := handler.NewEdgeDeliveryHandler(assetRepo, thumbnailSvc, watermarkSvc)
 		handler.RegisterM3Routes(api, handler.M3Dependencies{AIHandler: aiHandler, EdgeDeliveryHandler: edgeHandler})
 
-		faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider)
+		faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider).WithGalleryRepo(galleryRepo)
 		searchWorker := ai.NewSearchWorker(dbPool, searchSvc, aiConfigRepo)
 		duplicateWorker := ai.NewDuplicateWorker(aiJobRepo, duplicateSvc)
 		burstSvc := ai.NewBurstService(dbPool)

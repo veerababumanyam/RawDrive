@@ -257,6 +257,7 @@ func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, fiel
 	allowedFields := map[string]bool{
 		"password_hash": true, "access_mode": true, "proofing_deadline": true,
 		"faceid_enabled": true, "cover_config": true,
+		"face_detection_enabled": true, // M3 E8-S1 #6: privacy opt-out
 	}
 	if !allowedFields[field] {
 		return fmt.Errorf("gallery repo: field %q is not updatable via UpdateField", field)
@@ -267,4 +268,25 @@ func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, fiel
 		return fmt.Errorf("gallery repo update field %s: %w", field, err)
 	}
 	return nil
+}
+
+// IsFaceDetectionEnabled returns whether the gallery opts into the face
+// detection ML pipeline. Used by the face worker to skip privacy-opted-out
+// galleries. A missing gallery returns (false, error) so workers fail
+// closed rather than processing an unknown gallery.
+//
+// Added for M3 E8-S1 #6 (privacy opt-out).
+func (r *GalleryRepo) IsFaceDetectionEnabled(ctx context.Context, galleryID uuid.UUID) (bool, error) {
+	var enabled bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT face_detection_enabled FROM galleries WHERE id = $1 AND deleted_at IS NULL`,
+		galleryID,
+	).Scan(&enabled)
+	if err == pgx.ErrNoRows {
+		return false, fmt.Errorf("gallery %s not found", galleryID)
+	}
+	if err != nil {
+		return false, fmt.Errorf("gallery repo face detection check: %w", err)
+	}
+	return enabled, nil
 }

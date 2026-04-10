@@ -2,11 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -30,6 +32,7 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PIN             string `json:"pin"`
 		ExpiryDays      *int   `json:"expiry_days"`
 		DownloadAllowed bool   `json:"download_allowed"`
+		MaxAccessCount  *int   `json:"max_access_count"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -40,6 +43,7 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		GalleryID:       galleryID,
 		PIN:             input.PIN,
 		DownloadAllowed: input.DownloadAllowed,
+		MaxAccessCount:  input.MaxAccessCount,
 		Permissions:     map[string]interface{}{},
 	}
 	if input.ExpiryDays != nil && *input.ExpiryDays > 0 {
@@ -70,6 +74,49 @@ func (h *ShareLinkHandler) ListByGallery(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondJSON(w, http.StatusOK, links)
+}
+
+// Verify validates a share link token and optional credential, then atomically
+// increments access_count. Returns 403 with "access_limit_exceeded" when the
+// link has reached its max_access_count cap (GAL-FR-112).
+func (h *ShareLinkHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	if token == "" {
+		http.Error(w, `{"error":"missing token"}`, http.StatusBadRequest)
+		return
+	}
+
+	var input struct {
+		Credential string `json:"credential"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&input) // credential optional
+
+	ok, err := h.shareSvc.ValidateAccess(r.Context(), token, input.Credential)
+	if err != nil {
+		if err.Error() == "share link access limit reached" {
+			http.Error(w, `{"error":"access_limit_exceeded"}`, http.StatusForbidden)
+			return
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		return
+	}
+	if !ok {
+		http.Error(w, `{"error":"invalid_credential"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Atomically commit the access (enforces max_access_count under concurrent load).
+	if _, err := h.shareSvc.TrackAccess(r.Context(), token); err != nil {
+		if errors.Is(err, repository.ErrAccessLimitExceeded) {
+			http.Error(w, `{"error":"access_limit_exceeded"}`, http.StatusForbidden)
+			return
+		}
+		http.Error(w, `{"error":"track failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (h *ShareLinkHandler) Revoke(w http.ResponseWriter, r *http.Request) {

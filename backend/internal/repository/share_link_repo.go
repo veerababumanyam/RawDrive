@@ -21,6 +21,8 @@ type ShareLink struct {
 	ExpiresAt       *time.Time             `json:"expires_at,omitempty"`
 	Permissions     map[string]interface{} `json:"permissions"`
 	DownloadAllowed bool                   `json:"download_allowed"`
+	MaxAccessCount  *int                   `json:"max_access_count,omitempty"`
+	AccessCount     int                    `json:"access_count"`
 	CreatedAt       time.Time              `json:"created_at"`
 	RevokedAt       *time.Time             `json:"revoked_at,omitempty"`
 }
@@ -52,9 +54,9 @@ func (r *ShareLinkRepo) Create(ctx context.Context, sl *ShareLink) error {
 	sl.CreatedAt = time.Now()
 
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO share_links (id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed, created_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		sl.ID, sl.GalleryID, sl.Token, sl.PinHash, sl.ExpiresAt, sl.Permissions, sl.DownloadAllowed, sl.CreatedAt,
+		`INSERT INTO share_links (id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed, max_access_count, access_count, created_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		sl.ID, sl.GalleryID, sl.Token, sl.PinHash, sl.ExpiresAt, sl.Permissions, sl.DownloadAllowed, sl.MaxAccessCount, sl.AccessCount, sl.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("share link create: %w", err)
@@ -66,10 +68,11 @@ func (r *ShareLinkRepo) Create(ctx context.Context, sl *ShareLink) error {
 func (r *ShareLinkRepo) GetByToken(ctx context.Context, token string) (*ShareLink, error) {
 	sl := &ShareLink{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed, created_at, revoked_at
+		`SELECT id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed,
+		        max_access_count, access_count, created_at, revoked_at
 		 FROM share_links WHERE token = $1 AND revoked_at IS NULL`, token,
 	).Scan(&sl.ID, &sl.GalleryID, &sl.Token, &sl.PinHash, &sl.ExpiresAt, &sl.Permissions,
-		&sl.DownloadAllowed, &sl.CreatedAt, &sl.RevokedAt,
+		&sl.DownloadAllowed, &sl.MaxAccessCount, &sl.AccessCount, &sl.CreatedAt, &sl.RevokedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -83,7 +86,8 @@ func (r *ShareLinkRepo) GetByToken(ctx context.Context, token string) (*ShareLin
 // ListByGallery returns all active share links for a gallery.
 func (r *ShareLinkRepo) ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]ShareLink, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed, created_at, revoked_at
+		`SELECT id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed,
+		        max_access_count, access_count, created_at, revoked_at
 		 FROM share_links WHERE gallery_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC`,
 		galleryID,
 	)
@@ -96,13 +100,39 @@ func (r *ShareLinkRepo) ListByGallery(ctx context.Context, galleryID uuid.UUID) 
 	for rows.Next() {
 		var sl ShareLink
 		if err := rows.Scan(&sl.ID, &sl.GalleryID, &sl.Token, &sl.PinHash, &sl.ExpiresAt,
-			&sl.Permissions, &sl.DownloadAllowed, &sl.CreatedAt, &sl.RevokedAt); err != nil {
+			&sl.Permissions, &sl.DownloadAllowed, &sl.MaxAccessCount, &sl.AccessCount,
+			&sl.CreatedAt, &sl.RevokedAt); err != nil {
 			return nil, fmt.Errorf("share link scan: %w", err)
 		}
 		links = append(links, sl)
 	}
 	return links, rows.Err()
 }
+
+// IncrementAccessCount atomically bumps access_count and returns the new value.
+// Returns ErrAccessLimitExceeded if max_access_count is set and already reached.
+func (r *ShareLinkRepo) IncrementAccessCount(ctx context.Context, token string) (int, error) {
+	var newCount int
+	err := r.pool.QueryRow(ctx,
+		`UPDATE share_links
+		   SET access_count = access_count + 1
+		 WHERE token = $1
+		   AND revoked_at IS NULL
+		   AND (max_access_count IS NULL OR access_count < max_access_count)
+		 RETURNING access_count`,
+		token,
+	).Scan(&newCount)
+	if err == pgx.ErrNoRows {
+		return 0, ErrAccessLimitExceeded
+	}
+	if err != nil {
+		return 0, fmt.Errorf("share link increment access: %w", err)
+	}
+	return newCount, nil
+}
+
+// ErrAccessLimitExceeded is returned when a share link has reached its max_access_count.
+var ErrAccessLimitExceeded = fmt.Errorf("share link access limit exceeded")
 
 // Revoke marks a share link as revoked.
 func (r *ShareLinkRepo) Revoke(ctx context.Context, id uuid.UUID) error {
