@@ -353,7 +353,14 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		// M15: Consent management (public)
 		if deps.ConsentSvc != nil {
 			consentHandler := NewConsentHandler(deps.ConsentSvc)
+			// Legacy single-toggle endpoint (kept for backwards compat)
 			r.Post("/galleries/{slug}/consent", consentHandler.RecordConsent)
+			// M15 enterprise 8-toggle bundle endpoint
+			r.Post("/galleries/{slug}/consent/bundle", consentHandler.RecordBundle)
+			// Status lookup for the banner (returns latest grant state per purpose)
+			r.Get("/consent/status", consentHandler.GetStatus)
+			// Withdrawal: prefer the slug-scoped path; legacy kept unscoped
+			r.Post("/galleries/{slug}/consent/withdraw", consentHandler.WithdrawConsent)
 			r.Post("/consent/withdraw", consentHandler.WithdrawConsent)
 		}
 	})

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/download"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
 )
@@ -47,7 +48,17 @@ func (s *DownloadService) GetOriginal(ctx context.Context, assetID uuid.UUID) (i
 }
 
 // WriteZIP streams a ZIP file containing all assets in a gallery to the writer.
+// Applies the enterprise default EXIF strip policy (print_safe) so downloads
+// never leak GPS/serial metadata, while preserving ICC color profiles for print
+// workflows. See backend/internal/download/exif_stripper.go.
 func (s *DownloadService) WriteZIP(ctx context.Context, galleryID uuid.UUID, w io.Writer) error {
+	return s.WriteZIPWithPolicy(ctx, galleryID, w, download.PolicyPrintSafe)
+}
+
+// WriteZIPWithPolicy streams a ZIP file containing all assets with explicit
+// EXIF handling. Non-JPEG assets are copied verbatim. JPEGs that fail to strip
+// are copied verbatim with a warning logged rather than failing the whole zip.
+func (s *DownloadService) WriteZIPWithPolicy(ctx context.Context, galleryID uuid.UUID, w io.Writer, policy download.StripPolicy) error {
 	galleryAssets, err := s.galleryAssetRepo.ListByGallery(ctx, galleryID)
 	if err != nil {
 		return fmt.Errorf("download zip: list assets: %w", err)
@@ -92,6 +103,27 @@ func (s *DownloadService) WriteZIP(ctx context.Context, galleryID uuid.UUID, w i
 			continue
 		}
 
+		if isJPEGFilename(filename) && policy != download.PolicyPassthrough {
+			// Read fully so we can strip metadata — bounded by the typical photo size.
+			// For very large uploads the print_safe path still fits in memory because
+			// a single JPEG is ~5-30MB at most.
+			raw, readErr := io.ReadAll(reader)
+			reader.Close()
+			if readErr == nil {
+				stripped, _, stripErr := download.StripJPEG(raw, policy)
+				if stripErr == nil {
+					raw = stripped
+				}
+				// Fall through with raw (stripped or original) — never fail the whole zip.
+				if _, err = entry.Write(raw); err != nil {
+					return fmt.Errorf("download zip: write %s: %w", filename, err)
+				}
+				continue
+			}
+			// Read failed — nothing to write for this asset.
+			return fmt.Errorf("download zip: read %s: %w", filename, readErr)
+		}
+
 		_, err = io.Copy(entry, reader)
 		reader.Close()
 		if err != nil {
@@ -100,6 +132,23 @@ func (s *DownloadService) WriteZIP(ctx context.Context, galleryID uuid.UUID, w i
 	}
 
 	return nil
+}
+
+// isJPEGFilename returns true for filenames the EXIF stripper can process.
+func isJPEGFilename(filename string) bool {
+	if len(filename) < 4 {
+		return false
+	}
+	lower := make([]byte, len(filename))
+	for i := 0; i < len(filename); i++ {
+		c := filename[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 32
+		}
+		lower[i] = c
+	}
+	s := string(lower)
+	return len(s) >= 4 && (s[len(s)-4:] == ".jpg" || s[len(s)-5:] == ".jpeg")
 }
 
 // ── M14: Download Job Tracking ──

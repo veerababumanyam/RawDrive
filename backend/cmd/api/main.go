@@ -377,9 +377,12 @@ func main() {
 	bannerRepo := repository.NewBannerRepo(dbPool)
 	bannerSvc := service.NewBannerService(bannerRepo)
 
-	// M15 Services: Consent
+	// M15 Services: Consent (with optional cascade emitter for withdrawal purges)
 	consentRepo := repository.NewConsentRepo(dbPool)
-	consentSvc := service.NewConsentService(consentRepo)
+	// emitter is nil for now — withdrawal cascade logs only until Valkey wiring (M15.1).
+	// See _cobolt-output/latest/build/M15/M15-design-decisions.md § 2.
+	var consentEmitter service.WithdrawalCascadeEmitter
+	consentSvc := service.NewConsentService(consentRepo, consentEmitter)
 
 	// M11 Services: Lifecycle
 	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
