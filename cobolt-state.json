@@ -56,7 +56,7 @@
   },
   "build": {
     "version": "2.0.0",
-    "currentStep": "gap-fill-phase-a-complete",
+    "currentStep": "gap-fill-phase-b-m3-partial",
     "currentMilestone": "M3",
     "autoMode": true,
     "parallelMode": false,
@@ -105,8 +105,8 @@
     "resolvedIssues": 0,
     "startVersion": "0.0.27",
     "totalMilestones": 15,
-    "gapFillPhase": "A-complete",
-    "gapFillNotes": "Phase A shared utilities built with TDD: pdf_service (6 tests), notification_delivery (5 tests), scheduler package (8 tests). All 19 tests pass, backend builds clean. Ready for Phase B targeted milestone gap-fills."
+    "gapFillPhase": "B-m3-partial",
+    "gapFillNotes": "Phase A complete (PDF + notifications + scheduler, 19 tests). Phase B M3 progress: M3.2 face detection privacy opt-out (migration 046 + repo + worker + handler), M3.3 asset.ready event publication (worker/events.go + thumbnail integration). Bonus closures picked up from orphan route refs: GAL-FR-115 branding, GAL-FR-107/108 FaceMatch, GAL-FR-130 proofing CSV export, GAL-FR-134 photographer proofing notification, GAL-FR-112 share link access-count enforcement. 3 commits. All tests pass. Backend builds clean. Pending: M3.1 face filter slice (E8-S3, requires backend + frontend), M4/M5/M6/M7 targeted gap-fills, M9 greenfield, M10 compliance."
   },
   "gates": {
     "preflight": "passed"
