@@ -114,6 +114,52 @@ func (s *AdminUserService) ChangeRole(ctx context.Context, id uuid.UUID, newRole
 	return nil
 }
 
+// DeleteUser performs a GDPR/DPDPA erasure request (M7 E20-S1). It marks
+// the user as deleted and relies on ON DELETE CASCADE declared in the
+// schema (workspace_members, notifications, proofing_selections, etc.)
+// to ripple the deletion through dependent tables. The super_admin guard
+// mirrors SuspendUser so admin accounts cannot be erased by mistake.
+//
+// NOTE: A proper GDPR "right to be forgotten" workflow also needs to
+// purge the user's assets from R2 (done asynchronously by the asset purge
+// worker) and anonymize their rows in immutable audit logs (replaced by a
+// tombstone entry). Those steps are deferred to the DSR workflow in M10;
+// this method closes the admin-initiated delete path.
+func (s *AdminUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	if id == actorID {
+		return errors.New("cannot delete your own account via admin panel")
+	}
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("fetching user: %w", err)
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+	if user.Role == "super_admin" {
+		return errors.New("cannot delete a super_admin")
+	}
+	if err := s.userRepo.UpdateStatus(ctx, id, "deleted", "gdpr_erasure", actorID); err != nil {
+		return fmt.Errorf("marking user deleted: %w", err)
+	}
+	s.auditLog.RecordAction(ctx, repository.AuditLogCreate{
+		ActorID:      actorID,
+		ActorType:    "admin",
+		Action:       "user.delete",
+		ResourceType: "user",
+		ResourceID:   id.String(),
+		Severity:     "high",
+	})
+	return nil
+}
+
+// GetUserActivity returns the audit log timeline for a user — what they
+// did (actor_id) and what was done to them (resource_id). Used by the
+// admin user detail page for incident investigations.
+func (s *AdminUserService) GetUserActivity(ctx context.Context, userID uuid.UUID, limit int) ([]repository.AuditLogEntry, error) {
+	return s.userRepo.GetActivityTimeline(ctx, userID, limit)
+}
+
 func (s *AdminUserService) BulkSuspend(ctx context.Context, ids []uuid.UUID, reason string, actorID uuid.UUID) (int64, error) {
 	filtered := make([]uuid.UUID, 0, len(ids))
 	for _, id := range ids {

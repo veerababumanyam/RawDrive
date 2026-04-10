@@ -278,6 +278,26 @@ func (r *GearRepo) UpdateBookingStatus(ctx context.Context, id uuid.UUID, status
 	return err
 }
 
+// BookingConflictCheck returns true when an existing booking for the given
+// gear listing overlaps the [start, end] range and is in an active/reserving
+// state (pending, approved, or active). Uses the standard half-open range
+// overlap test: existing.start_date <= end AND existing.end_date >= start.
+// Added to close the M5 gap audit item on date-conflict detection.
+func (r *GearRepo) BookingConflictCheck(ctx context.Context, gearID uuid.UUID, start, end time.Time) (bool, error) {
+	var count int
+	err := r.DB.QueryRow(ctx, `
+		SELECT COUNT(*) FROM gear_bookings
+		WHERE gear_listing_id = $1
+		  AND status IN ('pending', 'approved', 'active')
+		  AND start_date <= $3
+		  AND end_date >= $2`,
+		gearID, start, end).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *GearRepo) ListBookingsByRenter(ctx context.Context, renterID uuid.UUID) ([]GearBooking, error) {
 	rows, err := r.DB.Query(ctx, `
 		SELECT id, gear_listing_id, renter_id, owner_id, start_date, end_date, total_paisa, deposit_paisa, status, owner_message, renter_message, return_photos, dispute_reason, created_at, updated_at

@@ -37,6 +37,9 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Post("/users/{id}/reactivate", users.Reactivate)
 		r.Post("/users/{id}/impersonate", users.Impersonate)
 		r.Put("/users/{id}/role", users.ChangeRole)
+		// M7 E20-S1: GDPR erasure + activity timeline
+		r.Delete("/users/{id}", users.Delete)
+		r.Get("/users/{id}/activity", users.Activity)
 
 		r.Get("/moderation", moderation.ListQueue)
 		r.Put("/moderation/{id}/approve", moderation.Approve)
@@ -45,6 +48,10 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 
 		r.Get("/workspaces", workspaces.List)
 		r.Get("/workspaces/{id}", workspaces.GetByID)
+		// M7 E20-S3: workspace lifecycle management
+		r.Post("/workspaces/{id}/suspend", workspaces.Suspend)
+		r.Post("/workspaces/{id}/unsuspend", workspaces.Unsuspend)
+		r.Delete("/workspaces/{id}", workspaces.Delete)
 
 		r.Get("/revenue", revenue.GetDashboard)
 		r.Get("/revenue/timeseries", revenue.GetTimeSeries)

@@ -11,11 +11,19 @@ import (
 
 // LeadEmbedHandler handles public lead capture form submissions (no auth required).
 type LeadEmbedHandler struct {
-	repo *repository.LeadRepo
+	repo       *repository.LeadRepo
+	dispatcher *NotificationDispatcher
 }
 
 func NewLeadEmbedHandler(repo *repository.LeadRepo) *LeadEmbedHandler {
 	return &LeadEmbedHandler{repo: repo}
+}
+
+// WithNotificationDispatcher wires the notification fan-out for public
+// lead-form submissions. Safe to call with nil — disables notifications.
+func (h *LeadEmbedHandler) WithNotificationDispatcher(d *NotificationDispatcher) *LeadEmbedHandler {
+	h.dispatcher = d
+	return h
 }
 
 // Submit handles POST /api/v1/public/leads/{workspaceId}
@@ -56,6 +64,14 @@ func (h *LeadEmbedHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to capture lead"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// Best-effort notification to workspace owner. Safe on nil dispatcher.
+	h.dispatcher.Notify(r.Context(), wsID,
+		"bookings",
+		"New lead from website",
+		"A new lead ("+lead.Name+") was captured from your embedded form.",
+		"/crm/leads/"+lead.ID.String(),
+	)
 
 	respondJSON(w, http.StatusCreated, map[string]string{
 		"status":  "captured",

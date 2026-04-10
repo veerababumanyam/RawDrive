@@ -29,11 +29,13 @@ func requireAdmin(next http.Handler) http.Handler {
 
 // M6Dependencies holds all dependencies needed for M6 route registration.
 type M6Dependencies struct {
-	DB         *pgxpool.Pool
-	DealerRepo *repository.DealerRepo
-	CouponRepo *repository.CouponRepo
-	MarginRepo *repository.MarginRepo
-	PayoutRepo *repository.PayoutRepo
+	DB              *pgxpool.Pool
+	DealerRepo      *repository.DealerRepo
+	CouponRepo      *repository.CouponRepo
+	MarginRepo      *repository.MarginRepo
+	PayoutRepo      *repository.PayoutRepo
+	KycDocumentRepo *repository.KycDocumentRepo
+	DealerAnalytics *service.DealerAnalyticsService
 }
 
 // RegisterM6Routes registers all M6 (Revenue & Dealership Engine) routes.
@@ -94,4 +96,25 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 
 	// Coupon validation (onboarding flow)
 	r.Post("/api/v1/onboarding/coupon", couponValidationHandler.ValidateCoupon)
+
+	// M6 gap-fill: KYC documents (dealer self-service + admin review)
+	if deps.KycDocumentRepo != nil {
+		kycHandler := NewKycHandler(deps.KycDocumentRepo, deps.DealerRepo)
+		r.Route("/api/v1/dealer/kyc-documents", func(r chi.Router) {
+			r.Post("/", kycHandler.Create)
+			r.Get("/", kycHandler.List)
+		})
+		r.Route("/api/v1/admin/kyc-documents", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Patch("/{id}", kycHandler.AdminReview)
+		})
+	}
+
+	// M6 gap-fill: dealer analytics dashboard with period selection.
+	// GET /api/v1/dealer/analytics?period=current_month|last_month|last_7_days|
+	//   last_30_days|last_quarter|custom&from=RFC3339&to=RFC3339
+	if deps.DealerAnalytics != nil {
+		analyticsHandler := NewDealerAnalyticsHandler(deps.DealerAnalytics, deps.DealerRepo)
+		r.Get("/api/v1/dealer/analytics", analyticsHandler.Dashboard)
+	}
 }

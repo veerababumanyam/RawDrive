@@ -265,3 +265,65 @@ func (r *AdminWorkspaceRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminW
 
 	return &detail, nil
 }
+
+// Suspend marks a workspace as suspended. Suspended workspaces cannot be
+// accessed by their members but data is preserved (for billing disputes or
+// abuse investigations). Reason is recorded in suspended_reason for the
+// audit trail and the admin UI.
+func (r *AdminWorkspaceRepo) Suspend(ctx context.Context, id uuid.UUID, reason string, actorID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE workspaces
+		 SET status = 'suspended',
+		     suspended_at = now(),
+		     suspended_reason = $2,
+		     suspended_by = $3
+		 WHERE id = $1 AND deleted_at IS NULL AND status != 'deleted'`,
+		id, reason, actorID)
+	if err != nil {
+		return fmt.Errorf("admin workspace suspend: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Unsuspend clears the suspended state and returns a workspace to active.
+func (r *AdminWorkspaceRepo) Unsuspend(ctx context.Context, id uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE workspaces
+		 SET status = 'active',
+		     suspended_at = NULL,
+		     suspended_reason = NULL,
+		     suspended_by = NULL
+		 WHERE id = $1 AND status = 'suspended' AND deleted_at IS NULL`,
+		id)
+	if err != nil {
+		return fmt.Errorf("admin workspace unsuspend: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SoftDelete marks a workspace as deleted. The row stays for 30 days to
+// allow restoration; a background purge worker hard-deletes thereafter.
+// This matches the DPDPA/GDPR "deletion within a reasonable period"
+// guidance while preserving a recovery window for accidents.
+func (r *AdminWorkspaceRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE workspaces
+		 SET status = 'deleted',
+		     deleted_at = now(),
+		     deleted_by = $2
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id, actorID)
+	if err != nil {
+		return fmt.Errorf("admin workspace delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

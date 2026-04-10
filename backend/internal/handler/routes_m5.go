@@ -1,9 +1,14 @@
 package handler
 
 import (
+	"context"
+	"time"
+
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/service"
 )
 
 // M5Dependencies holds all dependencies needed for M5 route registration.
@@ -18,8 +23,26 @@ type M5Dependencies struct {
 
 // RegisterM5Routes registers all M5 (Marketplaces & Communication) routes.
 func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
+	// M5 gap-audit fix: introduce a service layer wrapping the M5 repos so
+	// hire-request CRUD, review creation, and gear booking conflict checks
+	// route through a single validated entry point (matches M4/M6/M7 style).
+	marketplaceSvc := service.NewMarketplaceService(
+		deps.FreelancerRepo,
+		deps.GearRepo,
+		deps.MessagingRepo,
+		deps.ModerationRepo,
+	)
+
 	marketplaceHandler := NewMarketplaceHandler(deps.FreelancerRepo)
 	gearHandler := NewGearHandler(deps.GearRepo, deps.ModerationRepo)
+	// Wire conflict check only when the gear repo is present (tests that pass
+	// zero-value deps will skip the check, matching other M5 handlers).
+	if deps.GearRepo != nil {
+		gearHandler = gearHandler.WithBookingConflictCheck(func(ctx context.Context, gearID uuid.UUID, start, end time.Time) (bool, error) {
+			return deps.GearRepo.BookingConflictCheck(ctx, gearID, start, end)
+		})
+	}
+	hireRequestHandler := NewHireRequestHandler(marketplaceSvc, deps.FreelancerRepo)
 	messagingHandler := NewMessagingHandler(deps.MessagingRepo, deps.ModerationRepo, deps.Events)
 	moderationHandler := NewModerationHandler(deps.ModerationRepo)
 
@@ -50,6 +73,14 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 			r.Post("/inquiries", marketplaceHandler.CreateInquiry)
 			r.Get("/inquiries", marketplaceHandler.ListInquiries)
 			r.Put("/inquiries/{id}", marketplaceHandler.UpdateInquiry)
+
+			// Hire requests (M5 gap-audit fix — previously repo-only)
+			r.Post("/freelancers/{id}/hire", hireRequestHandler.CreateHireRequest)
+			r.Get("/hire-requests", hireRequestHandler.ListHireRequests)
+			r.Patch("/hire-requests/{id}/status", hireRequestHandler.UpdateHireRequestStatus)
+
+			// Freelancer reviews (counterpart to existing ListReviews)
+			r.Post("/freelancers/{id}/reviews", hireRequestHandler.CreateFreelancerReview)
 		})
 	})
 

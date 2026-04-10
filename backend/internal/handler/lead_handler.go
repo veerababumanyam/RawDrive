@@ -10,11 +10,20 @@ import (
 )
 
 type LeadHandler struct {
-	repo *repository.LeadRepo
+	repo       *repository.LeadRepo
+	dispatcher *NotificationDispatcher
 }
 
 func NewLeadHandler(repo *repository.LeadRepo) *LeadHandler {
 	return &LeadHandler{repo: repo}
+}
+
+// WithNotificationDispatcher wires the notification fan-out for lead events.
+// Calling this with a nil dispatcher disables notifications, which is fine
+// for tests and for deployments that have not yet configured delivery.
+func (h *LeadHandler) WithNotificationDispatcher(d *NotificationDispatcher) *LeadHandler {
+	h.dispatcher = d
+	return h
 }
 
 func (h *LeadHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +48,14 @@ func (h *LeadHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
+	// Best-effort notification fan-out to the workspace owner. Safe on nil
+	// dispatcher; never fails the caller.
+	h.dispatcher.Notify(r.Context(), workspaceID,
+		"bookings",
+		"New lead captured",
+		"A new lead ("+lead.Name+") has been added to your pipeline.",
+		"/crm/leads/"+lead.ID.String(),
+	)
 	respondJSON(w, http.StatusCreated, lead)
 }
 

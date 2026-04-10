@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -15,6 +16,10 @@ import (
 type GearHandler struct {
 	repo    *repository.GearRepo
 	modRepo *repository.ModerationRepo
+	// bookingConflictCheck is an optional hook (wired via WithBookingConflictCheck)
+	// that reports true when a prospective booking overlaps an existing reservation.
+	// Added as part of the M5 gap-audit fix so CreateBooking can return 409 Conflict.
+	bookingConflictCheck func(ctx context.Context, gearID uuid.UUID, start, end time.Time) (bool, error)
 }
 
 func NewGearHandler(repo *repository.GearRepo, modRepo ...* repository.ModerationRepo) *GearHandler {
@@ -22,6 +27,14 @@ func NewGearHandler(repo *repository.GearRepo, modRepo ...* repository.Moderatio
 	if len(modRepo) > 0 {
 		h.modRepo = modRepo[0]
 	}
+	return h
+}
+
+// WithBookingConflictCheck wires a conflict-detection function that is
+// invoked during CreateBooking. When the function reports true the handler
+// returns 409 Conflict. Pass nil (or don't call this) to disable.
+func (h *GearHandler) WithBookingConflictCheck(fn func(ctx context.Context, gearID uuid.UUID, start, end time.Time) (bool, error)) *GearHandler {
+	h.bookingConflictCheck = fn
 	return h
 }
 
@@ -262,6 +275,23 @@ func (h *GearHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	if err1 != nil || err2 != nil {
 		http.Error(w, `{"error":"invalid date format, use YYYY-MM-DD"}`, http.StatusBadRequest)
 		return
+	}
+	if endDate.Before(startDate) {
+		http.Error(w, `{"error":"end_date must be on or after start_date"}`, http.StatusBadRequest)
+		return
+	}
+
+	// M5 gap-audit fix: reject overlapping bookings on the same gear item.
+	if h.bookingConflictCheck != nil {
+		conflict, cErr := h.bookingConflictCheck(r.Context(), gearID, startDate, endDate)
+		if cErr != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		if conflict {
+			http.Error(w, `{"error":"requested dates conflict with an existing booking"}`, http.StatusConflict)
+			return
+		}
 	}
 
 	booking := &repository.GearBooking{

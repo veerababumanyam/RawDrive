@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/ai"
@@ -18,6 +19,7 @@ import (
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/onboarding"
 	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/scheduler"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
 	teamPkg "github.com/rawdrive/backend/internal/team"
@@ -335,6 +337,8 @@ func main() {
 	eventBroker := handler.NewEventBroker()
 
 	var m8Deps handler.M8Dependencies // declared here so public routes can reference
+	var m6Scheduler *scheduler.Scheduler // declared here so it can be started below next to workers
+	var publicLeadDispatcher *handler.NotificationDispatcher // set inside protected block, consumed by public lead embed below
 
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
 	// All M2, M3, M4 data-plane endpoints require authentication.
@@ -463,17 +467,41 @@ func main() {
 		eventRepo := repository.NewEventRepo(dbPool)
 		notificationRepo := repository.NewNotificationRepo(dbPool)
 
+		// M4 shared infrastructure: PDF renderer + notification delivery.
+		// Log-only providers are safe for dev / CI; production can replace
+		// them via the same With* chain without touching handlers.
+		pdfSvc := service.NewPDFService()
+		notifDeliverySvc := service.NewNotificationDeliveryService(notificationRepo).
+			WithProvider(service.LogEmailProvider{}).
+			WithProvider(service.LogWhatsAppProvider{}).
+			WithProvider(service.LogPushProvider{})
+
+		// Workspace owner lookup used by the notification dispatcher. Reads
+		// the owner_id column on workspaces — the same column the onboarding
+		// flow writes when a user first creates their workspace.
+		ownerLookup := func(ctx context.Context, wsID uuid.UUID) (uuid.UUID, error) {
+			var ownerID uuid.UUID
+			err := dbPool.QueryRow(ctx,
+				`SELECT owner_id FROM workspaces WHERE id = $1`, wsID).Scan(&ownerID)
+			return ownerID, err
+		}
+		notifDispatcher := handler.NewNotificationDispatcher(notifDeliverySvc, ownerLookup)
+		publicLeadDispatcher = notifDispatcher
+		log.Println("M4: notification delivery service wired (log-only email/push/whatsapp providers)")
+
 		// M4 routes (public lead form is registered inside RegisterM4Routes without auth)
 		handler.RegisterM4Routes(api, handler.M4Dependencies{
-			DB:               dbPool,
-			LeadRepo:         leadRepo,
-			ContactRepo:      contactRepo,
-			DealRepo:         dealRepo,
-			InvoiceRepo:      invoiceRepo,
-			PaymentRepo:      paymentRepo,
-			ContractRepo:     contractRepo,
-			EventRepo:        eventRepo,
-			NotificationRepo: notificationRepo,
+			DB:                     dbPool,
+			LeadRepo:               leadRepo,
+			ContactRepo:            contactRepo,
+			DealRepo:               dealRepo,
+			InvoiceRepo:            invoiceRepo,
+			PaymentRepo:            paymentRepo,
+			ContractRepo:           contractRepo,
+			EventRepo:              eventRepo,
+			NotificationRepo:       notificationRepo,
+			PDFService:             pdfSvc,
+			NotificationDispatcher: notifDispatcher,
 		})
 
 		log.Println("M4: Business Operations routes registered (CRM, Billing, Contracts, Calendar, Notifications, GST Reports, ICS Export, CSV Import, Payment Links)")
@@ -506,16 +534,46 @@ func main() {
 		couponRepo := repository.NewCouponRepo(dbPool)
 		marginRepo := repository.NewMarginRepo(dbPool)
 		payoutRepo := repository.NewPayoutRepo(dbPool)
+		kycDocumentRepo := repository.NewKycDocumentRepo(dbPool)
+		dealerAnalyticsRepo := repository.NewDealerAnalyticsRepo(dbPool)
+		dealerAnalyticsSvc := service.NewDealerAnalyticsService(dealerAnalyticsRepo, dealerRepo)
+		marginSvcForPayouts := service.NewMarginService(marginRepo, dealerRepo)
+		payoutSvc := service.NewPayoutService(payoutRepo, marginSvcForPayouts)
 
 		handler.RegisterM6Routes(api, handler.M6Dependencies{
-			DB:         dbPool,
-			DealerRepo: dealerRepo,
-			CouponRepo: couponRepo,
-			MarginRepo: marginRepo,
-			PayoutRepo: payoutRepo,
+			DB:              dbPool,
+			DealerRepo:      dealerRepo,
+			CouponRepo:      couponRepo,
+			MarginRepo:      marginRepo,
+			PayoutRepo:      payoutRepo,
+			KycDocumentRepo: kycDocumentRepo,
+			DealerAnalytics: dealerAnalyticsSvc,
 		})
 
-		log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts)")
+		log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts, KYC, Analytics)")
+
+		// M6 gap-fill: scheduler for monthly payout calculation on the 1st of each month.
+		// Uses the scheduler package (no external cron dep). Jobs run in goroutines
+		// started by Start(appCtx); Stop happens on process exit via defer.
+		schedulerInstance := scheduler.New()
+		if err := schedulerInstance.Register(
+			"monthly-payout-calculation",
+			scheduler.MonthlyOnDay(1),
+			func(ctx context.Context) error {
+				processed, failed, err := payoutSvc.CalculateMonthlyPayoutsForAllDealers(ctx, dealerRepo, time.Now().UTC())
+				log.Printf("[scheduler] monthly-payout-calculation: processed=%d failed=%d err=%v", processed, failed, err)
+				return err
+			},
+		); err != nil {
+			log.Printf("WARNING: failed to register monthly-payout-calculation job: %v", err)
+		} else {
+			log.Println("Scheduler: registered monthly-payout-calculation (monthly on day 1 at 00:00)")
+		}
+		// Start in the same context the workers use so shutdown is unified.
+		// NOTE: the actual Start() call happens below where workerCtx is created,
+		// because workerCtx is declared after this block. We stash the scheduler
+		// in a closure variable captured by the outer scope.
+		m6Scheduler = schedulerInstance
 
 		// ──────────────────────── M7: Admin Command Center & Reporting ──────────────────
 		adminUserRepo := repository.NewAdminUserRepo(dbPool)
@@ -577,7 +635,8 @@ func main() {
 
 	// Public lead capture (no auth required — embeddable on external sites)
 	publicLeadRepo := repository.NewLeadRepo(dbPool)
-	publicLeadHandler := handler.NewLeadEmbedHandler(publicLeadRepo)
+	publicLeadHandler := handler.NewLeadEmbedHandler(publicLeadRepo).
+		WithNotificationDispatcher(publicLeadDispatcher)
 	r.Post("/api/v1/public/leads/{workspaceId}", publicLeadHandler.Submit)
 
 	log.Println("Public lead form endpoint registered")
@@ -610,6 +669,16 @@ func main() {
 	defer workerCancel()
 	workerRegistry.StartAll(workerCtx)
 	log.Println("Workers: all started (thumbnail, asset-purge, gallery-expiry, face-detection, ai-tagging, duplicate-scan, message-cleanup, moderation)")
+
+	// Scheduler: start after workers so jobs run under the same cancellable context.
+	if m6Scheduler != nil {
+		m6Scheduler.Start(workerCtx)
+		jobs := m6Scheduler.Jobs()
+		for _, j := range jobs {
+			log.Printf("Scheduler: job %q next run at %s (%s)", j.Name, j.NextRun.Format(time.RFC3339), j.Schedule)
+		}
+		defer m6Scheduler.Stop()
+	}
 
 	// ──────────────────────── Health Check ────────────────────────
 

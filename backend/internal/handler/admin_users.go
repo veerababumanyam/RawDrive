@@ -109,6 +109,58 @@ func (h *AdminUsersHandler) Impersonate(w http.ResponseWriter, r *http.Request) 
 	respondJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
+// Delete handles DELETE /api/v1/admin/users/{id} (M7 E20-S1 GDPR erasure).
+// Marks the user as deleted, cascades through dependent tables via FK
+// ON DELETE CASCADE, logs a high-severity audit entry.
+func (h *AdminUsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+	actorID := middleware.GetActorID(r.Context())
+	if err := h.svc.DeleteUser(r.Context(), id, actorID); err != nil {
+		log.Printf("admin: delete user %s failed: %v", id, err)
+		// Bubble up specific errors so the admin UI can show accurate messages.
+		if err.Error() == "cannot delete a super_admin" ||
+			err.Error() == "cannot delete your own account via admin panel" {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusForbidden)
+			return
+		}
+		http.Error(w, `{"error":"failed to delete user"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Activity handles GET /api/v1/admin/users/{id}/activity (M7 E20-S1 timeline).
+// Returns the user's audit log trail — both actions they performed and
+// actions taken against them. Query param ?limit=20 (max 100).
+func (h *AdminUsersHandler) Activity(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	entries, err := h.svc.GetUserActivity(r.Context(), id, limit)
+	if err != nil {
+		log.Printf("admin: activity for user %s failed: %v", id, err)
+		http.Error(w, `{"error":"failed to fetch activity"}`, http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []repository.AuditLogEntry{}
+	}
+	respondJSON(w, http.StatusOK, entries)
+}
+
 func (h *AdminUsersHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

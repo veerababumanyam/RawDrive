@@ -92,6 +92,58 @@ func (s *PayoutService) ApprovePayout(ctx context.Context, payoutID, adminID uui
 	return s.repo.UpdateStatus(ctx, payoutID, "approved", &adminID)
 }
 
+// CalculateMonthlyPayoutsForAllDealers runs CalculateMonthlyPayout for every
+// approved dealer for the previous calendar month, relative to `now`. It's
+// the entry point the scheduler calls on the 1st of each month. Individual
+// dealer errors are collected but do not halt the batch — the scheduler
+// logs the aggregate error count.
+//
+// dealerRepo is passed explicitly (rather than stored on the service) so we
+// don't have to modify the existing NewPayoutService signature that tests
+// depend on.
+func (s *PayoutService) CalculateMonthlyPayoutsForAllDealers(ctx context.Context, dealerRepo *repository.DealerRepo, now time.Time) (processed, failed int, err error) {
+	// Previous month relative to `now`.
+	firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	prevMonth := firstOfThisMonth.AddDate(0, -1, 0)
+	year, month := prevMonth.Year(), int(prevMonth.Month())
+
+	// Paginate through approved dealers.
+	var cursor *time.Time
+	for {
+		page, listErr := dealerRepo.List(ctx, repository.DealerFilter{
+			Status: "approved",
+			Limit:  100,
+			Cursor: cursor,
+		})
+		if listErr != nil {
+			return processed, failed, listErr
+		}
+		if len(page) == 0 {
+			break
+		}
+		for _, d := range page {
+			_, perDealerErr := s.CalculateMonthlyPayout(ctx, d.ID, d.StateID, year, month)
+			if perDealerErr != nil {
+				// Skip dealers that already have a payout for the period;
+				// count only genuine failures.
+				if errors.Is(perDealerErr, ErrPayoutAlreadyExists) {
+					continue
+				}
+				failed++
+				continue
+			}
+			processed++
+		}
+		if len(page) < 100 {
+			break
+		}
+		// Cursor = last created_at of the page for next iteration.
+		last := page[len(page)-1].CreatedAt
+		cursor = &last
+	}
+	return processed, failed, nil
+}
+
 // ConfirmPayment transitions processing → paid.
 func (s *PayoutService) ConfirmPayment(ctx context.Context, payoutID uuid.UUID, paymentRef string) error {
 	p, err := s.repo.GetByID(ctx, payoutID)

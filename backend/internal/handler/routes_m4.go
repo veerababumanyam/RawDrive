@@ -19,16 +19,20 @@ type M4Dependencies struct {
 	ContractRepo     *repository.ContractRepo
 	EventRepo        *repository.EventRepo
 	NotificationRepo *repository.NotificationRepo
+	// Optional: shared infrastructure wired in main.go. Nil-safe — handlers
+	// degrade gracefully when these are not provided.
+	PDFService             *service.PDFService
+	NotificationDispatcher *NotificationDispatcher
 }
 
 // RegisterM4Routes registers all M4 (Business Operations) routes.
 func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
-	leadHandler := NewLeadHandler(deps.LeadRepo)
+	leadHandler := NewLeadHandler(deps.LeadRepo).WithNotificationDispatcher(deps.NotificationDispatcher)
 	contactHandler := NewContactHandler(deps.ContactRepo)
 	dealHandler := NewDealHandler(deps.DealRepo)
-	invoiceHandler := NewInvoiceHandler(deps.InvoiceRepo)
+	invoiceHandler := NewInvoiceHandler(deps.InvoiceRepo).WithPDFService(deps.PDFService)
 	paymentHandler := NewPaymentHandler(deps.PaymentRepo, deps.InvoiceRepo)
-	contractHandler := NewContractHandler(deps.ContractRepo)
+	contractHandler := NewContractHandler(deps.ContractRepo).WithPDFService(deps.PDFService)
 	calendarHandler := NewCalendarHandler(deps.EventRepo)
 	notifHandler := NewNotificationHandler(deps.NotificationRepo)
 	gstReportSvc := service.NewGSTReportService(deps.DB)
@@ -77,6 +81,7 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 			r.Post("/", invoiceHandler.Create)
 			r.Get("/", invoiceHandler.List)
 			r.Get("/{id}", invoiceHandler.GetByID)
+			r.Get("/{id}/pdf", invoiceHandler.DownloadPDF)
 			// Payment recording and listing per invoice
 			r.Post("/{id}/payments", paymentHandler.RecordPayment)
 			r.Get("/{id}/payments", paymentHandler.ListByInvoice)
@@ -100,7 +105,12 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 		r.Post("/", contractHandler.Create)
 		r.Get("/", contractHandler.List)
 		r.Get("/{id}", contractHandler.GetByID)
+		r.Get("/{id}/pdf", contractHandler.DownloadPDF)
 	})
+
+	// Shared alias under /api/v1/invoices/{id}/pdf (in addition to the
+	// billing path) for callers that prefer the resource-level URL scheme.
+	r.Get("/api/v1/invoices/{id}/pdf", invoiceHandler.DownloadPDF)
 
 	// Calendar routes
 	r.Route("/api/v1/calendar", func(r chi.Router) {
