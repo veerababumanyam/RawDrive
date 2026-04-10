@@ -229,29 +229,19 @@ type JWTService interface {
 	RevokeSession(ctx context.Context, familyID string) error
 }
 
-type refreshEntry struct {
-	sub          string
-	familyID     string
-	workspaceID  string
-	role         string
-	platformRole string
-	stateID      string
-	expiresAt    time.Time
-	revoked      bool
-	used         bool
-}
+// refreshEntry is removed in F-006 Part B — state lives in
+// RefreshSessionStore / RefreshSessionEntry now (see refresh_session_store.go).
 
 type jwtService struct {
 	config     JWTConfig
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
 	mu         sync.Mutex
-	// refresh tokens: token string -> entry
-	refreshTokens map[string]*refreshEntry
-	// user sessions: userID -> set of familyIDs
-	userSessions map[string]map[string]bool
-	// family -> revoked
-	families map[string]bool
+	// F-006 Part B (audit 2026-04-10): refresh session state lives
+	// behind the RefreshSessionStore interface so production can wire a
+	// DB-backed implementation (survives restarts, multi-instance safe)
+	// while tests continue to use the default in-memory store.
+	refreshStore RefreshSessionStore
 }
 
 func NewJWTService(config JWTConfig) JWTService {
@@ -260,13 +250,27 @@ func NewJWTService(config JWTConfig) JWTService {
 		panic("failed to generate RSA key: " + err.Error())
 	}
 	return &jwtService{
-		config:        config,
-		privateKey:    key,
-		publicKey:     &key.PublicKey,
-		refreshTokens: make(map[string]*refreshEntry),
-		userSessions:  make(map[string]map[string]bool),
-		families:      make(map[string]bool),
+		config:       config,
+		privateKey:   key,
+		publicKey:    &key.PublicKey,
+		refreshStore: NewInMemoryRefreshStore(),
 	}
+}
+
+// WithRefreshStore replaces the default in-memory refresh session store
+// with a caller-provided implementation. main.go uses this during
+// bootstrap to wire the DB-backed RefreshSessionRepo so refresh sessions
+// survive service restarts (F-006 Part B). Returns the same service
+// pointer for call chaining. Passing nil is a no-op — the existing
+// in-memory store is retained.
+func (s *jwtService) WithRefreshStore(store RefreshSessionStore) JWTService {
+	if store == nil {
+		return s
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refreshStore = store
+	return s
 }
 
 func (s *jwtService) GenerateAccessToken(ctx context.Context, claims TokenClaims) (string, error) {
@@ -336,25 +340,31 @@ func (s *jwtService) generateRefreshTokenString() (string, error) {
 	return fmt.Sprintf("%x", b), nil
 }
 
+// enforceSessionLimit checks whether creating a new session for the
+// given (user, family) pair would exceed MaxSessions. A rotate within
+// an existing family does not count as a new session. Returns an error
+// if the limit would be exceeded.
+func (s *jwtService) enforceSessionLimit(ctx context.Context, userID, familyID string) error {
+	hasFamily, err := s.refreshStore.UserHasFamily(ctx, userID, familyID)
+	if err != nil {
+		return fmt.Errorf("refresh store: check existing family: %w", err)
+	}
+	if hasFamily {
+		return nil // rotating within an existing family is always allowed
+	}
+	active, err := s.refreshStore.CountActiveFamiliesForUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("refresh store: count active families: %w", err)
+	}
+	if active >= s.config.MaxSessions {
+		return errors.New("max concurrent sessions exceeded")
+	}
+	return nil
+}
+
 func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID, familyID string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Check session limit
-	if s.userSessions[userID] == nil {
-		s.userSessions[userID] = make(map[string]bool)
-	}
-
-	// Count active sessions
-	activeCount := 0
-	for fid, active := range s.userSessions[userID] {
-		if active && !s.families[fid] {
-			activeCount++
-		}
-	}
-
-	if !s.userSessions[userID][familyID] && activeCount >= s.config.MaxSessions {
-		return "", errors.New("max concurrent sessions exceeded")
+	if err := s.enforceSessionLimit(ctx, userID, familyID); err != nil {
+		return "", err
 	}
 
 	tokenStr, err := s.generateRefreshTokenString()
@@ -362,34 +372,20 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID, familyID 
 		return "", err
 	}
 
-	s.refreshTokens[tokenStr] = &refreshEntry{
-		sub:       userID,
-		familyID:  familyID,
-		expiresAt: time.Now().Add(s.config.RefreshTokenExpiry),
-		revoked:   false,
-		used:      false,
+	if err := s.refreshStore.Create(ctx, RefreshSessionEntry{
+		RawToken:  tokenStr,
+		Sub:       userID,
+		FamilyID:  familyID,
+		ExpiresAt: time.Now().Add(s.config.RefreshTokenExpiry),
+	}); err != nil {
+		return "", fmt.Errorf("refresh store: create: %w", err)
 	}
-	s.userSessions[userID][familyID] = true
-
 	return tokenStr, nil
 }
 
 func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.userSessions[userID] == nil {
-		s.userSessions[userID] = make(map[string]bool)
-	}
-
-	activeCount := 0
-	for fid, active := range s.userSessions[userID] {
-		if active && !s.families[fid] {
-			activeCount++
-		}
-	}
-	if !s.userSessions[userID][familyID] && activeCount >= s.config.MaxSessions {
-		return "", errors.New("max concurrent sessions exceeded")
+	if err := s.enforceSessionLimit(ctx, userID, familyID); err != nil {
+		return "", err
 	}
 
 	tokenStr, err := s.generateRefreshTokenString()
@@ -397,69 +393,84 @@ func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID,
 		return "", err
 	}
 
-	s.refreshTokens[tokenStr] = &refreshEntry{
-		sub:          userID,
-		familyID:     familyID,
-		workspaceID:  workspaceID,
-		role:         role,
-		platformRole: platformRole,
-		stateID:      stateID,
-		expiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
+	if err := s.refreshStore.Create(ctx, RefreshSessionEntry{
+		RawToken:     tokenStr,
+		Sub:          userID,
+		FamilyID:     familyID,
+		WorkspaceID:  workspaceID,
+		Role:         role,
+		PlatformRole: platformRole,
+		StateID:      stateID,
+		ExpiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
+	}); err != nil {
+		return "", fmt.Errorf("refresh store: create: %w", err)
 	}
-	s.userSessions[userID][familyID] = true
-
 	return tokenStr, nil
 }
 
 func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (string, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	entry, ok := s.refreshTokens[oldToken]
-	if !ok {
-		return "", "", errors.New("refresh token not found")
+	entry, err := s.refreshStore.Get(ctx, oldToken)
+	if err != nil {
+		if errors.Is(err, ErrRefreshNotFound) {
+			return "", "", errors.New("refresh token not found")
+		}
+		return "", "", fmt.Errorf("refresh store: get: %w", err)
 	}
 
-	if entry.revoked || s.families[entry.familyID] {
-		// Token reuse detected - revoke entire family
-		s.families[entry.familyID] = true
+	// Check family revocation first — if the family is dead, nothing
+	// under it can be rotated, even if the individual row looks clean.
+	familyRevoked, err := s.refreshStore.IsFamilyRevoked(ctx, entry.FamilyID)
+	if err != nil {
+		return "", "", fmt.Errorf("refresh store: check family revocation: %w", err)
+	}
+	if entry.Revoked || familyRevoked {
+		// Token reuse detected (or the whole family is already dead).
+		// Kill the family again for idempotency.
+		_ = s.refreshStore.RevokeFamily(ctx, entry.FamilyID)
 		return "", "", errors.New("refresh token reuse detected, family revoked")
 	}
 
-	if entry.used {
-		// Token reuse detected
-		s.families[entry.familyID] = true
+	if entry.Used {
+		// Seeing a second Rotate for the same token means an attacker
+		// has the refresh secret. Nuke the family.
+		_ = s.refreshStore.RevokeFamily(ctx, entry.FamilyID)
 		return "", "", errors.New("refresh token reuse detected, family revoked")
 	}
 
-	if time.Now().After(entry.expiresAt) {
+	if time.Now().After(entry.ExpiresAt) {
 		return "", "", errors.New("refresh token expired")
 	}
 
-	// Mark old token as used
-	entry.used = true
+	// Mark the old token used BEFORE issuing the new one so a racing
+	// rotate hits the reuse-detection path.
+	if err := s.refreshStore.MarkUsed(ctx, oldToken); err != nil {
+		return "", "", fmt.Errorf("refresh store: mark used: %w", err)
+	}
 
-	// Generate new refresh token (sliding window)
+	// Generate the new refresh token (sliding window) and persist it.
 	newTokenStr, err := s.generateRefreshTokenString()
 	if err != nil {
 		return "", "", err
 	}
-
-	s.refreshTokens[newTokenStr] = &refreshEntry{
-		sub:          entry.sub,
-		familyID:     entry.familyID,
-		workspaceID:  entry.workspaceID,
-		role:         entry.role,
-		platformRole: entry.platformRole,
-		stateID:      entry.stateID,
-		expiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
+	if err := s.refreshStore.Create(ctx, RefreshSessionEntry{
+		RawToken:     newTokenStr,
+		Sub:          entry.Sub,
+		FamilyID:     entry.FamilyID,
+		WorkspaceID:  entry.WorkspaceID,
+		Role:         entry.Role,
+		PlatformRole: entry.PlatformRole,
+		StateID:      entry.StateID,
+		ExpiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
+	}); err != nil {
+		return "", "", fmt.Errorf("refresh store: create rotated: %w", err)
 	}
 
-	// Generate new access token — carry forward claims from original login
-	wsID := entry.workspaceID
-	role := entry.role
-	pRole := entry.platformRole
-	stID := entry.stateID
+	// Generate the new access token — carry forward claims from the
+	// original login. Defaults preserve the pre-F-006-Part-B behavior.
+	wsID := entry.WorkspaceID
+	role := entry.Role
+	pRole := entry.PlatformRole
+	stID := entry.StateID
 	if wsID == "" {
 		wsID = "pending-onboarding"
 	}
@@ -472,13 +483,16 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 	if stID == "" {
 		stID = "pending-onboarding"
 	}
+
+	s.mu.Lock()
 	accessToken, err := s.generateAccessTokenUnlocked(TokenClaims{
-		Sub:          entry.sub,
+		Sub:          entry.Sub,
 		WorkspaceID:  wsID,
 		Role:         role,
 		PlatformRole: pRole,
 		StateID:      stID,
 	})
+	s.mu.Unlock()
 	if err != nil {
 		return "", "", err
 	}
@@ -504,26 +518,24 @@ func (s *jwtService) generateAccessTokenUnlocked(claims TokenClaims) (string, er
 }
 
 func (s *jwtService) InspectRefreshToken(ctx context.Context, tokenStr string) (*RefreshTokenInfo, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	entry, ok := s.refreshTokens[tokenStr]
-	if !ok {
-		return nil, errors.New("refresh token not found")
+	entry, err := s.refreshStore.Get(ctx, tokenStr)
+	if err != nil {
+		if errors.Is(err, ErrRefreshNotFound) {
+			return nil, errors.New("refresh token not found")
+		}
+		return nil, fmt.Errorf("refresh store: get: %w", err)
 	}
-
 	return &RefreshTokenInfo{
-		Sub:       entry.sub,
-		FamilyID:  entry.familyID,
-		ExpiresAt: entry.expiresAt,
+		Sub:       entry.Sub,
+		FamilyID:  entry.FamilyID,
+		ExpiresAt: entry.ExpiresAt,
 	}, nil
 }
 
 func (s *jwtService) RevokeSession(ctx context.Context, familyID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.families[familyID] = true
+	if err := s.refreshStore.RevokeFamily(ctx, familyID); err != nil {
+		return fmt.Errorf("refresh store: revoke family: %w", err)
+	}
 	return nil
 }
 

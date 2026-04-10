@@ -241,6 +241,15 @@ func main() {
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		MaxSessions:        5,
 	})
+	// F-006 Part B (audit 2026-04-10): wire the DB-backed refresh
+	// session store so refresh tokens survive service restarts. The
+	// jwtService falls back to its default in-memory store if this
+	// is not called (legacy behavior + tests).
+	refreshSessionRepo := repository.NewRefreshSessionRepo(dbPool)
+	jwtSvc = jwtSvc.(interface {
+		WithRefreshStore(auth.RefreshSessionStore) auth.JWTService
+	}).WithRefreshStore(refreshSessionRepo)
+	log.Println("F-006 Part B: refresh sessions now persist via refresh_sessions table")
 
 	wsLookup := workspace.NewAuthLookup(dbPool)
 	var oauthSvc *auth.OAuthService
