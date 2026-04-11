@@ -1043,7 +1043,7 @@ RawDrive's AI capabilities should be framed as photographer productivity tools, 
 
 ### 17.2 Face-Based Browsing (Google Cloud Vision API)
 
-Face detection and clustering is powered by Google Cloud Vision API. Service account credentials file: `gen-lang-client-0225070656-9e42fd6f0ba8.json` (gitignored, deploy to servers as `GOOGLE_APPLICATION_CREDENTIALS`).
+Face detection and clustering is powered by Google Cloud Vision API. Google OAuth / service account credentials MUST be provided exclusively via environment variables (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) or deploy-time secret injection — the backend loader at `backend/cmd/api/main.go` reads env vars, never a filesystem credential JSON. Credential files (service-account JSONs, OAuth client_secret JSONs, any `gen-lang-client-*.json`) MUST NOT be committed to the repository and are `.gitignore`d. Any credential that has ever been tracked in git history must be considered compromised and rotated in Google Cloud Console.
 
 - group by person
 - rename and correct groups

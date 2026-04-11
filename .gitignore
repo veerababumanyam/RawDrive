@@ -31,3 +31,21 @@ e2e/screenshots/
 e2e/test-results/
 tmp-backend*
 tmp-*.exe
+
+# Credential files — NEVER commit service account JSONs, OAuth client secrets,
+# or any platform key material. Secrets MUST come from platform_settings
+# or environment variables. See AGENTS.md "No Hardcoded Credentials".
+gen-lang-client-*.json
+*-client-secret*.json
+*-credentials.json
+*.serviceaccount.json
+*service-account*.json
+*oauth-client*.json
+google-credentials*.json
+firebase-adminsdk*.json
+secrets/
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
