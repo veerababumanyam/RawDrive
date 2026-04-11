@@ -213,7 +213,7 @@ No silent SPOF in the happy path. Explicit manual-promote choice over automated 
 - `deploy/valkey/valkey.conf` (primary), `deploy/valkey/valkey-replica.conf`
 - `deploy/nats/nats-server.conf` (3-node JetStream cluster)
 - `backend/Dockerfile` (multi-stage Go build, produces both `api` and `migrate` binaries)
-- `backend/cmd/migrate/main.go` (new ~30-line binary that calls `database.NewMigrator(pool, logger).Up(ctx)` and exits with status 0 on success; imports existing migrator, no new dependencies)
+- `backend/cmd/migrate/main.go` (new ~30-line binary that calls `database.NewMigrator(dsn).Up()` and exits with status 0 on success; imports existing migrator, no new dependencies. Note: the `Migrator` API is intentionally simple — constructor takes a DSN string, `Up()` takes no args; no context or logger. Verified against `backend/internal/database/database.go:27`.)
 - `frontend/Dockerfile` (multi-stage Next.js standalone)
 - `deploy/scripts/deploy-app.sh` (rolling deploy driver)
 - `deploy/scripts/renew-ssl.sh` (cert renewal wrapper)
