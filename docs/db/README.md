@@ -23,23 +23,6 @@ The dev compose stack must be running (`docker compose up -d`). From the repo ro
 
 This runs `pg_dump --schema-only --no-owner --no-privileges` inside the `postgres` container and writes the result to `docs/db/schema.sql`. Commit the regenerated file as part of the PR that lands the migration.
 
-## CI schema drift gate (§5.4)
-
-The `schema-drift` job in `.github/workflows/production-gates.yml` enforces the refresh policy mechanically. On every push / PR it:
-
-1. Spins up a `pgvector/pgvector:pg16` service postgres (same image the local dev stack uses).
-2. Runs `backend/cmd/schematool` — a minimal CI-only binary that calls the production `database.Migrator.Up()` path against the blank service DB. Because schematool imports the exact same `Migrator`, the applied schema is byte-parity with what the live backend would produce on a fresh boot.
-3. Runs `scripts/ci-schema-check.sh`, which dumps the live schema via `pg_dump`, applies the same filter chain as `refresh-schema.sh` (strips `\restrict`/`\unrestrict` session tokens and `-- Dumped from/by` version header lines), and `diff -u`s the result against `docs/db/schema.sql`.
-
-The `images` job depends on `schema-drift`, so a stale `schema.sql` blocks container publishing the same way a gitleaks finding does. If you see the drift detector fire:
-
-1. Start the local dev postgres (`docker compose -f _cobolt-docker/docker-compose.yml up -d postgres`).
-2. Apply migrations (boot the backend once, or run `go run ./backend/cmd/schematool` with a `DATABASE_URL` pointing at your local dev DB).
-3. Run `./scripts/refresh-schema.sh`.
-4. Commit the updated `docs/db/schema.sql` alongside the migration that caused the drift.
-
-**Filter parity is load-bearing.** Any change to the filter chain in `scripts/refresh-schema.sh` MUST be mirrored in `scripts/ci-schema-check.sh` and vice versa, or the CI gate will flap on every run even when the schema itself is stable. Both scripts have cross-references in their header comments.
-
 ## Core entity ERD (17 tables)
 
 The diagram covers the top-level identity, workspace, gallery, asset, and album entities plus the M17 MFA tables. All 104 tables in the schema are documented in full in `schema.sql`.
