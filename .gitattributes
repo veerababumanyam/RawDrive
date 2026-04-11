@@ -1,0 +1,45 @@
+# Production deployment artifacts MUST use LF line endings because they
+# get tar-piped to Linux servers. Windows checkout with core.autocrlf=true
+# would otherwise produce CRLF files that break shell init scripts,
+# Postgres pg_hba parsing, nginx config parsing, Compose YAML parsing,
+# and pgbouncer ini parsing on the destination Linux hosts.
+
+# All deploy tooling
+deploy/** text eol=lf
+
+# Shell scripts anywhere in the repo
+*.sh text eol=lf
+
+# Dockerfiles and their ignore lists (parsed by docker daemon, which
+# requires LF on Linux)
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+.dockerignore text eol=lf
+
+# Go source — standard Go convention is LF
+*.go text eol=lf
+
+# Next.js / frontend configs — keep LF so diffing across platforms
+# doesn't generate phantom changes
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Markdown docs (specs, plans, runbooks) — LF for reproducibility
+*.md text eol=lf
+
+# Binary files (mark so git doesn't try to LF-normalize them)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.dump binary
+*.dump.gpg binary
