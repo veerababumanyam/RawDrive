@@ -4,6 +4,8 @@ ISSUE-004 (brownfield P1, contract) establishes the strategy for producing and m
 
 **Status as of this document:** the repository previously had zero OpenAPI spec. This directory is the scaffold. The 272-endpoint backfill is a separate milestone tracked in the project backlog.
 
+**Canary-critical hand-written spec:** [`openapi.yaml`](./openapi.yaml) covers the subset of endpoints that must have a stable machine-readable contract before any externally-reachable environment — auth, TOTP MFA, chunked upload (TUS 1.0.0), single-file asset upload, asset CRUD, and gallery CRUD + share links. Written against OpenAPI 3.1. This file coexists with the swag-annotation path: swag will eventually produce the full 272-endpoint `swagger.yaml` from handler annotations, while `openapi.yaml` remains authoritative for the canary surface until those annotations catch up. Supersedes the 75-line `openapi-skeleton.yaml` stub.
+
 ## Chosen approach: progressive swag annotations
 
 After weighing the options (annotations vs contract-first vs reflection-based codegen), RawDrive uses [`swaggo/swag`](https://github.com/swaggo/swag) to generate an OpenAPI 2.0 specification from inline annotations on Go handler functions.

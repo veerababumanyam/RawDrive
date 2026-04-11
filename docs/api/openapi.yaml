@@ -1,0 +1,1390 @@
+# RawDrive OpenAPI 3.1 specification — canary-critical surface.
+#
+# Scope policy: this file specifies the routes whose contracts must be
+# stable before an externally-reachable environment (canary or staging).
+# It intentionally omits design-studio, collaboration, face-detection
+# tuning, analytics, and later-milestone features — those get spec'd
+# as they approach production.
+#
+# Source of truth: backend/internal/auth/handler.go,
+# backend/internal/auth/mfa_handler.go,
+# backend/internal/handler/gallery_handler.go,
+# backend/internal/handler/asset_handler.go,
+# backend/internal/handler/chunked_upload.go,
+# backend/internal/handler/routes_m2.go.
+#
+# Maintenance: when a route in any of the files above changes, update
+# this spec in the same commit. A CI contract test should compare this
+# spec against the live router — see docs/api/README.md for the
+# follow-up plan.
+#
+# Supersedes: docs/api/openapi-skeleton.yaml (Swagger 2.0 placeholder).
+# The skeleton file now references this one and will be removed once
+# `swag init` is introduced for handler-annotation-based generation.
+
+openapi: 3.1.0
+
+info:
+  title: RawDrive API
+  version: "0.0.40"
+  description: |
+    Multi-tenant photography platform. Auth is Bearer JWT. Email OTP is
+    registration-only — all subsequent logins are password + optional
+    TOTP MFA step-up.
+
+    **Coverage:** auth, TOTP MFA, chunked uploads (TUS 1.0.0), single-
+    file asset upload, asset CRUD, gallery CRUD + share links.
+
+    **Out of scope (tracked separately):** design studio, gallery
+    collaboration, AI face/face-tagging, proofing sessions, platform
+    admin, payments, public share redeem flow.
+  contact:
+    name: RawDrive Support
+    email: support@rawdrive.in
+    url: https://rawdrive.in/contact
+  license:
+    name: Proprietary
+    url: https://rawdrive.in/legal
+
+servers:
+  - url: https://api.rawdrive.in
+    description: Production
+  - url: http://localhost:8080
+    description: Local dev
+
+tags:
+  - name: auth
+    description: Registration, login, email OTP, refresh, logout
+  - name: mfa
+    description: TOTP MFA enrollment, verification, status
+  - name: upload
+    description: TUS 1.0.0 chunked uploads and single-file asset upload
+  - name: asset
+    description: Asset CRUD, download, bulk operations
+  - name: gallery
+    description: Gallery CRUD, gallery assets, share links
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access token issued by `/auth/verify-otp`, `/auth/verify-totp`,
+        `/auth/verify-recovery-code`, or `/auth/refresh`. Claims carry
+        `sub`, `workspace_id`, `role`, `platform_role`, `state_id`, and
+        `mfa_verified` (wave 2).
+    MFAChallengeToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Short-lived challenge JWT issued by `/auth/login` when the user
+        has a verified TOTP enrollment. Accepted ONLY by
+        `/auth/verify-totp` and `/auth/verify-recovery-code` to
+        complete the step-up flow.
+
+  parameters:
+    GalleryIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Gallery UUID
+    AssetIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Asset UUID
+    UploadIdPath:
+      name: uploadId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: TUS upload session UUID
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code or short message
+        message:
+          type: string
+          description: Human-readable detail (optional)
+
+    # ───────── Auth ─────────
+
+    RegisterRequest:
+      type: object
+      required: [email, password, full_name, phone]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        full_name:
+          type: string
+        phone:
+          type: string
+          description: E.164 phone number
+        state:
+          type: string
+          description: State code (applied during onboarding). Accepted but not required at register time.
+      example:
+        email: user@example.com
+        password: correct-horse-battery-staple
+        full_name: Priya Sharma
+        phone: "+919876543210"
+        state: "TS"
+
+    RegisterResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: "User registered successfully. Check your email for the OTP."
+        user_id:
+          type: string
+          format: uuid
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginSuccessResponse:
+      description: Login succeeded with no MFA step-up required.
+      type: object
+      required: [access_token]
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+        refresh_token:
+          type: string
+          description: Also set as HTTP-only cookie. Omitted from JSON when cookies are available.
+
+    LoginMFAChallengeResponse:
+      description: |
+        Login returned HTTP 401 because the user has a verified TOTP
+        enrollment. The client must call `/auth/verify-totp` (or
+        `/auth/verify-recovery-code`) with the `mfa_token` and a
+        current code to complete authentication.
+      type: object
+      required: [mfa_required, mfa_token, challenge]
+      properties:
+        mfa_required:
+          type: boolean
+          const: true
+        mfa_token:
+          type: string
+          description: Short-lived challenge JWT (not an access token)
+        challenge:
+          type: string
+          enum: [totp]
+
+    VerifyOTPRequest:
+      description: Email OTP verification (registration-only flow)
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+
+    TokenResponse:
+      description: Full access + refresh token pair (refresh also as cookie)
+      type: object
+      required: [access_token]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+
+    RefreshRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: |
+            Refresh token from JSON body OR cookie. If the cookie is
+            present, the body is optional.
+
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+
+    # ───────── MFA ─────────
+
+    MFAEnrollResponse:
+      type: object
+      required: [secret, otpauth_url, issuer]
+      properties:
+        secret:
+          type: string
+          description: Plaintext base32 TOTP secret (shown once, for manual entry)
+        otpauth_url:
+          type: string
+          description: otpauth:// URL suitable for rendering a QR code
+        issuer:
+          type: string
+
+    MFAVerifyEnrollmentRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: 6-digit TOTP from the authenticator app
+
+    MFAVerifyEnrollmentResponse:
+      type: object
+      required: [recovery_codes]
+      properties:
+        recovery_codes:
+          type: array
+          items:
+            type: string
+          description: One-time recovery codes, shown once at enrollment time.
+
+    MFAVerifyTOTPRequest:
+      description: Complete the login step-up with a TOTP code
+      type: object
+      required: [mfa_token, code]
+      properties:
+        mfa_token:
+          type: string
+          description: Challenge token from `/auth/login`
+        code:
+          type: string
+
+    MFAVerifyRecoveryCodeRequest:
+      description: Complete the login step-up with a recovery code
+      type: object
+      required: [mfa_token, recovery_code]
+      properties:
+        mfa_token:
+          type: string
+        recovery_code:
+          type: string
+
+    MFAStatusResponse:
+      type: object
+      required: [enrolled, verified_enrolled, active_recovery_codes]
+      properties:
+        enrolled:
+          type: boolean
+        verified_enrolled:
+          type: boolean
+        active_recovery_codes:
+          type: integer
+
+    # ───────── Chunked upload (TUS 1.0.0) ─────────
+
+    CreateUploadSessionRequest:
+      type: object
+      required: [filename, content_type, total_size]
+      properties:
+        filename:
+          type: string
+        content_type:
+          type: string
+        total_size:
+          type: integer
+          format: int64
+          minimum: 1
+        chunk_size:
+          type: integer
+          format: int64
+          description: Client-preferred chunk size. Server may honor or override.
+        scan_manifest:
+          type: object
+          description: |
+            M16 Tier D upload scan manifest (optional). When the workspace
+            policy is strict, an upload without a manifest is rejected.
+          additionalProperties: true
+
+    CreateUploadSessionResponse:
+      type: object
+      required: [upload_id]
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        location:
+          type: string
+          description: TUS-spec Location URL the client PATCHes chunks to.
+
+    # ───────── Asset ─────────
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        gallery_id:
+          type: string
+          format: uuid
+          nullable: true
+        filename:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+        storage_key:
+          type: string
+        sha256:
+          type: string
+        derivatives:
+          type: object
+          description: Map of derivative name → storage key (thumb_sm_webp, thumb_md_webp, thumb_lg_webp, display_webp)
+          additionalProperties:
+            type: string
+        exif:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    AssetList:
+      type: object
+      required: [assets]
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Asset'
+        next_cursor:
+          type: string
+          nullable: true
+
+    BulkAssetActionRequest:
+      type: object
+      required: [action, asset_ids]
+      properties:
+        action:
+          type: string
+          enum: [soft_delete, restore, move_to_gallery, tag]
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        target_gallery_id:
+          type: string
+          format: uuid
+          description: Required when action = move_to_gallery
+        tag:
+          type: string
+          description: Required when action = tag
+
+    # ───────── Gallery ─────────
+
+    Gallery:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        gallery_type:
+          type: string
+          enum: [proofing, client_delivery, portfolio]
+        status:
+          type: string
+          enum: [draft, active, archived]
+        cover_asset_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateGalleryRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        gallery_type:
+          type: string
+          enum: [proofing, client_delivery, portfolio]
+          default: proofing
+
+    UpdateGalleryRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, archived]
+
+    GalleryList:
+      type: object
+      required: [galleries]
+      properties:
+        galleries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Gallery'
+
+    GalleryAddAssetRequest:
+      type: object
+      required: [asset_id]
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+
+    ShareLink:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        gallery_id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: Opaque token embedded in the public share URL
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        password_protected:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CreateShareLinkRequest:
+      type: object
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        password:
+          type: string
+          description: Optional password for the share link.
+
+    ShareLinkList:
+      type: object
+      required: [links]
+      properties:
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShareLink'
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Caller is authenticated but not authorized for this resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadRequest:
+      description: Malformed request body or invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource does not exist or caller cannot see it
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflicts with existing state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+
+  # ───────────────────────── Auth ─────────────────────────
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user
+      description: |
+        Creates a user and sends a 6-digit email OTP for account
+        activation. The user's password is set at this step but login
+        is blocked until `/auth/verify-otp` is called.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created, activation OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Log in with password
+      description: |
+        Password-only login (email OTP is registration-only). If the
+        user has a verified TOTP enrollment, returns HTTP 401 with an
+        `mfa_required` challenge instead of access tokens — the client
+        must then call `/auth/verify-totp`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login succeeded, tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: |
+            Either bad credentials OR MFA step-up required (distinguish
+            by inspecting the response body).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Error'
+                  - $ref: '#/components/schemas/LoginMFAChallengeResponse'
+        '403':
+          description: Account exists but email is not yet activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/verify-otp:
+    post:
+      tags: [auth]
+      summary: Verify email OTP (registration flow only)
+      description: |
+        Consumes the 6-digit code emailed during `/auth/register`,
+        marks the user activated, and issues the first access +
+        refresh token pair. **Never used for login** — subsequent
+        sessions go through `/auth/login`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPRequest'
+      responses:
+        '200':
+          description: Email verified, tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: OTP invalid, expired, or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate access + refresh tokens
+      description: |
+        Accepts a refresh token via either the HTTP-only cookie or the
+        JSON body and returns a new access + refresh token pair. The
+        `mfa_verified` claim is preserved across rotation so step-up
+        state never silently downgrades.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New token pair issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current refresh token
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Logged out (cookie cleared)
+
+  # ───────────────────────── MFA (TOTP) ─────────────────────────
+
+  /auth/verify-totp:
+    post:
+      tags: [mfa]
+      summary: Complete MFA step-up with a TOTP code
+      description: |
+        Exchanges the `mfa_token` from `/auth/login` + a current TOTP
+        code for full access + refresh tokens. The refresh token is
+        set via the standard HTTP-only cookie.
+      security:
+        - MFAChallengeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MFAVerifyTOTPRequest'
+      responses:
+        '200':
+          description: MFA verified, tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Challenge token invalid/expired OR code incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/verify-recovery-code:
+    post:
+      tags: [mfa]
+      summary: Complete MFA step-up with a recovery code
+      description: |
+        Burn-after-use recovery path when the authenticator app is
+        unavailable. Consumes one recovery code from the user's
+        pool; the client must enroll a new authenticator soon after.
+      security:
+        - MFAChallengeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MFAVerifyRecoveryCodeRequest'
+      responses:
+        '200':
+          description: Recovery code accepted, tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/mfa/enroll:
+    post:
+      tags: [mfa]
+      summary: Begin TOTP enrollment
+      description: |
+        Generates a fresh TOTP secret, returns the base32 secret and
+        an otpauth:// URL. The enrollment is NOT yet active —
+        `/auth/mfa/verify-enrollment` must be called with a first
+        valid code to activate it and receive recovery codes.
+      responses:
+        '200':
+          description: Pending enrollment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MFAEnrollResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: User already has a verified enrollment — delete it first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: MFA encryption key (PLATFORM_SETTINGS_KEK) not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/mfa/verify-enrollment:
+    post:
+      tags: [mfa]
+      summary: Activate a pending TOTP enrollment
+      description: |
+        Confirms the user has their authenticator app set up correctly
+        by verifying one code. Returns a set of recovery codes that
+        are shown **once** — the server bcrypt-hashes them before
+        persisting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MFAVerifyEnrollmentRequest'
+      responses:
+        '200':
+          description: Enrollment verified, recovery codes returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MFAVerifyEnrollmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/mfa/status:
+    get:
+      tags: [mfa]
+      summary: Current MFA enrollment status
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MFAStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/mfa/enrollment:
+    delete:
+      tags: [mfa]
+      summary: Remove the current TOTP enrollment
+      description: |
+        Removes the active enrollment and all recovery codes. The user
+        will no longer be prompted for TOTP at login until they
+        re-enroll. This is a gated operation — wave 3 requires step-up
+        re-verification before it succeeds.
+      responses:
+        '204':
+          description: Enrollment removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ───────────────────────── Upload ─────────────────────────
+
+  /api/v1/uploads:
+    post:
+      tags: [upload]
+      summary: Create a TUS 1.0.0 upload session
+      description: |
+        Reserves an upload session in `upload_sessions` (Postgres) and
+        initiates an R2 multipart upload. Subsequent PATCH calls
+        stream chunks directly to R2. Response headers carry the
+        standard TUS resumable/version/extension/max-size metadata.
+
+        The M16 Tier D validation gate runs here: a strict-mode
+        workspace rejects the session when `scan_manifest` is absent
+        or indicates BLOCK.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUploadSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          headers:
+            Tus-Resumable:
+              schema:
+                type: string
+                const: "1.0.0"
+            Tus-Version:
+              schema:
+                type: string
+                const: "1.0.0"
+            Tus-Extension:
+              schema:
+                type: string
+            Tus-Max-Size:
+              schema:
+                type: integer
+                format: int64
+            Location:
+              schema:
+                type: string
+              description: URL the client PATCHes chunks to
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUploadSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: total_size exceeds Tus-Max-Size
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/uploads/{uploadId}:
+    parameters:
+      - $ref: '#/components/parameters/UploadIdPath'
+    head:
+      tags: [upload]
+      summary: Get current upload offset
+      responses:
+        '200':
+          description: Offset returned in header
+          headers:
+            Upload-Offset:
+              required: true
+              schema:
+                type: integer
+                format: int64
+            Tus-Resumable:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [upload]
+      summary: Upload a chunk
+      description: |
+        Streams a chunk of bytes to R2 at the given Upload-Offset.
+        The body MUST be `application/offset+octet-stream`. Server
+        validates Upload-Checksum when present (sha256 only, hex
+        encoded) and rejects mismatches with HTTP 460.
+      parameters:
+        - name: Upload-Offset
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: Upload-Checksum
+          in: header
+          required: false
+          schema:
+            type: string
+          description: "Format: `sha256 <hex>`"
+        - name: Content-Type
+          in: header
+          required: true
+          schema:
+            type: string
+            const: application/offset+octet-stream
+      requestBody:
+        required: true
+        content:
+          application/offset+octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '204':
+          description: Chunk accepted, new offset in header
+          headers:
+            Upload-Offset:
+              required: true
+              schema:
+                type: integer
+                format: int64
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Upload-Offset does not match the server's current offset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '460':
+          description: Upload-Checksum verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [upload]
+      summary: Cancel an in-flight upload session
+      responses:
+        '204':
+          description: Session cancelled, R2 multipart aborted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ───────────────────────── Assets ─────────────────────────
+
+  /api/v1/assets:
+    get:
+      tags: [asset]
+      summary: List workspace assets
+      parameters:
+        - name: gallery_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [asset]
+      summary: Single-file asset upload (multipart/form-data)
+      description: |
+        For small files only. Large files MUST use the TUS chunked
+        upload endpoints under `/api/v1/uploads`. Generates WebP
+        derivatives synchronously and persists EXIF.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                gallery_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Asset created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File exceeds configured single-file size cap
+        '415':
+          description: Content-Type not supported for synchronous path
+
+  /api/v1/assets/bulk:
+    post:
+      tags: [asset]
+      summary: Apply a bulk action to many assets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkAssetActionRequest'
+      responses:
+        '200':
+          description: Bulk action applied (body includes per-asset status)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/assets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AssetIdPath'
+    get:
+      tags: [asset]
+      summary: Get an asset by ID
+      responses:
+        '200':
+          description: Asset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [asset]
+      summary: Soft-delete an asset
+      responses:
+        '204':
+          description: Asset marked deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/assets/{id}/download:
+    parameters:
+      - $ref: '#/components/parameters/AssetIdPath'
+    get:
+      tags: [asset]
+      summary: Download the asset binary
+      description: |
+        Requires a valid access token — no public URL path. `format`
+        query parameter chooses between original, WebP-optimized, and
+        thumbnail. Returns a redirect or a streamed body depending on
+        workspace storage mode.
+      parameters:
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [original, webp, thumbnail]
+            default: original
+      responses:
+        '200':
+          description: Streamed binary (when inline)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to a presigned R2 URL (when out-of-band)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ───────────────────────── Galleries ─────────────────────────
+
+  /api/v1/galleries:
+    get:
+      tags: [gallery]
+      summary: List galleries in the caller's workspace
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, active, archived]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [proofing, client_delivery, portfolio]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Gallery list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [gallery]
+      summary: Create a gallery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGalleryRequest'
+      responses:
+        '201':
+          description: Gallery created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gallery'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/galleries/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GalleryIdPath'
+    get:
+      tags: [gallery]
+      summary: Get a gallery by ID
+      responses:
+        '200':
+          description: Gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gallery'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [gallery]
+      summary: Update a gallery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGalleryRequest'
+      responses:
+        '200':
+          description: Updated gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gallery'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [gallery]
+      summary: Soft-delete a gallery
+      responses:
+        '204':
+          description: Gallery marked deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/galleries/{id}/assets:
+    parameters:
+      - $ref: '#/components/parameters/GalleryIdPath'
+    get:
+      tags: [gallery]
+      summary: List assets in a gallery
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [gallery]
+      summary: Add an existing asset to a gallery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GalleryAddAssetRequest'
+      responses:
+        '201':
+          description: Asset attached
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/galleries/{id}/assets/{assetId}:
+    parameters:
+      - $ref: '#/components/parameters/GalleryIdPath'
+      - name: assetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [gallery]
+      summary: Remove an asset from a gallery (does not delete the asset)
+      responses:
+        '204':
+          description: Asset detached
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/galleries/{id}/share:
+    parameters:
+      - $ref: '#/components/parameters/GalleryIdPath'
+    get:
+      tags: [gallery]
+      summary: List share links for a gallery
+      responses:
+        '200':
+          description: Share link list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLinkList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [gallery]
+      summary: Create a share link for a gallery
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShareLinkRequest'
+      responses:
+        '201':
+          description: Share link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLink'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/galleries/{id}/share/{linkId}:
+    parameters:
+      - $ref: '#/components/parameters/GalleryIdPath'
+      - name: linkId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [gallery]
+      summary: Revoke a share link
+      responses:
+        '204':
+          description: Link revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'

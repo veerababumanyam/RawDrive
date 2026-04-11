@@ -1,75 +1,32 @@
-# ISSUE-004 scaffold: hand-written OpenAPI 2.0 skeleton for the
-# RawDrive HTTP API. This file exists so the docs/api directory
-# has a concrete artifact that can be hand-extended per route file
-# until `swag init` replaces it. See README.md for the full
-# strategy and backfill plan.
+# DEPRECATED — superseded by docs/api/openapi.yaml
 #
-# Once the first backfill wave (routes_m2.go annotations) runs
-# swag init, this skeleton is superseded by the generated
-# swagger.yaml and this file can be deleted.
+# This 75-line Swagger 2.0 placeholder was the original ISSUE-004
+# scaffold. As of the ISSUE-005 follow-up (brownfield fix wave, 2026-
+# 04-11) the canonical spec is openapi.yaml in this same directory,
+# written against OpenAPI 3.1 and covering the canary-critical
+# surface: auth, TOTP MFA, chunked upload (TUS 1.0.0), single-file
+# asset upload, asset CRUD, gallery CRUD, and gallery share links.
+#
+# This file is kept only to preserve the path `docs/api/openapi-
+# skeleton.yaml` for any link or tool that may still reference it.
+# The next commit that touches this directory should delete it.
+#
+# Primary spec:   docs/api/openapi.yaml
+# Backing code:   backend/internal/auth/{handler,mfa_handler}.go
+#                 backend/internal/handler/{gallery_handler,asset_handler,
+#                                          chunked_upload,routes_m2}.go
+# Spec format:    OpenAPI 3.1.0 (not Swagger 2.0)
+#
+# Dual mount note: main.go (backend/cmd/api/main.go:455-495) mounts the
+# auth handler at BOTH /auth/* and /api/v1/auth/*. The canonical spec
+# documents only /auth/* for brevity — /api/v1/auth/* is the exact
+# same surface and accepts the same requests.
 
-swagger: "2.0"
+openapi: 3.1.0
 info:
-  title: RawDrive API
+  title: RawDrive API (deprecated skeleton)
+  version: "0.0.0-deprecated"
   description: |
-    Multi-tenant photo-gallery platform API. Auth is Bearer JWT.
-    Email OTP is registration-only — all subsequent logins are
-    password + optional TOTP MFA step-up.
-  version: "1.0.0"
-  contact:
-    name: RawDrive Support
-    email: support@rawdrive.in
-    url: https://rawdrive.in/contact
-  license:
-    name: Proprietary
-    url: https://rawdrive.in/legal
-host: api.rawdrive.in
-basePath: /api/v1
-schemes:
-  - https
-consumes:
-  - application/json
-produces:
-  - application/json
-
-securityDefinitions:
-  BearerAuth:
-    type: apiKey
-    name: Authorization
-    in: header
-    description: |
-      "Bearer {token}" — JWT access token from POST /auth/login or
-      POST /auth/verify-totp. Tokens carry workspace_id, role,
-      platform_role, state_id, and mfa_verified claims.
-
-# Placeholder tags so the generated spec has a sensible table of
-# contents once swag starts populating paths under each one.
-tags:
-  - name: auth
-    description: Registration, login, OTP, password reset, TOTP MFA
-  - name: onboarding
-    description: First-workspace setup for new users
-  - name: workspace
-    description: Workspace CRUD + members + storage
-  - name: team
-    description: Invitations, members, roles
-  - name: gallery
-    description: Galleries and gallery assets
-  - name: asset
-    description: Asset upload, metadata, bulk operations, derivatives
-  - name: album
-    description: Album CRUD + asset assignment
-  - name: proofing
-    description: Client proofing + selection
-  - name: share
-    description: Public gallery share links
-  - name: admin
-    description: Platform admin — settings, users, workspaces, moderation
-  - name: health
-    description: Liveness + readiness probes
-
-# Intentionally empty — populated by swag init during the first
-# backfill wave (see README.md backfill plan).
+    This file is a deprecation pointer. See `docs/api/openapi.yaml`
+    for the real API specification.
 paths: {}
-
-definitions: {}
