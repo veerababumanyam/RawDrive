@@ -28,6 +28,69 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// Why not a plain net.DialTimeout? Docker Desktop's port-forwarder on
+// Windows keeps compose-mapped ports bound even when the backing
+// container is stopped or unhealthy, so a bare TCP dial succeeds against
+// a black hole. All three helpers below therefore go one step further
+// and speak enough of the protocol to confirm a real server is on the
+// other end — identical to the pattern in tests/brownfield/*.
+
+// natsResponsive dials NATS and waits for the server's "INFO " line
+// within timeout. Returns true iff a real NATS server answered.
+func natsResponsive(addr string, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 5)
+	n, err := conn.Read(buf)
+	if err != nil || n < 5 {
+		return false
+	}
+	return string(buf[:5]) == "INFO "
+}
+
+// smtpResponsive dials SMTP and waits for the "220" greeting within
+// timeout. Returns true iff a real SMTP server answered.
+func smtpResponsive(addr string, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 3)
+	n, err := conn.Read(buf)
+	if err != nil || n < 3 {
+		return false
+	}
+	return string(buf[:3]) == "220"
+}
+
+// valkeyResponsive dials Valkey/Redis, sends a RESP inline PING, and
+// expects "+PONG" within timeout. Returns true iff a real Redis-speaking
+// server answered (Valkey is wire-compatible).
+func valkeyResponsive(addr string, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetWriteDeadline(time.Now().Add(timeout))
+	if _, err := conn.Write([]byte("PING\r\n")); err != nil {
+		return false
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 5)
+	n, err := conn.Read(buf)
+	if err != nil || n < 5 {
+		return false
+	}
+	return string(buf[:5]) == "+PONG"
+}
+
 // ──────────────────────────── Health Endpoint ────────────────────────────
 
 func TestHealthEndpoint(t *testing.T) {
@@ -70,6 +133,13 @@ func TestPostgresConnectivity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Skip cleanly when the testcontainer backend is unavailable (rootless
+	// Docker on Windows, Docker daemon stopped, CI without a Docker socket).
+	// Matches the skip-on-unreachable convention in tests/brownfield/*.
+	if _, err := testsupport.EnsureDSN(); err != nil {
+		t.Skipf("pgvector testcontainer unavailable — skipping: %v", err)
+	}
+
 	pool := testsupport.PgvectorPool(t)
 
 	// Basic liveness: plain SQL.
@@ -97,8 +167,13 @@ func TestPostgresConnectivity(t *testing.T) {
 // ──────────────────────────── Valkey Connectivity ────────────────────────────
 
 func TestValkeyConnectivity(t *testing.T) {
+	const addr = "localhost:64089"
+	if !valkeyResponsive(addr, 2*time.Second) {
+		t.Skipf("valkey not responsive at %s (compose not up or container unhealthy) — skipping", addr)
+	}
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:64089",
+		Addr: addr,
 	})
 	defer rdb.Close()
 
@@ -113,7 +188,12 @@ func TestValkeyConnectivity(t *testing.T) {
 // ──────────────────────────── NATS Connectivity ────────────────────────────
 
 func TestNATSConnectivity(t *testing.T) {
-	nc, err := nats.Connect("nats://localhost:4222",
+	const addr = "localhost:4222"
+	if !natsResponsive(addr, 2*time.Second) {
+		t.Skipf("nats not responsive at %s (compose not up or container unhealthy) — skipping", addr)
+	}
+
+	nc, err := nats.Connect("nats://"+addr,
 		nats.Timeout(5*time.Second),
 	)
 	require.NoError(t, err, "failed to connect to NATS")
@@ -125,7 +205,12 @@ func TestNATSConnectivity(t *testing.T) {
 // ──────────────────────────── Mailpit Connectivity ────────────────────────────
 
 func TestMailpitConnectivity(t *testing.T) {
-	conn, err := net.DialTimeout("tcp", "localhost:1025", 5*time.Second)
+	const addr = "localhost:1025"
+	if !smtpResponsive(addr, 2*time.Second) {
+		t.Skipf("mailpit SMTP not responsive at %s (compose not up or container unhealthy) — skipping", addr)
+	}
+
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	require.NoError(t, err, "failed to connect to Mailpit SMTP")
 	defer conn.Close()
 

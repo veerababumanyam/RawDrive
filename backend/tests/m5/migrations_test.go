@@ -20,6 +20,13 @@ import (
 // throwaway pgvector testcontainer managed by testsupport.
 var testDSN string
 
+// testcontainerSkipReason is non-empty when TestMain could not resolve a
+// usable DSN — typically because Docker Desktop on a dev machine does not
+// expose the named-pipe/rootless mode testcontainers-go needs. In that
+// state getTestDB skips the calling test cleanly instead of exploding
+// with a hard failure, matching the convention in tests/brownfield/*.
+var testcontainerSkipReason string
+
 // TestMain resolves the DSN for this test binary and cleans up the
 // testcontainer (if one was started) at exit.
 //
@@ -27,6 +34,12 @@ var testDSN string
 // required docker-compose to be running. It also kept its own sync.Once
 // around migrator.Up() — now redundant because testsupport guarantees
 // exactly-once migration as part of container init.
+//
+// If DATABASE_URL is unset AND testsupport.EnsureDSN cannot boot a
+// container, TestMain records the reason and still runs the suite — every
+// DB-backed test will skip via getTestDB and the package reports SKIP
+// instead of FAIL. This preserves CI parity (CI sets DATABASE_URL so the
+// full suite runs) while keeping dev machines that lack Docker unblocked.
 func TestMain(m *testing.M) {
 	if envDSN := os.Getenv("DATABASE_URL"); envDSN != "" {
 		// Strict parity with the previous version: run migrations against
@@ -41,10 +54,11 @@ func TestMain(m *testing.M) {
 	} else {
 		dsn, err := testsupport.EnsureDSN()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "m5_test: failed to start testcontainer: %v\n", err)
-			os.Exit(1)
+			testcontainerSkipReason = fmt.Sprintf("testcontainer unavailable: %v", err)
+			fmt.Fprintf(os.Stderr, "m5_test: %s — DB-backed tests will skip\n", testcontainerSkipReason)
+		} else {
+			testDSN = dsn
 		}
-		testDSN = dsn
 	}
 
 	code := m.Run()
@@ -54,8 +68,12 @@ func TestMain(m *testing.M) {
 
 // getTestDB returns a pool connected to the DSN resolved by TestMain. It
 // does NOT re-run migrations — testsupport.EnsureDSN already did that.
+// When the testcontainer could not be started, it skips the caller.
 func getTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	if testcontainerSkipReason != "" {
+		t.Skip(testcontainerSkipReason)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

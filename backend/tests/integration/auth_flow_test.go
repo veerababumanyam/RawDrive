@@ -153,14 +153,6 @@ func postJSON(url string, body interface{}) (*http.Response, error) {
 	return http.Post(url, "application/json", bytes.NewReader(b))
 }
 
-func postJSONWithAuth(url, token string, body interface{}) (*http.Response, error) {
-	b, _ := json.Marshal(body)
-	req, _ := http.NewRequest("POST", url, bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	return http.DefaultClient.Do(req)
-}
-
 func cookieByName(resp *http.Response, name string) *http.Cookie {
 	for _, cookie := range resp.Cookies() {
 		if cookie.Name == name {

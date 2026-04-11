@@ -19,6 +19,11 @@ import (
 // the DSN of a throwaway pgvector testcontainer provisioned by testsupport.
 var testDSN string
 
+// testcontainerSkipReason is non-empty when TestMain could not resolve a
+// usable DSN. getTestDB reads it to skip the calling test cleanly instead
+// of failing hard — same contract as tests/m5.
+var testcontainerSkipReason string
+
 // TestMain replaces the previous hardcoded localhost:55070 fallback with a
 // testsupport-managed testcontainer. The DATABASE_URL override is preserved
 // so the existing docker-compose workflow keeps working for developers who
@@ -28,16 +33,22 @@ var testDSN string
 // already at the correct schema version. testsupport.EnsureDSN() runs the
 // production Migrator as part of container init, so the testcontainer path
 // is self-sufficient.
+//
+// If DATABASE_URL is unset AND testsupport.EnsureDSN cannot boot a
+// container (e.g. Docker Desktop unavailable), TestMain records the reason
+// and still runs the suite. Every DB-backed test will skip via getTestDB
+// and the package reports SKIP instead of FAIL.
 func TestMain(m *testing.M) {
 	if envDSN := os.Getenv("DATABASE_URL"); envDSN != "" {
 		testDSN = envDSN
 	} else {
 		dsn, err := testsupport.EnsureDSN()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "m6_test: failed to start testcontainer: %v\n", err)
-			os.Exit(1)
+			testcontainerSkipReason = fmt.Sprintf("testcontainer unavailable: %v", err)
+			fmt.Fprintf(os.Stderr, "m6_test: %s — DB-backed tests will skip\n", testcontainerSkipReason)
+		} else {
+			testDSN = dsn
 		}
-		testDSN = dsn
 	}
 
 	code := m.Run()
@@ -47,6 +58,9 @@ func TestMain(m *testing.M) {
 
 func getTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	if testcontainerSkipReason != "" {
+		t.Skip(testcontainerSkipReason)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, testDSN)
