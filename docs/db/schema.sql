@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict os8sfZsJoEBTGduT0NBHv3f2VBVKfglYKV3L543Bu8ZG84UIP9YU1i3BSK9zMut
-
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.13 (Debian 16.13-1.pgdg12+1)
 
@@ -7648,6 +7646,4 @@ CREATE POLICY workspaces_isolation ON public.workspaces USING (((current_setting
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict os8sfZsJoEBTGduT0NBHv3f2VBVKfglYKV3L543Bu8ZG84UIP9YU1i3BSK9zMut
 

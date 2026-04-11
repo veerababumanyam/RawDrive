@@ -4,43 +4,81 @@
 # column-level schema reference alongside the 142 numbered migrations.
 #
 # Requirements:
-#   - Dev docker-compose stack running (docker compose up -d)
-#   - Postgres container reachable as cobolt-cobolt-rawdrive-f651e4-postgres-1
-#     (this is the compose project's auto-generated name — see
-#     _cobolt-docker/docker-compose.yml)
+#   - Dev docker-compose stack running (docker compose up -d postgres)
+#   - The `postgres` service in _cobolt-docker/docker-compose.yml is
+#     the source of the dump. The script looks it up by service name,
+#     not by container name, so no per-workstation hash bleeds in.
 #
 # Usage:
 #   ./scripts/refresh-schema.sh
 #
 # Output:
-#   docs/db/schema.sql  (overwritten)
+#   docs/db/schema.sql  (overwritten, post-processed to strip
+#                        non-deterministic pg_dump session tokens)
+#
+# Determinism note: pg_dump 16+ emits `\restrict <random>` and
+# `\unrestrict <random>` lines that lock the restore to the dumping
+# session. The tokens are random on every run, so raw pg_dump output
+# produces a spurious diff every refresh even when the schema is
+# unchanged. We strip those lines before writing so the committed
+# schema.sql stays diff-clean until a real schema change lands.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUT="${REPO_ROOT}/docs/db/schema.sql"
+COMPOSE_FILE="${REPO_ROOT}/_cobolt-docker/docker-compose.yml"
 
-# Container name is the compose_project_name + service + index. The
-# compose_project_name has a pre-existing double "cobolt-" prefix
-# documented in _cobolt-output/latest/infra/infra-manifest.json.
-CONTAINER="${POSTGRES_CONTAINER:-cobolt-cobolt-rawdrive-f651e4-postgres-1}"
 DB_USER="${PROJECT_USER:-rawdrive_user}"
 DB_NAME="${PROJECT_DB_NAME:-rawdrive_db}"
 
-if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
-  echo "ERROR: postgres container '$CONTAINER' is not running." >&2
-  echo "Start it with: docker compose -f _cobolt-docker/docker-compose.yml up -d postgres" >&2
+# Resolve the running postgres container by compose service name.
+# `docker compose ps -q <service>` prints the container ID (empty if
+# the service is not running). This replaces an older hardcoded
+# container-name default that contained a per-workstation project
+# hash — engineers other than the one who first wrote the script
+# would otherwise hit a phantom "container not running" error.
+#
+# POSTGRES_CONTAINER can still be set explicitly to override, for
+# operators running the dev DB outside of this compose file.
+if [ -n "${POSTGRES_CONTAINER:-}" ]; then
+  CONTAINER="$POSTGRES_CONTAINER"
+else
+  CONTAINER="$(docker compose -f "$COMPOSE_FILE" ps -q postgres 2>/dev/null || true)"
+fi
+
+if [ -z "$CONTAINER" ]; then
+  echo "ERROR: no running postgres container found." >&2
+  echo "Start it with: docker compose -f $COMPOSE_FILE up -d postgres" >&2
+  echo "Or set POSTGRES_CONTAINER to the exact container name / ID." >&2
+  exit 1
+fi
+
+# Confirm the container is actually running (ps -q can return a
+# stopped container's ID in some compose versions).
+if ! docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -qx 'true'; then
+  echo "ERROR: container '$CONTAINER' exists but is not running." >&2
+  echo "Start it with: docker compose -f $COMPOSE_FILE up -d postgres" >&2
   exit 1
 fi
 
 echo "Dumping schema from $CONTAINER ($DB_USER@$DB_NAME)..."
+
+# Strip `\restrict ...` and `\unrestrict ...` lines from pg_dump
+# output. These are per-session random tokens (introduced in pg_dump
+# 16) that would otherwise produce a phantom diff on every refresh.
+# Everything else pg_dump emits is deterministic given the same
+# schema state.
 docker exec "$CONTAINER" pg_dump \
   --schema-only \
   --no-owner \
   --no-privileges \
   -U "$DB_USER" \
-  -d "$DB_NAME" > "$OUT"
+  -d "$DB_NAME" \
+  | grep -v '^\\restrict ' \
+  | grep -v '^\\unrestrict ' \
+  > "$OUT"
 
 LINES=$(wc -l < "$OUT")
 TABLES=$(grep -c '^CREATE TABLE ' "$OUT" || true)
