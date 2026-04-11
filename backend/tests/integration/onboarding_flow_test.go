@@ -34,10 +34,65 @@ func (o *onbEventPub) Publish(_ context.Context, subject string, _ []byte) error
 	return nil
 }
 
-// Use plain string key so it matches the handler's fallback lookup.
+// integrationStubRepo is an in-memory onboarding.Repository for the
+// integration tests. Duplicated (not imported) from handler_test.go's
+// stubOnboardingRepo because that lives in the onboarding_test package.
+// Behavior matches the pgx PgRepo minus the SQL.
+type integrationStubRepo struct {
+	rows map[string]*onboarding.StatusRecord
+}
+
+func newIntegrationStubRepo() *integrationStubRepo {
+	return &integrationStubRepo{rows: map[string]*onboarding.StatusRecord{}}
+}
+
+func (s *integrationStubRepo) Get(_ context.Context, userID string) (*onboarding.StatusRecord, error) {
+	if rec, ok := s.rows[userID]; ok {
+		cp := *rec
+		return &cp, nil
+	}
+	return nil, nil
+}
+
+func (s *integrationStubRepo) Upsert(_ context.Context, rec *onboarding.StatusRecord) error {
+	existing, ok := s.rows[rec.UserID]
+	if !ok {
+		cp := *rec
+		s.rows[rec.UserID] = &cp
+		return nil
+	}
+	existing.CurrentStep = rec.CurrentStep
+	if rec.StateID != nil {
+		existing.StateID = rec.StateID
+	}
+	if rec.BusinessName != "" {
+		existing.BusinessName = rec.BusinessName
+	}
+	if rec.DisplayName != "" {
+		existing.DisplayName = rec.DisplayName
+	}
+	if rec.GSTIN != "" {
+		existing.GSTIN = rec.GSTIN
+	}
+	return nil
+}
+
+// Minimal resolver: maps every identifier used in this test file.
+func (s *integrationStubRepo) ResolveStateID(_ context.Context, raw string) (int, error) {
+	switch raw {
+	case "MH", "14", "Maharashtra":
+		return 14, nil
+	case "KA", "11", "Karnataka":
+		return 11, nil
+	case "DL", "32", "Delhi":
+		return 32, nil
+	}
+	return 0, onboarding.ErrInvalidState
+}
 
 func setupOnboardingServer(wsc *onbWorkspaceCreator, pub *onbEventPub, userID string) (*httptest.Server, onboarding.Service) {
-	svc := onboarding.NewService(wsc, pub)
+	repo := newIntegrationStubRepo()
+	svc := onboarding.NewService(repo, wsc, pub)
 	handler := onboarding.NewHandler(svc)
 
 	r := chi.NewRouter()
@@ -106,7 +161,9 @@ func TestOnboardingResume(t *testing.T) {
 	resp.Body.Close()
 
 	assert.Equal(t, onboarding.StepProfile, status.CurrentStep)
-	assert.Equal(t, "KA", status.StateID)
+	// After migration 067 the service stores state as the canonical
+	// integer id and serializes it as text ("11" for Karnataka).
+	assert.Equal(t, "11", status.StateID)
 }
 
 func TestOnboardingSkipProtection(t *testing.T) {

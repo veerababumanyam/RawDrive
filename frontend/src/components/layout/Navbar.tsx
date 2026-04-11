@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
+import { IndianFlag } from "@/components/layout/IndianFlag";
 
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
@@ -32,10 +33,14 @@ export function Navbar() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   // Hero-overlay variant: on the landing page ("/"), the navbar floats over
   // a full-bleed photographic hero instead of sitting on a solid surface.
-  // We keep the glass backdrop but skip the opaque background/border so
-  // the photo shows through, and we hide the theme toggle (since the
-  // landing forces its own theme via ForceTheme). Every other marketing
-  // route continues to render the default navbar, bit-for-bit unchanged.
+  // We apply a reduced-opacity glass backdrop (.landing-navbar-overlay in
+  // globals.css) instead of .glass-surface, so the photo still shows
+  // through at the top of the page AND the navbar stays clearly visible
+  // once the visitor scrolls past the hero onto the content sections.
+  // The theme toggle stays visible on the landing too — theme is now
+  // synced to the OS preference across all routes (Q10 reversal).
+  // Every other marketing route continues to render the default navbar,
+  // bit-for-bit unchanged.
   const pathname = usePathname();
   const isHeroOverlay = pathname === "/";
 
@@ -51,7 +56,7 @@ export function Navbar() {
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 lg:px-8">
         <Link
           href="/"
-          className="flex items-center gap-2 text-xl font-bold text-text-primary"
+          className="group flex items-center gap-2 text-xl font-bold text-text-primary"
           aria-label="RawDrive home"
         >
           <Image
@@ -62,6 +67,9 @@ export function Navbar() {
             className="h-8 w-8 rounded-lg"
           />
           RawDrive
+          {/* Patriotic flourish — decorative only, kept tight against the
+              wordmark so it reads as part of the brand identity. */}
+          <IndianFlag className="ml-1 self-center group-hover:scale-[1.08]" />
         </Link>
 
         <nav className="hidden h-full items-center gap-6 lg:flex" aria-label="Main navigation">
@@ -150,7 +158,7 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-4 md:flex">
-          {isHeroOverlay ? null : <ThemeToggleButton />}
+          <ThemeToggleButton />
 
           <Link
             href="/login"
@@ -169,7 +177,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
-          {isHeroOverlay ? null : <ThemeToggleButton />}
+          <ThemeToggleButton />
 
           <button
             type="button"

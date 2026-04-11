@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import { AiMomentSection } from "@/components/landing/AiMomentSection";
 import { FinalCta } from "@/components/landing/FinalCta";
-import { ForceTheme } from "@/components/landing/ForceTheme";
 import { GallerySection } from "@/components/landing/GallerySection";
 import { Hero } from "@/components/landing/Hero";
 import { StudioControlSection } from "@/components/landing/StudioControlSection";
@@ -25,8 +24,10 @@ export const metadata: Metadata = {
  * Landing page — cinematic editorial redesign.
  *
  * Architecture:
- *   1. ForceTheme locks the route to `liquid-glass-dark` (Q10) without
- *      touching the visitor's saved preference in localStorage.
+ *   1. The page respects the visitor's theme preference (OS
+ *      `prefers-color-scheme` on first visit, user's in-app toggle
+ *      thereafter). Every section is tokenized so it renders correctly
+ *      in `liquid-glass`, `liquid-glass-dark`, and `midnight`.
  *   2. Hero is a 100dvh photographic section with a staggered page-load
  *      reveal. Navbar floats over it via the hero-overlay variant.
  *   3. WorkflowPipeline is the signature interaction — sticky on desktop
@@ -38,11 +39,15 @@ export const metadata: Metadata = {
  *
  * See docs/landing-page-redesign-plan.md for the full section-by-section
  * design rationale and the Q&A history behind every copy decision.
+ *
+ * Q10 update (2026-04-11 evening): the earlier "force liquid-glass-dark"
+ * decision was reversed — forcing a theme on one route created visible
+ * inconsistency with the rest of the marketing site. All routes now
+ * sync to the OS preference + user toggle uniformly.
  */
 export default function LandingPage() {
   return (
     <div className="landing-root bg-surface text-text-primary selection:bg-accent-muted selection:text-text-primary">
-      <ForceTheme theme="liquid-glass-dark" />
       <Hero />
       <WorkflowPipeline />
       <GallerySection />

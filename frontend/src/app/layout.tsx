@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -62,7 +63,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      data-theme="liquid-glass-dark"
+      // No hardcoded data-theme attribute on SSR — the inline init
+      // script (rawDriveThemeInitScript) sets it before first paint
+      // based on localStorage → OS `prefers-color-scheme` → fallback.
+      // This ensures every route opens in a theme consistent with the
+      // visitor's OS and their in-app choice, with no flash of wrong
+      // theme. `suppressHydrationWarning` prevents React from complaining
+      // about the mismatch between the serverless HTML and the client DOM
+      // after the init script runs.
       suppressHydrationWarning
       className={`h-full antialiased ${inter.variable} ${manrope.variable}`}
     >
@@ -71,9 +79,15 @@ export default function RootLayout({
         <meta name="theme-color" content="#0b1326" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <script dangerouslySetInnerHTML={{ __html: rawDriveThemeInitScript }} />
       </head>
       <body className="flex min-h-full flex-col bg-surface font-sans text-text-primary">
+        {/* Theme init runs before interactive so data-theme is set before
+            React hydrates. Using next/script with beforeInteractive is the
+            Next.js 15 App Router-compliant way to inject an inline script
+            that must execute pre-hydration. */}
+        <Script id="rawdrive-theme-init" strategy="beforeInteractive">
+          {rawDriveThemeInitScript}
+        </Script>
         <ThemeProvider>
           <AppShell>{children}</AppShell>
         </ThemeProvider>

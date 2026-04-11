@@ -1,10 +1,34 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export const metadata: Metadata = {
   title: "Register | RawDrive",
   description: "Join RawDrive India and create your account to run your photography business.",
 };
+
+// Matches the silhouette of the real form so the page doesn't jump when the
+// client component hydrates. Mirrors the pattern in app/login/page.tsx.
+function RegisterFormFallback() {
+  return (
+    <div className="mt-2 space-y-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-14 animate-pulse rounded-xl bg-surface-container-high" />
+        ))}
+      </div>
+      <div className="h-12 animate-pulse rounded-xl bg-surface-container-high" />
+      <div className="flex items-center gap-4">
+        <div className="soft-divider flex-1" />
+        <div className="h-3 w-20 rounded bg-surface-container-high" />
+        <div className="soft-divider flex-1" />
+      </div>
+      <div className="h-12 animate-pulse rounded-xl bg-surface-container-high" />
+      <div className="h-12 animate-pulse rounded-xl bg-surface-container-high" />
+      <div className="h-14 animate-pulse rounded-xl bg-surface-container-highest" />
+    </div>
+  );
+}
 
 export default function RegisterPage() {
   return (
@@ -46,23 +70,16 @@ export default function RegisterPage() {
           </div>
         </section>
 
-        <section className="col-span-1 flex flex-col bg-surface-elevated px-8 py-12 md:px-12 lg:col-span-4">
-          <div className="mb-8 lg:hidden">
+        <section className="col-span-1 flex flex-col bg-surface-elevated px-8 py-8 md:px-12 lg:col-span-4">
+          <div className="mb-6 lg:hidden">
             <div className="font-headline text-2xl font-extrabold tracking-[-0.08em] text-text-primary">
               RawDrive India
             </div>
           </div>
 
-          <div className="mb-10">
-            <h1 className="font-headline text-3xl font-extrabold tracking-tight text-text-primary">
-              Create your account
-            </h1>
-            <p className="mt-2 font-medium text-text-secondary">
-              Join 5,000+ creators scaling their craft.
-            </p>
-          </div>
-
-          <RegisterForm />
+          <Suspense fallback={<RegisterFormFallback />}>
+            <RegisterForm />
+          </Suspense>
         </section>
       </main>
     </div>

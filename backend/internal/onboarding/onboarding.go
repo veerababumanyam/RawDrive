@@ -3,7 +3,7 @@ package onboarding
 import (
 	"context"
 	"errors"
-	"sync"
+	"strconv"
 )
 
 var (
@@ -11,20 +11,6 @@ var (
 	ErrInvalidGSTIN = errors.New("invalid GSTIN")
 	ErrStepRequired = errors.New("previous step required")
 )
-
-// All 28 states + 8 union territories — codes match DB states.code without IN- prefix.
-var validStates = map[string]bool{
-	// 28 States
-	"AP": true, "AR": true, "AS": true, "BR": true, "CT": true,
-	"GA": true, "GJ": true, "HR": true, "HP": true, "JH": true,
-	"KA": true, "KL": true, "MP": true, "MH": true, "MN": true,
-	"ML": true, "MZ": true, "NL": true, "OR": true, "PB": true,
-	"RJ": true, "SK": true, "TN": true, "TG": true, "TR": true,
-	"UT": true, "UP": true, "WB": true,
-	// 8 Union Territories
-	"AN": true, "CH": true, "DH": true, "DL": true,
-	"JK": true, "LA": true, "LD": true, "PY": true,
-}
 
 type Step string
 
@@ -34,14 +20,22 @@ const (
 	StepComplete       Step = "complete"
 )
 
+// OnboardingStatus is the JSON wire shape returned by GET /onboarding/status
+// and consumed by the frontend. StateID is serialized as a string (the
+// canonical integer id as text) so the frontend never has to care about
+// nullability on the wire — an empty string means "not selected".
 type OnboardingStatus struct {
-	UserID      string `json:"user_id"`
-	CurrentStep Step   `json:"current_step"`
-	StateID     string `json:"state_id,omitempty"`
+	UserID       string `json:"user_id"`
+	CurrentStep  Step   `json:"current_step"`
+	StateID      string `json:"state_id,omitempty"`
 	BusinessName string `json:"business_name,omitempty"`
-	GSTIN       string `json:"gstin,omitempty"`
+	GSTIN        string `json:"gstin,omitempty"`
 }
 
+// StateSelectionInput is the service-layer input for selecting a state.
+// StateID here is a raw user-supplied string — numeric id, 2-letter
+// code, "IN-XX" code, or full state name. The service delegates
+// canonicalization to Repository.ResolveStateID.
 type StateSelectionInput struct {
 	StateID string `json:"state_id"`
 }
@@ -52,6 +46,10 @@ type ProfileInput struct {
 	DisplayName  string `json:"display_name"`
 }
 
+// WorkspaceCreator is the port used to create the user's workspace at
+// the end of onboarding. Kept as an interface so tests can substitute
+// an in-memory stub. Production implementation lives in main.go as
+// onboardingWorkspaceCreator (adapting workspace.Service).
 type WorkspaceCreator interface {
 	CreateWorkspace(ctx context.Context, userID, stateID, businessName string) (string, error)
 }
@@ -66,50 +64,54 @@ type Service interface {
 	GetStatus(ctx context.Context, userID string) (*OnboardingStatus, error)
 }
 
+// service is the persistent implementation. It is stateless in Go
+// memory — all progress lives in the Repository. This is the fix for
+// the pre-existing "backend restart wipes onboarding progress" bug.
 type service struct {
-	mu       sync.Mutex
-	statuses map[string]*OnboardingStatus
-	wsc      WorkspaceCreator
-	pub      EventPublisher
+	repo Repository
+	wsc  WorkspaceCreator
+	pub  EventPublisher
 }
 
-func NewService(wsc WorkspaceCreator, pub EventPublisher) Service {
+// NewService constructs the Service. repo is required; wsc and pub may
+// be nil (workspace creation and event publishing are best-effort).
+func NewService(repo Repository, wsc WorkspaceCreator, pub EventPublisher) Service {
 	return &service{
-		statuses: make(map[string]*OnboardingStatus),
-		wsc:      wsc,
-		pub:      pub,
+		repo: repo,
+		wsc:  wsc,
+		pub:  pub,
 	}
 }
 
+// SelectState canonicalizes the user-supplied state identifier (any of
+// numeric id, 2-letter code, "IN-XX", state name), then upserts the
+// onboarding_statuses row with the new state_id and advances the step
+// to "profile".
 func (s *service) SelectState(ctx context.Context, userID string, input StateSelectionInput) error {
-	if !validStates[input.StateID] {
-		return ErrInvalidState
+	id, err := s.repo.ResolveStateID(ctx, input.StateID)
+	if err != nil {
+		return err // ErrInvalidState or a wrapped DB error
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	status, ok := s.statuses[userID]
-	if !ok {
-		status = &OnboardingStatus{
-			UserID:      userID,
-			CurrentStep: StepStateSelection,
-		}
-		s.statuses[userID] = status
-	}
-
-	status.StateID = input.StateID
-	status.CurrentStep = StepProfile
-
-	return nil
+	return s.repo.Upsert(ctx, &StatusRecord{
+		UserID:      userID,
+		CurrentStep: StepProfile,
+		StateID:     &id,
+	})
 }
 
+// SetProfile writes the business profile, advances the step to
+// "complete", and (best-effort) creates the workspace + publishes the
+// completion event. Workspace creation and event publishing errors
+// are intentionally logged-and-ignored by the caller rather than
+// reverting onboarding — a failed downstream should not leave the
+// user stuck at the profile step with nothing to click.
 func (s *service) SetProfile(ctx context.Context, userID string, input ProfileInput) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	status, ok := s.statuses[userID]
-	if !ok || status.CurrentStep == StepStateSelection {
+	existing, err := s.repo.Get(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if existing == nil || existing.CurrentStep == StepStateSelection {
 		return ErrStepRequired
 	}
 
@@ -117,16 +119,23 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 		return ErrInvalidGSTIN
 	}
 
-	status.BusinessName = input.BusinessName
-	status.GSTIN = input.GSTIN
-	status.CurrentStep = StepComplete
-
-	// Create workspace automatically on completion
-	if s.wsc != nil {
-		_, _ = s.wsc.CreateWorkspace(ctx, userID, status.StateID, input.BusinessName)
+	if err := s.repo.Upsert(ctx, &StatusRecord{
+		UserID:       userID,
+		CurrentStep:  StepComplete,
+		BusinessName: input.BusinessName,
+		DisplayName:  input.DisplayName,
+		GSTIN:        input.GSTIN,
+	}); err != nil {
+		return err
 	}
 
-	// Publish onboarding.complete event
+	// Best-effort workspace creation. The workspace-creator adapter in
+	// main.go takes a state identifier as a string; we pass the
+	// canonical numeric id so it does no further resolution work.
+	if s.wsc != nil && existing.StateID != nil {
+		_, _ = s.wsc.CreateWorkspace(ctx, userID, strconv.Itoa(*existing.StateID), input.BusinessName)
+	}
+
 	if s.pub != nil {
 		_ = s.pub.Publish(ctx, "onboarding.complete", []byte(`{"user_id":"`+userID+`"}`))
 	}
@@ -134,19 +143,31 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 	return nil
 }
 
+// GetStatus returns the wire-shape status for a user. A user with no
+// row yet gets the defaulted "state_selection" step with no state id,
+// which is what the frontend expects on first visit.
 func (s *service) GetStatus(ctx context.Context, userID string) (*OnboardingStatus, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	status, ok := s.statuses[userID]
-	if !ok {
+	rec, err := s.repo.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if rec == nil {
 		return &OnboardingStatus{
 			UserID:      userID,
 			CurrentStep: StepStateSelection,
 		}, nil
 	}
 
-	return status, nil
+	out := &OnboardingStatus{
+		UserID:       userID,
+		CurrentStep:  rec.CurrentStep,
+		BusinessName: rec.BusinessName,
+		GSTIN:        rec.GSTIN,
+	}
+	if rec.StateID != nil {
+		out.StateID = strconv.Itoa(*rec.StateID)
+	}
+	return out, nil
 }
 
 // isValidGSTIN validates the basic format of an Indian GSTIN (15 characters).

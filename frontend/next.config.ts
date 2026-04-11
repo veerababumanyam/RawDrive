@@ -11,6 +11,19 @@ const isDev = process.env.NODE_ENV === "development";
 // more permissive CSP than the API because it ships HTML with hydration
 // scripts — 'unsafe-inline' on script-src is required for Next's runtime
 // inline bootstrap until we wire a nonce-based CSP in a follow-up.
+//
+// DEV CARVE-OUT (cobolt-fix 2026-04-11): 49 client-side files fall back to
+// `http://localhost:8080` when NEXT_PUBLIC_API_URL is unset and fetch the
+// backend cross-origin (not through the rewrites() proxy below). The hardened
+// prod CSP `connect-src 'self' https:` blocks that because localhost:8080 is
+// neither same-origin nor HTTPS, which manifested as "Could not load state
+// list" on /register and prevented Google sign-in from /login. In dev we add
+// http://localhost:* and ws://localhost:* (the WS is for Next.js HMR). In
+// production NEXT_PUBLIC_API_URL is set to an HTTPS URL which the existing
+// `https:` token already covers, so this carve-out has zero prod impact.
+const isDev = process.env.NODE_ENV !== "production";
+const devConnectExtras = isDev ? " http://localhost:* ws://localhost:*" : "";
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -32,7 +45,8 @@ const securityHeaders = [
       "img-src 'self' data: blob: https:",
       // connect-src must include the API origin for same-origin fetches
       // through rewrites() plus any R2 public buckets the client talks to.
-      "connect-src 'self' https:",
+      // Dev adds localhost:* so cross-origin dev fetches to the Go API work.
+      "connect-src 'self' https:" + devConnectExtras,
       "font-src 'self' data:",
       "object-src 'none'",
       "frame-ancestors 'none'",

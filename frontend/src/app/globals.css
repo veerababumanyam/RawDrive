@@ -628,15 +628,18 @@ body[data-chrome="marketing"] {
 
 /* --- Hero-overlay navbar variant ----------------------------- */
 .landing-navbar-overlay {
-  /* Fully transparent background — the hero photograph shows through.
-     A soft top-down scrim gives the nav links readable contrast without
-     a hard background fill. No shadow, no border, no blur — the hero
-     owns its own scrim (.landing-hero__top-vignette). */
-  background: transparent;
+  /* Reduced-opacity glass. Lighter than .glass-surface so the hero
+     photograph still shows through at the top of the page, but heavy
+     enough that when the visitor scrolls past the hero onto dark
+     content the navbar stays clearly visible as a distinct band.
+     Uses the same token variables as .glass-surface so it automatically
+     adapts to all three themes. */
+  background: color-mix(in srgb, var(--surface-overlay) 70%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-variant) 14%, transparent);
+  box-shadow: 0 4px 18px -8px color-mix(in srgb, var(--surface-sunken) 50%, transparent);
 }
 
 /* --- Cinematic Hero (§4.1) ----------------------------------- */
@@ -678,17 +681,10 @@ body[data-chrome="marketing"] {
 }
 
 .landing-hero__top-vignette {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: calc(var(--navbar-height) * 2);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--surface-base) 60%, transparent) 0%,
-    transparent 100%
-  );
-  pointer-events: none;
+  /* Retained as a no-op so the component's JSX still resolves. The
+     navbar now provides its own glass backdrop via .landing-navbar-overlay,
+     so an additional vignette would double up. */
+  display: none;
 }
 
 .landing-hero__eyebrow {
@@ -764,7 +760,7 @@ body[data-chrome="marketing"] {
 .landing-pipeline {
   /* Desktop sticky container — the inner strip becomes position:sticky
      while this wrapper scrolls. The wrapper is intentionally tall so
-     the scroll-progression has room to play out. */
+     the scroll-progression has room to play out on every viewport size. */
   position: relative;
   padding-top: 6rem;
   padding-bottom: 6rem;
@@ -772,9 +768,16 @@ body[data-chrome="marketing"] {
 
 @media (min-width: 1024px) {
   .landing-pipeline {
-    /* Leave scroll-space so each step has room to "light up" */
+    /* Section total height must be meaningfully taller than the viewport
+       so the sticky progression has genuine scroll room. Using
+       `min-height: 200vh` guarantees ~100vh of scroll travel AFTER the
+       content sticks, which gives each of the seven steps ~14vh of
+       activation space. Works on 720p laptops and 4K desktops alike.
+       (Originally padded to 18rem — that wasn't enough on 900px viewports
+       where the total section was only 773px, shorter than the viewport.) */
+    min-height: 200vh;
     padding-top: 8rem;
-    padding-bottom: 18rem;
+    padding-bottom: 8rem;
   }
 }
 

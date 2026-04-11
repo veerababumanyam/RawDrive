@@ -430,8 +430,19 @@ func main() {
 	wsSvc := workspace.NewService(wsRepo, eventPublisher, &logStorageBucket{})
 	wsHandler := workspace.NewHandler(wsSvc)
 
-	// Onboarding with real workspace creation
-	onbSvc := onboarding.NewService(&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool}, eventPublisher)
+	// Onboarding with persistent repo (migration 067) + real workspace creation.
+	// The repo replaces the prior in-memory map so onboarding progress
+	// survives backend restarts — critical for the multi-step flow
+	// where a user might take minutes between state selection and
+	// profile submission. eventPublisher is the env-selected broker
+	// (real NATS JetStream or in-process stdout stub) from the lines
+	// above, not a fresh log stub.
+	onbRepo := onboarding.NewPgRepo(dbPool)
+	onbSvc := onboarding.NewService(
+		onbRepo,
+		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool},
+		eventPublisher,
+	)
 	onbHandler := onboarding.NewHandler(onbSvc)
 
 	// Real team repos backed by DB
@@ -456,6 +467,13 @@ func main() {
 	r.Mount("/auth", authHandler.Routes())
 	r.Mount("/api/v1/auth", authHandler.Routes())
 
+	// Public states listing — used by /register before the user has any
+	// credentials, so it must not sit behind JWT middleware. Cache-Control
+	// is set inside the handler; the underlying table is effectively
+	// immutable reference data seeded at migration 010.
+	statesHandler := handler.NewStatesHandler(handler.NewPgStatesRepo(dbPool))
+	r.Get("/api/v1/states", statesHandler.List)
+
 	// F-007 (M17 wave 2): MFA public route. /auth/verify-totp uses the
 	// mfa_token issued by Login as its own credential, so it must NOT
 	// be behind JWT middleware.
@@ -467,6 +485,13 @@ func main() {
 	// both paths. This cuts brute-force throughput against the 10^6
 	// TOTP code space while leaving legitimate retry-on-typo UX alive.
 	mfaVerifyLimiter := middleware.RateLimit(10, time.Minute)
+	// FIX (cobolt-fix 2026-04-11): chi panics when Mount() is called a
+	// second time on the same path ('/auth'), and '/auth' is already
+	// mounted above via authHandler.Routes(). Register the specific
+	// MFA public leaf routes directly so the per-IP rate limiter still
+	// applies without conflicting with the existing mount. Keeps the
+	// same 10/min rate-limit window shared across /auth and /api/v1/auth
+	// prefixes as intended by the M17 S-002 audit followup.
 	r.With(mfaVerifyLimiter).Post("/auth/verify-totp", mfaHandler.VerifyTOTP)
 	r.With(mfaVerifyLimiter).Post("/auth/verify-recovery-code", mfaHandler.VerifyRecoveryCode)
 	r.With(mfaVerifyLimiter).Post("/api/v1/auth/verify-totp", mfaHandler.VerifyTOTP)

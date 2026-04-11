@@ -22,6 +22,36 @@ Your visual thesis ("cinematic wedding gallery meets calm operating system") is 
 
 ---
 
+## 0.3 Post-QA feedback applied (2026-04-11 evening)
+
+After Phase 6 visual QA started, six pieces of feedback surfaced real problems the automated checks could never have caught. All fixed in this pass.
+
+| # | Issue | Fix |
+|---|---|---|
+| 1 | Navbar nearly invisible when scrolled past the hero onto dark content | `.landing-navbar-overlay` rebuilt with reduced-opacity glass backdrop: `color-mix(var(--surface-overlay) 70% transparent)` + `backdrop-filter: blur(var(--glass-blur))` + hairline `border-bottom`. Visible over both photo AND content sections. |
+| 2 | Other public routes felt inconsistent with the landing | Root cause was theme desync (#3), not a design divergence. Fixed via #3–#5 + verified token compliance on `/about` and `/pricing` (both use semantic tokens end-to-end, tested in dark mode). |
+| 3 | Landing opened in dark while other routes were in light — themes out of sync | **Q10 reversal.** Removed `<ForceTheme>` from the landing entirely. Deleted the unused `ForceTheme.tsx` component. Removed the hardcoded `data-theme="liquid-glass-dark"` from `layout.tsx`. All routes now resolve theme through the same init-script path. |
+| 4 | Theme should auto-match OS `prefers-color-scheme` on first visit, and track OS changes live | `rawDriveThemeInitScript` now checks `matchMedia("(prefers-color-scheme: dark)")` when no localStorage preference exists. `ThemeProvider` also subscribes to `matchMedia` `change` events and updates state — but only while the visitor has not made an explicit choice. First click on the toggle is the visitor's final word. |
+| 5 | Theme toggle hidden on landing (side-effect of the old hero-overlay variant) | Un-hidden. Toggle renders in both desktop and mobile nav on every route including `/`. |
+| 6 | All routes should use the central token system | Verified: every change in this feedback pass composes existing tokens (`--surface-overlay`, `--glass-blur`, `--outline-variant`, `--surface-base`, etc.). Zero hardcoded color / spacing values added. |
+
+**Bonus issues surfaced and fixed while verifying the above:**
+
+- **Hydration mismatch on `ThemeToggleButton`**: server was rendering `Sun` (assuming dark default) while client rendered `Moon` (actual light theme), forcing React to discard and regenerate the tree on every page load. Fixed via the standard "empty placeholder on SSR, real icon after hydration" pattern, implemented with `useSyncExternalStore` so it's lint-clean under `react-hooks/set-state-in-effect`.
+- **Next.js pre-App-Router script pattern**: the inline theme init script was injected via a raw inline `<script>` with `__html` content. Switched to `<Script id="rawdrive-theme-init" strategy="beforeInteractive">` from `next/script`, the Next.js 15 App Router-compliant way to inject pre-hydration scripts.
+- **Pipeline section too short on 900px viewports**: the sticky progression had no scroll room because the section was 773px tall on a 900px viewport. Added `min-height: 200vh` to `.landing-pipeline` on desktop so the progression has ~100vh of scroll travel regardless of viewport height.
+- **`docs/qa/` screenshots**: during QA I was saving verification screenshots into `docs/qa/` via `filePath`, polluting the docs tree with ephemeral artifacts that had nothing to do with the landing page at runtime. Folder deleted. Future verification uses Chrome DevTools MCP inline screenshots — nothing lands in the repo.
+
+**Net result:**
+
+- Every route opens in a theme matching the visitor's OS on first visit, and respects their in-app toggle choice across navigation.
+- Navbar clearly visible on every section on every route, in every theme.
+- `.landing-navbar-overlay` still lets the hero photograph breathe at the top, but is no longer invisible past that point.
+- Zero hydration errors, zero console warnings, zero lint errors, zero type errors.
+- Q10 is logged as reversed in §0.5.
+
+---
+
 ## 0.4 Implementation log
 
 | Phase | Status | Notes |

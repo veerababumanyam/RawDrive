@@ -103,16 +103,17 @@ func TestRegisterHandler_Success(t *testing.T) {
 	ts := newTestServer(handler)
 	defer ts.Close()
 
-	resp, err := postJSON(ts.URL+"/auth/register", map[string]string{
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
 		"email":    "test@example.com",
 		"password": "TestPassword123!",
+		"state_id": 14, // Maharashtra; any valid >0 id works for the handler-level check
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var result map[string]string
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.Contains(t, result["message"], "OTP")
 }
@@ -139,14 +140,297 @@ func TestRegisterHandler_DuplicateEmail(t *testing.T) {
 	ts := newTestServer(handler)
 	defer ts.Close()
 
-	resp, err := postJSON(ts.URL+"/auth/register", map[string]string{
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
 		"email":    "dup@example.com",
 		"password": "TestPassword123!",
+		"state_id": 14,
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+}
+
+// TestRegisterHandler_MissingStateRejected asserts state selection is a
+// hard gate at the handler boundary: a body without state_id (or with
+// state_id <= 0) must 400 before the user is created. This is the
+// server-side backstop for the UI lockout on the /register form.
+func TestRegisterHandler_MissingStateRejected(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "nostate@example.com",
+		"password": "TestPassword123!",
+		// state_id deliberately omitted
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Contains(t, result["error"], "state selection")
+}
+
+// TestRegisterHandler_ZeroStateRejected covers the explicit zero case:
+// the frontend might naively send state_id=0 as a sentinel, we must 400.
+func TestRegisterHandler_ZeroStateRejected(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "zero@example.com",
+		"password": "TestPassword123!",
+		"state_id": 0,
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+// ──────────────────────────── Plan selection (v0.0.46) ────────────────────────────
+
+// TestRegisterHandler_PlanDefault asserts that omitting the plan field is
+// accepted and the backend treats it as the free tier.
+func TestRegisterHandler_PlanDefault(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "planless@example.com",
+		"password": "TestPassword123!",
+		"state_id": 14,
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "free", result["plan"], "missing plan should default to free")
+}
+
+// TestRegisterHandler_PlanValid walks all self-serve plan IDs and asserts
+// each one is accepted and echoed back unchanged.
+func TestRegisterHandler_PlanValid(t *testing.T) {
+	for _, plan := range []string{"free", "starter", "professional", "business"} {
+		t.Run(plan, func(t *testing.T) {
+			handler, _, _, _ := setupAuthRouter()
+			ts := newTestServer(handler)
+			defer ts.Close()
+
+			resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+				"email":    plan + "@example.com",
+				"password": "TestPassword123!",
+				"state_id": 14,
+				"plan":     plan,
+			})
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			var result map[string]any
+			json.NewDecoder(resp.Body).Decode(&result)
+			assert.Equal(t, plan, result["plan"])
+		})
+	}
+}
+
+// TestRegisterHandler_PlanInvalidFallback asserts that an unknown plan id
+// is silently coerced to "free" rather than rejecting the registration.
+// Rationale: we do not want a typo'd query param to block signup.
+func TestRegisterHandler_PlanInvalidFallback(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "bogus@example.com",
+		"password": "TestPassword123!",
+		"state_id": 14,
+		"plan":     "unicorn",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "free", result["plan"])
+}
+
+// TestRegisterHandler_PlanEnterpriseRejected asserts that enterprise is
+// sales-gated and cannot be self-serve-registered. A curl bypass must 400.
+func TestRegisterHandler_PlanEnterpriseRejected(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "ent@example.com",
+		"password": "TestPassword123!",
+		"state_id": 14,
+		"plan":     "enterprise",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Contains(t, result["error"], "enterprise")
+}
+
+// ──────────────────────────── OAuth state gate (v0.0.47) ────────────────────────────
+
+// TestOAuthGoogle_MissingStateIDRejected asserts that the /auth/oauth/google
+// start endpoint refuses to issue a redirect without a state_id query param.
+// This is the server-side backstop for the UI lockout on the "Continue with
+// Google" button, so a curl or tampered form cannot bypass state selection
+// for Google signups. Since setupAuthRouter() passes a nil OAuth service,
+// the "OAuth not configured" 500 path would normally fire — but state_id
+// validation happens BEFORE the nil check would, so this test still
+// exercises the validation path deterministically.
+func TestOAuthGoogle_MissingStateIDRejected(t *testing.T) {
+	// Arrange: a handler with OAuth configured enough to pass the nil check.
+	// We reuse the normal router setup; the OAuthGoogle handler short-circuits
+	// on missing state_id before touching oauth, so a nil oauth service would
+	// reach the "OAuth not configured" branch first. To isolate the state_id
+	// check we construct a handler with a non-nil oauth service.
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength: 6, Expiry: time.Minute, MaxAttempts: 5,
+		RateLimitMax: 10, RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Minute,
+		RefreshTokenExpiry: time.Hour,
+		MaxSessions:        5,
+	})
+	// Minimally configured OAuth service — enough for the nil-check in
+	// OAuthGoogle to pass. The handler rejects before provider is ever called.
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test", RedirectURI: "http://localhost/cb"},
+		nil, nil,
+	)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	// All cases use intent=signup, because state_id is ONLY required when
+	// the user is starting OAuth from the /register page. Login paths omit
+	// `intent` and pass-through (see TestOAuthGoogle_LoginIntentAllowed).
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"no state_id query", "/auth/oauth/google?intent=signup"},
+		{"empty state_id", "/auth/oauth/google?intent=signup&state_id="},
+		{"zero state_id", "/auth/oauth/google?intent=signup&state_id=0"},
+		{"negative state_id", "/auth/oauth/google?intent=signup&state_id=-5"},
+		{"non-numeric state_id", "/auth/oauth/google?intent=signup&state_id=abc"},
+	}
+
+	// Don't follow the 302 so a valid request is observable as a redirect,
+	// not whatever Google's OAuth consent screen returns.
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := client.Get(ts.URL + tc.url)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			var result map[string]string
+			json.NewDecoder(resp.Body).Decode(&result)
+			assert.Contains(t, result["error"], "state selection")
+		})
+	}
+}
+
+// TestOAuthGoogle_LoginIntentAllowed asserts that OAuth requests WITHOUT
+// `intent=signup` (i.e. Google login from /login) are allowed through
+// without a state_id. Existing users already have a state set on their
+// user row; we only gate the signup path.
+func TestOAuthGoogle_LoginIntentAllowed(t *testing.T) {
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength: 6, Expiry: time.Minute, MaxAttempts: 5,
+		RateLimitMax: 10, RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Minute,
+		RefreshTokenExpiry: time.Hour,
+		MaxSessions:        5,
+	})
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test", RedirectURI: "http://localhost/cb"},
+		nil, nil,
+	)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// No intent, no state_id — this is the /login flow. Must 302 through.
+	resp, err := client.Get(ts.URL + "/auth/oauth/google")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode,
+		"login-path OAuth start should 302 without state_id")
+	assert.Contains(t, resp.Header.Get("Location"), "accounts.google.com")
+}
+
+// TestOAuthGoogle_ValidStateIDRedirects asserts the happy path: with
+// intent=signup and a valid state_id the handler issues a 302 redirect
+// to Google.
+func TestOAuthGoogle_ValidStateIDRedirects(t *testing.T) {
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength: 6, Expiry: time.Minute, MaxAttempts: 5,
+		RateLimitMax: 10, RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Minute,
+		RefreshTokenExpiry: time.Hour,
+		MaxSessions:        5,
+	})
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test", RedirectURI: "http://localhost/cb"},
+		nil, nil,
+	)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Get(ts.URL + "/auth/oauth/google?intent=signup&state_id=14")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode, "expected 302 redirect to Google")
+	assert.Contains(t, resp.Header.Get("Location"), "accounts.google.com",
+		"expected redirect to Google's OAuth endpoint")
 }
 
 func TestVerifyOTPHandler_Success(t *testing.T) {
@@ -261,6 +545,10 @@ func TestOAuthGoogleHandler_Redirect(t *testing.T) {
 		},
 	}
 
+	// This is the login-path OAuth start: no `intent=signup`, so state_id
+	// is NOT required (existing users already have state set). The
+	// TestOAuthGoogle_MissingStateIDRejected test exercises the signup path
+	// where state_id IS required.
 	resp, err := client.Get(ts.URL + "/auth/oauth/google")
 	require.NoError(t, err)
 	defer resp.Body.Close()
