@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -45,8 +47,42 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if inv.Currency == "" {
 		inv.Currency = "INR"
 	}
-	if inv.InvoiceType == "" {
+	// Map friendly GST-document invoice_type values the frontend
+	// uses to the CHECK-constraint values the invoices table
+	// actually allows. The DB check is {subscription,addon,service,
+	// credit_note}; the UI naturally sends tax_invoice/proforma/
+	// advance_receipt because that's how Indian accountants talk
+	// about invoices. Rather than migrate the check constraint
+	// (which would risk existing data), we normalize at the handler
+	// boundary: everything that is essentially a billable service
+	// collapses to "service".
+	switch inv.InvoiceType {
+	case "", "tax_invoice", "proforma", "advance_receipt":
 		inv.InvoiceType = "service"
+	case "credit_note":
+		// already valid
+	case "subscription", "addon":
+		// already valid
+	default:
+		inv.InvoiceType = "service"
+	}
+
+	// Default the state_id from the caller's JWT state claim when
+	// the client didn't send one. The invoices.state_id column is
+	// NOT NULL with an FK to states, so zero (the Go default) is
+	// never a valid value and was producing a raw 500 from the DB
+	// FK check — a client that knows its user's state gets to
+	// override, otherwise we borrow it from the session.
+	if inv.StateID == 0 {
+		if sid := middleware.StateIDFromContext(r.Context()); sid != "" {
+			if n, convErr := strconv.Atoi(sid); convErr == nil && n > 0 {
+				inv.StateID = n
+			}
+		}
+	}
+	if inv.StateID == 0 {
+		http.Error(w, `{"error":"state_id required: complete onboarding or send explicit state_id"}`, http.StatusBadRequest)
+		return
 	}
 
 	// Generate sequential invoice number
@@ -58,7 +94,13 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	inv.InvoiceNumber = num
 
 	if err := h.repo.Create(r.Context(), &inv); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		// Surface the actual DB error so UAT and callers can see
+		// the underlying reason instead of the old opaque
+		// "internal error" body. Previously this path returned
+		// just "internal error" which silently buried FK failures
+		// (e.g. contact_id pointing at a deleted row) and CHECK
+		// constraint violations on status/type.
+		http.Error(w, fmt.Sprintf(`{"error":"create invoice failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 	respondJSON(w, http.StatusCreated, inv)

@@ -13,6 +13,9 @@ export interface Invoice {
   total_paisa: number;
   amount_paid_paisa: number;
   line_items: InvoiceLineItem[];
+  contact_id?: string;
+  deal_id?: string;
+  gallery_id?: string;
   due_date?: string;
   paid_at?: string;
   created_at: string;
