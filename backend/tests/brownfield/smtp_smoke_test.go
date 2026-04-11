@@ -18,6 +18,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +46,12 @@ const (
 // symptom) returns false so the test skips instead of hanging.
 func mailpitReachable(t *testing.T) bool {
 	t.Helper()
-	addr := fmt.Sprintf("%s:%d", mailpitSMTPHost, mailpitSMTPPort)
+	// net.JoinHostPort (not fmt.Sprintf "%s:%d") is the IPv6-safe way
+	// to build a dial address — if mailpitSMTPHost is ever switched
+	// to an IPv6 literal like "::1", JoinHostPort wraps it in brackets.
+	// Also silences the go vet "address format does not work with IPv6"
+	// diagnostic on this line.
+	addr := net.JoinHostPort(mailpitSMTPHost, strconv.Itoa(mailpitSMTPPort))
 	d := net.Dialer{Timeout: 2 * time.Second}
 	conn, err := d.Dial("tcp", addr)
 	if err != nil {

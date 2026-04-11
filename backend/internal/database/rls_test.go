@@ -16,7 +16,7 @@ import (
 // used by RLS policies.
 func setupRLSTest(t *testing.T) (*pgxpool.Pool, string, string) {
 	t.Helper()
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)

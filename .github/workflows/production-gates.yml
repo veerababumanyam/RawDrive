@@ -61,3 +61,98 @@ jobs:
         run: docker build -f backend/Dockerfile -t rawdrive-api:ci .
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t rawdrive-frontend:ci frontend
+
+  # ──────────────────────────────────────────────────────────────────────
+  # security: SAST / secret / dependency scanning
+  #
+  # Covers ISSUE-008 inside this repo: the CoBolt sibling-dir scanner
+  # wrapper is brittle on Windows hosts, so we run the real scanners here
+  # in CI where Linux runners have everything we need. Three layers:
+  #   - semgrep  → SAST (code patterns, security smells)
+  #   - gitleaks → secret detection across full git history
+  #   - trivy fs → dependency + IaC + secret scan of the filesystem
+  #
+  # All three run with continue-on-error for the initial rollout. Findings
+  # land in the PR Checks tab AND upload to the repo Security tab via
+  # SARIF, so the user gets real signal without merges blocking on the
+  # first run of a freshly-wired scanner. Tighten by removing
+  # continue-on-error once rules are tuned and the baseline is clean.
+  # ──────────────────────────────────────────────────────────────────────
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks needs full git history to scan every commit for
+          # leaked secrets, not just the current tree.
+          fetch-depth: 0
+
+      - name: Set up Python for semgrep
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install semgrep
+        run: python -m pip install --upgrade pip semgrep
+
+      - name: Run semgrep
+        id: semgrep
+        continue-on-error: true
+        # --config auto pulls the default Semgrep Registry rule packs
+        # (security + best-practice) matched against detected languages.
+        # SARIF output uploads to the Security tab below.
+        run: |
+          semgrep scan \
+            --config auto \
+            --sarif \
+            --output semgrep.sarif \
+            --metrics=off \
+            --exclude node_modules \
+            --exclude _cobolt-output \
+            --exclude frontend/.next \
+            .
+
+      - name: Upload semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Run gitleaks
+        id: gitleaks
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE is only required for GitHub organizations,
+          # not personal accounts. Leave unset for personal repos.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Run trivy filesystem scan
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          # Skip generated / vendored dirs. trivy already has sensible
+          # defaults but these are the big ones for this repo.
+          skip-dirs: node_modules,_cobolt-output,frontend/.next,backend/vendor
+          # exit-code 0 here because continue-on-error above already
+          # controls blocking behaviour; double-gating would mask the
+          # SARIF upload when findings exist.
+          exit-code: "0"
+
+      - name: Upload trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy

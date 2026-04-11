@@ -21,6 +21,7 @@ package testsupport
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -110,10 +111,43 @@ func Shutdown() {
 	}
 }
 
+// dockerHealthy probes the Docker daemon with a short-lived `docker info`
+// invocation. On Windows dev machines without Docker Desktop running,
+// testcontainers-go's provider retries the named-pipe lookup for ~30s
+// before giving up. Running `docker info` ourselves with a 2-second
+// deadline lets us detect that condition in ~2s and short-circuit the
+// whole container boot path — which turns a 30s FAIL per test binary
+// into a 2s SKIP. A missing `docker` CLI is treated the same as a dead
+// daemon: either way, we cannot boot a container.
+func dockerHealthy() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "docker", "info")
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("docker info probe timed out after 2s")
+		}
+		return fmt.Errorf("docker info probe failed: %w", err)
+	}
+	return nil
+}
+
 // initSharedContainer does the one-time work: boot the container, resolve a
 // DSN, run the production Migrator against it. Runs inside sharedOnce.Do so
 // concurrent PgvectorPool calls from parallel tests all serialise behind it.
 func initSharedContainer() {
+	// Fast Docker probe first. If Docker isn't running, bail immediately
+	// rather than spending 30s inside testcontainers-go's named-pipe
+	// retry loop. The skip reason surfaced to tests (via EnsureDSN's
+	// error) keeps the diagnostic clear: "docker info probe failed" is
+	// unmistakable, unlike the cryptic "check host npipe://..." string
+	// that testcontainers emits after its own timeout.
+	if err := dockerHealthy(); err != nil {
+		sharedInitErr = fmt.Errorf("docker daemon unreachable: %w — start Docker Desktop or set DATABASE_URL to an already-migrated test database", err)
+		return
+	}
+
 	// Startup budget: pulling pgvector/pgvector:pg16 the first time on a cold
 	// machine can take ~30s. Once cached, boot is ~2-3s. 3 minutes is enough
 	// headroom for both cases without being so long that a broken Docker

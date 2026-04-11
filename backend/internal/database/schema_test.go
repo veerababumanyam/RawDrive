@@ -7,13 +7,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/rawdrive/backend/internal/database"
 )
 
 func setupSchemaTest(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 	return testPool(t)
 }

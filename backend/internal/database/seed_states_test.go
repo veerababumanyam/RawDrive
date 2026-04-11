@@ -7,12 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/rawdrive/backend/internal/database"
 )
 
 func TestAllIndianStatesSeeded(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -26,7 +24,7 @@ func TestAllIndianStatesSeeded(t *testing.T) {
 }
 
 func TestAllUnionTerritoriesSeeded(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -40,7 +38,7 @@ func TestAllUnionTerritoriesSeeded(t *testing.T) {
 }
 
 func TestStateCodesISO(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -75,7 +73,7 @@ func TestStateCodesISO(t *testing.T) {
 }
 
 func TestStateNamesNotEmpty(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)

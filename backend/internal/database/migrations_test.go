@@ -25,28 +25,56 @@ import (
 // the testcontainer's randomly-assigned host port.
 var testDSN string
 
+// testcontainerSkipReason is non-empty when TestMain could not resolve a
+// usable DSN — typically because Docker Desktop is not running on the dev
+// machine. In that state newMigrator / testPool / tempDatabaseDSN skip the
+// calling test cleanly instead of exploding with a hard failure, matching
+// the convention in tests/m5, tests/m6, tests/m13, and tests/integration.
+var testcontainerSkipReason string
+
 // TestMain owns the package-wide lifecycle for the shared testcontainer.
 // It boots the container (or reuses a running one in-process), runs the
 // production Migrator against it once, stores the DSN for all tests in the
 // package to reuse, and terminates the container cleanly at exit.
 //
-// All test helpers in this package (testPool, tempDatabaseDSN, setupRLSTest,
-// setupSchemaTest) read from testDSN and therefore need no changes.
+// If testsupport.EnsureDSN cannot boot a container (e.g. Docker Desktop is
+// not running), TestMain records the reason and still runs the suite — every
+// DB-backed test will skip via newMigrator/testPool and the package reports
+// SKIP instead of FAIL. This preserves CI parity (CI has Docker) while
+// keeping dev machines without Docker unblocked.
 func TestMain(m *testing.M) {
 	dsn, err := testsupport.EnsureDSN()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "database_test: failed to start testcontainer: %v\n", err)
-		os.Exit(1)
+		testcontainerSkipReason = fmt.Sprintf("testcontainer unavailable: %v", err)
+		fmt.Fprintf(os.Stderr, "database_test: %s — DB-backed tests will skip\n", testcontainerSkipReason)
+	} else {
+		testDSN = dsn
 	}
-	testDSN = dsn
 
 	code := m.Run()
 	testsupport.Shutdown()
 	os.Exit(code)
 }
 
+// newMigrator returns a *database.Migrator bound to the shared testcontainer
+// DSN, or skips the calling test cleanly if the container could not be
+// started. Every test in this package that previously called
+// `database.NewMigrator(testDSN)` goes through this helper so that the
+// Docker-unavailable path is a SKIP, never a hard failure at the first
+// migrator.Up() call.
+func newMigrator(t *testing.T) *database.Migrator {
+	t.Helper()
+	if testcontainerSkipReason != "" {
+		t.Skip(testcontainerSkipReason)
+	}
+	return database.NewMigrator(testDSN)
+}
+
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	if testcontainerSkipReason != "" {
+		t.Skip(testcontainerSkipReason)
+	}
 	pool, err := pgxpool.New(context.Background(), testDSN)
 	require.NoError(t, err, "failed to connect to test database")
 	t.Cleanup(func() { pool.Close() })
@@ -55,6 +83,9 @@ func testPool(t *testing.T) *pgxpool.Pool {
 
 func tempDatabaseDSN(t *testing.T) string {
 	t.Helper()
+	if testcontainerSkipReason != "" {
+		t.Skip(testcontainerSkipReason)
+	}
 
 	adminDSN, err := withDatabaseName(testDSN, "postgres")
 	require.NoError(t, err, "failed to build admin DSN")
@@ -92,7 +123,7 @@ func withDatabaseName(dsn, dbName string) (string, error) {
 }
 
 func TestMigrationsUp(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	err := migrator.Up()
 	require.NoError(t, err, "all migrations should apply without error")
 }
@@ -110,7 +141,7 @@ func TestMigrationsDown(t *testing.T) {
 }
 
 func TestUsersTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -137,7 +168,7 @@ func TestUsersTableExists(t *testing.T) {
 }
 
 func TestStatesTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -159,7 +190,7 @@ func TestStatesTableExists(t *testing.T) {
 }
 
 func TestWorkspacesTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -186,7 +217,7 @@ func TestWorkspacesTableExists(t *testing.T) {
 }
 
 func TestSessionsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -210,7 +241,7 @@ func TestSessionsTableExists(t *testing.T) {
 }
 
 func TestRolesTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -234,7 +265,7 @@ func TestRolesTableExists(t *testing.T) {
 }
 
 func TestRLSEnabled(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -255,7 +286,7 @@ func TestRLSEnabled(t *testing.T) {
 // === M4: Business Operations Tables ===
 
 func TestLeadsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -280,7 +311,7 @@ func TestLeadsTableExists(t *testing.T) {
 }
 
 func TestContactsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -305,7 +336,7 @@ func TestContactsTableExists(t *testing.T) {
 }
 
 func TestDealsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -330,7 +361,7 @@ func TestDealsTableExists(t *testing.T) {
 }
 
 func TestFollowUpsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -345,7 +376,7 @@ func TestFollowUpsTableExists(t *testing.T) {
 }
 
 func TestInvoicesTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -371,7 +402,7 @@ func TestInvoicesTableExists(t *testing.T) {
 }
 
 func TestContractsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -396,7 +427,7 @@ func TestContractsTableExists(t *testing.T) {
 }
 
 func TestContractTemplatesTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -411,7 +442,7 @@ func TestContractTemplatesTableExists(t *testing.T) {
 }
 
 func TestEventsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -436,7 +467,7 @@ func TestEventsTableExists(t *testing.T) {
 }
 
 func TestNotificationsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -461,7 +492,7 @@ func TestNotificationsTableExists(t *testing.T) {
 }
 
 func TestPaymentsTableExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -476,7 +507,7 @@ func TestPaymentsTableExists(t *testing.T) {
 }
 
 func TestM4RLSEnabled(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -495,7 +526,7 @@ func TestM4RLSEnabled(t *testing.T) {
 // === M7.5: Platform Role Schema ===
 
 func TestMigration035_PlatformRoleColumnExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -510,7 +541,7 @@ func TestMigration035_PlatformRoleColumnExists(t *testing.T) {
 }
 
 func TestMigration035_PlatformRoleDefault(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -525,7 +556,7 @@ func TestMigration035_PlatformRoleDefault(t *testing.T) {
 }
 
 func TestMigration035_PlatformRoleCheckConstraint(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -547,7 +578,7 @@ func TestMigration035_PlatformRoleCheckConstraint(t *testing.T) {
 }
 
 func TestMigration035_PlatformRoleIndex(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -562,7 +593,7 @@ func TestMigration035_PlatformRoleIndex(t *testing.T) {
 }
 
 func TestMigration036_TestUsersSeeded(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -594,7 +625,7 @@ func TestMigration036_TestUsersSeeded(t *testing.T) {
 }
 
 func TestMigration036_TestUsersHaveWorkspaces(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -620,7 +651,7 @@ func TestMigration036_TestUsersHaveWorkspaces(t *testing.T) {
 }
 
 func TestMigration036_DealerRecordExists(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
@@ -636,7 +667,7 @@ func TestMigration036_DealerRecordExists(t *testing.T) {
 }
 
 func TestMigration036_SeedIdempotent(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	// Running Up twice should not error (idempotent seeds)
 	require.NoError(t, migrator.Up())
 	// The second call is a no-op since all migrations are already applied
@@ -654,7 +685,7 @@ func TestMigration036_SeedIdempotent(t *testing.T) {
 }
 
 func TestMigration035_ValidPlatformRoles(t *testing.T) {
-	migrator := database.NewMigrator(testDSN)
+	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
 	pool := testPool(t)
