@@ -143,7 +143,9 @@ Until that step exists, the spec is advisory and drift is detected by reviewers.
 
 ## What lives in `docs/api/` today
 
-- `README.md` — this strategy document
-- `openapi-skeleton.yaml` — a minimal OpenAPI 2.0 stub you can use as a starting point if you run `swag init` before the first wave. Hand-written, not generated.
+- `README.md` — this strategy document.
+- `openapi.yaml` — hand-written OpenAPI 3.1 spec covering the canary-critical surface (auth, TOTP MFA, chunked upload, single-file upload, asset CRUD, gallery CRUD, share links). Validated in CI by the `openapi` job in `.github/workflows/production-gates.yml` using Redocly CLI. Lint rules and deferrals live in `redocly.yaml` at the repo root.
 
-Generated files (`swagger.yaml`, `swagger.json`, `docs.go`) will land here once the first backfill wave merges.
+Generated files (`swagger.yaml`, `swagger.json`, `docs.go`) will land here once the first swag backfill wave merges.
+
+> The former `openapi-skeleton.yaml` Swagger 2.0 stub was removed on `brownfield/fix-12-issues` after being superseded by `openapi.yaml`. Any tool still pointing at the old path needs to be updated.

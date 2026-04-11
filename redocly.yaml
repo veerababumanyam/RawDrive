@@ -1,0 +1,59 @@
+# Redocly CLI config for the RawDrive OpenAPI spec.
+#
+# Scope: lints docs/api/openapi.yaml — the canary-critical hand-written
+# spec — as part of .github/workflows/production-gates.yml.
+#
+# Why this file exists: ISSUE-004 (brownfield fix wave) shipped the spec
+# as valid OpenAPI 3.1 but three Redocly rules fire warnings we have
+# intentionally deferred or accepted. Codifying the decisions here
+# prevents the warnings from drowning out real problems in future PRs
+# and makes the deferral visible to reviewers.
+#
+# File name: `redocly.yaml` (no leading dot) is Redocly CLI's canonical
+# auto-discovered name. We tested with `.redocly.yaml` first and found
+# that the CLI did not auto-load the dotfile form in this environment,
+# so we use the canonical name.
+
+extends:
+  - recommended
+
+rules:
+  # STRUCTURAL VALIDITY — keep at error. This is the rule that caught
+  # the six `nullable: true` violations in the initial brownfield pass
+  # (OpenAPI 3.1 removed `nullable: true` in favour of type arrays like
+  # `type: [string, "null"]`). Regressions here must block the build.
+  struct: error
+
+  # DEFERRED: operation-operationId.
+  #
+  # Every operation in a 3.1 spec SHOULD carry an operationId because
+  # downstream codegen (openapi-typescript, oapi-codegen, Stoplight,
+  # Swagger UI) uses it as the function name in the generated client.
+  # Leaving it off means consumers get auto-generated names like
+  # `postApiV1Uploads` instead of `createUpload`.
+  #
+  # We chose not to backfill the 30 operationIds during the brownfield
+  # fix wave because that is a SDK-shaping product decision (naming
+  # conventions, casing, duplicate-name rules) that deserves its own
+  # review rather than being bundled into an unrelated spec-compliance
+  # fix. Track the backfill as a follow-up story; until it lands, keep
+  # this rule off so it does not drown the real errors in CI noise.
+  operation-operationId: off
+
+  # DEFERRED: no-unused-components.
+  #
+  # The `Forbidden` response component is defined but not yet referenced
+  # because the handlers that should return 403 (access-gated routes,
+  # platform-role checks) are out of the canary spec's declared scope.
+  # When the scope grows to include those paths, this rule will catch
+  # the component finally being used — at which point it can be
+  # re-enabled. Leaving it off today avoids churning the spec.
+  no-unused-components: off
+
+  # ACCEPTED: no-server-example.com.
+  #
+  # The rule fires on `localhost:8080` in the servers list, treating any
+  # non-production URL as suspicious. The localhost entry is the correct
+  # address for the dev server and is documented in the spec description.
+  # Turn it off; do not change the dev URL.
+  no-server-example.com: off

@@ -358,9 +358,8 @@ components:
           type: string
           format: uuid
         gallery_id:
-          type: string
+          type: [string, "null"]
           format: uuid
-          nullable: true
         filename:
           type: string
         content_type:
@@ -387,9 +386,8 @@ components:
           type: string
           format: date-time
         deleted_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
 
     AssetList:
       type: object
@@ -400,8 +398,7 @@ components:
           items:
             $ref: '#/components/schemas/Asset'
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     BulkAssetActionRequest:
       type: object
@@ -446,9 +443,8 @@ components:
           type: string
           enum: [draft, active, archived]
         cover_asset_id:
-          type: string
+          type: [string, "null"]
           format: uuid
-          nullable: true
         created_by:
           type: string
           format: uuid
@@ -514,9 +510,8 @@ components:
           type: string
           description: Opaque token embedded in the public share URL
         expires_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
         password_protected:
           type: boolean
         created_at:
@@ -527,9 +522,8 @@ components:
       type: object
       properties:
         expires_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
         password:
           type: string
           description: Optional password for the share link.
@@ -718,6 +712,15 @@ paths:
       responses:
         '204':
           description: Logged out (cookie cleared)
+        '401':
+          description: |
+            No refresh token supplied (neither cookie nor body) or the
+            supplied token is already revoked/expired. Clients can treat
+            this as a successful logout.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ───────────────────────── MFA (TOTP) ─────────────────────────
 
