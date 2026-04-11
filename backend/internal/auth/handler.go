@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -18,8 +19,44 @@ type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	FullName string `json:"full_name"`
-	State    string `json:"state,omitempty"` // Accepted from frontend; state is applied during onboarding flow
 	Phone    string `json:"phone"`
+	// StateID is the REQUIRED id of the chosen Indian state or union
+	// territory from the `states` table. Must be > 0; the handler rejects
+	// the request otherwise. Actual persistence to users.state_id still
+	// happens during onboarding (POST /onboarding/state) — at register
+	// time we only validate presence so the signup form can enforce the
+	// "pick a state" requirement consistently with the OAuth path.
+	StateID int `json:"state_id"`
+	// Plan is the user's self-serve plan intent captured at signup.
+	// It is validated via normalizePlan; "enterprise" is sales-gated and
+	// must be rejected at this boundary. Carried through the onboarding
+	// flow to seed workspaces.plan_tier at workspace creation time.
+	Plan string `json:"plan,omitempty"`
+}
+
+// selfServePlans is the whitelist of plan IDs that may be self-registered.
+// Must stay in lockstep with frontend/src/lib/tokens.ts pricingPlans, minus
+// "enterprise" which requires sales contact via /contact.
+var selfServePlans = map[string]struct{}{
+	"free":         {},
+	"starter":      {},
+	"professional": {},
+	"business":     {},
+}
+
+// normalizePlan coerces a user-supplied plan id into a canonical self-serve
+// value. Unknown / empty values fall back to "free" so a typo'd query param
+// never blocks signup. "enterprise" is explicitly rejected by returning ok=false;
+// callers surface a 400 with a message directing the user to sales.
+func normalizePlan(p string) (plan string, ok bool) {
+	p = strings.ToLower(strings.TrimSpace(p))
+	if p == "enterprise" {
+		return "", false
+	}
+	if _, allowed := selfServePlans[p]; allowed {
+		return p, true
+	}
+	return "free", true
 }
 
 type LoginRequest struct {
@@ -30,6 +67,13 @@ type LoginRequest struct {
 type RegisterResponse struct {
 	Message string `json:"message"`
 	UserID  string `json:"user_id,omitempty"`
+	// Plan echoes the canonicalized self-serve plan accepted by the server.
+	// The frontend uses this to confirm what the user was enrolled under
+	// (e.g., after an unknown plan was coerced to "free").
+	Plan string `json:"plan,omitempty"`
+	// StateID echoes the state id the user picked so onboarding can
+	// preselect it without an extra request.
+	StateID int `json:"state_id,omitempty"`
 }
 
 type VerifyOTPRequest struct {
@@ -142,6 +186,28 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// State selection is mandatory at register time. We do not look up
+	// the id in the states table here — that would couple the auth
+	// package to the states repo. Onboarding does the FK write against
+	// users.state_id and will reject a bogus id there; at this layer we
+	// only enforce "a non-zero id was supplied" so the signup UI cannot
+	// bypass the dropdown and submit empty.
+	if req.StateID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state selection is required"})
+		return
+	}
+
+	// Validate / canonicalize the self-serve plan intent. Enterprise is
+	// sales-gated and must be rejected here; anything else falls back to
+	// "free" via normalizePlan so a stray query-param typo never blocks signup.
+	canonicalPlan, ok := normalizePlan(req.Plan)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "enterprise plan requires sales contact — please use /contact",
+		})
+		return
+	}
+
 	// Check if user already exists
 	_, exists, err := h.users.FindByEmail(r.Context(), req.Email)
 	if err != nil {
@@ -170,6 +236,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, RegisterResponse{
 		Message: "User registered successfully. Check your email for the OTP.",
 		UserID:  userID,
+		Plan:    canonicalPlan,
+		StateID: req.StateID,
 	})
 }
 
@@ -366,6 +434,32 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	if h.oauth == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "OAuth not configured"})
 		return
+	}
+
+	// State selection is mandatory at signup — including for Google
+	// registration. The frontend must pass `intent=signup` plus the chosen
+	// `state_id` query param when starting OAuth from /register. Login
+	// (existing user) does NOT pass intent=signup, because state is already
+	// set on their user row and the OAuth callback will find them by email.
+	//
+	// We validate presence server-side rather than threading the id into
+	// the OAuth state map: actual persistence still lives in
+	// /onboarding/state, which runs after the OAuth return and picks up
+	// the stashed value from client-side sessionStorage. The purpose of
+	// THIS check is solely to prevent a curl or tampered form from
+	// starting a Google signup without a state selection — matching the
+	// same 400 behavior as /auth/register.
+	if strings.EqualFold(r.URL.Query().Get("intent"), "signup") {
+		rawStateID := strings.TrimSpace(r.URL.Query().Get("state_id"))
+		if rawStateID == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state selection is required"})
+			return
+		}
+		stateID, convErr := strconv.Atoi(rawStateID)
+		if convErr != nil || stateID <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state selection is required"})
+			return
+		}
 	}
 
 	returnTo := sanitizeFrontendOrigin(r.URL.Query().Get("redirect_to"))

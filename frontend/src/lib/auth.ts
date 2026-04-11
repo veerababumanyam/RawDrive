@@ -80,14 +80,44 @@ export function getStoredRefreshToken() {
     || "";
 }
 
-export function getGoogleOAuthStartUrl(apiBase = "") {
-  if (typeof window === "undefined") {
-    return `${apiBase}/auth/oauth/google`;
+/**
+ * Options that flow through the Google OAuth start URL as query parameters.
+ * - `intent` is "signup" from /register, "login" from /login. Only signup
+ *   requires state_id — the backend rejects signup without it. Login paths
+ *   omit it.
+ * - `stateID` is REQUIRED when intent is "signup". It must match an id in
+ *   the `states` table returned by GET /api/v1/states.
+ * - `plan` is optional; when present it carries the user's plan intent
+ *   across the OAuth round-trip so onboarding can pre-fill it.
+ */
+export type GoogleOAuthStartOptions = {
+  intent?: "signup" | "login";
+  stateID?: number | null;
+  plan?: string;
+};
+
+export function getGoogleOAuthStartUrl(
+  apiBase = "",
+  options: GoogleOAuthStartOptions = {},
+) {
+  const authBase = apiBase || "";
+  const params = new URLSearchParams();
+
+  if (typeof window !== "undefined") {
+    params.set("redirect_to", window.location.origin);
+  }
+  if (options.intent) {
+    params.set("intent", options.intent);
+  }
+  if (options.stateID != null && options.stateID > 0) {
+    params.set("state_id", String(options.stateID));
+  }
+  if (options.plan) {
+    params.set("plan", options.plan);
   }
 
-  const authBase = apiBase || "";
-  const redirectTo = encodeURIComponent(window.location.origin);
-  return `${authBase}/auth/oauth/google?redirect_to=${redirectTo}`;
+  const qs = params.toString();
+  return qs ? `${authBase}/auth/oauth/google?${qs}` : `${authBase}/auth/oauth/google`;
 }
 
 export function getStoredPlatformRole(): string {

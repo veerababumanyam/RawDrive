@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
+import { IndianFlag } from "@/components/layout/IndianFlag";
 
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
@@ -55,7 +56,7 @@ export function Navbar() {
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 lg:px-8">
         <Link
           href="/"
-          className="flex items-center gap-2 text-xl font-bold text-text-primary"
+          className="group flex items-center gap-2 text-xl font-bold text-text-primary"
           aria-label="RawDrive home"
         >
           <Image
@@ -66,6 +67,9 @@ export function Navbar() {
             className="h-8 w-8 rounded-lg"
           />
           RawDrive
+          {/* Patriotic flourish — decorative only, kept tight against the
+              wordmark so it reads as part of the brand identity. */}
+          <IndianFlag className="ml-1 self-center group-hover:scale-[1.08]" />
         </Link>
 
         <nav className="hidden h-full items-center gap-6 lg:flex" aria-label="Main navigation">

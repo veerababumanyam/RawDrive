@@ -175,9 +175,10 @@ func TestFullAuthFlow(t *testing.T) {
 	defer ts.Close()
 
 	// 1. Register
-	resp, err := postJSON(ts.URL+"/auth/register", map[string]string{
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
 		"email":    "flow@example.com",
 		"password": "TestPassword123!",
+		"state_id": 14, // Maharashtra — state selection is now mandatory at /auth/register
 	})
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
