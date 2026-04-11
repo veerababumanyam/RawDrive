@@ -3,19 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  CheckCircle2,
   Cloud,
   FileText,
-  MessageSquare,
   MoreVertical,
   Plus,
-  Send,
   Sparkles,
   UserPlus,
   Wallet,
 } from "lucide-react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
+import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
 import { cn } from "@/lib/utils";
 
 type GalleryCard = {
@@ -28,64 +26,26 @@ type GalleryCard = {
   image?: string;
 };
 
-const fallbackGalleries: GalleryCard[] = [
-  {
-    id: "malhotra-wedding",
-    title: "Malhotra Wedding",
-    meta: "24 Oct 2023 • 420 Photos",
-    client: "Rohan Malhotra",
-    status: "Delivered",
-    chipClass: "bg-accent-subtle text-accent",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuAJnvuEojfIFWF77Lh3_yZrdT4j-IAoyp1WQUi-x2IVqd39GB95-tyHqEHUoVj3hpaYWaxvcYTOnjHganqu9oXCAdga4KJqKrjdlonpMUIJg73phQcf9JOI9Z_PfYW7oUENm1ZC22QEVtoMXNvZJRjFZrM_wrGlJ4qDT1bYjVEDyAmk2DfTUYB3CD_DivgzT89zkULr_aEG8SfO4fNgMPzj55Pv9aDDi4EGPta615KEym4Ec4Z4R0Q4tRk_2erju8T9guPFDZjc_w4",
-  },
-  {
-    id: "techcorp-portraits",
-    title: "TechCorp Executive Portraits",
-    meta: "22 Oct 2023 • 85 Photos",
-    client: "Anita Desai",
-    status: "Processing",
-    chipClass: "bg-surface-container-high text-text-primary",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuADbROUc7A0o-GjmiFxsEPXwxCw_XQOUjLNR-hYJuozDR_JtNXpRDJO8iJa2yLspknahTDwN8ngse4FoCssaVyWEAKKgo0DkJ7VQ_5inIiO-DjXJTPWtz_Zqji9NcKVISG94COTw6A9f_5w5LUToN9FqNl5hivulzc7D7ORWJ95EmHC_Af_XmgofHnYgSnK-zCVn-iTxvyYmF--cjmAbuY9ShVOH_cxg0-7RHiXChS_bHykLCYdzQPWBekKqFQf3yXfMyMjPg80hrw",
-  },
-  {
-    id: "ladakh-expedition",
-    title: "Ladakh Expedition",
-    meta: "18 Oct 2023 • 1,200 Photos",
-    client: "NatGeo Project",
-    status: "Shared",
-    chipClass: "bg-surface-container-high text-text-primary",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBZ7sLCJ7t_OU0zWPkHnE-WZuQs_7xaeZFW7zBom9jOGbPuOuyiNSP19kgVt77CpDUhDH_7_ZW8F8YGMh7M2YGHD7KwO7jaGaUbSpCmg6gWIWNC6qxK2DTIHpChX5Hr-CCQppoiGBBIpl1DNJpXt-_5VbcvkPwZgY3Ocvc3T_umGxKLr2hpGu_nVDecMgZQPpLEYoLSBB0ys1kWYPwJlzFwLaZuob168bTvqZg1gh5kElgxX0Wpne13fqO3B24lrm0kVkII07xqQOQ",
-  },
-  {
-    id: "neon-summer-editorial",
-    title: "Neon Summer Editorial",
-    meta: "15 Oct 2023 • 56 Photos",
-    client: "Vogue Magazine",
-    status: "Draft",
-    chipClass: "bg-surface-container-high text-text-primary",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuD1F5cP6bSLB8Bla1QTLzn3cPy8UO47g0UNtCk_K4XjjrJIUf6W8FhOuyW7b_8jO2SQ6xSAZ9QKN6uuZeMvuEdAGtlQXy_z09cf35amVWSbQNZ9ZEfxkvzOcI4TRexP_vwVkJqxjEy8WwXHR-xoi1XTQYLRO6Bpc8_AzL9VFPMijELhUJfVATk73QkyzOmqq-ehP5Z5a2f-oovS3VZ6tsEfvvXrFYMrjQc7cdmtwHm1ANWaeSosJ3s53NWQI3Y4wwc87LsaMHdJ5ac",
-  },
-];
-
 const quickActions = [
-  { label: "Create Gallery", icon: Plus },
-  { label: "Send Invoice", icon: Wallet },
-  { label: "Add Client", icon: UserPlus },
-  { label: "New Booking", icon: Sparkles },
+  { label: "Create Gallery", icon: Plus, href: "/galleries" },
+  { label: "Send Invoice", icon: Wallet, href: "/billing" },
+  { label: "Add Client", icon: UserPlus, href: "/crm/contacts" },
+  { label: "New Booking", icon: Sparkles, href: "/calendar" },
 ];
 
-const recentActivity = [
-  { copy: "New booking from Priya Sharma", at: "Today, 2:45 PM", icon: Sparkles },
-  { copy: "Gallery Sharma Wedding delivered", at: "Yesterday, 6:20 PM", icon: Send },
-  { copy: "Invoice #1024 paid Rs. 35,000", at: "2 days ago", icon: CheckCircle2 },
-  { copy: "Vikram Roy commented on a photo", at: "3 days ago", icon: MessageSquare },
-];
-
-const metadataPresets = ["f/1.8 Prime", "ISO 100", "1/250s", "35mm", "Vivid Dark"];
+// First-name extraction for the greeting banner. Falls back to the
+// email local-part when the user has not set a display name, and
+// finally to a neutral "there" so we never render an empty greeting.
+// This replaces the literal "Welcome back, Arjun!" hardcode that
+// shipped in the earlier landing-redesign build.
+function greetingName(user: CurrentUser | null): string {
+  if (!user) return "there";
+  const displayName = (user.display_name || "").trim();
+  if (displayName) return displayName.split(/\s+/)[0];
+  const email = (user.email || "").trim();
+  if (email) return email.split("@")[0];
+  return "there";
+}
 
 function initials(name: string) {
   return name
@@ -100,6 +60,7 @@ export default function DashboardPage() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -107,22 +68,27 @@ export default function DashboardPage() {
       .then((data) => setGalleries(data ?? []))
       .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
       .finally(() => setLoading(false));
+    // Fetch the logged-in user's profile for the greeting banner. A
+    // failed /auth/me call degrades gracefully to a neutral greeting.
+    getCurrentUser(token).then(setUser).catch(() => setUser(null));
   }, []);
 
+  // Cards render the real galleries. When there are none, the UI
+  // shows an empty state further down rather than the old placeholder
+  // fallback set which leaked a different studio's fake data into
+  // every fresh account.
   const cards = useMemo<GalleryCard[]>(
     () =>
-      galleries.length > 0
-        ? galleries.slice(0, 4).map((gallery) => ({
-            id: gallery.id,
-            title: gallery.title,
-            meta: `${gallery.gallery_type} • ${new Date(gallery.created_at).toLocaleDateString("en-IN")}`,
-            client: "Studio Client",
-            status: gallery.is_published ? "Delivered" : "Draft",
-            chipClass: gallery.is_published
-              ? "bg-accent-subtle text-accent"
-              : "bg-surface-container-high text-text-primary",
-          }))
-        : fallbackGalleries,
+      galleries.slice(0, 4).map((gallery) => ({
+        id: gallery.id,
+        title: gallery.title,
+        meta: `${gallery.gallery_type} • ${new Date(gallery.created_at).toLocaleDateString("en-IN")}`,
+        client: "Studio Client",
+        status: gallery.is_published ? "Delivered" : "Draft",
+        chipClass: gallery.is_published
+          ? "bg-accent-subtle text-accent"
+          : "bg-surface-container-high text-text-primary",
+      })),
     [galleries],
   );
 
@@ -196,11 +162,12 @@ export default function DashboardPage() {
         <div className="relative z-10 flex items-start justify-between gap-6">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight text-text-primary">
-              Welcome back, Arjun!
+              Welcome back, {greetingName(user)}!
             </h1>
             <p className="mt-2 max-w-2xl text-text-secondary">
-              Your studio is buzzing today. You have 3 pending shoots and 2 galleries
-              ready for delivery. Let&apos;s make some magic.
+              {galleries.length === 0
+                ? "Create your first gallery to start delivering work to clients."
+                : `You have ${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"} in your studio. Let's make some magic.`}
             </p>
           </div>
           <button
@@ -260,6 +227,16 @@ export default function DashboardPage() {
               {[1, 2, 3, 4].map((item) => (
                 <div key={item} className="h-80 animate-pulse rounded-2xl bg-surface-container-high" />
               ))}
+            </div>
+          ) : cards.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
+              <p className="text-text-secondary">No galleries yet.</p>
+              <Link
+                href="/galleries"
+                className="mt-4 inline-block rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90"
+              >
+                + Create your first gallery
+              </Link>
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
@@ -322,14 +299,14 @@ export default function DashboardPage() {
             <h3 className="mb-6 font-headline text-lg font-bold text-text-primary">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-4">
               {quickActions.map((action) => (
-                <button
+                <Link
                   key={action.label}
-                  type="button"
+                  href={action.href}
                   className="group flex flex-col items-center justify-center rounded-xl bg-surface-container-high p-4 text-accent transition-colors hover:bg-surface-container-highest"
                 >
                   <action.icon className="mb-2 h-5 w-5 transition-transform group-hover:scale-110" />
                   <span className="text-xs font-semibold">{action.label}</span>
-                </button>
+                </Link>
               ))}
             </div>
           </section>
@@ -340,42 +317,29 @@ export default function DashboardPage() {
               <FileText className="h-4 w-4 text-text-tertiary" />
             </div>
 
-            <div className="space-y-6">
-              {recentActivity.map((item) => (
-                <div key={`${item.copy}-${item.at}`} className="flex gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
-                    <item.icon className="h-5 w-5" />
+            {galleries.length === 0 ? (
+              <p className="text-sm text-text-secondary">
+                Activity will show up here once you start uploading photos and working with clients.
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {galleries.slice(0, 4).map((gallery) => (
+                  <div key={gallery.id} className="flex gap-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm leading-tight text-text-primary">
+                        Gallery <span className="font-semibold">{gallery.title}</span> {gallery.is_published ? "published" : "created"}
+                      </p>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        {new Date(gallery.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm leading-tight text-text-primary">{item.copy}</p>
-                    <p className="mt-1 text-xs text-text-secondary">{item.at}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className="mt-8 w-full rounded-xl bg-surface-container-high py-3 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary"
-            >
-              View All Activity
-            </button>
-          </section>
-
-          <section className="surface-panel p-6">
-            <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-text-tertiary">
-              Metadata Presets
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {metadataPresets.map((preset) => (
-                <span
-                  key={preset}
-                  className="rounded-full bg-surface-container-high px-3 py-1 text-[10px] font-bold text-text-primary"
-                >
-                  {preset}
-                </span>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         </aside>
       </div>

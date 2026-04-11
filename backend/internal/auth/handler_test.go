@@ -54,6 +54,19 @@ func (m *mockUserService) MarkEmailVerified(_ context.Context, userID string) er
 	return nil
 }
 
+func (m *mockUserService) GetProfileByID(_ context.Context, userID string) (*auth.UserProfile, bool, error) {
+	for email, id := range m.users {
+		if id == userID {
+			return &auth.UserProfile{
+				ID:          id,
+				Email:       email,
+				DisplayName: "Mock User",
+			}, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
 // ──────────────────────────── Helper ────────────────────────────
 
 func setupAuthRouter() (*auth.Handler, auth.OTPService, auth.JWTService, *mockUserService) {

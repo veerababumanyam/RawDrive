@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // AuthAdapter adapts user.Service to the auth.UserService interface.
@@ -62,4 +64,23 @@ func (a *AuthAdapter) VerifyPassword(ctx context.Context, email, password string
 
 func (a *AuthAdapter) MarkEmailVerified(ctx context.Context, userID string) error {
 	return a.svc.MarkEmailVerified(ctx, userID)
+}
+
+// GetProfileByID returns (profile, exists, error). ErrNotFound translates
+// to (nil, false, nil) so GET /auth/me can render a clean 404 without
+// logging. Added 2026-04-12 to back the dashboard's current-user call.
+func (a *AuthAdapter) GetProfileByID(ctx context.Context, userID string) (*auth.UserProfile, bool, error) {
+	u, err := a.svc.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return &auth.UserProfile{
+		ID:          u.ID,
+		Email:       u.Email,
+		DisplayName: u.DisplayName,
+		AvatarURL:   u.AvatarURL,
+	}, true, nil
 }

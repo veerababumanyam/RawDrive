@@ -50,6 +50,15 @@ func (s *testUserService) MarkEmailVerified(_ context.Context, userID string) er
 	return nil
 }
 
+func (s *testUserService) GetProfileByID(_ context.Context, userID string) (*auth.UserProfile, bool, error) {
+	for email, id := range s.users {
+		if id == userID {
+			return &auth.UserProfile{ID: id, Email: email, DisplayName: "Test User"}, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
 type testDBContext struct{}
 
 func (d *testDBContext) SetWorkspaceID(_ context.Context, _ string) error { return nil }

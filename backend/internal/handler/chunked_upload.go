@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -106,6 +107,15 @@ type ChunkedUploadHandler struct {
 	// M16 E47-S5: optional Tier D validation hook. Wired via WithValidation().
 	// Nil means validation is disabled (legacy behavior).
 	validationSvc service.UploadManifestValidation
+
+	// storageAccountingSvc is the workspace storage quota tracker. Wired
+	// via WithStorageAccounting(). Calls to RecordUpload from finalizeUpload
+	// are best-effort: an accounting failure is logged but does not fail
+	// the upload itself. Added 2026-04-12 after UAT surfaced a real bug —
+	// the chunked upload path never updated workspace_storage, so the
+	// dashboard KPI and quota enforcement saw zero regardless of actual
+	// usage.
+	storageAccountingSvc *service.StorageAccounting
 }
 
 // sessionStreamState is the in-memory working set for an in-flight upload.
@@ -195,6 +205,18 @@ func (h *ChunkedUploadHandler) WithValidation(
 	validationSvc service.UploadManifestValidation,
 ) *ChunkedUploadHandler {
 	h.validationSvc = validationSvc
+	return h
+}
+
+// WithStorageAccounting wires the workspace storage quota tracker.
+// finalizeUpload will call RecordUpload after a successful asset row insert
+// so the dashboard KPI and quota enforcement see live usage. The call is
+// best-effort — an accounting failure is logged but does not fail the
+// upload itself. Returns the same handler for chainable construction.
+func (h *ChunkedUploadHandler) WithStorageAccounting(
+	storageAccountingSvc *service.StorageAccounting,
+) *ChunkedUploadHandler {
+	h.storageAccountingSvc = storageAccountingSvc
 	return h
 }
 
@@ -649,6 +671,20 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 	if h.assetRepo != nil {
 		if err := h.assetRepo.Create(ctx, asset); err != nil {
 			return nil, fmt.Errorf("create asset: %w", err)
+		}
+	}
+
+	// Record workspace storage usage so the dashboard KPI, quota
+	// enforcement, and storage analytics all see live state. Best-effort:
+	// an accounting failure is logged but does not fail the upload. Wired
+	// in wave-7 after UAT surfaced that the chunked finalize path never
+	// updated workspace_storage, so the dashboard showed 0 B used
+	// regardless of how many bytes the user had uploaded. The legacy
+	// UploadService path in service/upload_service.go already did this
+	// correctly; this brings the TUS path into parity.
+	if h.storageAccountingSvc != nil {
+		if err := h.storageAccountingSvc.RecordUpload(ctx, row.WorkspaceID, row.TotalSize, 0); err != nil {
+			log.Printf("chunked_upload: record usage failed for workspace %s: %v", row.WorkspaceID, err)
 		}
 	}
 

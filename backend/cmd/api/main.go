@@ -780,7 +780,8 @@ func main() {
 		// staging path anymore (F-008 hard law).
 		uploadSessionsRepo := repository.NewUploadSessionsRepo(dbPool)
 		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, uploadSessionsRepo).
-			WithValidation(uploadValidationSvc)
+			WithValidation(uploadValidationSvc).
+			WithStorageAccounting(storageAccountingSvc)
 		chunkedHandler.RegisterRoutes(api)
 
 		// M17 audit followup (S-011): register the upload-session cleanup
