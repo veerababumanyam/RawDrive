@@ -82,6 +82,7 @@ jobs:
       - backend
       - frontend
       - openapi
+      - security
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
@@ -99,11 +100,21 @@ jobs:
   #   - gitleaks → secret detection across full git history
   #   - trivy fs → dependency + IaC + secret scan of the filesystem
   #
-  # All three run with continue-on-error for the initial rollout. Findings
-  # land in the PR Checks tab AND upload to the repo Security tab via
-  # SARIF, so the user gets real signal without merges blocking on the
-  # first run of a freshly-wired scanner. Tighten by removing
-  # continue-on-error once rules are tuned and the baseline is clean.
+  # Blocking policy (brownfield fix wave review §2.2):
+  #   - gitleaks is BLOCKING. A leaked secret must stop the build. The
+  #     ISSUE-001 history-rewrite plan is the one-time cleanup; gitleaks
+  #     is the permanent forward guard. No continue-on-error.
+  #   - semgrep and trivy are advisory during rollout — they can produce
+  #     noisy first-run baselines that would block unrelated commits if
+  #     we hard-gated immediately. Tighten once the baseline is tuned.
+  #
+  # The images job depends on this job, so a gitleaks failure now blocks
+  # container publishing. Previously, `security` ran in parallel with
+  # `images` and could not block a publish even without continue-on-error.
+  #
+  # Action pinning: gitleaks and trivy are pinned by released tag (not
+  # @master) so a compromised upstream main branch cannot silently run
+  # arbitrary code in CI with security-events: write permission.
   # ──────────────────────────────────────────────────────────────────────
   security:
     runs-on: ubuntu-latest
@@ -149,20 +160,27 @@ jobs:
           sarif_file: semgrep.sarif
           category: semgrep
 
+      # gitleaks is BLOCKING by design — secret leakage is exactly the
+      # class of finding that should stop a build. No continue-on-error.
+      # Pinned to v2.3.9 (released tag, not @v2 floating) so a future
+      # breaking change in v2.x cannot break the gate without a code
+      # change in this repo.
       - name: Run gitleaks
         id: gitleaks
-        continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GITLEAKS_LICENSE is only required for GitHub organizations,
           # not personal accounts. Leave unset for personal repos.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
+      # trivy is advisory during rollout. Pinned to a released tag
+      # instead of @master so a compromised upstream main cannot run
+      # arbitrary code in CI with security-events: write permission.
       - name: Run trivy filesystem scan
         id: trivy
         continue-on-error: true
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: fs
           scan-ref: .
