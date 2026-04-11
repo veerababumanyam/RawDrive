@@ -1,0 +1,126 @@
+package repository
+
+import (
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+)
+
+// F-013 (M17 wave 4): upload_sessions repo unit tests.
+// Pure constructor + validation tests — DB integration tests live in
+// backend/tests/ via testcontainers.
+
+func TestNewUploadSessionsRepo(t *testing.T) {
+	repo := NewUploadSessionsRepo(nil)
+	assert.NotNil(t, repo)
+	assert.Nil(t, repo.pool)
+}
+
+func TestUploadSession_ZeroValue(t *testing.T) {
+	s := UploadSession{}
+	assert.Equal(t, uuid.Nil, s.ID)
+	assert.Equal(t, uuid.Nil, s.WorkspaceID)
+	assert.Equal(t, uuid.Nil, s.UserID)
+	assert.Empty(t, s.TUSUploadID)
+	assert.Empty(t, s.Filename)
+	assert.Equal(t, int64(0), s.TotalSize)
+	assert.Equal(t, int64(0), s.UploadOffset)
+	assert.Nil(t, s.R2MultipartUploadID)
+	assert.Nil(t, s.CompletedAt)
+}
+
+func TestUploadSession_FieldsSet(t *testing.T) {
+	wsID := uuid.New()
+	userID := uuid.New()
+	multipartID := "m-12345"
+	now := time.Now()
+	s := UploadSession{
+		ID:                  uuid.New(),
+		WorkspaceID:         wsID,
+		UserID:              userID,
+		TUSUploadID:         "tus-abc",
+		Filename:            "wedding (42).jpg",
+		ContentType:         "image/jpeg",
+		TotalSize:           52_428_800,
+		UploadOffset:        5_242_880,
+		ChunkSize:           5_242_880,
+		R2MultipartUploadID: &multipartID,
+		R2PartETags:         []byte(`[{"part_number":1,"etag":"e1","size":5242880}]`),
+		ExpiresAt:           now.Add(24 * time.Hour),
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+	assert.Equal(t, wsID, s.WorkspaceID)
+	assert.Equal(t, userID, s.UserID)
+	assert.Equal(t, "tus-abc", s.TUSUploadID)
+	assert.Equal(t, "wedding (42).jpg", s.Filename, "filenames with spaces + parens must survive (test-photos rule)")
+	assert.Equal(t, int64(52_428_800), s.TotalSize)
+	assert.Equal(t, int64(5_242_880), s.UploadOffset)
+	assert.Equal(t, "m-12345", *s.R2MultipartUploadID)
+}
+
+func TestUploadSessionsRepo_CreateValidation(t *testing.T) {
+	repo := NewUploadSessionsRepo(nil)
+	ctx := t.Context()
+	validExpiry := time.Now().Add(24 * time.Hour)
+
+	base := func() *UploadSession {
+		return &UploadSession{
+			WorkspaceID: uuid.New(),
+			UserID:      uuid.New(),
+			TUSUploadID: "tus-1",
+			Filename:    "f.jpg",
+			ContentType: "image/jpeg",
+			TotalSize:   1024,
+			ChunkSize:   512,
+			ExpiresAt:   validExpiry,
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*UploadSession) *UploadSession
+		wantErr string
+	}{
+		{"nil session", func(_ *UploadSession) *UploadSession { return nil }, "nil session"},
+		{"zero workspace_id", func(s *UploadSession) *UploadSession { s.WorkspaceID = uuid.Nil; return s }, "workspace_id required"},
+		{"zero user_id", func(s *UploadSession) *UploadSession { s.UserID = uuid.Nil; return s }, "user_id required"},
+		{"empty tus_upload_id", func(s *UploadSession) *UploadSession { s.TUSUploadID = ""; return s }, "tus_upload_id required"},
+		{"empty filename", func(s *UploadSession) *UploadSession { s.Filename = ""; return s }, "filename required"},
+		{"zero total_size", func(s *UploadSession) *UploadSession { s.TotalSize = 0; return s }, "total_size must be positive"},
+		{"negative total_size", func(s *UploadSession) *UploadSession { s.TotalSize = -1; return s }, "total_size must be positive"},
+		{"zero chunk_size", func(s *UploadSession) *UploadSession { s.ChunkSize = 0; return s }, "chunk_size must be positive"},
+		{"zero expires_at", func(s *UploadSession) *UploadSession { s.ExpiresAt = time.Time{}; return s }, "expires_at required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := base()
+			s = tc.mutate(s)
+			err := repo.Create(ctx, s)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}
+
+func TestUploadSessionsRepo_UpdateOffsetRejectsNegative(t *testing.T) {
+	repo := NewUploadSessionsRepo(nil)
+	err := repo.UpdateOffset(t.Context(), "tus-1", -1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "non-negative")
+}
+
+func TestUploadPartETag_JSONShape(t *testing.T) {
+	p := UploadPartETag{
+		PartNumber: 1,
+		ETag:       "abc123",
+		Size:       5_242_880,
+		SHA256:     "deadbeef",
+	}
+	assert.Equal(t, 1, p.PartNumber)
+	assert.Equal(t, "abc123", p.ETag)
+	assert.Equal(t, int64(5_242_880), p.Size)
+	assert.Equal(t, "deadbeef", p.SHA256)
+}
