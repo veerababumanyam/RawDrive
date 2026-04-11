@@ -1,8 +1,8 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "brownfield",
-  "currentStage": "M17-hardening-wave-1",
-  "version": "0.0.36",
+  "currentStage": "M17-hardening-wave-2",
+  "version": "0.0.37",
   "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
   "flags": {
     "generateSkills": false,
