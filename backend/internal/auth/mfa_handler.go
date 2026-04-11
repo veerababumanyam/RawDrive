@@ -240,6 +240,11 @@ func (h *MFAHandler) Enroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The enrollment response carries the plaintext TOTP secret (shown in
+	// the QR code). Disable caching so intermediate proxies, service
+	// workers, or browser back-forward cache cannot retain it.
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	writeJSON(w, http.StatusOK, mfaEnrollResponse{
 		Secret:     enrollment.Secret,
 		OtpauthURL: enrollment.OtpauthURL,
@@ -313,6 +318,12 @@ func (h *MFAHandler) VerifyEnrollment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The verify-enrollment response carries the plaintext recovery codes
+	// — shown exactly once, then discarded. Disable caching so no
+	// intermediate storage (proxies, service workers, back-forward cache)
+	// can retain a copy of this one-shot credential set.
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	writeJSON(w, http.StatusOK, mfaVerifyEnrollmentResponse{
 		RecoveryCodes: codes.Plaintext,
 	})

@@ -17,7 +17,12 @@ import (
 const (
 	defaultRecoveryCodeCount = 10
 	recoveryCodeByteLen      = 5 // 5 random bytes → 10 hex chars
-	recoveryBcryptCost       = bcrypt.DefaultCost
+	// recoveryBcryptCost is intentionally set above bcrypt.DefaultCost (10).
+	// Recovery codes are single-use MFA bypass credentials — higher value
+	// than passwords — so a slightly more expensive hash hurts offline
+	// cracking if the hashes table is ever exfiltrated. Cost 12 is ~4x
+	// slower than 10 and still < 500ms on commodity hardware.
+	recoveryBcryptCost = 12
 )
 
 // RecoveryCodeConfig customizes recovery-code generation. Zero values use
