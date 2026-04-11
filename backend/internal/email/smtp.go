@@ -16,9 +16,26 @@
 //     which net/smtp.SendMail handles transparently via the server's
 //     EHLO response when STARTTLS is offered)
 //
-// Config is loaded from platform_settings first (category "email")
-// then environment variables, matching the AGENTS.md No-Hardcoded
-// Credentials lookup order.
+// Config lookup order — AS CURRENTLY WIRED:
+//
+// The LoadSMTPConfig signature accepts a SettingsReader for
+// platform_settings lookups, but cmd/api/main.go currently passes
+// nil because the platform_settings repository is not yet
+// constructed at the point where the email transport is wired.
+// That means the env-var path is the only one exercised at boot
+// today. Changes made through the admin UI (category "email") will
+// NOT take effect until:
+//
+//  1. The backend is restarted, AND
+//  2. The new values are also reflected in the SMTP_* env vars.
+//
+// Post-boot hot-reload from platform_settings is a deferred
+// follow-up — the interface and DB category exist so the refresh
+// path can be added without changing this package's public API,
+// but that path is NOT wired today. Until it is, treat smtp.go as
+// env-var-only and document the reality in operator runbooks.
+// See docs/runbooks/production-launch-checklist.md for the env
+// var list.
 package email
 
 import (
@@ -61,7 +78,12 @@ type SettingsReader interface {
 //   - Development: accept a DEV_STUB_EMAIL=true escape hatch and
 //     fall through to the stdout stubs.
 //
-// Precedence per key: platform_settings wins over env var.
+// Precedence per key: platform_settings wins over env var WHEN a
+// non-nil reader is supplied. The current boot path in
+// cmd/api/main.go passes reader == nil (the platform_settings repo
+// is not yet constructed at that point), so in practice only the
+// env var branch is exercised at startup today. See the package
+// doc comment for the follow-up plan.
 //
 // Key names follow the canonical ones seeded by migration 039
 // (backend/internal/database/migrations/039_platform_settings.up.sql):
