@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------- build stage ----------
-FROM golang:1.26-alpine AS build
+# Pinned to the minor-patch of go.mod (1.26.2). Floating tag
+# 'golang:1.26-alpine' would silently drift on every patch release and
+# produce compiler-mismatched builds across machines. Bump in lockstep
+# with go.mod when we upgrade Go.
+FROM golang:1.26.2-alpine AS build
 
 # git + ca-certs needed for go mod download of pinned deps over https
 RUN apk add --no-cache git ca-certificates
@@ -24,7 +28,9 @@ RUN go build -trimpath -ldflags='-s -w' -o /out/api     ./cmd/api
 RUN go build -trimpath -ldflags='-s -w' -o /out/migrate ./cmd/migrate
 
 # ---------- runtime stage ----------
-FROM alpine:3.20 AS runtime
+# Pinned to a specific alpine patch for reproducibility. Bump when we
+# want new security patches from the alpine base.
+FROM alpine:3.20.3 AS runtime
 
 # Runtime dependencies:
 # - ca-certificates, tzdata: outbound TLS + Asia/Kolkata TZ
@@ -54,7 +60,10 @@ EXPOSE 8080
 # Healthcheck: containers get marked unhealthy if the API stops responding.
 # Compose reads this and nginx peer-backup failover uses the docker-dns
 # resolver to notice.
-HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+# start-period=30s gives the Go API enough headroom to open its Postgres
+# pgxpool, subscribe to NATS JetStream, and connect to Valkey on cold start.
+# 20s was cutting it close on fresh VPSes with cold disk cache.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8080/api/v1/health || exit 1
 
 # Default command is the API. The migrate service overrides with
