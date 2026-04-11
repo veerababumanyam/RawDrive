@@ -3,7 +3,6 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
-const isDev = process.env.NODE_ENV === "development";
 
 // F-010 (audit 2026-04-10): hardened response headers for the Next.js frontend.
 // Covers the same OWASP A05 baseline as the Go API's SecurityHeaders middleware
