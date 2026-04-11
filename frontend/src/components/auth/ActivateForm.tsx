@@ -33,6 +33,7 @@ export function ActivateForm() {
       const response = await fetch(`${API_BASE}/auth/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email: email.trim(), code: otpCode.trim() }),
       });
 
@@ -42,7 +43,7 @@ export function ActivateForm() {
         return;
       }
 
-      persistAuthTokens(payload.access_token, payload.refresh_token, true);
+      persistAuthTokens(payload.access_token);
       window.location.assign(getPostLoginPath());
     } catch {
       setError("Network error. Please confirm the API server is running.");

@@ -1,6 +1,8 @@
 const ACCESS_TOKEN_KEY = "rawdrive_token";
 const REFRESH_TOKEN_KEY = "rawdrive_refresh_token";
 
+let accessTokenCache = "";
+
 type AccessTokenClaims = {
   sub?: string;
   workspace_id?: string;
@@ -17,31 +19,28 @@ function getStorage(type: "local" | "session") {
   return type === "local" ? window.localStorage : window.sessionStorage;
 }
 
-export function persistAuthTokens(accessToken: string, refreshToken: string, remember = true) {
-  const activeStorage = getStorage(remember ? "local" : "session");
-  const inactiveStorage = getStorage(remember ? "session" : "local");
-
-  if (!activeStorage) {
-    return;
-  }
-
-  activeStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  activeStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  inactiveStorage?.removeItem(ACCESS_TOKEN_KEY);
-  inactiveStorage?.removeItem(REFRESH_TOKEN_KEY);
-}
-
-export function clearAuthTokens() {
+function clearLegacyStoredTokens() {
   getStorage("local")?.removeItem(ACCESS_TOKEN_KEY);
   getStorage("local")?.removeItem(REFRESH_TOKEN_KEY);
   getStorage("session")?.removeItem(ACCESS_TOKEN_KEY);
   getStorage("session")?.removeItem(REFRESH_TOKEN_KEY);
 }
 
+export function persistAuthTokens(accessToken: string, refreshToken = "", remember = true) {
+  void refreshToken;
+  void remember;
+  accessTokenCache = accessToken;
+  clearLegacyStoredTokens();
+}
+
+export function clearAuthTokens() {
+  accessTokenCache = "";
+  clearLegacyStoredTokens();
+}
+
 export function getStoredAccessToken() {
-  return getStorage("local")?.getItem(ACCESS_TOKEN_KEY)
-    || getStorage("session")?.getItem(ACCESS_TOKEN_KEY)
-    || "";
+  clearLegacyStoredTokens();
+  return accessTokenCache;
 }
 
 function decodeBase64Url(value: string) {
@@ -74,10 +73,33 @@ export function getStoredWorkspaceId() {
   return claims?.workspace_id ?? "";
 }
 
-export function getStoredRefreshToken() {
-  return getStorage("local")?.getItem(REFRESH_TOKEN_KEY)
-    || getStorage("session")?.getItem(REFRESH_TOKEN_KEY)
-    || "";
+export async function refreshAuthSession(apiBase = "") {
+  const response = await fetch(`${apiBase}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    clearAuthTokens();
+    return "";
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (typeof payload.access_token !== "string" || !payload.access_token) {
+    clearAuthTokens();
+    return "";
+  }
+
+  persistAuthTokens(payload.access_token);
+  return payload.access_token;
+}
+
+export async function logoutAuthSession(apiBase = "") {
+  await fetch(`${apiBase}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => {});
+  clearAuthTokens();
 }
 
 export function getGoogleOAuthStartUrl(apiBase = "") {

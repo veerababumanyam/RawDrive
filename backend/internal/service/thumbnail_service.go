@@ -173,19 +173,21 @@ func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID s
 		result.Derivatives = append(result.Derivatives, *dr)
 	}
 
-	// Generate WebP derivatives for in-app display (smaller, faster loading)
+	// Generate required WebP derivatives for in-app display. These must not
+	// silently downgrade to JPEG; upload processing is incomplete if WebP fails.
 	for _, size := range WebPThumbSizes {
 		dr, err := s.generateWebPDerivative(ctx, assetID, srcImg, size)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("required webp derivative %s: %w", size.Name, err)
 		}
 		result.Derivatives = append(result.Derivatives, *dr)
 	}
 
-	// Generate full-res WebP display version (replaces original in UI)
-	if displayWebP, err := s.generateWebPDerivative(ctx, assetID, srcImg, WebPDisplaySize); err == nil {
-		result.Derivatives = append(result.Derivatives, *displayWebP)
+	displayWebP, err := s.generateWebPDerivative(ctx, assetID, srcImg, WebPDisplaySize)
+	if err != nil {
+		return nil, fmt.Errorf("required webp derivative %s: %w", WebPDisplaySize.Name, err)
 	}
+	result.Derivatives = append(result.Derivatives, *displayWebP)
 
 	// Generate real LQIP (20px wide, base64 encoded)
 	result.LQIPBase64 = s.generateLQIP(srcImg)
@@ -201,37 +203,14 @@ func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID s
 	return result, nil
 }
 
-// generateWebPDerivative creates a WebP derivative using cwebp (libwebp) if available,
-// falling back to optimized JPEG if cwebp is not installed.
-// In production Docker containers, cwebp is always available.
+// generateWebPDerivative creates a WebP derivative using cwebp (libwebp).
 func (s *ThumbnailService) generateWebPDerivative(ctx context.Context, assetID string, src image.Image, size ThumbnailSize) (*DerivativeResult, error) {
 	resized := imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
 
-	// Try WebP via cwebp command (available in Docker)
-	if _, err := exec.LookPath("cwebp"); err == nil {
-		return s.encodeWebPViaCwebp(ctx, assetID, resized, size)
+	if _, err := exec.LookPath("cwebp"); err != nil {
+		return nil, fmt.Errorf("cwebp is required for RawDrive WebP derivatives: %w", err)
 	}
-
-	// Fallback: optimized JPEG at quality 75 (smaller than the standard 85)
-	buf := new(bytes.Buffer)
-	if err := imaging.Encode(buf, resized, imaging.JPEG, imaging.JPEGQuality(75)); err != nil {
-		return nil, fmt.Errorf("fallback jpeg encode %s: %w", size.Name, err)
-	}
-
-	key := fmt.Sprintf("derivatives/%s/%s.jpg", assetID, size.Name)
-	if err := s.store.Put(ctx, key, buf, int64(buf.Len()), "image/jpeg"); err != nil {
-		return nil, fmt.Errorf("store fallback %s: %w", size.Name, err)
-	}
-
-	rBounds := resized.Bounds()
-	return &DerivativeResult{
-		Variant:    size.Name,
-		StorageKey: key,
-		Width:      rBounds.Dx(),
-		Height:     rBounds.Dy(),
-		SizeBytes:  int64(buf.Len()),
-		Format:     "jpeg", // fallback format
-	}, nil
+	return s.encodeWebPViaCwebp(ctx, assetID, resized, size)
 }
 
 // encodeWebPViaCwebp uses the cwebp CLI tool to produce real WebP output.

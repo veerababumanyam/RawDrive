@@ -10,7 +10,12 @@ import {
   Home,
   Search,
 } from "lucide-react";
-import { getStoredAccessToken, getStoredAccessTokenClaims, getStoredPlatformRole } from "@/lib/auth";
+import {
+  getStoredAccessToken,
+  getStoredAccessTokenClaims,
+  getStoredPlatformRole,
+  refreshAuthSession,
+} from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import {
@@ -97,6 +102,8 @@ function RoleSidebar({ role, userInfo }: { role: string; userInfo: { display_nam
   }
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
 /* ------------------------------------------------------------------ */
 /*  Main dashboard layout                                             */
 /* ------------------------------------------------------------------ */
@@ -104,22 +111,8 @@ function RoleSidebar({ role, userInfo }: { role: string; userInfo: { display_nam
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
-  const [authenticated] = useState<boolean | null>(() => {
-    if (typeof window === "undefined") return null;
-    const token = getStoredAccessToken();
-    if (!token) return false;
-    if (!isOnboarding) {
-      const claims = getStoredAccessTokenClaims();
-      if (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id) {
-        return false;
-      }
-    }
-    return true;
-  });
-  const [role] = useState<string>(() => {
-    if (typeof window === "undefined") return "photographer";
-    return getStoredPlatformRole();
-  });
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [role, setRole] = useState<string>("photographer");
   const [userInfo] = useState<{ display_name?: string; email?: string }>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -129,20 +122,37 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      window.location.assign("/login");
-      return;
-    }
+    let active = true;
 
-    // Redirect to onboarding if workspace not set up yet (unless already there)
-    if (!isOnboarding) {
+    async function ensureSession() {
+      let token = getStoredAccessToken();
+      if (!token) {
+        token = await refreshAuthSession(API_BASE);
+      }
+      if (!active) {
+        return;
+      }
+      if (!token) {
+        setAuthenticated(false);
+        window.location.assign("/login");
+        return;
+      }
+
       const claims = getStoredAccessTokenClaims();
-      if (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id) {
+      if (!isOnboarding && (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id)) {
+        setAuthenticated(false);
         window.location.assign("/onboarding");
         return;
       }
+
+      setRole(getStoredPlatformRole());
+      setAuthenticated(true);
     }
+
+    void ensureSession();
+    return () => {
+      active = false;
+    };
   }, [isOnboarding]);
 
   if (authenticated === null) {

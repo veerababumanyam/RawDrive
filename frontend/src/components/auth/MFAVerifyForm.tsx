@@ -46,6 +46,7 @@ export function MFAVerifyForm() {
       const response = await fetch(`${API_BASE}/auth/verify-totp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ mfa_token: mfaToken, code: code.trim() }),
       });
 
@@ -68,7 +69,7 @@ export function MFAVerifyForm() {
 
       // Clear the short-lived challenge before persisting the real tokens.
       window.sessionStorage.removeItem(MFA_TOKEN_KEY);
-      persistAuthTokens(payload.access_token, payload.refresh_token, true);
+      persistAuthTokens(payload.access_token);
       window.location.assign(getPostLoginPath());
     } catch {
       setError("Network error. Please confirm the API server is running.");

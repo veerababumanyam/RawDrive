@@ -38,6 +38,7 @@ func JWTAuth(jwtSvc auth.JWTService) func(http.Handler) http.Handler {
 				"role":          claims.Role,
 				"platform_role": claims.PlatformRole,
 				"state_id":      claims.StateID,
+				"mfa_verified":  claims.MFAVerified,
 			}
 
 			ctx := WithJWTClaims(r.Context(), claimsMap)

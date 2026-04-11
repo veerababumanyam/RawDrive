@@ -3,6 +3,7 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
+const isDev = process.env.NODE_ENV === "development";
 
 // F-010 (audit 2026-04-10): hardened response headers for the Next.js frontend.
 // Covers the same OWASP A05 baseline as the Go API's SecurityHeaders middleware
@@ -25,8 +26,8 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Next.js hydration requires inline scripts until nonce-based CSP lands.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Inline scripts remain until nonce-based CSP lands; unsafe-eval is dev-only.
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       // connect-src must include the API origin for same-origin fetches

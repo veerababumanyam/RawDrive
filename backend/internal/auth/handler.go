@@ -39,7 +39,7 @@ type VerifyOTPRequest struct {
 
 type VerifyOTPResponse struct {
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type RefreshRequest struct {
@@ -48,7 +48,7 @@ type RefreshRequest struct {
 
 type RefreshResponse struct {
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type LogoutRequest struct {
@@ -269,20 +269,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set refresh token in HttpOnly cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true, // Should be true in production, using HTTPS
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   7 * 24 * 60 * 60, // 7 days
-	})
+	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, VerifyOTPResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken: accessToken,
 	})
 }
 
@@ -355,10 +345,10 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
 	}
+	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, VerifyOTPResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken: accessToken,
 	})
 }
 
@@ -433,30 +423,18 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
-		Sub:          user.ID,
-		WorkspaceID:  oauthWsID,
-		Role:         oauthRole,
-		PlatformRole: oauthPlatformRole,
-		StateID:      oauthStateID,
-	})
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
-		return
-	}
-
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+user.ID, oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
 	}
+	setRefreshTokenCookie(w, r, refreshToken)
 
 	http.Redirect(
 		w,
 		r,
 		buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{
-			"access_token":  accessToken,
-			"refresh_token": refreshToken,
+			"authenticated": "1",
 		}),
 		http.StatusFound,
 	)
@@ -464,12 +442,17 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	refreshToken := refreshTokenFromRequest(r, req.RefreshToken)
+	if refreshToken == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
-	newAccess, newRefresh, err := h.jwt.RotateRefreshToken(r.Context(), req.RefreshToken)
+	newAccess, newRefresh, err := h.jwt.RotateRefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token"})
 		return
@@ -496,22 +479,28 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	setRefreshTokenCookie(w, r, newRefresh)
 
 	writeJSON(w, http.StatusOK, RefreshResponse{
-		AccessToken:  newAccess,
-		RefreshToken: newRefresh,
+		AccessToken: newAccess,
 	})
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req LogoutRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	refreshToken := refreshTokenFromRequest(r, req.RefreshToken)
+	clearRefreshTokenCookie(w, r)
+	if refreshToken == "" {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	// Inspect to find family, then revoke
-	info, err := h.jwt.InspectRefreshToken(r.Context(), req.RefreshToken)
+	info, err := h.jwt.InspectRefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		// Even if token is unknown, return 204 (don't leak info)
 		w.WriteHeader(http.StatusNoContent)
@@ -551,6 +540,57 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+const refreshTokenCookieName = "refresh_token"
+
+func setRefreshTokenCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   7 * 24 * 60 * 60,
+	})
+}
+
+func clearRefreshTokenCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+}
+
+func refreshTokenFromRequest(r *http.Request, fallback string) string {
+	if cookie, err := r.Cookie(refreshTokenCookieName); err == nil {
+		if token := strings.TrimSpace(cookie.Value); token != "" {
+			return token
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func refreshCookieSecure(r *http.Request) bool {
+	appEnv := strings.ToLower(os.Getenv("APP_ENV"))
+	if appEnv == "production" || appEnv == "prod" {
+		return true
+	}
+	if r != nil {
+		if r.TLS != nil {
+			return true
+		}
+		if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			return true
+		}
+	}
+	return false
 }
 
 func sanitizeFrontendOrigin(candidate string) string {

@@ -41,6 +41,7 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
   getStoredAccessTokenClaims: () => mockGetStoredAccessTokenClaims(),
   getStoredPlatformRole: () => mockGetStoredPlatformRole(),
+  refreshAuthSession: vi.fn(async () => "test-token"),
 }));
 
 /* ------------------------------------------------------------------ */

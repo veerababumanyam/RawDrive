@@ -13,11 +13,14 @@ func CORS(next http.Handler) http.Handler {
 		frontendURL := os.Getenv("FRONTEND_URL")
 		origin := r.Header.Get("Origin")
 
-		// Determine allowed origin
+		// Determine allowed origin. APP_ENV is the canonical deployment
+		// environment knob; GO_ENV remains as a backward-compatible alias.
 		allowedOrigin := ""
 		if origin != "" {
-			env := os.Getenv("GO_ENV")
-			if env == "development" || env == "" {
+			appEnv := strings.ToLower(os.Getenv("APP_ENV"))
+			goEnv := strings.ToLower(os.Getenv("GO_ENV"))
+			isProduction := appEnv == "production" || appEnv == "prod" || goEnv == "production" || goEnv == "prod"
+			if !isProduction && (goEnv == "development" || appEnv == "development" || (goEnv == "" && appEnv == "")) {
 				// Dev: allow any localhost origin
 				if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
 					allowedOrigin = origin

@@ -258,7 +258,7 @@ func main() {
 		envName := strings.ToLower(os.Getenv("APP_ENV"))
 		isProduction := envName == "production" || envName == "prod"
 		if !stubAllowed || isProduction {
-			log.Fatalf("FATAL: No SMTP config (SMTP_HOST/SMTP_PORT/SMTP_FROM_ADDRESS all missing) "+
+			log.Fatalf("FATAL: No SMTP config (SMTP_HOST/SMTP_PORT/SMTP_FROM all missing) "+
 				"and DEV_STUB_EMAIL != true (or APP_ENV=%q is production). "+
 				"Set SMTP_* env vars, or explicitly set DEV_STUB_EMAIL=true in a non-production "+
 				"APP_ENV to acknowledge stdout email stubs for dev. "+
@@ -1004,8 +1004,8 @@ func main() {
 			} else {
 				appEnv := strings.ToLower(os.Getenv("APP_ENV"))
 				if appEnv == "production" || appEnv == "prod" {
-					log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required in production (APP_ENV=%s). " +
-						"Generate a 32-byte hex KEK and set it in your secret store. " +
+					log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required in production (APP_ENV=%s). "+
+						"Generate a 32-byte hex KEK and set it in your secret store. "+
 						"See F-005 in docs/audits/rawdrive-v0.0.35-m16-360-audit-2026-04-10.md.", appEnv)
 				}
 				log.Println("WARNING: PLATFORM_SETTINGS_KEK not set — platform settings secrets will be stored in PLAINTEXT. This is only acceptable in non-production environments.")
@@ -1260,9 +1260,13 @@ func main() {
 			MinVersion: tls.VersionTLS13,
 		}
 		fmt.Printf("RawDrive API starting on :%s with TLS 1.3 enforcement\n", port)
-		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil {
-			log.Fatalf("server error (TLS): %v", err)
-		}
+		serveWithGracefulShutdown(srv, certPath, keyPath, func() {
+			workerCancel()
+			workerRegistry.StopAll()
+			if m6Scheduler != nil {
+				m6Scheduler.Stop()
+			}
+		})
 		return
 	}
 
@@ -1292,9 +1296,13 @@ func main() {
 		log.Println("TRUSTED_PROXY_MODE=true — running plaintext HTTP behind an upstream TLS terminator.")
 	}
 	fmt.Printf("RawDrive API starting on :%s (plaintext)\n", port)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("server error: %v", err)
-	}
+	serveWithGracefulShutdown(srv, "", "", func() {
+		workerCancel()
+		workerRegistry.StopAll()
+		if m6Scheduler != nil {
+			m6Scheduler.Stop()
+		}
+	})
 }
 
 // Zero stubs remain — all dependencies are backed by real implementations.

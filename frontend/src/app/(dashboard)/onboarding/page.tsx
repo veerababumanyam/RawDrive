@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredAccessToken, getStoredRefreshToken, persistAuthTokens } from "@/lib/auth";
+import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -127,26 +127,11 @@ export default function OnboardingPage() {
       }
 
       // Refresh JWT to get updated workspace_id (no longer "pending-onboarding")
-      const refreshToken = getStoredRefreshToken();
-      if (refreshToken) {
-        try {
-          const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refresh_token: refreshToken }),
-          });
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            if (refreshData.access_token && refreshData.refresh_token) {
-              persistAuthTokens(refreshData.access_token, refreshData.refresh_token);
-            }
-          }
-        } catch {
-          // Token refresh failed — user can still see completion step
-          // and will get fresh tokens on next login
-        }
+      try {
+        await refreshAuthSession(API_BASE);
+      } catch {
+        // The dashboard layout will request a fresh session on next visit.
       }
-
       setStep("complete");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");

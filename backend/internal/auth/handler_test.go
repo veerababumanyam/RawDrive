@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -82,6 +83,17 @@ func newTestServer(handler *auth.Handler) *httptest.Server {
 func postJSON(url string, body interface{}) (*http.Response, error) {
 	b, _ := json.Marshal(body)
 	return http.Post(url, "application/json", bytes.NewReader(b))
+}
+
+func refreshCookieFromResponse(t *testing.T, resp *http.Response) *http.Cookie {
+	t.Helper()
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "refresh_token" {
+			return cookie
+		}
+	}
+	t.Fatalf("expected refresh_token cookie in response")
+	return nil
 }
 
 // ──────────────────────────── Tests ────────────────────────────
@@ -161,7 +173,8 @@ func TestVerifyOTPHandler_Success(t *testing.T) {
 	var result map[string]string
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.NotEmpty(t, result["access_token"])
-	assert.NotEmpty(t, result["refresh_token"])
+	assert.Empty(t, result["refresh_token"], "refresh token must not be returned in JSON")
+	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
 }
 
 func TestVerifyOTPHandler_WrongCode(t *testing.T) {
@@ -257,11 +270,79 @@ func TestOAuthGoogleHandler_Redirect(t *testing.T) {
 	assert.Contains(t, loc, "accounts.google.com")
 }
 
+func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+
+	profile := &auth.OAuthProfile{
+		Email:       "oauth@example.com",
+		DisplayName: "OAuth User",
+		ProviderID:  "google-oauth-test",
+	}
+	oauthSvc, state := newAuthorizedService(t, newMockProvider(profile), &mockUserStore{users: map[string]*auth.User{}})
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(ts.URL + "/auth/oauth/google/callback?code=valid-code&state=" + url.QueryEscape(state))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode)
+	location := resp.Header.Get("Location")
+	assert.NotContains(t, location, "access_token=")
+	assert.NotContains(t, location, "refresh_token=")
+
+	parsed, err := url.Parse(location)
+	require.NoError(t, err)
+	assert.Equal(t, "1", parsed.Query().Get("authenticated"))
+	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
+}
+
 func TestRefreshTokenHandler_Success(t *testing.T) {
 	handler, _, jwtSvc, _ := setupAuthRouter()
 
 	// Generate a refresh token
 	refreshToken, err := jwtSvc.GenerateRefreshToken(context.Background(), "user-1", "family-1")
+	require.NoError(t, err)
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/refresh", nil)
+	require.NoError(t, err)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: refreshToken})
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.NotEmpty(t, result["access_token"])
+	assert.Empty(t, result["refresh_token"], "rotated refresh token must stay in HttpOnly cookie")
+	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
+}
+
+func TestRefreshTokenHandler_LegacyBodyFallbackDoesNotReturnRefreshToken(t *testing.T) {
+	handler, _, jwtSvc, _ := setupAuthRouter()
+
+	refreshToken, err := jwtSvc.GenerateRefreshToken(context.Background(), "user-legacy", "family-legacy")
 	require.NoError(t, err)
 
 	ts := newTestServer(handler)
@@ -278,7 +359,8 @@ func TestRefreshTokenHandler_Success(t *testing.T) {
 	var result map[string]string
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.NotEmpty(t, result["access_token"])
-	assert.NotEmpty(t, result["refresh_token"])
+	assert.Empty(t, result["refresh_token"], "legacy body input must not re-expose refresh token")
+	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
 }
 
 func TestRefreshTokenHandler_InvalidToken(t *testing.T) {
@@ -305,11 +387,13 @@ func TestLogoutHandler_Success(t *testing.T) {
 	ts := newTestServer(handler)
 	defer ts.Close()
 
-	resp, err := postJSON(ts.URL+"/auth/logout", map[string]string{
-		"refresh_token": refreshToken,
-	})
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/logout", nil)
+	require.NoError(t, err)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: refreshToken})
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.Equal(t, -1, refreshCookieFromResponse(t, resp).MaxAge)
 }

@@ -61,16 +61,23 @@ type SettingsReader interface {
 //   - Development: accept a DEV_STUB_EMAIL=true escape hatch and
 //     fall through to the stdout stubs.
 //
-// Precedence per key: platform_settings wins over env var. Keys
-// under category "email":
+// Precedence per key: platform_settings wins over env var.
 //
-//	smtp_host, smtp_port, smtp_username, smtp_password,
-//	smtp_from_address, smtp_from_name
+// Key names follow the canonical ones seeded by migration 039
+// (backend/internal/database/migrations/039_platform_settings.up.sql):
 //
-// Corresponding env vars:
+//	email.smtp_host, email.smtp_port, email.smtp_user,
+//	email.smtp_password, email.smtp_from
 //
-//	SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD,
-//	SMTP_FROM_ADDRESS, SMTP_FROM_NAME
+// Env vars follow the names used by the project's .env file (which
+// differs slightly from the DB keys for historical reasons — the
+// env uses SMTP_USERNAME, the DB uses smtp_user):
+//
+//	SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM
+//
+// SMTP_FROM_NAME is an optional env-only override for the display
+// name in the From header. No platform_settings key exists for it;
+// leave it unset to default to "RawDrive".
 func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, error) {
 	get := func(dbKey, envName string) (string, error) {
 		if reader != nil {
@@ -93,7 +100,7 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 	if err != nil {
 		return nil, err
 	}
-	username, err := get("smtp_username", "SMTP_USERNAME")
+	username, err := get("smtp_user", "SMTP_USERNAME")
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +108,12 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 	if err != nil {
 		return nil, err
 	}
-	fromAddr, err := get("smtp_from_address", "SMTP_FROM_ADDRESS")
+	fromAddr, err := get("smtp_from", "SMTP_FROM")
 	if err != nil {
 		return nil, err
 	}
+	// smtp_from_name has no DB seed; env-only. The empty string
+	// path below falls back to "RawDrive" if unset.
 	fromName, err := get("smtp_from_name", "SMTP_FROM_NAME")
 	if err != nil {
 		return nil, err

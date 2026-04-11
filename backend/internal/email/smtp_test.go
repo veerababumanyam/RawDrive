@@ -54,7 +54,7 @@ func TestLoadSMTPConfig_EnvVarsOnly(t *testing.T) {
 		"SMTP_PORT":         "587",
 		"SMTP_USERNAME":     "apikey",
 		"SMTP_PASSWORD":     "s3cret",
-		"SMTP_FROM_ADDRESS": "noreply@rawdrive.in",
+		"SMTP_FROM": "noreply@rawdrive.in",
 		"SMTP_FROM_NAME":    "RawDrive Notifications",
 	})
 
@@ -78,7 +78,7 @@ func TestLoadSMTPConfig_AllMissing_ReturnsNil(t *testing.T) {
 		"SMTP_PORT":         "",
 		"SMTP_USERNAME":     "",
 		"SMTP_PASSWORD":     "",
-		"SMTP_FROM_ADDRESS": "",
+		"SMTP_FROM": "",
 		"SMTP_FROM_NAME":    "",
 	})
 
@@ -94,12 +94,12 @@ func TestLoadSMTPConfig_SettingsReaderBeatsEnvVars(t *testing.T) {
 	withEnv(t, map[string]string{
 		"SMTP_HOST":         "env.example.com",
 		"SMTP_PORT":         "25",
-		"SMTP_FROM_ADDRESS": "env@rawdrive.in",
+		"SMTP_FROM": "env@rawdrive.in",
 	})
 	reader := &fakeSettingsReader{data: map[string]string{
 		"email/smtp_host":         "db.example.com",
 		"email/smtp_port":         "587",
-		"email/smtp_from_address": "db@rawdrive.in",
+		"email/smtp_from": "db@rawdrive.in",
 	}}
 
 	cfg, err := LoadSMTPConfig(context.Background(), reader)
@@ -117,7 +117,7 @@ func TestLoadSMTPConfig_SettingsReaderPartialFallsBackToEnv(t *testing.T) {
 	withEnv(t, map[string]string{
 		"SMTP_HOST":         "env.example.com",
 		"SMTP_PORT":         "25",
-		"SMTP_FROM_ADDRESS": "env@rawdrive.in",
+		"SMTP_FROM": "env@rawdrive.in",
 	})
 	reader := &fakeSettingsReader{data: map[string]string{
 		"email/smtp_host": "db.example.com",
@@ -138,7 +138,7 @@ func TestLoadSMTPConfig_InvalidPort_Errors(t *testing.T) {
 	withEnv(t, map[string]string{
 		"SMTP_HOST":         "smtp.example.com",
 		"SMTP_PORT":         "not-a-number",
-		"SMTP_FROM_ADDRESS": "noreply@rawdrive.in",
+		"SMTP_FROM": "noreply@rawdrive.in",
 	})
 
 	cfg, err := LoadSMTPConfig(context.Background(), nil)

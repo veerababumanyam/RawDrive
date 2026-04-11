@@ -8,6 +8,7 @@ import {
   getGoogleOAuthStartUrl,
   getPostLoginPath,
   persistAuthTokens,
+  refreshAuthSession,
 } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -37,8 +38,7 @@ export function LoginForm() {
   const [notice, setNotice] = useState("");
 
   const registered = searchParams.get("registered") === "1";
-  const oauthAccessToken = searchParams.get("access_token");
-  const oauthRefreshToken = searchParams.get("refresh_token");
+  const oauthAuthenticated = searchParams.get("authenticated") === "1";
   const oauthError = searchParams.get("error");
   const prefilledEmail = searchParams.get("email") || "";
 
@@ -51,13 +51,29 @@ export function LoginForm() {
   }, [prefilledEmail]);
 
   useEffect(() => {
-    if (!oauthAccessToken || !oauthRefreshToken) {
+    if (!oauthAuthenticated) {
       return;
     }
 
-    persistAuthTokens(oauthAccessToken, oauthRefreshToken, true);
-    router.replace(getPostLoginPath());
-  }, [oauthAccessToken, oauthRefreshToken, router]);
+    let cancelled = false;
+    async function finishOAuthLogin() {
+      const token = await refreshAuthSession(API_BASE);
+      if (cancelled) {
+        return;
+      }
+      if (!token) {
+        setError("Google sign-in could not be completed. Please try again.");
+        router.replace("/login");
+        return;
+      }
+      router.replace(getPostLoginPath());
+    }
+
+    void finishOAuthLogin();
+    return () => {
+      cancelled = true;
+    };
+  }, [oauthAuthenticated, router]);
 
   useEffect(() => {
     if (registered) {
@@ -85,6 +101,7 @@ export function LoginForm() {
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email: email.trim(), password }),
       });
 
@@ -115,7 +132,7 @@ export function LoginForm() {
         return;
       }
 
-      persistAuthTokens(payload.access_token, payload.refresh_token, true);
+      persistAuthTokens(payload.access_token);
       window.location.assign(getPostLoginPath());
     } catch {
       setError("Network error. Please confirm the API server is running.");

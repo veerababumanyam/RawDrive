@@ -207,7 +207,7 @@ type mfaVerifyTOTPRequest struct {
 
 type mfaVerifyTOTPResponse struct {
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type mfaVerifyRecoveryCodeRequest struct {
@@ -231,7 +231,7 @@ type mfaStatusResponse struct {
 func (h *MFAHandler) Enroll(w http.ResponseWriter, r *http.Request) {
 	if h.envelope == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "mfa_unavailable",
+			"error":  "mfa_unavailable",
 			"reason": "TOTP secret encryption is not configured. Set PLATFORM_SETTINGS_KEK.",
 		})
 		return
@@ -480,10 +480,10 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
 		return
 	}
+	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, mfaVerifyTOTPResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken: accessToken,
 	})
 }
 
@@ -608,10 +608,10 @@ func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
 		return
 	}
+	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, mfaVerifyTOTPResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken: accessToken,
 	})
 }
 

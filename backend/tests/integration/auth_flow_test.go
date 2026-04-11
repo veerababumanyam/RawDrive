@@ -161,6 +161,15 @@ func postJSONWithAuth(url, token string, body interface{}) (*http.Response, erro
 	return http.DefaultClient.Do(req)
 }
 
+func cookieByName(resp *http.Response, name string) *http.Cookie {
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
+}
+
 func getWithAuth(url, token string) (*http.Response, error) {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -265,13 +274,16 @@ func TestSessionRotation(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&loginResp)
 	resp.Body.Close()
 
-	refreshToken := loginResp["refresh_token"]
-	require.NotEmpty(t, refreshToken)
+	require.Empty(t, loginResp["refresh_token"])
+	refreshCookie := cookieByName(resp, "refresh_token")
+	require.NotNil(t, refreshCookie)
+	require.NotEmpty(t, refreshCookie.Value)
 
 	// Refresh
-	resp, err = postJSON(ts.URL+"/auth/refresh", map[string]string{
-		"refresh_token": refreshToken,
-	})
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/refresh", nil)
+	require.NoError(t, err)
+	req.AddCookie(refreshCookie)
+	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -281,6 +293,7 @@ func TestSessionRotation(t *testing.T) {
 
 	newAccessToken := refreshResp["access_token"]
 	assert.NotEmpty(t, newAccessToken)
+	assert.Empty(t, refreshResp["refresh_token"])
 
 	// Verify new token works
 	_, err = jwtSvc.ParseAccessToken(context.Background(), newAccessToken)
@@ -288,7 +301,7 @@ func TestSessionRotation(t *testing.T) {
 
 	// Old refresh token should now fail (already used)
 	resp, err = postJSON(ts.URL+"/auth/refresh", map[string]string{
-		"refresh_token": refreshToken,
+		"refresh_token": refreshCookie.Value,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
