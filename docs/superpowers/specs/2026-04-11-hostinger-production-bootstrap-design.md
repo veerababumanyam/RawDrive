@@ -482,4 +482,48 @@ These assumptions are made by this design. If any turn out false, stop and escal
 
 ---
 
+## 12. Security self-review addendum (added post-approval)
+
+A dedicated security pass after the main design was approved surfaced several items. They are captured here so the spec is the single source of truth for what's in scope, in scope with mitigation, or explicitly deferred.
+
+### Resolved in the plan (upgraded from the spec's baseline)
+
+| ID | Issue | Resolution |
+|---|---|---|
+| S1 | Real secrets copy-pasted from `HostingerServerDetails.md` into the implementation plan at commit `3ff719b` | Plan file redacted — all literal R2 keys, SMTP password, MoonShot key, Cloudflare API token, R2 account ID, R2 public URL hash replaced with `<PLACEHOLDER>` tokens. Real values are loaded from `HostingerServerDetails.md` at Task B.1 execution time into a gitignored local scratch env var. |
+| S2 | `deploy/pgbouncer/pgbouncer.ini` used `auth_type = md5` | Upgraded to `auth_type = scram-sha-256`. `userlist.txt` now contains the literal SCRAM verifier fetched from `pg_authid.rolpassword`, not an MD5 hash. |
+| S3 | `backup-db.sh` uploaded raw `pg_dump` output to R2 | Now pipes through `gpg --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512` with a per-deploy random 32-byte passphrase (`BACKUP_GPG_PASSPHRASE`). Restore rehearsal (Task B.9) decrypts before `pg_restore`. Stored only on `.46` in `/opt/rawdrive/app/.env` plus operator's password manager. Loss of the passphrase = backups unrecoverable. |
+
+### In scope but accepted trade-off
+
+| ID | Issue | Mitigation in place | Why not upgraded |
+|---|---|---|---|
+| S4 | Postgres / Valkey / NATS traffic between VPSes is plaintext (`host` not `hostssl`, no TLS on cache/message bus) | UFW restricts inbound on `.46:5432`, `:6379`, and NATS cluster ports to `.42` and `.44` IPs only. All three VPSes are in the same Hostinger DC. | Enabling TLS on each service requires per-service cert management + rotation. WireGuard mesh is the cleaner answer and should be a dedicated follow-up milestone. For 10k-user greenfield on same-DC nodes with IP allowlisting, the residual risk is Hostinger's own network being compromised — outside our threat model. |
+| S5 | SSH private key at `~/.ssh/id_ed25519` has no passphrase | Workstation is single-user. Key is authorized only on three specific VPSes. | Adding a passphrase mid-bootstrap adds friction to every `ssh` and `scp` call. Will be addressed as a post-bootstrap follow-up — add passphrase + `ssh-agent` for the operator. |
+| S6 | `pg_hba.conf` uses `host` not `hostssl` (same root cause as S4) | Same UFW + same-DC network mitigation as S4. | Requires TLS on Postgres container — see S4 rationale. |
+| S7 | No metrics, no alerting | Health endpoints exist; JSON logs ship via Docker json-file driver with rotation. `docker-compose.observability.yml.example` stub committed for follow-up wiring. | Observability stack is a dedicated project, not a bootstrap step. |
+| S9 | Cloudflare API token scope is unknown — the token in `HostingerServerDetails.md` may be over-privileged | N/A | **Verify at start of Phase E.** Use CF API token-verify endpoint, confirm it's scoped to zone `rawdrive.in` with `Zone:Read` + `Zone:DNS:Edit` only. If over-privileged, create a minimally-scoped token, use it, rotate the old one, update followups. |
+
+### Explicit non-goals
+
+- Zero-trust container networking (mTLS between sidecars)
+- Hardware security modules for JWT signing
+- Automated secret rotation (e.g., Vault)
+- SOC 2 / HIPAA controls
+- External WAF beyond Cloudflare orange-cloud
+- Intrusion detection beyond fail2ban
+
+### Post-bootstrap rotation list
+
+These credentials remain as-is during the bootstrap per user decision, and must be rotated in a follow-up session. None of them are in the new plan file (only in `HostingerServerDetails.md` which is untracked from git at Phase E):
+
+- Cloudflare R2 Access Key ID + Secret Access Key
+- Cloudflare Zone API Token
+- SMTP password for `noreply@rawdrive.de`
+- MoonShot API key
+- Google OAuth client secret (if present)
+- MSG91 credentials (if present)
+
+---
+
 *End of design document.*

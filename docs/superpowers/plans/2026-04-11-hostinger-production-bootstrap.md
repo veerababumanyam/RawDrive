@@ -32,7 +32,7 @@
 | `deploy/valkey/valkey.conf` | Primary config with AOF |
 | `deploy/valkey/valkey-replica.conf` | Replica config for `.42` |
 | `deploy/pgbouncer/pgbouncer.ini` | Transaction mode pooler config |
-| `deploy/pgbouncer/userlist.txt` | MD5 auth list (generated with real creds at runtime) |
+| `deploy/pgbouncer/userlist.txt` | SCRAM-SHA-256 verifier list (fetched from pg_authid at runtime) |
 | `deploy/pgbouncer/databases.ini` | DB host routing (mutable during failover) |
 | `deploy/nats/nats-server.conf` | 3-node JetStream cluster config |
 | `deploy/nginx/nginx.conf` | Main nginx config |
@@ -746,8 +746,11 @@ Create `deploy/pgbouncer/pgbouncer.ini`:
 listen_addr = 0.0.0.0
 listen_port = 6432
 
-; Authenticated against userlist.txt (MD5 hashes)
-auth_type = md5
+; Authenticated against userlist.txt (SCRAM-SHA-256).
+; pgbouncer 1.23 supports scram-sha-256; MD5 is dead and should never be
+; used for new deployments. userlist.txt format for SCRAM is the literal
+; SCRAM verifier from pg_authid.rolpassword, not an MD5 hash.
+auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 
 ; Transaction-mode pooling: server connections are returned to the pool
@@ -802,14 +805,22 @@ rawdrive = host=187.127.142.46 port=5432 dbname=rawdrive auth_user=rawdrive
 
 Create `deploy/pgbouncer/userlist.txt.example`:
 ```
-; PgBouncer userlist.txt format: "username" "md5hash"
-; The md5hash is literally the string "md5" followed by the md5 hex of
-;   password || username
-; Example (NOT real creds):
-;   "rawdrive" "md5abc123def456..."
+; PgBouncer userlist.txt format (SCRAM-SHA-256):
+;   "username" "<literal contents of pg_authid.rolpassword>"
 ;
-; This file is generated on the server during Phase C from the rotated
-; Postgres password. NEVER commit the real userlist.txt.
+; For SCRAM, the second field is the full SCRAM verifier string as stored
+; in Postgres, which looks like:
+;   SCRAM-SHA-256$<iter>:<salt>$<stored_key>:<server_key>
+;
+; You extract it with:
+;   psql -h <pg-host> -U rawdrive -d rawdrive \
+;     -tAc "SELECT rolpassword FROM pg_authid WHERE rolname='rawdrive';"
+;
+; Example (NOT real creds):
+;   "rawdrive" "SCRAM-SHA-256$4096:abc==$xyz:qrs"
+;
+; This file is generated on the server during Phase C from the primary's
+; pg_authid. NEVER commit the real userlist.txt.
 ```
 
 - [ ] **Step 4: Commit**
@@ -1554,9 +1565,15 @@ postgres-replica (.44 only) behind Compose profiles."
 Create `deploy/scripts/backup-db.sh`:
 ```bash
 #!/usr/bin/env bash
-# Nightly Postgres backup → Cloudflare R2 via rclone.
+# Nightly Postgres backup → symmetric-GPG-encrypted → Cloudflare R2 via rclone.
 # Runs on .46 via cron 0 2 * * *.
 # Exits non-zero on any failure so cron mails root.
+#
+# Security: the R2 API keys in the doc grant read access to this bucket, so
+# an attacker with leaked R2 creds would otherwise walk out with a plaintext
+# DB dump. Symmetric GPG with a passphrase stored ONLY in
+# /opt/rawdrive/app/.env (BACKUP_GPG_PASSPHRASE) provides a second lock —
+# stealing R2 creds alone is not enough to read the backups.
 
 set -euo pipefail
 
@@ -1564,16 +1581,18 @@ BACKUP_DIR=/opt/rawdrive/backups
 RCLONE_REMOTE="r2:rawdrive-backups"
 RETAIN_DAYS=7  # local only — R2 lifecycle handles longer retention
 
+: "${BACKUP_GPG_PASSPHRASE:?BACKUP_GPG_PASSPHRASE not set — source /opt/rawdrive/app/.env before running}"
+
 mkdir -p "$BACKUP_DIR"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-DUMP="$BACKUP_DIR/rawdrive_${STAMP}.dump"
+DUMP="$BACKUP_DIR/rawdrive_${STAMP}.dump.gpg"
 LOG="$BACKUP_DIR/backup.log"
 
 log() {
     echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"
 }
 
-log "starting pg_dump → $DUMP"
+log "starting pg_dump → gpg → $DUMP"
 docker exec deploy-postgres-1 \
     pg_dump \
     -U "${POSTGRES_USER:-rawdrive}" \
@@ -1582,14 +1601,17 @@ docker exec deploy-postgres-1 \
     --compress=9 \
     --no-owner \
     --no-privileges \
-    > "$DUMP"
+    | gpg --batch --yes --passphrase "$BACKUP_GPG_PASSPHRASE" \
+          --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 \
+          --s2k-count 65011712 \
+          --output "$DUMP"
 
 SIZE=$(stat -c %s "$DUMP")
 if [ "$SIZE" -lt 1024 ]; then
     log "FATAL: dump too small ($SIZE bytes) — refusing to upload"
     exit 1
 fi
-log "dump size: $SIZE bytes"
+log "encrypted dump size: $SIZE bytes"
 
 log "uploading to R2: $RCLONE_REMOTE/daily/"
 rclone copy "$DUMP" "$RCLONE_REMOTE/daily/" --progress
@@ -1600,7 +1622,7 @@ rclone lsf "$RCLONE_REMOTE/daily/" | grep -q "^${REMOTE_NAME}$" \
     || { log "FATAL: remote verification failed"; exit 2; }
 
 log "cleaning local dumps older than $RETAIN_DAYS days"
-find "$BACKUP_DIR" -name 'rawdrive_*.dump' -mtime +$RETAIN_DAYS -delete
+find "$BACKUP_DIR" -name 'rawdrive_*.dump.gpg' -mtime +$RETAIN_DAYS -delete
 
 log "backup complete: $REMOTE_NAME"
 ```
@@ -1763,6 +1785,12 @@ POSTGRES_PASSWORD=<openssl rand -hex 24>
 POSTGRES_DB=rawdrive
 POSTGRES_REPLICATION_PASSWORD=<openssl rand -hex 24>
 
+# --- Backup encryption (rotated during Phase B, stored in DB-node .env only) ---
+# Used by /opt/rawdrive/backup-db.sh to symmetric-encrypt pg_dump output
+# before upload to R2. Loss of this passphrase means the backups in R2
+# are unrecoverable — store a copy in your password manager.
+BACKUP_GPG_PASSPHRASE=<openssl rand -hex 32>
+
 # --- Backend connection (app nodes only) ---
 # Points at the LOCAL pgbouncer on 127.0.0.1:6432. Pgbouncer itself
 # forwards to whatever host is listed in pgbouncer/databases.ini.
@@ -1776,10 +1804,10 @@ VALKEY_URL=redis://:<VALKEY_PASSWORD>@187.127.142.46:6379
 R2_BUCKET_NAME=rawdrive
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
-R2_ENDPOINT=https://1b62424aa3b6d960f5c0d2588eb576f5.r2.cloudflarestorage.com
+R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
 R2_REGION=auto
-R2_PUBLIC_URL=https://pub-c9b96fd6eb4141a7a62b997390f5edde.r2.dev
-R2_ACCOUNT_ID=1b62424aa3b6d960f5c0d2588eb576f5
+R2_PUBLIC_URL=https://pub-<R2_PUBLIC_URL_HASH>.r2.dev
+R2_ACCOUNT_ID=<R2_ACCOUNT_ID>
 
 # --- SMTP (from HostingerServerDetails.md — NOT rotated) ---
 SMTP_HOST=smtp.hostinger.com
@@ -1800,7 +1828,7 @@ LOG_LEVEL=info
 TZ=Asia/Kolkata
 
 # --- MoonShot (from HostingerServerDetails.md — NOT rotated) ---
-MOONSHOT_API_KEY=sk-BXTO23rB3IngP16w0TLM4DgKsB08xZmlbmWbhwuYd0ThrE4F
+MOONSHOT_API_KEY=<MOONSHOT_API_KEY>
 
 # --- Platform settings KEK (envelope encryption per AGENTS.md F-005) ---
 PLATFORM_SETTINGS_KEK=<openssl rand -hex 32>
@@ -2329,8 +2357,11 @@ echo "VALKEY_PASSWORD=$(openssl rand -hex 24)"
 echo "JWT_SECRET=$(openssl rand -hex 32)"
 echo "PLATFORM_SETTINGS_KEK=$(openssl rand -hex 32)"
 echo "NATS_CLUSTER_SEED=$(openssl rand -hex 16)"
+echo "BACKUP_GPG_PASSPHRASE=$(openssl rand -hex 32)"
 ```
-Expected: six lines each with a hex string.
+Expected: seven lines each with a hex string.
+
+**Critical:** copy `BACKUP_GPG_PASSPHRASE` to your password manager IMMEDIATELY. Losing it means the R2 backups are unrecoverable.
 
 - [ ] **Step 2: Save the values to a local scratch file OUTSIDE the repo**
 
@@ -2371,6 +2402,7 @@ POSTGRES_PASSWORD=<POSTGRES_PASSWORD>
 POSTGRES_DB=rawdrive
 POSTGRES_REPLICATION_PASSWORD=<POSTGRES_REPLICATION_PASSWORD>
 VALKEY_PASSWORD=<VALKEY_PASSWORD>
+BACKUP_GPG_PASSPHRASE=<BACKUP_GPG_PASSPHRASE>
 TZ=Asia/Kolkata
 ENV_EOF
 ssh root@187.127.142.46 'chmod 600 /opt/rawdrive/app/.env'
@@ -2462,9 +2494,9 @@ ssh root@187.127.142.46 'mkdir -p /root/.config/rclone && cat > /root/.config/rc
 [r2]
 type = s3
 provider = Cloudflare
-access_key_id = 4ca4360fd0e7125714183681de63dcb6
-secret_access_key = 94c9f722d05e4b5ac0b1cf9b25e4631b13f18560a02d61b0bb819a8dcb312e2c
-endpoint = https://1b62424aa3b6d960f5c0d2588eb576f5.r2.cloudflarestorage.com
+access_key_id = <R2_ACCESS_KEY_ID>
+secret_access_key = <R2_SECRET_ACCESS_KEY>
+endpoint = https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
 acl = private
 RCLONE_EOF
 ssh root@187.127.142.46 'chmod 600 /root/.config/rclone/rclone.conf'
@@ -2540,7 +2572,7 @@ Run:
 ```bash
 ssh root@187.127.142.46 'apt-get install -y awscli 2>/dev/null || true'
 scp /tmp/r2-backup-lifecycle.json root@187.127.142.46:/tmp/
-ssh root@187.127.142.46 'AWS_ACCESS_KEY_ID=4ca4360fd0e7125714183681de63dcb6 AWS_SECRET_ACCESS_KEY=94c9f722d05e4b5ac0b1cf9b25e4631b13f18560a02d61b0bb819a8dcb312e2c aws --endpoint-url=https://1b62424aa3b6d960f5c0d2588eb576f5.r2.cloudflarestorage.com s3api put-bucket-lifecycle-configuration --bucket rawdrive-backups --lifecycle-configuration file:///tmp/r2-backup-lifecycle.json'
+ssh root@187.127.142.46 'AWS_ACCESS_KEY_ID=<R2_ACCESS_KEY_ID> AWS_SECRET_ACCESS_KEY=<R2_SECRET_ACCESS_KEY> aws --endpoint-url=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com s3api put-bucket-lifecycle-configuration --bucket rawdrive-backups --lifecycle-configuration file:///tmp/r2-backup-lifecycle.json'
 ```
 Expected: no output, exit 0.
 
@@ -2554,15 +2586,18 @@ Run: `rm /tmp/r2-backup-lifecycle.json`
 
 ### Task B.9: Restore rehearsal
 
-- [ ] **Step 1: Download latest dump locally**
+- [ ] **Step 1: Download latest encrypted dump, decrypt locally on .46**
 
 Run:
 ```bash
-ssh root@187.127.142.46 'rclone lsf r2:rawdrive-backups/daily/ --include "*.dump" | sort | tail -1' > /tmp/latest_dump_name.txt
+ssh root@187.127.142.46 'rclone lsf r2:rawdrive-backups/daily/ --include "*.dump.gpg" | sort | tail -1' > /tmp/latest_dump_name.txt
 LATEST=$(cat /tmp/latest_dump_name.txt)
 echo "Latest dump: $LATEST"
-ssh root@187.127.142.46 "rclone cat r2:rawdrive-backups/daily/$LATEST > /tmp/restore-test.dump"
+ssh root@187.127.142.46 "rclone cat r2:rawdrive-backups/daily/$LATEST > /tmp/restore-test.dump.gpg"
+ssh root@187.127.142.46 'source /opt/rawdrive/app/.env && gpg --batch --yes --passphrase "$BACKUP_GPG_PASSPHRASE" --decrypt --output /tmp/restore-test.dump /tmp/restore-test.dump.gpg'
+ssh root@187.127.142.46 'ls -la /tmp/restore-test.dump'
 ```
+Expected: the decrypted `.dump` file exists and is larger than the `.dump.gpg` (GPG overhead is small; plaintext is the bigger file).
 
 - [ ] **Step 2: Restore into a disposable local container**
 
@@ -2586,7 +2621,7 @@ Expected: count > 0 (schema exists even though the greenfield DB has no rows yet
 
 Run:
 ```bash
-ssh root@187.127.142.46 'docker rm -f pg-restore-test && rm /tmp/restore-test.dump'
+ssh root@187.127.142.46 'docker rm -f pg-restore-test && rm -f /tmp/restore-test.dump /tmp/restore-test.dump.gpg'
 rm /tmp/latest_dump_name.txt
 ```
 
@@ -2762,18 +2797,18 @@ VALKEY_URL=redis://:<VALKEY_PASSWORD>@187.127.142.46:6379
 
 # R2 (external, not rotated)
 R2_BUCKET_NAME=rawdrive
-R2_ACCESS_KEY_ID=4ca4360fd0e7125714183681de63dcb6
-R2_SECRET_ACCESS_KEY=94c9f722d05e4b5ac0b1cf9b25e4631b13f18560a02d61b0bb819a8dcb312e2c
-R2_ENDPOINT=https://1b62424aa3b6d960f5c0d2588eb576f5.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<R2_ACCESS_KEY_ID>
+R2_SECRET_ACCESS_KEY=<R2_SECRET_ACCESS_KEY>
+R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
 R2_REGION=auto
-R2_PUBLIC_URL=https://pub-c9b96fd6eb4141a7a62b997390f5edde.r2.dev
-R2_ACCOUNT_ID=1b62424aa3b6d960f5c0d2588eb576f5
+R2_PUBLIC_URL=https://pub-<R2_PUBLIC_URL_HASH>.r2.dev
+R2_ACCOUNT_ID=<R2_ACCOUNT_ID>
 
 # SMTP (external, not rotated)
 SMTP_HOST=smtp.hostinger.com
 SMTP_PORT=465
 SMTP_USERNAME=noreply@rawdrive.de
-SMTP_PASSWORD=Prasad@1979@
+SMTP_PASSWORD=<SMTP_PASSWORD>
 SMTP_FROM=RawDrive <noreply@rawdrive.de>
 
 # NATS
@@ -2787,7 +2822,7 @@ APP_ENV=production
 LOG_LEVEL=info
 TZ=Asia/Kolkata
 PLATFORM_SETTINGS_KEK=<PLATFORM_SETTINGS_KEK>
-MOONSHOT_API_KEY=sk-BXTO23rB3IngP16w0TLM4DgKsB08xZmlbmWbhwuYd0ThrE4F
+MOONSHOT_API_KEY=<MOONSHOT_API_KEY>
 ENV_EOF
 ssh root@187.127.142.42 'chmod 600 /opt/rawdrive/app/.env'
 ```
@@ -2807,26 +2842,26 @@ ssh root@187.127.142.42 'chmod 600 /opt/rawdrive/app/deploy/.env'
 
 ### Task C1.3: Write pgbouncer userlist and databases.ini on .42
 
-- [ ] **Step 1: Compute MD5 hash for userlist**
+- [ ] **Step 1: Fetch the SCRAM verifier from the primary**
 
-Run (locally):
+The Postgres primary on `.46` stores `rawdrive`'s password as a SCRAM-SHA-256 verifier in `pg_authid.rolpassword`. PgBouncer's `userlist.txt` expects that exact string verbatim — no transformation.
+
+Run (from the workstation, via .46):
 ```bash
-POSTGRES_PASSWORD='<POSTGRES_PASSWORD>'
-# pgbouncer md5: "md5" + md5(password + username)
-echo -n "md5$(echo -n "${POSTGRES_PASSWORD}rawdrive" | md5sum | awk '{print $1}')"
+SCRAM_VERIFIER=$(ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -tAc "SELECT rolpassword FROM pg_authid WHERE rolname='"'"'rawdrive'"'"';"')
+echo "Verifier: $SCRAM_VERIFIER"
 ```
-Save the output line (looks like `md5abc123def...`).
+Expected: a string starting with `SCRAM-SHA-256$4096:`. Save it — you'll reuse it on `.44` (same verifier, same user).
 
 - [ ] **Step 2: Write userlist.txt on .42**
 
-Run (substitute `<MD5_HASH>` with the value above):
+Run:
 ```bash
 ssh root@187.127.142.42 'mkdir -p /opt/rawdrive/app/deploy/pgbouncer'
-ssh root@187.127.142.42 'cat > /opt/rawdrive/app/deploy/pgbouncer/userlist.txt' <<'UL_EOF'
-"rawdrive" "<MD5_HASH>"
-UL_EOF
-ssh root@187.127.142.42 'chmod 600 /opt/rawdrive/app/deploy/pgbouncer/userlist.txt'
+ssh root@187.127.142.42 "printf '%s\n' '\"rawdrive\" \"${SCRAM_VERIFIER}\"' > /opt/rawdrive/app/deploy/pgbouncer/userlist.txt"
+ssh root@187.127.142.42 'chmod 600 /opt/rawdrive/app/deploy/pgbouncer/userlist.txt && head /opt/rawdrive/app/deploy/pgbouncer/userlist.txt'
 ```
+Expected: `"rawdrive" "SCRAM-SHA-256$4096:..."` printed from the `head` call.
 
 - [ ] **Step 3: Confirm databases.ini points at .46**
 
@@ -3069,17 +3104,17 @@ VALKEY_PASSWORD=<VALKEY_PASSWORD>
 VALKEY_URL=redis://:<VALKEY_PASSWORD>@187.127.142.46:6379
 
 R2_BUCKET_NAME=rawdrive
-R2_ACCESS_KEY_ID=4ca4360fd0e7125714183681de63dcb6
-R2_SECRET_ACCESS_KEY=94c9f722d05e4b5ac0b1cf9b25e4631b13f18560a02d61b0bb819a8dcb312e2c
-R2_ENDPOINT=https://1b62424aa3b6d960f5c0d2588eb576f5.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<R2_ACCESS_KEY_ID>
+R2_SECRET_ACCESS_KEY=<R2_SECRET_ACCESS_KEY>
+R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
 R2_REGION=auto
-R2_PUBLIC_URL=https://pub-c9b96fd6eb4141a7a62b997390f5edde.r2.dev
-R2_ACCOUNT_ID=1b62424aa3b6d960f5c0d2588eb576f5
+R2_PUBLIC_URL=https://pub-<R2_PUBLIC_URL_HASH>.r2.dev
+R2_ACCOUNT_ID=<R2_ACCOUNT_ID>
 
 SMTP_HOST=smtp.hostinger.com
 SMTP_PORT=465
 SMTP_USERNAME=noreply@rawdrive.de
-SMTP_PASSWORD=Prasad@1979@
+SMTP_PASSWORD=<SMTP_PASSWORD>
 SMTP_FROM=RawDrive <noreply@rawdrive.de>
 
 NATS_URL=nats://127.0.0.1:4222
@@ -3091,7 +3126,7 @@ APP_ENV=production
 LOG_LEVEL=info
 TZ=Asia/Kolkata
 PLATFORM_SETTINGS_KEK=<PLATFORM_SETTINGS_KEK>
-MOONSHOT_API_KEY=sk-BXTO23rB3IngP16w0TLM4DgKsB08xZmlbmWbhwuYd0ThrE4F
+MOONSHOT_API_KEY=<MOONSHOT_API_KEY>
 ENV_EOF
 ssh root@187.127.142.44 'chmod 600 /opt/rawdrive/app/.env'
 ```
@@ -3119,24 +3154,22 @@ Note: `PEER_NODE_IP=187.127.142.42` — this is the inverse of `.42`'s file, whi
 
 ### Task C2.4: Write pgbouncer userlist and databases.ini on .44
 
-- [ ] **Step 1: Compute MD5 hash (same as Task C1.3 Step 1 — identical)**
+- [ ] **Step 1: Reuse the SCRAM verifier from Task C1.3**
 
-The hash is deterministic on password+username. If you still have the value from Task C1.3, reuse it. Otherwise recompute:
+The SCRAM verifier is a property of the Postgres user's stored password. Since both app nodes authenticate as the same `rawdrive` user against the same primary, the verifier is identical. Reuse the value captured in Task C1.3 Step 1. If it's no longer in your shell:
 ```bash
-POSTGRES_PASSWORD='<POSTGRES_PASSWORD>'
-echo -n "md5$(echo -n "${POSTGRES_PASSWORD}rawdrive" | md5sum | awk '{print $1}')"
+SCRAM_VERIFIER=$(ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -tAc "SELECT rolpassword FROM pg_authid WHERE rolname='"'"'rawdrive'"'"';"')
 ```
 
 - [ ] **Step 2: Write userlist.txt on .44**
 
-Run (substitute `<MD5_HASH>` with the value from Step 1):
+Run:
 ```bash
 ssh root@187.127.142.44 'mkdir -p /opt/rawdrive/app/deploy/pgbouncer'
-ssh root@187.127.142.44 'cat > /opt/rawdrive/app/deploy/pgbouncer/userlist.txt' <<'UL_EOF'
-"rawdrive" "<MD5_HASH>"
-UL_EOF
-ssh root@187.127.142.44 'chmod 600 /opt/rawdrive/app/deploy/pgbouncer/userlist.txt'
+ssh root@187.127.142.44 "printf '%s\n' '\"rawdrive\" \"${SCRAM_VERIFIER}\"' > /opt/rawdrive/app/deploy/pgbouncer/userlist.txt"
+ssh root@187.127.142.44 'chmod 600 /opt/rawdrive/app/deploy/pgbouncer/userlist.txt && head /opt/rawdrive/app/deploy/pgbouncer/userlist.txt'
 ```
+Expected: matches `.42`'s userlist content.
 
 - [ ] **Step 3: Confirm databases.ini still points at primary on .46**
 
@@ -3676,7 +3709,7 @@ git commit -m "docs(runbooks): add 6 operational runbooks for bootstrapped prod 
 
 Run:
 ```bash
-CF_TOKEN="cfat_REDACTED_ROTATE_IN_CLOUDFLARE"
+CF_TOKEN="<CLOUDFLARE_API_TOKEN>"
 ZONE_ID=$(curl -fsS -X GET "https://api.cloudflare.com/client/v4/zones?name=rawdrive.in" \
     -H "Authorization: Bearer $CF_TOKEN" \
     -H "Content-Type: application/json" | jq -r '.result[0].id')
@@ -3735,7 +3768,7 @@ Run:
 ```bash
 for ip in 187.127.142.42 187.127.142.44; do
   ssh root@$ip 'mkdir -p /etc/letsencrypt && cat > /etc/letsencrypt/cloudflare.ini' <<'CF_EOF'
-dns_cloudflare_api_token = cfat_REDACTED_ROTATE_IN_CLOUDFLARE
+dns_cloudflare_api_token = <CLOUDFLARE_API_TOKEN>
 CF_EOF
   ssh root@$ip 'chmod 600 /etc/letsencrypt/cloudflare.ini'
 done
