@@ -121,6 +121,17 @@ func (h *Handler) SetProfile(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "previous step required"})
 			return
 		}
+		if errors.Is(err, ErrWorkspaceCreateFail) {
+			// Workspace creation failed — the onboarding step did NOT
+			// advance, so the client can safely retry. We return 503
+			// (Service Unavailable) rather than 500 to hint at the
+			// retryable nature: the user's form data validated fine,
+			// but a downstream dependency blocked completion.
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "could not create workspace, please try again",
+			})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,6 +25,19 @@ type stubWorkspaceCreator struct {
 func (s *stubWorkspaceCreator) CreateWorkspace(_ context.Context, userID, stateID, businessName string) (string, error) {
 	s.created = append(s.created, userID)
 	return "ws-" + userID, nil
+}
+
+// failingWorkspaceCreator always returns an error. Used to assert the
+// v0.0.47 fix: a failed workspace must NOT advance the onboarding step,
+// so the user can retry from step=profile instead of being trapped with
+// "onboarding complete ✓" and no workspace.
+type failingWorkspaceCreator struct {
+	attempts int
+}
+
+func (f *failingWorkspaceCreator) CreateWorkspace(_ context.Context, _, _, _ string) (string, error) {
+	f.attempts++
+	return "", errors.New("simulated DB outage")
 }
 
 type stubEventPub struct {
@@ -336,4 +350,101 @@ func TestOnboardingPersistsAcrossServiceInstances(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, onboarding.StepProfile, status.CurrentStep)
 	assert.Equal(t, "14", status.StateID)
+}
+
+// TestSetProfile_WorkspaceFailureDoesNotAdvanceStep is the regression
+// test for v0.0.47's silent-failure fix. Before the fix, SetProfile
+// upserted step=complete FIRST and then ignored the CreateWorkspace
+// error, leaving users with "onboarding complete ✓" on screen but no
+// workspace. The fix reorders so that a failed workspace leaves the
+// user at step=profile for retry. This test asserts:
+//
+//  1. The service returns ErrWorkspaceCreateFail (wrapped), so the
+//     handler can map it to HTTP 503.
+//  2. The onboarding_statuses row is STILL at step=profile after the
+//     failed call — no ghost "complete" status.
+//  3. A subsequent successful retry (with a healthy workspace creator)
+//     advances the step to complete. This proves retries are not
+//     permanently broken by the failed attempt.
+func TestSetProfile_WorkspaceFailureDoesNotAdvanceStep(t *testing.T) {
+	repo := newStubOnboardingRepo()
+	badWsc := &failingWorkspaceCreator{}
+	pub := &stubEventPub{}
+	svc := onboarding.NewService(repo, badWsc, pub)
+
+	ctx := context.Background()
+
+	// Arrange: user has completed state selection, step is "profile".
+	require.NoError(t, svc.SelectState(ctx, "user-retry",
+		onboarding.StateSelectionInput{StateID: "MH"}))
+
+	// Act: SetProfile with a workspace creator that always errors.
+	err := svc.SetProfile(ctx, "user-retry", onboarding.ProfileInput{
+		BusinessName: "Retry Studios",
+		DisplayName:  "Test Owner",
+		GSTIN:        "", // empty = skip GSTIN validation
+	})
+
+	// Assert 1: error surfaces as ErrWorkspaceCreateFail.
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, onboarding.ErrWorkspaceCreateFail),
+		"expected ErrWorkspaceCreateFail, got %v", err)
+	assert.Equal(t, 1, badWsc.attempts, "workspace creator should have been called once")
+
+	// Assert 2: step is STILL profile, NOT complete. This is the core
+	// invariant — a failed workspace must not leave the user trapped
+	// with a ghost complete status.
+	rec, err := repo.Get(ctx, "user-retry")
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, onboarding.StepProfile, rec.CurrentStep,
+		"step must NOT advance to complete when workspace creation fails")
+
+	// Assert 3: retry with a healthy creator completes normally.
+	// We have to build a new service because the creator is injected
+	// at construction time. Same repo so the prior state is preserved.
+	goodWsc := &stubWorkspaceCreator{}
+	svc2 := onboarding.NewService(repo, goodWsc, pub)
+	require.NoError(t, svc2.SetProfile(ctx, "user-retry", onboarding.ProfileInput{
+		BusinessName: "Retry Studios",
+		DisplayName:  "Test Owner",
+	}))
+
+	rec, _ = repo.Get(ctx, "user-retry")
+	require.NotNil(t, rec)
+	assert.Equal(t, onboarding.StepComplete, rec.CurrentStep,
+		"retry with healthy workspace creator should advance to complete")
+	assert.Contains(t, goodWsc.created, "user-retry",
+		"healthy retry should have created the workspace")
+	assert.Contains(t, pub.events, "onboarding.complete",
+		"completion event should fire after successful retry")
+}
+
+// TestSetProfile_CompletedStepIsIdempotent asserts the idempotent
+// short-circuit: a SetProfile call for a user already at step=complete
+// returns nil without attempting to re-create the workspace. Prevents
+// duplicate workspace attempts if the client accidentally double-submits.
+func TestSetProfile_CompletedStepIsIdempotent(t *testing.T) {
+	repo := newStubOnboardingRepo()
+	wsc := &stubWorkspaceCreator{}
+	svc := onboarding.NewService(repo, wsc, &stubEventPub{})
+	ctx := context.Background()
+
+	// Drive the user through a full successful onboarding.
+	require.NoError(t, svc.SelectState(ctx, "user-idem",
+		onboarding.StateSelectionInput{StateID: "MH"}))
+	require.NoError(t, svc.SetProfile(ctx, "user-idem", onboarding.ProfileInput{
+		BusinessName: "Idempotent Co",
+		DisplayName:  "Test",
+	}))
+	assert.Equal(t, 1, len(wsc.created), "first call should create workspace")
+
+	// Double-submit: same call again. Must be a no-op success.
+	err := svc.SetProfile(ctx, "user-idem", onboarding.ProfileInput{
+		BusinessName: "Idempotent Co",
+		DisplayName:  "Test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(wsc.created),
+		"idempotent short-circuit should skip re-creating the workspace")
 }

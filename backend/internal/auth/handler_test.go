@@ -76,6 +76,14 @@ func setupAuthRouter() (*auth.Handler, auth.OTPService, auth.JWTService, *mockUs
 
 func newTestServer(handler *auth.Handler) *httptest.Server {
 	r := chi.NewRouter()
+	// Mirror main.go's wiring: the rate-limited credential endpoints
+	// live at the ROOT (not inside the /auth subrouter) so they can
+	// share a per-IP budget via a single middleware instance. In the
+	// test server we register them without the limiter so tests don't
+	// rate-limit themselves when running in quick succession.
+	r.Post("/auth/register", handler.Register)
+	r.Post("/auth/login", handler.Login)
+	r.Post("/auth/verify-otp", handler.VerifyOTP)
 	r.Mount("/auth", handler.Routes())
 	return httptest.NewServer(r)
 }

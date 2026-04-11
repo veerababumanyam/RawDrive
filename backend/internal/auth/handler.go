@@ -157,11 +157,15 @@ func (h *Handler) WithMFA(store MFAEnrollmentStore, mfaHandler *MFAHandler) *Han
 	return h
 }
 
+// Routes returns the auth subrouter. Note: /register, /login, and
+// /verify-otp are DELIBERATELY NOT registered here — they are mounted
+// at the ROOT router level in cmd/api/main.go with a tighter per-IP
+// rate limiter (5/min), matching the pattern already used for the
+// MFA verify endpoints. This keeps auth rate-limit policy centralized
+// in main.go and avoids an auth→middleware→repository→auth import
+// cycle that would otherwise block wiring the limiter here.
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Post("/register", h.Register)
-	r.Post("/login", h.Login)
-	r.Post("/verify-otp", h.VerifyOTP)
 	r.Get("/oauth/google", h.OAuthGoogle)
 	r.Get("/oauth/google/callback", h.OAuthGoogleCallback)
 	r.Post("/refresh", h.RefreshToken)

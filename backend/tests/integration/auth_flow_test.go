@@ -112,6 +112,13 @@ func setupIntegrationServer(userSvc *testUserService) (*httptest.Server, auth.OT
 	wsHandler := workspace.NewHandler(wsSvc)
 
 	r := chi.NewRouter()
+	// Mirror main.go: credential endpoints at the root, not inside the
+	// /auth subrouter, so they can be wrapped with the per-IP rate limiter
+	// in production. Tests don't apply the limiter here so sequential
+	// calls don't rate-limit themselves.
+	r.Post("/auth/register", authHandler.Register)
+	r.Post("/auth/login", authHandler.Login)
+	r.Post("/auth/verify-otp", authHandler.VerifyOTP)
 	r.Mount("/auth", authHandler.Routes())
 
 	// Protected routes with JWT auth middleware simulation
@@ -227,6 +234,10 @@ func TestOAuthFlow(t *testing.T) {
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userSvc)
 
 	r := chi.NewRouter()
+	// Credential endpoints at the root (see setupIntegrationServer comment).
+	r.Post("/auth/register", handler.Register)
+	r.Post("/auth/login", handler.Login)
+	r.Post("/auth/verify-otp", handler.VerifyOTP)
 	r.Mount("/auth", handler.Routes())
 	ts := httptest.NewServer(r)
 	defer ts.Close()

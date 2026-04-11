@@ -463,7 +463,26 @@ func main() {
 	dbCtx := middleware.NewPgDBContext(dbPool)
 	auditLog := middleware.NewPgAuditLog(dbPool)
 
-	// Mount auth routes (no JWT required — this IS the login endpoint)
+	// Credential endpoints with a tight per-IP limiter (v0.0.47).
+	// Register, Login, and VerifyOTP are the prime targets for credential
+	// stuffing, brute-force password guessing, and spam signups. 5/min
+	// per IP is well above legitimate human retry rates while making
+	// automated attacks uneconomical — 7.2k attempts/day vs 86k at the
+	// previous global 60/min budget. A SINGLE limiter instance wraps
+	// both the /auth and /api/v1/auth prefixes so an attacker cannot
+	// double their budget by alternating. Same rationale as the MFA
+	// verify limiter below.
+	credLimiter := middleware.RateLimit(5, time.Minute)
+	r.With(credLimiter).Post("/auth/register", authHandler.Register)
+	r.With(credLimiter).Post("/auth/login", authHandler.Login)
+	r.With(credLimiter).Post("/auth/verify-otp", authHandler.VerifyOTP)
+	r.With(credLimiter).Post("/api/v1/auth/register", authHandler.Register)
+	r.With(credLimiter).Post("/api/v1/auth/login", authHandler.Login)
+	r.With(credLimiter).Post("/api/v1/auth/verify-otp", authHandler.VerifyOTP)
+
+	// Mount the rest of the auth routes (oauth, refresh, logout). The
+	// credential endpoints above are deliberately NOT inside Routes()
+	// — see the comment on authHandler.Routes() for why.
 	r.Mount("/auth", authHandler.Routes())
 	r.Mount("/api/v1/auth", authHandler.Routes())
 

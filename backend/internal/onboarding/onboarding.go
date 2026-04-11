@@ -3,13 +3,15 @@ package onboarding
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 )
 
 var (
-	ErrInvalidState = errors.New("invalid state")
-	ErrInvalidGSTIN = errors.New("invalid GSTIN")
-	ErrStepRequired = errors.New("previous step required")
+	ErrInvalidState        = errors.New("invalid state")
+	ErrInvalidGSTIN        = errors.New("invalid GSTIN")
+	ErrStepRequired        = errors.New("previous step required")
+	ErrWorkspaceCreateFail = errors.New("workspace creation failed")
 )
 
 type Step string
@@ -100,12 +102,23 @@ func (s *service) SelectState(ctx context.Context, userID string, input StateSel
 	})
 }
 
-// SetProfile writes the business profile, advances the step to
-// "complete", and (best-effort) creates the workspace + publishes the
-// completion event. Workspace creation and event publishing errors
-// are intentionally logged-and-ignored by the caller rather than
-// reverting onboarding — a failed downstream should not leave the
-// user stuck at the profile step with nothing to click.
+// SetProfile writes the business profile, creates the user's workspace,
+// and advances the step to "complete" — in that order.
+//
+// Ordering matters: workspace creation happens BEFORE the step=complete
+// upsert, so if the workspace creator returns an error the user row
+// stays at step=profile and the handler surfaces a 500. This is the
+// fix for the prior silent-failure bug (pre-v0.0.47) where a failed
+// workspace create left the user with "onboarding complete ✓" on
+// screen but no actual workspace — they'd be trapped with a JWT
+// workspace_id of "pending-onboarding" and no way to retry.
+//
+// The one caveat: if CreateWorkspace partially succeeds (workspace row
+// exists but e.g. the workspace_members write fails), a retry will
+// return "workspace already exists" and re-fail here. Callers should
+// treat repeated failures as a support-ticket signal rather than
+// retrying forever. A future task can add an "existing workspace?"
+// check here for full idempotency.
 func (s *service) SetProfile(ctx context.Context, userID string, input ProfileInput) error {
 	existing, err := s.repo.Get(ctx, userID)
 	if err != nil {
@@ -115,10 +128,47 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 		return ErrStepRequired
 	}
 
+	// Idempotent short-circuit: if the user already completed onboarding
+	// (including a successful workspace create from a prior call), a
+	// retry here should be a no-op success, not a duplicate workspace
+	// attempt. Step=complete means the happy path ran to the end.
+	if existing.CurrentStep == StepComplete {
+		return nil
+	}
+
+	if existing.StateID == nil {
+		// Defensive: should be impossible because the step check above
+		// already enforces we're past state_selection, which means
+		// state_id was persisted. Refuse explicitly instead of silently
+		// passing a nil-deref state id to the workspace creator.
+		return ErrStepRequired
+	}
+
 	if input.GSTIN != "" && !isValidGSTIN(input.GSTIN) {
 		return ErrInvalidGSTIN
 	}
 
+	// STEP 1: create workspace (hard prerequisite, not best-effort).
+	// A failure here must NOT advance the step — the user should be
+	// able to retry by resubmitting the profile form.
+	if s.wsc == nil {
+		return fmt.Errorf("%w: workspace creator not configured", ErrWorkspaceCreateFail)
+	}
+	if _, err := s.wsc.CreateWorkspace(
+		ctx,
+		userID,
+		strconv.Itoa(*existing.StateID),
+		input.BusinessName,
+	); err != nil {
+		return fmt.Errorf("%w: %v", ErrWorkspaceCreateFail, err)
+	}
+
+	// STEP 2: persist the profile and advance the step. If this upsert
+	// fails after a successful workspace create, the workspace is
+	// orphaned but the step stays at "profile", so a retry will hit
+	// the idempotent short-circuit above (step=complete check) — once
+	// a follow-up adds "existing workspace?" detection to step 1.
+	// For now: repeated upsert failures here are a support signal.
 	if err := s.repo.Upsert(ctx, &StatusRecord{
 		UserID:       userID,
 		CurrentStep:  StepComplete,
@@ -129,13 +179,10 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 		return err
 	}
 
-	// Best-effort workspace creation. The workspace-creator adapter in
-	// main.go takes a state identifier as a string; we pass the
-	// canonical numeric id so it does no further resolution work.
-	if s.wsc != nil && existing.StateID != nil {
-		_, _ = s.wsc.CreateWorkspace(ctx, userID, strconv.Itoa(*existing.StateID), input.BusinessName)
-	}
-
+	// STEP 3: best-effort event publish. The workspace is created and
+	// the step is persisted — event publishing is truly fire-and-forget
+	// here because downstream consumers can also bootstrap themselves
+	// from the onboarding_statuses table on next poll.
 	if s.pub != nil {
 		_ = s.pub.Publish(ctx, "onboarding.complete", []byte(`{"user_id":"`+userID+`"}`))
 	}
