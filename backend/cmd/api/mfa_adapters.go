@@ -70,3 +70,30 @@ func (a *mfaRecoveryCodeStoreAdapter) DeleteAll(ctx context.Context, userID uuid
 func (a *mfaRecoveryCodeStoreAdapter) CountActive(ctx context.Context, userID uuid.UUID) (int, error) {
 	return a.repo.CountActive(ctx, userID)
 }
+
+// ListActive mirrors repository.UserMFARecoveryCodesRepo.ListActive but
+// shrinks the row shape to the minimum the auth handler needs (id +
+// hash). The auth package cannot import repository without creating an
+// import cycle, so this adapter does the narrowing here.
+func (a *mfaRecoveryCodeStoreAdapter) ListActive(ctx context.Context, userID uuid.UUID) ([]auth.MFARecoveryCodeHashRow, error) {
+	rows, err := a.repo.ListActive(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]auth.MFARecoveryCodeHashRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, auth.MFARecoveryCodeHashRow{
+			ID:       row.ID,
+			CodeHash: row.CodeHash,
+		})
+	}
+	return out, nil
+}
+
+// MarkConsumed passes through to the repository's atomic consume method.
+// The repository uses UPDATE ... WHERE consumed_at IS NULL so a
+// concurrent second consume of the same code returns an error and
+// prevents double-use.
+func (a *mfaRecoveryCodeStoreAdapter) MarkConsumed(ctx context.Context, id uuid.UUID) error {
+	return a.repo.MarkConsumed(ctx, id)
+}

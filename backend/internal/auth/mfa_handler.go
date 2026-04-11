@@ -59,6 +59,23 @@ type MFARecoveryCodeStore interface {
 	BulkInsert(ctx context.Context, userID uuid.UUID, hashes []string) error
 	DeleteAll(ctx context.Context, userID uuid.UUID) error
 	CountActive(ctx context.Context, userID uuid.UUID) (int, error)
+	// F-007 (M17 audit followup): ListActive + MarkConsumed are the
+	// primitives VerifyRecoveryCode needs at login step-up time. The
+	// handler iterates ListActive, bcrypt-compares each hash against
+	// the submitted plaintext, then calls MarkConsumed on a match. The
+	// MarkConsumed call is atomic (UPDATE ... WHERE consumed_at IS
+	// NULL RETURNING) on the repo side so two concurrent consumes of
+	// the same code cannot both succeed.
+	ListActive(ctx context.Context, userID uuid.UUID) ([]MFARecoveryCodeHashRow, error)
+	MarkConsumed(ctx context.Context, id uuid.UUID) error
+}
+
+// MFARecoveryCodeHashRow is the minimal row shape VerifyRecoveryCode
+// needs from MFARecoveryCodeStore.ListActive — enough to bcrypt-compare
+// and uniquely identify a row for MarkConsumed.
+type MFARecoveryCodeHashRow struct {
+	ID       uuid.UUID
+	CodeHash string
 }
 
 // ErrMFANotEnrolled is returned by MFAEnrollmentStore.GetByUserID when
@@ -147,11 +164,12 @@ func NewMFAHandler(
 }
 
 // PublicRoutes returns the chi subrouter for MFA endpoints that do NOT
-// require a valid access token. /verify-totp is exempt because the
-// mfa_token IS its authentication.
+// require a valid access token. /verify-totp and /verify-recovery-code
+// are exempt because the mfa_token IS their authentication.
 func (h *MFAHandler) PublicRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/verify-totp", h.VerifyTOTP)
+	r.Post("/verify-recovery-code", h.VerifyRecoveryCode)
 	return r
 }
 
@@ -190,6 +208,11 @@ type mfaVerifyTOTPRequest struct {
 type mfaVerifyTOTPResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type mfaVerifyRecoveryCodeRequest struct {
+	MFAToken     string `json:"mfa_token"`
+	RecoveryCode string `json:"recovery_code"`
 }
 
 type mfaStatusResponse struct {
@@ -429,6 +452,134 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve fresh workspace claims the same way Login does — roles may
 	// have changed between Login and step-up (rare but correct).
+	wsID := claims.WorkspaceID
+	stateID := claims.StateID
+	role := claims.Role
+	platformRole := claims.PlatformRole
+	if h.workspaceLookup != nil {
+		if w2, s2, r2, p2, _ := h.workspaceLookup.GetUserWorkspace(r.Context(), claims.Sub); w2 != "" {
+			wsID, stateID, role, platformRole = w2, s2, r2, p2
+		}
+	}
+
+	accessToken, err := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
+		Sub:          claims.Sub,
+		WorkspaceID:  wsID,
+		Role:         role,
+		PlatformRole: platformRole,
+		StateID:      stateID,
+		MFAVerified:  true,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
+		return
+	}
+
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithMFA(r.Context(), claims.Sub, "family-"+claims.Sub, wsID, role, platformRole, stateID, true)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, mfaVerifyTOTPResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
+}
+
+// VerifyRecoveryCode is the login step-up fallback when the user has
+// lost access to their authenticator app. It takes the same
+// short-lived mfa_token that Login issues + one of the user's one-time
+// recovery codes (plaintext, as shown at enrollment). On success it
+// issues full access/refresh tokens with mfa_verified=true, marks the
+// code consumed atomically, and consumes the mfa_token via the same
+// S-003 denylist that VerifyTOTP uses.
+//
+// Security notes:
+//   - The mfa_token is not burned on a wrong code (same retry UX as
+//     VerifyTOTP). The global per-IP rate limiter (10/min) applies.
+//   - MarkConsumed runs an atomic UPDATE ... WHERE consumed_at IS NULL
+//     so two concurrent consumes of the same code cannot both succeed.
+//     If MarkConsumed returns an error on a bcrypt-match, we treat it
+//     as a failure (the caller sees 401 "invalid recovery code"); the
+//     row in the DB may still be unused in that edge case, so the user
+//     can retry with the same code on the next request.
+//   - CountActive after success is logged only, not returned, so a
+//     response observer cannot infer how many recovery codes a user
+//     has left. The Settings UI uses MFAHandler.Status for that.
+func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) {
+	if h.envelope == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "mfa_unavailable"})
+		return
+	}
+
+	var req mfaVerifyRecoveryCodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MFAToken == "" || req.RecoveryCode == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and recovery_code required"})
+		return
+	}
+
+	claims, err := h.parseChallengeToken(r.Context(), req.MFAToken)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid mfa token"})
+		return
+	}
+
+	userID, err := uuid.Parse(claims.Sub)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid mfa token subject"})
+		return
+	}
+
+	// Load the user's active recovery codes. We iterate and bcrypt-compare
+	// each one; on match we atomically mark it consumed. A user has at
+	// most 10 codes by default so the O(n) scan is trivial.
+	rows, err := h.codesRepo.ListActive(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "recovery lookup failed"})
+		return
+	}
+	if len(rows) == 0 {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "no active recovery codes"})
+		return
+	}
+
+	var matchedID uuid.UUID
+	matched := false
+	for _, row := range rows {
+		if h.recovery.Verify(req.RecoveryCode, row.CodeHash) {
+			matchedID = row.ID
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid recovery code"})
+		return
+	}
+
+	// Atomic consume — if two requests race on the same code, only the
+	// first MarkConsumed returns nil, and the second sees
+	// "already consumed or not found" which we surface as 401.
+	if err := h.codesRepo.MarkConsumed(r.Context(), matchedID); err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid recovery code"})
+		return
+	}
+
+	// Burn the mfa_token so the same challenge cannot be replayed with a
+	// different recovery code or with a TOTP code. Mirrors the S-003
+	// guard in VerifyTOTP.
+	if !h.consumeChallengeToken(req.MFAToken) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "mfa token already used"})
+		return
+	}
+
+	// Stamp last_verified_at so Status reflects a recent successful
+	// step-up, even though the step-up was via recovery code and not a
+	// TOTP code.
+	_ = h.enrollRepo.UpdateLastVerified(r.Context(), userID)
+
+	// Resolve fresh workspace claims (same pattern as VerifyTOTP).
 	wsID := claims.WorkspaceID
 	stateID := claims.StateID
 	role := claims.Role
