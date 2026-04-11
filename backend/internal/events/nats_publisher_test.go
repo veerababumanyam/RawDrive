@@ -81,3 +81,35 @@ func TestNATSPublisher_PublishRespectsContextCancellation(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.False(t, fake.called, "cancelled context must short-circuit before the publish call")
 }
+
+// TestNATSPublisher_PublishRejectsOutOfStreamSubject pins the
+// subject-prefix guard added for the brownfield fix wave. The
+// RAWDRIVE_EVENTS stream filter is "rawdrive.>", so a publish on a
+// subject that does not start with SubjectPrefix will never land in
+// the stream — the server would return "no stream matches subject",
+// which is indistinguishable from "broker unreachable" in logs.
+// Failing at the boundary with a clear error is the defensive fix.
+func TestNATSPublisher_PublishRejectsOutOfStreamSubject(t *testing.T) {
+	cases := []struct {
+		name    string
+		subject string
+	}{
+		{"empty", ""},
+		{"missing prefix", "asset.uploaded"},
+		{"wrong case", "RawDrive.asset.uploaded"},
+		{"wrong namespace", "otherapp.asset.uploaded"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeJetStreamPublisher{}
+			p := &NATSPublisher{js: fake}
+
+			err := p.Publish(context.Background(), tc.subject, []byte(`{}`))
+			require.Error(t, err, "subject %q must be rejected", tc.subject)
+			assert.Contains(t, err.Error(), SubjectPrefix,
+				"error must name the expected prefix so the caller can fix their subject")
+			assert.False(t, fake.called,
+				"out-of-stream subject must short-circuit before the JetStream publish call")
+		})
+	}
+}

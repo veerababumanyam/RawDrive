@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -34,8 +35,10 @@ type jetStreamPublisher interface {
 
 // NATSPublisher publishes events to NATS JetStream. Construction
 // dials the broker and ensures the RAWDRIVE_EVENTS stream exists.
-// Publish blocks until JetStream acknowledges the message or the
-// caller's context is cancelled.
+// Publish blocks until JetStream acknowledges the message or until
+// the NATS client's AckWait timeout elapses. See the Publish method
+// doc for the exact context semantics — the ctx is honoured before
+// dispatch but cannot interrupt an in-flight publish.
 type NATSPublisher struct {
 	conn *nats.Conn
 	js   jetStreamPublisher
@@ -57,6 +60,15 @@ const SubjectPrefix = "rawdrive."
 // stream exists. If the stream already exists with a different
 // configuration, the existing config wins — we never mutate an
 // operator's retention/storage choices.
+//
+// The initial connect is verified synchronously: after nats.Connect
+// returns, we check conn.Status() == nats.CONNECTED before handing a
+// publisher back. Without this check, the NATS client's infinite
+// reconnect loop (MaxReconnects(-1)) would let nats.Connect return
+// successfully while the underlying TCP session was still retrying —
+// callers would then get an apparently-working publisher whose every
+// Publish call blocks or errors. Failing fast at construction is
+// worth the extra round-trip.
 func NewNATSPublisher(url string) (*NATSPublisher, error) {
 	conn, err := nats.Connect(url,
 		nats.Name("rawdrive-backend"),
@@ -65,6 +77,15 @@ func NewNATSPublisher(url string) (*NATSPublisher, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("nats connect %q: %w", url, err)
+	}
+
+	// Guard against nats.Connect returning a client that is still
+	// cycling through its reconnect loop. CONNECTED is the only
+	// status that means "the TCP + CONNECT + INFO handshake all
+	// completed successfully and the client is ready to publish."
+	if status := conn.Status(); status != nats.CONNECTED {
+		conn.Close()
+		return nil, fmt.Errorf("nats connect %q: client status is %v, expected CONNECTED", url, status)
 	}
 
 	js, err := conn.JetStream()
@@ -98,11 +119,30 @@ func NewNATSPublisher(url string) (*NATSPublisher, error) {
 
 // Publish implements the EventPublisher contract expected by the
 // handler, onboarding, and workspace packages. Returns an error if
-// the context is already cancelled, if JetStream refuses the
-// message, or if the publish ack is not received.
+// the context is already cancelled, if the subject does not start
+// with SubjectPrefix, if JetStream refuses the message, or if the
+// publish ack is not received.
+//
+// Context semantics: the ctx is checked for cancellation BEFORE the
+// publish is dispatched but CANNOT interrupt an in-flight publish.
+// js.Publish is a synchronous call that blocks on the JetStream
+// server's ack (or the NATS client's default AckWait of 30s) and
+// does not observe ctx.Done(). Callers that need hard cancellation
+// during the publish must race Publish against ctx.Done() themselves
+// in a goroutine, or use a future async variant of this method.
+//
+// Subject validation: the stream filter for RAWDRIVE_EVENTS is
+// "rawdrive.>", so any subject that does not start with SubjectPrefix
+// will be rejected by the server with a cryptic "no stream matches
+// subject" error. We check the prefix at the boundary instead, so
+// typos like "RawDrive.asset.uploaded" (wrong case) or
+// "asset.uploaded" (missing prefix) produce a clear error message.
 func (p *NATSPublisher) Publish(ctx context.Context, subject string, data []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if !strings.HasPrefix(subject, SubjectPrefix) {
+		return fmt.Errorf("nats publish: subject %q must start with %q to match the RAWDRIVE_EVENTS stream filter", subject, SubjectPrefix)
 	}
 	if _, err := p.js.Publish(subject, data); err != nil {
 		return fmt.Errorf("nats publish %q: %w", subject, err)
