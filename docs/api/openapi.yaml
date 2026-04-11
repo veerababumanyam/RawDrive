@@ -575,6 +575,7 @@ paths:
 
   /auth/register:
     post:
+      operationId: registerUser
       tags: [auth]
       summary: Register a new user
       description: |
@@ -602,6 +603,7 @@ paths:
 
   /auth/login:
     post:
+      operationId: loginUser
       tags: [auth]
       summary: Log in with password
       description: |
@@ -644,6 +646,7 @@ paths:
 
   /auth/verify-otp:
     post:
+      operationId: verifyRegistrationOtp
       tags: [auth]
       summary: Verify email OTP (registration flow only)
       description: |
@@ -674,6 +677,7 @@ paths:
 
   /auth/refresh:
     post:
+      operationId: refreshTokens
       tags: [auth]
       summary: Rotate access + refresh tokens
       description: |
@@ -700,6 +704,7 @@ paths:
 
   /auth/logout:
     post:
+      operationId: logoutUser
       tags: [auth]
       summary: Revoke the current refresh token
       security: []
@@ -726,6 +731,7 @@ paths:
 
   /auth/verify-totp:
     post:
+      operationId: verifyMfaTotp
       tags: [mfa]
       summary: Complete MFA step-up with a TOTP code
       description: |
@@ -756,6 +762,7 @@ paths:
 
   /auth/verify-recovery-code:
     post:
+      operationId: verifyMfaRecoveryCode
       tags: [mfa]
       summary: Complete MFA step-up with a recovery code
       description: |
@@ -782,6 +789,7 @@ paths:
 
   /auth/mfa/enroll:
     post:
+      operationId: enrollMfa
       tags: [mfa]
       summary: Begin TOTP enrollment
       description: |
@@ -813,6 +821,7 @@ paths:
 
   /auth/mfa/verify-enrollment:
     post:
+      operationId: verifyMfaEnrollment
       tags: [mfa]
       summary: Activate a pending TOTP enrollment
       description: |
@@ -838,6 +847,7 @@ paths:
 
   /auth/mfa/status:
     get:
+      operationId: getMfaStatus
       tags: [mfa]
       summary: Current MFA enrollment status
       responses:
@@ -852,6 +862,7 @@ paths:
 
   /auth/mfa/enrollment:
     delete:
+      operationId: deleteMfaEnrollment
       tags: [mfa]
       summary: Remove the current TOTP enrollment
       description: |
@@ -869,6 +880,7 @@ paths:
 
   /api/v1/uploads:
     post:
+      operationId: createUploadSession
       tags: [upload]
       summary: Create a TUS 1.0.0 upload session
       description: |
@@ -928,6 +940,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/UploadIdPath'
     head:
+      operationId: getUploadOffset
       tags: [upload]
       summary: Get current upload offset
       responses:
@@ -945,6 +958,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
+      operationId: uploadChunk
       tags: [upload]
       summary: Upload a chunk
       description: |
@@ -1004,6 +1018,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
     delete:
+      operationId: cancelUpload
       tags: [upload]
       summary: Cancel an in-flight upload session
       responses:
@@ -1016,6 +1031,7 @@ paths:
 
   /api/v1/assets:
     get:
+      operationId: listAssets
       tags: [asset]
       summary: List workspace assets
       parameters:
@@ -1044,6 +1060,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
+      operationId: createAsset
       tags: [asset]
       summary: Single-file asset upload (multipart/form-data)
       description: |
@@ -1082,6 +1099,7 @@ paths:
 
   /api/v1/assets/bulk:
     post:
+      operationId: bulkUpdateAssets
       tags: [asset]
       summary: Apply a bulk action to many assets
       requestBody:
@@ -1107,6 +1125,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/AssetIdPath'
     get:
+      operationId: getAssetById
       tags: [asset]
       summary: Get an asset by ID
       responses:
@@ -1121,6 +1140,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
+      operationId: deleteAsset
       tags: [asset]
       summary: Soft-delete an asset
       responses:
@@ -1135,6 +1155,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/AssetIdPath'
     get:
+      operationId: downloadAsset
       tags: [asset]
       summary: Download the asset binary
       description: |
@@ -1169,6 +1190,7 @@ paths:
 
   /api/v1/galleries:
     get:
+      operationId: listGalleries
       tags: [gallery]
       summary: List galleries in the caller's workspace
       parameters:
@@ -1196,6 +1218,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
+      operationId: createGallery
       tags: [gallery]
       summary: Create a gallery
       requestBody:
@@ -1220,6 +1243,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GalleryIdPath'
     get:
+      operationId: getGalleryById
       tags: [gallery]
       summary: Get a gallery by ID
       responses:
@@ -1234,6 +1258,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     put:
+      operationId: updateGallery
       tags: [gallery]
       summary: Update a gallery
       requestBody:
@@ -1256,6 +1281,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
+      operationId: deleteGallery
       tags: [gallery]
       summary: Soft-delete a gallery
       responses:
@@ -1270,6 +1296,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GalleryIdPath'
     get:
+      operationId: listGalleryAssets
       tags: [gallery]
       summary: List assets in a gallery
       parameters:
@@ -1294,6 +1321,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
+      operationId: addAssetToGallery
       tags: [gallery]
       summary: Add an existing asset to a gallery
       requestBody:
@@ -1322,6 +1350,7 @@ paths:
           type: string
           format: uuid
     delete:
+      operationId: removeAssetFromGallery
       tags: [gallery]
       summary: Remove an asset from a gallery (does not delete the asset)
       responses:
@@ -1336,6 +1365,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GalleryIdPath'
     get:
+      operationId: listGalleryShareLinks
       tags: [gallery]
       summary: List share links for a gallery
       responses:
@@ -1350,6 +1380,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
+      operationId: createGalleryShareLink
       tags: [gallery]
       summary: Create a share link for a gallery
       requestBody:
@@ -1382,6 +1413,7 @@ paths:
           type: string
           format: uuid
     delete:
+      operationId: revokeGalleryShareLink
       tags: [gallery]
       summary: Revoke a share link
       responses:

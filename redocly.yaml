@@ -24,21 +24,20 @@ rules:
   # `type: [string, "null"]`). Regressions here must block the build.
   struct: error
 
-  # DEFERRED: operation-operationId.
+  # ENFORCED: operation-operationId.
   #
-  # Every operation in a 3.1 spec SHOULD carry an operationId because
+  # Every operation in a 3.1 spec carries an operationId because
   # downstream codegen (openapi-typescript, oapi-codegen, Stoplight,
   # Swagger UI) uses it as the function name in the generated client.
-  # Leaving it off means consumers get auto-generated names like
+  # Without one, consumers get auto-generated names like
   # `postApiV1Uploads` instead of `createUpload`.
   #
-  # We chose not to backfill the 30 operationIds during the brownfield
-  # fix wave because that is a SDK-shaping product decision (naming
-  # conventions, casing, duplicate-name rules) that deserves its own
-  # review rather than being bundled into an unrelated spec-compliance
-  # fix. Track the backfill as a follow-up story; until it lands, keep
-  # this rule off so it does not drown the real errors in CI noise.
-  operation-operationId: off
+  # The 32 operationIds were backfilled as part of the ISSUE-011
+  # follow-up fix wave using the camelCase verb+resource convention
+  # (createUpload, listGalleries, getGalleryById, etc.). This rule is
+  # now ERROR-level so any new operation added without an operationId
+  # — or any duplicate ID — blocks the build in CI.
+  operation-operationId: error
 
   # DEFERRED: no-unused-components.
   #
