@@ -467,8 +467,10 @@ func main() {
 	// both paths. This cuts brute-force throughput against the 10^6
 	// TOTP code space while leaving legitimate retry-on-typo UX alive.
 	mfaVerifyLimiter := middleware.RateLimit(10, time.Minute)
-	r.With(mfaVerifyLimiter).Mount("/auth", mfaHandler.PublicRoutes())
-	r.With(mfaVerifyLimiter).Mount("/api/v1/auth", mfaHandler.PublicRoutes())
+	r.With(mfaVerifyLimiter).Post("/auth/verify-totp", mfaHandler.VerifyTOTP)
+	r.With(mfaVerifyLimiter).Post("/auth/verify-recovery-code", mfaHandler.VerifyRecoveryCode)
+	r.With(mfaVerifyLimiter).Post("/api/v1/auth/verify-totp", mfaHandler.VerifyTOTP)
+	r.With(mfaVerifyLimiter).Post("/api/v1/auth/verify-recovery-code", mfaHandler.VerifyRecoveryCode)
 
 	// Protected routes — JWT auth → tenant context → state check
 	r.Group(func(pr chi.Router) {

@@ -2,6 +2,13 @@
 .env
 .env.cobolt
 .env.mcp
+
+# Editor / IDE state — per-user config, not project state.
+# Committing these conflicts across devs who use different layouts.
+.obsidian/
+.vscode/
+.idea/
+
 _cobolt-output/
 .worktrees/
 _cobolt-docker/.env
