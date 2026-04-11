@@ -162,6 +162,7 @@ func (h *MFAHandler) AuthenticatedRoutes() chi.Router {
 	r.Post("/enroll", h.Enroll)
 	r.Post("/verify-enrollment", h.VerifyEnrollment)
 	r.Get("/status", h.Status)
+	r.Delete("/enrollment", h.DeleteEnrollment)
 	return r
 }
 
@@ -219,14 +220,30 @@ func (h *MFAHandler) Enroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject re-enrollment while a row already exists. The client must
-	// explicitly delete the existing enrollment first (future endpoint).
-	if _, err := h.enrollRepo.GetByUserID(r.Context(), userID); err == nil {
-		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "already_enrolled",
-			"reason": "MFA is already enrolled for this user. Delete the existing enrollment first.",
-		})
-		return
+	// Handle existing enrollment rows intelligently:
+	//   - Verified (LastVerifiedAt != nil): reject with 409 — the client
+	//     must hit DELETE /auth/mfa/enrollment first, which is a gated
+	//     operation. This prevents an attacker with a stolen session
+	//     from silently replacing a victim's active TOTP secret.
+	//   - Unverified (LastVerifiedAt == nil): the user abandoned a
+	//     previous enrollment flow (SF-003). Silently clean up the
+	//     stale row + any orphaned recovery codes and proceed with a
+	//     fresh enrollment. Otherwise users get permanently stuck at
+	//     "already_enrolled" with no way out.
+	if existing, err := h.enrollRepo.GetByUserID(r.Context(), userID); err == nil {
+		if existing.LastVerifiedAt != nil {
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error":  "already_enrolled",
+				"reason": "MFA is already enrolled for this user. Delete the existing enrollment first.",
+			})
+			return
+		}
+		// Abandoned pending enrollment — reap and continue.
+		if err := h.enrollRepo.Delete(r.Context(), userID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "stale enrollment cleanup failed"})
+			return
+		}
+		_ = h.codesRepo.DeleteAll(r.Context(), userID)
 	} else if !errors.Is(err, ErrMFANotEnrolled) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "enrollment lookup failed"})
 		return
@@ -445,6 +462,45 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	})
+}
+
+// DeleteEnrollment wipes the caller's MFA enrollment and all associated
+// recovery codes. Used by Settings → Security → "Disable MFA". The
+// caller's authenticated session is the only credential required —
+// stepping up through TOTP first would create a chicken-and-egg for
+// users whose authenticator app is lost, which is what recovery codes
+// exist for. Higher-trust operations (admin account reset, billing
+// changes) remain behind separate step-up gates.
+//
+// This endpoint deliberately does NOT require password re-confirmation.
+// Tightening it would be a cross-cutting UX decision for a future wave.
+func (h *MFAHandler) DeleteEnrollment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.authedUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthenticated"})
+		return
+	}
+
+	if _, err := h.enrollRepo.GetByUserID(r.Context(), userID); err != nil {
+		if errors.Is(err, ErrMFANotEnrolled) {
+			// Idempotent — "not enrolled" and "just deleted" look the
+			// same to the client.
+			writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "enrollment lookup failed"})
+		return
+	}
+
+	if err := h.enrollRepo.Delete(r.Context(), userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete enrollment failed"})
+		return
+	}
+	// Recovery codes become meaningless once the enrollment is gone;
+	// best-effort delete without surfacing the error.
+	_ = h.codesRepo.DeleteAll(r.Context(), userID)
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // Status reports the authenticated user's current enrollment state.

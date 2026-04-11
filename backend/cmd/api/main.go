@@ -371,8 +371,16 @@ func main() {
 	// F-007 (M17 wave 2): MFA public route. /auth/verify-totp uses the
 	// mfa_token issued by Login as its own credential, so it must NOT
 	// be behind JWT middleware.
-	r.Mount("/auth", mfaHandler.PublicRoutes())
-	r.Mount("/api/v1/auth", mfaHandler.PublicRoutes())
+	//
+	// M17 audit followup (S-002): wrap the mount in a tighter per-IP
+	// limiter on top of the global 60/min — 10 attempts per minute
+	// shared across both the legacy /auth and versioned /api/v1/auth
+	// mounts so an attacker cannot double their budget by hitting
+	// both paths. This cuts brute-force throughput against the 10^6
+	// TOTP code space while leaving legitimate retry-on-typo UX alive.
+	mfaVerifyLimiter := middleware.RateLimit(10, time.Minute)
+	r.With(mfaVerifyLimiter).Mount("/auth", mfaHandler.PublicRoutes())
+	r.With(mfaVerifyLimiter).Mount("/api/v1/auth", mfaHandler.PublicRoutes())
 
 	// Protected routes — JWT auth → tenant context → state check
 	r.Group(func(pr chi.Router) {
