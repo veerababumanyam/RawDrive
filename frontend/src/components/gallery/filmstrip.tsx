@@ -13,11 +13,18 @@
 
 import { useEffect, useRef } from "react";
 import type { Asset } from "@/lib/api/assets";
+import { getStoredAccessToken } from "@/lib/auth";
 
 interface Props {
   assets: Asset[];
   activeId: string;
   onSelect: (id: string) => void;
+}
+
+function appendTokenIfStorage(url: string, token: string | null): string {
+  if (!url || !token || !url.includes("/storage/") || url.includes("token=")) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
 }
 
 export function Filmstrip({ assets, activeId, onSelect }: Props) {
@@ -42,12 +49,13 @@ export function Filmstrip({ assets, activeId, onSelect }: Props) {
     >
       {assets.map((a) => {
         const active = a.id === activeId;
-        const thumbUrl =
+        const rawThumb =
           a.thumbnail_urls?.thumb_sm_webp ||
           a.thumbnail_urls?.thumb_sm ||
           a.thumbnail_urls?.sm ||
           a.thumbnail_urls?.thumb_md ||
           "";
+        const thumbUrl = appendTokenIfStorage(rawThumb, getStoredAccessToken());
         return (
           <button
             key={a.id}

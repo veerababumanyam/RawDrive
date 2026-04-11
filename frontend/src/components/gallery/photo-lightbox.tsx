@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
 import type { Gallery } from "@/lib/api/galleries";
+import { getStoredAccessToken } from "@/lib/auth";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   ChevronLeft, ChevronRight, XMark, Download, Expand, Compress,
@@ -60,6 +61,22 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+/**
+ * Append ?token=... to a /storage/* URL so the JWT-authed streaming
+ * proxy will accept a bare <img src> / <video src>. Non-/storage
+ * URLs (legacy presigned S3 URLs, data URIs, relative blob refs)
+ * pass through untouched. Idempotent — does not double-append if a
+ * token query param already exists.
+ */
+function authedStorageUrl(url: string | undefined | null, token: string | null): string {
+  if (!url) return "";
+  if (!token) return url;
+  if (!url.includes("/storage/")) return url;
+  if (url.includes("token=")) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
 }
 
 function isVideo(a: Asset): boolean {
@@ -183,6 +200,7 @@ export function PhotoLightbox({
     }
     if (!url) return;
     if (!url.startsWith("http")) url = `${API_BASE}/storage/${url}`;
+    url = authedStorageUrl(url, token);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   };
 
@@ -190,7 +208,20 @@ export function PhotoLightbox({
     if (commentText.trim() && onComment) { onComment(asset.id, commentText.trim()); setCommentText(""); }
   };
 
-  const largeUrl = asset.thumbnail_urls?.lg || asset.thumbnail_urls?.cover_1920 || asset.download_url || Object.values(asset.thumbnail_urls || {})[0] || "";
+  // Token is read eagerly so every URL derived below uses the same
+  // session credential. The token is in-memory (see lib/auth.ts) and
+  // is refreshed by the ambient refresh hook, so we do not need to
+  // watch for changes here.
+  const token = getStoredAccessToken();
+  const rawLargeUrl = asset.thumbnail_urls?.display_webp
+    || asset.thumbnail_urls?.thumb_lg_webp
+    || asset.thumbnail_urls?.thumb_lg
+    || asset.thumbnail_urls?.lg
+    || asset.thumbnail_urls?.cover_1920
+    || asset.download_url
+    || Object.values(asset.thumbnail_urls || {})[0]
+    || "";
+  const largeUrl = authedStorageUrl(rawLargeUrl, token);
   const exif = asset.exif_data || {};
 
   const filmstripVisible = (showFilmstrip ?? !!allAssets) && !compareMode && !!allAssets && allAssets.length > 1;
@@ -296,8 +327,8 @@ export function PhotoLightbox({
               {isVideo(asset) ? (
                 // GAL-FR-095: video playback with poster, controls, trim.
                 <VideoPlayer
-                  src={asset.download_url || (asset.storage_key ? `/storage/${asset.storage_key}` : "")}
-                  poster={asset.poster_url || asset.thumbnail_urls?.lg}
+                  src={authedStorageUrl(asset.download_url || (asset.storage_key ? `/storage/${asset.storage_key}` : ""), token)}
+                  poster={authedStorageUrl(asset.poster_url || asset.thumbnail_urls?.lg, token)}
                   showTrim={isProofing}
                   className="flex max-h-full max-w-full items-center justify-center p-4"
                 />
@@ -357,10 +388,11 @@ export function PhotoLightbox({
           {burstExpanded && (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
               {burstSiblings.map((sib) => {
-                const thumb =
+                const rawThumb =
                   sib.thumbnail_urls?.thumb_sm ||
                   sib.thumbnail_urls?.sm ||
                   sib.thumbnail_urls?.thumb_md || "";
+                const thumb = authedStorageUrl(rawThumb, token);
                 return (
                   <div
                     key={sib.id}

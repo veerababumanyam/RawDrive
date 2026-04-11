@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
@@ -26,7 +27,13 @@ type AssetWithURL struct {
 	DownloadURL string `json:"download_url"`
 }
 
-// GetByID retrieves an asset with a presigned URL.
+// GetByID retrieves an asset with a stable download URL. The URL is
+// rooted at PUBLIC_API_URL/storage/{key} so the browser only ever talks
+// to the public api origin and never sees R2/MinIO host details. The
+// backend /storage/* proxy re-authenticates on every request (token
+// query param OR Authorization header) so the URL is safe to embed
+// permanently in API responses. Replaces the previous PresignURL call
+// path which leaked the internal storage host and expired after 1h.
 func (s *AssetService) GetByID(ctx context.Context, id uuid.UUID) (*AssetWithURL, error) {
 	asset, err := s.assetRepo.GetByID(ctx, id)
 	if err != nil {
@@ -36,12 +43,11 @@ func (s *AssetService) GetByID(ctx context.Context, id uuid.UUID) (*AssetWithURL
 		return nil, nil
 	}
 
-	url, err := s.storage.PresignURL(ctx, asset.StorageKey, storage.PresignOptions{
-		ExpiresInSeconds: 3600,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("asset service: presign: %w", err)
+	publicBase := os.Getenv("PUBLIC_API_URL")
+	if publicBase == "" {
+		publicBase = "https://api.rawdrive.in"
 	}
+	url := fmt.Sprintf("%s/storage/%s", publicBase, asset.StorageKey)
 
 	return &AssetWithURL{Asset: asset, DownloadURL: url}, nil
 }
