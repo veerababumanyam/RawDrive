@@ -95,6 +95,21 @@ export function LoginForm() {
         return;
       }
 
+      // F-007 (M17 wave 3): MFA step-up. When the backend detects a verified
+      // enrollment, Login returns 401 + { mfa_required, mfa_token, challenge }.
+      // We stash the mfa_token in sessionStorage (short-lived, never written
+      // to localStorage) and hand the user off to /login/mfa to complete the
+      // TOTP check. The mfa_token is a 5-minute JWT with purpose=mfa_challenge
+      // that the backend's /auth/verify-totp endpoint accepts as its own
+      // credential.
+      if (response.status === 401 && payload.mfa_required && payload.mfa_token) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem("rawdrive_mfa_token", payload.mfa_token);
+        }
+        router.push("/login/mfa");
+        return;
+      }
+
       if (!response.ok) {
         setError(payload.error || "Login failed. Please check your credentials.");
         return;
