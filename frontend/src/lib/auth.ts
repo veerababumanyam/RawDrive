@@ -1,5 +1,4 @@
-const ACCESS_TOKEN_KEY = "rawdrive_token";
-const REFRESH_TOKEN_KEY = "rawdrive_refresh_token";
+const LEGACY_TOKEN_KEYS = ["rawdrive_token", "rawdrive_refresh_token"] as const;
 
 let accessTokenCache = "";
 
@@ -11,24 +10,19 @@ type AccessTokenClaims = {
   state_id?: string;
 };
 
-function getStorage(type: "local" | "session") {
+function clearLegacyStoredTokens() {
   if (typeof window === "undefined") {
-    return null;
+    return;
   }
 
-  return type === "local" ? window.localStorage : window.sessionStorage;
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    for (const key of LEGACY_TOKEN_KEYS) {
+      storage.removeItem(key);
+    }
+  }
 }
 
-function clearLegacyStoredTokens() {
-  getStorage("local")?.removeItem(ACCESS_TOKEN_KEY);
-  getStorage("local")?.removeItem(REFRESH_TOKEN_KEY);
-  getStorage("session")?.removeItem(ACCESS_TOKEN_KEY);
-  getStorage("session")?.removeItem(REFRESH_TOKEN_KEY);
-}
-
-export function persistAuthTokens(accessToken: string, refreshToken = "", remember = true) {
-  void refreshToken;
-  void remember;
+export function persistAuthTokens(accessToken: string) {
   accessTokenCache = accessToken;
   clearLegacyStoredTokens();
 }
