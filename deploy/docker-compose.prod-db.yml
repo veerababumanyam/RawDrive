@@ -48,6 +48,12 @@ services:
       - /etc/valkey/valkey.conf
       - --requirepass
       - ${VALKEY_PASSWORD}
+    environment:
+      # Required by the healthcheck command; the --requirepass flag
+      # above handles the listener but doesn't set this env var inside
+      # the container, so the healthcheck's $${VALKEY_PASSWORD}
+      # expansion would otherwise resolve to empty.
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD}
     volumes:
       - valkey_data:/data
       - ./valkey/valkey.conf:/etc/valkey/valkey.conf:ro
