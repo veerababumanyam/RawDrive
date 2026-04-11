@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -1174,21 +1175,74 @@ func main() {
 	log.Println("Public lead form endpoint registered")
 
 	// ──────────────────────── Authenticated Storage Proxy ────────────────
-	// Proxies storage file requests through JWT auth + R2 presigned URLs.
-	// Photos are stored in R2 only — never on local filesystem.
-	r.Route("/storage", func(sr chi.Router) {
-		sr.Use(middleware.JWTAuth(jwtSvc))
-		sr.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			key := chi.URLParam(r, "*")
-			presigned, err := storageProvider.PresignURL(r.Context(), key, storage.PresignOptions{ExpiresInSeconds: 3600})
-			if err != nil {
-				http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
-				return
-			}
-			http.Redirect(w, r, presigned, http.StatusTemporaryRedirect)
-		})
+	// Streams storage file bytes through the backend with JWT auth so
+	// the browser never learns the R2/MinIO host. Previously this
+	// endpoint issued a 307 redirect to a presigned R2 URL — which
+	// leaked the backend's storage endpoint to the client and broke
+	// completely when the storage host wasn't publicly reachable (as
+	// observed during UAT on 2026-04-12 against the MinIO bridge on a
+	// private VPS IP). Streaming is slightly more bandwidth on the API
+	// node but:
+	//   - keeps "all file serving requires JWT auth" intact
+	//   - hides the storage endpoint, satisfying "no public URL
+	//     access" from AGENTS.md §No Local Storage
+	//   - works identically for R2 (HTTPS) and MinIO (HTTP)
+	//   - lets the thumbnail worker emit stable /storage/{key} URLs
+	//     that never expire
+	// Query-param token fallback lets <img src> tags authenticate
+	// without a custom header — the Authorization header form is
+	// preserved for fetch() callers that already set it.
+	r.Get("/storage/*", func(w http.ResponseWriter, r *http.Request) {
+		key := chi.URLParam(r, "*")
+		if key == "" {
+			http.Error(w, `{"error":"missing key"}`, http.StatusBadRequest)
+			return
+		}
+		// Verify JWT — accept Bearer header OR ?token=... for <img src>.
+		tokenStr := ""
+		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+			tokenStr = strings.TrimPrefix(h, "Bearer ")
+		} else if q := r.URL.Query().Get("token"); q != "" {
+			tokenStr = q
+		}
+		if tokenStr == "" {
+			http.Error(w, `{"error":"unauthenticated"}`, http.StatusUnauthorized)
+			return
+		}
+		if _, err := jwtSvc.ParseAccessToken(r.Context(), tokenStr); err != nil {
+			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+			return
+		}
+
+		rc, err := storageProvider.Get(r.Context(), key)
+		if err != nil {
+			http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
+			return
+		}
+		defer rc.Close()
+
+		// Best-effort content-type guess from extension — the backend
+		// does not persist content-type for every derivative so we
+		// fall back to octet-stream rather than sniff the body.
+		ct := "application/octet-stream"
+		switch {
+		case strings.HasSuffix(key, ".webp"):
+			ct = "image/webp"
+		case strings.HasSuffix(key, ".jpg"), strings.HasSuffix(key, ".jpeg"):
+			ct = "image/jpeg"
+		case strings.HasSuffix(key, ".png"):
+			ct = "image/png"
+		case strings.HasSuffix(key, ".gif"):
+			ct = "image/gif"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		if _, err := io.Copy(w, rc); err != nil {
+			// Connection dropped mid-stream — nothing we can do.
+			return
+		}
 	})
-	log.Println("Storage: R2 proxy with JWT auth on /storage/*")
+	log.Println("Storage: streaming proxy with JWT auth on /storage/*")
 
 	// ──────────────────────── Background Workers (start after all routes) ────────────────
 	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).WithPublisher(eventBroker)

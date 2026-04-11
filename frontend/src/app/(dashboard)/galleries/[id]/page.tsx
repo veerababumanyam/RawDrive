@@ -362,7 +362,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {visibleAssets.map((entry) => {
-                  const previewUrl = getAssetPreviewUrl(entry.asset || undefined);
+                  const previewUrl = getAssetPreviewUrl(entry.asset || undefined, token);
 
                   return (
                     <article
