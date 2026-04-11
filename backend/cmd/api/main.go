@@ -641,6 +641,14 @@ func main() {
 			WithValidation(uploadValidationSvc)
 		chunkedHandler.RegisterRoutes(api)
 
+		// M17 audit followup (S-011): register the upload-session cleanup
+		// worker so abandoned chunked uploads don't leak R2 multipart
+		// state and upload_sessions rows indefinitely. Polls every 15
+		// minutes and aborts each expired session's R2 multipart upload
+		// before deleting the DB row.
+		uploadSessionCleanupWorker := worker.NewUploadSessionCleanupWorker(uploadSessionsRepo, storageProvider)
+		workerRegistry.Register("upload-session-cleanup", uploadSessionCleanupWorker)
+
 		log.Println("M2: routes registered")
 
 		// ──────────────────────── M3: AI & Intelligence Layer ──────────────────────

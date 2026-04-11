@@ -2,9 +2,12 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -92,6 +95,23 @@ type MFAHandler struct {
 	workspaceLookup WorkspaceLookup
 	// now is injected for deterministic tests.
 	now func() time.Time
+
+	// consumedChallenges tracks MFA challenge tokens that have been used
+	// successfully, to enforce single-use semantics (S-003). The key is a
+	// hex-encoded sha256 of the raw mfa_token string; the value is the
+	// wall-clock time at which the entry becomes eligible for eviction
+	// (challenge expiry + 1 minute buffer). A failed TOTP attempt does
+	// NOT burn the token — we only consume on successful verification,
+	// just before issuing the full access/refresh tokens. That keeps
+	// retry UX alive while closing the replay-after-success window.
+	//
+	// In-process sync.Map is acceptable here because the challenge
+	// lifetime (5 minutes) is shorter than any realistic restart window,
+	// and brute-forcing a valid 6-digit code within one 5-minute JWT
+	// lifetime is already bounded by the global 60/min rate limiter. A
+	// horizontal scale-out would want a Valkey-backed denylist instead;
+	// that is tracked as a separate Tier A finding.
+	consumedChallenges sync.Map
 }
 
 // NewMFAHandler constructs the MFA handler. The envelope may be nil in
@@ -377,6 +397,17 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// S-003: enforce single-use on the mfa_token. A successful TOTP
+	// verification consumes the challenge so a subsequent replay with
+	// the same mfa_token (even with a valid code) cannot re-issue a
+	// session. Intentionally placed AFTER totp.Verify so a typo'd code
+	// does not burn the challenge — users can retry with the same
+	// mfa_token until they either succeed or the token expires.
+	if !h.consumeChallengeToken(req.MFAToken) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "mfa token already used"})
+		return
+	}
+
 	_ = h.enrollRepo.UpdateLastVerified(r.Context(), userID)
 
 	// Resolve fresh workspace claims the same way Login does — roles may
@@ -484,6 +515,49 @@ func SetAuthedUserIDReader(fn func(r *http.Request) (uuid.UUID, bool)) {
 // token-minting logic.
 func (h *MFAHandler) IssueMFAChallengeToken(userID, workspaceID, role, platformRole, stateID string) (string, error) {
 	return issueMFAChallengeToken(h.jwt, userID, workspaceID, role, platformRole, stateID, mfaChallengeExpiry)
+}
+
+// consumeChallengeToken atomically marks an mfa_token as used. Returns
+// true if this call performed the consumption (the token was not
+// previously used), false if the token has already been consumed within
+// its validity window.
+//
+// The key is a sha256 hash of the raw token string so the in-memory map
+// stays small regardless of JWT length. Opportunistic eviction sweeps
+// up to 16 expired entries per call to keep the map bounded without
+// spawning a background goroutine.
+func (h *MFAHandler) consumeChallengeToken(tokenStr string) bool {
+	if tokenStr == "" {
+		return false
+	}
+	sum := sha256.Sum256([]byte(tokenStr))
+	key := hex.EncodeToString(sum[:])
+
+	nowFn := h.now
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	now := nowFn()
+	// Keep the entry around for a full challenge expiry + 1 minute
+	// buffer so a clock-skewed replay still gets caught.
+	evictAt := now.Add(mfaChallengeExpiry + time.Minute)
+
+	if _, loaded := h.consumedChallenges.LoadOrStore(key, evictAt); loaded {
+		return false
+	}
+
+	// Opportunistic cleanup — delete up to 16 entries whose eviction
+	// time has passed. Bounded work per call, no background goroutine.
+	swept := 0
+	h.consumedChallenges.Range(func(k, v any) bool {
+		if ts, ok := v.(time.Time); ok && now.After(ts) {
+			h.consumedChallenges.Delete(k)
+			swept++
+		}
+		return swept < 16
+	})
+
+	return true
 }
 
 // parseChallengeToken verifies a challenge token and extracts its claims.
