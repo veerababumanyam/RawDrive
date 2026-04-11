@@ -127,12 +127,15 @@ func seedWorkspace(t *testing.T, pool *pgxpool.Pool, label string) seededWorkspa
 	// seed a throwaway one. The states table is tiny and shared
 	// across tests, so a unique code per test keeps us from
 	// colliding with other packages.
-	stateCode := "ZZ-" + strings.ToUpper(label[:min(3, len(label))]) + "-" + uuid.New().String()[:8]
+	stateCode := "ZZ" + strings.ToUpper(strings.ReplaceAll(uuid.New().String()[:8], "-", ""))
 	var stateID int
 	err := pool.QueryRow(ctx,
-		`INSERT INTO states (code, name, country_code)
-		 VALUES ($1, $2, 'IN')
-		 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+		`INSERT INTO states (code, name, type, is_union_territory)
+		 VALUES ($1, $2, 'state', false)
+		 ON CONFLICT (code) DO UPDATE SET
+		  name = EXCLUDED.name,
+		  type = EXCLUDED.type,
+		  is_union_territory = EXCLUDED.is_union_territory
 		 RETURNING id`,
 		stateCode, "Brownfield Test "+label,
 	).Scan(&stateID)
@@ -181,8 +184,8 @@ func seedGallery(t *testing.T, pool *pgxpool.Pool, ws seededWorkspace, slug stri
 	id := uuid.New()
 	uniqueSlug := slug + "-" + id.String()[:8]
 	_, err := pool.Exec(ctx,
-		`INSERT INTO galleries (id, workspace_id, created_by, name, slug, visibility)
-		 VALUES ($1, $2, $3, $4, $5, 'private')`,
+		`INSERT INTO galleries (id, workspace_id, created_by, title, slug, status, is_published)
+		 VALUES ($1, $2, $3, $4, $5, 'draft', false)`,
 		id, ws.WorkspaceID, ws.OwnerID, "BF "+slug, uniqueSlug,
 	)
 	require.NoError(t, err, "seed gallery")
