@@ -60,3 +60,11 @@ credentials/
 *.key
 *.p12
 *.pfx
+
+# Production credentials file — untracked 2026-04-11 during prod bootstrap.
+# Contains R2/SMTP/MoonShot/CF creds plus SSH key metadata. File stays on
+# disk as operator reference but must never be committed.
+HostingerServerDetails.md
+
+# Local scratch env used during bootstrap (lives in /tmp/, but defensive)
+rawdrive-secrets.env
