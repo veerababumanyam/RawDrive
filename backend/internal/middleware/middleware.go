@@ -107,7 +107,16 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 				parts := strings.Split(r.URL.Path, "/workspaces/")
 				if len(parts) > 1 {
 					urlWS := strings.Split(parts[1], "/")[0]
-					if urlWS != "" && urlWS != wsID {
+					// Exempt the literal "current" keyword. Handlers that sit
+					// under /api/v1/workspaces/current/* (e.g. GetCurrentPlan
+					// from F-011) intentionally read the workspace id from
+					// JWT claims rather than the URL so the client cannot
+					// spoof a different workspace. The strict same-uuid
+					// check would otherwise 403 them because "current" never
+					// equals the JWT's workspace UUID. (UAT 2026-04-12 —
+					// /settings/storage loaded with a 403 from
+					// /api/v1/workspaces/current/plan for @pho_pro.)
+					if urlWS != "" && urlWS != wsID && urlWS != "current" {
 						http.Error(w, "Forbidden", http.StatusForbidden)
 						return
 					}

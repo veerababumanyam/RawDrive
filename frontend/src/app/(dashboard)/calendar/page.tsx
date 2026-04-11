@@ -58,9 +58,19 @@ export default function CalendarPage() {
       .then((res) => res.json())
       .then((data) => {
         if (!ignore) {
+          // Backend returns `null` when the range is empty, which
+          // previously crashed the month-grid with
+          // "Cannot read properties of null (reading 'filter')".
+          // Coerce to an array and accept either a bare array or
+          // the wrapped {events:[...]} shape for forward-compat.
+          const list: CalendarEvent[] = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.events)
+              ? data.events
+              : [];
           setRequestState({
             key: requestKey,
-            events: data,
+            events: list,
             error: null,
           });
         }
@@ -86,7 +96,7 @@ export default function CalendarPage() {
 
   const eventsOnDay = (day: number) => {
     const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return events.filter((event) => event.start_at.startsWith(dayStr));
+    return (events ?? []).filter((event) => event?.start_at?.startsWith(dayStr));
   };
 
   const monthName = currentDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
