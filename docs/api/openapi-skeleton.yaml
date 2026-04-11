@@ -1,0 +1,75 @@
+# ISSUE-004 scaffold: hand-written OpenAPI 2.0 skeleton for the
+# RawDrive HTTP API. This file exists so the docs/api directory
+# has a concrete artifact that can be hand-extended per route file
+# until `swag init` replaces it. See README.md for the full
+# strategy and backfill plan.
+#
+# Once the first backfill wave (routes_m2.go annotations) runs
+# swag init, this skeleton is superseded by the generated
+# swagger.yaml and this file can be deleted.
+
+swagger: "2.0"
+info:
+  title: RawDrive API
+  description: |
+    Multi-tenant photo-gallery platform API. Auth is Bearer JWT.
+    Email OTP is registration-only — all subsequent logins are
+    password + optional TOTP MFA step-up.
+  version: "1.0.0"
+  contact:
+    name: RawDrive Support
+    email: support@rawdrive.in
+    url: https://rawdrive.in/contact
+  license:
+    name: Proprietary
+    url: https://rawdrive.in/legal
+host: api.rawdrive.in
+basePath: /api/v1
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+
+securityDefinitions:
+  BearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: |
+      "Bearer {token}" — JWT access token from POST /auth/login or
+      POST /auth/verify-totp. Tokens carry workspace_id, role,
+      platform_role, state_id, and mfa_verified claims.
+
+# Placeholder tags so the generated spec has a sensible table of
+# contents once swag starts populating paths under each one.
+tags:
+  - name: auth
+    description: Registration, login, OTP, password reset, TOTP MFA
+  - name: onboarding
+    description: First-workspace setup for new users
+  - name: workspace
+    description: Workspace CRUD + members + storage
+  - name: team
+    description: Invitations, members, roles
+  - name: gallery
+    description: Galleries and gallery assets
+  - name: asset
+    description: Asset upload, metadata, bulk operations, derivatives
+  - name: album
+    description: Album CRUD + asset assignment
+  - name: proofing
+    description: Client proofing + selection
+  - name: share
+    description: Public gallery share links
+  - name: admin
+    description: Platform admin — settings, users, workspaces, moderation
+  - name: health
+    description: Liveness + readiness probes
+
+# Intentionally empty — populated by swag init during the first
+# backfill wave (see README.md backfill plan).
+paths: {}
+
+definitions: {}
