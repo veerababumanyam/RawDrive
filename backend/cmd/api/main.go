@@ -20,6 +20,8 @@ import (
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/auth"
 	backendcrypto "github.com/rawdrive/backend/internal/crypto"
+	"github.com/rawdrive/backend/internal/email"
+	"github.com/rawdrive/backend/internal/events"
 	"github.com/rawdrive/backend/internal/handler"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/onboarding"
@@ -226,14 +228,56 @@ func main() {
 	userSvc := user.NewService(userRepo)
 	userAuthAdapter := user.NewAuthAdapter(userSvc)
 
-	// OTP with dev logging (prints code to stdout)
+	// ──────────────────────── ISSUE-002 Email Transport ────────────────────────
+	//
+	// Brownfield P0: every email path was backed by a stdout stub and
+	// there was no compile-time or runtime guard preventing production
+	// use, which meant signup OTPs, password resets, team invitations
+	// and MFA enrolment mails all silently vanished in any non-local
+	// environment. Load SMTP settings from env vars (the platform_settings
+	// DB path is not yet available this early in boot) and construct the
+	// real email.OTPDelivery + email.InvitationSender. If no SMTP config
+	// is present, require an explicit DEV_STUB_EMAIL=true escape hatch
+	// AND a non-production APP_ENV — otherwise FATAL so misconfigurations
+	// cannot ship.
+	smtpCfg, smtpErr := email.LoadSMTPConfig(context.Background(), nil)
+	if smtpErr != nil {
+		log.Fatalf("FATAL: SMTP config error (ISSUE-002): %v", smtpErr)
+	}
+
+	var otpDelivery auth.EmailDelivery
+	var teamEmailSender teamPkg.EmailSender
+
+	if smtpCfg != nil {
+		otpDelivery = email.NewOTPDelivery(smtpCfg)
+		teamEmailSender = email.NewInvitationSender(smtpCfg)
+		log.Printf("Email: SMTP transport wired to %s:%d (from=%s)",
+			smtpCfg.Host, smtpCfg.Port, smtpCfg.FromAddress)
+	} else {
+		stubAllowed := strings.EqualFold(os.Getenv("DEV_STUB_EMAIL"), "true")
+		envName := strings.ToLower(os.Getenv("APP_ENV"))
+		isProduction := envName == "production" || envName == "prod"
+		if !stubAllowed || isProduction {
+			log.Fatalf("FATAL: No SMTP config (SMTP_HOST/SMTP_PORT/SMTP_FROM_ADDRESS all missing) "+
+				"and DEV_STUB_EMAIL != true (or APP_ENV=%q is production). "+
+				"Set SMTP_* env vars, or explicitly set DEV_STUB_EMAIL=true in a non-production "+
+				"APP_ENV to acknowledge stdout email stubs for dev. "+
+				"(ISSUE-002 production-readiness guard.)", envName)
+		}
+		otpDelivery = &logOTPDelivery{}
+		teamEmailSender = &logEmailSender{}
+		log.Println("WARNING: Email stubs active (DEV_STUB_EMAIL=true) — every email " +
+			"goes to stdout. DO NOT USE IN PRODUCTION.")
+	}
+
+	// OTP service backed by the selected delivery.
 	otpSvc := auth.NewOTPServiceWithDelivery(auth.OTPConfig{
 		CodeLength:      6,
 		Expiry:          15 * time.Minute,
 		MaxAttempts:     5,
 		RateLimitMax:    10,
 		RateLimitWindow: 15 * time.Minute,
-	}, &logOTPDelivery{})
+	}, otpDelivery)
 
 	// JWT
 	jwtSvc := auth.NewJWTService(auth.JWTConfig{
@@ -339,21 +383,65 @@ func main() {
 	// challenge tokens for enrolled users.
 	authHandler = authHandler.WithMFA(mfaEnrollmentAdapter, mfaHandler)
 
+	// ──────────────────────── ISSUE-003 Event Publisher ────────────────────────
+	//
+	// Brownfield P1: NATS JetStream ran in the compose stack but
+	// zero backend code consumed it — every published event went to
+	// an in-process stdout stub that silently dropped messages on
+	// restart. The selected publisher is chosen at startup via the
+	// EVENT_BROKER env var (default "inprocess" for backward
+	// compatibility with existing dev workflows):
+	//
+	//   EVENT_BROKER=nats       → events.NATSPublisher (JetStream)
+	//   EVENT_BROKER=inprocess  → logEventPublisher stdout stub
+	//
+	// NATS_URL defaults to "nats://nats:4222" for the compose stack;
+	// operators pointing at external NATS set it explicitly.
+	//
+	// Note: onboarding.EventPublisher, workspace.EventPublisher, and
+	// handler.EventPublisher are three separate interface declarations
+	// with identical shapes (Publish(ctx, subject, data) error), so a
+	// single structurally-compatible value can be passed to all
+	// three. We use a narrow local type to make the intent explicit.
+	type broadcastPublisher interface {
+		Publish(ctx context.Context, subject string, data []byte) error
+	}
+	var eventPublisher broadcastPublisher
+	switch strings.ToLower(os.Getenv("EVENT_BROKER")) {
+	case "nats":
+		natsURL := os.Getenv("NATS_URL")
+		if natsURL == "" {
+			natsURL = "nats://nats:4222"
+		}
+		natsPub, err := events.NewNATSPublisher(natsURL)
+		if err != nil {
+			log.Fatalf("FATAL: EVENT_BROKER=nats but NATS connection failed (ISSUE-003): %v", err)
+		}
+		defer natsPub.Close()
+		eventPublisher = natsPub
+		log.Printf("Events: NATS JetStream publisher wired to %s", natsURL)
+	default:
+		eventPublisher = &logEventPublisher{}
+		log.Println("Events: in-process stdout stub active (set EVENT_BROKER=nats to switch to JetStream)")
+	}
+
 	// Real workspace service backed by DB
 	wsRepo := workspace.NewPgRepo(dbPool)
-	wsSvc := workspace.NewService(wsRepo, &logEventPublisher{}, &logStorageBucket{})
+	wsSvc := workspace.NewService(wsRepo, eventPublisher, &logStorageBucket{})
 	wsHandler := workspace.NewHandler(wsSvc)
 
 	// Onboarding with real workspace creation
-	onbSvc := onboarding.NewService(&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool}, &logEventPublisher{})
+	onbSvc := onboarding.NewService(&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool}, eventPublisher)
 	onbHandler := onboarding.NewHandler(onbSvc)
 
 	// Real team repos backed by DB
 	invRepo := teamPkg.NewPgInvitationRepo(dbPool)
 	memberRepo := teamPkg.NewPgMemberRepo(dbPool)
+	// ISSUE-002: use the selected email transport (real SMTP or
+	// dev stub) for team invitation mail.
 	invSvc := teamPkg.NewInvitationService(
 		invRepo,
-		&logEmailSender{},
+		teamEmailSender,
 		memberRepo,
 		userAuthAdapter,
 		teamPkg.InvitationConfig{ExpiryDuration: 7 * 24 * time.Hour},
@@ -1118,6 +1206,20 @@ func main() {
 	// probe reports "disabled" for it.
 	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, nil)
 	r.Get("/health/deep", deepHealth.Deep)
+
+	// ──────────────────────── ISSUE-006 MFA Mount Gate ────────────────────────
+	//
+	// The RequireMFA middleware reads mfa_verified from JWT claims,
+	// which are populated by JWTAuth. Mounting RequireMFA without
+	// JWTAuth earlier in the chain was previously enforced only by a
+	// comment in require_mfa.go — the invariant was fragile and a
+	// regression would produce a confusing 401 or, worse, a permissive
+	// hole if someone "fixed" RequireMFA to be less strict. Walk every
+	// registered route and FATAL at startup if any MFA-protected route
+	// violates the JWTAuth-before-RequireMFA ordering.
+	if err := middleware.ValidateMFAMountOrder(r); err != nil {
+		log.Fatalf("FATAL: MFA mount order validation failed (ISSUE-006 invariant): %v", err)
+	}
 
 	// ──────────────────────── Start Server ────────────────────────
 	//
