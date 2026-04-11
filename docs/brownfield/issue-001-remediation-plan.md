@@ -1,4 +1,4 @@
-# ISSUE-001 — OAuth client_secret in git history (remediation plan)
+# ISSUE-001 — Credentials in git history (remediation plan, v2 — broadened scope)
 
 > **Status:** ⛔ **HALTED — awaiting explicit operator authorization.**
 > The steps below are prepared but NOT executed. Every action in
@@ -10,8 +10,25 @@
 > **Owner:** human operator (not an automated fix agent).
 > **Branch in progress:** `brownfield/fix-12-issues`.
 > **Prepared:** 2026-04-11, brownfield fix wave.
+> **Scope broadened:** 2026-04-11 (see §"Scope expansion" below), after
+> `docs/brownfield/brownfield-fix-wave-review.md §2.1` found that the
+> original plan only covered the Google OAuth JSON file and did not
+> account for the `.env` blob — which contains 11+ additional live
+> credentials including Razorpay **LIVE** keys, R2 secrets, PhonePe
+> prod client_secret, and a second Google OAuth client.
+>
+> **Read this before running anything:** the v1 plan below is
+> complete for the Google JSON file alone. Before Phase 2 runs, the
+> operator MUST also complete every row in §"Phase 1 — Rotation
+> checklist (v2, broadened)" and broaden the Phase 2 filter-repo
+> invocation to include `.env`. Running v1 as originally written
+> would remove the Google JSON from history while leaving every
+> other leaked credential reachable at `553febb:.env` and
+> `4d0c13d:.env`.
 
-## Current state (verified 2026-04-11)
+## Current state (verified 2026-04-11, broadened 2026-04-11)
+
+### Leaked blob 1 — Google OAuth JSON file
 
 - Commit `3889908` ("security(brownfield): remove committed OAuth
   client_secret + harden .gitignore [ISSUE-001]") removed the file
@@ -29,10 +46,60 @@
 - Confirmed via `git cat-file -e 553febb:gen-lang-client-0225070656-9e42fd6f0ba8.json`
   (exit 0 = blob is reachable).
 - Leaked artifact: a Google OAuth web-client credential JSON file.
-  The GCP project identifier is in the filename itself
-  (`gen-lang-client-0225070656`). **The client_secret value must
-  be rotated in GCP Console regardless of what happens to git
-  history.**
+  GCP project identifier: `gen-lang-client-0225070656`.
+  - `client_id`: `1057612383675-qg1horr2ng0pu5tnbbu3c1m5jbq8pnir.apps.googleusercontent.com`
+  - `client_secret`: `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` (compromised)
+
+### Leaked blob 2 — `.env` file (added in v2)
+
+Also discovered during review: the `.env` file was tracked in two
+commits and contains a second, independent set of live credentials.
+
+- Added in `553febb` (Initial project state).
+- Deleted in `4d0c13d` ("feat: admin dashboard hardening + schema
+  alignment"), which replaced the tracked `.env` with `.env.example`
+  for secrets hygiene. That commit did NOT remove the blob from
+  history; it only stopped tracking the file going forward.
+- Both commits still contain the blob:
+  ```bash
+  git cat-file -e 553febb:.env   # exit 0
+  git cat-file -e 4d0c13d:.env   # intermediate, also reachable
+  ```
+- Contents (verified 2026-04-11 via `git show 553febb:.env`):
+
+  | Credential | Value fragment (for rotation lookup — not for distribution) |
+  |---|---|
+  | `R2_ACCOUNT_ID` | `1b62424aa3b6d960f5c0d2588eb576f5` |
+  | `R2_ACCESS_KEY_ID` | `b1c8f71e60b3572241793906a7d674e8` |
+  | `R2_SECRET_ACCESS_KEY` | `ac59578e7db5...` |
+  | `R2_BUCKET_NAME` | `rawdrive` |
+  | `CLODFLARE_STREAMING` (Cloudflare Stream API token) | `cfut_OaZRpOeUdbVm8OWnmkXYRZanBSuDDl97fNNN3J0Ec7a3344c` |
+  | `PHONEPE_CLIENT_ID_PROD` | `SU2601231301347147219160` |
+  | `PHONEPE_CLIENT_SECRET_PROD` | `b5b663f8-b488-4c7b-8000-9915aaa450f0` |
+  | `PHONEPE_CLIENT_ID_TEST` | `M23YZ7TPI88P3_2512192349` |
+  | `PHONEPE_CLIENT_SECRET_TEST` | `NGRmZjRjMDYtMTM1ZC00ZTU2LTk2MDQtZmQ3Zjg4YzU0OGE1` |
+  | `RAZORPAY_KEY_ID` | `rzp_live_SaACt1vxmVQQXf` (**LIVE** key — not sandbox) |
+  | `RAZORPAY_KEY_SECRET` | `mRwt4O2IidkM19E9vq0TPN7T` |
+  | `STITCH_API_KEY` | `AQ.Ab8RN6JNw5z0D_PCq1b5jbByHvYquXPbg6U6naaWkXQHwvcKCg` |
+  | `FIGMA_API_KEY` | `figd_fYF4nPcfAt_i4sk2vILEcyyi6ZIBhlgiSmBUB7W7` |
+  | **Second Google OAuth client_id** | `1057612383675-vmqts48gkofn1le3grij4udp1rkrfssc.apps.googleusercontent.com` |
+  | **Second Google OAuth client_secret** | `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` |
+  | `SMTP_PASSWORD` | `Prasad@1979@` (looks like a personal password — may be reused across accounts; change everywhere it is reused) |
+
+**There are TWO Google OAuth clients exposed, not one.** The first
+is in `gen-lang-client-0225070656-9e42fd6f0ba8.json` (blob 1). The
+second is in `.env` (blob 2) and has a different `client_id`. Both
+client_secrets must be rotated in GCP Console.
+
+### Scope expansion
+
+The original (v1) plan scoped Phase 2 filter-repo to
+`gen-lang-client-0225070656-9e42fd6f0ba8.json` only. Running the v1
+plan as written would produce a rewritten history where the Google
+JSON is gone but `553febb:.env` and `4d0c13d:.env` are still
+reachable with all 11+ credentials above. v2 of this plan broadens
+the filter-repo path list to include `.env` and expands Phase 1
+rotation to cover every credential listed above.
 
 ## Why this cannot be done by a fix agent
 
@@ -95,48 +162,60 @@ branch I can see from this workstation — **verify the origin list
 with `git ls-remote origin` before running Phase 2** in case a team
 member has pushed a new branch while this plan was being prepared.
 
-## Phase 1 — Rotate the credential (MANDATORY FIRST)
+## Phase 1 — Rotation checklist (v2, broadened — MANDATORY FIRST)
 
 > History rewrite is defense-in-depth. **Rotation is the
 > load-bearing step.** After a rotation, the leaked secret is
 > useless even if it remains reachable everywhere it was ever
-> cloned. Before Phase 1 is complete, treat the credential as
-> live and compromised.
+> cloned. Before Phase 1 is complete, treat every credential
+> below as live and compromised.
+>
+> **Every row in the table below must be rotated before Phase 2
+> runs.** The v1 plan only covered blob 1 row 9 (the first Google
+> OAuth client). All other rows are new in v2 and are non-negotiable
+> — leaving any of them unrotated while Phase 2 proceeds means the
+> history rewrite removes the paper trail while the live exposure
+> continues.
 
-1. Sign in to Google Cloud Console at
-   <https://console.cloud.google.com/apis/credentials>
-   with an account that has Owner or Editor on the
-   `gen-lang-client-0225070656` project.
-2. Locate the OAuth 2.0 Client ID whose client_id matches the one
-   in the leaked JSON. The operator can look it up without
-   re-exposing the secret by running locally:
-   ```bash
-   git show 553febb:gen-lang-client-0225070656-9e42fd6f0ba8.json \
-     | python -c "import json,sys; print(json.load(sys.stdin)['web']['client_id'])"
-   ```
-3. Click **Reset Secret** on that client. Confirm.
-4. **Record the new client_secret in a secure secret store**
-   (1Password, Vault, AWS Secrets Manager, the team's chosen tool).
-   Do NOT paste it into Slack / email / commit / PR description.
-5. Update every place that consumed the old secret:
-   - `.env.cobolt` (local dev — each engineer rotates their own copy)
-   - Any staging / production deployment environment variables
-     (`GOOGLE_OAUTH_CLIENT_SECRET`, or whatever name the code uses;
-     grep for the old client_id to find every consumer)
-   - Any CI environment that needs to build against the OAuth app
-   - Any documentation runbook that references the credential
-6. Smoke-test the OAuth flow against the new secret before
-   proceeding:
-   - Trigger `/auth/oauth/google` locally
-   - Complete the callback
-   - Confirm a session is issued
-7. **Verify the old secret is dead.** Try to complete an OAuth flow
-   using the OLD client_secret (e.g. by temporarily swapping it
-   back in a throwaway env). Google should reject the request. If
-   it does not, the rotation did not take effect and Phase 2 must
-   not proceed.
+For each row, record the new value in a secure secret store
+(1Password, Vault, AWS Secrets Manager — whichever the team has
+chosen). Do NOT paste new values into Slack / email / commits /
+PR descriptions.
 
-After Phase 1 is complete and verified, the leaked credential is
+| # | Credential | Where to rotate | Where to update consumers | Verification |
+|---|---|---|---|---|
+| 1 | Cloudflare R2 access key + secret (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) | R2 dashboard → Manage R2 API Tokens → create new, then disable/delete the old token | `.env.cobolt` (each engineer rotates their own copy), staging env, prod env, any CI that uploads to R2 | Upload a test object via the new key; attempt with the old key and confirm 403 |
+| 2 | Cloudflare Stream API token (`CLODFLARE_STREAMING` — note the typo; grep for both spellings) | Cloudflare dashboard → My Profile → API Tokens → create new, revoke old | Same consumers as above | `curl -H "Authorization: Bearer <old>"` against the tokens/verify endpoint and confirm rejection |
+| 3 | PhonePe prod `client_secret` (`PHONEPE_CLIENT_SECRET_PROD`) | PhonePe merchant portal (prod environment) | Prod env only | Attempt a tokenize call with the old secret; confirm rejection |
+| 4 | PhonePe test `client_secret` (`PHONEPE_CLIENT_SECRET_TEST`) | PhonePe merchant portal (sandbox) | Local dev env, staging env | Same as above, against sandbox |
+| 5 | **Razorpay LIVE key_id + key_secret** (`rzp_live_SaACt1vxmVQQXf` + secret) | Razorpay dashboard → Settings → API Keys → regenerate (⚠ THIS IS A LIVE KEY — production transactions depend on it; coordinate timing with any in-flight payment flows) | Prod env only — stale live keys must not land in lower envs | Attempt an order creation with the old key; confirm 401 |
+| 6 | Razorpay webhook secret (`RAZORPAY_WEBHOOK_SECRET`) | Razorpay dashboard → Webhooks → regenerate | Whatever service consumes the webhook HMAC | Send a test webhook with the old secret; confirm signature validation fails |
+| 7 | Stitch API key (`STITCH_API_KEY`) | Stitch account settings → API keys | Any env that uses Stitch MCP | `curl` against Stitch API with old key and confirm rejection |
+| 8 | Figma API key (`FIGMA_API_KEY`) | Figma account → Settings → Security → Personal access tokens → revoke old, create new | Any env that uses Figma MCP | `curl -H "X-Figma-Token: <old>"` against `/v1/me` and confirm 403 |
+| 9 | **Google OAuth #1** (client_id `...qg1horr2ng0pu5tnbbu3c1m5jbq8pnir`, from the JSON file) | GCP Console → `gen-lang-client-0225070656` project → APIs & Services → Credentials → Reset Secret on that OAuth 2.0 Client ID | Wherever that specific client_id is consumed (grep the codebase for `qg1horr2ng0pu5tnbbu3c1m5jbq8pnir` or for the JSON filename) | Swap the old secret back in a throwaway env, attempt a flow, confirm Google rejects |
+| 10 | **Google OAuth #2** (client_id `...vmqts48gkofn1le3grij4udp1rkrfssc`, from the `.env` file) | GCP Console → whichever project hosts that client_id (not `gen-lang-client-0225070656`; look it up by client_id) → Reset Secret | Wherever `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars are consumed | Same as #9 |
+| 11 | SMTP password (`SMTP_PASSWORD = Prasad@1979@`) | Whatever mailbox this is the password for. NOTE: this looks like a personal password pattern — if it is reused across any other accounts (personal email, social media, banking, etc.), **change it everywhere** and not just the SMTP relay. Reuse is the failure mode to defend against. | `.env.cobolt` everywhere SMTP is wired, plus any staging/prod env | Attempt SMTP auth with the old password; confirm 535 |
+
+Do not consider Phase 1 complete until every row has its
+"Verification" column satisfied against a real attempt with the old
+credential.
+
+### Phase 1 sign-off sequence
+
+1. Rotate in the order above (R2 and Cloudflare first so the
+   storage and video paths are not orphaned, then payment gateways,
+   then SDK/tooling keys, then OAuth, then SMTP).
+2. Update all consumer envs for each credential IMMEDIATELY after
+   rotating. An in-flight partial state where prod is using the new
+   key but staging is using the old key is fine for a few minutes;
+   leaving it that way for hours is not.
+3. For each row, record the rotation date, operator initials, and
+   verification outcome in the "Decision log" at the bottom of this
+   document.
+4. When every row is marked verified, Phase 2 is authorized to
+   proceed. Not before.
+
+After Phase 1 is complete and verified, every leaked credential is
 useless. Phase 2 and 3 then become "clean up history so future
 readers are not confused," not "stop a live exposure."
 
@@ -167,29 +246,83 @@ readers are not confused," not "stop a live exposure."
 
 3. In a fresh working clone (NOT the mirror), from the repo root:
    ```bash
-   git filter-repo --invert-paths --path "gen-lang-client-0225070656-9e42fd6f0ba8.json"
+   git filter-repo --invert-paths \
+     --path "gen-lang-client-0225070656-9e42fd6f0ba8.json" \
+     --path ".env"
    ```
+   **⚠ v2 scope expansion:** the command above now includes `.env`
+   in addition to the Google JSON file. The v1 plan only stripped
+   the JSON; running v1 without `.env` would leave all 11+ other
+   credentials from the `.env` blob reachable at `553febb:.env` and
+   `4d0c13d:.env`. Do NOT revert to the v1 single-path invocation.
+
    This walks every commit on every branch and tag, removes the
-   blob, and rewrites the affected commits with new SHAs. The
-   default behavior enforces "no uncommitted changes + no
+   named blobs, and rewrites the affected commits with new SHAs.
+   The default behavior enforces "no uncommitted changes + no
    untracked files you care about + clone-not-workspace" — if
    you get a refuse message, fix the tree state first, do not
    `--force`.
 
-4. Verify the blob is gone from every ref:
+   Note on `.env` specifically: filter-repo removes every
+   historical version of the file. `.env` is already in
+   `.gitignore` (hardened in commit `3889908`) so it cannot be
+   re-added going forward without a developer overriding the
+   ignore. That is the forward-guard; filter-repo is the backward
+   cleanup.
+
+4. Verify both blobs are gone from every ref:
    ```bash
+   # Google JSON file
    git log --all --full-history --oneline -- "gen-lang-client-*.json"
    # Expected output: nothing
    git cat-file -e 553febb:gen-lang-client-0225070656-9e42fd6f0ba8.json 2>&1
    # Expected: fatal: Not a valid object name ...
+
+   # .env file (v2 addition)
+   git log --all --full-history --oneline -- ".env"
+   # Expected output: nothing
+   git cat-file -e 553febb:.env 2>&1
+   # Expected: fatal: Not a valid object name ...
+   git cat-file -e 4d0c13d:.env 2>&1
+   # Expected: fatal: Not a valid object name ...
    ```
-   `553febb` itself will no longer exist under that SHA — filter-
-   repo will have renamed the rewritten commit. Look it up via
-   the commit title:
+   `553febb` and `4d0c13d` themselves will no longer exist under
+   those SHAs — filter-repo will have renamed the rewritten
+   commits. Look them up via commit titles:
    ```bash
    git log --all --oneline --grep "Initial project state"
+   git log --all --oneline --grep "admin dashboard hardening"
    ```
-   The new SHA should print and should NOT contain the file.
+   The new SHAs should print and should NOT contain either file.
+
+5. **Value-level verification (v2).** Filename checks above only
+   prove the tracked paths are gone. To catch any unexpected
+   re-inclusion in a branch-stash, tag, or other ref, search
+   rewritten history for the actual leaked values or their hashes:
+   ```bash
+   # Pick a distinctive fragment from each rotated credential and
+   # confirm zero matches across all refs + history:
+   for pattern in \
+     "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" \
+     "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" \
+     "rzp_live_SaACt1vxmVQQXf" \
+     "mRwt4O2IidkM19E9vq0TPN7T" \
+     "cfut_OaZRpOeUdbVm8OWnmkXYRZanBSuDDl97fNNN3J0Ec7a3344c" \
+     "b5b663f8-b488-4c7b-8000-9915aaa450f0" \
+     "b1c8f71e60b3572241793906a7d674e8" \
+     "AQ.Ab8RN6JNw5z0D_PCq1b5jbByHvYquXPbg6U6naaWkXQHwvcKCg" \
+     "figd_fYF4nPcfAt_i4sk2vILEcyyi6ZIBhlgiSmBUB7W7"; do
+     git log --all --full-history -p -S "$pattern" > /dev/null
+     if git grep "$pattern" $(git rev-list --all) >/dev/null 2>&1; then
+       echo "LEAK STILL PRESENT: $pattern"
+     else
+       echo "CLEAN: $pattern"
+     fi
+   done
+   ```
+   Every line must print `CLEAN`. Any `LEAK STILL PRESENT` means
+   the rewrite missed a path and Phase 3 MUST NOT proceed until
+   the leak is located and stripped.
 
 5. Run the full test suite locally to catch any accidental
    collateral damage:
@@ -319,20 +452,39 @@ rewrite was incomplete. Do not consider the incident closed.
 
 ## Decision log (operator fills in as they go)
 
+### Phase 1 — Rotation checklist sign-off (v2, 11 rows)
+
+Every row must show "Verified rejected" before Phase 2 is
+authorized. Dates in `YYYY-MM-DD`.
+
+| # | Credential | Rotated on | Consumers updated | Verified rejected | Operator |
+|---|---|---|---|---|---|
+| 1 | R2 access key + secret | | | | |
+| 2 | Cloudflare Stream API token | | | | |
+| 3 | PhonePe prod client_secret | | | | |
+| 4 | PhonePe test client_secret | | | | |
+| 5 | Razorpay LIVE key_id + key_secret | | | | |
+| 6 | Razorpay webhook secret | | | | |
+| 7 | Stitch API key | | | | |
+| 8 | Figma API key | | | | |
+| 9 | Google OAuth #1 (JSON file client) | | | | |
+| 10 | Google OAuth #2 (.env client) | | | | |
+| 11 | SMTP password (+ any reused personal password) | | | | |
+
+### Phase 2 — History rewrite sign-off
+
 | Step | Responsible | Completed | Notes |
 |---|---|---|---|
-| Phase 1 step 1: sign in to GCP Console | | | |
-| Phase 1 step 3: reset secret | | | |
-| Phase 1 step 4: store new secret in secret store | | | |
-| Phase 1 step 5: update .env.cobolt (local) | | | |
-| Phase 1 step 5: update staging env | | | |
-| Phase 1 step 5: update prod env | | | |
-| Phase 1 step 6: smoke test new secret | | | |
-| Phase 1 step 7: verify old secret rejected | | | |
 | Phase 2 step 1: mirror backup created | | | |
-| Phase 2 step 3: filter-repo run | | | |
-| Phase 2 step 4: blob gone verification | | | |
-| Phase 2 step 5: test suite pass | | | |
+| Phase 2 step 3: filter-repo run (with `.env` in path list) | | | |
+| Phase 2 step 4: blob-gone verification (JSON + .env) | | | |
+| Phase 2 step 5: value-level verification (every pattern CLEAN) | | | |
+| Phase 2 step 6: test suite pass | | | |
+
+### Phase 3 — Force-push coordination sign-off
+
+| Step | Responsible | Completed | Notes |
+|---|---|---|---|
 | Phase 3 step 1: team announcement sent | | | |
 | Phase 3 step 2: main force-pushed | | | |
 | Phase 3 step 2: brownfield/fix-12-issues force-pushed | | | |
@@ -341,20 +493,44 @@ rewrite was incomplete. Do not consider the incident closed.
 | Phase 3 step 2: cobolt-build/M7 force-pushed | | | |
 | Phase 3 step 4: GitHub cached-view purge request sent | | | |
 | Phase 4: team recovery instructions posted | | | |
-| Verification step: clean clone confirms blob absent | | | |
+| Verification: clean clone confirms both blobs absent | | | |
 
 ## What I (the fix agent) did NOT do
 
 - I did not run `git filter-repo`.
 - I did not force-push anything.
-- I did not rotate the GCP credential.
-- I did not touch the leaked blob in history.
+- I did not rotate any credential (GCP, R2, Cloudflare, PhonePe,
+  Razorpay, Stitch, Figma, SMTP).
+- I did not touch any leaked blob in history.
 - I did not delete or rename `gen-lang-client-0225070656-9e42fd6f0ba8.json`
-  anywhere.
+  or `.env` anywhere.
 - I did not update `.env.cobolt`, staging env, or prod env.
 
 The only thing I did for ISSUE-001 is write this plan and commit it
 to `brownfield/fix-12-issues` so there is a single authoritative
 document for the operator to work from. Any statement that ISSUE-001
-is "resolved" in automated review output before Phase 1 is verified
-should be treated as false.
+is "resolved" in automated review output before every row of the
+Phase 1 rotation checklist is verified should be treated as false.
+
+### v2 changelog (2026-04-11 later in the same day)
+
+Amendments made after
+`docs/brownfield/brownfield-fix-wave-review.md §2.1` found that the
+v1 plan scope was incomplete:
+
+- Added `.env` as a second leaked blob with its full credential
+  inventory (11+ live values including Razorpay LIVE keys and a
+  second Google OAuth client).
+- Expanded Phase 1 from 1 credential (Google OAuth JSON) to 11+
+  credentials, organized as a single checklist table with
+  per-row verification.
+- Expanded Phase 2 filter-repo command to include `--path ".env"`
+  alongside the original JSON path.
+- Added a value-level verification step (grep for distinctive
+  fragments across all refs) so a missed path in a branch-stash
+  or tag cannot silently re-leak after the rewrite.
+- Restructured the Decision log into three sign-off tables
+  (rotation, rewrite, force-push coordination).
+
+None of the v2 changes execute anything. The plan remains halted
+pending operator authorization of Phase 1.
