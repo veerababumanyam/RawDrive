@@ -4,6 +4,7 @@ import {
   BarChart3,
   BrainCircuit,
   CalendarDays,
+  Handshake,
   Home,
   ImageIcon,
   MessageSquare,
@@ -36,7 +37,8 @@ const groups: NavGroup[] = [
     title: "Business",
     items: [
       { href: "/crm/contacts", label: "Clients", icon: Users },
-      { href: "/crm", label: "CRM", icon: BarChart3 },
+      { href: "/crm", label: "Leads", icon: BarChart3 },
+      { href: "/crm/deals", label: "Deals", icon: Handshake },
       { href: "/calendar", label: "Bookings", icon: CalendarDays },
       { href: "/billing", label: "Invoices", icon: ReceiptText },
     ],

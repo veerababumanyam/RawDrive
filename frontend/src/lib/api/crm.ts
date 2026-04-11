@@ -38,9 +38,11 @@ export interface Deal {
   title: string;
   stage: string;
   amount_paisa: number;
+  advance_paisa?: number;
   event_type?: string;
   event_date?: string;
   venue?: string;
+  notes?: string;
   created_at: string;
 }
 

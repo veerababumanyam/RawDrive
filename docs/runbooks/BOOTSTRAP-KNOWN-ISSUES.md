@@ -8,11 +8,13 @@
 
 **Tested with:** Both the bucket-scoped `rclone` config and a direct `python3 -c "import boto3; ..."` call with SigV4 signing. Both fail identically. Curl to the endpoint root returns 400 Bad Request which confirms network connectivity is fine — the issue is the credentials themselves.
 
-**Credentials used (from `HostingerServerDetails.md` §Cloudflare R2 S3 Credentials):**
-- Access Key ID: `4ca4360fd0e7125714183681de63dcb6`
-- Secret Access Key: `94c9f722d05e4b5ac0b1cf9b25e4631b13f18560a02d61b0bb819a8dcb312e2c`
-- Endpoint: `https://1b62424aa3b6d960f5c0d2588eb576f5.r2.cloudflarestorage.com`
+**Credentials used** (from the initial provisioning handoff — both redacted in this runbook since they are dead and should never be committed to a public repo):
+- Access Key ID: `<REDACTED — 32-char hex, see .env on app nodes>`
+- Secret Access Key: `<REDACTED — 64-char hex, see .env on app nodes>`
+- Endpoint: `https://<redacted-account-id>.r2.cloudflarestorage.com`
 - Bucket: `rawdrive`
+
+> Keys rotated on 2026-04-12 — the original values are dead on Cloudflare's side and would reject every request anyway. They are removed here so future `git grep` audits don't flag the runbook.
 
 **Likely cause:** API token rotated / revoked since the doc was written (2026-04-02).
 
