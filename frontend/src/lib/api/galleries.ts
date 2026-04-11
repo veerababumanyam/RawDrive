@@ -101,7 +101,13 @@ export async function listGalleries(token: string, params?: { status?: string; t
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  // Backend may return either a bare array, or {galleries: [...]}, or null
+  // when there are zero rows. Coerce to a proper array so the page never
+  // crashes on .length / .map.
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.galleries)) return body.galleries;
+  return [];
 }
 
 export async function getGallery(token: string, id: string): Promise<Gallery> {

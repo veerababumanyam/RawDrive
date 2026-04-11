@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { listGalleries, type Gallery } from "@/lib/api/galleries";
+import { listGalleries, createGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { galleryStatusClasses, galleryTypeClasses } from "@/lib/dashboard-ui";
@@ -12,14 +12,38 @@ export default function GalleriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newType, setNewType] = useState<"proofing" | "delivery">("proofing");
+  const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
+  const refresh = () => {
     const token = getStoredAccessToken();
     listGalleries(token)
       .then(setGalleries)
       .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(refresh, []);
+
+  const handleCreate = async () => {
+    if (!newTitle.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const token = getStoredAccessToken();
+      await createGallery(token, { title: newTitle.trim(), gallery_type: newType });
+      setShowCreate(false);
+      setNewTitle("");
+      setNewType("proofing");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create gallery");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -52,6 +76,12 @@ export default function GalleriesPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowCreate(true)}
+            className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+          >
+            + New Gallery
+          </button>
+          <button
             onClick={() => setViewMode("grid")}
             className={cn(
               "segmented-control-button h-11 w-11 p-0",
@@ -82,6 +112,52 @@ export default function GalleriesPage() {
         </div>
       </div>
 
+      {showCreate && (
+        <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-text-primary">New Gallery</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-text-tertiary uppercase tracking-wider">Title</label>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
+                placeholder="e.g. Sharma Wedding 2026"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-tertiary uppercase tracking-wider">Type</label>
+              <select
+                value={newType}
+                onChange={(e) => setNewType(e.target.value as "proofing" | "delivery")}
+                className="mt-1 w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              >
+                <option value="proofing">Proofing — client selects favorites</option>
+                <option value="delivery">Delivery — final hand-off</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => { setShowCreate(false); setNewTitle(""); }}
+              className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
+              disabled={creating}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={creating || !newTitle.trim()}
+              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
+            >
+              {creating ? "Creating…" : "Create Gallery"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {galleries.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-surface-sunken flex items-center justify-center">
@@ -90,6 +166,14 @@ export default function GalleriesPage() {
             </svg>
           </div>
           <p className="text-text-secondary">No galleries yet. Create your first gallery to get started.</p>
+          {!showCreate && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+            >
+              + Create your first gallery
+            </button>
+          )}
         </div>
       ) : (
         <div

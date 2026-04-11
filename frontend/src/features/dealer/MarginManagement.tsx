@@ -4,11 +4,12 @@
 import { useState, useEffect } from "react";
 import MarginPreview from "./MarginPreview";
 import MarginHistory from "./MarginHistory";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 function getAuthHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+  const token = getStoredAccessToken();
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 

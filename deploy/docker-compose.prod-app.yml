@@ -86,6 +86,13 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* env vars are read at BUILD time by next build and
+        # baked into the client bundle. Setting this points all
+        # frontend fetch('${API_BASE}/...') calls at the real API
+        # subdomain instead of defaulting to localhost:8080 (which is
+        # the frontend container's own loopback and always fails).
+        NEXT_PUBLIC_API_URL: https://api.rawdrive.in
     image: rawdrive-frontend:local
     container_name: deploy-frontend-1
     restart: unless-stopped

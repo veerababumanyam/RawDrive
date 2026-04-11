@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -17,7 +18,10 @@ export default function PayoutStatements() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/api/v1/dealers/statements?year=${year}`).then(r => r.ok ? r.json() : []).then(setStatements).catch(() => setStatements([])).finally(() => setLoading(false));
+    const token = getStoredAccessToken();
+    fetch(`${API}/api/v1/dealers/statements?year=${year}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }).then(r => r.ok ? r.json() : []).then(setStatements).catch(() => setStatements([])).finally(() => setLoading(false));
   }, [year]);
 
   const downloadPDF = (url: string) => { window.open(`${API}${url}`, "_blank"); };

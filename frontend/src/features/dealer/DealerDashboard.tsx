@@ -3,13 +3,14 @@
 
 import { useState, useEffect } from "react";
 import { getDealerDashboard, type Dealer } from "@/lib/api/dealer";
+import { getStoredAccessToken } from "@/lib/auth";
 
 export default function DealerDashboard() {
   const [dealer, setDealer] = useState<Dealer | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+    const storedToken = getStoredAccessToken();
     getDealerDashboard(storedToken)
       .then(setDealer)
       .catch(() => setDealer(null))

@@ -55,6 +55,15 @@ RUN rm -f pnpm-workspace.yaml
 # Disable Next.js telemetry during CI-style builds
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# NEXT_PUBLIC_* env vars are read at BUILD time by `next build` and
+# baked into the client bundle. The Compose frontend service passes
+# NEXT_PUBLIC_API_URL=https://api.rawdrive.in via build args so all
+# client-side fetch('${API_BASE}/...') calls go directly to the real
+# API subdomain. Without this, API_BASE defaults to http://localhost:8080
+# inside the container (its own loopback) and every fetch fails.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 # Produces .next/standalone/server.js plus a trimmed node_modules tree.
 # Requires next.config.ts to have output: 'standalone' (enabled in
 # Task 0.1 / commit fc7b671).

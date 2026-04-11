@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 interface DealerUser {
   workspace_id: string;
@@ -29,7 +30,10 @@ export default function DealerUserList({ dealerId }: { dealerId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/dealers/users?limit=20`)
+    const token = getStoredAccessToken();
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/dealers/users?limit=20`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
       .then(r => r.ok ? r.json() : { users: [] })
       .then(d => setUsers(d.users || []))
       .catch(() => setUsers([]))

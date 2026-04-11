@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 interface Commission { id: string; workspace_name: string; amount_paisa: number; margin_rate_pct: number; status: string; earned_at: string; paid_at: string | null; }
 
@@ -20,7 +21,12 @@ export default function CommissionTracker({ dealerId }: { dealerId: string }) {
 
   useEffect(() => {
     const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/dealers/commissions?limit=20${filter ? `&status=${filter}` : ""}`;
-    fetch(url).then(r => r.ok ? r.json() : { commissions: [] }).then(d => setCommissions(d.commissions || [])).catch(() => setCommissions([])).finally(() => setLoading(false));
+    const token = getStoredAccessToken();
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+      .then(r => r.ok ? r.json() : { commissions: [] })
+      .then(d => setCommissions(d.commissions || []))
+      .catch(() => setCommissions([]))
+      .finally(() => setLoading(false));
   }, [dealerId, filter]);
 
   const totals = { earned: 0, pending: 0, paid: 0 };

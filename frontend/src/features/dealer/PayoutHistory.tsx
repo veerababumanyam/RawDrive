@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 interface Payout {
   id: string;
@@ -35,7 +36,10 @@ export default function PayoutHistory() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/v1/dealers/payouts`)
+    const token = getStoredAccessToken();
+    fetch(`${API_BASE}/api/v1/dealers/payouts`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
       .then((r) => (r.ok ? r.json() : []))
       .then(setPayouts)
       .catch(() => setPayouts([]))

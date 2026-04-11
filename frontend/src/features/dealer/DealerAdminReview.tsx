@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { listDealers, approveDealer, rejectDealer, type Dealer } from "@/lib/api/dealer";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const statusColors: Record<string, string> = {
   pending: "bg-feedback-warning/10 text-feedback-warning",
@@ -19,7 +20,7 @@ export default function DealerAdminReview() {
   const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+    const token = getStoredAccessToken();
     listDealers(token)
       .then(setDealers)
       .catch(() => setDealers([]))
@@ -28,7 +29,7 @@ export default function DealerAdminReview() {
 
   const handleApprove = async (id: string) => {
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+      const token = getStoredAccessToken();
       await approveDealer(token, id, commissionRate);
       setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "approved" as const } : d)));
       setSelectedId(null);
@@ -40,7 +41,7 @@ export default function DealerAdminReview() {
   const handleReject = async (id: string) => {
     if (!rejectReason) return;
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") || "" : "";
+      const token = getStoredAccessToken();
       await rejectDealer(token, id, rejectReason);
       setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "pending" as const } : d)));
       setSelectedId(null);

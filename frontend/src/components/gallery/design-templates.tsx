@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -15,7 +16,7 @@ interface DesignTemplate {
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") : null;
+  const token = getStoredAccessToken();
   return token
     ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
     : { "Content-Type": "application/json" };

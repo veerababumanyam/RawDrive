@@ -7,6 +7,7 @@ import { DesignTemplates } from "@/components/gallery/design-templates";
 import { AIDesignSuggest } from "@/components/gallery/ai-design-suggest";
 import { useDesignHistory } from "@/hooks/use-design-history";
 import { useDesignLatency, LATENCY_BUDGET_MS } from "@/hooks/use-design-latency";
+import { getStoredAccessToken } from "@/lib/auth";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -217,7 +218,7 @@ export default function GalleryDesignStudioPage() {
     setPublishStatus("saving");
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const token = localStorage.getItem("rawdrive_token");
+      const token = getStoredAccessToken();
       const res = await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
