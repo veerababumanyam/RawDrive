@@ -614,3 +614,477 @@ body[data-chrome="marketing"] {
     transition-duration: 0ms !important;
   }
 }
+
+/* ============================================================
+   Landing page (frontend/src/app/page.tsx) section styles
+   ------------------------------------------------------------
+   Scoped via .landing-* prefixes so they cannot collide with
+   any other route. Uses CSS variables from the active theme
+   so all three themes (liquid-glass / liquid-glass-dark /
+   midnight) render correctly without per-theme overrides.
+   See docs/landing-page-redesign-plan.md §4 for the design
+   rationale.
+   ============================================================ */
+
+/* --- Hero-overlay navbar variant ----------------------------- */
+.landing-navbar-overlay {
+  /* Fully transparent background — the hero photograph shows through.
+     A soft top-down scrim gives the nav links readable contrast without
+     a hard background fill. No shadow, no border, no blur — the hero
+     owns its own scrim (.landing-hero__top-vignette). */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* --- Cinematic Hero (§4.1) ----------------------------------- */
+.landing-hero {
+  /* Let the hero overlap the navbar. The parent <main> drops its
+     default top padding when this section is the first child. */
+  margin-top: calc(var(--navbar-height) * -1);
+  padding-top: var(--navbar-height);
+}
+
+.landing-hero__image {
+  /* Gentle cinematic settle on page load. Pure CSS. Auto-disabled
+     by the global prefers-reduced-motion rule above. */
+  animation: landing-hero-image-reveal 900ms var(--easing-out) both;
+  will-change: opacity, transform;
+  transform-origin: center 60%;
+}
+
+.landing-hero__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    /* Left-anchored horizontal gradient that fades to transparent,
+       guaranteeing text contrast against the photograph's midtones. */
+    linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--surface-base) 92%, transparent) 0%,
+      color-mix(in srgb, var(--surface-base) 82%, transparent) 28%,
+      color-mix(in srgb, var(--surface-base) 38%, transparent) 58%,
+      transparent 90%
+    ),
+    /* Bottom fade for depth and scroll-cue legibility. */
+    linear-gradient(
+      180deg,
+      transparent 58%,
+      color-mix(in srgb, var(--surface-base) 40%, transparent) 100%
+    );
+  pointer-events: none;
+}
+
+.landing-hero__top-vignette {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--navbar-height) * 2);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-base) 60%, transparent) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.landing-hero__eyebrow {
+  opacity: 0;
+  animation: landing-fade-up 700ms var(--easing-out) 120ms forwards;
+}
+
+.landing-hero__headline {
+  opacity: 0;
+  animation: landing-fade-up 800ms var(--easing-out) 240ms forwards;
+}
+
+.landing-hero__subhead {
+  opacity: 0;
+  animation: landing-fade-up 700ms var(--easing-out) 420ms forwards;
+}
+
+.landing-hero__ctas {
+  opacity: 0;
+  animation: landing-fade-up 700ms var(--easing-out) 560ms forwards;
+}
+
+.landing-hero__scroll-cue {
+  opacity: 0;
+  animation:
+    landing-scroll-cue-reveal 700ms var(--easing-out) 900ms forwards,
+    landing-scroll-cue-float 2800ms var(--easing-default) 1600ms infinite;
+}
+
+@keyframes landing-hero-image-reveal {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-scroll-cue-reveal {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 0.6;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes landing-scroll-cue-float {
+  0%, 100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, 6px);
+  }
+}
+
+/* --- Workflow Pipeline (§4.2) -------------------------------- */
+.landing-pipeline {
+  /* Desktop sticky container — the inner strip becomes position:sticky
+     while this wrapper scrolls. The wrapper is intentionally tall so
+     the scroll-progression has room to play out. */
+  position: relative;
+  padding-top: 6rem;
+  padding-bottom: 6rem;
+}
+
+@media (min-width: 1024px) {
+  .landing-pipeline {
+    /* Leave scroll-space so each step has room to "light up" */
+    padding-top: 8rem;
+    padding-bottom: 18rem;
+  }
+}
+
+.landing-pipeline__sticky {
+  position: relative;
+}
+
+@media (min-width: 1024px) {
+  .landing-pipeline__sticky {
+    position: sticky;
+    top: calc(var(--navbar-height) + 2rem);
+  }
+}
+
+.landing-pipeline__row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 1.25rem;
+  scrollbar-width: none;
+}
+
+.landing-pipeline__row::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .landing-pipeline__row {
+    overflow: visible;
+    justify-content: space-between;
+    padding: 0;
+  }
+}
+
+.landing-pipeline__step {
+  flex: 0 0 72%;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius-2xl);
+  transition:
+    color var(--duration-normal) var(--easing-default),
+    transform var(--duration-normal) var(--easing-default),
+    opacity var(--duration-normal) var(--easing-default);
+}
+
+@media (min-width: 640px) {
+  .landing-pipeline__step {
+    flex: 0 0 52%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-pipeline__step {
+    flex: 1 1 0;
+    padding: 1rem 0.5rem;
+  }
+}
+
+.landing-pipeline__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--surface-variant) 60%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 22%, transparent);
+  color: var(--text-tertiary);
+  transition:
+    color var(--duration-normal) var(--easing-default),
+    border-color var(--duration-normal) var(--easing-default),
+    background var(--duration-normal) var(--easing-default),
+    box-shadow var(--duration-normal) var(--easing-default);
+}
+
+.landing-pipeline__step-label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary);
+  transition: color var(--duration-normal) var(--easing-default);
+}
+
+.landing-pipeline__step-tagline {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  line-height: 1.4;
+  max-width: 18ch;
+}
+
+.landing-pipeline__step[data-active="true"] .landing-pipeline__step-icon {
+  color: var(--button-primary-foreground);
+  background: linear-gradient(135deg, var(--button-primary-from), var(--button-primary-to));
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+  box-shadow: 0 12px 32px -8px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+
+.landing-pipeline__step[data-active="true"] .landing-pipeline__step-label {
+  color: var(--text-primary);
+}
+
+.landing-pipeline__connector {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .landing-pipeline__connector {
+    display: block;
+    flex: 0 0 auto;
+    align-self: center;
+    height: 1px;
+    width: 28px;
+    background: color-mix(in srgb, var(--outline-variant) 18%, transparent);
+    position: relative;
+    top: -1.5rem;
+  }
+
+  .landing-pipeline__connector[data-active="true"] {
+    background: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+  }
+}
+
+.landing-pipeline__progress {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .landing-pipeline__progress {
+    display: block;
+    margin-top: 2.5rem;
+    height: 2px;
+    background: color-mix(in srgb, var(--outline-variant) 14%, transparent);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+}
+
+.landing-pipeline__progress-bar {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--button-primary-from), var(--button-primary-to));
+  width: calc(var(--landing-pipeline-progress, 0) * 100%);
+  transition: width var(--duration-normal) var(--easing-default);
+}
+
+/* --- Gallery Experience (§4.3) ------------------------------- */
+.landing-gallery-photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  aspect-ratio: 16 / 10;
+  isolation: isolate;
+}
+
+@media (min-width: 1024px) {
+  .landing-gallery-photo {
+    aspect-ratio: 21 / 10;
+  }
+}
+
+.landing-gallery-photo__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 55%,
+    color-mix(in srgb, var(--surface-base) 28%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.landing-gallery-chip {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.2)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.2)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 20%, transparent);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-glass);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* --- Studio Control (§4.4) ----------------------------------- */
+.landing-studio-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 18%, transparent);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-md);
+}
+
+.landing-studio-tile__viz {
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.landing-storage-bar {
+  width: 100%;
+  height: 6px;
+  background: color-mix(in srgb, var(--outline-variant) 16%, transparent);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.landing-storage-bar__fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  border-radius: inherit;
+}
+
+/* --- AI Moment (§4.5) ---------------------------------------- */
+.landing-ai {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+}
+
+.landing-ai__photo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.landing-ai__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, var(--surface-base) 88%, transparent) 0%,
+      color-mix(in srgb, var(--surface-base) 68%, transparent) 35%,
+      color-mix(in srgb, var(--surface-base) 20%, transparent) 72%,
+      transparent 100%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--surface-base) 55%, transparent) 0%,
+      transparent 60%
+    );
+  pointer-events: none;
+}
+
+.landing-ai__pillar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem 1.25rem;
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 18%, transparent);
+  border-radius: var(--radius-xl);
+}
+
+/* --- Trust Row (§4.6) ---------------------------------------- */
+.landing-trust-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 1.1rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 18%, transparent);
+  border-radius: var(--radius-full);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.landing-trust-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+}
+
+/* --- Final CTA (§4.7) ---------------------------------------- */
+.landing-final-cta {
+  text-align: center;
+  padding: 6rem 1.5rem 9rem;
+}

@@ -46,6 +46,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: frontendRoot,
   },
+  images: {
+    // Q9 (landing redesign 2026-04-11): prefer AVIF, then WebP, then the
+    // original source format. Next.js image optimizer serves the smallest
+    // format the visitor's browser can decode. This materially improves
+    // LCP on the landing hero (~180 KB AVIF vs ~800 KB source JPEG) while
+    // keeping compatibility with every browser we target.
+    formats: ["image/avif", "image/webp"],
+  },
   async headers() {
     return [
       {
