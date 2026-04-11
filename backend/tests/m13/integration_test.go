@@ -201,6 +201,14 @@ func TestProofingSessionCRUD(t *testing.T) {
 
 // ──────────────────────── Album Approval Immutability ────────────────────────
 
+// DO NOT add t.Parallel() to this test. TestAlbumApprovalAppendOnly drops
+// and recreates the album_approvals immutability trigger mid-test to cover
+// the append-only invariant from both sides. Parallel tests in the same
+// package would see the trigger in an inconsistent state and either race
+// into false failures or silently miss violations. The package-level note
+// at the top of this file (lines 40-42) explains the sequential invariant
+// for the whole m13 suite; this local marker exists because drive-by
+// edits to a single function are where the warning tends to get lost.
 func TestAlbumApprovalAppendOnly(t *testing.T) {
 	pool := getTestDB(t)
 	ctx := context.Background()
