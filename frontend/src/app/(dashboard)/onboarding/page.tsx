@@ -5,46 +5,15 @@ import { getStoredAccessToken, getStoredRefreshToken, persistAuthTokens } from "
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-// All 28 states + 8 union territories — codes match DB states.code (without IN- prefix)
-const indianStates = [
-  { code: "AP", name: "Andhra Pradesh" },
-  { code: "AR", name: "Arunachal Pradesh" },
-  { code: "AS", name: "Assam" },
-  { code: "BR", name: "Bihar" },
-  { code: "CT", name: "Chhattisgarh" },
-  { code: "GA", name: "Goa" },
-  { code: "GJ", name: "Gujarat" },
-  { code: "HR", name: "Haryana" },
-  { code: "HP", name: "Himachal Pradesh" },
-  { code: "JH", name: "Jharkhand" },
-  { code: "KA", name: "Karnataka" },
-  { code: "KL", name: "Kerala" },
-  { code: "MP", name: "Madhya Pradesh" },
-  { code: "MH", name: "Maharashtra" },
-  { code: "MN", name: "Manipur" },
-  { code: "ML", name: "Meghalaya" },
-  { code: "MZ", name: "Mizoram" },
-  { code: "NL", name: "Nagaland" },
-  { code: "OR", name: "Odisha" },
-  { code: "PB", name: "Punjab" },
-  { code: "RJ", name: "Rajasthan" },
-  { code: "SK", name: "Sikkim" },
-  { code: "TN", name: "Tamil Nadu" },
-  { code: "TG", name: "Telangana" },
-  { code: "TR", name: "Tripura" },
-  { code: "UT", name: "Uttarakhand" },
-  { code: "UP", name: "Uttar Pradesh" },
-  { code: "WB", name: "West Bengal" },
-  // Union Territories
-  { code: "AN", name: "Andaman & Nicobar Islands" },
-  { code: "CH", name: "Chandigarh" },
-  { code: "DH", name: "Dadra & Nagar Haveli and Daman & Diu" },
-  { code: "DL", name: "Delhi" },
-  { code: "JK", name: "Jammu & Kashmir" },
-  { code: "LA", name: "Ladakh" },
-  { code: "LD", name: "Lakshadweep" },
-  { code: "PY", name: "Puducherry" },
-];
+// Matches the public shape returned by GET /api/v1/states. Keep in
+// lockstep with backend/internal/handler/states.go State struct and
+// the identical type in RegisterForm.tsx.
+type IndianState = {
+  id: number;
+  name: string;
+  code: string;
+  is_union_territory: boolean;
+};
 
 type Step = "state_selection" | "profile" | "complete";
 
@@ -54,7 +23,9 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   // State selection
-  const [selectedState, setSelectedState] = useState("");
+  const [selectedStateID, setSelectedStateID] = useState<number | null>(null);
+  const [states, setStates] = useState<IndianState[]>([]);
+  const [statesLoading, setStatesLoading] = useState(true);
 
   // Profile
   const [businessName, setBusinessName] = useState("");
@@ -70,14 +41,67 @@ export default function OnboardingPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.current_step) setStep(data.current_step);
+        // If the server already has a state_id (user picked it earlier
+        // in this session, or the status was persisted via migration
+        // 067), preselect it so the dropdown isn't empty on resume.
+        if (data.state_id) {
+          const n = Number(data.state_id);
+          if (!Number.isNaN(n) && n > 0) setSelectedStateID(n);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [token]);
 
+  // Fetch the full states list from the API (replaces the prior
+  // hardcoded 36-entry list, which was drifting from the DB and from
+  // the register form's own copy). Heavily cached server-side.
+  useEffect(() => {
+    let cancelled = false;
+    setStatesLoading(true);
+    fetch(`${API_BASE}/api/v1/states`)
+      .then((res) => res.json())
+      .then((body: { states?: IndianState[] }) => {
+        if (cancelled) return;
+        setStates(Array.isArray(body.states) ? body.states : []);
+      })
+      .catch(() => {
+        // Non-fatal — the select will show "Loading states…" until
+        // the user retries. We deliberately do NOT block the rest of
+        // the form.
+      })
+      .finally(() => {
+        if (!cancelled) setStatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Pre-fill from sessionStorage if the user picked a state on /register
+  // before being redirected here. The RegisterForm stashes the id under
+  // `rawdrive_pending_state_id` before starting OAuth / submitting the
+  // password form, which closes the loop end-to-end: user picks once,
+  // onboarding remembers. We clear the key after reading so a later
+  // /register visit doesn't show a stale value.
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("rawdrive_pending_state_id");
+      if (raw) {
+        const n = Number(raw);
+        if (!Number.isNaN(n) && n > 0) {
+          setSelectedStateID((prev) => prev ?? n);
+        }
+        window.sessionStorage.removeItem("rawdrive_pending_state_id");
+      }
+    } catch {
+      // SessionStorage unavailable (private mode, etc.) — nothing to restore.
+    }
+  }, []);
+
   async function handleStateSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedState) return;
+    if (selectedStateID == null) return;
     setError(null);
     setLoading(true);
     try {
@@ -87,7 +111,10 @@ export default function OnboardingPage() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ state_id: selectedState }),
+        // state_id is sent as a number — the backend handler accepts
+        // both number and string since v0.0.48 (see
+        // backend/internal/onboarding/handler.go StateSelectionRequest).
+        body: JSON.stringify({ state_id: selectedStateID }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -212,21 +239,44 @@ export default function OnboardingPage() {
           </p>
           <form onSubmit={handleStateSubmit}>
             <select
-              value={selectedState}
-              onChange={(e) => setSelectedState(e.target.value)}
+              value={selectedStateID ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSelectedStateID(v ? Number(v) : null);
+              }}
               className="input-base mb-6 w-full min-h-[44px]"
+              disabled={statesLoading}
               required
             >
-              <option value="">Select your state...</option>
-              {indianStates.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.name}
-                </option>
-              ))}
+              <option value="" disabled>
+                {statesLoading ? "Loading states…" : "Select your state…"}
+              </option>
+              {states.filter((s) => !s.is_union_territory).length > 0 && (
+                <optgroup label="States">
+                  {states
+                    .filter((s) => !s.is_union_territory)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+              {states.filter((s) => s.is_union_territory).length > 0 && (
+                <optgroup label="Union Territories">
+                  {states
+                    .filter((s) => s.is_union_territory)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
             </select>
             <button
               type="submit"
-              disabled={!selectedState || loading}
+              disabled={selectedStateID == null || loading || statesLoading}
               className="btn-primary w-full min-h-[44px] disabled:opacity-50 cursor-pointer"
             >
               {loading ? "Saving..." : "Continue"}

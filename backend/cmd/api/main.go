@@ -344,8 +344,17 @@ func main() {
 	wsSvc := workspace.NewService(wsRepo, &logEventPublisher{}, &logStorageBucket{})
 	wsHandler := workspace.NewHandler(wsSvc)
 
-	// Onboarding with real workspace creation
-	onbSvc := onboarding.NewService(&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool}, &logEventPublisher{})
+	// Onboarding with persistent repo (migration 067) + real workspace creation.
+	// The repo replaces the prior in-memory map so onboarding progress
+	// survives backend restarts — critical for the multi-step flow
+	// where a user might take minutes between state selection and
+	// profile submission.
+	onbRepo := onboarding.NewPgRepo(dbPool)
+	onbSvc := onboarding.NewService(
+		onbRepo,
+		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool},
+		&logEventPublisher{},
+	)
 	onbHandler := onboarding.NewHandler(onbSvc)
 
 	// Real team repos backed by DB

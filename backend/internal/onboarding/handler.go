@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rawdrive/backend/internal/middleware"
@@ -11,8 +12,13 @@ import (
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
 
+// StateSelectionRequest accepts state_id as either a JSON number
+// (preferred: the canonical id from /api/v1/states) or a JSON string
+// (legacy: 2-letter code, ISO code, or state name). json.RawMessage
+// lets us inspect the raw bytes and forward them to the service-layer
+// resolver without locking into one type. The resolver normalizes.
 type StateSelectionRequest struct {
-	StateID string `json:"state_id"`
+	StateID json.RawMessage `json:"state_id"`
 }
 
 type ProfileRequest struct {
@@ -65,7 +71,17 @@ func (h *Handler) SelectState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.svc.SelectState(r.Context(), userID, StateSelectionInput{StateID: req.StateID})
+	// Normalize the raw state_id into a plain string for the service-
+	// layer resolver. JSON numbers arrive as `14`, JSON strings as
+	// `"MH"`. Stripping surrounding quotes on the raw bytes handles
+	// both without a type switch: `14` → "14", `"MH"` → "MH".
+	raw := strings.Trim(strings.TrimSpace(string(req.StateID)), `"`)
+	if raw == "" || raw == "null" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid state"})
+		return
+	}
+
+	err := h.svc.SelectState(r.Context(), userID, StateSelectionInput{StateID: raw})
 	if err != nil {
 		if errors.Is(err, ErrInvalidState) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid state"})
