@@ -1,20 +1,40 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/repository"
 )
+
+// bulkAssetRepo is the minimal surface of the asset repository that
+// BulkAssetHandler uses. It exists so the handler can be tested
+// without a live database. *repository.AssetRepo satisfies this
+// interface implicitly.
+//
+// ISSUE-007 (brownfield P2): BulkMoveToGallery previously took no
+// workspaceID parameter, which allowed a tenant-isolation bypass.
+// The new signature makes workspace scoping a compile-time
+// requirement for every caller.
+type bulkAssetRepo interface {
+	BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status string, workspaceID uuid.UUID) (int64, error)
+	BulkMoveToGallery(ctx context.Context, ids []uuid.UUID, fromGalleryID, toGalleryID, workspaceID uuid.UUID) (int64, error)
+	BulkSetRating(ctx context.Context, ids []uuid.UUID, rating int, workspaceID uuid.UUID) (int64, error)
+	BulkSetColorLabel(ctx context.Context, ids []uuid.UUID, label string, workspaceID uuid.UUID) (int64, error)
+	BulkAddTags(ctx context.Context, ids []uuid.UUID, tags []string, workspaceID uuid.UUID) (int64, error)
+	BulkRemoveTags(ctx context.Context, ids []uuid.UUID, tags []string, workspaceID uuid.UUID) (int64, error)
+}
 
 // BulkAssetHandler handles bulk asset operations.
 type BulkAssetHandler struct {
-	assetRepo *repository.AssetRepo
+	assetRepo bulkAssetRepo
 }
 
-// NewBulkAssetHandler creates a new BulkAssetHandler.
-func NewBulkAssetHandler(ar *repository.AssetRepo) *BulkAssetHandler {
+// NewBulkAssetHandler creates a new BulkAssetHandler. The repo
+// argument is accepted as the bulkAssetRepo interface so tests can
+// substitute fakes; production wiring passes *repository.AssetRepo.
+func NewBulkAssetHandler(ar bulkAssetRepo) *BulkAssetHandler {
 	return &BulkAssetHandler{assetRepo: ar}
 }
 
@@ -84,11 +104,13 @@ func (h *BulkAssetHandler) BulkAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid target_id"}`, http.StatusBadRequest)
 			return
 		}
-		_ = workspaceID // TODO: pass workspace scoping to BulkMoveToGallery when repo supports it
-		err = h.assetRepo.BulkMoveToGallery(r.Context(), ids, fromID, toID)
-		if err == nil {
-			affected = int64(len(ids))
-		}
+		// ISSUE-007: workspaceID is threaded through the repo so the
+		// SQL layer can filter cross-workspace asset_ids and reject
+		// from/to galleries that belong to other tenants. The handler
+		// reports the repo's real RowsAffected (which may be less
+		// than len(ids) when the filter drops rows) instead of the
+		// previously hardcoded len(ids).
+		affected, err = h.assetRepo.BulkMoveToGallery(r.Context(), ids, fromID, toID, workspaceID)
 	case "delete":
 		affected, err = h.assetRepo.BulkUpdateStatus(r.Context(), ids, "deleted", workspaceID)
 	case "set_rating":

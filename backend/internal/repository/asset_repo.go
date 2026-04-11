@@ -453,31 +453,114 @@ func (r *AssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, statu
 	return tag.RowsAffected(), nil
 }
 
-// BulkMoveToGallery moves multiple assets to a different gallery.
-func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID, fromGalleryID, toGalleryID uuid.UUID) error {
+// BulkMoveToGallery moves multiple assets from one gallery to another,
+// but only for assets and galleries owned by the given workspaceID.
+//
+// ISSUE-007 (brownfield P2, tenant isolation): previously this method
+// took no workspaceID and the SQL unconditionally modified
+// gallery_assets rows, which meant a caller in workspace A could
+// supply asset_ids and gallery_ids belonging to workspace B and have
+// them moved. The fix enforces workspace scoping in three places:
+//
+//  1. Both fromGalleryID and toGalleryID must belong to workspaceID.
+//     If either does not, the call is a silent no-op (returns 0).
+//  2. The asset list is filtered to assets that belong to
+//     workspaceID before any mutation. IDs that do not belong to the
+//     workspace are silently dropped.
+//  3. The whole operation runs inside a transaction so the DELETE
+//     and INSERT cannot be observed in a partial state.
+//
+// The return value is the number of assets that were actually moved
+// (which may be less than len(assetIDs) when cross-workspace IDs are
+// filtered). Callers should surface this to clients rather than
+// assuming every supplied ID was moved.
+func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID, fromGalleryID, toGalleryID, workspaceID uuid.UUID) (int64, error) {
 	if len(assetIDs) == 0 {
-		return nil
+		return 0, nil
 	}
-	// Remove from old gallery
-	_, err := r.pool.Exec(ctx,
-		`DELETE FROM gallery_assets WHERE gallery_id = $1 AND asset_id = ANY($2)`,
-		fromGalleryID, assetIDs,
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo bulk move begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Guard 1: both galleries must belong to workspaceID.
+	var gCount int
+	if err := tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM galleries WHERE id = ANY($1) AND workspace_id = $2`,
+		[]uuid.UUID{fromGalleryID, toGalleryID}, workspaceID,
+	).Scan(&gCount); err != nil {
+		return 0, fmt.Errorf("asset repo bulk move gallery check: %w", err)
+	}
+	if gCount != 2 {
+		// Either gallery does not belong to this workspace. Silently
+		// drop the whole operation — returning an error would leak
+		// information about the existence of cross-workspace IDs.
+		return 0, nil
+	}
+
+	// Guard 2: fetch the intersection of assetIDs and workspace-owned,
+	// non-deleted assets. Preserve the client's input order for the
+	// subsequent sort_order assignment so drag-and-drop reorderings
+	// survive the move.
+	rows, err := tx.Query(ctx,
+		`SELECT id FROM assets WHERE id = ANY($1) AND workspace_id = $2 AND deleted_at IS NULL`,
+		assetIDs, workspaceID,
 	)
 	if err != nil {
-		return fmt.Errorf("asset repo bulk move remove: %w", err)
+		return 0, fmt.Errorf("asset repo bulk move filter: %w", err)
 	}
-	// Add to new gallery
-	for i, id := range assetIDs {
-		_, err := r.pool.Exec(ctx,
+	ownedSet := make(map[uuid.UUID]struct{})
+	for rows.Next() {
+		var id uuid.UUID
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			rows.Close()
+			return 0, fmt.Errorf("asset repo bulk move scan: %w", scanErr)
+		}
+		ownedSet[id] = struct{}{}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("asset repo bulk move filter rows: %w", err)
+	}
+
+	owned := make([]uuid.UUID, 0, len(assetIDs))
+	for _, id := range assetIDs {
+		if _, ok := ownedSet[id]; ok {
+			owned = append(owned, id)
+		}
+	}
+	if len(owned) == 0 {
+		return 0, nil
+	}
+
+	// Remove owned assets from the source gallery.
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM gallery_assets WHERE gallery_id = $1 AND asset_id = ANY($2)`,
+		fromGalleryID, owned,
+	); err != nil {
+		return 0, fmt.Errorf("asset repo bulk move remove: %w", err)
+	}
+
+	// Insert into the target gallery preserving the client-supplied
+	// ordering. ON CONFLICT DO NOTHING keeps the call idempotent if
+	// the client retries after a partial failure.
+	for i, id := range owned {
+		if _, err := tx.Exec(ctx,
 			`INSERT INTO gallery_assets (gallery_id, asset_id, sort_order, added_at)
 			 VALUES ($1, $2, $3, now()) ON CONFLICT DO NOTHING`,
 			toGalleryID, id, i,
-		)
-		if err != nil {
-			return fmt.Errorf("asset repo bulk move add: %w", err)
+		); err != nil {
+			return 0, fmt.Errorf("asset repo bulk move add: %w", err)
 		}
 	}
-	return nil
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("asset repo bulk move commit: %w", err)
+	}
+
+	return int64(len(owned)), nil
 }
 
 // GetWorkspaceStorageUsed returns total storage bytes used by a workspace.
