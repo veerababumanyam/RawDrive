@@ -632,12 +632,12 @@ func main() {
 		uploadPolicyHandler := handler.NewUploadPolicyHandler(uploadPolicyCatalog)
 		uploadPolicyHandler.RegisterRoutes(r)
 
-		// Chunked upload routes
-		tmpDir := os.Getenv("UPLOAD_TMP_DIR")
-		if tmpDir == "" {
-			tmpDir = ".tmp/uploads"
-		}
-		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, tmpDir).
+		// F-013 (M17 wave 6): Chunked upload routes now use a persistent
+		// session store + direct-to-R2 multipart streaming. The tmpDir env
+		// var is intentionally no longer consulted — there is no local
+		// staging path anymore (F-008 hard law).
+		uploadSessionsRepo := repository.NewUploadSessionsRepo(dbPool)
+		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, uploadSessionsRepo).
 			WithValidation(uploadValidationSvc)
 		chunkedHandler.RegisterRoutes(api)
 

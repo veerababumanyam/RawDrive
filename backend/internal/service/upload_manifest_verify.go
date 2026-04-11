@@ -127,6 +127,27 @@ func VerifyHeaderTrailer(tempFilePath string, detectedFormat string) error {
 		return fmt.Errorf("reading file tail: %w", err)
 	}
 
+	return VerifyHeaderTrailerBytes(head, tail, detectedFormat)
+}
+
+// VerifyHeaderTrailerBytes runs the same cheap format spot-check as
+// VerifyHeaderTrailer but operates on caller-supplied head and tail byte
+// slices instead of opening a temp file. This is the no-disk variant that
+// F-013 (M17 wave 6) direct-to-R2 streaming needs — the TUS handler
+// captures the first 64 bytes and the last 64 bytes of the stream into
+// memory as chunks flow through it, so the finalize step can run the
+// spot-check without ever materializing the full upload on disk.
+//
+// Either slice may be short (even empty) — the signature helpers handle
+// short reads defensively, matching the original path-based behavior when
+// a file is smaller than 64 bytes.
+func VerifyHeaderTrailerBytes(head, tail []byte, detectedFormat string) error {
+	format := strings.ToLower(strings.TrimSpace(detectedFormat))
+	if format == "" {
+		// No format hint — skip the check.
+		return nil
+	}
+
 	switch format {
 	case "jpeg", "jpg":
 		if !hasJpegSignature(head) || !hasJpegEnd(tail) {

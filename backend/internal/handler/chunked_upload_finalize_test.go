@@ -3,8 +3,6 @@ package handler_test
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,13 +33,10 @@ import (
 // SHA-256 of the literal bytes "hello world" (no trailing newline).
 const helloWorldSHA256 = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
 
-func writeTempFile(t *testing.T, contents string) string {
-	t.Helper()
-	dir := t.TempDir()
-	p := filepath.Join(dir, "upload.bin")
-	require.NoError(t, os.WriteFile(p, []byte(contents), 0o600))
-	return p
-}
+// helloWorld is the canonical test payload. F-013 (M17 wave 6) moved the
+// F-003 test seam to accept raw bytes instead of a temp file path because
+// the direct-R2 rewrite deleted all local-disk staging.
+var helloWorld = []byte("hello world")
 
 func newHandlerWithValidator(t *testing.T) *handler.ChunkedUploadHandler {
 	t.Helper()
@@ -51,7 +46,9 @@ func newHandlerWithValidator(t *testing.T) *handler.ChunkedUploadHandler {
 		nil, // auditLog
 		true,
 	)
-	return handler.NewChunkedUploadHandler(nil, nil, nil, t.TempDir()).
+	// nil session store is fine: these tests drive verifyManifestAtFinalize
+	// via the export_test.go seam, which never touches the store.
+	return handler.NewChunkedUploadHandler(nil, nil, nil, nil).
 		WithValidation(validator)
 }
 
@@ -59,15 +56,12 @@ func newHandlerWithValidator(t *testing.T) *handler.ChunkedUploadHandler {
 
 func TestVerifyManifestAtFinalize_NoManifest_NoOp(t *testing.T) {
 	h := newHandlerWithValidator(t)
-	tmp := writeTempFile(t, "hello world")
-
-	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), tmp, nil)
+	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), helloWorld, nil)
 	assert.NoError(t, err, "nil manifest must be a no-op (legacy upload path)")
 }
 
 func TestVerifyManifestAtFinalize_MatchingHash_Succeeds(t *testing.T) {
 	h := newHandlerWithValidator(t)
-	tmp := writeTempFile(t, "hello world")
 
 	manifest := &service.UploadScanManifest{
 		SHA256: helloWorldSHA256,
@@ -75,20 +69,19 @@ func TestVerifyManifestAtFinalize_MatchingHash_Succeeds(t *testing.T) {
 		// isolates the hash check from the format spot-check.
 	}
 
-	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), tmp, manifest)
+	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), helloWorld, manifest)
 	assert.NoError(t, err, "matching SHA-256 must succeed")
 }
 
 func TestVerifyManifestAtFinalize_HashMismatch_Rejected(t *testing.T) {
 	h := newHandlerWithValidator(t)
-	tmp := writeTempFile(t, "hello world")
 
 	manifest := &service.UploadScanManifest{
 		// Plausible-looking but wrong hash.
 		SHA256: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 	}
 
-	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), tmp, manifest)
+	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), helloWorld, manifest)
 	require.Error(t, err, "mismatched SHA-256 must be rejected")
 	assert.ErrorIs(t, err, service.ErrScanHashMismatch,
 		"error must unwrap to ErrScanHashMismatch so the handler returns 422")
@@ -96,11 +89,10 @@ func TestVerifyManifestAtFinalize_HashMismatch_Rejected(t *testing.T) {
 
 func TestVerifyManifestAtFinalize_EmptyManifestHash_Rejected(t *testing.T) {
 	h := newHandlerWithValidator(t)
-	tmp := writeTempFile(t, "hello world")
 
 	manifest := &service.UploadScanManifest{SHA256: ""}
 
-	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), tmp, manifest)
+	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), helloWorld, manifest)
 	require.Error(t, err, "blank manifest hash must be rejected, not silently passed")
 	assert.ErrorIs(t, err, service.ErrScanManifestInvalid,
 		"blank hash must surface ErrScanManifestInvalid for 422 mapping")
@@ -108,17 +100,15 @@ func TestVerifyManifestAtFinalize_EmptyManifestHash_Rejected(t *testing.T) {
 
 func TestVerifyManifestAtFinalize_FormatSpotCheckDetectsCorruption(t *testing.T) {
 	h := newHandlerWithValidator(t)
-	// These bytes are not a valid JPEG (no FFD8/FFD9 markers) but we will
-	// claim they are in the manifest. The hash will match — so only the
+	// These bytes are not a valid JPEG (no FFD8/FFD9 markers) but we claim
+	// they are in the manifest. The hash will match — so only the
 	// header/trailer spot-check can catch the corruption.
-	tmp := writeTempFile(t, "hello world")
-
 	manifest := &service.UploadScanManifest{
 		SHA256:         helloWorldSHA256, // matches — forces hash check to pass
 		DetectedFormat: "jpeg",           // forces spot-check to run
 	}
 
-	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), tmp, manifest)
+	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), helloWorld, manifest)
 	require.Error(t, err, "corrupt JPEG must fail the header/trailer spot-check")
 	assert.ErrorIs(t, err, service.ErrScanHashMismatch,
 		"spot-check failure currently surfaces as ErrScanHashMismatch by design")

@@ -92,13 +92,11 @@ func setupChunkedUploadRig(t *testing.T, policyMode service.PolicyMode) *chunked
 		true,       // enforceMode = true so strict-mode rejections actually return errors
 	)
 
-	// Real temp dir per test (auto-cleaned).
-	tmpDir := t.TempDir()
-
-	// nil uploadSvc / assetRepo / store — CreateSession path doesn't touch any
-	// of these for tests that reject at validation. Round 3 GREEN will continue
-	// to short-circuit before touching them, so this stays nil-safe in GREEN.
-	h := handler.NewChunkedUploadHandler(nil, nil, nil, tmpDir).
+	// F-013 (M17 wave 6): the handler no longer keeps local state on disk;
+	// it accepts an UploadSessionStore instead. These validation-rejection
+	// tests short-circuit before any store call, so a nil store is fine
+	// and the handler's nil-guard path keeps them passing unchanged.
+	h := handler.NewChunkedUploadHandler(nil, nil, nil, nil).
 		WithValidation(validationSvc)
 
 	return &chunkedUploadTestRig{

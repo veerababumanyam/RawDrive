@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -11,13 +13,30 @@ import (
 // It exposes narrowly-scoped test hooks into the unexported chunked upload
 // helpers so audit-driven tests (F-003, F-004) can exercise them directly.
 
-// VerifyManifestAtFinalizeForTest is a test-only seam that calls the internal
-// verifyManifestAtFinalize method. Used by the F-003 hash mismatch tests so
-// they can drive the manifest verification path without booting the full
-// multi-chunk upload flow.
-func VerifyManifestAtFinalizeForTest(h *ChunkedUploadHandler, ctx context.Context, tmpPath string, manifest *service.UploadScanManifest) error {
-	session := &uploadSession{TmpPath: tmpPath, Manifest: manifest}
-	return h.verifyManifestAtFinalize(ctx, session)
+// VerifyManifestAtFinalizeForTest is a test-only seam over the unexported
+// verifyManifestAtFinalize method. F-013 (M17 wave 6) replaced the temp-file
+// argument with in-memory bytes so the seam no longer depends on local disk
+// I/O — the test passes the full upload buffer and the seam computes the
+// SHA-256 and the head/tail windows internally before dispatching to the
+// real verification method.
+func VerifyManifestAtFinalizeForTest(
+	h *ChunkedUploadHandler,
+	ctx context.Context,
+	fileBytes []byte,
+	manifest *service.UploadScanManifest,
+) error {
+	sum := sha256.Sum256(fileBytes)
+	hashHex := hex.EncodeToString(sum[:])
+
+	head := fileBytes
+	if len(head) > 64 {
+		head = head[:64]
+	}
+	tail := fileBytes
+	if len(tail) > 64 {
+		tail = tail[len(tail)-64:]
+	}
+	return h.verifyManifestAtFinalize(ctx, hashHex, head, tail, manifest)
 }
 
 // ApplyScanMetadataForTest is a test-only seam over the unexported

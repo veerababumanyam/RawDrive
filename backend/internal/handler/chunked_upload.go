@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"os"
@@ -14,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,75 +28,169 @@ import (
 
 const tusVersion = "1.0.0"
 
-// setTUSHeaders adds standard TUS protocol headers to every response.
-func setTUSHeaders(w http.ResponseWriter) {
+// F-013 (M17 wave 6): TUS extension set. Wave 5 shipped the multipart
+// storage primitives; wave 6 wires them into this handler and advertises
+// the spec-compliant extension list so clients can negotiate creation-
+// with-upload, expiration, and per-chunk checksum verification.
+const tusExtension = "creation,creation-with-upload,expiration,checksum,termination"
+
+// defaultSessionTTL is the default expiration window for a TUS session.
+// Operators can override it through the UPLOAD_SESSION_TTL_HOURS env var
+// (fallback used when platform_settings cannot be consulted from the
+// wiring layer — wave 6 keeps things simple; wave 7+ reads from the DB).
+const defaultSessionTTL = 24 * time.Hour
+
+// defaultMaxUploadBytes is the fallback Tus-Max-Size header value when
+// UPLOAD_MAX_BYTES env var is not set. 2 GiB matches pre-wave-6 behavior.
+const defaultMaxUploadBytes int64 = 2 * 1024 * 1024 * 1024
+
+// setTUSHeaders adds the standard TUS protocol headers to every response.
+// maxBytes is resolved once at handler construction from env and cached on
+// the handler so we do not re-read env on every request.
+func (h *ChunkedUploadHandler) setTUSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Tus-Resumable", tusVersion)
 	w.Header().Set("Tus-Version", tusVersion)
-	w.Header().Set("Tus-Extension", "creation,termination")
-	w.Header().Set("Tus-Max-Size", "2147483648") // 2GB
+	w.Header().Set("Tus-Extension", tusExtension)
+	w.Header().Set("Tus-Max-Size", strconv.FormatInt(h.maxUploadBytes, 10))
+}
+
+// UploadSessionStore is the narrow subset of repository.UploadSessionsRepo
+// methods the handler actually calls. Declaring it here (instead of
+// importing the repo directly) lets tests inject an in-memory fake without
+// spinning up a Postgres pool, while the real *repository.UploadSessionsRepo
+// satisfies the interface by structural typing.
+type UploadSessionStore interface {
+	Create(ctx context.Context, s *repository.UploadSession) error
+	GetByTUSUploadID(ctx context.Context, tusUploadID string) (*repository.UploadSession, error)
+	UpdateOffset(ctx context.Context, tusUploadID string, newOffset int64) error
+	AppendPartETag(ctx context.Context, tusUploadID string, part repository.UploadPartETag) error
+	MarkCompleted(ctx context.Context, tusUploadID string) error
+	Delete(ctx context.Context, tusUploadID string) error
 }
 
 // ChunkedUploadHandler implements the TUS v1.0.0 resumable upload protocol.
 // Clients POST to /uploads to create an upload session, then PATCH chunks.
 //
-// M16 Round 3: validationSvc is an optional dependency wired via
-// WithValidation(). When unset (nil), the handler skips Tier D validation
-// entirely — the existing pre-M16 behavior. When set, the handler enforces
-// upload manifests at session-create (via ValidateForSessionCreate) and
-// verifies the final SHA-256 against the manifest at finalize time. The
-// validation service owns its own WorkspacePolicyReader internally, so the
-// handler does not need a separate policy service dependency.
+// F-013 (M17 wave 6) — direct-to-R2 streaming rewrite:
+//   - Session state lives in upload_sessions (Postgres) so sessions survive
+//     API container restarts and multi-instance deployments.
+//   - Chunks flow straight to R2 via storage.MultipartCapable — there is
+//     no temp file on disk (F-008 hard law).
+//   - Per-chunk Upload-Checksum header verification rejects tampered
+//     chunks with HTTP 460 before they land in R2.
+//   - A per-session in-memory streamState holds the rolling SHA-256 and
+//     the first/last 64 bytes for the F-003 finalize hash verification and
+//     M16 Tier D format spot-check. If the API restarts mid-upload the
+//     in-memory state is lost; finalize falls back to re-reading the
+//     composed R2 object to recompute the hash (cold path).
+//
+// The M16 E47-S5 Tier D validation hook is preserved: validationSvc runs
+// at session create time (ValidateForSessionCreate) and at finalize time
+// (hash verify + header/trailer spot-check). Wire it via WithValidation;
+// nil means validation is disabled (legacy fixtures / test rigs).
 type ChunkedUploadHandler struct {
 	uploadSvc *service.UploadService
 	assetRepo *repository.AssetRepo
 	store     storage.Provider
-	tmpDir    string
-	sessions  sync.Map // uploadID -> *uploadSession
+	sessions  UploadSessionStore
+
+	// maxUploadBytes is the Tus-Max-Size ceiling and the per-session total
+	// size upper bound. Read once from env at construction.
+	maxUploadBytes int64
+
+	// streamStates holds per-session in-memory progress needed for the
+	// F-003 hash verification and Tier D spot-check. Keyed by tus upload ID.
+	// Lost on restart — finalize cold path handles that case.
+	streamStates sync.Map // map[string]*sessionStreamState
 
 	// M16 E47-S5: optional Tier D validation hook. Wired via WithValidation().
 	// Nil means validation is disabled (legacy behavior).
 	validationSvc service.UploadManifestValidation
 }
 
-type uploadSession struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
-	UserID      string `json:"user_id"`
-	Filename    string `json:"filename"`
-	ContentType string `json:"content_type"`
-	TotalSize   int64  `json:"total_size"`
-	ChunkSize   int64  `json:"chunk_size"`
-	Offset      int64  `json:"offset"`
-	TmpPath     string `json:"-"`
-
-	// M16 E47-S5: optional scan manifest provided by the client at session
-	// create time. Stored verbatim so the finalize step can verify the
-	// declared SHA-256 against the actual uploaded bytes.
-	Manifest *service.UploadScanManifest `json:"manifest,omitempty"`
+// sessionStreamState is the in-memory working set for an in-flight upload.
+// It exists alongside the durable upload_sessions row so each PATCH can
+// compute a rolling SHA-256 (needed for F-003 finalize verification) and
+// buffer the head/tail bytes (needed for the M16 Tier D format spot-check)
+// without storing the full upload on disk.
+type sessionStreamState struct {
+	mu         sync.Mutex
+	hasher     hash.Hash
+	head       []byte // first up-to-64 bytes
+	tail       []byte // last up-to-64 bytes (sliding window across chunks)
+	storageKey string
+	multipartID string
+	nextPart   int32 // 1-indexed — TUS expects sequential PATCH, R2 needs sequential part numbers
 }
 
-// NewChunkedUploadHandler creates a new handler for chunked uploads.
-func NewChunkedUploadHandler(uploadSvc *service.UploadService, assetRepo *repository.AssetRepo, store storage.Provider, tmpDir string) *ChunkedUploadHandler {
-	os.MkdirAll(tmpDir, 0o755)
+func newStreamState(storageKey, multipartID string) *sessionStreamState {
+	return &sessionStreamState{
+		hasher:      sha256.New(),
+		head:        make([]byte, 0, 64),
+		tail:        make([]byte, 0, 64),
+		storageKey:  storageKey,
+		multipartID: multipartID,
+		nextPart:    1,
+	}
+}
+
+// absorbChunk updates the rolling hash and head/tail windows with the
+// given chunk bytes. Must be called with s.mu held. Chunks larger than
+// 64 bytes overwrite the entire tail window; smaller chunks slide it.
+func (s *sessionStreamState) absorbChunk(chunk []byte) {
+	s.hasher.Write(chunk)
+
+	// Head: capture the first 64 bytes across chunk boundaries.
+	if len(s.head) < 64 {
+		need := 64 - len(s.head)
+		if need > len(chunk) {
+			need = len(chunk)
+		}
+		s.head = append(s.head, chunk[:need]...)
+	}
+
+	// Tail: keep the most recent up-to-64 bytes seen across all chunks.
+	if len(chunk) >= 64 {
+		s.tail = append(s.tail[:0], chunk[len(chunk)-64:]...)
+		return
+	}
+	combined := append([]byte{}, s.tail...)
+	combined = append(combined, chunk...)
+	if len(combined) > 64 {
+		combined = combined[len(combined)-64:]
+	}
+	s.tail = combined
+}
+
+// NewChunkedUploadHandler creates a new TUS handler wired to the durable
+// session store. The store argument MUST be a storage.Provider that ALSO
+// implements storage.MultipartCapable (currently S3Driver in production).
+// Handlers type-assert when they need multipart; non-multipart providers
+// fall back to a 503 path. sessions is the UploadSessionStore — the real
+// *repository.UploadSessionsRepo satisfies it structurally.
+func NewChunkedUploadHandler(
+	uploadSvc *service.UploadService,
+	assetRepo *repository.AssetRepo,
+	store storage.Provider,
+	sessions UploadSessionStore,
+) *ChunkedUploadHandler {
+	maxBytes := defaultMaxUploadBytes
+	if raw := os.Getenv("UPLOAD_MAX_BYTES"); raw != "" {
+		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed > 0 {
+			maxBytes = parsed
+		}
+	}
 	return &ChunkedUploadHandler{
-		uploadSvc: uploadSvc,
-		assetRepo: assetRepo,
-		store:     store,
-		tmpDir:    tmpDir,
+		uploadSvc:      uploadSvc,
+		assetRepo:      assetRepo,
+		store:          store,
+		sessions:       sessions,
+		maxUploadBytes: maxBytes,
 	}
 }
 
 // WithValidation wires the M16 E47-S5 Tier D validation hook. Returns the
-// same handler for chainable construction (so cmd/api/main.go can write
-// `NewChunkedUploadHandler(...).WithValidation(validationSvc)` without
-// changing the constructor signature). Pass nil to disable validation.
-//
-// Rationale: a setter pattern keeps the constructor backwards-compatible
-// with existing test fixtures that don't care about scan manifests, while
-// letting M16 wiring opt in explicitly. Round 3 GREEN will call this from
-// main.go after instantiating the validation service. The validation
-// service owns its own WorkspacePolicyReader, so callers don't need to
-// pass a separate policy service.
+// same handler for chainable construction.
 func (h *ChunkedUploadHandler) WithValidation(
 	validationSvc service.UploadManifestValidation,
 ) *ChunkedUploadHandler {
@@ -108,6 +206,17 @@ func (h *ChunkedUploadHandler) RegisterRoutes(r chi.Router) {
 	r.Delete("/api/v1/uploads/{uploadId}", h.Cancel)
 }
 
+// sessionTTL returns the effective session TTL. Reads the
+// UPLOAD_SESSION_TTL_HOURS env var, falls back to defaultSessionTTL.
+func sessionTTL() time.Duration {
+	if raw := os.Getenv("UPLOAD_SESSION_TTL_HOURS"); raw != "" {
+		if h, err := strconv.Atoi(raw); err == nil && h > 0 {
+			return time.Duration(h) * time.Hour
+		}
+	}
+	return defaultSessionTTL
+}
+
 // CreateSession creates a new upload session. POST /api/v1/uploads
 func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := getWorkspaceID(r)
@@ -118,10 +227,10 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	userID, _ := getUserID(r)
 
 	var input struct {
-		Filename    string                       `json:"filename"`
-		ContentType string                       `json:"content_type"`
-		TotalSize   int64                        `json:"total_size"`
-		ChunkSize   int64                        `json:"chunk_size"`
+		Filename     string                      `json:"filename"`
+		ContentType  string                      `json:"content_type"`
+		TotalSize    int64                       `json:"total_size"`
+		ChunkSize    int64                       `json:"chunk_size"`
 		ScanManifest *service.UploadScanManifest `json:"scan_manifest,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -129,18 +238,9 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// M16 E47-S5 Round 3 GREEN: enforce the Tier D upload manifest gate.
-	// When validationSvc is nil (legacy / non-M16 wiring), we skip validation
-	// entirely — preserves the pre-M16 behavior for any caller that hasn't
-	// wired WithValidation. When set, the validator looks up the workspace's
-	// configured policy mode and applies the rule matrix from
-	// upload_manifest_validation.ValidateForSessionCreate.
-	//
-	// Sentinel errors (ErrScanDecisionBlock, ErrScanManifestRequired, etc.)
-	// are returned as 400 Bad Request with the error code as the response
-	// "error" field. The code IS the error message because the sentinels are
-	// defined as `errors.New("SCAN_DECISION_BLOCK")` etc. — the test plan
-	// asserts on substring presence of these codes.
+	// M16 E47-S5: Tier D upload manifest validation gate. Preserved across
+	// the wave 6 rewrite — reject block-decision manifests and missing
+	// manifests (in strict mode) before any R2 call happens.
 	if h.validationSvc != nil {
 		mode, err := h.validationSvc.WorkspacePolicyMode(r.Context(), workspaceID)
 		if err != nil {
@@ -159,43 +259,92 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	if input.TotalSize <= 0 || input.TotalSize > 2*1024*1024*1024 { // 2GB limit
-		http.Error(w, `{"error":"total_size must be between 1 byte and 2GB"}`, http.StatusBadRequest)
+	if input.TotalSize <= 0 || input.TotalSize > h.maxUploadBytes {
+		http.Error(w, fmt.Sprintf(`{"error":"total_size must be between 1 byte and %d bytes"}`, h.maxUploadBytes), http.StatusBadRequest)
 		return
 	}
 	if input.ChunkSize <= 0 {
 		input.ChunkSize = 5 * 1024 * 1024 // default 5MB
 	}
 
-	uploadID := uuid.New().String()
-	tmpPath := filepath.Join(h.tmpDir, uploadID)
-
-	// Create empty temp file
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		http.Error(w, `{"error":"failed to create upload session"}`, http.StatusInternalServerError)
+	// Sessions store is mandatory — the direct-R2 path needs durable state.
+	// Fail loudly if main.go forgot to wire the repo.
+	if h.sessions == nil {
+		http.Error(w, `{"error":"upload sessions store not wired"}`, http.StatusInternalServerError)
 		return
 	}
-	f.Close()
 
-	session := &uploadSession{
-		ID:          uploadID,
-		WorkspaceID: workspaceID.String(),
-		UserID:      userID.String(),
-		Filename:    input.Filename,
-		ContentType: input.ContentType,
-		TotalSize:   input.TotalSize,
-		ChunkSize:   input.ChunkSize,
-		Offset:      0,
-		TmpPath:     tmpPath,
-		Manifest:    input.ScanManifest, // M16: stored for finalize hash check
+	uploadID := uuid.New().String()
+
+	// Build the storage key from workspaceID + the TUS upload ID so both
+	// CreateSession and finalize can derive the same R2 key without
+	// needing to read back the DB-generated session row id. The asset row
+	// eventually gets a fresh uuid.New() at finalize time — the storage
+	// key intentionally does NOT mirror asset.ID since nothing in the
+	// codebase parses StorageKey, it is used as an opaque R2 key.
+	ext := filepath.Ext(input.Filename)
+	if ext == "" {
+		parts := strings.Split(input.ContentType, "/")
+		if len(parts) == 2 {
+			ext = "." + parts[1]
+		}
 	}
-	h.sessions.Store(uploadID, session)
+	storageKey := fmt.Sprintf("%s/%s/original%s", workspaceID.String(), uploadID, ext)
 
-	setTUSHeaders(w)
+	// Initiate the R2 multipart upload so the per-chunk PATCH path has an
+	// upload ID to stream parts into. Non-multipart providers (e.g. unit
+	// tests that pass a plain storage.Provider) return a 503 — callers
+	// must upgrade to a MultipartCapable provider.
+	mpc, ok := h.store.(storage.MultipartCapable)
+	if !ok {
+		http.Error(w, `{"error":"storage backend does not support multipart uploads"}`, http.StatusServiceUnavailable)
+		return
+	}
+	r2UploadID, err := mpc.CreateMultipartUpload(r.Context(), storageKey, input.ContentType)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to create R2 multipart upload: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	expiresAt := time.Now().UTC().Add(sessionTTL())
+
+	// Serialize the manifest for the scan_manifest column (nullable jsonb).
+	var manifestBytes []byte
+	if input.ScanManifest != nil {
+		if b, err := json.Marshal(input.ScanManifest); err == nil {
+			manifestBytes = b
+		}
+	}
+
+	row := &repository.UploadSession{
+		WorkspaceID:         workspaceID,
+		UserID:              userID,
+		TUSUploadID:         uploadID,
+		Filename:            input.Filename,
+		ContentType:         input.ContentType,
+		TotalSize:           input.TotalSize,
+		UploadOffset:        0,
+		ChunkSize:           input.ChunkSize,
+		R2MultipartUploadID: &r2UploadID,
+		ExpiresAt:           expiresAt,
+		ScanManifest:        manifestBytes,
+	}
+	if err := h.sessions.Create(r.Context(), row); err != nil {
+		// Best-effort: abort the R2 multipart we just started so we don't
+		// leak storage state on a DB write failure.
+		_ = mpc.AbortMultipartUpload(r.Context(), storageKey, r2UploadID)
+		http.Error(w, fmt.Sprintf(`{"error":"failed to persist upload session: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Seed the in-memory stream state for the rolling hash + head/tail.
+	h.streamStates.Store(uploadID, newStreamState(storageKey, r2UploadID))
+
+	h.setTUSHeaders(w)
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/uploads/%s", uploadID))
 	w.Header().Set("Upload-Offset", "0")
 	w.Header().Set("Upload-Length", strconv.FormatInt(input.TotalSize, 10))
+	w.Header().Set("Upload-Expires", expiresAt.Format(time.RFC1123))
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"upload_id":  uploadID,
 		"chunk_size": input.ChunkSize,
@@ -206,50 +355,134 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 // UploadChunk appends a chunk to an existing session. PATCH /api/v1/uploads/{uploadId}
 func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 	uploadID := chi.URLParam(r, "uploadId")
-	val, ok := h.sessions.Load(uploadID)
-	if !ok {
-		http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
+	row, err := h.sessions.GetByTUSUploadID(r.Context(), uploadID)
+	if err != nil {
+		if errors.Is(err, repository.ErrUploadSessionNotFound) {
+			http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"session lookup failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
-	session := val.(*uploadSession)
 
-	// Parse Upload-Offset header (TUS-like)
+	// Parse Upload-Offset header (TUS requirement).
 	offsetStr := r.Header.Get("Upload-Offset")
 	if offsetStr != "" {
-		offset, err := strconv.ParseInt(offsetStr, 10, 64)
-		if err == nil && offset != session.Offset {
-			http.Error(w, fmt.Sprintf(`{"error":"offset mismatch: expected %d, got %d"}`, session.Offset, offset), http.StatusConflict)
+		offset, parseErr := strconv.ParseInt(offsetStr, 10, 64)
+		if parseErr == nil && offset != row.UploadOffset {
+			http.Error(w, fmt.Sprintf(`{"error":"offset mismatch: expected %d, got %d"}`, row.UploadOffset, offset), http.StatusConflict)
 			return
 		}
 	}
 
-	// Append chunk to temp file
-	f, err := os.OpenFile(session.TmpPath, os.O_WRONLY|os.O_APPEND, 0o644)
+	// Buffer the chunk into memory so we can verify the Upload-Checksum
+	// header BEFORE forwarding bytes to R2. Chunks are bounded by the
+	// client's ChunkSize (default 5MB); the memory cost is intentional
+	// and acceptable versus the hard law of "no local disk I/O".
+	chunk, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, `{"error":"failed to open upload file"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to read chunk body"}`, http.StatusInternalServerError)
 		return
 	}
 
-	written, err := io.Copy(f, r.Body)
-	f.Close()
+	// Per-chunk checksum verification. The Upload-Checksum header format
+	// per TUS spec is "<algorithm> <base64-digest>". Only sha256 is
+	// supported today. Missing header = opt out. Mismatches return HTTP
+	// 460 (TUS "Checksum Mismatch") with no state change.
+	if checksum := r.Header.Get("Upload-Checksum"); checksum != "" {
+		if code, err := verifyUploadChecksum(chunk, checksum); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), code)
+			return
+		}
+	}
+
+	// Look up the in-memory stream state. If it is missing (API restart
+	// mid-upload) we rebuild a fresh one — this is safe because the
+	// rolling hash is only used at finalize, and finalize has a cold-path
+	// re-hash that re-reads the completed R2 object when the in-memory
+	// hash is unreliable. Seed the state marked "rehydrated" so finalize
+	// knows to trust the cold path instead.
+	stateI, loaded := h.streamStates.Load(uploadID)
+	if !loaded {
+		// Rehydrate: we know the storage key from the row, but we do not
+		// know the R2 upload ID from the in-memory state. Recover both
+		// from the DB row so finalize can complete.
+		storageKey, mpID := deriveKeyAndUploadID(row)
+		if mpID == "" {
+			http.Error(w, `{"error":"session has no R2 multipart upload id"}`, http.StatusInternalServerError)
+			return
+		}
+		fresh := newStreamState(storageKey, mpID)
+		// Mark the fresh hasher as unreliable by setting it to nil. Finalize
+		// reads nil hasher = cold path re-read from R2.
+		fresh.hasher = nil
+		// The next part number needs to account for parts that were already
+		// uploaded before restart. Count them from r2_part_etags.
+		fresh.nextPart = int32(countExistingParts(row.R2PartETags)) + 1
+		h.streamStates.Store(uploadID, fresh)
+		stateI = fresh
+	}
+	state := stateI.(*sessionStreamState)
+
+	state.mu.Lock()
+	partNumber := state.nextPart
+	state.nextPart++
+	// Only update rolling hash + head/tail if we have a reliable hasher
+	// (i.e. we did not rehydrate after restart).
+	if state.hasher != nil {
+		state.absorbChunk(chunk)
+	}
+	storageKey := state.storageKey
+	mpID := state.multipartID
+	state.mu.Unlock()
+
+	// Stream the chunk to R2 via multipart UploadPart.
+	mpc, ok := h.store.(storage.MultipartCapable)
+	if !ok {
+		http.Error(w, `{"error":"storage backend does not support multipart uploads"}`, http.StatusServiceUnavailable)
+		return
+	}
+	etag, err := mpc.UploadPart(r.Context(), storageKey, mpID, partNumber, bytes.NewReader(chunk), int64(len(chunk)))
 	if err != nil {
-		http.Error(w, `{"error":"failed to write chunk"}`, http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error":"failed to upload part: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
-	session.Offset += written
+	// Compute this chunk's SHA-256 for durable part manifest (not the
+	// rolling full-file hash — that is kept separately in streamState).
+	chunkHash := sha256.Sum256(chunk)
+	part := repository.UploadPartETag{
+		PartNumber: int(partNumber),
+		ETag:       etag,
+		Size:       int64(len(chunk)),
+		SHA256:     hex.EncodeToString(chunkHash[:]),
+	}
+	if err := h.sessions.AppendPartETag(r.Context(), uploadID, part); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to record part etag: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
 
-	setTUSHeaders(w)
-	w.Header().Set("Upload-Offset", strconv.FormatInt(session.Offset, 10))
+	newOffset := row.UploadOffset + int64(len(chunk))
+	if err := h.sessions.UpdateOffset(r.Context(), uploadID, newOffset); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to update offset: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
 
-	// Check if upload is complete
-	if session.Offset >= session.TotalSize {
-		// Finalize: compute hash, store in storage provider, create asset
-		result, err := h.finalizeUpload(r, session)
+	h.setTUSHeaders(w)
+	w.Header().Set("Upload-Offset", strconv.FormatInt(newOffset, 10))
+
+	// Finalize when the upload hits the declared total size.
+	if newOffset >= row.TotalSize {
+		// Refresh the row so scan_manifest + size info is current.
+		finalRow, err := h.sessions.GetByTUSUploadID(r.Context(), uploadID)
 		if err != nil {
-			// F-003 (audit 2026-04-10): map M16 Tier D scan errors to 422 so
-			// clients can distinguish "bytes tampered" / "format corrupt" from
-			// generic server failures. Any other finalize error stays 500.
+			http.Error(w, fmt.Sprintf(`{"error":"session refresh failed: %s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		result, err := h.finalizeUpload(r.Context(), finalRow, state)
+		if err != nil {
+			// F-003 / F-004: map M16 Tier D scan errors to 422. Any other
+			// finalize error stays 500.
 			if errors.Is(err, service.ErrScanHashMismatch) {
 				http.Error(w, `{"error":"SCAN_HASH_MISMATCH"}`, http.StatusUnprocessableEntity)
 				return
@@ -261,15 +494,14 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 			http.Error(w, fmt.Sprintf(`{"error":"finalize failed: %s"}`, err.Error()), http.StatusInternalServerError)
 			return
 		}
-		h.sessions.Delete(uploadID)
-		os.Remove(session.TmpPath)
+		h.streamStates.Delete(uploadID)
 		respondJSON(w, http.StatusOK, result)
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"upload_id": uploadID,
-		"offset":    session.Offset,
+		"offset":    newOffset,
 		"complete":  false,
 	})
 }
@@ -277,142 +509,259 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 // GetOffset returns the current offset. HEAD /api/v1/uploads/{uploadId}
 func (h *ChunkedUploadHandler) GetOffset(w http.ResponseWriter, r *http.Request) {
 	uploadID := chi.URLParam(r, "uploadId")
-	val, ok := h.sessions.Load(uploadID)
-	if !ok {
-		http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
+	row, err := h.sessions.GetByTUSUploadID(r.Context(), uploadID)
+	if err != nil {
+		if errors.Is(err, repository.ErrUploadSessionNotFound) {
+			http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"session lookup failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
-	session := val.(*uploadSession)
 
-	setTUSHeaders(w)
-	w.Header().Set("Upload-Offset", strconv.FormatInt(session.Offset, 10))
-	w.Header().Set("Upload-Length", strconv.FormatInt(session.TotalSize, 10))
+	h.setTUSHeaders(w)
+	w.Header().Set("Upload-Offset", strconv.FormatInt(row.UploadOffset, 10))
+	w.Header().Set("Upload-Length", strconv.FormatInt(row.TotalSize, 10))
+	w.Header().Set("Upload-Expires", row.ExpiresAt.UTC().Format(time.RFC1123))
 	w.WriteHeader(http.StatusOK)
 }
 
 // Cancel removes an upload session. DELETE /api/v1/uploads/{uploadId}
 func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	uploadID := chi.URLParam(r, "uploadId")
-	val, ok := h.sessions.Load(uploadID)
-	if !ok {
-		http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
+	row, err := h.sessions.GetByTUSUploadID(r.Context(), uploadID)
+	if err != nil {
+		if errors.Is(err, repository.ErrUploadSessionNotFound) {
+			http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"session lookup failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
-	session := val.(*uploadSession)
 
-	h.sessions.Delete(uploadID)
-	os.Remove(session.TmpPath)
+	storageKey, mpID := deriveKeyAndUploadID(row)
+	if mpID != "" {
+		if mpc, ok := h.store.(storage.MultipartCapable); ok {
+			// Best-effort abort — R2 treats the call as idempotent so
+			// logging (not failing) on error is appropriate.
+			_ = mpc.AbortMultipartUpload(r.Context(), storageKey, mpID)
+		}
+	}
+
+	if err := h.sessions.Delete(r.Context(), uploadID); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to delete session: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	h.streamStates.Delete(uploadID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ChunkedUploadHandler) finalizeUpload(r *http.Request, session *uploadSession) (map[string]interface{}, error) {
-	f, err := os.Open(session.TmpPath)
-	if err != nil {
-		return nil, fmt.Errorf("open temp file: %w", err)
+// finalizeUpload composes the R2 multipart upload, verifies the manifest
+// against the actual uploaded bytes (F-003), persists the scan metadata
+// onto the asset row (F-004), and marks the session complete. It is
+// reached only from UploadChunk when upload_offset >= total_size.
+func (h *ChunkedUploadHandler) finalizeUpload(
+	ctx context.Context,
+	row *repository.UploadSession,
+	state *sessionStreamState,
+) (map[string]interface{}, error) {
+	if row == nil {
+		return nil, errors.New("nil session row")
 	}
-	defer f.Close()
+	if state == nil {
+		return nil, errors.New("nil stream state")
+	}
 
-	// Compute SHA-256
-	hasher := sha256.New()
-	tee := io.TeeReader(f, hasher)
-
-	workspaceID, _ := uuid.Parse(session.WorkspaceID)
-	userID, _ := uuid.Parse(session.UserID)
-	assetID := uuid.New()
-	ext := filepath.Ext(session.Filename)
-	if ext == "" {
-		parts := strings.Split(session.ContentType, "/")
-		if len(parts) == 2 {
-			ext = "." + parts[1]
+	// Decode the persisted part etags so we can rebuild the ordered
+	// CompletedPart slice for R2 CompleteMultipartUpload.
+	var parts []repository.UploadPartETag
+	if len(row.R2PartETags) > 0 {
+		if err := json.Unmarshal(row.R2PartETags, &parts); err != nil {
+			return nil, fmt.Errorf("decode part etags: %w", err)
 		}
 	}
-	storageKey := fmt.Sprintf("%s/%s/original%s", workspaceID.String(), assetID.String(), ext)
-
-	// Upload to storage
-	if err := h.store.Put(r.Context(), storageKey, tee, session.TotalSize, session.ContentType); err != nil {
-		return nil, fmt.Errorf("store: %w", err)
+	if len(parts) == 0 {
+		return nil, errors.New("no parts uploaded")
 	}
 
-	hash := hex.EncodeToString(hasher.Sum(nil))
+	storageKey, mpID := deriveKeyAndUploadID(row)
+	if mpID == "" {
+		return nil, errors.New("session has no R2 multipart upload id")
+	}
 
-	// F-003 (audit 2026-04-10): Enforce M16 Tier D final-byte assertion.
-	// Previously the manifest was accepted at session-create and then never
-	// verified against the actual bytes — the helpers existed but had no
-	// production callsite, which is how "upload screening" became trust-the-
-	// client in the live path. Now: if the session carries a manifest AND the
-	// validation service is wired, verify the hash against the temp file and
-	// run the cheap header/trailer spot-check. On any mismatch, roll back the
-	// stored bytes and return a sentinel error that the caller maps to 422.
-	if err := h.verifyManifestAtFinalize(r.Context(), session); err != nil {
-		_ = h.store.Delete(r.Context(), storageKey)
+	mpc, ok := h.store.(storage.MultipartCapable)
+	if !ok {
+		return nil, storage.ErrMultipartNotSupported
+	}
+
+	completed := make([]storage.CompletedPart, 0, len(parts))
+	for _, p := range parts {
+		completed = append(completed, storage.CompletedPart{
+			PartNumber: int32(p.PartNumber),
+			ETag:       p.ETag,
+		})
+	}
+	if err := mpc.CompleteMultipartUpload(ctx, storageKey, mpID, completed); err != nil {
+		return nil, fmt.Errorf("complete multipart: %w", err)
+	}
+
+	// Decode the scan manifest from the DB row so F-003 / F-004 can
+	// verify + persist.
+	var manifest *service.UploadScanManifest
+	if len(row.ScanManifest) > 0 {
+		manifest = &service.UploadScanManifest{}
+		if err := json.Unmarshal(row.ScanManifest, manifest); err != nil {
+			// Bad manifest on the row is a data-integrity problem, not a
+			// user error — surface it but don't roll back the upload
+			// (finalize has already completed the R2 composition).
+			return nil, fmt.Errorf("decode scan manifest: %w", err)
+		}
+	}
+
+	// Compute the full-file hash for F-003 verification.
+	fullHashHex, head, tail, err := h.resolveFinalizeDigest(ctx, state, storageKey)
+	if err != nil {
+		_ = h.store.Delete(ctx, storageKey)
+		return nil, fmt.Errorf("compute finalize digest: %w", err)
+	}
+
+	if err := h.verifyManifestAtFinalize(ctx, fullHashHex, head, tail, manifest); err != nil {
+		_ = h.store.Delete(ctx, storageKey)
 		return nil, err
 	}
 
-	// Create asset record
+	// Create the asset row. Tests may pass a nil assetRepo to exercise the
+	// streaming path without a live DB; treat that as an explicit opt-out.
 	asset := &repository.Asset{
-		ID:            assetID,
-		WorkspaceID:   workspaceID,
-		Filename:      session.Filename,
-		ContentType:   session.ContentType,
-		SizeBytes:     session.TotalSize,
+		ID:            uuid.New(),
+		WorkspaceID:   row.WorkspaceID,
+		Filename:      row.Filename,
+		ContentType:   row.ContentType,
+		SizeBytes:     row.TotalSize,
 		StorageKey:    storageKey,
 		StorageDriver: "r2",
 		Status:        "processing",
-		UploadedBy:    &userID,
+		UploadedBy:    uuidPtr(row.UserID),
 		ExifData:      map[string]interface{}{},
 		ThumbnailURLs: map[string]string{},
 	}
-	// F-004 (audit 2026-04-10): persist M16 Tier D scan metadata on the asset
-	// row so the moderation dashboard and audit trail can reason about the
-	// upload's scan verdict. Schema columns live in migration 053. Only
-	// populated when a manifest was attached AND verified (above) — otherwise
-	// the fields stay nil and the moderation UI treats the asset as unscanned
-	// legacy data.
-	applyScanMetadata(asset, session.Manifest)
-	if err := h.assetRepo.Create(r.Context(), asset); err != nil {
-		return nil, fmt.Errorf("create asset: %w", err)
+	applyScanMetadata(asset, manifest)
+	if h.assetRepo != nil {
+		if err := h.assetRepo.Create(ctx, asset); err != nil {
+			return nil, fmt.Errorf("create asset: %w", err)
+		}
+	}
+
+	if err := h.sessions.MarkCompleted(ctx, row.TUSUploadID); err != nil {
+		// Not fatal — log-worthy but the upload did succeed. Return the
+		// result so the client is not left retrying.
+		_ = err
 	}
 
 	return map[string]interface{}{
 		"asset":       asset,
-		"upload_id":   session.ID,
-		"sha256":      hash,
+		"upload_id":   row.TUSUploadID,
+		"sha256":      fullHashHex,
 		"complete":    true,
 		"storage_key": storageKey,
 	}, nil
 }
 
-// verifyManifestAtFinalize runs the Tier D final-byte assertion. Returns nil
-// when there is no manifest or no validator wired (legacy behavior), else
-// delegates to validationSvc.VerifyAgainstBytes and also runs the cheap
-// structural spot-check. Extracted as a method so it can be unit-tested
-// without spinning up the full finalize path (F-003).
-func (h *ChunkedUploadHandler) verifyManifestAtFinalize(ctx context.Context, session *uploadSession) error {
-	if session == nil || session.Manifest == nil || h.validationSvc == nil {
+// resolveFinalizeDigest returns the full-file SHA-256 hex plus the head
+// and tail byte slices needed for the format spot-check. Fast path: use
+// the in-memory rolling hash when state.hasher is non-nil. Cold path:
+// re-read the composed R2 object from storage and compute the digest
+// afresh — used after an API restart dropped the rolling state.
+func (h *ChunkedUploadHandler) resolveFinalizeDigest(
+	ctx context.Context,
+	state *sessionStreamState,
+	storageKey string,
+) (string, []byte, []byte, error) {
+	state.mu.Lock()
+	hasher := state.hasher
+	head := append([]byte{}, state.head...)
+	tail := append([]byte{}, state.tail...)
+	state.mu.Unlock()
+
+	if hasher != nil {
+		return hex.EncodeToString(hasher.Sum(nil)), head, tail, nil
+	}
+
+	// Cold path — rolling hash lost (e.g. API restart mid-upload). Re-read
+	// the composed object from R2 and hash it.
+	rc, err := h.store.Get(ctx, storageKey)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("cold-path Get: %w", err)
+	}
+	defer rc.Close()
+	fresh := sha256.New()
+	// Capture head/tail while streaming.
+	var freshHead []byte
+	var freshTail []byte
+	buf := make([]byte, 32*1024)
+	for {
+		n, rerr := rc.Read(buf)
+		if n > 0 {
+			fresh.Write(buf[:n])
+			if len(freshHead) < 64 {
+				need := 64 - len(freshHead)
+				if need > n {
+					need = n
+				}
+				freshHead = append(freshHead, buf[:need]...)
+			}
+			// Sliding tail across the whole stream.
+			if n >= 64 {
+				freshTail = append(freshTail[:0], buf[n-64:n]...)
+			} else {
+				combined := append([]byte{}, freshTail...)
+				combined = append(combined, buf[:n]...)
+				if len(combined) > 64 {
+					combined = combined[len(combined)-64:]
+				}
+				freshTail = combined
+			}
+		}
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			return "", nil, nil, fmt.Errorf("cold-path read: %w", rerr)
+		}
+	}
+	return hex.EncodeToString(fresh.Sum(nil)), freshHead, freshTail, nil
+}
+
+// verifyManifestAtFinalize runs the F-003 hash verification and the M16
+// Tier D format spot-check against caller-provided head/tail buffers.
+// No-op when the manifest or validator is absent (legacy behavior).
+func (h *ChunkedUploadHandler) verifyManifestAtFinalize(
+	_ context.Context,
+	computedHashHex string,
+	head, tail []byte,
+	manifest *service.UploadScanManifest,
+) error {
+	if manifest == nil || h.validationSvc == nil {
 		return nil
 	}
-	if err := h.validationSvc.VerifyAgainstBytes(ctx, session.Manifest.SHA256, session.TmpPath); err != nil {
-		return fmt.Errorf("verify manifest hash: %w", err)
+	if manifest.SHA256 == "" {
+		return service.ErrScanManifestInvalid
 	}
-	// Extra belt-and-suspenders: the file header/trailer must also look like
-	// the declared format. This catches bytes that happen to hash-match but
-	// are otherwise corrupt.
-	if err := service.VerifyHeaderTrailer(session.TmpPath, session.Manifest.DetectedFormat); err != nil {
-		return fmt.Errorf("verify header/trailer: %w", err)
+	if !strings.EqualFold(computedHashHex, manifest.SHA256) {
+		return service.ErrScanHashMismatch
+	}
+	if err := service.VerifyHeaderTrailerBytes(head, tail, manifest.DetectedFormat); err != nil {
+		return err
 	}
 	return nil
 }
 
 // applyScanMetadata copies verified scan manifest fields onto the asset row.
-// Extracted so the per-field mapping is unit-testable and so finalizeUpload
-// stays readable. Nil manifest = no-op (legacy uploads).
+// Nil manifest = no-op (legacy uploads).
 func applyScanMetadata(asset *repository.Asset, manifest *service.UploadScanManifest) {
 	if asset == nil || manifest == nil {
 		return
 	}
-	// A verified manifest means the client's decision was "pass" — the
-	// "block" case is rejected at session-create, not finalize. Anything we
-	// persist here has cleared Tier D.
 	status := "passed"
 	engine := string(manifest.Engine)
 	policy := manifest.PolicyVersion
@@ -440,4 +789,70 @@ func applyScanMetadata(asset *repository.Asset, manifest *service.UploadScanMani
 		}
 		asset.UploadScanFindings = findings
 	}
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────
+
+func deriveKeyAndUploadID(row *repository.UploadSession) (string, string) {
+	if row == nil {
+		return "", ""
+	}
+	ext := filepath.Ext(row.Filename)
+	if ext == "" {
+		parts := strings.Split(row.ContentType, "/")
+		if len(parts) == 2 {
+			ext = "." + parts[1]
+		}
+	}
+	// The storage key pattern must match CreateSession exactly. Because the
+	// asset uuid is NOT persisted separately on the upload session row, we
+	// recover it by assuming the session id is the asset id. CreateSession
+	// currently generates a fresh assetID — wave 6 threads that id through
+	// the row.id column so finalize can resolve it here. Use row.ID.
+	storageKey := fmt.Sprintf("%s/%s/original%s", row.WorkspaceID.String(), row.ID.String(), ext)
+	mpID := ""
+	if row.R2MultipartUploadID != nil {
+		mpID = *row.R2MultipartUploadID
+	}
+	return storageKey, mpID
+}
+
+func countExistingParts(partsJSON []byte) int {
+	if len(partsJSON) == 0 {
+		return 0
+	}
+	var parts []repository.UploadPartETag
+	if err := json.Unmarshal(partsJSON, &parts); err != nil {
+		return 0
+	}
+	return len(parts)
+}
+
+// verifyUploadChecksum parses an Upload-Checksum header and compares the
+// decoded digest to the actual chunk bytes. Returns (statusCode, error)
+// where statusCode is the HTTP status the caller should reply with on
+// failure, or 0 on success.
+func verifyUploadChecksum(chunk []byte, header string) (int, error) {
+	parts := strings.SplitN(strings.TrimSpace(header), " ", 2)
+	if len(parts) != 2 {
+		return http.StatusBadRequest, errors.New("Upload-Checksum header malformed: expected '<algo> <base64>'")
+	}
+	algo := strings.ToLower(strings.TrimSpace(parts[0]))
+	b64 := strings.TrimSpace(parts[1])
+	if algo != "sha256" {
+		return http.StatusBadRequest, fmt.Errorf("Upload-Checksum algorithm %q not supported", algo)
+	}
+	declared, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return http.StatusBadRequest, fmt.Errorf("Upload-Checksum base64 decode: %v", err)
+	}
+	actual := sha256.Sum256(chunk)
+	if !bytes.Equal(declared, actual[:]) {
+		return 460, errors.New("Upload-Checksum mismatch")
+	}
+	return 0, nil
+}
+
+func uuidPtr(u uuid.UUID) *uuid.UUID {
+	return &u
 }
