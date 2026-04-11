@@ -113,13 +113,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [role, setRole] = useState<string>("photographer");
-  const [userInfo] = useState<{ display_name?: string; email?: string }>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const stored = localStorage.getItem("user");
-      return stored ? JSON.parse(stored) : {};
-    } catch { return {}; }
-  });
+  // Display profile used by the sidebar avatar and role header. Never
+  // persisted across sessions — the layout fetches a fresh copy on
+  // every mount via getCurrentUser() so a server-side name change
+  // propagates on the next page load. localStorage was intentionally
+  // not used because clearLegacyStoredTokens() actively wipes the
+  // "user" key, which silently reset the avatar back to "U".
+  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string }>({});
 
   useEffect(() => {
     let active = true;
@@ -147,6 +147,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       setRole(getStoredPlatformRole());
       setAuthenticated(true);
+
+      // Populate the avatar + greeting from GET /auth/me. A failure
+      // here degrades the sidebar to the email-local-part fallback,
+      // never to a hardcoded "User".
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && active) {
+          const me = await res.json();
+          setUserInfo({ display_name: me.display_name, email: me.email });
+        }
+      } catch { /* keep empty userInfo — sidebar falls back safely */ }
     }
 
     void ensureSession();
