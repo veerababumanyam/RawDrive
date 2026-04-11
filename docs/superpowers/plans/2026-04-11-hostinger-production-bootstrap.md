@@ -21,7 +21,7 @@
 | Path | Purpose |
 |---|---|
 | `backend/cmd/migrate/main.go` | One-shot migration runner binary (new) |
-| `backend/Dockerfile` | Multi-stage build producing `api` and `migrate` binaries |
+| `backend/Dockerfile` | Multi-stage build producing `api` and `migrate` binaries (REPLACES the pre-existing Dockerfile from commit `c481200` which only built a single `rawdrive-api` from debian:bookworm-slim with webp+ffmpeg runtime deps; those deps are preserved in the new alpine-based variant via `libwebp-tools ffmpeg` apk packages) |
 | `frontend/Dockerfile` | Multi-stage Next.js standalone build |
 | `deploy/docker-compose.prod-db.yml` | Compose file for `.46` (postgres + valkey + nats-3) |
 | `deploy/docker-compose.prod-app.yml` | Compose file for `.42`/`.44` (nginx, backend, frontend, worker, pgbouncer, nats, replicas) |
@@ -282,7 +282,7 @@ Create `backend/Dockerfile`:
 # syntax=docker/dockerfile:1.7
 
 # ---------- build stage ----------
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 
 # git + ca-certs needed for go mod download of pinned deps over https
 RUN apk add --no-cache git ca-certificates
@@ -307,9 +307,17 @@ RUN go build -trimpath -ldflags='-s -w' -o /out/migrate ./cmd/migrate
 # ---------- runtime stage ----------
 FROM alpine:3.20 AS runtime
 
-# CA certs for outbound TLS (R2, SMTP, Cloudflare); tzdata for TZ support;
-# curl for container healthchecks; nothing else.
-RUN apk add --no-cache ca-certificates tzdata curl
+# Runtime dependencies:
+# - ca-certificates, tzdata: outbound TLS + Asia/Kolkata TZ
+# - curl: container HEALTHCHECK
+# - libwebp-tools: provides `cwebp`. REQUIRED by thumbnail_service.go which
+#   shells out to cwebp via exec.CommandContext to produce WebP derivatives.
+#   Per AGENTS.md ("Every uploaded image MUST produce WebP derivatives") this
+#   binary is non-negotiable — the image is broken without it.
+# - ffmpeg: used by processing_pipeline.go:tryVideoThumbnail for video poster
+#   frame extraction. Graceful-degrade in code, but we ship it for feature
+#   parity with the pre-existing Dockerfile (commit c481200).
+RUN apk add --no-cache ca-certificates tzdata curl libwebp-tools ffmpeg
 
 # Non-root user — drops privileges even if the binary is exploited
 RUN addgroup -S rawdrive && adduser -S -G rawdrive rawdrive
@@ -337,11 +345,17 @@ CMD ["/usr/local/bin/api"]
 
 - [ ] **Step 3: Validate the Dockerfile builds locally**
 
-Run: `cd backend && docker build -t rawdrive-backend:local .`
-Expected: build succeeds; final image ~30–50 MB.
+Run: `docker build -t rawdrive-backend:local ./backend`
+Expected: build succeeds; final image ~200–260 MB (the ffmpeg package is ~100 MB).
 
-Run: `docker run --rm rawdrive-backend:local /usr/local/bin/migrate 2>&1 | head -5`
-Expected: `DATABASE_URL is required` (exit code 1 from Task 0.2 logic).
+Run: `MSYS_NO_PATHCONV=1 docker run --rm rawdrive-backend:local /usr/local/bin/migrate 2>&1 | head -5`
+Expected: `DATABASE_URL is required` (exit code 1 from Task 0.2 logic). The `MSYS_NO_PATHCONV=1` prefix is only required on Git Bash for Windows — without it, the shell translates `/usr/local/bin/migrate` into a Windows path before passing to Docker.
+
+Also verify both media tools are on PATH:
+```bash
+docker run --rm --entrypoint sh rawdrive-backend:local -c 'which cwebp && which ffmpeg'
+```
+Expected: `/usr/bin/cwebp` and `/usr/bin/ffmpeg` printed.
 
 - [ ] **Step 4: Clean up test image**
 

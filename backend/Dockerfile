@@ -26,9 +26,17 @@ RUN go build -trimpath -ldflags='-s -w' -o /out/migrate ./cmd/migrate
 # ---------- runtime stage ----------
 FROM alpine:3.20 AS runtime
 
-# CA certs for outbound TLS (R2, SMTP, Cloudflare); tzdata for TZ support;
-# curl for container healthchecks; nothing else.
-RUN apk add --no-cache ca-certificates tzdata curl
+# Runtime dependencies:
+# - ca-certificates, tzdata: outbound TLS + Asia/Kolkata TZ
+# - curl: container HEALTHCHECK
+# - libwebp-tools: provides `cwebp`. REQUIRED by thumbnail_service.go which
+#   shells out to cwebp via exec.CommandContext to produce WebP derivatives.
+#   Per AGENTS.md ("Every uploaded image MUST produce WebP derivatives") this
+#   binary is non-negotiable — the image is broken without it.
+# - ffmpeg: used by processing_pipeline.go:tryVideoThumbnail for video poster
+#   frame extraction. Graceful-degrade in code, but we ship it for feature
+#   parity with the pre-existing Dockerfile (commit c481200).
+RUN apk add --no-cache ca-certificates tzdata curl libwebp-tools ffmpeg
 
 # Non-root user — drops privileges even if the binary is exploited
 RUN addgroup -S rawdrive && adduser -S -G rawdrive rawdrive
