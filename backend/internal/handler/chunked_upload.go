@@ -804,12 +804,16 @@ func deriveKeyAndUploadID(row *repository.UploadSession) (string, string) {
 			ext = "." + parts[1]
 		}
 	}
-	// The storage key pattern must match CreateSession exactly. Because the
-	// asset uuid is NOT persisted separately on the upload session row, we
-	// recover it by assuming the session id is the asset id. CreateSession
-	// currently generates a fresh assetID — wave 6 threads that id through
-	// the row.id column so finalize can resolve it here. Use row.ID.
-	storageKey := fmt.Sprintf("%s/%s/original%s", row.WorkspaceID.String(), row.ID.String(), ext)
+	// The storage key pattern must match CreateSession exactly. CreateSession
+	// builds the key as "<workspaceID>/<TUSUploadID>/original<ext>" where
+	// TUSUploadID is the uuid minted at session creation time and persisted
+	// on the row. Earlier revisions of this helper used row.ID (the DB PK),
+	// which produced a different key and caused CompleteMultipartUpload to
+	// fail with NoSuchUpload whenever finalize ran on a rehydrated state or
+	// on a different backend instance than the one that created the
+	// session. Always derive from TUSUploadID so CreateSession, UploadChunk,
+	// rehydration, and finalize agree on the same key.
+	storageKey := fmt.Sprintf("%s/%s/original%s", row.WorkspaceID.String(), row.TUSUploadID, ext)
 	mpID := ""
 	if row.R2MultipartUploadID != nil {
 		mpID = *row.R2MultipartUploadID

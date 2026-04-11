@@ -44,3 +44,13 @@ func VerifyManifestAtFinalizeForTest(
 func ApplyScanMetadataForTest(asset *repository.Asset, manifest *service.UploadScanManifest) {
 	applyScanMetadata(asset, manifest)
 }
+
+// DeriveKeyAndUploadIDForTest is a test-only seam over the unexported
+// deriveKeyAndUploadID helper. Regression coverage for the key-consistency
+// bug discovered during UAT on 2026-04-12: finalize was building the R2
+// storage key from row.ID while CreateSession built it from TUSUploadID,
+// so CompleteMultipartUpload targeted a key the storage backend had never
+// seen and failed with NoSuchUpload.
+func DeriveKeyAndUploadIDForTest(row *repository.UploadSession) (string, string) {
+	return deriveKeyAndUploadID(row)
+}
