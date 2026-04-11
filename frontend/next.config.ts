@@ -56,6 +56,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Production bootstrap (2026-04-11): required for slim Docker image
+  // under deploy/docker-compose.prod-app.yml. See docs/superpowers/specs/
+  // 2026-04-11-hostinger-production-bootstrap-design.md §3.3.
+  output: 'standalone',
   turbopack: {
     root: frontendRoot,
   },
