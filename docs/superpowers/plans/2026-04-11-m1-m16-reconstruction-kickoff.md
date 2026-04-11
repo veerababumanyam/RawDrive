@@ -39,12 +39,12 @@
 - `CoverPhotoSystem.md` — 24 KB (also duplicated in `Gallery/CoverPhotoSystem.md`)
 - `Gallery/GALLERY_FEATURE_REQUIREMENTS.md` — 36 KB
 - `Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md` — 23 KB
-- `Gallery/GALLERY_DESIGN_ENHANCEMENTS_VERIFICATION.md` — 24 KB
 - `Gallery/GALLERY_CANVAS.md` — 16 KB
-- `Gallery/GALLERY_DESIGN_STUDIO_VERIFICATION.md` — 16 KB
+- ~~`Gallery/GALLERY_DESIGN_ENHANCEMENTS_VERIFICATION.md`~~ — **archived 2026-04-11 to `docs/archive/python-implementation/` — Python-prototype origin, cites `.py` migration filenames. See archive README for context.**
+- ~~`Gallery/GALLERY_DESIGN_STUDIO_VERIFICATION.md`~~ — **archived 2026-04-11 to `docs/archive/python-implementation/` — Python-prototype service layout (the exact file audit F-022 flagged at lines 485-490).**
 
 **Domain/technical specs (classify as Technical/Architecture):**
-- `GOOGLE_CLOUD_VISION_FACEID_TECH_SPEC.md` — 32 KB
+- ~~`GOOGLE_CLOUD_VISION_FACEID_TECH_SPEC.md`~~ — **archived 2026-04-11 to `docs/archive/python-implementation/` — 876 lines of Python code examples (`create_upload_session`, `TaskPriority.NORMAL`, Python dict job payloads) against a `backend/src/app/services/*.py` tree that does not exist in this Go monolith. Authoritative current source: `backend/internal/ai/` (`face_service.go`, `face_worker.go`, `face_repo.go`, `gemini_client.go`, `handler.go`). See archive README.**
 - `Techstack.md` — 7 KB
 - `Razorpay_Payment_Gateway_Integration.md` — 8 KB
 - `Security_Compliance_Privacy.md` — 5 KB — **contains the MFA requirement F-007 traces to**
@@ -53,13 +53,13 @@
 - `StreamingDesktop/` subfolder: `LiveStreaming.md`, `Studio_Desktop_Companion.md`, `Studio_Desktop_Companion_Implementation_Plan.md`, `Video_Transcoding_Delivery.md`
 - `DESIGN_SYSTEM_GUIDE.md`
 
-**Gallery progress/status reports (classify as Research/Context — partial-build snapshots):**
-- `Gallery/GALLERY_FIXES_*` (SUMMARY, STATUS, PROGRESS_SUMMARY, FINAL_REPORT, DEPLOYMENT_READY, etc.)
-- `Gallery/GALLERY_ISSUES_REPORT.md`
-- `Gallery/GALLERY_SERVICE_ERROR_STANDARDIZATION_SUMMARY.md`
-- `Gallery/GALLERY_PERFORMANCE_DEPLOYMENT.md`
-- `Gallery/UPLOAD_SERVICE_DEPLOYMENT_GUIDE.md`
-- `Gallery/COVER_SYSTEM_REVIEW_AND_PLAN.md`
+**Gallery progress/status reports** — **all archived 2026-04-11 to `docs/archive/python-implementation/` per audit F-022 resolution.** These described fix work done against a Python microservices prototype (`services/gallery-service/`, `services/billing-service/`, `services/llm-service/`) that does not exist in this Go + Next.js repository. One of them (`GALLERY_FIXES_SUMMARY.md`) contained an `llm-service (chat completions)` line that was the immediate trigger for the archive sweep — RawDrive uses Google Gemini (`backend/internal/ai/gemini_client.go`) for photo intelligence, not an OpenAI-style LLM. See `docs/archive/python-implementation/README.md` for full provenance.
+- ~~`Gallery/GALLERY_FIXES_*`~~ (SUMMARY, STATUS, PROGRESS_SUMMARY, FINAL_REPORT, DEPLOYMENT_READY) — **archived**
+- ~~`Gallery/GALLERY_ISSUES_REPORT.md`~~ — **archived**
+- ~~`Gallery/GALLERY_SERVICE_ERROR_STANDARDIZATION_SUMMARY.md`~~ — **archived**
+- ~~`Gallery/GALLERY_PERFORMANCE_DEPLOYMENT.md`~~ — **archived**
+- ~~`Gallery/UPLOAD_SERVICE_DEPLOYMENT_GUIDE.md`~~ — **archived**
+- `Gallery/COVER_SYSTEM_REVIEW_AND_PLAN.md` — retained; does not reference the Python services tree and may describe the real Go implementation. If later review finds it is also drifted, archive alongside the others.
 
 ### 1.2 — `docs/superpowers/plans/` (feature-scoped implementation plans)
 
