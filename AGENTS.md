@@ -98,12 +98,26 @@ The bullets above are the TLDR. The sections below are the authoritative referen
 - Categories: `storage`, `auth`, `payments`, `ai`, `email`, `messaging`.
 - Secrets are encrypted at rest. Super-admin CRUD: `GET/PUT/DELETE /api/v1/admin/settings/{category}/{key}`.
 
-### Auth Model (OTP is registration-only)
-- OTP is used **only** during registration to verify email ownership.
-- All subsequent logins are email + password only.
-- `/auth/login` checks password + `email_verified` flag. Unverified accounts get 403 "account not activated".
+### Auth Model (email-OTP is registration-only; TOTP MFA is login step-up)
+
+There are **two separate one-time-code primitives** in this codebase and they are NOT interchangeable. Future agents must keep them separate.
+
+**Email OTP** (6-digit code sent via SMTP/Mailpit):
+- Used **only** during registration to verify email ownership.
 - `/auth/verify-otp` is only called from the `/activate` page after registration.
-- **Do not add OTP paths to login flows.**
+- Never added to login flows. `/auth/login` checks password + `email_verified` flag. Unverified accounts get 403 "account not activated".
+- Backed by `OTPService` in `backend/internal/auth/auth.go`.
+
+**Authenticator-app TOTP (RFC 6238)** — F-007 (M17 wave 2):
+- Second factor added **after** password check in `/auth/login` for users who have enrolled.
+- Enrollment flow: `POST /auth/mfa/enroll` → user scans QR → `POST /auth/mfa/verify-enrollment` with first code → recovery codes returned (shown once).
+- Login step-up: if the user has a verified enrollment, `/auth/login` returns `401 {"mfa_required": true, "mfa_token": "<short-lived JWT>", "challenge": "totp"}` instead of access/refresh tokens. The client then `POST /auth/verify-totp` with the `mfa_token` + current code → full access+refresh tokens issued with `mfa_verified: true`.
+- Wave 2 is **opt-in**: only users who actively enrolled trigger the step-up path. Mandatory enforcement for photographers + platform staff roles (with a grace window via `users.mfa_grace_until`) lands in a later wave.
+- TOTP secrets are envelope-encrypted at rest using the same F-005 KEK (`PLATFORM_SETTINGS_KEK`). Recovery codes are bcrypt-hashed.
+- JWT access tokens carry a `mfa_verified` boolean claim. Refresh token rotation preserves it via `refresh_sessions.mfa_verified` so refreshes do not silently downgrade a verified session.
+- Backed by `TOTPService`, `RecoveryCodeService`, and `MFAHandler` in `backend/internal/auth/`. Persistence: `user_mfa_enrollments` + `user_mfa_recovery_codes` tables (migration 063, amended by 065).
+
+**Do not conflate email-OTP and TOTP.** They are separate primitives, separate tables, separate endpoints, separate flows. A handler that accepts either for login would reintroduce the email-OTP login path that this rule forbids.
 
 ### JWT Context (Non-Negotiable)
 - Handlers that need JWT claims MUST call `middleware.JWTClaimsFromContext(r.Context())`.

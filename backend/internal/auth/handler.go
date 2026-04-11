@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
@@ -79,6 +80,13 @@ type Handler struct {
 	oauth      *OAuthService
 	users      UserService
 	workspaces WorkspaceLookup
+	// F-007 (M17 wave 2): MFA enrollment store for login step-up.
+	// When nil, Login falls back to the pre-M17 password-only flow.
+	mfaEnrollments MFAEnrollmentStore
+	// mfaHandler is used to mint the challenge token when Login needs
+	// to force step-up. When nil, no challenge can be issued so Login
+	// also falls back to the pre-M17 flow.
+	mfaHandler *MFAHandler
 }
 
 func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserService) *Handler {
@@ -93,6 +101,15 @@ func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserS
 // WithWorkspaceLookup attaches a workspace resolver to the handler.
 func (h *Handler) WithWorkspaceLookup(wl WorkspaceLookup) *Handler {
 	h.workspaces = wl
+	return h
+}
+
+// WithMFA attaches the MFA enrollment store and handler so Login can
+// step up users who have enrolled. Callers pass nil/nil to opt out.
+// F-007 (M17 wave 2).
+func (h *Handler) WithMFA(store MFAEnrollmentStore, mfaHandler *MFAHandler) *Handler {
+	h.mfaEnrollments = store
+	h.mfaHandler = mfaHandler
 	return h
 }
 
@@ -201,6 +218,35 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		if resolvedPlatformRole != "" {
 			platformRole = resolvedPlatformRole
+		}
+	}
+
+	// F-007 (M17 wave 2): MFA step-up. If the user has a verified TOTP
+	// enrollment, issue a short-lived challenge token instead of full
+	// access tokens. The client then POSTs to /auth/verify-totp with
+	// the challenge + a current code to finish authentication.
+	//
+	// Wave 2 is opt-in: only users who have actively enrolled trigger
+	// the step-up path. Mandatory enforcement for un-enrolled
+	// photographer + staff roles lands in wave 3 along with the grace
+	// window UI and the frontend enrollment wizard.
+	if h.mfaEnrollments != nil && h.mfaHandler != nil {
+		if uid, parseErr := uuid.Parse(userID); parseErr == nil {
+			if row, mfaErr := h.mfaEnrollments.GetByUserID(r.Context(), uid); mfaErr == nil {
+				if row.LastVerifiedAt != nil && row.DisabledAt == nil {
+					mfaToken, err := h.mfaHandler.IssueMFAChallengeToken(userID, wsID, role, platformRole, stateID)
+					if err != nil {
+						writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to issue mfa challenge"})
+						return
+					}
+					writeJSON(w, http.StatusUnauthorized, map[string]interface{}{
+						"mfa_required": true,
+						"mfa_token":    mfaToken,
+						"challenge":    "totp",
+					})
+					return
+				}
+			}
 		}
 	}
 

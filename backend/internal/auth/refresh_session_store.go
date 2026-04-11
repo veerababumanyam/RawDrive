@@ -81,9 +81,14 @@ type RefreshSessionEntry struct {
 	Role         string
 	PlatformRole string
 	StateID      string
-	ExpiresAt    time.Time
-	Revoked      bool
-	Used         bool
+	// F-007 (M17 wave 2): MFAVerified persists the second-factor state of
+	// the login that minted this session. RotateRefreshToken carries it
+	// forward so refreshing an access token does not silently demote the
+	// session to mfa_verified=false. Default false for legacy rows.
+	MFAVerified bool
+	ExpiresAt   time.Time
+	Revoked     bool
+	Used        bool
 }
 
 // HashToken returns the hex SHA-256 of a raw refresh-token string. The

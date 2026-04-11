@@ -42,12 +42,12 @@ func (r *RefreshSessionRepo) Create(ctx context.Context, entry auth.RefreshSessi
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO refresh_sessions (
 		    token_hash, sub, family_id, workspace_id, role, platform_role, state_id,
-		    expires_at, revoked, used, family_revoked
-		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		    expires_at, revoked, used, family_revoked, mfa_verified
+		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 ON CONFLICT (token_hash) DO NOTHING`,
 		hash, entry.Sub, entry.FamilyID, entry.WorkspaceID, entry.Role,
 		entry.PlatformRole, entry.StateID, entry.ExpiresAt,
-		entry.Revoked, entry.Used, false,
+		entry.Revoked, entry.Used, false, entry.MFAVerified,
 	)
 	if err != nil {
 		return fmt.Errorf("refresh session repo: create: %w", err)
@@ -64,12 +64,12 @@ func (r *RefreshSessionRepo) Get(ctx context.Context, rawToken string) (*auth.Re
 	var familyRevoked bool
 	err := r.pool.QueryRow(ctx,
 		`SELECT sub, family_id, workspace_id, role, platform_role, state_id,
-		        expires_at, revoked, used, family_revoked
+		        expires_at, revoked, used, family_revoked, mfa_verified
 		 FROM refresh_sessions WHERE token_hash = $1`,
 		hash,
 	).Scan(&entry.Sub, &entry.FamilyID, &entry.WorkspaceID, &entry.Role,
 		&entry.PlatformRole, &entry.StateID, &entry.ExpiresAt,
-		&entry.Revoked, &entry.Used, &familyRevoked)
+		&entry.Revoked, &entry.Used, &familyRevoked, &entry.MFAVerified)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, auth.ErrRefreshNotFound
 	}

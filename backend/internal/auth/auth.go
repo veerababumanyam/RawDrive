@@ -231,6 +231,10 @@ type JWTService interface {
 	ParseAccessToken(ctx context.Context, tokenStr string) (*TokenClaims, error)
 	GenerateRefreshToken(ctx context.Context, userID, familyID string) (string, error)
 	GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error)
+	// F-007 (M17 wave 2): variant that persists the mfa_verified state
+	// of the minting login. RotateRefreshToken carries this forward so
+	// refreshed access tokens keep their MFA state.
+	GenerateRefreshTokenWithMFA(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string, mfaVerified bool) (string, error)
 	RotateRefreshToken(ctx context.Context, oldToken string) (newAccess string, newRefresh string, err error)
 	InspectRefreshToken(ctx context.Context, tokenStr string) (*RefreshTokenInfo, error)
 	RevokeSession(ctx context.Context, familyID string) error
@@ -398,6 +402,16 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID, familyID 
 }
 
 func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error) {
+	// Backward-compatible wrapper: legacy callers that don't know about
+	// MFA state get mfa_verified=false, matching their pre-M17 semantics.
+	return s.GenerateRefreshTokenWithMFA(ctx, userID, familyID, workspaceID, role, platformRole, stateID, false)
+}
+
+// GenerateRefreshTokenWithMFA is the F-007 variant that persists the
+// mfa_verified state of the minting login. The VerifyTOTP handler calls
+// this with mfaVerified=true after a successful second-factor check so
+// that subsequent access-token refreshes preserve the MFA claim.
+func (s *jwtService) GenerateRefreshTokenWithMFA(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string, mfaVerified bool) (string, error) {
 	if err := s.enforceSessionLimit(ctx, userID, familyID); err != nil {
 		return "", err
 	}
@@ -415,6 +429,7 @@ func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID,
 		Role:         role,
 		PlatformRole: platformRole,
 		StateID:      stateID,
+		MFAVerified:  mfaVerified,
 		ExpiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
 	}); err != nil {
 		return "", fmt.Errorf("refresh store: create: %w", err)
@@ -474,6 +489,7 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 		Role:         entry.Role,
 		PlatformRole: entry.PlatformRole,
 		StateID:      entry.StateID,
+		MFAVerified:  entry.MFAVerified, // F-007 wave 2: preserve MFA state through rotation
 		ExpiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
 	}); err != nil {
 		return "", "", fmt.Errorf("refresh store: create rotated: %w", err)
@@ -505,6 +521,7 @@ func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (s
 		Role:         role,
 		PlatformRole: pRole,
 		StateID:      stID,
+		MFAVerified:  entry.MFAVerified, // F-007 wave 2: carry forward MFA state to rotated access token
 	})
 	s.mu.Unlock()
 	if err != nil {

@@ -271,6 +271,74 @@ func main() {
 
 	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).WithWorkspaceLookup(wsLookup)
 
+	// ──────────────────────── F-007 (M17 wave 2): MFA setup ────────────────────
+	//
+	// Load the envelope once here so both the MFA handler and the later
+	// platform_settings repo can share it. A missing KEK is non-fatal in
+	// dev — MFA simply reports mfa_unavailable until the KEK is set. In
+	// production the later platform_settings block still enforces the
+	// fatal fail on missing KEK, so the strict posture survives.
+	var mfaEnvelope *backendcrypto.Envelope
+	{
+		kekHex := os.Getenv("PLATFORM_SETTINGS_KEK")
+		if kekHex != "" {
+			env, err := backendcrypto.NewEnvelopeFromHex(kekHex)
+			if err != nil {
+				log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is invalid: %v", err)
+			}
+			mfaEnvelope = env
+		}
+	}
+
+	mfaEnrollmentsRepo := repository.NewUserMFAEnrollmentsRepo(dbPool)
+	mfaRecoveryRepo := repository.NewUserMFARecoveryCodesRepo(dbPool)
+	totpSvc := auth.NewTOTPService(auth.TOTPConfig{Issuer: os.Getenv("MFA_ISSUER_NAME")})
+	recoverySvc := auth.NewRecoveryCodeService(auth.RecoveryCodeConfig{})
+
+	mfaEnrollmentAdapter := &mfaEnrollmentStoreAdapter{repo: mfaEnrollmentsRepo}
+	mfaRecoveryAdapter := &mfaRecoveryCodeStoreAdapter{repo: mfaRecoveryRepo}
+
+	mfaHandler := auth.NewMFAHandler(
+		totpSvc,
+		recoverySvc,
+		mfaEnrollmentAdapter,
+		mfaRecoveryAdapter,
+		mfaEnvelope,
+		jwtSvc,
+		os.Getenv("MFA_ISSUER_NAME"),
+		func(ctx context.Context, userID uuid.UUID) (string, error) {
+			u, err := userSvc.GetByID(ctx, userID.String())
+			if err != nil || u == nil {
+				return "", err
+			}
+			return u.Email, nil
+		},
+		wsLookup,
+	)
+
+	// Wire the authed-user-ID reader so MFA handlers can read the JWT
+	// claim subject from the middleware context without importing the
+	// middleware package (which would create an import cycle).
+	auth.SetAuthedUserIDReader(func(r *http.Request) (uuid.UUID, bool) {
+		claims := middleware.JWTClaimsFromContext(r.Context())
+		if claims == nil {
+			return uuid.Nil, false
+		}
+		sub, _ := claims["sub"].(string)
+		if sub == "" {
+			return uuid.Nil, false
+		}
+		uid, err := uuid.Parse(sub)
+		if err != nil {
+			return uuid.Nil, false
+		}
+		return uid, true
+	})
+
+	// Attach MFA step-up to the main auth handler so Login can issue
+	// challenge tokens for enrolled users.
+	authHandler = authHandler.WithMFA(mfaEnrollmentAdapter, mfaHandler)
+
 	// Real workspace service backed by DB
 	wsRepo := workspace.NewPgRepo(dbPool)
 	wsSvc := workspace.NewService(wsRepo, &logEventPublisher{}, &logStorageBucket{})
@@ -300,6 +368,12 @@ func main() {
 	r.Mount("/auth", authHandler.Routes())
 	r.Mount("/api/v1/auth", authHandler.Routes())
 
+	// F-007 (M17 wave 2): MFA public route. /auth/verify-totp uses the
+	// mfa_token issued by Login as its own credential, so it must NOT
+	// be behind JWT middleware.
+	r.Mount("/auth", mfaHandler.PublicRoutes())
+	r.Mount("/api/v1/auth", mfaHandler.PublicRoutes())
+
 	// Protected routes — JWT auth → tenant context → state check
 	r.Group(func(pr chi.Router) {
 		pr.Use(middleware.JWTAuth(jwtSvc))
@@ -314,6 +388,15 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.JWTAuth(jwtSvc))
 		r.Mount("/onboarding", onbHandler.Routes())
+	})
+
+	// F-007 (M17 wave 2): authenticated MFA routes (enroll, verify-
+	// enrollment, status). These are JWT-only — no tenant context
+	// required because enrollment happens from any workspace state.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.JWTAuth(jwtSvc))
+		r.Mount("/auth/mfa", mfaHandler.AuthenticatedRoutes())
+		r.Mount("/api/v1/auth/mfa", mfaHandler.AuthenticatedRoutes())
 	})
 
 	// ──────────────────────── M2: Asset Management & Gallery ────────────────────────
