@@ -195,6 +195,17 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 	// handler reads workspace_id from JWT claims (so clients can't spoof).
 	r.Get("/api/v1/workspaces/current/plan", storageConfigHandler.GetCurrentPlan)
 
+	// Workspace business profile — studio address, GSTIN, bank details,
+	// invoice terms + footer, signature name. Used by the Settings →
+	// Business Profile page so the invoice PDF renderer has real studio
+	// branding to lay out. Uses "current" literal + JWT workspace id
+	// (same pattern as /plan above).
+	if deps.Pool != nil {
+		profileHandler := &WorkspaceProfileHandler{DB: deps.Pool}
+		r.Get("/api/v1/workspaces/current/profile", profileHandler.GetProfile)
+		r.Put("/api/v1/workspaces/current/profile", profileHandler.UpdateProfile)
+	}
+
 	// M14: Download routes
 	if deps.DownloadService != nil {
 		dlHandler := NewDownloadHandler(deps.DownloadService)

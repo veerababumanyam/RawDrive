@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -167,6 +168,71 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch studio branding from workspaces row (migration 068 adds
+	// address/phone/email/GSTIN/bank/terms/signature columns). All
+	// fields are optional — missing values collapse gracefully in
+	// the PDF layout.
+	var (
+		wsName, wsAddr1, wsAddr2, wsCity, wsPostal, wsGSTIN   string
+		wsPhone, wsEmail, wsWebsite                            string
+		wsBankName, wsBankHolder, wsBankAcc, wsIFSC, wsBranch  string
+		wsSigName, wsTerms, wsFooter                           string
+	)
+	_ = h.repo.DB.QueryRow(r.Context(), `
+		SELECT
+			COALESCE(name, ''),
+			COALESCE(address_line1, ''),
+			COALESCE(address_line2, ''),
+			COALESCE(city, ''),
+			COALESCE(postal_code, ''),
+			COALESCE(gstin, ''),
+			COALESCE(phone, ''),
+			COALESCE(email, ''),
+			COALESCE(website, ''),
+			COALESCE(bank_name, ''),
+			COALESCE(bank_account_holder, ''),
+			COALESCE(bank_account_number, ''),
+			COALESCE(bank_ifsc, ''),
+			COALESCE(bank_branch, ''),
+			COALESCE(signature_name, ''),
+			COALESCE(invoice_terms, ''),
+			COALESCE(invoice_footer, '')
+		FROM workspaces WHERE id = $1`, workspaceID).Scan(
+		&wsName, &wsAddr1, &wsAddr2, &wsCity, &wsPostal, &wsGSTIN,
+		&wsPhone, &wsEmail, &wsWebsite,
+		&wsBankName, &wsBankHolder, &wsBankAcc, &wsIFSC, &wsBranch,
+		&wsSigName, &wsTerms, &wsFooter,
+	)
+
+	// Fetch bill-to client details from contacts row (if the invoice
+	// has a contact_id). The contacts table has a single free-form
+	// `address` field plus `company`/`phone`/`email`; we split the
+	// address on newlines for the two-line layout. Richer structured
+	// billing fields (gstin/city/postal) are a future extension.
+	var (
+		cName, cEmail, cPhone, cCompany, cAddress string
+	)
+	if inv.ContactID != nil {
+		_ = h.repo.DB.QueryRow(r.Context(), `
+			SELECT
+				COALESCE(name, ''),
+				COALESCE(email, ''),
+				COALESCE(phone, ''),
+				COALESCE(company, ''),
+				COALESCE(address, '')
+			FROM contacts WHERE id = $1 AND workspace_id = $2`,
+			*inv.ContactID, workspaceID,
+		).Scan(&cName, &cEmail, &cPhone, &cCompany, &cAddress)
+	}
+	cAddrLines := splitNonEmpty(cAddress, "\n")
+	var cAddr1, cAddr2 string
+	if len(cAddrLines) > 0 {
+		cAddr1 = cAddrLines[0]
+	}
+	if len(cAddrLines) > 1 {
+		cAddr2 = strings.Join(cAddrLines[1:], ", ")
+	}
+
 	// Build the PDF payload from the repository Invoice. Amounts in the DB
 	// are stored in paisa; convert to rupees for display.
 	payload := service.Invoice{
@@ -178,6 +244,32 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		SGSTText:      formatINR(inv.SGSTPaisa),
 		IGSTText:      formatINR(inv.IGSTPaisa),
 		TotalText:     formatINR(inv.TotalPaisa),
+
+		StudioName:       wsName,
+		StudioAddressL1:  wsAddr1,
+		StudioAddressL2:  wsAddr2,
+		StudioCity:       wsCity,
+		StudioPostalCode: wsPostal,
+		StudioGSTIN:      wsGSTIN,
+		StudioPhone:      wsPhone,
+		StudioEmail:      wsEmail,
+		StudioWebsite:    wsWebsite,
+
+		ClientName:      cName,
+		ClientAddressL1: cAddr1,
+		ClientAddressL2: cAddr2,
+		ClientPhone:     cPhone,
+
+		BankName:          wsBankName,
+		BankAccountHolder: wsBankHolder,
+		BankAccountNumber: wsBankAcc,
+		BankIFSC:          wsIFSC,
+		BankBranch:        wsBranch,
+
+		SignatureName: wsSigName,
+		Terms:         wsTerms,
+		Footer:        wsFooter,
+		AmountInWords: amountInWords(inv.TotalPaisa),
 	}
 	if inv.DueDate != nil {
 		payload.DueDate = inv.DueDate.Format("2 Jan 2006")
@@ -194,6 +286,7 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	for _, it := range items {
 		payload.Lines = append(payload.Lines, service.InvoiceLine{
 			Description:  it.Description,
+			HSN:          it.HSNCode,
 			QuantityText: fmt.Sprintf("%d", it.Quantity),
 			UnitText:     formatINR(it.UnitPricePaisa),
 			AmountText:   formatINR(int64(it.Quantity) * it.UnitPricePaisa),
@@ -227,5 +320,113 @@ func formatINR(paisa int64) string {
 	}
 	rupees := paisa / 100
 	remainder := paisa % 100
-	return fmt.Sprintf("%sINR %d.%02d", neg, rupees, remainder)
+	// Indian lakh/crore grouping: last 3 digits, then groups of 2.
+	rupeeStr := fmt.Sprintf("%d", rupees)
+	if len(rupeeStr) > 3 {
+		// Split the last 3 digits, then group the rest in 2s.
+		tail := rupeeStr[len(rupeeStr)-3:]
+		head := rupeeStr[:len(rupeeStr)-3]
+		var parts []string
+		for len(head) > 2 {
+			parts = append([]string{head[len(head)-2:]}, parts...)
+			head = head[:len(head)-2]
+		}
+		if head != "" {
+			parts = append([]string{head}, parts...)
+		}
+		rupeeStr = strings.Join(parts, ",") + "," + tail
+	}
+	return fmt.Sprintf("%sINR %s.%02d", neg, rupeeStr, remainder)
+}
+
+// splitNonEmpty splits s by sep and removes empty strings + trims each piece.
+// Used by the PDF handler to parse multiline contact addresses into layout
+// rows.
+func splitNonEmpty(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// amountInWords converts a paisa amount to the Indian-English words form
+// (e.g. "One Lakh Forty-Seven Thousand Five Hundred rupees only") so the
+// invoice PDF has the legally-required amount-in-words line.
+func amountInWords(paisa int64) string {
+	if paisa == 0 {
+		return "Zero rupees only"
+	}
+	rupees := paisa / 100
+	paise := paisa % 100
+	text := indianNumberWords(rupees) + " rupees"
+	if paise > 0 {
+		text += " and " + indianNumberWords(paise) + " paise"
+	}
+	return text + " only"
+}
+
+// indianNumberWords spells a positive integer in Indian lakh/crore words.
+func indianNumberWords(n int64) string {
+	if n == 0 {
+		return "Zero"
+	}
+	ones := []string{
+		"", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+		"Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+		"Seventeen", "Eighteen", "Nineteen",
+	}
+	tens := []string{"", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"}
+	under100 := func(x int64) string {
+		if x < 20 {
+			return ones[x]
+		}
+		t := ones[x%10]
+		if t == "" {
+			return tens[x/10]
+		}
+		return tens[x/10] + "-" + t
+	}
+	under1000 := func(x int64) string {
+		if x == 0 {
+			return ""
+		}
+		h := ""
+		if x >= 100 {
+			h = ones[x/100] + " Hundred"
+			x = x % 100
+			if x > 0 {
+				h += " "
+			}
+		}
+		return h + under100(x)
+	}
+
+	// Break into crore / lakh / thousand / remainder groups.
+	crore := n / 10000000
+	n %= 10000000
+	lakh := n / 100000
+	n %= 100000
+	thousand := n / 1000
+	n %= 1000
+	rest := n
+
+	parts := []string{}
+	if crore > 0 {
+		parts = append(parts, indianNumberWords(crore)+" Crore")
+	}
+	if lakh > 0 {
+		parts = append(parts, under100(lakh)+" Lakh")
+	}
+	if thousand > 0 {
+		parts = append(parts, under1000(thousand)+" Thousand")
+	}
+	if rest > 0 {
+		parts = append(parts, under1000(rest))
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
 }

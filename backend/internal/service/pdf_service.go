@@ -39,27 +39,76 @@ type Receipt struct {
 	Notes         string
 }
 
-// Invoice captures the fields rendered on an invoice PDF. Line items are
-// rendered sequentially below the header.
+// Invoice captures the fields rendered on an invoice PDF. The renderer
+// produces a professional multi-section layout:
+//
+//   1. Studio header block (name, address, GSTIN, phone, email, website)
+//   2. "TAX INVOICE" title + invoice meta (number, date, due)
+//   3. Bill-to block (client name, address, GSTIN, place of supply)
+//   4. Itemized table (S.No / Description / HSN / Qty / Rate / Amount)
+//   5. GST breakup (Subtotal / CGST / SGST / IGST / Total)
+//   6. Amount in words
+//   7. Bank details (name / account holder / account / IFSC / branch)
+//   8. Terms + footer + signature line
+//
+// All studio-branding fields are optional — callers should pass what they
+// have, empty strings collapse gracefully. The legacy two-field signature
+// (ClientName + ClientGSTIN) still works; new fields are additive.
 type Invoice struct {
 	Title         string
 	InvoiceNumber string
 	IssueDate     string
 	DueDate       string
-	ClientName    string
-	ClientGSTIN   string
+
+	// Studio branding block (from workspaces table).
+	StudioName        string
+	StudioAddressL1   string
+	StudioAddressL2   string
+	StudioCity        string
+	StudioPostalCode  string
+	StudioGSTIN       string
+	StudioPhone       string
+	StudioEmail       string
+	StudioWebsite     string
+
+	// Bill-to block.
+	ClientName        string
+	ClientAddressL1   string
+	ClientAddressL2   string
+	ClientCity        string
+	ClientPostalCode  string
+	ClientGSTIN       string
+	ClientPhone       string
+	PlaceOfSupply     string
+
+	// Itemized table + totals.
 	Lines         []InvoiceLine
 	SubtotalText  string
 	CGSTText      string
 	SGSTText      string
 	IGSTText      string
+	DiscountText  string
 	TotalText     string
+	AmountInWords string
+
+	// Bank + payment details.
+	BankName          string
+	BankAccountHolder string
+	BankAccountNumber string
+	BankIFSC          string
+	BankBranch        string
+
+	// Footer.
+	Terms         string
 	Notes         string
+	SignatureName string
+	Footer        string
 }
 
 // InvoiceLine is one row on an invoice.
 type InvoiceLine struct {
-	Description string
+	Description  string
+	HSN          string
 	QuantityText string
 	UnitText     string
 	AmountText   string
@@ -118,46 +167,259 @@ func (s *PDFService) RenderReceipt(r Receipt) ([]byte, error) {
 	return buildPDF(r.Title, lines)
 }
 
-// RenderInvoice produces an invoice PDF.
+// RenderInvoice produces a professional tax invoice PDF with studio
+// branding, itemized table, GST breakup, amount-in-words, bank details,
+// terms, and a signature line. All branding fields are optional — callers
+// should pass whatever is populated on the workspace, missing sections are
+// simply skipped.
 func (s *PDFService) RenderInvoice(inv Invoice) ([]byte, error) {
 	if inv.Title == "" {
 		inv.Title = "Tax Invoice"
 	}
-	lines := []string{
-		inv.Title,
-		"",
-		"Invoice No: " + inv.InvoiceNumber,
-		"Issue Date: " + inv.IssueDate,
-		"Due Date:   " + inv.DueDate,
-		"",
-		"Billed To: " + inv.ClientName,
+	const rule = "================================================================================"
+	const sub = "--------------------------------------------------------------------------------"
+
+	lines := []string{}
+
+	// ── Studio header + invoice meta (two-column) ──────────────────────────
+	studioName := inv.StudioName
+	if studioName == "" {
+		studioName = "RawDrive Studio"
+	}
+	studioHeader := []string{
+		strings.ToUpper(studioName),
+	}
+	if inv.StudioAddressL1 != "" {
+		studioHeader = append(studioHeader, inv.StudioAddressL1)
+	}
+	if inv.StudioAddressL2 != "" {
+		studioHeader = append(studioHeader, inv.StudioAddressL2)
+	}
+	cityLine := strings.TrimSpace(strings.Join(nonEmpty([]string{inv.StudioCity, inv.StudioPostalCode}), " "))
+	if cityLine != "" {
+		studioHeader = append(studioHeader, cityLine)
+	}
+	if inv.StudioGSTIN != "" {
+		studioHeader = append(studioHeader, "GSTIN: "+inv.StudioGSTIN)
+	}
+	if inv.StudioPhone != "" {
+		studioHeader = append(studioHeader, "Phone: "+inv.StudioPhone)
+	}
+	if inv.StudioEmail != "" {
+		studioHeader = append(studioHeader, "Email: "+inv.StudioEmail)
+	}
+	if inv.StudioWebsite != "" {
+		studioHeader = append(studioHeader, inv.StudioWebsite)
+	}
+
+	invoiceMeta := []string{
+		strings.ToUpper(inv.Title),
+		"Invoice: " + inv.InvoiceNumber,
+		"Date:    " + inv.IssueDate,
+	}
+	if inv.DueDate != "" {
+		invoiceMeta = append(invoiceMeta, "Due:     "+inv.DueDate)
+	}
+
+	lines = append(lines, rule)
+	lines = append(lines, twoColumn(studioHeader, invoiceMeta, 50, 30)...)
+	lines = append(lines, rule)
+	lines = append(lines, "")
+
+	// ── Bill-to block ──────────────────────────────────────────────────────
+	lines = append(lines, "BILL TO:")
+	lines = append(lines, "  "+inv.ClientName)
+	if inv.ClientAddressL1 != "" {
+		lines = append(lines, "  "+inv.ClientAddressL1)
+	}
+	if inv.ClientAddressL2 != "" {
+		lines = append(lines, "  "+inv.ClientAddressL2)
+	}
+	clientCityLine := strings.TrimSpace(strings.Join(nonEmpty([]string{inv.ClientCity, inv.ClientPostalCode}), " "))
+	if clientCityLine != "" {
+		lines = append(lines, "  "+clientCityLine)
 	}
 	if inv.ClientGSTIN != "" {
-		lines = append(lines, "GSTIN:     "+inv.ClientGSTIN)
+		lines = append(lines, "  GSTIN: "+inv.ClientGSTIN)
 	}
-	lines = append(lines, "", "Items:")
-	for _, l := range inv.Lines {
-		lines = append(lines, fmt.Sprintf("  %-40s %6s %-6s %12s",
-			truncate(l.Description, 40), l.QuantityText, l.UnitText, l.AmountText))
+	if inv.ClientPhone != "" {
+		lines = append(lines, "  Phone: "+inv.ClientPhone)
+	}
+	if inv.PlaceOfSupply != "" {
+		lines = append(lines, "  Place of Supply: "+inv.PlaceOfSupply)
 	}
 	lines = append(lines, "")
+
+	// ── Itemized table ─────────────────────────────────────────────────────
+	lines = append(lines, rule)
+	lines = append(lines, fmt.Sprintf("%-4s  %-38s  %-8s  %5s  %10s  %12s",
+		"S.No", "DESCRIPTION", "HSN", "QTY", "RATE", "AMOUNT"))
+	lines = append(lines, sub)
+	for i, l := range inv.Lines {
+		lines = append(lines, fmt.Sprintf("%-4d  %-38s  %-8s  %5s  %10s  %12s",
+			i+1,
+			truncate(l.Description, 38),
+			truncate(l.HSN, 8),
+			l.QuantityText,
+			l.UnitText,
+			l.AmountText))
+	}
+	lines = append(lines, rule)
+	lines = append(lines, "")
+
+	// ── GST breakup (right-aligned summary) ────────────────────────────────
 	if inv.SubtotalText != "" {
-		lines = append(lines, "Subtotal: "+inv.SubtotalText)
+		lines = append(lines, padRight("Subtotal:", inv.SubtotalText))
+	}
+	if inv.DiscountText != "" {
+		lines = append(lines, padRight("Discount:", inv.DiscountText))
 	}
 	if inv.CGSTText != "" {
-		lines = append(lines, "CGST:     "+inv.CGSTText)
+		lines = append(lines, padRight("CGST:", inv.CGSTText))
 	}
 	if inv.SGSTText != "" {
-		lines = append(lines, "SGST:     "+inv.SGSTText)
+		lines = append(lines, padRight("SGST:", inv.SGSTText))
 	}
 	if inv.IGSTText != "" {
-		lines = append(lines, "IGST:     "+inv.IGSTText)
+		lines = append(lines, padRight("IGST:", inv.IGSTText))
 	}
-	lines = append(lines, "TOTAL:    "+inv.TotalText)
+	lines = append(lines, padRight("", "------------"))
+	lines = append(lines, padRight("TOTAL:", inv.TotalText))
+	lines = append(lines, "")
+
+	if inv.AmountInWords != "" {
+		lines = append(lines, "Amount in words: "+inv.AmountInWords)
+		lines = append(lines, "")
+	}
+
+	// ── Bank details + Terms (two-column) ──────────────────────────────────
+	bankLines := []string{}
+	if inv.BankName != "" || inv.BankAccountNumber != "" {
+		bankLines = append(bankLines, "BANK DETAILS")
+		if inv.BankName != "" {
+			bankLines = append(bankLines, "Bank:     "+inv.BankName)
+		}
+		if inv.BankAccountHolder != "" {
+			bankLines = append(bankLines, "A/C Name: "+inv.BankAccountHolder)
+		}
+		if inv.BankAccountNumber != "" {
+			bankLines = append(bankLines, "A/C No.:  "+inv.BankAccountNumber)
+		}
+		if inv.BankIFSC != "" {
+			bankLines = append(bankLines, "IFSC:     "+inv.BankIFSC)
+		}
+		if inv.BankBranch != "" {
+			bankLines = append(bankLines, "Branch:   "+inv.BankBranch)
+		}
+	}
+
+	termsLines := []string{}
+	if inv.Terms != "" {
+		termsLines = append(termsLines, "TERMS & CONDITIONS")
+		for _, t := range strings.Split(inv.Terms, "\n") {
+			if t != "" {
+				termsLines = append(termsLines, t)
+			}
+		}
+	}
+
+	if len(bankLines) > 0 || len(termsLines) > 0 {
+		lines = append(lines, rule)
+		lines = append(lines, twoColumn(bankLines, termsLines, 40, 40)...)
+		lines = append(lines, rule)
+		lines = append(lines, "")
+	}
+
+	// ── Notes ──────────────────────────────────────────────────────────────
 	if inv.Notes != "" {
-		lines = append(lines, "", "Notes:", inv.Notes)
+		lines = append(lines, "Notes:")
+		for _, n := range strings.Split(inv.Notes, "\n") {
+			lines = append(lines, "  "+n)
+		}
+		lines = append(lines, "")
 	}
+
+	// ── Signature block ────────────────────────────────────────────────────
+	lines = append(lines, "")
+	if inv.StudioName != "" {
+		lines = append(lines, padRightFixed("", "For "+inv.StudioName, 80))
+	}
+	lines = append(lines, "")
+	lines = append(lines, "")
+	lines = append(lines, padRightFixed("", "_________________________", 80))
+	sigName := inv.SignatureName
+	if sigName == "" {
+		sigName = "Authorized Signatory"
+	}
+	lines = append(lines, padRightFixed("", sigName, 80))
+	lines = append(lines, "")
+	lines = append(lines, rule)
+
+	footer := inv.Footer
+	if footer == "" {
+		footer = "This is a computer-generated invoice and does not require a physical signature."
+	}
+	lines = append(lines, footer)
+
 	return buildPDF(inv.Title, lines)
+}
+
+// nonEmpty filters empty strings out of a slice.
+func nonEmpty(parts []string) []string {
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if strings.TrimSpace(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// twoColumn lays out two blocks side-by-side with fixed widths and a
+// two-space gutter. Short columns are padded with spaces; taller column
+// wins the row count.
+func twoColumn(left, right []string, leftWidth, rightWidth int) []string {
+	n := len(left)
+	if len(right) > n {
+		n = len(right)
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		var l, r string
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		if len(l) > leftWidth {
+			l = l[:leftWidth]
+		}
+		if len(r) > rightWidth {
+			r = r[:rightWidth]
+		}
+		out = append(out, fmt.Sprintf("%-*s  %-*s", leftWidth, l, rightWidth, r))
+	}
+	return out
+}
+
+// padRight right-aligns the value column to column 80, placing the label
+// ~20 chars to its left. Used for the GST breakup block.
+func padRight(label, value string) string {
+	leftFill := 80 - 20 - len(value) - 2
+	if leftFill < 0 {
+		leftFill = 0
+	}
+	return fmt.Sprintf("%*s%-20s%s", leftFill, "", label, value)
+}
+
+// padRightFixed right-aligns the value column to the given width.
+func padRightFixed(label, value string, totalWidth int) string {
+	leftFill := totalWidth - len(label) - len(value)
+	if leftFill < 0 {
+		leftFill = 0
+	}
+	return fmt.Sprintf("%s%*s%s", label, leftFill, "", value)
 }
 
 // RenderContract produces a contract PDF with a header block and free-form

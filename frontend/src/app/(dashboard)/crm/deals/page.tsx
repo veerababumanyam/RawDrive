@@ -7,15 +7,30 @@ import { cn } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-const DEAL_STAGES = ["inquiry", "proposal", "negotiation", "booked", "delivered", "lost"];
+// Stage vocabulary matches the DB CHECK constraint on deals.stage
+// (proposal/negotiation/confirmed/in_progress/completed/cancelled)
+// rather than the more photographer-friendly "inquiry/booked/
+// delivered/lost" set, because the backend normalizes friendly
+// names into these but the round-trip list-view rendering gets the
+// canonical value back.
+const DEAL_STAGES = ["proposal", "negotiation", "confirmed", "in_progress", "completed", "cancelled"];
+
+const STAGE_LABEL: Record<string, string> = {
+  proposal: "Proposal",
+  negotiation: "Negotiation",
+  confirmed: "Booked",
+  in_progress: "In progress",
+  completed: "Delivered",
+  cancelled: "Cancelled",
+};
 
 const stageClass: Record<string, string> = {
-  inquiry: "status-badge status-badge--neutral",
   proposal: "status-badge status-badge--info",
   negotiation: "status-badge status-badge--warning",
-  booked: "status-badge status-badge--success",
-  delivered: "status-badge status-badge--accent",
-  lost: "status-badge status-badge--error",
+  confirmed: "status-badge status-badge--success",
+  in_progress: "status-badge status-badge--accent",
+  completed: "status-badge status-badge--accent",
+  cancelled: "status-badge status-badge--error",
 };
 
 export default function DealsPage() {
@@ -29,7 +44,7 @@ export default function DealsPage() {
   const [form, setForm] = useState({
     contact_id: "",
     title: "",
-    stage: "inquiry",
+    stage: "proposal",
     amount_rupees: 0,
     advance_rupees: 0,
     event_type: "wedding",
@@ -82,7 +97,7 @@ export default function DealsPage() {
       }
       setShowCreate(false);
       setForm({
-        contact_id: "", title: "", stage: "inquiry",
+        contact_id: "", title: "", stage: "proposal",
         amount_rupees: 0, advance_rupees: 0,
         event_type: "wedding", event_date: "", venue: "", notes: "",
       });
@@ -256,9 +271,9 @@ export default function DealsPage() {
             <select
               value={form.stage}
               onChange={(e) => setForm({ ...form, stage: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary capitalize"
+              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
             >
-              {DEAL_STAGES.map((s) => (<option key={s} value={s}>{s}</option>))}
+              {DEAL_STAGES.map((s) => (<option key={s} value={s}>{STAGE_LABEL[s] ?? s}</option>))}
             </select>
             <select
               value={form.event_type}
@@ -355,8 +370,8 @@ export default function DealsPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-text-primary">{deal.title}</p>
-                    <span className={cn("capitalize", stageClass[deal.stage] || "status-badge status-badge--neutral")}>
-                      {deal.stage}
+                    <span className={cn(stageClass[deal.stage] || "status-badge status-badge--neutral")}>
+                      {STAGE_LABEL[deal.stage] ?? deal.stage}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-text-secondary">
