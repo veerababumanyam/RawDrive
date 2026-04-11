@@ -83,6 +83,7 @@ jobs:
       - frontend
       - openapi
       - security
+      - schema-drift
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
@@ -201,3 +202,98 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
           category: trivy
+
+  # ──────────────────────────────────────────────────────────────────────
+  # schema-drift: docs/db/schema.sql vs migration-applied schema
+  #
+  # Covers brownfield fix wave review §5.4: the refresh-schema policy
+  # ("commit docs/db/schema.sql alongside any migration that lands on
+  # main") was previously aspirational and enforced by convention only.
+  # This job enforces it mechanically by:
+  #
+  #   1. Spinning up a pgvector/pgvector:pg16 service postgres (same
+  #      image the local dev compose stack uses — see
+  #      _cobolt-docker/docker-compose.yml).
+  #   2. Running backend/cmd/schematool, which calls the production
+  #      database.Migrator.Up() path against the blank service DB.
+  #      Parity with the live backend's migration apply is guaranteed
+  #      because schematool imports the exact same Migrator.
+  #   3. Running scripts/ci-schema-check.sh, which shells to pg_dump
+  #      with the same filter chain refresh-schema.sh uses and diffs
+  #      the result against docs/db/schema.sql.
+  #
+  # On drift, the job fails with a remediation block pointing at
+  # scripts/refresh-schema.sh. The images job depends on this one, so
+  # a stale schema.sql blocks container publishing the same way a
+  # gitleaks finding does.
+  #
+  # Credentials are test-only throwaways that exist only for the
+  # lifetime of this job. They are not mirrored anywhere outside the
+  # workflow. Safe to hardcode.
+  #
+  # pgvector image pinning: tagged @pg16 to match the local dev
+  # stack. Both will drift together when pgvector rebuilds the tag.
+  # The §5.4 deferral doc's Path A recommendation included "pin the
+  # same tag" and ci-schema-check.sh's version-line filter absorbs
+  # patch-level pg16 differences between local and CI runs.
+  # ──────────────────────────────────────────────────────────────────────
+  schema-drift:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rawdrive_user
+          POSTGRES_PASSWORD: ci_test_only_schema_drift_password
+          POSTGRES_DB: rawdrive_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U rawdrive_user -d rawdrive_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: rawdrive_user
+      PGPASSWORD: ci_test_only_schema_drift_password
+      PGDATABASE: rawdrive_db
+      DATABASE_URL: postgres://rawdrive_user:ci_test_only_schema_drift_password@localhost:5432/rawdrive_db?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.2"
+          cache-dependency-path: backend/go.sum
+
+      # postgresql-client-16 ships in the ubuntu-24.04 main repo used
+      # by ubuntu-latest runners today, so no PGDG apt-source dance
+      # is needed. Kept as an explicit step (rather than relying on a
+      # pre-installed version) so a future runner image bump that
+      # drops or re-versions the client surfaces loudly here.
+      - name: Install postgres client 16
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Wait for postgres service to be ready
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" >/dev/null 2>&1; then
+              echo "postgres service is ready"
+              exit 0
+            fi
+            echo "waiting for postgres service (attempt $i/10)..."
+            sleep 2
+          done
+          echo "postgres service did not become ready in time" >&2
+          exit 1
+
+      - name: Apply migrations via schematool
+        working-directory: backend
+        run: go run ./cmd/schematool
+
+      - name: Check schema drift (docs/db/schema.sql vs migrated schema)
+        run: bash scripts/ci-schema-check.sh

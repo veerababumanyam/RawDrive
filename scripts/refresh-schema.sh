@@ -65,11 +65,20 @@ fi
 
 echo "Dumping schema from $CONTAINER ($DB_USER@$DB_NAME)..."
 
-# Strip `\restrict ...` and `\unrestrict ...` lines from pg_dump
-# output. These are per-session random tokens (introduced in pg_dump
-# 16) that would otherwise produce a phantom diff on every refresh.
+# Strip lines that would otherwise produce a phantom diff. Filter
+# parity with scripts/ci-schema-check.sh is REQUIRED — the §5.4 CI
+# gate diffs local-produced schema.sql against CI-produced output,
+# so both scripts must apply the exact same filter chain or the
+# gate flaps on every CI run. Any change here needs a mirror change
+# in ci-schema-check.sh (and vice versa).
+#
+#   - `\restrict <token>`   — pg_dump 16+ per-session random token
+#   - `\unrestrict <token>` — closing pair of the same
+#   - `-- Dumped from database version N.M (...)` — patch version drift
+#   - `-- Dumped by pg_dump version N.M (...)`     — client version drift
+#
 # Everything else pg_dump emits is deterministic given the same
-# schema state.
+# migration set and major postgres version.
 docker exec "$CONTAINER" pg_dump \
   --schema-only \
   --no-owner \
@@ -78,6 +87,8 @@ docker exec "$CONTAINER" pg_dump \
   -d "$DB_NAME" \
   | grep -v '^\\restrict ' \
   | grep -v '^\\unrestrict ' \
+  | grep -v '^-- Dumped from database version ' \
+  | grep -v '^-- Dumped by pg_dump version ' \
   > "$OUT"
 
 LINES=$(wc -l < "$OUT")
