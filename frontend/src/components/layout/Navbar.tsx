@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
@@ -29,11 +30,23 @@ const companyLinks = [
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  // Hero-overlay variant: on the landing page ("/"), the navbar floats over
+  // a full-bleed photographic hero instead of sitting on a solid surface.
+  // We keep the glass backdrop but skip the opaque background/border so
+  // the photo shows through, and we hide the theme toggle (since the
+  // landing forces its own theme via ForceTheme). Every other marketing
+  // route continues to render the default navbar, bit-for-bit unchanged.
+  const pathname = usePathname();
+  const isHeroOverlay = pathname === "/";
 
   return (
     <header
-      className="glass-surface sticky top-0 z-[var(--z-sticky)]"
+      className={cn(
+        "sticky top-0 z-[var(--z-sticky)]",
+        isHeroOverlay ? "landing-navbar-overlay" : "glass-surface",
+      )}
       style={{ height: "var(--navbar-height)" }}
+      data-variant={isHeroOverlay ? "hero-overlay" : "default"}
     >
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 lg:px-8">
         <Link
@@ -137,7 +150,7 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-4 md:flex">
-          <ThemeToggleButton />
+          {isHeroOverlay ? null : <ThemeToggleButton />}
 
           <Link
             href="/login"
@@ -156,7 +169,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
-          <ThemeToggleButton />
+          {isHeroOverlay ? null : <ThemeToggleButton />}
 
           <button
             type="button"
