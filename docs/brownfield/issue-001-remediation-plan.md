@@ -182,6 +182,41 @@ For each row, record the new value in a secure secret store
 chosen). Do NOT paste new values into Slack / email / commits /
 PR descriptions.
 
+### Consumer-map preflight (added 2026-04-11)
+
+Before executing any row, note which credentials have live code
+consumers that require an `.env.cobolt` / runtime-env update and
+which are pure console + env rotations. This was derived by
+grepping backend source for each credential identifier and env
+var name during the v2 preflight pass and is informational —
+rotation urgency is unchanged for every row regardless.
+
+| Credential family | Code consumers in backend source | Rotation scope |
+|---|---|---|
+| **Razorpay** (`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`) | None — only in `.env.example`, docs, and planning TR | Console (Razorpay dashboard) + env only. Integration not yet coded in the current tree. |
+| **PhonePe** (`PHONEPE_CLIENT_ID_*`, `PHONEPE_CLIENT_SECRET_*`) | None — only in `.env.example` and this plan | Console (PhonePe merchant portal) + env only. Not yet coded. |
+| **R2** (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) | `backend/cmd/api/main.go` | **Wired.** `.env.cobolt` update is load-bearing; a missed update leaves uploads broken. |
+| **Cloudflare Stream** (`CLODFLARE_STREAMING` — note the typo) | `backend/internal/service/stream_service.go`, `backend/cmd/api/main.go` | **Wired.** Grep both `CLODFLARE` and `CLOUDFLARE_STREAM` spellings when rotating. |
+| **Google OAuth #1** (client_id ending `...qg1horr2ng0pu5tnbbu3c1m5jbq8pnir`) | None — only in the brownfield docs | GCP Console only. No source code to update. |
+| **Google OAuth #2** (client_id ending `...vmqts48gkofn1le3grij4udp1rkrfssc`) | None — only in the brownfield docs | Same as #1. |
+| **Stitch / Figma / SMTP password** | Tooling env (MCP configs, `.env.cobolt`) | Rotate in upstream account, update `.env.cobolt`. |
+
+**Takeaway:** 5 of the 11 rows (rows 3, 4, 5, 9, 10 — Razorpay,
+both PhonePe variants, both Google OAuth clients) have **zero**
+code consumers in the current backend tree. Their rotation is a
+console action plus an env-store update, with no risk of a
+source-code consumer pointing at a stale credential. Rows 1, 2,
+and the SDK keys DO have code consumers and must update
+`.env.cobolt` (and prod env) immediately after rotation, or the
+backend will fail on the next request.
+
+This does NOT downgrade the urgency of any row — Razorpay LIVE
+keys are still LIVE, PhonePe prod secrets are still production
+material, and a leaked credential is compromised regardless of
+whether it is currently consumed by a code path. The table above
+is only for planning *which envs need to be updated*, not
+*whether to rotate*.
+
 | # | Credential | Where to rotate | Where to update consumers | Verification |
 |---|---|---|---|---|
 | 1 | Cloudflare R2 access key + secret (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) | R2 dashboard → Manage R2 API Tokens → create new, then disable/delete the old token | `.env.cobolt` (each engineer rotates their own copy), staging env, prod env, any CI that uploads to R2 | Upload a test object via the new key; attempt with the old key and confirm 403 |
@@ -279,16 +314,32 @@ readers are not confused," not "stop a live exposure."
    # Expected: fatal: Not a valid object name ...
 
    # .env file (v2 addition)
+   #
+   # The authoritative post-rewrite check is that no commit in any ref
+   # touches .env at all — this is the only command that cleanly
+   # distinguishes the pre- and post-rewrite states:
    git log --all --full-history --oneline -- ".env"
-   # Expected output: nothing
+   # Pre-rewrite: prints 553febb and 4d0c13d.
+   # Post-rewrite: empty output.
+
+   # Blob-existence check at 553febb (the commit that ADDED .env):
    git cat-file -e 553febb:.env 2>&1
-   # Expected: fatal: Not a valid object name ...
-   git cat-file -e 4d0c13d:.env 2>&1
-   # Expected: fatal: Not a valid object name ...
+   # Pre-rewrite: exit 0 (blob is in 553febb's tree).
+   # Post-rewrite: fatal: Not a valid object name ... (553febb itself
+   #               will also no longer exist under that SHA — see below).
+   #
+   # WARNING: do NOT use `git cat-file -e 4d0c13d:.env` as a post-
+   # rewrite signal. 4d0c13d is the commit whose DIFF DELETES .env,
+   # so `4d0c13d:.env` already returns "not valid" pre-rewrite — the
+   # command gives the same output before and after filter-repo and
+   # therefore proves nothing. The blob is reachable via
+   # `4d0c13d^:.env` (the parent tree) pre-rewrite, but the only
+   # clean post-rewrite proof is the `git log` command above plus
+   # the 553febb cat-file check.
    ```
-   `553febb` and `4d0c13d` themselves will no longer exist under
-   those SHAs — filter-repo will have renamed the rewritten
-   commits. Look them up via commit titles:
+   `553febb` will no longer exist under that SHA after filter-repo
+   — the rewritten commits get new SHAs. Look them up via commit
+   titles if you need the new SHAs:
    ```bash
    git log --all --oneline --grep "Initial project state"
    git log --all --oneline --grep "admin dashboard hardening"

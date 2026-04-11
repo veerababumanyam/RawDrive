@@ -111,7 +111,8 @@ A real-restart run closes the first two gaps.
        Confirm `Storage: File`, `Retention: Limits`, `Max Age: 7d`,
        and `Subjects: [rawdrive.>]`. These come from
        `events.NewNATSPublisher` in
-       `backend/internal/events/nats_publisher.go:81`.
+       `backend/internal/events/nats_publisher.go:72` (the constructor)
+       and `:107` (the `Storage: nats.FileStorage` setting).
 
 ### Result
 

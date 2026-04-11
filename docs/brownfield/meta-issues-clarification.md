@@ -205,8 +205,9 @@ check:
 If the stream is empty after restart, check that
 `events.NewNATSPublisher` is creating the stream with
 `Storage: nats.FileStorage` (it is — see
-`backend/internal/events/nats_publisher.go:86`), and check that
-`docker-compose.yml` mounts the JetStream data volume.
+`backend/internal/events/nats_publisher.go:107`), and check that
+`docker-compose.yml` mounts the JetStream data volume (`nats_data`
+bound to `/data` on the `nats` service).
 
 ## Related real-code fixes (separate from this file)
 

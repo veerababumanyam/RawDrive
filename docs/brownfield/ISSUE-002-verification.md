@@ -57,6 +57,20 @@ provider.
 - [ ] `DEV_STUB_EMAIL` is **not** set to `true` (otherwise the
       backend falls back to the stdout stub and nothing actually
       sends)
+- [ ] **`platform_settings` DB rows do not shadow your env vars.**
+      `backend/internal/email/smtp.go:117-133` resolves each SMTP
+      setting (`smtp_host`, `smtp_port`, `smtp_user`, `smtp_password`,
+      `smtp_from`, `smtp_from_name`) by reading the `platform_settings`
+      table FIRST, then falling back to the env var (`SMTP_HOST`,
+      `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`,
+      `SMTP_FROM_NAME`). If there are stale rows for any of those
+      keys in `platform_settings`, they will override your
+      `.env.cobolt` values SILENTLY and the OTP will go out via the
+      wrong credentials — this is the most common "I set the env var,
+      why is it still broken" failure mode for this procedure. Before
+      booting: either clear those rows
+      (`DELETE FROM platform_settings WHERE category = 'email'`)
+      or update them to match the env vars you are about to use.
 - [ ] `APP_ENV` is set to something other than `production` unless
       you are deliberately testing against the production env
 
