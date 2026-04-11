@@ -61,7 +61,10 @@ export async function listLeads(token: string, params?: { stage?: string; source
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/crm/leads?${query}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch leads");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.leads)) return body.leads;
+  return [];
 }
 
 export async function createLead(token: string, lead: Partial<Lead>): Promise<Lead> {
@@ -87,7 +90,10 @@ export async function listContacts(token: string, params?: { type?: string; sear
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/crm/contacts?${query}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch contacts");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.contacts)) return body.contacts;
+  return [];
 }
 
 export async function createContact(token: string, contact: Partial<Contact>): Promise<Contact> {
@@ -104,5 +110,8 @@ export async function listDeals(token: string, params?: { stage?: string }): Pro
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/crm/deals?${query}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch deals");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.deals)) return body.deals;
+  return [];
 }

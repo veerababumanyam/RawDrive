@@ -70,7 +70,10 @@ export async function listDealers(token: string, params?: { status?: string; sta
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/admin/dealers?${query}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch dealers");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.dealers)) return body.dealers;
+  return [];
 }
 
 export async function approveDealer(token: string, id: string, commissionRate: number): Promise<Dealer> {

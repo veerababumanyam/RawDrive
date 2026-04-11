@@ -96,7 +96,10 @@ export async function listProducts(token: string, galleryId: string): Promise<Ga
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`list products: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.galleryproducts)) return body.galleryproducts;
+  return [];
 }
 
 export async function createProduct(
@@ -182,7 +185,10 @@ export async function clearPublicCart(slug: string, clientEmail: string): Promis
 export async function listPublicBanners(slug: string): Promise<GalleryBanner[]> {
   const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/banners`);
   if (!res.ok) return [];
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.gallerybanners)) return body.gallerybanners;
+  return [];
 }
 
 // listPublicProducts returns the active product catalog for a public

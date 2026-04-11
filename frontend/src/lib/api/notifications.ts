@@ -23,7 +23,10 @@ export async function listNotifications(token: string, unread?: boolean): Promis
   const params = unread ? "?unread=true" : "";
   const res = await fetch(`${API_BASE}/api/v1/notifications${params}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch notifications");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.notifications)) return body.notifications;
+  return [];
 }
 
 export async function markRead(token: string, id: string): Promise<void> {

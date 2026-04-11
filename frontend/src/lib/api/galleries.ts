@@ -160,7 +160,10 @@ export async function listGalleryAssets(token: string, galleryId: string): Promi
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list gallery assets: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.assets)) return body.assets;
+  return [];
 }
 
 export async function getPublicGallery(slug: string): Promise<Gallery> {
@@ -183,5 +186,8 @@ export interface PublicAsset {
 export async function getPublicGalleryAssets(slug: string): Promise<PublicAsset[]> {
   const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/assets`);
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.publicassets)) return body.publicassets;
+  return [];
 }

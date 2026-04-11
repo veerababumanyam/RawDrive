@@ -30,5 +30,8 @@ export async function getAnalyticsDaily(token: string, galleryId: string, days =
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to get daily analytics: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.analyticsdailys)) return body.analyticsdailys;
+  return [];
 }

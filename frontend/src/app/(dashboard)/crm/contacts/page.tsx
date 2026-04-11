@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { listContacts, type Contact } from "@/lib/api/crm";
+import { useState, useEffect, useCallback } from "react";
+import { listContacts, createContact, type Contact } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 
 export default function ContactsPage() {
@@ -9,14 +9,36 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", contact_type: "client" });
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     const token = getStoredAccessToken();
     listContacts(token, search ? { search } : undefined)
       .then(setContacts)
       .catch((err) => { setError(err?.message || "Failed to load contacts"); setContacts([]); })
       .finally(() => setLoading(false));
   }, [search]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const token = getStoredAccessToken();
+      await createContact(token, form);
+      setShowCreate(false);
+      setForm({ name: "", email: "", phone: "", contact_type: "client" });
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create contact");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -47,6 +69,12 @@ export default function ContactsPage() {
             {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}
           </p>
         </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+        >
+          + New Client
+        </button>
       </div>
 
       <input
@@ -57,9 +85,72 @@ export default function ContactsPage() {
         className="input-base w-full max-w-md"
       />
 
+      {showCreate && (
+        <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-text-primary">New Client</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input
+              type="text"
+              placeholder="Name *"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
+              autoFocus
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
+            />
+            <input
+              type="tel"
+              placeholder="Phone"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
+            />
+            <select
+              value={form.contact_type}
+              onChange={(e) => setForm({ ...form, contact_type: e.target.value })}
+              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+            >
+              <option value="client">Client</option>
+              <option value="lead">Lead</option>
+              <option value="vendor">Vendor</option>
+            </select>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => { setShowCreate(false); setForm({ name: "", email: "", phone: "", contact_type: "client" }); }}
+              className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
+              disabled={creating}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={creating || !form.name.trim()}
+              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
+            >
+              {creating ? "Creating…" : "Save Client"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {contacts.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <p className="text-text-secondary">No clients found.</p>
+          {!showCreate && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+            >
+              + Add your first client
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

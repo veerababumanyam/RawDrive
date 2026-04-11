@@ -16,7 +16,10 @@ export async function listProofingSelections(token: string, galleryId: string): 
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list proofing: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.selections)) return body.selections;
+  return [];
 }
 
 export async function updateSelectionStatus(token: string, galleryId: string, selectionId: string, status: string): Promise<void> {
@@ -75,7 +78,10 @@ export async function listProofingSessions(token: string, galleryId: string): Pr
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list sessions: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.proofingsessions)) return body.proofingsessions;
+  return [];
 }
 
 export async function setStarRating(token: string, galleryId: string, selectionId: string, rating: number): Promise<void> {
@@ -134,7 +140,10 @@ export async function listComments(token: string, galleryId: string, assetId: st
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list comments: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.proofingcomments)) return body.proofingcomments;
+  return [];
 }
 
 // M13: Album Approval
@@ -171,7 +180,10 @@ export async function listAlbumApprovals(token: string, galleryId: string): Prom
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list approvals: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.albumapprovals)) return body.albumapprovals;
+  return [];
 }
 
 // M13: Gallery Access

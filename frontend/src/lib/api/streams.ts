@@ -67,7 +67,10 @@ export async function listStreams(token: string, params?: { status?: string; lim
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list streams: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.streams)) return body.streams;
+  return [];
 }
 
 export async function getStream(token: string, id: string): Promise<Stream> {
@@ -127,7 +130,10 @@ export async function getChatHistory(token: string, streamId: string, limit?: nu
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to get chat: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.streamchats)) return body.streamchats;
+  return [];
 }
 
 export async function sendChatMessage(streamId: string, data: { user_name: string; message: string }, token?: string): Promise<StreamChat> {
@@ -164,7 +170,10 @@ export async function getPublicChatHistory(streamId: string, limit?: number): Pr
   const query = limit ? `?limit=${limit}` : "";
   const res = await fetch(`${API_BASE}/api/v1/public/streams/${streamId}/chat${query}`);
   if (!res.ok) throw new Error(`Failed to get chat: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.streamchats)) return body.streamchats;
+  return [];
 }
 
 // ─── Chat Moderation (authenticated) ───
@@ -279,7 +288,10 @@ export async function listDesktopSessions(token: string): Promise<DesktopSession
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list sessions: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.desktopsessions)) return body.desktopsessions;
+  return [];
 }
 
 export async function desktopHeartbeat(token: string, sessionId: string, appVersion: string): Promise<void> {
