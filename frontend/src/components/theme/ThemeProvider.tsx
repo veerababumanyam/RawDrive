@@ -69,20 +69,47 @@ function readInitialTheme(): ThemeMode {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>(readInitialTheme);
 
+  // Apply the theme to the DOM whenever it changes. Persistence to
+  // localStorage is deliberately NOT done here — we only persist when
+  // the visitor makes an explicit choice via setTheme/toggleTheme below,
+  // so that a first-time visitor with no saved preference continues to
+  // follow their OS `prefers-color-scheme` on every subsequent navigation.
   useEffect(() => {
     applyTheme(theme);
-    window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
+
+  // Live-track OS theme changes while the page is open, but only if the
+  // visitor has NOT yet chosen a theme explicitly. Once they've picked
+  // one via the in-app toggle, their choice is authoritative.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      if (window.localStorage.getItem(STORAGE_KEY) !== null) return;
+      setThemeState(e.matches ? "liquid-glass-dark" : "liquid-glass");
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Explicit user actions — these write localStorage so the choice
+  // persists across navigations and overrides the OS preference.
+  const persistAndSet = (next: ThemeMode) => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      /* storage may be blocked; the DOM update still happens via state */
+    }
+    setThemeState(next);
+  };
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
       isDark: isDarkTheme(theme),
-      setTheme: setThemeState,
+      setTheme: persistAndSet,
       toggleTheme: () =>
-        setThemeState((current) =>
-          isDarkTheme(current) ? "liquid-glass" : "liquid-glass-dark",
-        ),
+        persistAndSet(isDarkTheme(theme) ? "liquid-glass" : "liquid-glass-dark"),
     }),
     [theme],
   );
@@ -100,13 +127,35 @@ export function useTheme() {
   return context;
 }
 
+/**
+ * Inline init script injected from the root layout. It runs before React
+ * hydration so the correct theme is applied on first paint and there is
+ * no flash of wrong theme.
+ *
+ * Decision order:
+ *
+ *   1. Explicit user preference in localStorage wins, always.
+ *   2. Otherwise, follow the OS `prefers-color-scheme` media query so a
+ *      dark-mode OS gets `liquid-glass-dark` and a light-mode OS gets
+ *      `liquid-glass`.
+ *   3. Otherwise, fall back to DEFAULT_THEME.
+ *
+ * Every route executes this same script at navigation time, which is
+ * why all pages stay in sync.
+ */
 export const rawDriveThemeInitScript = `
   (() => {
     try {
       const key = "${STORAGE_KEY}";
       const validThemes = ${JSON.stringify([...VALID_THEMES])};
       const stored = window.localStorage.getItem(key);
-      const theme = validThemes.includes(stored) ? stored : "${DEFAULT_THEME}";
+      let theme;
+      if (validThemes.includes(stored)) {
+        theme = stored;
+      } else {
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        theme = prefersDark ? "liquid-glass-dark" : "liquid-glass";
+      }
       document.documentElement.dataset.theme = theme;
       const darkThemes = ${JSON.stringify([...DARK_THEMES])};
       document.documentElement.style.colorScheme = darkThemes.includes(theme) ? "dark" : "light";
