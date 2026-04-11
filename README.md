@@ -165,4 +165,12 @@ pnpm dev
   <img src="logo/favicon-32x32.png" width="32" />
 </p>
 
+---
+
+<p align="center">
+  <sub>Powered By</sub>
+  <br /><br />
+  <img src="frontend/public/CoBolt/CoBolt_Name_Logo.png" alt="CoBolt" width="200" />
+</p>
+
 
