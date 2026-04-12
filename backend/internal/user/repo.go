@@ -22,11 +22,16 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 	if u.PlatformRole == "" {
 		u.PlatformRole = "photographer"
 	}
+	// state_id is mandatory at registration per CLAUDE.md. When the
+	// caller sets it (> 0), we persist it in the same INSERT that
+	// creates the user row. This closes the gap where state_id was
+	// validated in the register handler but only written during
+	// onboarding — users who skipped onboarding ended up with NULL.
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO users (email, phone, display_name, avatar_url, password_hash, email_verified, platform_role)
-		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7)
+		`INSERT INTO users (email, phone, display_name, avatar_url, password_hash, email_verified, platform_role, state_id)
+		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7, $8)
 		 RETURNING id`,
-		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole,
+		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole, u.StateID,
 	).Scan(&u.ID)
 	if err != nil {
 		return nil, fmt.Errorf("user repo create: %w", err)

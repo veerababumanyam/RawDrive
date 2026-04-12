@@ -23,12 +23,20 @@ type User struct {
 	PasswordHash  *string
 	EmailVerified bool
 	PlatformRole  string // super_admin|admin|dealer|photographer|team_member|client
+	// StateID is the FK to states.id (Indian state / UT). Mandatory at
+	// registration per CLAUDE.md — callers set it during Create; the repo
+	// INSERT persists it so onboarding no longer owns the first write.
+	StateID *int
 }
 
 type CreateUserInput struct {
 	Email    string
 	Phone    string
 	Password string
+	// StateID threads the mandatory state selection from the register
+	// handler through to the SQL INSERT. 0 means "not provided" (the
+	// register handler already rejects <= 0 before calling Create).
+	StateID int
 }
 
 type UpdateUserInput struct {
@@ -71,6 +79,11 @@ func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, err
 		ID:    generateID(),
 		Email: input.Email,
 		Phone: input.Phone,
+	}
+
+	if input.StateID > 0 {
+		sid := input.StateID
+		u.StateID = &sid
 	}
 
 	if input.Password != "" {

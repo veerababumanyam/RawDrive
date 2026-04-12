@@ -27,7 +27,7 @@ func newTestUserService() *testUserService {
 	return &testUserService{users: make(map[string]string)}
 }
 
-func (s *testUserService) Create(_ context.Context, email, password string) (string, error) {
+func (s *testUserService) Create(_ context.Context, email, password string, _ int) (string, error) {
 	id := "test-user-" + email
 	s.users[email] = id
 	return id, nil
@@ -272,7 +272,7 @@ func TestSessionRotation(t *testing.T) {
 	defer ts.Close()
 
 	// Register user
-	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!")
+	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!", 11)
 	require.NoError(t, err)
 
 	// Get OTP and verify

@@ -114,7 +114,7 @@ type UserProfile struct {
 }
 
 type UserService interface {
-	Create(ctx context.Context, email, password string) (string, error)
+	Create(ctx context.Context, email, password string, stateID int) (string, error)
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
 	VerifyPassword(ctx context.Context, email, password string) (string, bool, bool, error)
 	MarkEmailVerified(ctx context.Context, userID string) error
@@ -291,8 +291,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user with password
-	userID, err := h.users.Create(r.Context(), req.Email, req.Password)
+	// Create user with password + mandatory state selection. StateID is
+	// validated > 0 above; persisting it in the same INSERT closes the
+	// gap where onboarding was the sole writer of users.state_id.
+	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.StateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
