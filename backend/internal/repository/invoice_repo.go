@@ -39,6 +39,11 @@ type Invoice struct {
 	PlaceOfSupplyCode  string `json:"place_of_supply_code,omitempty"`
 	AmountInWords      string `json:"amount_in_words,omitempty"`
 	RoundOffPaisa      int64  `json:"round_off_paisa,omitempty"`
+	// M24: document-type metadata and package origin.
+	QuotationValidUntil *time.Time `json:"quotation_valid_until,omitempty"`
+	CreditNoteInvoiceID *uuid.UUID `json:"credit_note_invoice_id,omitempty"`
+	CreditNoteReason    *string    `json:"credit_note_reason,omitempty"`
+	SourcePackageID     *uuid.UUID `json:"source_package_id,omitempty"`
 }
 
 // InvoiceLineItem represents a line item on an invoice.
@@ -66,7 +71,7 @@ func NewInvoiceRepo(db *pgxpool.Pool) *InvoiceRepo {
 	return &InvoiceRepo{DB: db}
 }
 
-const invoiceCols = `id, workspace_id, state_id, contact_id, invoice_number, invoice_type, status, currency, subtotal_paisa, cgst_paisa, sgst_paisa, igst_paisa, total_paisa, amount_paid_paisa, discount_paisa, line_items, due_date, paid_at, notes, created_at, updated_at, place_of_supply_state, place_of_supply_code, amount_in_words, round_off_paisa`
+const invoiceCols = `id, workspace_id, state_id, contact_id, invoice_number, invoice_type, status, currency, subtotal_paisa, cgst_paisa, sgst_paisa, igst_paisa, total_paisa, amount_paid_paisa, discount_paisa, line_items, due_date, paid_at, notes, created_at, updated_at, place_of_supply_state, place_of_supply_code, amount_in_words, round_off_paisa, quotation_valid_until, credit_note_invoice_id, credit_note_reason, source_package_id`
 
 func scanInvoice(row pgx.Row) (Invoice, error) {
 	var inv Invoice
@@ -78,6 +83,7 @@ func scanInvoice(row pgx.Row) (Invoice, error) {
 		&inv.LineItems, &inv.DueDate, &inv.PaidAt, &inv.Notes,
 		&inv.CreatedAt, &inv.UpdatedAt,
 		&inv.PlaceOfSupplyState, &inv.PlaceOfSupplyCode, &inv.AmountInWords, &inv.RoundOffPaisa,
+		&inv.QuotationValidUntil, &inv.CreditNoteInvoiceID, &inv.CreditNoteReason, &inv.SourcePackageID,
 	)
 	return inv, err
 }
@@ -89,7 +95,7 @@ func (r *InvoiceRepo) Create(ctx context.Context, inv *Invoice) error {
 	inv.UpdatedAt = now
 	_, err := r.DB.Exec(ctx, `
 		INSERT INTO invoices (`+invoiceCols+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
 		inv.ID, inv.WorkspaceID, inv.StateID, inv.ContactID,
 		inv.InvoiceNumber, inv.InvoiceType, inv.Status, inv.Currency,
 		inv.SubtotalPaisa, inv.CGSTPaisa, inv.SGSTPaisa, inv.IGSTPaisa,
@@ -97,6 +103,7 @@ func (r *InvoiceRepo) Create(ctx context.Context, inv *Invoice) error {
 		inv.LineItems, inv.DueDate, inv.PaidAt, inv.Notes,
 		inv.CreatedAt, inv.UpdatedAt,
 		inv.PlaceOfSupplyState, inv.PlaceOfSupplyCode, inv.AmountInWords, inv.RoundOffPaisa,
+		inv.QuotationValidUntil, inv.CreditNoteInvoiceID, inv.CreditNoteReason, inv.SourcePackageID,
 	)
 	return err
 }
@@ -148,6 +155,7 @@ func (r *InvoiceRepo) List(ctx context.Context, f InvoiceFilter) ([]Invoice, err
 			&inv.LineItems, &inv.DueDate, &inv.PaidAt, &inv.Notes,
 			&inv.CreatedAt, &inv.UpdatedAt,
 			&inv.PlaceOfSupplyState, &inv.PlaceOfSupplyCode, &inv.AmountInWords, &inv.RoundOffPaisa,
+			&inv.QuotationValidUntil, &inv.CreditNoteInvoiceID, &inv.CreditNoteReason, &inv.SourcePackageID,
 		); err != nil {
 			return nil, err
 		}

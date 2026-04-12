@@ -42,6 +42,8 @@ const groups: NavGroup[] = [
       { href: "/crm/deals", label: "Deals", icon: Handshake },
       { href: "/calendar", label: "Bookings", icon: CalendarDays },
       { href: "/billing", label: "Invoices", icon: ReceiptText },
+      { href: "/settings/packages", label: "Packages", icon: ShoppingBag },
+      { href: "/reports/gstr1", label: "GSTR-1", icon: ReceiptText },
     ],
   },
   {

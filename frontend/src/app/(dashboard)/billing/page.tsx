@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { listInvoices, createInvoice, formatPaisa, type Invoice, type InvoiceLineItem } from "@/lib/api/billing";
+import {
+  listInvoices,
+  createInvoice,
+  convertQuotation,
+  expandPackageLineItems,
+  listServicePackages,
+  formatPaisa,
+  type Invoice,
+  type InvoiceLineItem,
+  type ServicePackage,
+} from "@/lib/api/billing";
 import { listContacts, type Contact } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -21,13 +31,14 @@ const BLANK_LINE: LineRow = {
   description: "",
   quantity: 1,
   unit_price_rupees: 0,
-  hsn_code: "998381", // HSN for photographic services (GST)
+  hsn_code: "998386",
   tax_rate: 18,
 };
 
 export default function BillingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [packages, setPackages] = useState<ServicePackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -42,6 +53,10 @@ export default function BillingPage() {
   const [form, setForm] = useState({
     contact_id: "",
     invoice_type: "tax_invoice",
+    package_id: "",
+    quotation_valid_until: "",
+    credit_note_invoice_id: "",
+    credit_note_reason: "",
     due_date: "",
     notes: "",
     lines: [{ ...BLANK_LINE }] as LineRow[],
@@ -58,6 +73,7 @@ export default function BillingPage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     listContacts(token).then(setContacts).catch(() => setContacts([]));
+    listServicePackages(token).then(setPackages).catch(() => setPackages([]));
   }, []);
 
   const totalRupees = form.lines.reduce((sum, l) => sum + l.quantity * l.unit_price_rupees, 0);
@@ -71,6 +87,30 @@ export default function BillingPage() {
       ...f,
       lines: f.lines.map((l, i) => (i === idx ? { ...l, ...patch } : l)),
     }));
+  };
+
+  const handlePackageSelect = async (packageId: string) => {
+    setForm((f) => ({ ...f, package_id: packageId }));
+    if (!packageId) return;
+    try {
+      const token = getStoredAccessToken();
+      const items = await expandPackageLineItems(token, packageId);
+      if (items.length > 0) {
+        setForm((f) => ({
+          ...f,
+          package_id: packageId,
+          lines: items.map((item) => ({
+            description: item.description,
+            quantity: item.quantity,
+            unit_price_rupees: item.unit_price_paisa / 100,
+            hsn_code: item.hsn_code,
+            tax_rate: item.tax_rate,
+          })),
+        }));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply package");
+    }
   };
 
   const handleCreate = async () => {
@@ -109,6 +149,10 @@ export default function BillingPage() {
       await createInvoice(token, {
         contact_id: form.contact_id,
         invoice_type: form.invoice_type,
+        source_package_id: form.package_id || undefined,
+        quotation_valid_until: form.invoice_type === "quotation" ? form.quotation_valid_until || undefined : undefined,
+        credit_note_invoice_id: form.invoice_type === "credit_note" ? form.credit_note_invoice_id || undefined : undefined,
+        credit_note_reason: form.invoice_type === "credit_note" ? form.credit_note_reason || undefined : undefined,
         due_date: form.due_date || undefined,
         line_items: lineItems,
         subtotal_paisa: subtotalPaisa,
@@ -122,6 +166,10 @@ export default function BillingPage() {
       setForm({
         contact_id: "",
         invoice_type: "tax_invoice",
+        package_id: "",
+        quotation_valid_until: "",
+        credit_note_invoice_id: "",
+        credit_note_reason: "",
         due_date: "",
         notes: "",
         lines: [{ ...BLANK_LINE }],
@@ -131,6 +179,16 @@ export default function BillingPage() {
       setError(err instanceof Error ? err.message : "Failed to create invoice");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleConvertQuotation = async (inv: Invoice) => {
+    const token = getStoredAccessToken();
+    try {
+      await convertQuotation(token, inv.id);
+      setRefreshTick((n) => n + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to convert quotation");
     }
   };
 
@@ -254,8 +312,18 @@ export default function BillingPage() {
             >
               <option value="tax_invoice">Tax Invoice</option>
               <option value="proforma">Proforma</option>
-              <option value="advance_receipt">Advance Receipt</option>
+              <option value="quotation">Quotation</option>
               <option value="credit_note">Credit Note</option>
+            </select>
+            <select
+              value={form.package_id}
+              onChange={(e) => handlePackageSelect(e.target.value)}
+              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+            >
+              <option value="">No package</option>
+              {packages.map((pkg) => (
+                <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+              ))}
             </select>
             <input
               type="date" placeholder="Due date"
@@ -264,6 +332,48 @@ export default function BillingPage() {
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
             />
           </div>
+
+          {form.invoice_type === "quotation" && (
+            <label className="flex flex-col gap-1 text-xs text-text-secondary">
+              Valid until
+              <input
+                type="date"
+                value={form.quotation_valid_until}
+                onChange={(e) => setForm({ ...form, quotation_valid_until: e.target.value })}
+                className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              />
+            </label>
+          )}
+
+          {form.invoice_type === "credit_note" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                Original invoice
+                <select
+                  value={form.credit_note_invoice_id}
+                  onChange={(e) => setForm({ ...form, credit_note_invoice_id: e.target.value })}
+                  className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+                >
+                  <option value="">Select invoice</option>
+                  {invoices
+                    .filter((inv) => inv.invoice_type !== "credit_note")
+                    .map((inv) => (
+                      <option key={inv.id} value={inv.id}>{inv.invoice_number}</option>
+                    ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                Reason
+                <input
+                  type="text"
+                  value={form.credit_note_reason}
+                  onChange={(e) => setForm({ ...form, credit_note_reason: e.target.value })}
+                  className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+                  placeholder="Cancellation or refund reason"
+                />
+              </label>
+            </div>
+          )}
 
           <div className="space-y-2">
             <h3 className="text-sm font-medium text-text-secondary">Line items</h3>
@@ -334,7 +444,12 @@ export default function BillingPage() {
             </button>
             <button
               onClick={handleCreate}
-              disabled={creating || !form.contact_id || !form.lines[0].description.trim()}
+              disabled={
+                creating ||
+                !form.contact_id ||
+                !form.lines[0].description.trim() ||
+                (form.invoice_type === "credit_note" && (!form.credit_note_invoice_id || !form.credit_note_reason.trim()))
+              }
               className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
             >
               {creating ? "Creating…" : "Create Invoice"}
@@ -358,7 +473,7 @@ export default function BillingPage() {
                 <div>
                   <p className="font-mono text-sm text-text-primary">{inv.invoice_number}</p>
                   <div className="flex items-center gap-3 mt-1 text-sm text-text-secondary">
-                    <span className="capitalize">{inv.invoice_type.replace("_", " ")}</span>
+                    <span className="capitalize">{inv.invoice_type === "service" ? "Tax Invoice" : inv.invoice_type.replace("_", " ")}</span>
                     {inv.due_date && <span>Due: {new Date(inv.due_date).toLocaleDateString("en-IN")}</span>}
                   </div>
                 </div>
@@ -397,6 +512,14 @@ export default function BillingPage() {
                     className="rounded-lg bg-success/10 border border-success/30 px-3 py-1.5 text-xs text-success hover:bg-success/20"
                   >
                     Record Payment
+                  </button>
+                )}
+                {inv.invoice_type === "quotation" && (
+                  <button
+                    onClick={() => handleConvertQuotation(inv)}
+                    className="rounded-lg bg-accent-primary/10 border border-accent-primary/30 px-3 py-1.5 text-xs text-accent-primary hover:bg-accent-primary/20"
+                  >
+                    Convert to invoice
                   </button>
                 )}
               </div>

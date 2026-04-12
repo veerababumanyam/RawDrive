@@ -1,8 +1,8 @@
 ﻿{
     "projectId":  "cobolt-rawdrive-f651e4",
     "projectType":  "brownfield",
-    "currentStage":  "M23-validated",
-    "version":  "0.0.50",
+    "currentStage":  "M24-validated",
+    "version":  "0.0.51",
     "resolvedRoot":  "C:/Users/admin/Desktop/RawDriveCobolt",
     "flags":  {
                   "generateSkills":  false,
@@ -11,7 +11,7 @@
     "playwright":  {
                        "installed":  true,
                        "configPath":  "e2e/playwright.config.js",
-                       "lastSmokeTest":  "2026-04-12T18:31:40.5593406Z",
+                       "lastSmokeTest":  "2026-04-12T19:10:47.9130743Z",
                        "smokeTestPassed":  true
                    },
     "initCheckpoints":  {
@@ -24,7 +24,7 @@
                             "generate-skills":  "skipped",
                             "create-claude-md":  "completed"
                         },
-    "lastUpdated":  "2026-04-12T18:35:00.0000000Z",
+    "lastUpdated":  "2026-04-12T19:38:35.7655062Z",
     "planning":  {
                      "completedAt":  "2026-04-07T13:39:14.048Z",
                      "phases":  5,
@@ -45,15 +45,15 @@
                      "readinessVerdict":  "BUILD_AUTHORIZED",
                      "readinessScore":  4.5,
                      "firstMilestone":  "M1",
-                     "featureName":  "crm-enhancement-india",
-                     "featureMilestone":  "M23",
-                     "featureSource":  "crmissues-analysis-2026-04-12",
-                     "lastFeatureRun":  "2026-04-12T12:00:00.000Z"
+                     "featureName":  "crm-documents-catalogue-gstr1",
+                     "featureMilestone":  "M24",
+                     "featureSource":  "crm-enhancement-india-M24",
+                     "lastFeatureRun":  "2026-04-12T19:10:47.9130743Z"
                  },
-    "currentMilestone":  "M23",
+    "currentMilestone":  "M24",
     "pipeline":  {
                      "currentStage":  "S7-validate-complete",
-                     "currentMilestone":  "M23",
+                     "currentMilestone":  "M24",
                      "infra_verified":  true,
                      "infra_started":  true,
                      "infra_healthy":  true,
@@ -1709,7 +1709,7 @@
     "build":  {
                   "version":  "2.0.0",
                   "currentStep":  "08-milestone-complete",
-                  "currentMilestone":  "M23",
+                  "currentMilestone":  "M24",
                   "autoMode":  true,
                   "parallelMode":  false,
                   "startedAt":  "2026-04-12T10:29:43Z",
@@ -1729,12 +1729,12 @@
                                                       ],
                                         "currentIteration":  1
                                     },
-                  "totalTasks":  27,
-                  "totalWaves":  5,
+                  "totalTasks":  22,
+                  "totalWaves":  3,
                   "storyTracking":  {
-                                        "totalStories":  16,
-                                        "expectedStories":  16,
-                                        "completedStories":  0
+                                        "totalStories":  4,
+                                        "expectedStories":  4,
+                                        "completedStories":  4
                                     },
                   "lastCompletedStep":  "07-validate",
                   "completedSteps":  [
@@ -1748,16 +1748,17 @@
                                          "07-validate"
                                      ],
                   "validation":  {
-                                     "milestone":  "M23",
+                                     "milestone":  "M24",
                                      "status":  "pass",
-                                     "completedAt":  "2026-04-12T18:31:40.5593406Z",
+                                     "completedAt":  "2026-04-12T19:10:47.9130743Z",
                                      "tests":  "pass",
                                      "lint":  "pass",
                                      "build":  "pass",
                                      "dockerPlaywrightSmoke":  "pass",
                                      "specVerify":  "pass",
                                      "workerLifecycle":  "pass",
-                                     "artifactsDir":  "_cobolt-output/latest/build/M23"
+                                     "strictPreflight":  "advisory",
+                                     "artifactsDir":  "_cobolt-output/latest/build/M24"
                                  }
               }
 }

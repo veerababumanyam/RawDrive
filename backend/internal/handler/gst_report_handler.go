@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rawdrive/backend/internal/service"
@@ -17,13 +19,40 @@ func NewGSTReportHandler(svc *service.GSTReportService) *GSTReportHandler {
 	return &GSTReportHandler{svc: svc}
 }
 
-// GSTR1 handles GET /api/v1/billing/reports/gstr1?year=2026&month=4
+// GSTR1 handles GET /api/v1/billing/reports/gstr1?fy=2026-27&format=csv
 func (h *GSTReportHandler) GSTR1(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := getWorkspaceID(r)
 	if !ok {
 		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
 		return
 	}
+	fy := r.URL.Query().Get("fy")
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if fy != "" || format != "" {
+		if fy == "" {
+			fy = service.CurrentFinancialYear(time.Now())
+		}
+		report, err := h.svc.GenerateGSTR1FinancialYear(r.Context(), workspaceID, fy)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		if format == "csv" {
+			body, err := report.CSV()
+			if err != nil {
+				http.Error(w, `{"error":"csv generation failed"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="gstr1-%s.csv"`, report.FinancialYear))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		respondJSON(w, http.StatusOK, report)
+		return
+	}
+
 	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
 	month, _ := strconv.Atoi(r.URL.Query().Get("month"))
 	if year == 0 || month == 0 {

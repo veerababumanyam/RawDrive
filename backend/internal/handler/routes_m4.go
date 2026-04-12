@@ -10,15 +10,16 @@ import (
 
 // M4Dependencies holds all dependencies needed for M4 route registration.
 type M4Dependencies struct {
-	DB               *pgxpool.Pool
-	LeadRepo         *repository.LeadRepo
-	ContactRepo      *repository.ContactRepo
-	DealRepo         *repository.DealRepo
-	InvoiceRepo      *repository.InvoiceRepo
-	PaymentRepo      *repository.PaymentRepo
-	ContractRepo     *repository.ContractRepo
-	EventRepo        *repository.EventRepo
-	NotificationRepo *repository.NotificationRepo
+	DB                 *pgxpool.Pool
+	LeadRepo           *repository.LeadRepo
+	ContactRepo        *repository.ContactRepo
+	DealRepo           *repository.DealRepo
+	InvoiceRepo        *repository.InvoiceRepo
+	PaymentRepo        *repository.PaymentRepo
+	ServicePackageRepo *repository.ServicePackageRepo
+	ContractRepo       *repository.ContractRepo
+	EventRepo          *repository.EventRepo
+	NotificationRepo   *repository.NotificationRepo
 	// Optional: shared infrastructure wired in main.go. Nil-safe — handlers
 	// degrade gracefully when these are not provided.
 	PDFService             *service.PDFService
@@ -32,6 +33,7 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 	dealHandler := NewDealHandler(deps.DealRepo)
 	invoiceHandler := NewInvoiceHandler(deps.InvoiceRepo).WithPDFService(deps.PDFService)
 	paymentHandler := NewPaymentHandler(deps.PaymentRepo, deps.InvoiceRepo)
+	packageHandler := NewServicePackageHandler(deps.ServicePackageRepo)
 	contractHandler := NewContractHandler(deps.ContractRepo).WithPDFService(deps.PDFService)
 	calendarHandler := NewCalendarHandler(deps.EventRepo)
 	notifHandler := NewNotificationHandler(deps.NotificationRepo)
@@ -88,10 +90,20 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 			r.Get("/", invoiceHandler.List)
 			r.Get("/{id}", invoiceHandler.GetByID)
 			r.Get("/{id}/pdf", invoiceHandler.DownloadPDF)
+			r.Post("/{id}/convert", invoiceHandler.ConvertQuotation)
 			// Payment recording and listing per invoice
 			r.Post("/{id}/payments", paymentHandler.RecordPayment)
 			r.Get("/{id}/payments", paymentHandler.ListByInvoice)
 			r.Post("/{id}/payment-link", paymentHandler.GeneratePaymentLink)
+		})
+
+		r.Route("/packages", func(r chi.Router) {
+			r.Post("/", packageHandler.Create)
+			r.Get("/", packageHandler.List)
+			r.Get("/{id}", packageHandler.GetByID)
+			r.Put("/{id}", packageHandler.Update)
+			r.Delete("/{id}", packageHandler.Delete)
+			r.Get("/{id}/line-items", packageHandler.ExpandLineItems)
 		})
 
 		// GST Reports
@@ -100,6 +112,10 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 			r.Get("/gstr3b", gstReportHandler.GSTR3B)
 			r.Get("/revenue", gstReportHandler.Revenue)
 		})
+	})
+
+	r.Route("/api/v1/reports", func(r chi.Router) {
+		r.Get("/gstr1", gstReportHandler.GSTR1)
 	})
 
 	// Contract routes

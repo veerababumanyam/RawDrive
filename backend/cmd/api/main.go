@@ -925,6 +925,7 @@ func main() {
 		dealRepo := repository.NewDealRepo(dbPool)
 		invoiceRepo := repository.NewInvoiceRepo(dbPool)
 		paymentRepo := repository.NewPaymentRepo(dbPool)
+		servicePackageRepo := repository.NewServicePackageRepo(dbPool)
 		contractRepo := repository.NewContractRepo(dbPool)
 		eventRepo := repository.NewEventRepo(dbPool)
 		notificationRepo := repository.NewNotificationRepo(dbPool)
@@ -959,6 +960,7 @@ func main() {
 			DealRepo:               dealRepo,
 			InvoiceRepo:            invoiceRepo,
 			PaymentRepo:            paymentRepo,
+			ServicePackageRepo:     servicePackageRepo,
 			ContractRepo:           contractRepo,
 			EventRepo:              eventRepo,
 			NotificationRepo:       notificationRepo,

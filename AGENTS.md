@@ -1,6 +1,6 @@
 # RawDrive — Root Agent Guide
 
-Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.50
+Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.51
 (milestone M23). **Read `frontend/AGENTS.md` before touching anything under `frontend/`**
 — Next.js here has breaking changes from public docs.
 

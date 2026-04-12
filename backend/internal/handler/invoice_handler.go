@@ -48,25 +48,23 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if inv.Currency == "" {
 		inv.Currency = "INR"
 	}
-	// Map friendly GST-document invoice_type values the frontend
-	// uses to the CHECK-constraint values the invoices table
-	// actually allows. The DB check is {subscription,addon,service,
-	// credit_note}; the UI naturally sends tax_invoice/proforma/
-	// advance_receipt because that's how Indian accountants talk
-	// about invoices. Rather than migrate the check constraint
-	// (which would risk existing data), we normalize at the handler
-	// boundary: everything that is essentially a billable service
-	// collapses to "service".
-	// M23: proforma and quotation are now first-class types in the
-	// DB CHECK constraint (migration 073). Map legacy aliases; leave
-	// valid types as-is.
-	switch inv.InvoiceType {
-	case "", "tax_invoice", "advance_receipt":
-		inv.InvoiceType = "service"
-	case "proforma", "quotation", "credit_note", "subscription", "addon", "service":
-		// already valid in CHECK constraint
-	default:
-		inv.InvoiceType = "service"
+	docType := service.NormalizeInvoiceDocumentType(inv.InvoiceType)
+	inv.InvoiceType = docType.DBValue()
+	if docType == service.InvoiceDocumentCreditNote {
+		if inv.CreditNoteInvoiceID == nil {
+			http.Error(w, `{"error":"credit_note_invoice_id required for credit notes"}`, http.StatusBadRequest)
+			return
+		}
+		if inv.CreditNoteReason == nil || strings.TrimSpace(*inv.CreditNoteReason) == "" {
+			http.Error(w, `{"error":"credit_note_reason required for credit notes"}`, http.StatusBadRequest)
+			return
+		}
+		inv.SubtotalPaisa = service.ApplyCreditNoteSign(inv.SubtotalPaisa)
+		inv.CGSTPaisa = service.ApplyCreditNoteSign(inv.CGSTPaisa)
+		inv.SGSTPaisa = service.ApplyCreditNoteSign(inv.SGSTPaisa)
+		inv.IGSTPaisa = service.ApplyCreditNoteSign(inv.IGSTPaisa)
+		inv.TotalPaisa = service.ApplyCreditNoteSign(inv.TotalPaisa)
+		inv.DiscountPaisa = service.ApplyCreditNoteSign(inv.DiscountPaisa)
 	}
 
 	// M23: Compute amount-in-words for the invoice total.
@@ -150,6 +148,53 @@ func (h *InvoiceHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, inv)
 }
 
+// ConvertQuotation clones a quotation into a draft tax invoice. The original
+// quotation remains unchanged for auditability.
+func (h *InvoiceHandler) ConvertQuotation(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid invoice id"}`, http.StatusBadRequest)
+		return
+	}
+	quotation, err := h.repo.GetByID(r.Context(), workspaceID, id)
+	if err != nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if service.NormalizeInvoiceDocumentType(quotation.InvoiceType) != service.InvoiceDocumentQuotation {
+		http.Error(w, `{"error":"only quotations can be converted"}`, http.StatusBadRequest)
+		return
+	}
+	num, err := h.repo.GetNextInvoiceNumber(r.Context(), workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate invoice number"}`, http.StatusInternalServerError)
+		return
+	}
+	converted := quotation
+	converted.ID = uuid.Nil
+	converted.InvoiceNumber = num
+	converted.InvoiceType = service.InvoiceDocumentTaxInvoice.DBValue()
+	converted.Status = "draft"
+	converted.AmountPaidPaisa = 0
+	converted.PaidAt = nil
+	converted.QuotationValidUntil = nil
+	converted.CreditNoteInvoiceID = nil
+	converted.CreditNoteReason = nil
+	if converted.TotalPaisa > 0 {
+		converted.AmountInWords = service.AmountInWords(converted.TotalPaisa)
+	}
+	if err := h.repo.Create(r.Context(), &converted); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"convert quotation failed: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusCreated, converted)
+}
+
 // DownloadPDF renders the invoice as a PDF document and streams it to the
 // caller. The frontend uses this for the "Download invoice" button and for
 // email attachments. Requires the PDF service to be wired at construction.
@@ -180,9 +225,9 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	// the PDF layout.
 	var (
 		wsName, wsAddr1, wsAddr2, wsCity, wsPostal, wsGSTIN   string
-		wsPhone, wsEmail, wsWebsite                            string
-		wsBankName, wsBankHolder, wsBankAcc, wsIFSC, wsBranch  string
-		wsSigName, wsTerms, wsFooter                           string
+		wsPhone, wsEmail, wsWebsite                           string
+		wsBankName, wsBankHolder, wsBankAcc, wsIFSC, wsBranch string
+		wsSigName, wsTerms, wsFooter                          string
 	)
 	_ = h.repo.DB.QueryRow(r.Context(), `
 		SELECT
@@ -242,7 +287,7 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	// Build the PDF payload from the repository Invoice. Amounts in the DB
 	// are stored in paisa; convert to rupees for display.
 	payload := service.Invoice{
-		Title:         "Tax Invoice",
+		Title:         service.NormalizeInvoiceDocumentType(inv.InvoiceType).PDFTitle(),
 		InvoiceNumber: inv.InvoiceNumber,
 		IssueDate:     inv.CreatedAt.Format("2 Jan 2006"),
 		SubtotalText:  formatINR(inv.SubtotalPaisa),
