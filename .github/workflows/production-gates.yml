@@ -138,7 +138,8 @@ jobs:
 
       - name: Run semgrep
         id: semgrep
-        continue-on-error: true
+        # SOC2 CC7.1: SAST findings now block the build.
+        # Was advisory (continue-on-error: true) during rollout.
         # --config auto pulls the default Semgrep Registry rule packs
         # (security + best-practice) matched against detected languages.
         # SARIF output uploads to the Security tab below.
@@ -179,7 +180,8 @@ jobs:
       # arbitrary code in CI with security-events: write permission.
       - name: Run trivy filesystem scan
         id: trivy
-        continue-on-error: true
+        # SOC2 CC7.1: SCA findings (CRITICAL/HIGH) now block the build.
+        # Was advisory (continue-on-error: true) during rollout.
         uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: fs
@@ -190,10 +192,9 @@ jobs:
           # Skip generated / vendored dirs. trivy already has sensible
           # defaults but these are the big ones for this repo.
           skip-dirs: node_modules,_cobolt-output,frontend/.next,backend/vendor
-          # exit-code 0 here because continue-on-error above already
-          # controls blocking behaviour; double-gating would mask the
-          # SARIF upload when findings exist.
-          exit-code: "0"
+          # exit-code 1 causes the step (and job) to fail when CRITICAL/HIGH
+          # findings are found. SARIF still uploads via the always() step below.
+          exit-code: "1"
 
       - name: Upload trivy SARIF
         if: always()
