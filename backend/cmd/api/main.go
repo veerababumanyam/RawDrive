@@ -116,7 +116,7 @@ type onboardingWorkspaceCreator struct {
 	pool  *pgxpool.Pool
 }
 
-func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateCode, businessName string) (string, error) {
+func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateCode, businessName, planTier string) (string, error) {
 	// Resolve state code to integer state ID.
 	// Frontend may send 2-letter codes ("TG"), ISO codes ("IN-TG"), state names ("Telangana"),
 	// or numeric IDs ("24"). Try all patterns for maximum compatibility.
@@ -146,6 +146,7 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 		StateID:      stateIDStr,
 		OwnerID:      userID,
 		BusinessName: businessName,
+		PlanTier:     planTier,
 	})
 	if err != nil {
 		return "", err
@@ -159,6 +160,17 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 		ws.ID, userID)
 
 	return ws.ID, nil
+}
+
+// onboardingUserUpdater adapts user.Service into the onboarding.UserUpdater
+// interface so the onboarding service can persist phone during profile setup.
+type onboardingUserUpdater struct {
+	userSvc user.Service
+}
+
+func (o *onboardingUserUpdater) UpdatePhone(ctx context.Context, userID, phone string) error {
+	_, err := o.userSvc.Update(ctx, userID, user.UpdateUserInput{Phone: &phone})
+	return err
 }
 
 // envOrFatal tries multiple env var names in order. Returns the first non-empty value.
@@ -443,6 +455,7 @@ func main() {
 		onbRepo,
 		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool},
 		eventPublisher,
+		onboarding.WithUserUpdater(&onboardingUserUpdater{userSvc: userSvc}),
 	)
 	onbHandler := onboarding.NewHandler(onbSvc)
 
@@ -547,6 +560,14 @@ func main() {
 		r.Use(middleware.JWTAuth(jwtSvc))
 		r.Mount("/auth/mfa", mfaHandler.AuthenticatedRoutes())
 		r.Mount("/api/v1/auth/mfa", mfaHandler.AuthenticatedRoutes())
+	})
+
+	// M18: user profile routes (JWT-only — no tenant context required).
+	profileHandler := handler.NewProfileHandler(userSvc)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.JWTAuth(jwtSvc))
+		r.Get("/api/v1/users/profile", profileHandler.GetProfile)
+		r.Put("/api/v1/users/profile", profileHandler.UpdateProfile)
 	})
 
 	// ──────────────────────── M2: Asset Management & Gallery ────────────────────────

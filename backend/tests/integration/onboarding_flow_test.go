@@ -17,11 +17,11 @@ import (
 // ──────────────────────────── Onboarding Stubs ────────────────────────────
 
 type onbWorkspaceCreator struct {
-	created []struct{ UserID, StateID, BusinessName string }
+	created []struct{ UserID, StateID, BusinessName, PlanTier string }
 }
 
-func (o *onbWorkspaceCreator) CreateWorkspace(_ context.Context, userID, stateID, businessName string) (string, error) {
-	o.created = append(o.created, struct{ UserID, StateID, BusinessName string }{userID, stateID, businessName})
+func (o *onbWorkspaceCreator) CreateWorkspace(_ context.Context, userID, stateID, businessName, planTier string) (string, error) {
+	o.created = append(o.created, struct{ UserID, StateID, BusinessName, PlanTier string }{userID, stateID, businessName, planTier})
 	return "ws-" + userID, nil
 }
 

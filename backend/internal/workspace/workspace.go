@@ -34,6 +34,7 @@ type Workspace struct {
 	StateID      string
 	OwnerID      string
 	BusinessName string
+	PlanTier     string
 }
 
 type CreateWorkspaceInput struct {
@@ -41,6 +42,7 @@ type CreateWorkspaceInput struct {
 	StateID      string
 	OwnerID      string
 	BusinessName string
+	PlanTier     string
 }
 
 type Repository interface {
@@ -83,12 +85,18 @@ func (s *service) Create(ctx context.Context, input CreateWorkspaceInput) (*Work
 		name = input.BusinessName
 	}
 
+	planTier := input.PlanTier
+	if planTier == "" {
+		planTier = "free"
+	}
+
 	ws := &Workspace{
 		ID:           generateID(),
 		Name:         name,
 		StateID:      input.StateID,
 		OwnerID:      input.OwnerID,
 		BusinessName: input.BusinessName,
+		PlanTier:     planTier,
 	}
 
 	created, err := s.repo.Create(ctx, ws)

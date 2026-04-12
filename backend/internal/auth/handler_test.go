@@ -28,7 +28,7 @@ func newMockUserService() *mockUserService {
 	return &mockUserService{users: make(map[string]string)}
 }
 
-func (m *mockUserService) Create(_ context.Context, email, password string, _ int) (string, error) {
+func (m *mockUserService) Create(_ context.Context, email, password, _, _ string, _ int) (string, error) {
 	if m.errOnCreate {
 		return "", errors.New("mock create error")
 	}

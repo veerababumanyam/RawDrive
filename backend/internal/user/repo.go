@@ -71,8 +71,8 @@ func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
 
 func (r *PgRepo) Update(ctx context.Context, u *User) (*User, error) {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE users SET display_name = $1, avatar_url = $2, updated_at = now() WHERE id = $3`,
-		u.DisplayName, u.AvatarURL, u.ID,
+		`UPDATE users SET display_name = $1, avatar_url = $2, phone = NULLIF($3, ''), updated_at = now() WHERE id = $4`,
+		u.DisplayName, u.AvatarURL, u.Phone, u.ID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user repo update: %w", err)

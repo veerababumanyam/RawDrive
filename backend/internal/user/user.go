@@ -30,9 +30,10 @@ type User struct {
 }
 
 type CreateUserInput struct {
-	Email    string
-	Phone    string
-	Password string
+	Email       string
+	Phone       string
+	Password    string
+	DisplayName string
 	// StateID threads the mandatory state selection from the register
 	// handler through to the SQL INSERT. 0 means "not provided" (the
 	// register handler already rejects <= 0 before calling Create).
@@ -42,6 +43,7 @@ type CreateUserInput struct {
 type UpdateUserInput struct {
 	DisplayName *string
 	AvatarURL   *string
+	Phone       *string
 }
 
 type Repository interface {
@@ -76,9 +78,10 @@ func generateID() string {
 
 func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, error) {
 	u := &User{
-		ID:    generateID(),
-		Email: input.Email,
-		Phone: input.Phone,
+		ID:          generateID(),
+		Email:       input.Email,
+		Phone:       input.Phone,
+		DisplayName: input.DisplayName,
 	}
 
 	if input.StateID > 0 {
@@ -117,6 +120,9 @@ func (s *service) Update(ctx context.Context, id string, input UpdateUserInput) 
 	}
 	if input.AvatarURL != nil {
 		u.AvatarURL = *input.AvatarURL
+	}
+	if input.Phone != nil {
+		u.Phone = *input.Phone
 	}
 
 	return s.repo.Update(ctx, u)

@@ -145,7 +145,7 @@ export function RegisterForm() {
   async function handleRegister(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
-    if (!email.trim() || !termsAccepted) {
+    if (!email.trim() || !fullName.trim() || !termsAccepted) {
       return;
     }
 
@@ -450,13 +450,17 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-name"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
+          className="ml-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Full name
+          <span className="text-feedback-error" aria-hidden="true">
+            *
+          </span>
         </label>
         <input
           id="register-name"
           type="text"
+          required
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
           placeholder="Arjun Malhotra"
@@ -550,7 +554,7 @@ export function RegisterForm() {
 
       <button
         type="submit"
-        disabled={loading || !email.trim() || !termsAccepted || stateID == null}
+        disabled={loading || !email.trim() || !fullName.trim() || !termsAccepted || stateID == null}
         title={stateID == null ? "Select your state first" : undefined}
         className="btn-primary h-14 w-full font-headline disabled:cursor-not-allowed disabled:opacity-60"
       >

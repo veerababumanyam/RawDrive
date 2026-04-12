@@ -25,8 +25,8 @@ func NewAuthAdapter(svc Service) *AuthAdapter {
 // mandatory Indian state selection from the register form; it is
 // persisted directly in the INSERT so the user row never has a NULL
 // state_id even if onboarding is skipped or interrupted.
-func (a *AuthAdapter) Create(ctx context.Context, email, password string, stateID int) (string, error) {
-	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, StateID: stateID})
+func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, phone string, stateID int) (string, error) {
+	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, DisplayName: displayName, Phone: phone, StateID: stateID})
 	if err != nil {
 		return "", err
 	}

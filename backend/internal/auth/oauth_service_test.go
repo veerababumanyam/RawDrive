@@ -42,6 +42,29 @@ func (m *mockUserStore) Create(ctx context.Context, u *auth.User) (*auth.User, e
 	return u, nil
 }
 
+func (m *mockUserStore) BackfillProfile(_ context.Context, userID, displayName, avatarURL string) error {
+	var target *auth.User
+	if u, ok := m.users[userID]; ok {
+		target = u
+	} else {
+		for _, u := range m.users {
+			if u.ID == userID {
+				target = u
+				break
+			}
+		}
+	}
+	if target != nil {
+		if displayName != "" {
+			target.DisplayName = displayName
+		}
+		if avatarURL != "" {
+			target.AvatarURL = avatarURL
+		}
+	}
+	return nil
+}
+
 func (m *mockUserStore) LinkOAuth(ctx context.Context, userID, provider, providerID string) error {
 	return nil
 }

@@ -142,6 +142,23 @@ func TestUpdateUserProfile(t *testing.T) {
 	assert.Equal(t, "https://example.com/new-avatar.jpg", updated.AvatarURL)
 }
 
+func TestUpdateUserProfile_Phone(t *testing.T) {
+	svc := newTestUserService()
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, user.CreateUserInput{Email: "phone@example.com"})
+	require.NoError(t, err)
+
+	updated, err := svc.Update(ctx, created.ID, user.UpdateUserInput{
+		Phone: strPtr("+919876543210"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "+919876543210", updated.Phone)
+	// Display name and avatar should remain unchanged.
+	assert.Equal(t, "", updated.DisplayName)
+	assert.Equal(t, "", updated.AvatarURL)
+}
+
 func strPtr(s string) *string {
 	return &s
 }
