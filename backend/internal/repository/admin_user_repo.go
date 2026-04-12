@@ -111,7 +111,7 @@ func NewAdminUserRepo(pool *pgxpool.Pool) *AdminUserRepo {
 // collector binds directly onto the struct fields.
 const adminUserSelectColumns = `
 		u.id,
-		u.display_name AS full_name,
+		COALESCE(u.display_name, '') AS full_name,
 		u.email,
 		u.phone,
 		u.platform_role,
