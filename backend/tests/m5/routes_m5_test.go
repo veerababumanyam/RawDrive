@@ -16,13 +16,15 @@ import (
 func TestRegisterM5Routes_MarketplaceEndpoints(t *testing.T) {
 	pool := getTestDB(t)
 	r := chi.NewRouter()
-	handler.RegisterM5Routes(r, handler.M5Dependencies{
+	deps := handler.M5Dependencies{
 		DB:             pool,
 		FreelancerRepo: repository.NewFreelancerRepo(pool),
 		GearRepo:       repository.NewGearRepo(pool),
 		MessagingRepo:  repository.NewMessagingRepo(pool),
 		ModerationRepo: repository.NewModerationRepo(pool),
-	})
+	}
+	handler.RegisterM5PublicRoutes(r, deps)
+	handler.RegisterM5Routes(r, deps)
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
@@ -42,13 +44,15 @@ func TestRegisterM5Routes_MarketplaceEndpoints(t *testing.T) {
 func TestRegisterM5Routes_GearEndpoints(t *testing.T) {
 	pool := getTestDB(t)
 	r := chi.NewRouter()
-	handler.RegisterM5Routes(r, handler.M5Dependencies{
+	deps := handler.M5Dependencies{
 		DB:             pool,
 		FreelancerRepo: repository.NewFreelancerRepo(pool),
 		GearRepo:       repository.NewGearRepo(pool),
 		MessagingRepo:  repository.NewMessagingRepo(pool),
 		ModerationRepo: repository.NewModerationRepo(pool),
-	})
+	}
+	handler.RegisterM5PublicRoutes(r, deps)
+	handler.RegisterM5Routes(r, deps)
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
@@ -63,13 +67,15 @@ func TestRegisterM5Routes_GearEndpoints(t *testing.T) {
 func TestRegisterM5Routes_PublicEndpointsNoAuth(t *testing.T) {
 	pool := getTestDB(t)
 	r := chi.NewRouter()
-	handler.RegisterM5Routes(r, handler.M5Dependencies{
+	deps := handler.M5Dependencies{
 		DB:             pool,
 		FreelancerRepo: repository.NewFreelancerRepo(pool),
 		GearRepo:       repository.NewGearRepo(pool),
 		MessagingRepo:  repository.NewMessagingRepo(pool),
 		ModerationRepo: repository.NewModerationRepo(pool),
-	})
+	}
+	handler.RegisterM5PublicRoutes(r, deps)
+	handler.RegisterM5Routes(r, deps)
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
