@@ -46,6 +46,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // event that FaceFilter dispatches after fetching cluster assets.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
+  // E71-S1: Album state
+  const [albums, setAlbums] = useState<{ id: string; name: string; gallery_id: string }[]>([]);
+  const [activeAlbum, setActiveAlbum] = useState<string | null>(null);
+  const [newAlbumName, setNewAlbumName] = useState("");
+  const [showAlbumCreate, setShowAlbumCreate] = useState(false);
+
   // E68-S1: Bulk selection state
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
@@ -137,6 +143,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     return () => {
       cancelled = true;
     };
+  }, [id]);
+
+  // E71-S1: Fetch albums for this gallery
+  useEffect(() => {
+    const t = getStoredAccessToken();
+    if (!t) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${id}/albums`, {
+      headers: { Authorization: `Bearer ${t}` },
+    })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setAlbums(Array.isArray(data) ? data : data.data || []))
+      .catch(() => setAlbums([]));
   }, [id]);
 
   // Subscribe to face-filter events from the FaceFilter component. The
@@ -508,6 +526,51 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </button>
               </div>
             </div>
+
+            {/* E71-S1: Album tabs */}
+            {albums.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setActiveAlbum(null)}
+                  className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", !activeAlbum ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
+                >
+                  All Photos
+                </button>
+                {albums.map((album) => (
+                  <button key={album.id} onClick={() => setActiveAlbum(album.id)}
+                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", activeAlbum === album.id ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
+                  >
+                    {album.name}
+                  </button>
+                ))}
+                {showAlbumCreate ? (
+                  <div className="flex items-center gap-1">
+                    <input type="text" value={newAlbumName} onChange={(e) => setNewAlbumName(e.target.value)}
+                      placeholder="Album name" className="px-2 py-1 text-xs rounded-lg border border-border-default bg-surface-sunken focus:outline-none focus:border-accent-primary w-32"
+                      autoFocus onKeyDown={async (e) => {
+                        if (e.key === "Enter" && newAlbumName.trim()) {
+                          const t = getStoredAccessToken(); if (!t) return;
+                          await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${id}/albums`, {
+                            method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: newAlbumName.trim() }),
+                          });
+                          setNewAlbumName(""); setShowAlbumCreate(false);
+                          window.location.reload();
+                        }
+                        if (e.key === "Escape") { setShowAlbumCreate(false); setNewAlbumName(""); }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button onClick={() => setShowAlbumCreate(true)} className="px-2 py-1.5 text-xs text-text-tertiary hover:text-accent-primary">+ Album</button>
+                )}
+              </div>
+            )}
+            {assets.length > 0 && albums.length === 0 && (
+              <button onClick={() => setShowAlbumCreate(true)} className="text-xs text-text-tertiary hover:text-accent-primary">
+                + Create Album
+              </button>
+            )}
 
             {/* FaceFilter surfaces only when we have an auth token and at
                 least one asset — before uploads there's nothing to

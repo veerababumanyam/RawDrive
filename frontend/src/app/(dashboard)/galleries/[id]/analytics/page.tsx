@@ -142,9 +142,51 @@ export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
+      {/* Per-photo analytics (M22 E73-S1) */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <PerPhotoSection title="Most Viewed Photos" galleryId={id} metric="views" token={token} days={days} />
+        <PerPhotoSection title="Most Downloaded Photos" galleryId={id} metric="downloads" token={token} days={days} />
+      </div>
+
       {daily.length === 0 && !loading && (
         <div className="surface-panel px-6 py-14 text-center text-sm text-text-secondary">
           No analytics data yet. Analytics will appear as clients view and interact with your gallery.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PerPhotoSection({ title, galleryId, metric, token, days }: {
+  title: string; galleryId: string; metric: "views" | "downloads"; token: string | null; days: number;
+}) {
+  const [items, setItems] = useState<{ asset_id: string; views: number; downloads: number; filename?: string }[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+    fetch(`${apiUrl}/api/v1/galleries/${galleryId}/analytics/top-${metric}?days=${days}&limit=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => setItems(d.data || []))
+      .catch(() => setItems([]));
+  }, [galleryId, metric, token, days]);
+
+  return (
+    <div className="surface-panel p-5 space-y-3">
+      <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+      {items.length === 0 ? (
+        <p className="text-xs text-text-tertiary py-4 text-center">No data yet</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item, i) => (
+            <div key={item.asset_id} className="flex items-center gap-3 text-sm">
+              <span className="w-6 text-center text-xs text-text-tertiary">{i + 1}</span>
+              <div className="flex-1 truncate text-text-primary">{item.filename || item.asset_id.slice(0, 8)}</div>
+              <span className="text-xs font-medium text-text-secondary">{metric === "views" ? item.views : item.downloads}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

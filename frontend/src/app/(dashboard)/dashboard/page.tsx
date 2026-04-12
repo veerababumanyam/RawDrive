@@ -341,7 +341,61 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* E76-S1: Gallery Activity Widget */}
+          <section className="surface-panel p-5 space-y-4">
+            <h2 className="text-base font-semibold text-text-primary">Gallery Activity</h2>
+            <GalleryActivityWidget />
+          </section>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+function GalleryActivityWidget() {
+  const [stats, setStats] = useState<{ views: number; downloads: number; selections: number; activeGalleries: number } | null>(null);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+    fetch(`${apiUrl}/api/v1/dashboard/gallery-activity?days=7`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.data) setStats(d.data); })
+      .catch(() => {});
+  }, []);
+
+  if (!stats) {
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        {["Views (7d)", "Downloads (7d)", "Selections (7d)", "Active Galleries"].map((label) => (
+          <div key={label} className="rounded-xl bg-surface-sunken p-3 text-center">
+            <p className="text-lg font-bold text-text-primary">—</p>
+            <p className="text-[10px] text-text-tertiary mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="rounded-xl bg-surface-sunken p-3 text-center">
+        <p className="text-lg font-bold text-text-primary">{stats.views.toLocaleString()}</p>
+        <p className="text-[10px] text-text-tertiary mt-0.5">Views (7d)</p>
+      </div>
+      <div className="rounded-xl bg-surface-sunken p-3 text-center">
+        <p className="text-lg font-bold text-text-primary">{stats.downloads.toLocaleString()}</p>
+        <p className="text-[10px] text-text-tertiary mt-0.5">Downloads (7d)</p>
+      </div>
+      <div className="rounded-xl bg-surface-sunken p-3 text-center">
+        <p className="text-lg font-bold text-text-primary">{stats.selections.toLocaleString()}</p>
+        <p className="text-[10px] text-text-tertiary mt-0.5">Selections (7d)</p>
+      </div>
+      <div className="rounded-xl bg-surface-sunken p-3 text-center">
+        <p className="text-lg font-bold text-text-primary">{stats.activeGalleries}</p>
+        <p className="text-[10px] text-text-tertiary mt-0.5">Active Galleries</p>
       </div>
     </div>
   );
