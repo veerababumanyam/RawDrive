@@ -150,7 +150,14 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
       ) : (
         <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4" aria-label={`Grid view for gallery ${slug}`}>
           {visibleAssets.map((asset) => {
+            // Backend thumbnail worker emits keys thumb_lg / thumb_md
+            // / thumb_sm (prefixed) — not the legacy lg/md/sm shape
+            // some earlier code paths expected. Try both so pre-fix
+            // gallery rows still render.
             const thumbUrl =
+              asset.thumbnail_urls?.thumb_lg ||
+              asset.thumbnail_urls?.thumb_md ||
+              asset.thumbnail_urls?.thumb_sm ||
               asset.thumbnail_urls?.lg ||
               asset.thumbnail_urls?.md ||
               asset.thumbnail_urls?.sm;

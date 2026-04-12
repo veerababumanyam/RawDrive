@@ -26,7 +26,20 @@ export default function AdminRevenuePage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     Promise.all([getRevenueDashboard(token), getRevenueTimeSeries(token, { period: "monthly" })])
-      .then(([rev, ts]) => { setRevenue(rev); setTimeSeries(ts); setError(null); })
+      .then(([rev, ts]) => {
+        // Backend returns null for empty state_breakdown and null for
+        // empty time-series arrays. Coerce to empty arrays so the
+        // page's .map() calls don't throw on undefined. Same pattern
+        // we've been applying across every list page touched during
+        // UAT on 2026-04-12.
+        const safeRev = rev ? {
+          ...rev,
+          state_breakdown: Array.isArray(rev.state_breakdown) ? rev.state_breakdown : [],
+        } : rev;
+        setRevenue(safeRev);
+        setTimeSeries(Array.isArray(ts) ? ts : []);
+        setError(null);
+      })
       .catch(() => setError("Failed to load revenue data"))
       .finally(() => setLoading(false));
   }, []);

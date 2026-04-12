@@ -1215,20 +1215,32 @@ func main() {
 			http.Error(w, `{"error":"missing key"}`, http.StatusBadRequest)
 			return
 		}
-		// Verify JWT — accept Bearer header OR ?token=... for <img src>.
-		tokenStr := ""
-		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-			tokenStr = strings.TrimPrefix(h, "Bearer ")
-		} else if q := r.URL.Query().Get("token"); q != "" {
-			tokenStr = q
-		}
-		if tokenStr == "" {
-			http.Error(w, `{"error":"unauthenticated"}`, http.StatusUnauthorized)
-			return
-		}
-		if _, err := jwtSvc.ParseAccessToken(r.Context(), tokenStr); err != nil {
-			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-			return
+		// Public gallery access: thumbnails/* objects are derivative
+		// renders (small JPEG/WebP previews) and are safe to serve
+		// anonymously because they are the exact bytes a visitor
+		// already receives from a /g/{slug} client gallery. Originals
+		// (keyed under <workspace>/<upload>/original.<ext>) still
+		// require a bearer token. This is what unlocked the public
+		// gallery grid during UAT — otherwise anonymous visitors
+		// hit 401 on every <img src>.
+		isPublicThumbnail := strings.HasPrefix(key, "thumbnails/")
+
+		if !isPublicThumbnail {
+			// Verify JWT — accept Bearer header OR ?token=... for <img src>.
+			tokenStr := ""
+			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+				tokenStr = strings.TrimPrefix(h, "Bearer ")
+			} else if q := r.URL.Query().Get("token"); q != "" {
+				tokenStr = q
+			}
+			if tokenStr == "" {
+				http.Error(w, `{"error":"unauthenticated"}`, http.StatusUnauthorized)
+				return
+			}
+			if _, err := jwtSvc.ParseAccessToken(r.Context(), tokenStr); err != nil {
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
 		}
 
 		rc, err := storageProvider.Get(r.Context(), key)
