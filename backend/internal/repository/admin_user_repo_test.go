@@ -100,7 +100,10 @@ func TestAdminUserFilter_SortMapping(t *testing.T) {
 
 func TestAdminUserRow_Fields(t *testing.T) {
 	now := time.Now()
-	stateID := uuid.New()
+	// state_id is the integer PK from states.id, not a UUID. The
+	// repo struct field flipped to *int32 in the 2026-04-12 admin
+	// users 500 fix — this test fixture followed suit.
+	stateID := int32(29)
 	stateName := "Karnataka"
 	tier := "pro"
 	tierName := "Pro"
