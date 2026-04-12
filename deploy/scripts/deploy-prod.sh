@@ -21,7 +21,7 @@ SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="docker-compose.prod-app.yml"
 DEPLOY_DIR="/opt/rawdrive/app/deploy"
-HEALTH_URL="http://127.0.0.1:8080/api/v1/health"
+HEALTH_URL="http://127.0.0.1:8080/health"
 HEALTH_RETRIES=30
 HEALTH_INTERVAL=5
 
