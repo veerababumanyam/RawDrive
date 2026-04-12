@@ -51,6 +51,9 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 		// Public routes (no auth required)
 		r.Get("/freelancers", marketplaceHandler.ListFreelancers)
 		r.Get("/freelancers/{id}", marketplaceHandler.GetFreelancer)
+		// Availability is public-readable (clients browsing the
+		// marketplace need to see "next available" on the card).
+		r.Get("/freelancers/{id}/availability", marketplaceHandler.GetFreelancerAvailability)
 		r.Get("/gear", gearHandler.ListGear)
 		r.Get("/gear/{id}", gearHandler.GetGear)
 
@@ -59,6 +62,9 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 			// Freelancer listings
 			r.Post("/freelancers", marketplaceHandler.CreateFreelancerListing)
 			r.Put("/freelancers/{id}", marketplaceHandler.UpdateFreelancerListing)
+			// Availability (authenticated mutation). The GET is
+			// public above.
+			r.Put("/freelancers/{id}/availability", marketplaceHandler.UpdateFreelancerAvailability)
 
 			// Gear listings
 			r.Post("/gear", gearHandler.CreateGearListing)
