@@ -115,6 +115,39 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 	return nil
 }
 
+// Duplicate creates a copy of a gallery with new ID/slug but same settings,
+// design config, and album structure. Does NOT copy assets or proofing data.
+func (r *GalleryRepo) Duplicate(ctx context.Context, sourceID uuid.UUID, newTitle string, createdBy uuid.UUID) (*Gallery, error) {
+	src, err := r.GetByID(ctx, sourceID)
+	if err != nil || src == nil {
+		return nil, fmt.Errorf("gallery repo duplicate: source not found")
+	}
+
+	dup := &Gallery{
+		ID:              uuid.New(),
+		WorkspaceID:     src.WorkspaceID,
+		Title:           newTitle,
+		Slug:            generateSlug(newTitle),
+		Description:     src.Description,
+		GalleryType:     src.GalleryType,
+		Settings:        src.Settings,
+		WatermarkConfig: src.WatermarkConfig,
+		CoverTemplate:   src.CoverTemplate,
+		CoverConfig:     src.CoverConfig,
+		DownloadEnabled: src.DownloadEnabled,
+		SortPreference:  src.SortPreference,
+		WhatsappTemplate: src.WhatsappTemplate,
+		MaxSelections:   src.MaxSelections,
+		Status:          "draft",
+		CreatedBy:       &createdBy,
+	}
+
+	if err := r.Create(ctx, dup); err != nil {
+		return nil, fmt.Errorf("gallery repo duplicate create: %w", err)
+	}
+	return dup, nil
+}
+
 // GetByID retrieves a gallery by ID.
 func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, error) {
 	g := &Gallery{}

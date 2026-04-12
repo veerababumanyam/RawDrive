@@ -144,6 +144,11 @@ func (s *GalleryService) ListAssets(ctx context.Context, galleryID uuid.UUID) ([
 	return s.galleryAssetRepo.ListByGallery(ctx, galleryID)
 }
 
+// DuplicateGallery creates a copy of a gallery with new ID/slug but same config.
+func (s *GalleryService) DuplicateGallery(ctx context.Context, sourceID uuid.UUID, newTitle string, createdBy uuid.UUID) (*repository.Gallery, error) {
+	return s.galleryRepo.Duplicate(ctx, sourceID, newTitle, createdBy)
+}
+
 // ReorderAssets updates sort_order for multiple assets in a gallery.
 func (s *GalleryService) ReorderAssets(ctx context.Context, galleryID uuid.UUID, items []repository.ReorderItem) error {
 	return s.galleryAssetRepo.Reorder(ctx, galleryID, items)

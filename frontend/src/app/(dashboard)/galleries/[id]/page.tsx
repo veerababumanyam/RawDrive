@@ -46,6 +46,36 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // event that FaceFilter dispatches after fetching cluster assets.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
+  // E68-S1: Bulk selection state
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const toggleAssetSelection = (assetId: string) => {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(assetId)) next.delete(assetId); else next.add(assetId);
+      return next;
+    });
+  };
+  const selectAllAssets = () => {
+    setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[]));
+  };
+  const clearSelection = () => { setSelectedAssetIds(new Set()); setBulkMode(false); };
+  const handleBulkDelete = async () => {
+    if (selectedAssetIds.size === 0 || !confirm(`Delete ${selectedAssetIds.size} photos? This cannot be undone.`)) return;
+    const t = getStoredAccessToken();
+    if (!t) return;
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/assets/bulk`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", asset_ids: Array.from(selectedAssetIds) }),
+      });
+      clearSelection();
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk delete failed");
+    }
+  };
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -449,13 +479,27 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Assets</h2>
               <div className="flex items-center gap-3">
-                <p className="text-sm text-text-secondary">
-                  {assets.length === 0
-                    ? "No assets yet"
-                    : (faceFilterIds || proofingFilter)
-                      ? `${visibleAssets.length} of ${assets.length} assets`
-                      : `${assets.length} assets`}
-                </p>
+                {bulkMode ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-secondary">{selectedAssetIds.size} of {visibleAssets.length} selected</span>
+                    <button onClick={selectAllAssets} className="text-xs text-accent-primary hover:underline">Select All</button>
+                    <button onClick={handleBulkDelete} disabled={selectedAssetIds.size === 0} className="btn-danger px-3 py-1.5 text-xs disabled:opacity-30">Delete</button>
+                    <button onClick={clearSelection} className="text-xs text-text-tertiary hover:underline">Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-text-secondary">
+                      {assets.length === 0
+                        ? "No assets yet"
+                        : (faceFilterIds || proofingFilter)
+                          ? `${visibleAssets.length} of ${assets.length} assets`
+                          : `${assets.length} assets`}
+                    </p>
+                    {assets.length > 0 && (
+                      <button onClick={() => setBulkMode(true)} className="text-xs text-text-tertiary hover:text-text-primary">Select</button>
+                    )}
+                  </>
+                )}
                 <button
                   onClick={handleFileSelect}
                   className="btn-primary px-3 py-1.5 text-xs"
@@ -511,8 +555,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   return (
                     <article
                       key={entry.id}
-                      className="surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg"
+                      className={cn("surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg relative", bulkMode && entry.asset && selectedAssetIds.has(entry.asset.id) && "ring-2 ring-accent-primary")}
                       onClick={() => {
+                        if (bulkMode && entry.asset) { toggleAssetSelection(entry.asset.id); return; }
                         const idx = assets.findIndex((a) => a.id === entry.id);
                         if (idx !== -1) setLightboxIndex(idx);
                       }}
@@ -527,6 +572,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         }
                       }}
                     >
+                      {bulkMode && entry.asset && (
+                        <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedAssetIds.has(entry.asset.id) ? "bg-accent-primary border-accent-primary" : "border-white/60 bg-black/20"}`}>
+                          {selectedAssetIds.has(entry.asset.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                      )}
                       {previewUrl ? (
                         <img
                           src={previewUrl}

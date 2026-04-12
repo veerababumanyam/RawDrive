@@ -341,6 +341,22 @@ export default function GalleriesPage() {
                         Design
                       </button>
                       <button
+                        onClick={async (e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          const t = getStoredAccessToken(); if (!t) return;
+                          try {
+                            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${g.id}/duplicate`, {
+                              method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+                              body: JSON.stringify({ title: `${g.title} (Copy)` }),
+                            });
+                            if (res.ok) refresh();
+                          } catch { /* ignore */ }
+                        }}
+                        className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
+                      >
+                        Duplicate
+                      </button>
+                      <button
                         onClick={(e) => handleDelete(e, g.id)}
                         className="rounded-full bg-red-500/30 backdrop-blur-sm border border-red-400/30 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500/50 min-h-[36px]"
                       >

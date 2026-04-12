@@ -248,6 +248,52 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
+// DuplicateGallery handles POST /api/v1/galleries/{id}/duplicate
+func (h *GalleryHandler) DuplicateGallery(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	wsIDStr, _ := claims["workspace_id"].(string)
+	userIDStr, _ := claims["user_id"].(string)
+	userID, _ := uuid.Parse(userIDStr)
+	wsID, _ := uuid.Parse(wsIDStr)
+
+	// Verify source gallery belongs to this workspace
+	src, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil || src == nil {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	if src.WorkspaceID != wsID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var input struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Title == "" {
+		input.Title = src.Title + " (Copy)"
+	}
+
+	dup, err := h.gallerySvc.DuplicateGallery(r.Context(), galleryID, input.Title, userID)
+	if err != nil {
+		http.Error(w, `{"error":"duplicate failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(dup)
+}
+
 // ReorderAssets handles PATCH /api/v1/galleries/{id}/assets/reorder
 func (h *GalleryHandler) ReorderAssets(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))

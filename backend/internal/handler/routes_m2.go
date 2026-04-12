@@ -78,6 +78,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/{id}", galleryHandler.GetByID)
 		r.Put("/{id}", galleryHandler.Update)
 		r.Delete("/{id}", galleryHandler.SoftDelete)
+		r.Post("/{id}/duplicate", galleryHandler.DuplicateGallery)
 		r.Post("/{id}/assets", galleryHandler.AddAsset)
 		r.Delete("/{id}/assets/{assetId}", galleryHandler.RemoveAsset)
 		r.Get("/{id}/assets", galleryHandler.ListAssets)
