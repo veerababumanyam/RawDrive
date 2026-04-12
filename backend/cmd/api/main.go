@@ -712,6 +712,23 @@ func main() {
 	var m6Scheduler *scheduler.Scheduler                     // declared here so it can be started below next to workers
 	var publicLeadDispatcher *handler.NotificationDispatcher // set inside protected block, consumed by public lead embed below
 
+	// ──────────────────────── Public marketplace routes ────────────────────────
+	// Freelancer listing browse + detail + availability and gear
+	// browse/detail are intentionally reachable without a bearer token
+	// so anonymous visitors can discover the marketplace from the
+	// public landing page. Mounted BEFORE the authed group so the JWT
+	// middleware never sees them.
+	{
+		marketplaceFreelancerRepo := repository.NewFreelancerRepo(dbPool)
+		marketplaceGearRepo := repository.NewGearRepo(dbPool)
+		handler.RegisterM5PublicRoutes(r, handler.M5Dependencies{
+			DB:             dbPool,
+			FreelancerRepo: marketplaceFreelancerRepo,
+			GearRepo:       marketplaceGearRepo,
+		})
+		log.Println("Public: M5 marketplace read routes registered")
+	}
+
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
 	// All M2, M3, M4 data-plane endpoints require authentication.
 	r.Group(func(api chi.Router) {

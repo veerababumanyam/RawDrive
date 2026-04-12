@@ -21,6 +21,27 @@ type M5Dependencies struct {
 	Events         EventPublisher
 }
 
+// RegisterM5PublicRoutes registers the subset of M5 routes that are
+// intentionally reachable without a bearer token: freelancer listing
+// browse, listing detail, listing availability, and gear browse/detail.
+// Must be mounted OUTSIDE the JWTAuth-protected API group — previously
+// these were nested inside the authed group behind the "public routes
+// (no auth required)" comment, which made the comment a lie: anonymous
+// browsers could not reach them. Mount on the root router before any
+// auth middleware so the marketplace is truly public.
+func RegisterM5PublicRoutes(r chi.Router, deps M5Dependencies) {
+	marketplaceHandler := NewMarketplaceHandler(deps.FreelancerRepo)
+	gearHandler := NewGearHandler(deps.GearRepo, deps.ModerationRepo)
+
+	r.Route("/api/v1/marketplace", func(r chi.Router) {
+		r.Get("/freelancers", marketplaceHandler.ListFreelancers)
+		r.Get("/freelancers/{id}", marketplaceHandler.GetFreelancer)
+		r.Get("/freelancers/{id}/availability", marketplaceHandler.GetFreelancerAvailability)
+		r.Get("/gear", gearHandler.ListGear)
+		r.Get("/gear/{id}", gearHandler.GetGear)
+	})
+}
+
 // RegisterM5Routes registers all M5 (Marketplaces & Communication) routes.
 func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 	// M5 gap-audit fix: introduce a service layer wrapping the M5 repos so
@@ -46,49 +67,34 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 	messagingHandler := NewMessagingHandler(deps.MessagingRepo, deps.ModerationRepo, deps.Events)
 	moderationHandler := NewModerationHandler(deps.ModerationRepo)
 
-	// Marketplace routes
-	r.Route("/api/v1/marketplace", func(r chi.Router) {
-		// Public routes (no auth required)
-		r.Get("/freelancers", marketplaceHandler.ListFreelancers)
-		r.Get("/freelancers/{id}", marketplaceHandler.GetFreelancer)
-		// Availability is public-readable (clients browsing the
-		// marketplace need to see "next available" on the card).
-		r.Get("/freelancers/{id}/availability", marketplaceHandler.GetFreelancerAvailability)
-		r.Get("/gear", gearHandler.ListGear)
-		r.Get("/gear/{id}", gearHandler.GetGear)
+	// Marketplace routes (authenticated subset). The public
+	// browse/detail/availability GET routes are registered separately
+	// via RegisterM5PublicRoutes() on the root router so anonymous
+	// visitors can hit them without a JWT. We use full path strings
+	// here instead of r.Route("/api/v1/marketplace") because chi
+	// refuses to Mount a second subrouter on a prefix the public
+	// registration already claimed — the attempted mount would panic
+	// at startup.
+	r.Post("/api/v1/marketplace/freelancers", marketplaceHandler.CreateFreelancerListing)
+	r.Put("/api/v1/marketplace/freelancers/{id}", marketplaceHandler.UpdateFreelancerListing)
+	r.Put("/api/v1/marketplace/freelancers/{id}/availability", marketplaceHandler.UpdateFreelancerAvailability)
 
-		// Authenticated routes
-		r.Group(func(r chi.Router) {
-			// Freelancer listings
-			r.Post("/freelancers", marketplaceHandler.CreateFreelancerListing)
-			r.Put("/freelancers/{id}", marketplaceHandler.UpdateFreelancerListing)
-			// Availability (authenticated mutation). The GET is
-			// public above.
-			r.Put("/freelancers/{id}/availability", marketplaceHandler.UpdateFreelancerAvailability)
+	r.Post("/api/v1/marketplace/gear", gearHandler.CreateGearListing)
+	r.Put("/api/v1/marketplace/gear/{id}", gearHandler.UpdateGearListing)
+	r.Delete("/api/v1/marketplace/gear/{id}", gearHandler.DeleteGearListing)
 
-			// Gear listings
-			r.Post("/gear", gearHandler.CreateGearListing)
-			r.Put("/gear/{id}", gearHandler.UpdateGearListing)
-			r.Delete("/gear/{id}", gearHandler.DeleteGearListing)
+	r.Post("/api/v1/marketplace/gear/{id}/bookings", gearHandler.CreateBooking)
+	r.Put("/api/v1/marketplace/gear/bookings/{bookingId}", gearHandler.UpdateBookingStatus)
 
-			// Gear bookings (GAP-002 fix)
-			r.Post("/gear/{id}/bookings", gearHandler.CreateBooking)
-			r.Put("/gear/bookings/{bookingId}", gearHandler.UpdateBookingStatus)
+	r.Post("/api/v1/marketplace/inquiries", marketplaceHandler.CreateInquiry)
+	r.Get("/api/v1/marketplace/inquiries", marketplaceHandler.ListInquiries)
+	r.Put("/api/v1/marketplace/inquiries/{id}", marketplaceHandler.UpdateInquiry)
 
-			// Inquiries
-			r.Post("/inquiries", marketplaceHandler.CreateInquiry)
-			r.Get("/inquiries", marketplaceHandler.ListInquiries)
-			r.Put("/inquiries/{id}", marketplaceHandler.UpdateInquiry)
+	r.Post("/api/v1/marketplace/freelancers/{id}/hire", hireRequestHandler.CreateHireRequest)
+	r.Get("/api/v1/marketplace/hire-requests", hireRequestHandler.ListHireRequests)
+	r.Patch("/api/v1/marketplace/hire-requests/{id}/status", hireRequestHandler.UpdateHireRequestStatus)
 
-			// Hire requests (M5 gap-audit fix — previously repo-only)
-			r.Post("/freelancers/{id}/hire", hireRequestHandler.CreateHireRequest)
-			r.Get("/hire-requests", hireRequestHandler.ListHireRequests)
-			r.Patch("/hire-requests/{id}/status", hireRequestHandler.UpdateHireRequestStatus)
-
-			// Freelancer reviews (counterpart to existing ListReviews)
-			r.Post("/freelancers/{id}/reviews", hireRequestHandler.CreateFreelancerReview)
-		})
-	})
+	r.Post("/api/v1/marketplace/freelancers/{id}/reviews", hireRequestHandler.CreateFreelancerReview)
 
 	// Messaging routes (all authenticated)
 	r.Route("/api/v1/messages", func(r chi.Router) {
