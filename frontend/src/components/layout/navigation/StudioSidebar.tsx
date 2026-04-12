@@ -54,7 +54,8 @@ const groups: NavGroup[] = [
     title: "Tools",
     items: [
       { href: "/desktop", label: "Desktop App", icon: Monitor },
-      { href: "/settings/storage", label: "Settings", icon: Settings },
+      { href: "/settings/business", label: "Business Profile", icon: Settings },
+      { href: "/settings/storage", label: "Storage", icon: Settings },
     ],
   },
 ];
