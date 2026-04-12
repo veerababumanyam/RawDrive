@@ -248,6 +248,46 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
+// ReorderAssets handles PATCH /api/v1/galleries/{id}/assets/reorder
+func (h *GalleryHandler) ReorderAssets(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var input struct {
+		Order []struct {
+			AssetID   string `json:"asset_id"`
+			SortOrder int    `json:"sort_order"`
+		} `json:"order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if len(input.Order) == 0 {
+		http.Error(w, `{"error":"order array is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	items := make([]repository.ReorderItem, 0, len(input.Order))
+	for _, item := range input.Order {
+		assetID, err := uuid.Parse(item.AssetID)
+		if err != nil {
+			continue
+		}
+		items = append(items, repository.ReorderItem{AssetID: assetID, SortOrder: item.SortOrder})
+	}
+
+	if err := h.gallerySvc.ReorderAssets(r.Context(), galleryID, items); err != nil {
+		http.Error(w, `{"error":"reorder failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // RemoveAsset handles DELETE /api/v1/galleries/{id}/assets/{assetId}
 func (h *GalleryHandler) RemoveAsset(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))

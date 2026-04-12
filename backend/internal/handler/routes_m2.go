@@ -81,6 +81,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Post("/{id}/assets", galleryHandler.AddAsset)
 		r.Delete("/{id}/assets/{assetId}", galleryHandler.RemoveAsset)
 		r.Get("/{id}/assets", galleryHandler.ListAssets)
+		r.Patch("/{id}/assets/reorder", galleryHandler.ReorderAssets)
 		r.Get("/{id}/assets/timeline", galleryHandler.Timeline)
 
 		// M3 E8-S1 #6: privacy opt-out for face detection pipeline

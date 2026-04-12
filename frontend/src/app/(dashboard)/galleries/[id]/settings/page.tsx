@@ -164,6 +164,138 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         />
       </section>
 
+      {/* Proofing */}
+      <section className="surface-panel space-y-4 p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Proofing</h2>
+        <p className="text-sm text-text-secondary">
+          Control how many photos clients can select for proofing.
+        </p>
+        <div className="flex items-center justify-between gap-4 py-2">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium text-text-primary">Selection limit</p>
+            <p className="text-xs text-text-secondary">Set to 0 for unlimited selections.</p>
+          </div>
+          <input
+            type="number"
+            min={0}
+            value={gallery.max_selections ?? 0}
+            onChange={async (e) => {
+              const val = Math.max(0, parseInt(e.target.value) || 0);
+              const token = getStoredAccessToken();
+              if (!token || !gallery) return;
+              try {
+                const updated = await updateGallerySettings(token, id, { max_selections: val });
+                setGallery(updated);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to update selection limit");
+              }
+            }}
+            className="min-h-[44px] w-24 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+            disabled={saving}
+          />
+        </div>
+      </section>
+
+      {/* Watermark */}
+      <section className="surface-panel space-y-4 p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Watermark</h2>
+        <p className="text-sm text-text-secondary">
+          Add a text watermark to gallery images to protect your work.
+        </p>
+        <ToggleRow
+          label="Enable watermark"
+          description="Overlay a text watermark on images displayed in the public gallery."
+          checked={((gallery.watermark_config as Record<string, unknown>)?.enabled === true)}
+          disabled={saving}
+          onChange={async (v) => {
+            const current = (gallery.watermark_config as Record<string, unknown>) || {};
+            const config = { ...current, enabled: v };
+            const token = getStoredAccessToken();
+            if (!token || !gallery) return;
+            try {
+              const updated = await updateGallerySettings(token, id, { watermark_config: config });
+              setGallery(updated);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed to update watermark");
+            }
+          }}
+        />
+        {((gallery.watermark_config as Record<string, unknown>)?.enabled === true) && (
+          <div className="space-y-4 pl-1">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-text-primary">Watermark text</label>
+              <input
+                type="text"
+                placeholder="Studio Name"
+                value={String((gallery.watermark_config as Record<string, unknown>)?.text || "")}
+                onBlur={async (e) => {
+                  const current = (gallery.watermark_config as Record<string, unknown>) || {};
+                  const config = { ...current, text: e.target.value };
+                  const token = getStoredAccessToken();
+                  if (!token || !gallery) return;
+                  try {
+                    const updated = await updateGallerySettings(token, id, { watermark_config: config });
+                    setGallery(updated);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to update watermark text");
+                  }
+                }}
+                onChange={(e) => {
+                  setGallery({ ...gallery, watermark_config: { ...(gallery.watermark_config as Record<string, unknown> || {}), text: e.target.value } });
+                }}
+                className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-text-primary">
+                Opacity — {Number((gallery.watermark_config as Record<string, unknown>)?.opacity) || 40}%
+              </label>
+              <input
+                type="range" min={10} max={90} step={5}
+                value={Number((gallery.watermark_config as Record<string, unknown>)?.opacity) || 40}
+                onChange={async (e) => {
+                  const current = (gallery.watermark_config as Record<string, unknown>) || {};
+                  const config = { ...current, opacity: Number(e.target.value) };
+                  const token = getStoredAccessToken();
+                  if (!token || !gallery) return;
+                  try {
+                    const updated = await updateGallerySettings(token, id, { watermark_config: config });
+                    setGallery(updated);
+                  } catch (err) { /* non-critical */ }
+                }}
+                className="w-full accent-[var(--accent-primary)]"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-sm font-medium text-text-primary">Position</span>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(["center", "bottom-right", "bottom-left", "diagonal"] as const).map((pos) => (
+                  <button key={pos} type="button"
+                    onClick={async () => {
+                      const current = (gallery.watermark_config as Record<string, unknown>) || {};
+                      const config = { ...current, position: pos };
+                      const token = getStoredAccessToken();
+                      if (!token || !gallery) return;
+                      try {
+                        const updated = await updateGallerySettings(token, id, { watermark_config: config });
+                        setGallery(updated);
+                      } catch (err) { /* non-critical */ }
+                    }}
+                    className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                      (gallery.watermark_config as Record<string, unknown>)?.position === pos
+                        ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                        : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
+                    }`}
+                  >
+                    {pos.replace("-", " ").replace(/\b\w/g, c => c.toUpperCase())}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Password Protection */}
       <section className="surface-panel space-y-4 p-5">
         <h2 className="text-lg font-semibold text-text-primary">Password Protection</h2>

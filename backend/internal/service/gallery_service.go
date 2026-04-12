@@ -144,6 +144,11 @@ func (s *GalleryService) ListAssets(ctx context.Context, galleryID uuid.UUID) ([
 	return s.galleryAssetRepo.ListByGallery(ctx, galleryID)
 }
 
+// ReorderAssets updates sort_order for multiple assets in a gallery.
+func (s *GalleryService) ReorderAssets(ctx context.Context, galleryID uuid.UUID, items []repository.ReorderItem) error {
+	return s.galleryAssetRepo.Reorder(ctx, galleryID, items)
+}
+
 // GetTimeline returns assets grouped by capture/creation date for timeline view.
 func (s *GalleryService) GetTimeline(ctx context.Context, galleryID uuid.UUID) ([]repository.TimelineGroup, error) {
 	if s.assetRepo == nil {
