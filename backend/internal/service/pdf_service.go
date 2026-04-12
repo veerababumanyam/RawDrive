@@ -316,10 +316,14 @@ func (s *PDFService) RenderInvoice(inv Invoice) ([]byte, error) {
 	termsLines := []string{}
 	if inv.Terms != "" {
 		termsLines = append(termsLines, "TERMS & CONDITIONS")
+		// Wrap long term paragraphs at the right-column width
+		// (38 chars) so the two-column layout stays readable.
 		for _, t := range strings.Split(inv.Terms, "\n") {
-			if t != "" {
-				termsLines = append(termsLines, t)
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
 			}
+			termsLines = append(termsLines, wrapText(t, 38)...)
 		}
 	}
 
@@ -420,6 +424,34 @@ func padRightFixed(label, value string, totalWidth int) string {
 		leftFill = 0
 	}
 	return fmt.Sprintf("%s%*s%s", label, leftFill, "", value)
+}
+
+// wrapText breaks a long line into multiple lines each at most `width`
+// characters wide, using a simple greedy word-wrap. Used to fit wide
+// paragraphs (terms & conditions) inside a narrow two-column layout.
+func wrapText(s string, width int) []string {
+	if width <= 0 || len(s) <= width {
+		return []string{s}
+	}
+	words := strings.Fields(s)
+	var out []string
+	var current string
+	for _, w := range words {
+		if current == "" {
+			current = w
+			continue
+		}
+		if len(current)+1+len(w) > width {
+			out = append(out, current)
+			current = w
+		} else {
+			current += " " + w
+		}
+	}
+	if current != "" {
+		out = append(out, current)
+	}
+	return out
 }
 
 // RenderContract produces a contract PDF with a header block and free-form
