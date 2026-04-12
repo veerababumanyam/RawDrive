@@ -83,6 +83,7 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Get("/system/thresholds", health.GetThresholds)
 
 		r.Get("/audit-logs", auditLogs.List)
+		r.Get("/audit-logs/export", auditLogs.Export)
 		r.Get("/audit-logs/{id}", auditLogs.GetDetail)
 
 		// M16 E49-S1 / E49-S2: workspace upload-policy admin endpoints.

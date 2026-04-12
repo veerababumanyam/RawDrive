@@ -64,7 +64,7 @@ type DBContext interface {
 }
 
 type AuditLog interface {
-	LogAccess(ctx context.Context, workspaceID, action string)
+	LogAccess(ctx context.Context, workspaceID, action, ipAddress, userAgent string)
 }
 
 // ──────────────────────────── Tenant Middleware ────────────────────────────
@@ -126,8 +126,21 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 			// Set DB context for RLS
 			_ = db.SetWorkspaceID(r.Context(), wsID)
 
-			// Log access
-			audit.LogAccess(r.Context(), wsID, r.Method+" "+r.URL.Path)
+			// Log access — capture real client IP (proxy-aware) and user-agent
+			clientIP := r.Header.Get("X-Forwarded-For")
+			if clientIP != "" {
+				// X-Forwarded-For may contain multiple IPs; take the first (original client)
+				if i := strings.Index(clientIP, ","); i > 0 {
+					clientIP = strings.TrimSpace(clientIP[:i])
+				}
+			} else if clientIP = r.Header.Get("X-Real-IP"); clientIP == "" {
+				clientIP = r.RemoteAddr
+				// Strip port from host:port
+				if i := strings.LastIndex(clientIP, ":"); i > 0 {
+					clientIP = clientIP[:i]
+				}
+			}
+			audit.LogAccess(r.Context(), wsID, r.Method+" "+r.URL.Path, clientIP, r.UserAgent())
 
 			// Enrich context
 			ctx := context.WithValue(r.Context(), workspaceIDKey, wsID)
