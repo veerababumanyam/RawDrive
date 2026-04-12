@@ -12,6 +12,7 @@
 .obsidian/
 .vscode/
 .idea/
+.claude/
 
 _cobolt-output/
 .worktrees/
@@ -68,3 +69,8 @@ HostingerServerDetails.md
 
 # Local scratch env used during bootstrap (lives in /tmp/, but defensive)
 rawdrive-secrets.env
+
+# Screenshots — root-level captures stay on disk, not in repo
+/*.png
+/*.jpg
+/*.jpeg
