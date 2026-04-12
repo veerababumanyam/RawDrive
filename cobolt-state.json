@@ -24,7 +24,7 @@
     "generate-skills": "skipped",
     "create-claude-md": "completed"
   },
-  "lastUpdated": "2026-04-10T18:00:00.000Z",
+  "lastUpdated": "2026-04-12T08:32:45.351Z",
   "planning": {
     "completedAt": "2026-04-07T13:39:14.048Z",
     "phases": 5,
@@ -45,15 +45,15 @@
     "readinessVerdict": "BUILD_AUTHORIZED",
     "readinessScore": 4.5,
     "firstMilestone": "M1",
-    "featureName": "client-side-upload-abuse-screening",
-    "featureMilestone": "M16",
-    "featureSource": "docs/TechnicalRequirements/Gallery/UPLOAD_CLIENT_SIDE_ABUSE_SCREENING_ARCHITECTURE.md",
-    "lastFeatureRun": "2026-04-10T11:28:01.124Z"
+    "featureName": "faceid-client-experience",
+    "featureMilestone": "M21",
+    "featureSource": "UAT-faceid-audit-2026-04-12",
+    "lastFeatureRun": "2026-04-12T07:50:35.740Z"
   },
-  "currentMilestone": "M15",
+  "currentMilestone": "M21",
   "pipeline": {
     "currentStage": "S5-S6",
-    "currentMilestone": "M3",
+    "currentMilestone": "M21",
     "infra_verified": true,
     "infra_started": true,
     "infra_healthy": true,
@@ -280,93 +280,6 @@
       }
     }
   },
-  "build": {
-    "version": "2.1.0",
-    "currentStep": "08-milestone-complete",
-    "currentMilestone": "M16",
-    "autoMode": true,
-    "parallelMode": false,
-    "startedAt": "2026-04-10T12:05:15.267Z",
-    "fixIterations": 0,
-    "reviewCycles": 0,
-    "phantomRates": {},
-    "agentScoring": {},
-    "mcpAvailability": {
-      "context7": true,
-      "stitch": true,
-      "figma": true,
-      "stitchModel": "GEMINI_3_1_PRO",
-      "github": false,
-      "githubReason": "not configured",
-      "stitchReason": "ok",
-      "figmaReason": "ok"
-    },
-    "milestoneLoop": {
-      "autoMode": true,
-      "currentIteration": 1,
-      "featureMilestone": "M16",
-      "completed": [
-        "M16"
-      ]
-    },
-    "designTokens": true,
-    "storyTracking": {
-      "totalStories": 7,
-      "expectedStories": 7,
-      "completedStories": 0
-    },
-    "totalTasks": 0,
-    "totalWaves": 0,
-    "tddPhase": "refactor-pending",
-    "totalRounds": 5,
-    "currentRound": 5,
-    "currentRoundPhase": "complete",
-    "currentRoundName": "finalize",
-    "currentRoundSubBatch": null,
-    "roundsCompleted": [
-      "round-01-foundation",
-      "round-02-core-logic",
-      "round-03-api-layer",
-      "round-04-frontend",
-      "round-05-finalize"
-    ],
-    "gapAnalysis": null,
-    "designCacheSize": 0,
-    "designMCP": {
-      "stitch": true,
-      "figma": true,
-      "stitchModel": "GEMINI_3_1_PRO"
-    },
-    "openIssues": 0,
-    "resolvedIssues": 0,
-    "startVersion": "0.0.27",
-    "gapFillPhase": "ALL-PHASES-COMPLETE",
-    "gapFillNotes": "Phase A (3 shared utilities, 19 tests). Phase B M3.1 face filter + smart album backend (5 tests). Phase B M3.2 face detection privacy opt-out. Phase B M3.3 asset.ready events. Phase B M4 PDF invoice/contract + notification dispatcher (13 tests). Phase B M5 marketplace service layer + hire requests (12 tests). Phase B M6 KYC docs + period selection + monthly payout scheduler (25 tests). Phase B M7 GDPR delete + workspace lifecycle + activity timeline (6 tests). Phase C M9 API key service + middleware + handler + webhook delivery worker (10 tests). Phase D M10 DSR workflow with 24h dedup + idempotent processing (9 tests). Bonus M13 deferred-FR closures: GAL-FR-115 branding, GAL-FR-107/108 FaceMatch, GAL-FR-130 CSV export, GAL-FR-134 proofing notification, GAL-FR-112 share link access count. 6 commits, ~6500+ lines added, 99+ new tests across 17 packages. All tests pass. Backend builds clean. Migrations 046, 047, 048, 049 applied. Deferred to next session: OpenAPI spec generation (swaggo annotations), CLI tool subproject, frontend FaceFilter component, M9 routes wiring in main.go.",
-    "stepsCompleted": [
-      "00-preflight",
-      "01-milestone-setup",
-      "01a-story-specs",
-      "01b-spec-validation",
-      "02-tdd-red-plan",
-      "03-tdd-green-round-1",
-      "03-tdd-green-round-2",
-      "03-tdd-green-round-3",
-      "03-tdd-green-round-4",
-      "03-tdd-green-round-5",
-      "03a-code-gap-analysis",
-      "03b-integration-smoke",
-      "04-tdd-refactor",
-      "04a-deep-verification",
-      "05-review",
-      "06-fix",
-      "07-validate",
-      "08-milestone-complete"
-    ],
-    "lastUpdated": "2026-04-10T15:07:31.330Z",
-    "lastSessionNote": "M16 Upload Client-Side Abuse Screening COMPLETE through Step 08. Commit 6e0a2fd landed with 38 new + 6 modified files: 4 migrations, 8 Go services/repos, 5 Go handlers + tests, 15 frontend screening files + tests + 3 admin pages, 4 Round 5 finalize files (e2e/infra/docs), 8 step checkpoints. 18/18 backend packages + 26/26 frontend tests green. Version bumped 0.0.35 → 0.0.36 in state. Push/tag/merge NOT auto-executed — awaiting user confirmation because remote state changes warrant explicit approval. Known deferrals: 8 gaps tracked in M16-03a-code-gap-analysis.json (metrics counters, test rig, tier default, perf polish). User can push with: git tag v0.0.36 && git push origin main --tags",
-    "currentVersion": "0.0.36",
-    "lastCommitSha": "6e0a2fd"
-  },
   "gates": {
     "preflight": "passed",
     "planning-regroup": {
@@ -390,7 +303,9 @@
       "timestamp": "2026-04-10T12:03:40.242Z"
     }
   },
-  "checkpoints": {},
+  "checkpoints": {
+    "setup": "passed"
+  },
   "planningArtifacts": {
     "agentGrounding": {
       "exists": true,
@@ -1789,6 +1704,31 @@
       "backendBuild": "pass",
       "trackedEnv": false,
       "gitleaksInstalled": false
+    }
+  },
+  "build": {
+    "version": "2.0.0",
+    "currentStep": "01b-spec-validation",
+    "currentMilestone": "M21",
+    "autoMode": true,
+    "parallelMode": false,
+    "startedAt": "2026-04-12T07:51:47.777Z",
+    "fixIterations": 0,
+    "reviewCycles": 0,
+    "phantomRates": {},
+    "agentScoring": {},
+    "milestoneLoop": {
+      "autoMode": true,
+      "totalMilestones": 1,
+      "completed": [],
+      "currentIteration": 1
+    },
+    "totalTasks": 27,
+    "totalWaves": 5,
+    "storyTracking": {
+      "totalStories": 16,
+      "expectedStories": 16,
+      "completedStories": 0
     }
   }
 }
