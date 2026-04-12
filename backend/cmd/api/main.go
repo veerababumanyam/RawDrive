@@ -518,10 +518,17 @@ func main() {
 	r.With(mfaVerifyLimiter).Post("/api/v1/auth/verify-recovery-code", mfaHandler.VerifyRecoveryCode)
 
 	// Protected routes — JWT auth → tenant context → state check
+	// SOC2 CC6.3: MFA enforcement for photographer workspace routes.
+	// Gated behind MFA_ENFORCE_PHOTOGRAPHERS=1 so rollout is progressive.
+	// When unset (default), RequireMFA is NOT mounted — zero behavioral change.
 	r.Group(func(pr chi.Router) {
 		pr.Use(middleware.JWTAuth(jwtSvc))
 		pr.Use(middleware.TenantContext(dbCtx, auditLog))
 		pr.Use(middleware.RequireState)
+		if os.Getenv("MFA_ENFORCE_PHOTOGRAPHERS") == "1" {
+			pr.Use(middleware.RequireMFA)
+			log.Println("SOC2: MFA enforcement ENABLED for workspace/team routes")
+		}
 
 		pr.Mount("/workspace", wsHandler.Routes())
 		pr.Mount("/team", teamHandler.Routes())
@@ -731,9 +738,13 @@ func main() {
 
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
 	// All M2, M3, M4 data-plane endpoints require authentication.
+	// SOC2 CC6.3: MFA enforcement gated behind MFA_ENFORCE_PHOTOGRAPHERS=1.
 	r.Group(func(api chi.Router) {
 		api.Use(middleware.JWTAuth(jwtSvc))
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
+		if os.Getenv("MFA_ENFORCE_PHOTOGRAPHERS") == "1" {
+			api.Use(middleware.RequireMFA)
+		}
 
 		// M2 + M11 Protected routes
 		m2Deps := handler.M2Dependencies{
