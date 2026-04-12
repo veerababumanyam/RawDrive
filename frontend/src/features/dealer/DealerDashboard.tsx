@@ -5,9 +5,15 @@ import { useState, useEffect } from "react";
 import { getDealerDashboard, type Dealer } from "@/lib/api/dealer";
 import { getStoredAccessToken } from "@/lib/auth";
 
+// Same pattern as DealerAdminReview: dealer responses only carry state_id,
+// so we look up id → name from GET /api/v1/states once on mount to render
+// a human-readable state label instead of the cosmetic "#24".
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
 export default function DealerDashboard() {
   const [dealer, setDealer] = useState<Dealer | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stateNames, setStateNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const storedToken = getStoredAccessToken();
@@ -15,6 +21,17 @@ export default function DealerDashboard() {
       .then(setDealer)
       .catch(() => setDealer(null))
       .finally(() => setLoading(false));
+
+    fetch(`${API_BASE}/api/v1/states`)
+      .then((res) => (res.ok ? res.json() : { states: [] }))
+      .then((body: { states?: { id: number; name: string }[] }) => {
+        const map: Record<number, string> = {};
+        for (const s of body.states ?? []) map[s.id] = s.name;
+        setStateNames(map);
+      })
+      .catch(() => {
+        /* non-fatal — card falls back to the raw id */
+      });
   }, []);
 
   if (loading) {
@@ -87,7 +104,7 @@ export default function DealerDashboard() {
         <div className="glass-card p-6">
           <p className="text-sm text-text-secondary">State</p>
           <p className="text-2xl font-semibold text-text-primary mt-1">
-            #{dealer.state_id}
+            {stateNames[dealer.state_id] ?? `#${dealer.state_id}`}
           </p>
         </div>
         <div className="glass-card p-6">
