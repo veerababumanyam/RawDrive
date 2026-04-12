@@ -3,8 +3,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -61,6 +64,28 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"gallery not published"}`, http.StatusNotFound)
 		return
 	}
+
+	// M19 F-009: Gallery expiry enforcement
+	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
+		respondJSON(w, http.StatusGone, map[string]interface{}{
+			"expired":    true,
+			"expired_at": gallery.ExpiresAt,
+			"title":      gallery.Title,
+		})
+		return
+	}
+
+	// M19 F-009: Enrich settings with computed fields for the public client
+	if gallery.Settings == nil {
+		gallery.Settings = make(map[string]interface{})
+	}
+	// Cover template data
+	if gallery.CoverTemplate != "" && gallery.CoverTemplate != "none" {
+		gallery.Settings["cover_template"] = gallery.CoverTemplate
+		gallery.Settings["cover_config"] = gallery.CoverConfig
+	}
+	// Password protection indicator (PasswordHash is json:"-" so never leaks)
+	gallery.Settings["has_password"] = gallery.PasswordHash != nil && *gallery.PasswordHash != ""
 
 	respondJSON(w, http.StatusOK, gallery)
 }
@@ -317,4 +342,88 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 		Threshold:         threshold,
 		FallbackAvailable: true,
 	})
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// M21: Public Asset Download
+// ──────────────────────────────────────────────────────────────────────────────
+
+// PublicAssetDownload handles GET /api/v1/public/galleries/{slug}/assets/{assetId}/download.
+// Streams the original file from R2 storage for published galleries that have
+// downloads enabled. No JWT required — this is a public endpoint.
+func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
+		return
+	}
+
+	assetIDStr := chi.URLParam(r, "assetId")
+	assetID, err := uuid.Parse(assetIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
+		return
+	}
+
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// M19 F-009: Gallery expiry enforcement
+	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
+		http.Error(w, `{"error":"gallery expired"}`, http.StatusGone)
+		return
+	}
+
+	if !gallery.DownloadEnabled {
+		http.Error(w, `{"error":"downloads disabled for this gallery"}`, http.StatusForbidden)
+		return
+	}
+
+	// Verify the asset belongs to this gallery
+	galleryAssets, err := h.gallerySvc.ListAssets(r.Context(), gallery.ID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	found := false
+	for _, ga := range galleryAssets {
+		if ga.AssetID == assetID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, `{"error":"asset not in gallery"}`, http.StatusNotFound)
+		return
+	}
+
+	// Fetch asset details
+	asset, err := h.assetSvc.GetByID(r.Context(), assetID)
+	if err != nil || asset == nil {
+		http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Stream file from R2 storage
+	reader, err := h.assetSvc.GetStorageReader(r.Context(), asset.StorageKey)
+	if err != nil {
+		http.Error(w, `{"error":"file retrieval failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, asset.Filename))
+	w.Header().Set("Content-Type", asset.ContentType)
+	if asset.SizeBytes > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", asset.SizeBytes))
+	}
+
+	io.Copy(w, reader)
 }

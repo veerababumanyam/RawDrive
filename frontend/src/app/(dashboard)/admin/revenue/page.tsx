@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getRevenueDashboard, getRevenueTimeSeries, type RevenueData, type RevenueTimeSeries } from "@/lib/api/admin";
+import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
 // Backend fields can come back null/undefined when there is no data for a
 // given period (e.g. no paid subscriptions yet, empty state buckets). Guard
@@ -20,6 +21,54 @@ function MetricCard({ label, value, accent }: { label: string; value: string; ac
     </div>
   );
 }
+
+// ─── Row types cast-compatible with DataTable's Record<string, unknown> constraint ──
+
+type StateBreakdownRow = { state_name: string; revenue_paisa: number; subscriber_count: number } & Record<string, unknown>;
+type TimeSeriesRow = RevenueTimeSeries & Record<string, unknown>;
+
+// ─── Column definitions (stable refs via module scope) ──
+
+const stateBreakdownColumns: ColumnDef<StateBreakdownRow>[] = [
+  { key: "state_name", label: "State", sortable: true },
+  {
+    key: "revenue_paisa",
+    label: "Revenue",
+    sortable: true,
+    render: (_v, row) => <span className="text-primary font-medium">₹{formatINR(row.revenue_paisa)}</span>,
+  },
+  { key: "subscriber_count", label: "Subscribers", sortable: true },
+];
+
+const stateBreakdownCompareFns = {
+  revenue_paisa: (a: StateBreakdownRow, b: StateBreakdownRow) =>
+    (a.revenue_paisa ?? 0) - (b.revenue_paisa ?? 0),
+};
+
+const timeSeriesColumns: ColumnDef<TimeSeriesRow>[] = [
+  {
+    key: "period",
+    label: "Period",
+    sortable: true,
+    render: (v) => <>{(v as string) ?? "—"}</>,
+  },
+  {
+    key: "revenue_paisa",
+    label: "Revenue",
+    sortable: true,
+    render: (_v, row) => <span className="text-primary font-medium">₹{formatINR(row.revenue_paisa)}</span>,
+  },
+  {
+    key: "subscribers",
+    label: "Subscribers",
+    sortable: true,
+  },
+];
+
+const timeSeriesCompareFns = {
+  revenue_paisa: (a: TimeSeriesRow, b: TimeSeriesRow) =>
+    (a.revenue_paisa ?? 0) - (b.revenue_paisa ?? 0),
+};
 
 export default function AdminRevenuePage() {
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
@@ -48,6 +97,16 @@ export default function AdminRevenuePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Memoize data arrays so DataTable doesn't re-render on every parent render
+  const stateBreakdownData = useMemo<StateBreakdownRow[]>(
+    () => (revenue?.state_breakdown ?? []) as StateBreakdownRow[],
+    [revenue],
+  );
+  const timeSeriesData = useMemo<TimeSeriesRow[]>(
+    () => timeSeries as TimeSeriesRow[],
+    [timeSeries],
+  );
+
   if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading revenue data...</p></div>;
   if (error || !revenue) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error || "No data"}</p></div>;
 
@@ -67,53 +126,30 @@ export default function AdminRevenuePage() {
 
       <div>
         <h3 className="font-headline text-xl font-bold text-on-surface mb-4">State Breakdown</h3>
-        <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
-                <th className="px-6 py-4 font-semibold">State</th>
-                <th className="px-6 py-4 font-semibold">Revenue</th>
-                <th className="px-6 py-4 font-semibold">Subscribers</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.03]">
-              {revenue.state_breakdown.map((s) => (
-                <tr key={s.state_name} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-6 py-5 text-sm font-semibold text-on-surface">{s.state_name}</td>
-                  <td className="px-6 py-5 text-sm text-primary font-medium">₹{formatINR(s.revenue_paisa)}</td>
-                  <td className="px-6 py-5 text-sm text-text-tertiary">{s.subscriber_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<StateBreakdownRow>
+          columns={stateBreakdownColumns}
+          data={stateBreakdownData}
+          rowKey={(row) => row.state_name}
+          searchable
+          searchKeys={["state_name"]}
+          searchPlaceholder="Search states..."
+          compareFns={stateBreakdownCompareFns}
+          pageSize={50}
+          emptyStateMessage="No state breakdown data available."
+        />
       </div>
 
-      {timeSeries.length > 0 && (
+      {timeSeriesData.length > 0 && (
         <div>
           <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Monthly Trend</h3>
-          <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
-                  <th className="px-6 py-4 font-semibold">Period</th>
-                  <th className="px-6 py-4 font-semibold">Revenue</th>
-                  <th className="px-6 py-4 font-semibold">Subscribers</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.03]">
-                {timeSeries.map((ts, i) => (
-                  // Use index as fallback key since period can be null for the
-                  // current-month bucket on day 1 before any charges hit.
-                  <tr key={ts.period ?? `row-${i}`} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-5 text-sm text-on-surface">{ts.period ?? "—"}</td>
-                    <td className="px-6 py-5 text-sm text-primary font-medium">₹{formatINR(ts.revenue_paisa)}</td>
-                    <td className="px-6 py-5 text-sm text-text-tertiary">{ts.subscribers ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<TimeSeriesRow>
+            columns={timeSeriesColumns}
+            data={timeSeriesData}
+            rowKey={(row) => row.period || row.revenue_paisa?.toString() || Math.random().toString()}
+            compareFns={timeSeriesCompareFns}
+            pageSize={50}
+            emptyStateMessage="No trend data available."
+          />
         </div>
       )}
     </div>

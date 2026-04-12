@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
+import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
 interface DealerUser {
   workspace_id: string;
@@ -13,6 +14,7 @@ interface DealerUser {
   subscription_status: string;
   plan_name: string;
   mrr_paisa: number;
+  [key: string]: unknown;
 }
 
 const statusColors: Record<string, string> = {
@@ -23,7 +25,63 @@ const statusColors: Record<string, string> = {
   none: "bg-surface-sunken text-text-tertiary",
 };
 
-function formatPaisa(p: number) { return `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`; }
+function formatPaisa(p: number) {
+  return `\u20B9${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+}
+
+const columns: ColumnDef<DealerUser>[] = [
+  {
+    key: "workspace_name",
+    label: "Workspace",
+    sortable: true,
+  },
+  {
+    key: "owner_name",
+    label: "Owner",
+    sortable: true,
+  },
+  {
+    key: "state_name",
+    label: "State",
+    sortable: true,
+  },
+  {
+    key: "attributed_at",
+    label: "Attributed",
+    sortable: true,
+    render: (value) => new Date(value as string).toLocaleDateString("en-IN"),
+  },
+  {
+    key: "subscription_status",
+    label: "Status",
+    sortable: true,
+    filterable: true,
+    filterOptions: ["active", "trialing", "cancelled", "churned", "none"],
+    render: (value) => {
+      const status = value as string;
+      return (
+        <span
+          className={`px-2 py-0.5 rounded-full text-xs font-medium w-fit ${statusColors[status] || statusColors.none}`}
+        >
+          {status}
+        </span>
+      );
+    },
+  },
+  {
+    key: "plan_name",
+    label: "Plan",
+    sortable: true,
+  },
+  {
+    key: "mrr_paisa",
+    label: "MRR",
+    sortable: true,
+    align: "right",
+    headerAlign: "right",
+    render: (value) => formatPaisa(value as number),
+  },
+];
 
 export default function DealerUserList({ dealerId }: { dealerId: string }) {
   const [users, setUsers] = useState<DealerUser[]>([]);
@@ -40,24 +98,22 @@ export default function DealerUserList({ dealerId }: { dealerId: string }) {
       .finally(() => setLoading(false));
   }, [dealerId]);
 
-  if (loading) return <div className="animate-pulse space-y-3">{[1,2,3].map(i => <div key={i} className="h-12 bg-surface-sunken rounded-xl" />)}</div>;
-
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-7 gap-4 px-4 py-2 text-xs font-medium text-text-tertiary uppercase tracking-wider">
-        <span>Workspace</span><span>Owner</span><span>State</span><span>Attributed</span><span>Status</span><span>Plan</span><span className="text-right">MRR</span>
-      </div>
-      {users.length === 0 ? <p className="text-text-secondary text-center py-8">No referred users yet.</p> : users.map(u => (
-        <div key={u.workspace_id} className="grid grid-cols-7 gap-4 px-4 py-3 glass-card rounded-xl items-center">
-          <span className="text-sm text-text-primary truncate">{u.workspace_name}</span>
-          <span className="text-sm text-text-secondary truncate">{u.owner_name}</span>
-          <span className="text-sm text-text-secondary">{u.state_name}</span>
-          <span className="text-sm text-text-secondary">{new Date(u.attributed_at).toLocaleDateString("en-IN")}</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-medium w-fit ${statusColors[u.subscription_status] || statusColors.none}`}>{u.subscription_status}</span>
-          <span className="text-sm text-text-secondary">{u.plan_name}</span>
-          <span className="text-sm text-text-primary text-right">{formatPaisa(u.mrr_paisa)}</span>
-        </div>
-      ))}
-    </div>
+    <DataTable<DealerUser>
+      columns={columns}
+      data={users}
+      rowKey={(row) => row.workspace_id}
+      searchable
+      searchKeys={["workspace_name", "owner_name"]}
+      searchPlaceholder="Search users..."
+      pageSize={20}
+      loading={loading}
+      emptyStateMessage="No referred users yet."
+      compareFns={{
+        attributed_at: (a, b) =>
+          new Date(a.attributed_at).getTime() - new Date(b.attributed_at).getTime(),
+        mrr_paisa: (a, b) => a.mrr_paisa - b.mrr_paisa,
+      }}
+    />
   );
 }

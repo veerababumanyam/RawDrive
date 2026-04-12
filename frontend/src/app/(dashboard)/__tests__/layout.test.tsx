@@ -103,7 +103,7 @@ describe("DashboardLayout header", () => {
 
     const header = searchInput.closest("header");
     expect(header).not.toBeNull();
-    expect(header?.className).toContain("md:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)]");
+    expect(header?.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)]");
   });
 
   it("renders authenticated content after the layout auth check completes", async () => {

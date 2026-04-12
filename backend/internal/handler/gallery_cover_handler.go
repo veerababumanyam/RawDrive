@@ -48,6 +48,15 @@ type CoverUpdateRequest struct {
 	AssetID    string             `json:"asset_id"`
 	StyleID    string             `json:"style_id"`
 	FocalPoint *FocalPointPayload `json:"focal_point,omitempty"`
+	// M19: Cover page template (full_bleed, split_screen, minimal_white, classic_film, festive)
+	Template     string                 `json:"template,omitempty"`
+	TemplateConfig map[string]interface{} `json:"template_config,omitempty"`
+}
+
+// validCoverTemplates lists the 5 cover page templates from F-009.
+var validCoverTemplates = map[string]bool{
+	"none": true, "full_bleed": true, "split_screen": true,
+	"minimal_white": true, "classic_film": true, "festive": true,
 }
 
 // parseCoverRequest decodes and validates the request body. Extracted so
@@ -66,6 +75,9 @@ func parseCoverRequest(body []byte) (CoverUpdateRequest, error) {
 	}
 	if req.StyleID != "" && !validCoverStyles[req.StyleID] {
 		return req, fmt.Errorf("invalid style_id: %s (must be one of 30 valid cover styles)", req.StyleID)
+	}
+	if req.Template != "" && !validCoverTemplates[req.Template] {
+		return req, fmt.Errorf("invalid template: %s (must be one of: none, full_bleed, split_screen, minimal_white, classic_film, festive)", req.Template)
 	}
 	return req, nil
 }
@@ -109,7 +121,7 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 	if gallery.Settings == nil {
 		gallery.Settings = make(map[string]interface{})
 	}
-	gallery.Settings["cover_config"] = map[string]interface{}{
+	gallery.Settings["cover_style"] = map[string]interface{}{
 		"asset_id": assetID,
 		"style_id": req.StyleID,
 		"focal_point": map[string]float64{
@@ -125,6 +137,14 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// M19: Persist cover template selection
+	if req.Template != "" {
+		gallery.CoverTemplate = req.Template
+	}
+	if req.TemplateConfig != nil {
+		gallery.CoverConfig = req.TemplateConfig
+	}
+
 	if err := h.galleryRepo.Update(r.Context(), gallery); err != nil {
 		http.Error(w, `{"error":"failed to save cover config"}`, http.StatusInternalServerError)
 		return
@@ -132,7 +152,8 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "updated",
-		"cover":  gallery.Settings["cover_config"],
+		"status":         "updated",
+		"cover":          gallery.Settings["cover_style"],
+		"cover_template": gallery.CoverTemplate,
 	})
 }

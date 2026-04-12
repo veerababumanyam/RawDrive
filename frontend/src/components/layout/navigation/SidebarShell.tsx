@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,19 +29,52 @@ interface SidebarShellProps {
   groups: NavGroup[];
   /** Footer content — avatar area at the bottom */
   footer: ReactNode;
-  /** All sidebars use the standard expanded width (240px).
-   *  Simpler roles just have fewer items — the sidebar stays the same width. */
+  /** Mobile drawer open state — when true, sidebar slides in on < lg screens */
+  mobileOpen?: boolean;
+  /** Callback to close the mobile drawer */
+  onMobileClose?: () => void;
 }
 
-export function SidebarShell({ subtitle, groups, footer }: SidebarShellProps) {
+export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClose }: SidebarShellProps) {
   const pathname = usePathname();
   // Collect all hrefs to resolve prefix-match collisions (e.g., /crm vs /crm/contacts)
   const allHrefs = groups.flatMap((g) => g.items.map((i) => i.href));
 
+  // Close mobile drawer on route change
+  useEffect(() => {
+    if (mobileOpen && onMobileClose) onMobileClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [mobileOpen]);
+
   return (
-    <aside
-      className="glass-surface fixed left-0 top-0 z-50 hidden h-screen w-[var(--sidebar-width-expanded)] flex-col px-4 py-8 lg:flex"
-    >
+    <>
+      {/* Backdrop overlay for mobile drawer */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={cn(
+          "glass-surface fixed left-0 top-0 z-50 h-screen w-[var(--sidebar-width-expanded)] flex-col px-4 py-8 transition-transform duration-300 ease-out",
+          // Desktop: always visible
+          "lg:flex lg:translate-x-0",
+          // Mobile: slide in/out
+          mobileOpen
+            ? "flex translate-x-0"
+            : "hidden -translate-x-full lg:flex",
+        )}
+      >
       {/* Logo + subtitle */}
       <div className="mb-10 flex items-center gap-3 px-2">
         <Image
@@ -104,6 +138,7 @@ export function SidebarShell({ subtitle, groups, footer }: SidebarShellProps) {
       {/* Footer — avatar / role badge */}
       <div className="mt-auto">{footer}</div>
     </aside>
+    </>
   );
 }
 

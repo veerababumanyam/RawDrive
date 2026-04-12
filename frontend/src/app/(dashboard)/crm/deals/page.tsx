@@ -4,8 +4,12 @@ import { useState, useEffect } from "react";
 import { listDeals, listContacts, type Deal, type Contact } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { useDataTable } from "@/hooks/use-data-table";
+import { TableToolbar } from "@/components/ui/table-toolbar";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+type DealRow = Deal & Record<string, unknown>;
 
 // Stage vocabulary matches the DB CHECK constraint on deals.stage
 // (proposal/negotiation/confirmed/in_progress/completed/cancelled)
@@ -33,6 +37,8 @@ const stageClass: Record<string, string> = {
   cancelled: "status-badge status-badge--error",
 };
 
+const EVENT_TYPES = ["wedding", "portrait", "event", "commercial", "other"];
+
 export default function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -51,6 +57,16 @@ export default function DealsPage() {
     event_date: "",
     venue: "",
     notes: "",
+  });
+
+  const table = useDataTable<DealRow>({
+    data: deals as DealRow[],
+    pageSize: 15,
+    searchKeys: ["title", "venue", "event_type"],
+    compareFns: {
+      amount_paisa: (a, b) => (a.amount_paisa as number || 0) - (b.amount_paisa as number || 0),
+      event_date: (a, b) => new Date(a.event_date as string || 0).getTime() - new Date(b.event_date as string || 0).getTime(),
+    },
   });
 
   useEffect(() => {
@@ -230,7 +246,7 @@ export default function DealsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Deals</h1>
           <p className="text-sm text-text-secondary mt-1">
-            {deals.length} {deals.length === 1 ? "deal" : "deals"}
+            {table.filteredCount} {table.filteredCount === 1 ? "deal" : "deals"}
             {deals.length > 0 && (
               <span className="ml-3">
                 · Pipeline value: ₹{(totalValue / 100).toLocaleString("en-IN")}
@@ -248,6 +264,31 @@ export default function DealsPage() {
           + New Deal
         </button>
       </div>
+
+      <TableToolbar
+        searchable
+        searchPlaceholder="Search deals..."
+        searchValue={table.searchQuery}
+        onSearchChange={table.setSearchQuery}
+        filters={[
+          { key: "stage", label: "Stages", options: DEAL_STAGES },
+          { key: "event_type", label: "Event Types", options: EVENT_TYPES },
+        ]}
+        getFilterValue={table.getColumnFilterValue}
+        onFilterChange={table.setColumnFilter}
+        sortOptions={[
+          { key: "title", label: "Title" },
+          { key: "stage", label: "Stage" },
+          { key: "amount_paisa", label: "Amount" },
+          { key: "event_date", label: "Event Date" },
+          { key: "event_type", label: "Event Type" },
+        ]}
+        currentSortKey={table.sort?.key ?? null}
+        currentSortDirection={table.sort?.direction ?? null}
+        onSortChange={table.toggleSort}
+        hasActiveFilters={table.searchQuery.length > 0 || table.columnFilters.length > 0}
+        onClearAll={table.clearAllFilters}
+      />
 
       {showCreate && (
         <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
@@ -359,56 +400,110 @@ export default function DealsPage() {
             + Create your first deal
           </button>
         </div>
+      ) : table.filteredCount === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
+          <p className="text-text-primary font-medium">No deals match your filters</p>
+          <p className="text-sm text-text-secondary mt-1">
+            Try adjusting your search or clearing filters.
+          </p>
+          <button
+            onClick={table.clearAllFilters}
+            className="mt-4 rounded-xl border border-border-default px-5 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
+          >
+            Clear all filters
+          </button>
+        </div>
       ) : (
-        <div className="space-y-2">
-          {deals.map((deal) => (
-            <div
-              key={deal.id}
-              className="bg-surface-raised rounded-xl p-4 border border-border-default"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-text-primary">{deal.title}</p>
-                    <span className={cn(stageClass[deal.stage] || "status-badge status-badge--neutral")}>
-                      {STAGE_LABEL[deal.stage] ?? deal.stage}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-sm text-text-secondary">
-                    {deal.event_type && <span className="capitalize">{deal.event_type}</span>}
-                    {deal.event_date && (
-                      <span>
-                        {new Date(deal.event_date).toLocaleDateString("en-IN", {
-                          day: "numeric", month: "short", year: "numeric",
-                        })}
+        <>
+          <div className="space-y-2">
+            {table.pageData.map((deal) => (
+              <div
+                key={deal.id}
+                className="bg-surface-raised rounded-xl p-4 border border-border-default"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-text-primary">{deal.title}</p>
+                      <span className={cn(stageClass[deal.stage] || "status-badge status-badge--neutral")}>
+                        {STAGE_LABEL[deal.stage] ?? deal.stage}
                       </span>
-                    )}
-                    {deal.venue && <span>{deal.venue}</span>}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-text-secondary">
+                      {deal.event_type && <span className="capitalize">{deal.event_type}</span>}
+                      {deal.event_date && (
+                        <span>
+                          {new Date(deal.event_date).toLocaleDateString("en-IN", {
+                            day: "numeric", month: "short", year: "numeric",
+                          })}
+                        </span>
+                      )}
+                      {deal.venue && <span>{deal.venue}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-semibold text-text-primary">
+                      ₹{((deal.amount_paisa || 0) / 100).toLocaleString("en-IN")}
+                    </p>
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="font-semibold text-text-primary">
-                    ₹{((deal.amount_paisa || 0) / 100).toLocaleString("en-IN")}
-                  </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => handleBookCalendar(deal)}
+                    className="rounded-lg border border-border-default px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-sunken"
+                  >
+                    Book on calendar
+                  </button>
+                  <button
+                    onClick={() => handleGenerateInvoice(deal)}
+                    className="rounded-lg bg-accent-primary/10 border border-accent-primary/30 px-3 py-1.5 text-xs text-accent-primary hover:bg-accent-primary/20"
+                  >
+                    Generate invoice
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 flex gap-2">
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {table.pageCount > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-text-secondary">
+                Page {table.page + 1} of {table.pageCount}
+              </p>
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleBookCalendar(deal)}
-                  className="rounded-lg border border-border-default px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-sunken"
+                  onClick={table.firstPage}
+                  disabled={!table.canPreviousPage}
+                  className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
                 >
-                  Book on calendar
+                  First
                 </button>
                 <button
-                  onClick={() => handleGenerateInvoice(deal)}
-                  className="rounded-lg bg-accent-primary/10 border border-accent-primary/30 px-3 py-1.5 text-xs text-accent-primary hover:bg-accent-primary/20"
+                  onClick={table.previousPage}
+                  disabled={!table.canPreviousPage}
+                  className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
                 >
-                  Generate invoice
+                  Previous
+                </button>
+                <button
+                  onClick={table.nextPage}
+                  disabled={!table.canNextPage}
+                  className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={table.lastPage}
+                  disabled={!table.canNextPage}
+                  className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
+                >
+                  Last
                 </button>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );

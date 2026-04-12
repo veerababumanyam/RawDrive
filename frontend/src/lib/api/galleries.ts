@@ -21,6 +21,15 @@ export interface Gallery {
   };
   faceid_enabled?: boolean;
   settings?: Record<string, unknown>;
+  // Populated by list endpoint via LEFT JOIN on assets — used for card thumbnails
+  cover_thumbnails?: Record<string, string>;
+  // M19: Gallery Enhancement Suite (F-009)
+  cover_template?: string;
+  cover_config?: Record<string, unknown>;
+  expires_at?: string;
+  download_enabled?: boolean;
+  sort_preference?: string;
+  whatsapp_template?: string;
 }
 
 // GAL-FR-115: plan-aware white-label branding response
@@ -181,6 +190,45 @@ export interface PublicAsset {
   blurhash?: string;
   thumbnail_urls: Record<string, string>;
   sort_order: number;
+}
+
+// ── Gallery Settings ──────────────────────────────────────────────
+export async function updateGallerySettings(
+  token: string,
+  galleryId: string,
+  settings: Record<string, unknown>,
+): Promise<Gallery> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error(`Failed to update gallery settings: ${res.status}`);
+  return res.json();
+}
+
+// ── AI Face Scan ──────────────────────────────────────────────────
+export async function triggerFaceScan(
+  token: string,
+  galleryId: string,
+): Promise<{ job_id: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai/scan-faces`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to trigger face scan: ${res.status}`);
+  return res.json();
+}
+
+export async function getFaceScanStatus(
+  token: string,
+  galleryId: string,
+): Promise<{ status: string; processed: number; total: number; faces_found: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai/scan-status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to get scan status: ${res.status}`);
+  return res.json();
 }
 
 export async function getPublicGalleryAssets(slug: string): Promise<PublicAsset[]> {

@@ -810,8 +810,12 @@ func main() {
 			// the AI init block below) is safe and keeps this block self-contained.
 			Pool:     dbPool,
 			FaceRepo: ai.NewFaceRepo(dbPool),
+			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
+			// JobRepo is stateless (same pattern as FaceRepo).
+			FaceSvc: nil,
+			JobRepo: ai.NewJobRepo(dbPool),
 		}
-		handler.RegisterM2Routes(api, m2Deps)
+		galleryHandler := handler.RegisterM2Routes(api, m2Deps)
 
 		// Public gallery routes — registered on outer router (no auth required)
 		handler.RegisterPublicGalleryRoutes(r, m2Deps)
@@ -875,6 +879,9 @@ func main() {
 
 		// AI services
 		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+
+		// M21: wire face scan deps into gallery handler now that faceSvc is available.
+		galleryHandler.WithAIDeps(faceSvc, assetSvc, aiJobRepo)
 		searchSvc := ai.NewSearchService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
 		duplicateSvc := ai.NewDuplicateService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
 		cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)

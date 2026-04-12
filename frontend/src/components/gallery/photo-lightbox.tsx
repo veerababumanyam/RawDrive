@@ -460,28 +460,34 @@ export function PhotoLightbox({
           {isProofing && <span>1/2/3 Select/Approve/Reject</span>}
         </div>
 
-        {/* Info panel */}
+        {/* Info panel — EXIF metadata and file details (separate from Comments sidebar) */}
         {showInfo && (
           <div className="mx-auto max-w-2xl rounded-2xl bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] px-6 py-4 text-white shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.2)]">
-            <div className="flex items-start justify-between">
-              <p className="text-sm text-white/60">
-                {asset.width && asset.height ? `${asset.width} x ${asset.height} px` : "Dimensions unknown"}{" "}
-                — {formatBytes(asset.size_bytes)} — {asset.content_type}
-              </p>
+            <div className="flex items-start justify-between mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">File info</h3>
               <span className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
                 asset.status === "ready" ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20" :
                 asset.status === "failed" ? "bg-feedback-error/15 text-feedback-error/70 border-feedback-error/20" :
                 "bg-feedback-warning/15 text-feedback-warning/70 border-feedback-warning/20"
               }`}>{asset.status}</span>
             </div>
-            {Object.keys(exif).length > 0 && (
-              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
+            <p className="text-sm text-white/60">
+              {asset.filename}{" — "}
+              {asset.width && asset.height ? `${asset.width} x ${asset.height} px` : "Dimensions unknown"}{" "}
+              — {formatBytes(asset.size_bytes)} — {asset.content_type}
+            </p>
+            {Object.keys(exif).length > 0 ? (
+              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
                 {exif.camera_make ? <div><span className="text-white/35">Camera</span> <span className="text-white/70">{String(exif.camera_make)} {String(exif.camera_model || "")}</span></div> : null}
                 {exif.focal_length ? <div><span className="text-white/35">Focal</span> <span className="text-white/70">{String(exif.focal_length)}mm</span></div> : null}
                 {exif.exposure_time ? <div><span className="text-white/35">Shutter</span> <span className="text-white/70">{String(exif.exposure_time)}</span></div> : null}
                 {exif.f_number ? <div><span className="text-white/35">Aperture</span> <span className="text-white/70">f/{String(exif.f_number)}</span></div> : null}
                 {exif.iso ? <div><span className="text-white/35">ISO</span> <span className="text-white/70">{String(exif.iso)}</span></div> : null}
+                {exif.date_taken ? <div><span className="text-white/35">Taken</span> <span className="text-white/70">{String(exif.date_taken)}</span></div> : null}
+                {exif.lens_model ? <div className="sm:col-span-2"><span className="text-white/35">Lens</span> <span className="text-white/70">{String(exif.lens_model)}</span></div> : null}
               </div>
+            ) : (
+              <p className="mt-3 text-xs text-white/25 border-t border-white/8 pt-3">No EXIF metadata available for this file.</p>
             )}
           </div>
         )}

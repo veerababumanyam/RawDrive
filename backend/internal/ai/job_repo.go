@@ -101,6 +101,31 @@ func (r *JobRepo) MarkDone(ctx context.Context, id uuid.UUID, result map[string]
 	return err
 }
 
+// GetLatestByGallery returns the most recent face_detection job whose
+// result->>'gallery_id' matches the given gallery UUID. Returns nil if
+// no matching job exists.
+func (r *JobRepo) GetLatestByGallery(ctx context.Context, galleryID uuid.UUID) (*AIJob, error) {
+	var job AIJob
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, workspace_id, type, status, total_items, processed_items,
+		 result, error, created_at, updated_at
+		 FROM ai_jobs
+		 WHERE type = 'face_detection'
+		   AND result->>'gallery_id' = $1
+		 ORDER BY created_at DESC
+		 LIMIT 1`, galleryID.String(),
+	).Scan(&job.ID, &job.WorkspaceID, &job.Type, &job.Status,
+		&job.TotalItems, &job.ProcessedItems, &job.Result, &job.Error,
+		&job.CreatedAt, &job.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("job repo: get latest by gallery: %w", err)
+	}
+	return &job, nil
+}
+
 // MarkFailed marks a job as failed.
 func (r *JobRepo) MarkFailed(ctx context.Context, id uuid.UUID, errMsg string) error {
 	_, err := r.pool.Exec(ctx,

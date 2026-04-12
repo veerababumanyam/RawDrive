@@ -9,9 +9,11 @@ import {
   FolderOpen,
   Home,
   LogOut,
+  Menu,
   Search,
   Settings,
   User,
+  X,
 } from "lucide-react";
 import {
   getStoredAccessToken,
@@ -86,23 +88,28 @@ function getSearchPlaceholder(role: string) {
 /*  Role → Sidebar component (completely separate nav per role)       */
 /* ------------------------------------------------------------------ */
 
-function RoleSidebar({ role, userInfo }: { role: string; userInfo: { display_name?: string; email?: string } }) {
+function RoleSidebar({ role, userInfo, mobileOpen, onMobileClose }: {
+  role: string;
+  userInfo: { display_name?: string; email?: string };
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}) {
   const name = userInfo.display_name || userInfo.email || "User";
 
   switch (role) {
     case "super_admin":
     case "admin":
-      return <AdminSidebar userName={name} platformRole={role} />;
+      return <AdminSidebar userName={name} platformRole={role} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "dealer":
-      return <DealerSidebar userName={name} />;
+      return <DealerSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "client":
-      return <ClientSidebar userName={name} />;
+      return <ClientSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "photographer":
     case "team_member":
     case "assistant":
     case "studio_manager":
     default:
-      return <StudioSidebar userName={name} />;
+      return <StudioSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
   }
 }
 
@@ -242,6 +249,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [role, setRole] = useState<string>("photographer");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // Display profile used by the sidebar avatar and role header. Never
   // persisted across sessions — the layout fetches a fresh copy on
   // every mount via getCurrentUser() so a server-side name change
@@ -324,11 +332,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
       {/* Role-specific sidebar — completely different component per role */}
-      <RoleSidebar role={role} userInfo={userInfo} />
+      <RoleSidebar role={role} userInfo={userInfo} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
 
       {/* Header bar — offset from sidebar on desktop */}
-      <header className="glass-surface fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 lg:w-[calc(100%-var(--sidebar-width-expanded))] lg:px-8 md:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)]">
-        <nav className="hidden min-w-0 items-center gap-2 md:flex" aria-label="Workspace quick navigation">
+      <header className="glass-surface fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 lg:w-[calc(100%-var(--sidebar-width-expanded))] lg:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)] lg:px-8">
+        {/* Mobile hamburger — opens sidebar drawer on < lg screens */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-accent lg:hidden"
+        >
+          {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+        <nav className="hidden min-w-0 items-center gap-2 lg:flex" aria-label="Workspace quick navigation">
           {headerNavItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

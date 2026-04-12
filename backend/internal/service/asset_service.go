@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/google/uuid"
@@ -55,6 +56,13 @@ func (s *AssetService) GetByID(ctx context.Context, id uuid.UUID) (*AssetWithURL
 // List retrieves assets matching the filter.
 func (s *AssetService) List(ctx context.Context, f repository.AssetFilter) ([]repository.Asset, error) {
 	return s.assetRepo.List(ctx, f)
+}
+
+// GetStorageReader returns a ReadCloser for the given storage key.
+// Used by public download endpoints that need to stream file contents
+// from R2 without exposing the storage provider directly.
+func (s *AssetService) GetStorageReader(ctx context.Context, key string) (io.ReadCloser, error) {
+	return s.storage.Get(ctx, key)
 }
 
 // SoftDelete marks an asset as deleted and removes from storage.

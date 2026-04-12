@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
+import { getStoredAccessToken } from "@/lib/auth";
 
 interface Props {
   left: Asset;
@@ -28,14 +29,19 @@ interface Props {
   onExit: () => void;
 }
 
-function largeUrl(a: Asset): string {
-  return (
+function largeUrl(a: Asset, token: string | null): string {
+  const raw =
+    a.thumbnail_urls?.display_webp ||
+    a.thumbnail_urls?.thumb_lg_webp ||
+    a.thumbnail_urls?.thumb_lg ||
     a.thumbnail_urls?.lg ||
     a.thumbnail_urls?.cover_1920 ||
     a.download_url ||
     Object.values(a.thumbnail_urls || {})[0] ||
-    ""
-  );
+    "";
+  if (!raw || !token || !raw.includes("/storage/") || raw.includes("token=")) return raw;
+  const sep = raw.includes("?") ? "&" : "?";
+  return `${raw}${sep}token=${encodeURIComponent(token)}`;
 }
 
 export function CompareMode({ left, right, onExit }: Props) {
@@ -66,8 +72,9 @@ export function CompareMode({ left, right, onExit }: Props) {
     };
   }, [onPointerMove, onPointerUp]);
 
-  const leftUrl = largeUrl(left);
-  const rightUrl = largeUrl(right);
+  const token = getStoredAccessToken();
+  const leftUrl = largeUrl(left, token);
+  const rightUrl = largeUrl(right, token);
 
   return (
     <div

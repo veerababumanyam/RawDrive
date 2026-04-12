@@ -33,13 +33,17 @@ const groups: NavGroup[] = [
 interface DealerSidebarProps {
   userName: string;
   territory?: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function DealerSidebar({ userName, territory }: DealerSidebarProps) {
+export function DealerSidebar({ userName, territory, mobileOpen, onMobileClose }: DealerSidebarProps) {
   return (
     <SidebarShell
       subtitle="Dealer Portal"
       groups={groups}
+      mobileOpen={mobileOpen}
+      onMobileClose={onMobileClose}
       footer={
         <SidebarAvatar
           name={userName}

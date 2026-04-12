@@ -9,12 +9,15 @@ import {
   type ContactImportResult,
 } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
+import { useDataTable } from "@/hooks/use-data-table";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+
+type ContactRow = Contact & Record<string, unknown>;
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", contact_type: "client" });
@@ -27,13 +30,19 @@ export default function ContactsPage() {
 
   const refresh = useCallback(() => {
     const token = getStoredAccessToken();
-    listContacts(token, search ? { search } : undefined)
-      .then(setContacts)
+    listContacts(token)
+      .then((data) => setContacts(data as ContactRow[]))
       .catch((err) => { setError(err?.message || "Failed to load contacts"); setContacts([]); })
       .finally(() => setLoading(false));
-  }, [search]);
+  }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const table = useDataTable<ContactRow>({
+    data: contacts,
+    pageSize: 20,
+    searchKeys: ["name", "email", "phone", "company"],
+  });
 
   const handleImportClick = () => {
     setImportResult(null);
@@ -92,6 +101,8 @@ export default function ContactsPage() {
     );
   }
 
+  const hasActiveFilters = !!table.searchQuery || table.columnFilters.length > 0;
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       {error && (
@@ -103,7 +114,9 @@ export default function ContactsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
           <p className="text-sm text-text-secondary mt-1">
-            {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}
+            {hasActiveFilters
+              ? `${table.filteredCount} of ${table.totalCount} contacts`
+              : `${table.totalCount} ${table.totalCount === 1 ? "contact" : "contacts"}`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -112,7 +125,7 @@ export default function ContactsPage() {
             disabled={importing}
             className="rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-sunken disabled:opacity-50 min-h-[44px]"
           >
-            {importing ? "Importing…" : "Import CSV"}
+            {importing ? "Importing\u2026" : "Import CSV"}
           </button>
           <input
             ref={fileInputRef}
@@ -153,12 +166,25 @@ export default function ContactsPage() {
         </div>
       )}
 
-      <input
-        type="text"
-        placeholder="Search by name, email, or phone..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="input-base w-full max-w-md"
+      <TableToolbar
+        searchable
+        searchPlaceholder="Search by name, email, or phone..."
+        searchValue={table.searchQuery}
+        onSearchChange={table.setSearchQuery}
+        filters={[{ key: "contact_type", label: "Type", options: ["client", "lead", "vendor"] }]}
+        getFilterValue={table.getColumnFilterValue}
+        onFilterChange={table.setColumnFilter}
+        sortOptions={[
+          { key: "name", label: "Name" },
+          { key: "email", label: "Email" },
+          { key: "contact_type", label: "Type" },
+          { key: "total_revenue_paisa", label: "Revenue" },
+        ]}
+        currentSortKey={table.sort?.key ?? null}
+        currentSortDirection={table.sort?.direction ?? null}
+        onSortChange={table.toggleSort}
+        hasActiveFilters={hasActiveFilters}
+        onClearAll={table.clearAllFilters}
       />
 
       {showCreate && (
@@ -210,16 +236,18 @@ export default function ContactsPage() {
               disabled={creating || !form.name.trim()}
               className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
             >
-              {creating ? "Creating…" : "Save Client"}
+              {creating ? "Creating\u2026" : "Save Client"}
             </button>
           </div>
         </div>
       )}
 
-      {contacts.length === 0 ? (
+      {table.pageData.length === 0 ? (
         <div className="text-center py-16 space-y-3">
-          <p className="text-text-secondary">No clients found.</p>
-          {!showCreate && (
+          <p className="text-text-secondary">
+            {hasActiveFilters ? "No contacts match your filters." : "No clients found."}
+          </p>
+          {!showCreate && !hasActiveFilters && (
             <button
               onClick={() => setShowCreate(true)}
               className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
@@ -230,7 +258,7 @@ export default function ContactsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {contacts.map((c) => (
+          {table.pageData.map((c) => (
             <div
               key={c.id}
               className="bg-surface-raised rounded-xl p-4 border border-border-default hover:border-accent/30 transition-colors cursor-pointer flex items-center justify-between"
@@ -255,6 +283,30 @@ export default function ContactsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {table.pageCount > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-xs text-text-tertiary">
+            Page {table.page + 1} of {table.pageCount} ({table.filteredCount} contacts)
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={table.previousPage}
+              disabled={!table.canPreviousPage}
+              className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
+            >
+              Previous
+            </button>
+            <button
+              onClick={table.nextPage}
+              disabled={!table.canNextPage}
+              className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>

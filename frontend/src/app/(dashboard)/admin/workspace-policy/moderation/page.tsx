@@ -7,6 +7,7 @@ import {
   overrideUploadBlock,
   type BlockedAssetRow,
 } from "@/lib/api/admin";
+import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // M16 E50-S1 — Upload moderation dashboard (admin).
@@ -15,9 +16,11 @@ import {
 // admin issue a one-time allowlist token to override a false positive.
 // ─────────────────────────────────────────────────────────────────────────────
 
+type ModerationRow = BlockedAssetRow & Record<string, unknown>;
+
 export default function UploadModerationPage() {
   const [workspaceId, setWorkspaceId] = useState("");
-  const [rows, setRows] = useState<BlockedAssetRow[]>([]);
+  const [rows, setRows] = useState<ModerationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overrideMsg, setOverrideMsg] = useState<string | null>(null);
@@ -29,7 +32,7 @@ export default function UploadModerationPage() {
     try {
       const token = getStoredAccessToken();
       const resp = await listUploadModerationQueue(token, workspaceId);
-      setRows(resp.queue);
+      setRows(resp.queue as ModerationRow[]);
     } catch (e) {
       setError((e as Error).message);
       setRows([]);
@@ -38,7 +41,7 @@ export default function UploadModerationPage() {
     }
   }, [workspaceId]);
 
-  const handleOverride = async (row: BlockedAssetRow) => {
+  const handleOverride = async (row: ModerationRow) => {
     const justification = window.prompt(
       `Override block for ${row.filename}?\nEnter justification (required):`
     );
@@ -57,6 +60,74 @@ export default function UploadModerationPage() {
       setError((e as Error).message);
     }
   };
+
+  const columns: ColumnDef<ModerationRow>[] = [
+    {
+      key: "filename",
+      label: "Filename",
+      sortable: true,
+    },
+    {
+      key: "scan_status",
+      label: "Status",
+      sortable: true,
+      filterable: true,
+      filterOptions: ["blocked", "needs_desktop"],
+      render: (value) => {
+        const status = value as string;
+        const colorClass =
+          status === "blocked"
+            ? "bg-feedback-error/10 text-feedback-error"
+            : "bg-feedback-warning/10 text-feedback-warning";
+        return (
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${colorClass}`}
+          >
+            {status}
+          </span>
+        );
+      },
+    },
+    {
+      key: "scan_engine",
+      label: "Engine",
+      sortable: true,
+    },
+    {
+      key: "risk_score",
+      label: "Risk",
+      sortable: true,
+      align: "right",
+      headerAlign: "right",
+      render: (value) => (
+        <span className="font-mono">{(value as number).toFixed(2)}</span>
+      ),
+    },
+    {
+      key: "created_at",
+      label: "Created",
+      sortable: true,
+      render: (value) => new Date(value as string).toLocaleDateString(),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      align: "right",
+      headerAlign: "right",
+      render: (_value, row) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOverride(row);
+          }}
+          className="text-xs font-medium text-accent hover:underline"
+        >
+          Override
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 p-8">
@@ -93,7 +164,7 @@ export default function UploadModerationPage() {
           disabled={!workspaceId || loading}
           className="rounded-lg bg-surface-raised px-4 py-2 text-sm font-medium text-on-surface hover:bg-surface-raised/80 disabled:opacity-50"
         >
-          {loading ? "Loading…" : "Load queue"}
+          {loading ? "Loading\u2026" : "Load queue"}
         </button>
       </div>
 
@@ -108,64 +179,21 @@ export default function UploadModerationPage() {
         </div>
       )}
 
-      {rows.length === 0 && !loading && workspaceId && (
-        <p className="text-sm text-text-secondary">
-          No blocked uploads for this workspace.
-        </p>
-      )}
-
-      {rows.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-surface-raised">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-sunken text-xs font-label uppercase tracking-wide text-text-secondary">
-              <tr>
-                <th className="px-4 py-3 text-left">Filename</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Engine</th>
-                <th className="px-4 py-3 text-right">Risk</th>
-                <th className="px-4 py-3 text-left">Created</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-raised">
-              {rows.map((row) => (
-                <tr key={row.asset_id} className="bg-surface-raised/20">
-                  <td className="px-4 py-3 text-on-surface">{row.filename}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        row.scan_status === "blocked"
-                          ? "bg-feedback-error/10 text-feedback-error"
-                          : "bg-feedback-warning/10 text-feedback-warning"
-                      }`}
-                    >
-                      {row.scan_status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">
-                    {row.scan_engine}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-text-secondary">
-                    {row.risk_score.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">
-                    {new Date(row.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleOverride(row)}
-                      className="text-xs font-medium text-accent hover:underline"
-                    >
-                      Override
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable<ModerationRow>
+        columns={columns}
+        data={rows}
+        rowKey={(row) => row.asset_id}
+        searchable
+        searchKeys={["filename", "scan_engine"]}
+        searchPlaceholder="Search uploads..."
+        pageSize={20}
+        loading={loading}
+        emptyStateMessage="No blocked uploads for this workspace."
+        compareFns={{
+          created_at: (a, b) =>
+            new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime(),
+        }}
+      />
     </div>
   );
 }

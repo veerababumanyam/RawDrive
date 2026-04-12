@@ -9,12 +9,17 @@ import (
 )
 
 // RegisterM2Routes registers all M2 (Asset Management & Gallery) and M11 (Processing, Storage, Organization) routes.
-func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
+// Returns the GalleryHandler so callers can wire AI deps post-hoc after AI init.
+func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	// M16 E47-S5: chain the Tier D validation service onto the asset handler
 	// when it is wired (nil-safe — pre-M16 callers continue to work).
 	assetHandler := NewAssetHandler(deps.AssetService, deps.UploadService).
 		WithValidation(deps.UploadValidationSvc)
 	galleryHandler := NewGalleryHandler(deps.GalleryService)
+	// M21: wire face scan deps when available
+	if deps.FaceSvc != nil && deps.AssetService != nil && deps.JobRepo != nil {
+		galleryHandler.WithAIDeps(deps.FaceSvc, deps.AssetService, deps.JobRepo)
+	}
 	shareHandler := NewShareLinkHandler(deps.ShareLinkService)
 	proofingHandler := NewProofingHandler(deps.ProofingService)
 	storageConfigHandler := NewStorageConfigHandler(deps.StorageConfigService)
@@ -80,6 +85,13 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 
 		// M3 E8-S1 #6: privacy opt-out for face detection pipeline
 		r.Patch("/{id}/face-detection", galleryHandler.SetFaceDetection)
+
+		// M21: per-gallery face scan trigger and status (nil-safe — handlers
+		// return 503 when face service is unavailable, so routes are always
+		// registered). scan-status works with just JobRepo; scan-faces needs
+		// FaceSvc which may be wired post-hoc after AI init.
+		r.Post("/{id}/ai/scan-faces", galleryHandler.TriggerFaceScan)
+		r.Get("/{id}/ai/scan-status", galleryHandler.GetFaceScanStatus)
 
 		// M11: Albums (sub-galleries)
 		if albumHandler != nil {
@@ -287,6 +299,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) {
 	}
 
 	// NOTE: Public routes moved to RegisterPublicGalleryRoutes — must be called on outer (no-auth) router
+	return galleryHandler
 }
 
 // RegisterPublicGalleryRoutes registers gallery public routes that do NOT require authentication.
@@ -307,6 +320,7 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
+		r.Get("/galleries/{slug}/assets/{assetId}/download", publicHandler.PublicAssetDownload)
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
 
@@ -424,4 +438,7 @@ type M2Dependencies struct {
 	ConsentSvc           *service.ConsentService
 	// M16 dependencies (nil-safe)
 	UploadValidationSvc  service.UploadManifestValidation
+	// M21 dependencies (nil-safe)
+	FaceSvc              *ai.FaceService
+	JobRepo              *ai.JobRepo
 }
