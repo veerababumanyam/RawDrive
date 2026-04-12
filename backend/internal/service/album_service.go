@@ -20,8 +20,8 @@ type FaceClusterResolver interface {
 // AlbumService handles album business logic.
 type AlbumService struct {
 	albumRepo    *repository.AlbumRepo
-	galleryRepo  *repository.GalleryRepo  // optional — needed by face smart-album resolver to look up workspace_id
-	faceResolver FaceClusterResolver      // optional — when set, smart albums with face_cluster_label resolve to real assets
+	galleryRepo  *repository.GalleryRepo // optional — needed by face smart-album resolver to look up workspace_id
+	faceResolver FaceClusterResolver     // optional — when set, smart albums with face_cluster_label resolve to real assets
 }
 
 // NewAlbumService creates a new AlbumService.
@@ -84,6 +84,11 @@ func (s *AlbumService) GetBreadcrumb(ctx context.Context, albumID uuid.UUID) ([]
 // AddAsset adds an asset to an album.
 func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID uuid.UUID, position int) error {
 	return s.albumRepo.AddAsset(ctx, albumID, assetID, position)
+}
+
+// ListAssets returns all assets linked to an album.
+func (s *AlbumService) ListAssets(ctx context.Context, albumID uuid.UUID) ([]repository.AlbumAsset, error) {
+	return s.albumRepo.ListAssets(ctx, albumID)
 }
 
 // RemoveAsset removes an asset from an album.

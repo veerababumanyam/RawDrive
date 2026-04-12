@@ -141,6 +141,31 @@ func (r *AlbumRepo) AddAsset(ctx context.Context, albumID, assetID uuid.UUID, po
 	return nil
 }
 
+// ListAssets returns all asset links for an album ordered by position.
+func (r *AlbumRepo) ListAssets(ctx context.Context, albumID uuid.UUID) ([]AlbumAsset, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT album_id, asset_id, position, added_at
+		 FROM album_assets
+		 WHERE album_id = $1
+		 ORDER BY position ASC, added_at ASC`,
+		albumID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("album repo list assets: %w", err)
+	}
+	defer rows.Close()
+
+	var items []AlbumAsset
+	for rows.Next() {
+		var item AlbumAsset
+		if err := rows.Scan(&item.AlbumID, &item.AssetID, &item.Position, &item.AddedAt); err != nil {
+			return nil, fmt.Errorf("album repo list assets scan: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 // RemoveAsset removes an asset from an album.
 func (r *AlbumRepo) RemoveAsset(ctx context.Context, albumID, assetID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,

@@ -5,10 +5,15 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import {
+  addAlbumAssets,
+  createGalleryAlbum,
   getGallery,
+  listAlbumAssets,
+  listGalleryAlbums,
   listGalleryAssets,
   updateGallery,
   type Gallery,
+  type GalleryAlbum,
   type GalleryAsset,
 } from "@/lib/api/galleries";
 import { listProofingSelections, createComment, type ProofingSelection } from "@/lib/api/proofing";
@@ -47,10 +52,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
   // E71-S1: Album state
-  const [albums, setAlbums] = useState<{ id: string; name: string; gallery_id: string }[]>([]);
+  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
+  const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<Record<string, string[]>>({});
   const [activeAlbum, setActiveAlbum] = useState<string | null>(null);
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
+  const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
 
   // E68-S1: Bulk selection state
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -145,17 +153,78 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [id]);
 
-  // E71-S1: Fetch albums for this gallery
-  useEffect(() => {
+  const refreshAlbums = useCallback(async () => {
     const t = getStoredAccessToken();
     if (!t) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${id}/albums`, {
-      headers: { Authorization: `Bearer ${t}` },
-    })
-      .then((r) => r.ok ? r.json() : [])
-      .then((data) => setAlbums(Array.isArray(data) ? data : data.data || []))
-      .catch(() => setAlbums([]));
+    try {
+      const nextAlbums = await listGalleryAlbums(t, id);
+      const memberships = await Promise.all(
+        nextAlbums.map(async (album) => {
+          const albumAssets = await listAlbumAssets(t, album.id).catch(() => []);
+          return [album.id, albumAssets.map((item) => item.asset_id)] as const;
+        }),
+      );
+      setAlbums(nextAlbums);
+      setAlbumAssetIdsByAlbum(Object.fromEntries(memberships));
+    } catch {
+      setAlbums([]);
+      setAlbumAssetIdsByAlbum({});
+    }
   }, [id]);
+
+  // E71-S1: Fetch albums for this gallery
+  useEffect(() => {
+    void refreshAlbums();
+  }, [refreshAlbums]);
+
+  const handleCreateAlbum = useCallback(async () => {
+    const name = newAlbumName.trim();
+    if (!name) return;
+    const t = getStoredAccessToken();
+    if (!t) return;
+
+    setCreatingAlbum(true);
+    setError("");
+    try {
+      const album = await createGalleryAlbum(t, id, { name });
+      const selectedIds = Array.from(selectedAssetIds);
+      if (selectedIds.length > 0) {
+        await addAlbumAssets(t, album.id, selectedIds);
+      }
+      setNewAlbumName("");
+      setShowAlbumCreate(false);
+      setActiveAlbum(album.id);
+      setSelectedAssetIds(new Set());
+      setBulkMode(false);
+      await refreshAlbums();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create sub-gallery");
+    } finally {
+      setCreatingAlbum(false);
+    }
+  }, [id, newAlbumName, refreshAlbums, selectedAssetIds]);
+
+  const buildShareUrl = useCallback((albumId?: string) => {
+    if (!gallery?.slug) return "";
+    const query = albumId ? `?album=${encodeURIComponent(albumId)}` : "";
+    const path = `/g/${gallery.slug}${query}`;
+    return typeof window === "undefined" ? path : `${window.location.origin}${path}`;
+  }, [gallery?.slug]);
+
+  const copyShareUrl = useCallback(async (albumId?: string) => {
+    if (!gallery?.is_published) {
+      setShareMessage("Publish this gallery before sharing client links.");
+      return;
+    }
+    const url = buildShareUrl(albumId);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareMessage(albumId ? "Sub-gallery link copied." : "Gallery link copied.");
+    } catch {
+      setShareMessage(url);
+    }
+  }, [buildShareUrl, gallery?.is_published]);
 
   // Subscribe to face-filter events from the FaceFilter component. The
   // component doesn't know anything about the page's asset list — it
@@ -194,6 +263,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   const visibleAssets = useMemo(() => {
     let result = assets;
+    if (activeAlbum) {
+      const albumAssetIds = new Set(albumAssetIdsByAlbum[activeAlbum] || []);
+      result = result.filter((a) => a.asset && albumAssetIds.has(a.asset.id));
+    }
     if (faceFilterIds) {
       result = result.filter((a) => a.asset && faceFilterIds.has(a.asset.id));
     }
@@ -201,7 +274,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       result = result.filter((a) => a.asset && proofingFilterAssetIds.has(a.asset.id));
     }
     return result;
-  }, [assets, faceFilterIds, proofingFilterAssetIds]);
+  }, [activeAlbum, albumAssetIdsByAlbum, assets, faceFilterIds, proofingFilterAssetIds]);
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
@@ -527,50 +600,108 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            {/* E71-S1: Album tabs */}
-            {albums.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="rounded-xl border border-border-subtle bg-surface-sunken/40 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-text-primary">Sub-galleries</h3>
+                  <p className="text-xs text-text-secondary">
+                    Group photos for rituals, family sets, or client-only share links.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {gallery.slug && (
+                    <button
+                      type="button"
+                      onClick={() => copyShareUrl()}
+                      className="btn-tertiary px-3 py-1.5 text-xs"
+                    >
+                      Copy gallery link
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAlbumCreate(true)}
+                    className="btn-primary px-3 py-1.5 text-xs"
+                  >
+                    New sub-gallery
+                  </button>
+                </div>
+              </div>
+
+              {shareMessage && (
+                <p className="text-xs text-accent-primary">{shareMessage}</p>
+              )}
+
+              {showAlbumCreate && (
+                <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-elevated p-3 sm:flex-row sm:items-center">
+                  <input
+                    type="text"
+                    value={newAlbumName}
+                    onChange={(e) => setNewAlbumName(e.target.value)}
+                    placeholder="Sub-gallery name"
+                    className="input-base min-w-0 flex-1 text-sm"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleCreateAlbum();
+                      if (e.key === "Escape") { setShowAlbumCreate(false); setNewAlbumName(""); }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateAlbum}
+                    disabled={creatingAlbum || !newAlbumName.trim()}
+                    className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
+                  >
+                    {selectedAssetIds.size > 0
+                      ? `Create with ${selectedAssetIds.size} selected`
+                      : creatingAlbum ? "Creating..." : "Create"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAlbumCreate(false); setNewAlbumName(""); }}
+                    className="btn-tertiary px-3 py-2 text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 <button
+                  type="button"
                   onClick={() => setActiveAlbum(null)}
-                  className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", !activeAlbum ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
+                  className={cn("shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", !activeAlbum ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
                 >
                   All Photos
                 </button>
-                {albums.map((album) => (
-                  <button key={album.id} onClick={() => setActiveAlbum(album.id)}
-                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", activeAlbum === album.id ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
-                  >
-                    {album.name}
-                  </button>
-                ))}
-                {showAlbumCreate ? (
-                  <div className="flex items-center gap-1">
-                    <input type="text" value={newAlbumName} onChange={(e) => setNewAlbumName(e.target.value)}
-                      placeholder="Album name" className="px-2 py-1 text-xs rounded-lg border border-border-default bg-surface-sunken focus:outline-none focus:border-accent-primary w-32"
-                      autoFocus onKeyDown={async (e) => {
-                        if (e.key === "Enter" && newAlbumName.trim()) {
-                          const t = getStoredAccessToken(); if (!t) return;
-                          await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${id}/albums`, {
-                            method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
-                            body: JSON.stringify({ name: newAlbumName.trim() }),
-                          });
-                          setNewAlbumName(""); setShowAlbumCreate(false);
-                          window.location.reload();
-                        }
-                        if (e.key === "Escape") { setShowAlbumCreate(false); setNewAlbumName(""); }
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <button onClick={() => setShowAlbumCreate(true)} className="px-2 py-1.5 text-xs text-text-tertiary hover:text-accent-primary">+ Album</button>
+                {albums.map((album) => {
+                  const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
+                  return (
+                    <div key={album.id} className="flex shrink-0 items-center gap-1 rounded-lg border border-border-subtle px-1 py-1">
+                      <button
+                        type="button"
+                        onClick={() => setActiveAlbum(album.id)}
+                        className={cn("px-2 py-1 text-xs font-medium transition-colors", activeAlbum === album.id ? "text-accent-primary" : "text-text-secondary hover:text-text-primary")}
+                      >
+                        {album.name} <span className="text-text-tertiary">{assetCount}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyShareUrl(album.id)}
+                        className="rounded-md px-2 py-1 text-xs text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
+                      >
+                        Share
+                      </button>
+                    </div>
+                  );
+                })}
+                {albums.length === 0 && (
+                  <span className="text-xs text-text-tertiary">
+                    Select photos, then create a sub-gallery.
+                  </span>
                 )}
               </div>
-            )}
-            {assets.length > 0 && albums.length === 0 && (
-              <button onClick={() => setShowAlbumCreate(true)} className="text-xs text-text-tertiary hover:text-accent-primary">
-                + Create Album
-              </button>
-            )}
+            </div>
 
             {/* FaceFilter surfaces only when we have an auth token and at
                 least one asset — before uploads there's nothing to

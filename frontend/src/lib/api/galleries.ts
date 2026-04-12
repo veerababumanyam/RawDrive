@@ -104,6 +104,27 @@ export interface GalleryAsset {
   is_hero: boolean;
 }
 
+export interface GalleryAlbum {
+  id: string;
+  gallery_id: string;
+  parent_id?: string;
+  name: string;
+  description?: string;
+  cover_asset_id?: string;
+  position: number;
+  smart_filter?: Record<string, unknown>;
+  asset_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AlbumAsset {
+  album_id: string;
+  asset_id: string;
+  position: number;
+  added_at: string;
+}
+
 export async function listGalleries(token: string, params?: { status?: string; type?: string; search?: string }): Promise<Gallery[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/galleries?${query}`, {
@@ -175,6 +196,52 @@ export async function listGalleryAssets(token: string, galleryId: string): Promi
   return [];
 }
 
+export async function listGalleryAlbums(token: string, galleryId: string): Promise<GalleryAlbum[]> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/albums`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to list albums: ${res.status}`);
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.data)) return body.data;
+  return [];
+}
+
+export async function createGalleryAlbum(
+  token: string,
+  galleryId: string,
+  data: { name: string; description?: string; parent_id?: string },
+): Promise<GalleryAlbum> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/albums`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to create album: ${res.status}`);
+  const body = await res.json();
+  return body.data ?? body;
+}
+
+export async function listAlbumAssets(token: string, albumId: string): Promise<AlbumAsset[]> {
+  const res = await fetch(`${API_BASE}/api/v1/albums/${albumId}/assets`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to list album assets: ${res.status}`);
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.data)) return body.data;
+  return [];
+}
+
+export async function addAlbumAssets(token: string, albumId: string, assetIds: string[]): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/albums/${albumId}/assets`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ asset_ids: assetIds }),
+  });
+  if (!res.ok) throw new Error(`Failed to add album assets: ${res.status}`);
+}
+
 export async function getPublicGallery(slug: string): Promise<Gallery> {
   const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}`);
   if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
@@ -231,8 +298,11 @@ export async function getFaceScanStatus(
   return res.json();
 }
 
-export async function getPublicGalleryAssets(slug: string): Promise<PublicAsset[]> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/assets`);
+export async function getPublicGalleryAssets(slug: string, albumId?: string): Promise<PublicAsset[]> {
+  const path = albumId
+    ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
+    : `/api/v1/public/galleries/${slug}/assets`;
+  const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;

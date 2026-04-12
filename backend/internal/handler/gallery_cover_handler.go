@@ -45,11 +45,12 @@ type FocalPointPayload struct {
 
 // CoverUpdateRequest is the canonical shape of PUT /galleries/{id}/cover.
 type CoverUpdateRequest struct {
-	AssetID    string             `json:"asset_id"`
-	StyleID    string             `json:"style_id"`
-	FocalPoint *FocalPointPayload `json:"focal_point,omitempty"`
+	AssetID     string             `json:"asset_id"`
+	StyleID     string             `json:"style_id"`
+	FocalPoint  *FocalPointPayload `json:"focal_point,omitempty"`
+	AspectRatio string             `json:"aspect_ratio,omitempty"`
 	// M19: Cover page template (full_bleed, split_screen, minimal_white, classic_film, festive)
-	Template     string                 `json:"template,omitempty"`
+	Template       string                 `json:"template,omitempty"`
 	TemplateConfig map[string]interface{} `json:"template_config,omitempty"`
 }
 
@@ -122,8 +123,9 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 		gallery.Settings = make(map[string]interface{})
 	}
 	gallery.Settings["cover_style"] = map[string]interface{}{
-		"asset_id": assetID,
-		"style_id": req.StyleID,
+		"asset_id":     assetID,
+		"style_id":     req.StyleID,
+		"aspect_ratio": req.AspectRatio,
 		"focal_point": map[string]float64{
 			"x": req.FocalPoint.X,
 			"y": req.FocalPoint.Y,
@@ -131,10 +133,7 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 	}
 
 	if assetID != nil {
-		if err := h.galleryRepo.UpdateCover(r.Context(), galleryID, assetID); err != nil {
-			http.Error(w, `{"error":"failed to update cover"}`, http.StatusInternalServerError)
-			return
-		}
+		gallery.CoverAssetID = assetID
 	}
 
 	// M19: Persist cover template selection

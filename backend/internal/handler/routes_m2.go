@@ -176,6 +176,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 			r.Get("/{id}", albumHandler.GetByID)
 			r.Delete("/{id}", albumHandler.Delete)
 			r.Get("/{id}/breadcrumb", albumHandler.Breadcrumb)
+			r.Get("/{id}/assets", albumHandler.ListAssets)
+			r.Post("/{id}/assets", albumHandler.AddAssets)
 		})
 	}
 
@@ -308,6 +310,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 // MUST be called on the outer router (not inside JWT middleware group).
 func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	publicHandler := NewPublicGalleryHandler(deps.GalleryService, deps.AssetService, deps.ShareLinkService)
+	if deps.AlbumService != nil {
+		publicHandler = publicHandler.WithAlbumService(deps.AlbumService)
+	}
 	// GAL-FR-115 + 107/108: inject optional pool + face repo for branding
 	// tier lookup and gallery-scoped FaceID matching.
 	if deps.Pool != nil {
@@ -322,6 +327,7 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
+		r.Get("/galleries/{slug}/albums/{albumId}/assets", publicHandler.ListAlbumAssets)
 		r.Get("/galleries/{slug}/assets/{assetId}/download", publicHandler.PublicAssetDownload)
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
@@ -418,29 +424,29 @@ type M2Dependencies struct {
 	LifecycleService     *service.AssetLifecycleService
 	AssetRepo            *repository.AssetRepo
 	// M12 dependencies
-	DesignTemplateSvc    *service.DesignTemplateService
-	GalleryRepo          *repository.GalleryRepo
-	GalleryDesignSvc     *service.GalleryDesignService
-	DesignCollabSvc      *service.DesignCollabService
-	DesignAISvc          *service.DesignAIService
+	DesignTemplateSvc *service.DesignTemplateService
+	GalleryRepo       *repository.GalleryRepo
+	GalleryDesignSvc  *service.GalleryDesignService
+	DesignCollabSvc   *service.DesignCollabService
+	DesignAISvc       *service.DesignAIService
 	// M13 dependencies (nil-safe)
-	GalleryAccessSvc     *service.GalleryAccessService
-	ProofingSessionSvc   *service.ProofingSessionService
-	ProofingCommentSvc   *service.ProofingCommentService
-	AlbumApprovalSvc     *service.AlbumApprovalService
+	GalleryAccessSvc   *service.GalleryAccessService
+	ProofingSessionSvc *service.ProofingSessionService
+	ProofingCommentSvc *service.ProofingCommentService
+	AlbumApprovalSvc   *service.AlbumApprovalService
 	// M14 dependencies (nil-safe)
-	DownloadService      *service.DownloadService
-	GalleryAnalyticsSvc  *service.GalleryAnalyticsService
-	WebhookSvc           *service.WebhookService
-	ProductService       *service.ProductService
-	CartService          *service.CartService
-	FulfillmentBridge    *service.ProofingFulfillmentBridge
-	BannerService        *service.BannerService
+	DownloadService     *service.DownloadService
+	GalleryAnalyticsSvc *service.GalleryAnalyticsService
+	WebhookSvc          *service.WebhookService
+	ProductService      *service.ProductService
+	CartService         *service.CartService
+	FulfillmentBridge   *service.ProofingFulfillmentBridge
+	BannerService       *service.BannerService
 	// M15 dependencies (nil-safe)
-	ConsentSvc           *service.ConsentService
+	ConsentSvc *service.ConsentService
 	// M16 dependencies (nil-safe)
-	UploadValidationSvc  service.UploadManifestValidation
+	UploadValidationSvc service.UploadManifestValidation
 	// M21 dependencies (nil-safe)
-	FaceSvc              *ai.FaceService
-	JobRepo              *ai.JobRepo
+	FaceSvc *ai.FaceService
+	JobRepo *ai.JobRepo
 }

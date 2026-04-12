@@ -124,22 +124,22 @@ func (r *GalleryRepo) Duplicate(ctx context.Context, sourceID uuid.UUID, newTitl
 	}
 
 	dup := &Gallery{
-		ID:              uuid.New(),
-		WorkspaceID:     src.WorkspaceID,
-		Title:           newTitle,
-		Slug:            generateSlug(newTitle),
-		Description:     src.Description,
-		GalleryType:     src.GalleryType,
-		Settings:        src.Settings,
-		WatermarkConfig: src.WatermarkConfig,
-		CoverTemplate:   src.CoverTemplate,
-		CoverConfig:     src.CoverConfig,
-		DownloadEnabled: src.DownloadEnabled,
-		SortPreference:  src.SortPreference,
+		ID:               uuid.New(),
+		WorkspaceID:      src.WorkspaceID,
+		Title:            newTitle,
+		Slug:             generateSlug(newTitle),
+		Description:      src.Description,
+		GalleryType:      src.GalleryType,
+		Settings:         src.Settings,
+		WatermarkConfig:  src.WatermarkConfig,
+		CoverTemplate:    src.CoverTemplate,
+		CoverConfig:      src.CoverConfig,
+		DownloadEnabled:  src.DownloadEnabled,
+		SortPreference:   src.SortPreference,
 		WhatsappTemplate: src.WhatsappTemplate,
-		MaxSelections:   src.MaxSelections,
-		Status:          "draft",
-		CreatedBy:       &createdBy,
+		MaxSelections:    src.MaxSelections,
+		Status:           "draft",
+		CreatedBy:        &createdBy,
 	}
 
 	if err := r.Create(ctx, dup); err != nil {
@@ -206,9 +206,21 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		g.gallery_type, g.settings, g.password_hash, g.watermark_config, g.is_published,
 		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
 		g.cover_template, g.cover_config, g.expires_at, g.download_enabled, g.sort_preference, g.whatsapp_template,
-		a.thumbnail_urls
+		cover_asset.thumbnail_urls
 		FROM galleries g
-		LEFT JOIN assets a ON a.id = g.cover_asset_id
+		LEFT JOIN LATERAL (
+			SELECT a.thumbnail_urls
+			FROM gallery_assets ga
+			INNER JOIN assets a ON a.id = ga.asset_id
+			WHERE ga.gallery_id = g.id
+			  AND a.deleted_at IS NULL
+			ORDER BY
+				CASE WHEN g.cover_asset_id IS NOT NULL AND a.id = g.cover_asset_id THEN 0 ELSE 1 END,
+				ga.is_hero DESC,
+				ga.sort_order ASC,
+				ga.added_at ASC
+			LIMIT 1
+		) cover_asset ON true
 		WHERE g.workspace_id = $1 AND g.deleted_at IS NULL`
 	args := []interface{}{f.WorkspaceID}
 	argIdx := 2

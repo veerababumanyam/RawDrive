@@ -19,3 +19,8 @@ playwright-report/
 
 # Prevent accidentally shipping local plugin/skill cache
 .claude/
+.codex/
+.codex-runtime-logs/
+.playwright-mcp/
+_cobolt-output/
+**/_cobolt-output/

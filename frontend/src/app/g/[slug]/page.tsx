@@ -9,16 +9,19 @@ import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate"
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ album?: string }>;
 }
 
-export default async function PublicGalleryPage({ params }: Props) {
+export default async function PublicGalleryPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const query = searchParams ? await searchParams : {};
+  const albumId = typeof query.album === "string" && query.album ? query.album : undefined;
 
   let gallery;
   let assets;
   try {
     gallery = await getPublicGallery(slug);
-    assets = await getPublicGalleryAssets(slug);
+    assets = await getPublicGalleryAssets(slug, albumId);
   } catch (err) {
     // Distinguish between "gallery not found" and "gallery not published".
     // If the error message contains a 404, the slug is either invalid or

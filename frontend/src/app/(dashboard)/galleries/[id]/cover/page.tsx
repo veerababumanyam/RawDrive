@@ -30,6 +30,9 @@ export default function CoverPhotoPage() {
     aspectRatio: "16:9",
     zoom: 1,
   });
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   // Fetch gallery and its assets on mount
   useEffect(() => {
@@ -55,8 +58,9 @@ export default function CoverPhotoPage() {
         if (cancelled) return;
         const assets = hydrated.filter((a): a is Asset => a !== null);
         setRealAssets(assets);
-        if (assets.length > 0 && !state.assetId) {
-          setState((s) => ({ ...s, assetId: assets[0].id }));
+        const initialAssetId = g.cover_asset_id || assets[0]?.id || null;
+        if (initialAssetId) {
+          setState((s) => ({ ...s, assetId: initialAssetId }));
         }
       } catch (err) {
         console.error("Failed to load cover page data:", err);
@@ -64,7 +68,6 @@ export default function CoverPhotoPage() {
     })();
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]);
 
   const token = getStoredAccessToken();
@@ -86,12 +89,34 @@ export default function CoverPhotoPage() {
   }, []);
 
   const handleSave = async () => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setSaveError("Your session expired. Please log in again.");
+      return;
+    }
+    if (!state.assetId) {
+      setSaveError("Select a gallery photo before saving the cover.");
+      return;
+    }
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/cover`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ asset_id: state.assetId, focal_point: state.focalPoint, aspect_ratio: state.aspectRatio }),
-    }).catch(console.error);
+    setSaving(true);
+    setSaveError("");
+    setSaveMessage("");
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/cover`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ asset_id: state.assetId, focal_point: state.focalPoint, aspect_ratio: state.aspectRatio }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      setGallery((g) => g ? { ...g, cover_asset_id: state.assetId || undefined } : g);
+      setSaveMessage("Cover saved.");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save cover.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -105,8 +130,10 @@ export default function CoverPhotoPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => setState((s) => ({ ...s, focalPoint: { x: 50, y: 50 }, zoom: 1 }))}
             className="px-4 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5 transition-colors">Reset</button>
-          <button onClick={handleSave}
-            className="px-6 py-2 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary">Save Cover</button>
+          <button onClick={handleSave} disabled={saving || !state.assetId}
+            className="px-6 py-2 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary disabled:opacity-50">
+            {saving ? "Saving..." : "Save Cover"}
+          </button>
         </div>
       </header>
 
@@ -174,6 +201,8 @@ export default function CoverPhotoPage() {
           {/* Select Cover */}
           <section>
             <h3 className="text-sm font-semibold mb-3">Select Cover</h3>
+            {saveMessage && <p className="mb-3 text-xs text-success">{saveMessage}</p>}
+            {saveError && <p className="mb-3 text-xs text-danger">{saveError}</p>}
             <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
               {realAssets.map((a) => {
                 const thumbUrl = getAssetPreviewUrl(a, token);
@@ -189,9 +218,9 @@ export default function CoverPhotoPage() {
                 );
               })}
             </div>
-            <button className="mt-3 w-full py-2 text-xs rounded-xl border border-white/10 hover:bg-white/5 transition-colors">
-              Upload External Image
-            </button>
+            <p className="mt-3 text-xs text-on-surface-variant">
+              Cover photos are selected from uploaded gallery photos.
+            </p>
           </section>
 
           {/* Cover Previews */}

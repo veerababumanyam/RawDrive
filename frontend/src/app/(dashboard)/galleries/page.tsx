@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { listGalleries, createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { galleryStatusClasses, galleryTypeClasses } from "@/lib/dashboard-ui";
+import { galleryStatusClasses, galleryTypeClasses, getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 export default function GalleriesPage() {
   const router = useRouter();
@@ -289,13 +289,10 @@ export default function GalleriesPage() {
           }
         >
           {filteredGalleries.map((g) => {
-            const coverUrl =
-              g.cover_thumbnails?.thumb_md_webp ||
-              g.cover_thumbnails?.thumb_md ||
-              g.cover_thumbnails?.thumb_sm_webp ||
-              g.cover_thumbnails?.thumb_sm ||
-              g.cover_thumbnails?.thumb_lg ||
-              (g.cover_thumbnails ? Object.values(g.cover_thumbnails)[0] : undefined);
+            const coverUrl = getAssetPreviewUrl(
+              { thumbnail_urls: g.cover_thumbnails || {} },
+              getStoredAccessToken(),
+            );
 
             return (
               <Link

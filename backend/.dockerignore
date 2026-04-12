@@ -11,10 +11,23 @@ tests/
 # workstation — do NOT ship into the build context.
 *.exe
 *.exe~
+api-fixed
+api-fixed~
+rawdrive-api
+rawdrive-api~
+*.test
+*.test.exe
 *.log
 *.sh
+.storage/
+.tmp/
 _cobolt-output/
+**/_cobolt-output/
 frontend/
+.claude/
+.codex/
+.codex-runtime-logs/
+.playwright-mcp/
 
 # Seed SQL contains test-user fixtures with known passwords per
 # AGENTS.md M7.5 platform roles. Integration tests consume it via

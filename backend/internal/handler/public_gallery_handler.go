@@ -22,6 +22,7 @@ type PublicGalleryHandler struct {
 	gallerySvc *service.GalleryService
 	assetSvc   *service.AssetService
 	shareSvc   *service.ShareLinkService
+	albumSvc   *service.AlbumService
 
 	// M13 deferred-FR closure deps (optional — nil-safe handlers degrade
 	// gracefully so existing tests that construct PublicGalleryHandler
@@ -40,6 +41,12 @@ func NewPublicGalleryHandler(gs *service.GalleryService, as *service.AssetServic
 func (h *PublicGalleryHandler) WithM13Deps(pool *pgxpool.Pool, faceRepo *ai.FaceRepo) *PublicGalleryHandler {
 	h.pool = pool
 	h.faceRepo = faceRepo
+	return h
+}
+
+// WithAlbumService wires album lookups for public sub-gallery links.
+func (h *PublicGalleryHandler) WithAlbumService(albumSvc *service.AlbumService) *PublicGalleryHandler {
+	h.albumSvc = albumSvc
 	return h
 }
 
@@ -138,6 +145,59 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 			Blurhash:      asset.Blurhash,
 			ThumbnailURLs: asset.ThumbnailURLs,
 			SortOrder:     ga.SortOrder,
+		})
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// ListAlbumAssets handles GET /api/v1/public/galleries/{slug}/albums/{albumId}/assets.
+func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Request) {
+	if h.albumSvc == nil {
+		http.Error(w, `{"error":"album service unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	slug := chi.URLParam(r, "slug")
+	albumID, err := uuid.Parse(chi.URLParam(r, "albumId"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid album id"}`, http.StatusBadRequest)
+		return
+	}
+
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+
+	album, err := h.albumSvc.GetByID(r.Context(), albumID)
+	if err != nil || album == nil || album.GalleryID != gallery.ID {
+		http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+		return
+	}
+
+	albumAssets, err := h.albumSvc.ListAssets(r.Context(), albumID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	result := make([]publicAssetResponse, 0, len(albumAssets))
+	for _, aa := range albumAssets {
+		asset, err := h.assetSvc.GetByID(r.Context(), aa.AssetID)
+		if err != nil || asset == nil {
+			continue
+		}
+		result = append(result, publicAssetResponse{
+			ID:            asset.ID.String(),
+			Filename:      asset.Filename,
+			ContentType:   asset.ContentType,
+			Width:         asset.Width,
+			Height:        asset.Height,
+			Blurhash:      asset.Blurhash,
+			ThumbnailURLs: asset.ThumbnailURLs,
+			SortOrder:     aa.Position,
 		})
 	}
 

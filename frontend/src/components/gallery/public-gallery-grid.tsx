@@ -275,11 +275,13 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
       ) : (
         <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4" aria-label={`Grid view for gallery ${slug}`}>
           {visibleAssets.map((asset) => {
-            // Backend thumbnail worker emits keys thumb_lg / thumb_md
-            // / thumb_sm (prefixed) — not the legacy lg/md/sm shape
-            // some earlier code paths expected. Try both so pre-fix
-            // gallery rows still render.
+            // Prefer the mandatory WebP derivatives for public display,
+            // but keep legacy JPEG keys as fallbacks for older rows.
             const thumbUrl =
+              asset.thumbnail_urls?.thumb_md_webp ||
+              asset.thumbnail_urls?.thumb_lg_webp ||
+              asset.thumbnail_urls?.thumb_sm_webp ||
+              asset.thumbnail_urls?.display_webp ||
               asset.thumbnail_urls?.thumb_lg ||
               asset.thumbnail_urls?.thumb_md ||
               asset.thumbnail_urls?.thumb_sm ||
@@ -486,7 +488,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
         return (
           <div
             ref={lightboxRef}
-            className="fixed inset-0 z-50 flex flex-col bg-black/95"
+            className="fixed inset-0 z-50 bg-black/95"
             onClick={(e) => { if (e.target === e.currentTarget) setLightboxIdx(null); }}
             onMouseMove={resetChromeTimer}
             role="dialog"
@@ -494,7 +496,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
             aria-label={`Photo: ${photo.filename}`}
           >
             {/* Toolbar — auto-hides in fullscreen after 3s idle */}
-            <div className={`flex items-center justify-between px-4 py-3 shrink-0 transition-opacity duration-300 ${
+            <div className={`absolute left-0 right-0 top-0 z-20 flex items-center justify-between px-4 py-3 transition-opacity duration-300 ${
               chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}>
               <span className="text-sm text-white font-medium truncate max-w-[300px]">
@@ -513,7 +515,10 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
             </div>
 
             {/* Image */}
-            <div className="relative flex flex-1 items-center justify-center overflow-auto">
+            <div
+              className="absolute inset-0 flex items-center justify-center overflow-auto"
+              onClick={(e) => { if (e.target === e.currentTarget) setLightboxIdx(null); }}
+            >
               {lightboxIdx > 0 && (
                 <GlassIconButton
                   size="lg"
@@ -529,8 +534,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 <img
                   src={fullUrl}
                   alt={photo.filename}
-                  className="max-h-full max-w-full object-contain p-4 transition-transform duration-200"
-                  style={{ transform: `scale(${zoom})` }}
+                  className="h-full w-full object-contain transition-transform duration-200"
+                  style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
                   draggable={false}
                 />
               ) : (
@@ -551,11 +556,18 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
             {/* Filmstrip — scrollable thumbnail strip for quick navigation, auto-hides in fullscreen */}
             {visibleAssets.length > 1 && (
-              <div className={`flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 shrink-0 transition-opacity duration-300 ${
+              <div className={`absolute bottom-8 left-0 right-0 z-20 flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300 ${
                 chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
               }`} role="tablist" aria-label="Photo filmstrip">
                 {visibleAssets.map((a, i) => {
-                  const thumb = a.thumbnail_urls?.thumb_sm || a.thumbnail_urls?.sm || a.thumbnail_urls?.thumb_md || Object.values(a.thumbnail_urls || {})[0] || "";
+                  const thumb =
+                    a.thumbnail_urls?.thumb_sm_webp ||
+                    a.thumbnail_urls?.thumb_md_webp ||
+                    a.thumbnail_urls?.thumb_sm ||
+                    a.thumbnail_urls?.sm ||
+                    a.thumbnail_urls?.thumb_md ||
+                    Object.values(a.thumbnail_urls || {})[0] ||
+                    "";
                   return (
                     <button
                       key={a.id}
@@ -579,7 +591,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
             )}
 
             {/* Bottom hints */}
-            <div className={`px-4 pb-4 shrink-0 transition-opacity duration-300 ${
+            <div className={`absolute bottom-0 left-0 right-0 z-20 px-4 pb-4 transition-opacity duration-300 ${
               chromeVisible ? "opacity-100" : "opacity-0"
             }`}>
               <div className="flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide">

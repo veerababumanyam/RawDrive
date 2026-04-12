@@ -118,6 +118,68 @@ func (h *AlbumHandler) Breadcrumb(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"data": chain})
 }
 
+// ListAssets handles GET /api/v1/albums/{id}/assets.
+func (h *AlbumHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+
+	assets, err := h.albumSvc.ListAssets(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": assets})
+}
+
+// AddAssets handles POST /api/v1/albums/{id}/assets.
+func (h *AlbumHandler) AddAssets(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var input struct {
+		AssetID  string   `json:"asset_id"`
+		AssetIDs []string `json:"asset_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	rawIDs := input.AssetIDs
+	if input.AssetID != "" {
+		rawIDs = append(rawIDs, input.AssetID)
+	}
+	if len(rawIDs) == 0 {
+		http.Error(w, `{"error":"asset_id or asset_ids required"}`, http.StatusBadRequest)
+		return
+	}
+
+	added := 0
+	for i, rawID := range rawIDs {
+		assetID, err := uuid.Parse(rawID)
+		if err != nil {
+			http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
+			return
+		}
+		if err := h.albumSvc.AddAsset(r.Context(), id, assetID, i); err != nil {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+		added++
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"added": added})
+}
+
 // Delete handles DELETE /api/v1/albums/{id}
 func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

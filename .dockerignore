@@ -10,6 +10,16 @@ e2e/node_modules
 e2e/test-results
 e2e/screenshots
 backend/api.exe
+backend/*.exe
+backend/*.exe~
+backend/api-fixed
+backend/api-fixed~
+backend/rawdrive-api
+backend/rawdrive-api~
+backend/*.test
+backend/*.test.exe
+backend/.storage
+backend/.tmp
 backend/tmp
 dist
 coverage
