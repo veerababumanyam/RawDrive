@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { listContacts, createContact, type Contact } from "@/lib/api/crm";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  listContacts,
+  createContact,
+  importContactsCSV,
+  type Contact,
+  type ContactImportResult,
+} from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 
 export default function ContactsPage() {
@@ -12,6 +18,12 @@ export default function ContactsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", contact_type: "client" });
+  // CSV import state — we keep the file input hidden and drive it from a
+  // visible "Import CSV" button. `importResult` doubles as the banner
+  // payload so we can reuse the existing error/status styling.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ContactImportResult | null>(null);
 
   const refresh = useCallback(() => {
     const token = getStoredAccessToken();
@@ -22,6 +34,31 @@ export default function ContactsPage() {
   }, [search]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const handleImportClick = () => {
+    setImportResult(null);
+    setError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleImportChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const token = getStoredAccessToken();
+      const result = await importContactsCSV(token, file);
+      setImportResult(result);
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import contacts");
+    } finally {
+      setImporting(false);
+      // Reset the input so the same filename can be re-selected if needed.
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -69,13 +106,52 @@ export default function ContactsPage() {
             {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
-        >
-          + New Client
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleImportClick}
+            disabled={importing}
+            className="rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-sunken disabled:opacity-50 min-h-[44px]"
+          >
+            {importing ? "Importing…" : "Import CSV"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleImportChange}
+            className="hidden"
+          />
+          <button
+            onClick={() => setShowCreate(true)}
+            className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+          >
+            + New Client
+          </button>
+        </div>
       </div>
+
+      {importResult && (
+        <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-text-primary">
+          <p>
+            Imported <strong>{importResult.imported}</strong> contact
+            {importResult.imported === 1 ? "" : "s"}
+            {importResult.skipped > 0 && (
+              <>, skipped <strong>{importResult.skipped}</strong></>
+            )}
+            .
+          </p>
+          {importResult.errors && importResult.errors.length > 0 && (
+            <details className="mt-2 text-xs text-text-secondary">
+              <summary className="cursor-pointer">View {importResult.errors.length} warning{importResult.errors.length === 1 ? "" : "s"}</summary>
+              <ul className="mt-1 list-disc pl-5">
+                {importResult.errors.slice(0, 20).map((msg, i) => (
+                  <li key={i}>{msg}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
 
       <input
         type="text"

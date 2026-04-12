@@ -108,6 +108,32 @@ export async function createContact(token: string, contact: Partial<Contact>): P
   return res.json();
 }
 
+export interface ContactImportResult {
+  imported: number;
+  skipped: number;
+  errors?: string[];
+}
+
+// Uploads a CSV file of contacts. The backend expects a multipart form with
+// field name "file" and a header row containing at minimum "name". Optional
+// columns: email, phone, company, type, tags (semicolon-separated).
+export async function importContactsCSV(token: string, file: File): Promise<ContactImportResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE}/api/v1/crm/contacts/import`, {
+    method: "POST",
+    // Intentionally NO Content-Type header — browser sets the multipart
+    // boundary automatically when the body is FormData.
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to import contacts");
+  }
+  return res.json();
+}
+
 export async function listDeals(token: string, params?: { stage?: string }): Promise<Deal[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/crm/deals?${query}`, { headers: headers(token) });
