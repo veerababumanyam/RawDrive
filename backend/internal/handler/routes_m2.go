@@ -317,7 +317,7 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		}
 		publicHandler = publicHandler.WithM13Deps(deps.Pool, fr)
 	}
-	proofingHandler := NewProofingHandler(deps.ProofingService)
+	proofingHandler := NewProofingHandler(deps.ProofingService).WithGalleryService(deps.GalleryService)
 
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)

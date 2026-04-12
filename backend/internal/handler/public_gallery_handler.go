@@ -86,6 +86,11 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	}
 	// Password protection indicator (PasswordHash is json:"-" so never leaks)
 	gallery.Settings["has_password"] = gallery.PasswordHash != nil && *gallery.PasswordHash != ""
+	// M22 E74-S1: Expose watermark config and selection limit to public client
+	if gallery.WatermarkConfig != nil {
+		gallery.Settings["watermark_config"] = gallery.WatermarkConfig
+	}
+	gallery.Settings["max_selections"] = gallery.MaxSelections
 
 	respondJSON(w, http.StatusOK, gallery)
 }
