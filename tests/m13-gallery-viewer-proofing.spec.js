@@ -29,6 +29,10 @@ test.beforeEach(async ({ page }) => {
   }
 });
 
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {string} path
+ */
 async function gotoAndWait(page, path) {
   await page.goto(path);
   await page.waitForLoadState('networkidle');
@@ -83,6 +87,7 @@ test.describe('M14: Gallery Analytics Page', () => {
 
 test.describe('M13: No console errors', () => {
   test('proofing page has no critical console errors', async ({ page }) => {
+    /** @type {string[]} */
     const errors = [];
     page.on('console', msg => {
       if (msg.type() === 'error' && !msg.text().includes('favicon')) {

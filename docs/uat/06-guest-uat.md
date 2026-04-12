@@ -226,8 +226,15 @@ All P0. Guests are adversarial by default — security is first-class.
 | K10 | Public profile page does NOT expose photographer's private email, phone, or billing data beyond what they published |
 
 ### K05 — Brute force rate limit
-- **Steps:** script 50 password attempts at `/g/<wedding-slug>/password` with wrong passwords from a single IP.
-- **Expected:** after the configured threshold (document the exact number here during UAT), requests return 429 with `Retry-After`. Server logs show the event. Legitimate password entry from a different IP still works.
+- **Policy under test:** 10 wrong attempts per minute per `(IP, gallery_slug)` key, then exponential backoff: 60 s → 120 s → 240 s → 480 s → lock until manually cleared. Correct password at any point resets the counter for that IP/slug pair. Counter is keyed on `(IP + slug)` — **not** just IP — so a shared corporate NAT entering the wrong password on one gallery does not lock employees out of a different gallery.
+- **Steps:**
+  1. From a fresh IP, script 10 wrong passwords at `/g/<wedding-slug>/password` within 60 s — all return 401 with a normal error.
+  2. Submit the 11th attempt — must return **429** with `Retry-After: 60`.
+  3. Wait 60 s, submit the 12th wrong — must return 429 with `Retry-After: 120` (exponential).
+  4. From a different IP (or a different slug on the same IP), submit one wrong password — must return 401, NOT 429. (Proves the key is `IP + slug`, not global.)
+  5. From the original IP/slug, submit the *correct* password — must succeed and reset the counter.
+- **Expected:** step 2 hits the 429 boundary exactly at attempt 11; step 4 proves key scoping; step 5 proves counter reset. Server logs show a `rate_limit.exceeded` event for each 429.
+- **Pass criteria:** all five sub-steps behave as specified. If a shared NAT could be locked out of an unrelated gallery (step 4 fails), that is a **P0 defect**.
 
 ---
 

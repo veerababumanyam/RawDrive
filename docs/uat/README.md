@@ -172,6 +172,21 @@ Some flows touch multiple roles in sequence. When testing these, coordinate betw
 
 Scenarios marked **[cross-persona]** in a doc must be executed with the other persona's tester online and in sync.
 
+### 8.1 Acceptable device pairings for cross-persona flows
+
+Session isolation between personas is non-negotiable — a single browser profile cannot hold two personas' cookies simultaneously without false test results. Below are the approved configurations:
+
+| Pairing | Persona A | Persona B | Use when |
+|---|---|---|---|
+| **Two browser profiles on one desktop** | Chrome Profile 1 (incognito) | Chrome Profile 2 (incognito) | Default for most cross-persona flows on staging. Cheapest setup. |
+| **Desktop + phone** | Desktop Chrome | Real Android / iOS Safari | **Required** for Client UAT cross-persona flows that install a PWA (Client B01–B03) and for any mobile-viewport assertion (Client L01–L06). |
+| **Two phones** | Android | iOS | Required once per cycle for Client P01 (proofing round-trip on mobile) to catch platform-specific WebKit vs Blink bugs. |
+| **Desktop + a second machine** | Your workstation | A separate VM or colleague's laptop | Required for Admin↔Super Admin escalation (Admin L02 / Super Admin C03) when the organisation enforces 2FA with hardware keys tied to the Super Admin's own machine. |
+
+**Not acceptable:** two tabs in the same browser profile (cookies leak), incognito + non-incognito in the same window (shares workers), or "switching user" mid-flow without a fresh authentication session. If the available hardware does not match one of these pairings, halt the cross-persona scenario and escalate — do not improvise.
+
+Each cross-persona scenario in the persona docs lists the minimum pairing it supports; mobile-only scenarios (e.g. Client B03 installed-PWA-reopen) cannot be substituted with desktop emulation for sign-off.
+
 ---
 
 ## 9. Non-negotiable Rules for Testers
