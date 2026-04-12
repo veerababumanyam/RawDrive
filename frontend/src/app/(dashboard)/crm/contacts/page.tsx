@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   listContacts,
   createContact,
@@ -15,6 +16,7 @@ import { TableToolbar } from "@/components/ui/table-toolbar";
 type ContactRow = Contact & Record<string, unknown>;
 
 export default function ContactsPage() {
+  const router = useRouter();
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +263,7 @@ export default function ContactsPage() {
           {table.pageData.map((c) => (
             <div
               key={c.id}
+              onClick={() => router.push(`/crm/contacts/${c.id}`)}
               className="bg-surface-raised rounded-xl p-4 border border-border-default hover:border-accent/30 transition-colors cursor-pointer flex items-center justify-between"
             >
               <div>

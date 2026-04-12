@@ -57,15 +57,21 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// (which would risk existing data), we normalize at the handler
 	// boundary: everything that is essentially a billable service
 	// collapses to "service".
+	// M23: proforma and quotation are now first-class types in the
+	// DB CHECK constraint (migration 073). Map legacy aliases; leave
+	// valid types as-is.
 	switch inv.InvoiceType {
-	case "", "tax_invoice", "proforma", "advance_receipt":
+	case "", "tax_invoice", "advance_receipt":
 		inv.InvoiceType = "service"
-	case "credit_note":
-		// already valid
-	case "subscription", "addon":
-		// already valid
+	case "proforma", "quotation", "credit_note", "subscription", "addon", "service":
+		// already valid in CHECK constraint
 	default:
 		inv.InvoiceType = "service"
+	}
+
+	// M23: Compute amount-in-words for the invoice total.
+	if inv.TotalPaisa > 0 {
+		inv.AmountInWords = service.AmountInWords(inv.TotalPaisa)
 	}
 
 	// Default the state_id from the caller's JWT state claim when
@@ -269,7 +275,8 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		SignatureName: wsSigName,
 		Terms:         wsTerms,
 		Footer:        wsFooter,
-		AmountInWords: amountInWords(inv.TotalPaisa),
+		AmountInWords: service.AmountInWords(inv.TotalPaisa),
+		PlaceOfSupply: inv.PlaceOfSupplyState,
 	}
 	if inv.DueDate != nil {
 		payload.DueDate = inv.DueDate.Format("2 Jan 2006")
@@ -354,79 +361,6 @@ func splitNonEmpty(s, sep string) []string {
 	return out
 }
 
-// amountInWords converts a paisa amount to the Indian-English words form
-// (e.g. "One Lakh Forty-Seven Thousand Five Hundred rupees only") so the
-// invoice PDF has the legally-required amount-in-words line.
-func amountInWords(paisa int64) string {
-	if paisa == 0 {
-		return "Zero rupees only"
-	}
-	rupees := paisa / 100
-	paise := paisa % 100
-	text := indianNumberWords(rupees) + " rupees"
-	if paise > 0 {
-		text += " and " + indianNumberWords(paise) + " paise"
-	}
-	return text + " only"
-}
-
-// indianNumberWords spells a positive integer in Indian lakh/crore words.
-func indianNumberWords(n int64) string {
-	if n == 0 {
-		return "Zero"
-	}
-	ones := []string{
-		"", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
-		"Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
-		"Seventeen", "Eighteen", "Nineteen",
-	}
-	tens := []string{"", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"}
-	under100 := func(x int64) string {
-		if x < 20 {
-			return ones[x]
-		}
-		t := ones[x%10]
-		if t == "" {
-			return tens[x/10]
-		}
-		return tens[x/10] + "-" + t
-	}
-	under1000 := func(x int64) string {
-		if x == 0 {
-			return ""
-		}
-		h := ""
-		if x >= 100 {
-			h = ones[x/100] + " Hundred"
-			x = x % 100
-			if x > 0 {
-				h += " "
-			}
-		}
-		return h + under100(x)
-	}
-
-	// Break into crore / lakh / thousand / remainder groups.
-	crore := n / 10000000
-	n %= 10000000
-	lakh := n / 100000
-	n %= 100000
-	thousand := n / 1000
-	n %= 1000
-	rest := n
-
-	parts := []string{}
-	if crore > 0 {
-		parts = append(parts, indianNumberWords(crore)+" Crore")
-	}
-	if lakh > 0 {
-		parts = append(parts, under100(lakh)+" Lakh")
-	}
-	if thousand > 0 {
-		parts = append(parts, under1000(thousand)+" Thousand")
-	}
-	if rest > 0 {
-		parts = append(parts, under1000(rest))
-	}
-	return strings.TrimSpace(strings.Join(parts, " "))
-}
+// amountInWords was previously defined locally here but has been removed
+// in favour of the canonical service.AmountInWords to avoid divergence.
+// See backend/internal/service/amount_in_words.go.

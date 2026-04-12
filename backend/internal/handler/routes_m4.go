@@ -38,6 +38,9 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 	gstReportSvc := service.NewGSTReportService(deps.DB)
 	gstReportHandler := NewGSTReportHandler(gstReportSvc)
 
+	// Client profile handler (360-degree view)
+	clientProfileHandler := NewClientProfileHandler(deps.DB)
+
 	// CRM routes
 	r.Route("/api/v1/crm", func(r chi.Router) {
 		// Leads
@@ -57,6 +60,9 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 			r.Put("/{id}", contactHandler.Update)
 			r.Post("/merge", contactHandler.Merge)
 			r.Post("/import", contactHandler.ImportCSV)
+			// 360-degree client profile (M23)
+			r.Get("/{id}/profile", clientProfileHandler.GetProfile)
+			r.Get("/{id}/timeline", clientProfileHandler.GetTimeline)
 		})
 
 		// Deals
@@ -111,6 +117,13 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 	// Shared alias under /api/v1/invoices/{id}/pdf (in addition to the
 	// billing path) for callers that prefer the resource-level URL scheme.
 	r.Get("/api/v1/invoices/{id}/pdf", invoiceHandler.DownloadPDF)
+
+	// GST utilities (M23)
+	gstStatesHandler := NewGSTStatesHandler()
+	r.Route("/api/v1/gst", func(r chi.Router) {
+		r.Get("/states", gstStatesHandler.ListStates)
+		r.Get("/determine", gstStatesHandler.DetermineGSTType)
+	})
 
 	// Calendar routes
 	r.Route("/api/v1/calendar", func(r chi.Router) {

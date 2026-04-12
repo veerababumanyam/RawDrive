@@ -37,7 +37,7 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     const token = getStoredAccessToken();
     try {
-      const res = await listUsers(token);
+      const res = await listUsers(token, {});
       setUsers(res.items as UserRow[]);
       setTotal(res.total_count);
       setError(null);
@@ -183,6 +183,12 @@ export default function AdminUsersPage() {
           <p className="text-text-secondary mt-2 font-body text-sm">Manage photographers, studio accounts, and subscription tiers.</p>
         </div>
       </div>
+
+      {loading && (
+        <p className="text-sm text-text-tertiary" aria-live="polite">
+          Loading users...
+        </p>
+      )}
 
       <DataTable<UserRow>
         columns={columns}

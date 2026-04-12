@@ -480,6 +480,12 @@ export default function AdminAuditLogsPage() {
         />
       )}
 
+      {loading && (
+        <p className="text-sm text-text-tertiary" aria-live="polite">
+          Loading audit logs...
+        </p>
+      )}
+
       {/* Data table */}
       <DataTable<AuditLogRow>
         columns={columns}

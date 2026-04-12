@@ -63,7 +63,7 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update invoice amount_paid
+	// Update invoice amount_paid and status based on total payments
 	totalPaid, err := h.paymentRepo.GetTotalPaidForInvoice(r.Context(), workspaceID, invoiceID)
 	if err == nil {
 		inv, err := h.invoiceRepo.GetByID(r.Context(), workspaceID, invoiceID)
@@ -72,7 +72,7 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 			if totalPaid >= inv.TotalPaisa {
 				newStatus = "paid"
 			}
-			_ = h.invoiceRepo.UpdateStatus(r.Context(), workspaceID, invoiceID, newStatus)
+			_ = h.invoiceRepo.UpdateStatusAndPaid(r.Context(), workspaceID, invoiceID, newStatus, totalPaid)
 		}
 	}
 

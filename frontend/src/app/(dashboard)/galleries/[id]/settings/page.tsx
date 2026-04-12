@@ -261,7 +261,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                   try {
                     const updated = await updateGallerySettings(token, id, { watermark_config: config });
                     setGallery(updated);
-                  } catch (err) { /* non-critical */ }
+                  } catch { /* non-critical */ }
                 }}
                 className="w-full accent-[var(--accent-primary)]"
               />
@@ -279,7 +279,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                       try {
                         const updated = await updateGallerySettings(token, id, { watermark_config: config });
                         setGallery(updated);
-                      } catch (err) { /* non-critical */ }
+                      } catch { /* non-critical */ }
                     }}
                     className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
                       (gallery.watermark_config as Record<string, unknown>)?.position === pos

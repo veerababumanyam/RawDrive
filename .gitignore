@@ -33,6 +33,8 @@ tests/photos/
 .storage/
 .tmp/
 backend/.storage/
+backend/api-fixed
+backend/api-fixed~
 *.exe~
 
 # Playwright + E2E test artifacts
