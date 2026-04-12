@@ -910,7 +910,9 @@ func main() {
 
 		log.Println("M3: AI routes + 5 workers registered")
 
-		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available)
+		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available).
+		// Route is registered here (not in routes_m2.go) because DesignAISvc depends on
+		// geminiClient and aiConfigRepo which are only available after AI init.
 		designAISvc := service.NewDesignAIService(assetRepo, geminiClient, aiConfigRepo)
 		designAIHandler := handler.NewDesignAIHandler(designAISvc)
 		api.Get("/api/v1/galleries/{id}/ai-suggest", designAIHandler.Suggest)

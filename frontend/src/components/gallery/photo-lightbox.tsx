@@ -89,7 +89,7 @@ export function PhotoLightbox({
   allAssets, gallery, showFilmstrip, onJumpTo,
 }: PhotoLightboxProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showInfo, setShowInfo] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [commentText, setCommentText] = useState("");

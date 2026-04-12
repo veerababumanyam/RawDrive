@@ -21,6 +21,7 @@ export default function GalleriesPage() {
   const [titleError, setTitleError] = useState("");
   const [filterType, setFilterType] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
@@ -29,9 +30,15 @@ export default function GalleriesPage() {
         if (filterStatus === "published" && !g.is_published) return false;
         if (filterStatus !== "published" && g.status !== filterStatus) return false;
       }
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const matchesTitle = g.title?.toLowerCase().includes(q);
+        const matchesDesc = g.description?.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesDesc) return false;
+      }
       return true;
     });
-  }, [galleries, filterType, filterStatus]);
+  }, [galleries, filterType, filterStatus, searchQuery]);
 
   const handleDelete = async (e: React.MouseEvent, galleryId: string) => {
     e.preventDefault();
@@ -111,6 +118,14 @@ export default function GalleriesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search galleries…"
+            className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary min-h-[44px] w-48 lg:w-64"
+            aria-label="Search galleries"
+          />
           <button
             onClick={() => setShowCreate(true)}
             className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
@@ -149,7 +164,7 @@ export default function GalleriesPage() {
       </div>
 
       {/* Active filter chips */}
-      {(filterType || filterStatus) && (
+      {(filterType || filterStatus || searchQuery.trim()) && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-text-tertiary">Filtered by:</span>
           {filterType && (
@@ -174,8 +189,19 @@ export default function GalleriesPage() {
               </svg>
             </button>
           )}
+          {searchQuery.trim() && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
+            >
+              &quot;{searchQuery.trim()}&quot;
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
           <button
-            onClick={() => { setFilterType(null); setFilterStatus(null); }}
+            onClick={() => { setFilterType(null); setFilterStatus(null); setSearchQuery(""); }}
             className="text-xs text-text-tertiary hover:text-text-primary underline"
           >
             Clear all
@@ -357,21 +383,23 @@ export default function GalleriesPage() {
                     >
                       {g.gallery_type}
                     </button>
-                    {/* Clickable status tag */}
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setFilterStatus((prev) => prev === g.status ? null : g.status);
-                      }}
-                      className={cn(
-                        galleryStatusClasses[g.status] || "status-badge status-badge--neutral",
-                        "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
-                      )}
-                      title={`Filter by status: ${g.status}`}
-                    >
-                      {g.status}
-                    </button>
+                    {/* Clickable status tag — skip if published (the Published badge below covers it) */}
+                    {!(g.is_published && g.status === "published") && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setFilterStatus((prev) => prev === g.status ? null : g.status);
+                        }}
+                        className={cn(
+                          galleryStatusClasses[g.status] || "status-badge status-badge--neutral",
+                          "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
+                        )}
+                        title={`Filter by status: ${g.status}`}
+                      >
+                        {g.status}
+                      </button>
+                    )}
                     {g.is_published && (
                       <button
                         onClick={(e) => {

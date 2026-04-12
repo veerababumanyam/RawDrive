@@ -104,7 +104,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
       <div className="space-y-2">
         <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
           Back to gallery

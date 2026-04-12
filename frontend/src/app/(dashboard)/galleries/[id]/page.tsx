@@ -497,7 +497,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </p>
             ) : visibleAssets.length === 0 ? (
               <p className="text-center text-xs text-text-tertiary py-4">
-                No photos match the selected face filter.
+                {proofingFilter
+                  ? `No photos have been ${proofingFilter} by clients yet.`
+                  : faceFilterIds
+                    ? "No photos match the selected face filter."
+                    : "No photos match the current filter."}
               </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

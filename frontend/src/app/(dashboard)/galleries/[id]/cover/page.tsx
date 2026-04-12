@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams } from "next/navigation";
+import { getStoredAccessToken } from "@/lib/auth";
+import { getGallery, listGalleryAssets, type Gallery } from "@/lib/api/galleries";
+import { getAsset, type Asset } from "@/lib/api/assets";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 type AspectRatio = "16:9" | "4:3" | "1:1";
 
@@ -12,35 +16,60 @@ interface CoverState {
   zoom: number;
 }
 
-interface CoverVersion {
-  id: string;
-  assetId: string;
-  date: string;
-  focalPoint: { x: number; y: number };
-}
-
-const MOCK_ASSETS = Array.from({ length: 16 }, (_, i) => ({
-  id: `asset-${i + 1}`,
-  filename: `IMG_${1000 + i}.jpg`,
-}));
-
-const MOCK_VERSIONS: CoverVersion[] = [
-  { id: "v3", assetId: "asset-1", date: "Apr 9, 2026", focalPoint: { x: 50, y: 40 } },
-  { id: "v2", assetId: "asset-5", date: "Apr 7, 2026", focalPoint: { x: 60, y: 50 } },
-  { id: "v1", assetId: "asset-3", date: "Apr 2, 2026", focalPoint: { x: 50, y: 50 } },
-];
 
 export default function CoverPhotoPage() {
   const params = useParams();
   const galleryId = params.id as string;
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const [gallery, setGallery] = useState<Gallery | null>(null);
+  const [realAssets, setRealAssets] = useState<Asset[]>([]);
   const [state, setState] = useState<CoverState>({
-    assetId: "asset-1",
+    assetId: null,
     focalPoint: { x: 50, y: 50 },
     aspectRatio: "16:9",
     zoom: 1,
   });
+
+  // Fetch gallery and its assets on mount
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [g, galleryAssets] = await Promise.all([
+          getGallery(token, galleryId),
+          listGalleryAssets(token, galleryId),
+        ]);
+        if (cancelled) return;
+        setGallery(g);
+
+        const hydrated = await Promise.all(
+          galleryAssets.map(async (entry) => {
+            try { return await getAsset(token, entry.asset_id); }
+            catch { return null; }
+          })
+        );
+        if (cancelled) return;
+        const assets = hydrated.filter((a): a is Asset => a !== null);
+        setRealAssets(assets);
+        if (assets.length > 0 && !state.assetId) {
+          setState((s) => ({ ...s, assetId: assets[0].id }));
+        }
+      } catch (err) {
+        console.error("Failed to load cover page data:", err);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId]);
+
+  const token = getStoredAccessToken();
+  const selectedAsset = realAssets.find((a) => a.id === state.assetId);
+  const selectedPreviewUrl = selectedAsset ? getAssetPreviewUrl(selectedAsset, token) : "";
 
   const aspectRatioMap: Record<AspectRatio, string> = {
     "16:9": "16/9",
@@ -71,7 +100,7 @@ export default function CoverPhotoPage() {
       <header className="px-8 py-4 border-b border-white/5 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold font-headline">Cover Photo</h1>
-          <p className="text-xs text-on-surface-variant">Gallery: {galleryId}</p>
+          <p className="text-xs text-on-surface-variant">{gallery?.title || "Loading…"}</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setState((s) => ({ ...s, focalPoint: { x: 50, y: 50 }, zoom: 1 }))}
@@ -104,9 +133,19 @@ export default function CoverPhotoPage() {
             className="relative flex-1 rounded-2xl bg-surface-container border border-white/10 overflow-hidden cursor-crosshair flex items-center justify-center"
             style={{ aspectRatio: aspectRatioMap[state.aspectRatio], maxHeight: "500px" }}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-surface-container to-surface-container-high" />
+            {selectedPreviewUrl ? (
+              <img
+                src={selectedPreviewUrl}
+                alt={selectedAsset?.filename || "Cover preview"}
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-200"
+                style={{ transform: `scale(${state.zoom})`, objectPosition: `${state.focalPoint.x}% ${state.focalPoint.y}%` }}
+                draggable={false}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-surface-container to-surface-container-high" />
+            )}
             <p className="relative text-sm text-on-surface-variant z-10">
-              {state.assetId ? `Selected: ${state.assetId}` : "Click an asset to select"}
+              {!selectedPreviewUrl && (state.assetId ? "Loading preview…" : "Click an asset to select")}
             </p>
 
             {/* Focal point crosshair */}
@@ -136,12 +175,19 @@ export default function CoverPhotoPage() {
           <section>
             <h3 className="text-sm font-semibold mb-3">Select Cover</h3>
             <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-              {MOCK_ASSETS.map((a) => (
-                <button key={a.id} onClick={() => setState((s) => ({ ...s, assetId: a.id }))}
-                  className={`aspect-square rounded-lg overflow-hidden transition-all ${state.assetId === a.id ? "ring-2 ring-primary" : "ring-1 ring-white/10 hover:ring-white/20"}`}>
-                  <div className="w-full h-full bg-surface-container-high" />
-                </button>
-              ))}
+              {realAssets.map((a) => {
+                const thumbUrl = getAssetPreviewUrl(a, token);
+                return (
+                  <button key={a.id} onClick={() => setState((s) => ({ ...s, assetId: a.id }))}
+                    className={`aspect-square rounded-lg overflow-hidden transition-all ${state.assetId === a.id ? "ring-2 ring-primary" : "ring-1 ring-white/10 hover:ring-white/20"}`}>
+                    {thumbUrl ? (
+                      <img src={thumbUrl} alt={a.filename} className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-full bg-surface-container-high" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <button className="mt-3 w-full py-2 text-xs rounded-xl border border-white/10 hover:bg-white/5 transition-colors">
               Upload External Image
@@ -161,29 +207,24 @@ export default function CoverPhotoPage() {
                   <p className="text-[10px] text-on-surface-variant mb-1">{p.label}</p>
                   <div className={`${p.h} rounded-xl bg-surface-container border border-white/5 overflow-hidden`}
                     style={{ aspectRatio: p.ratio }}>
-                    <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-high" />
+                    {selectedPreviewUrl ? (
+                      <img src={selectedPreviewUrl} alt={`${p.label} preview`} className="w-full h-full object-cover"
+                        style={{ objectPosition: `${state.focalPoint.x}% ${state.focalPoint.y}%` }} />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-high" />
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* Version History */}
+          {/* Version History — populated when API returns cover history */}
           <section>
             <h3 className="text-sm font-semibold mb-3">Version History</h3>
-            <div className="space-y-2">
-              {MOCK_VERSIONS.map((v) => (
-                <div key={v.id} className="flex items-center gap-3 p-2 rounded-xl bg-surface-container border border-white/5">
-                  <div className="w-12 h-8 rounded-lg bg-surface-container-high" />
-                  <div className="flex-1">
-                    <p className="text-xs">{v.date}</p>
-                    <p className="text-[10px] text-on-surface-variant">Focal: {v.focalPoint.x}%, {v.focalPoint.y}%</p>
-                  </div>
-                  <button onClick={() => setState((s) => ({ ...s, assetId: v.assetId, focalPoint: v.focalPoint }))}
-                    className="text-[10px] px-2 py-1 rounded-lg border border-white/10 hover:bg-white/5 text-primary">Revert</button>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-on-surface-variant">
+              {gallery?.cover_asset_id ? "Current cover set" : "No cover versions saved yet. Select and save a cover to start tracking history."}
+            </p>
           </section>
         </aside>
       </div>
