@@ -20,7 +20,7 @@ func CORS(next http.Handler) http.Handler {
 			appEnv := strings.ToLower(os.Getenv("APP_ENV"))
 			goEnv := strings.ToLower(os.Getenv("GO_ENV"))
 			isProduction := appEnv == "production" || appEnv == "prod" || goEnv == "production" || goEnv == "prod"
-			if !isProduction && (goEnv == "development" || appEnv == "development" || (goEnv == "" && appEnv == "")) {
+			if !isProduction && (goEnv == "development" || goEnv == "dev" || appEnv == "development" || appEnv == "dev" || (goEnv == "" && appEnv == "")) {
 				// Dev: allow any localhost origin
 				if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
 					allowedOrigin = origin

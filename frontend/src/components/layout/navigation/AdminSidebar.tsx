@@ -3,6 +3,7 @@
 import {
   BarChart3,
   FileText,
+  Handshake,
   Home,
   LayoutGrid,
   LineChart,
@@ -24,6 +25,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/admin/dashboard", label: "Dashboard Overview", icon: Home },
       { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/dealers", label: "Dealers", icon: Handshake },
       { href: "/admin/moderation", label: "Moderation", icon: Shield },
       { href: "/admin/workspaces", label: "Workspaces", icon: LayoutGrid },
       { href: "/admin/revenue", label: "Revenue", icon: LineChart },
@@ -37,13 +39,17 @@ const groups: NavGroup[] = [
 interface AdminSidebarProps {
   userName: string;
   platformRole: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function AdminSidebar({ userName, platformRole }: AdminSidebarProps) {
+export function AdminSidebar({ userName, platformRole, mobileOpen, onMobileClose }: AdminSidebarProps) {
   return (
     <SidebarShell
       subtitle="Admin Console"
       groups={groups}
+      mobileOpen={mobileOpen}
+      onMobileClose={onMobileClose}
       footer={
         <SidebarAvatar
           name={userName}

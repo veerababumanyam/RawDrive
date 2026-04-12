@@ -1,0 +1,16 @@
+; PgBouncer userlist.txt format (SCRAM-SHA-256):
+;   "username" "<literal contents of pg_authid.rolpassword>"
+;
+; For SCRAM, the second field is the full SCRAM verifier string as stored
+; in Postgres, which looks like:
+;   SCRAM-SHA-256$<iter>:<salt>$<stored_key>:<server_key>
+;
+; You extract it with:
+;   psql -h <pg-host> -U rawdrive -d rawdrive \
+;     -tAc "SELECT rolpassword FROM pg_authid WHERE rolname='rawdrive';"
+;
+; Example (NOT real creds):
+;   "rawdrive" "SCRAM-SHA-256$4096:abc==$xyz:qrs"
+;
+; This file is generated on the server during Phase C from the primary's
+; pg_authid. NEVER commit the real userlist.txt.

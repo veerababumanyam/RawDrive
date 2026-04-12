@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -34,7 +35,7 @@ interface CollabState {
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") : null;
+  const token = getStoredAccessToken();
   return token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
 }
 
@@ -59,7 +60,7 @@ export function useDesignCollab(galleryId: string, onRemoteUpdate?: (update: Des
     join();
 
     // Connect SSE stream
-    const token = typeof window !== "undefined" ? localStorage.getItem("rawdrive_token") : null;
+    const token = getStoredAccessToken();
     const url = `${API_BASE}/api/v1/galleries/${galleryId}/collab/stream${token ? `?token=${token}` : ""}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;

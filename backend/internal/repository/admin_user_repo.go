@@ -46,7 +46,10 @@ type AdminUserRow struct {
 	Phone          *string    `db:"phone" json:"phone,omitempty"`
 	PlatformRole   string     `db:"platform_role" json:"platform_role"`
 	Status         string     `db:"status" json:"status"`
-	StateID        *uuid.UUID `db:"state_id" json:"state_id,omitempty"`
+	// state_id is the integer primary key from states.id — NOT a
+	// UUID. Declared as *int32 (nullable) so the scan tolerates
+	// users whose state has not been set during onboarding.
+	StateID        *int32     `db:"state_id" json:"state_id,omitempty"`
 	StateName      *string    `db:"state_name" json:"state_name,omitempty"`
 	TierSlug       *string    `db:"tier_slug" json:"tier_slug,omitempty"`
 	TierName       *string    `db:"tier_name" json:"tier_name,omitempty"`
@@ -67,7 +70,9 @@ type AdminUserDetail struct {
 	AvatarURL        *string              `db:"avatar_url" json:"avatar_url,omitempty"`
 	PlatformRole     string               `db:"platform_role" json:"platform_role"`
 	Status           string               `db:"status" json:"status"`
-	StateID          *uuid.UUID           `db:"state_id" json:"state_id,omitempty"`
+	// states.id is integer, not UUID — see AdminUserRow for the
+	// same correction.
+	StateID          *int32               `db:"state_id" json:"state_id,omitempty"`
 	StateName        *string              `db:"state_name" json:"state_name,omitempty"`
 	TierSlug         *string              `db:"tier_slug" json:"tier_slug,omitempty"`
 	TierName         *string              `db:"tier_name" json:"tier_name,omitempty"`
@@ -111,7 +116,7 @@ func NewAdminUserRepo(pool *pgxpool.Pool) *AdminUserRepo {
 // collector binds directly onto the struct fields.
 const adminUserSelectColumns = `
 		u.id,
-		u.display_name AS full_name,
+		COALESCE(u.display_name, '') AS full_name,
 		u.email,
 		u.phone,
 		u.platform_role,

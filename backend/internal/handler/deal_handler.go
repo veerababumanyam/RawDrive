@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -29,11 +30,28 @@ func (h *DealHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.WorkspaceID = workspaceID
-	if d.Stage == "" {
+	// Normalize friendly stage names (used by the UI) to the
+	// CHECK-constraint-allowed set on deals.stage:
+	// {proposal, negotiation, confirmed, in_progress, completed,
+	// cancelled}. Enables the UI to keep human terms like
+	// "booked" / "delivered" / "lost" without a risky migration.
+	switch d.Stage {
+	case "", "inquiry":
 		d.Stage = "proposal"
+	case "booked":
+		d.Stage = "confirmed"
+	case "delivered":
+		d.Stage = "completed"
+	case "lost":
+		d.Stage = "cancelled"
+	case "proposal", "negotiation", "confirmed", "in_progress", "completed", "cancelled":
+		// pass through — already valid
 	}
 	if err := h.repo.Create(r.Context(), &d); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		// Verbose error so UAT + callers can see the actual cause
+		// (FK to contact_id, CHECK on stage, etc.) instead of the
+		// old opaque "internal error" body.
+		http.Error(w, fmt.Sprintf(`{"error":"create deal failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 	respondJSON(w, http.StatusCreated, d)

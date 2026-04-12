@@ -2,18 +2,24 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
   FolderOpen,
   Home,
+  LogOut,
+  Menu,
   Search,
+  Settings,
+  User,
+  X,
 } from "lucide-react";
 import {
   getStoredAccessToken,
   getStoredAccessTokenClaims,
   getStoredPlatformRole,
+  logoutAuthSession,
   refreshAuthSession,
 } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -82,27 +88,157 @@ function getSearchPlaceholder(role: string) {
 /*  Role → Sidebar component (completely separate nav per role)       */
 /* ------------------------------------------------------------------ */
 
-function RoleSidebar({ role, userInfo }: { role: string; userInfo: { display_name?: string; email?: string } }) {
+function RoleSidebar({ role, userInfo, mobileOpen, onMobileClose }: {
+  role: string;
+  userInfo: { display_name?: string; email?: string };
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}) {
   const name = userInfo.display_name || userInfo.email || "User";
 
   switch (role) {
     case "super_admin":
     case "admin":
-      return <AdminSidebar userName={name} platformRole={role} />;
+      return <AdminSidebar userName={name} platformRole={role} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "dealer":
-      return <DealerSidebar userName={name} />;
+      return <DealerSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "client":
-      return <ClientSidebar userName={name} />;
+      return <ClientSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "photographer":
     case "team_member":
     case "assistant":
     case "studio_manager":
     default:
-      return <StudioSidebar userName={name} />;
+      return <StudioSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
   }
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+/* ------------------------------------------------------------------ */
+/*  User menu dropdown — profile, settings, logout                    */
+/* ------------------------------------------------------------------ */
+
+function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email?: string }; role: string }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const initials = (userInfo.display_name || userInfo.email || "U")
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const displayName = userInfo.display_name || userInfo.email || "User";
+  const roleBadge =
+    role === "super_admin" ? "Super Admin" :
+    role === "admin" ? "Admin" :
+    role === "dealer" ? "Dealer" :
+    role === "client" ? "Client" :
+    "Photographer";
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open]);
+
+  const handleLogout = useCallback(async () => {
+    setOpen(false);
+    await logoutAuthSession(API_BASE);
+    window.location.assign("/login");
+  }, []);
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label="User menu"
+        className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary transition-colors hover:bg-surface-container-highest hover:text-accent focus:ring-2 focus:ring-secondary/50 focus:outline-none"
+      >
+        {initials}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-2 w-64 origin-top-right animate-in fade-in slide-in-from-top-1 duration-150 surface-panel rounded-2xl shadow-xl border border-white/[0.06] overflow-hidden"
+        >
+          {/* User info header */}
+          <div className="px-4 py-3 border-b border-white/[0.06]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-sm font-bold text-text-primary">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-text-primary">{displayName}</p>
+                {userInfo.email && userInfo.display_name && (
+                  <p className="truncate text-xs text-text-tertiary">{userInfo.email}</p>
+                )}
+                <p className="text-[10px] font-label uppercase tracking-[0.15em] text-text-tertiary mt-0.5">{roleBadge}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Menu items */}
+          <div className="py-1">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+            >
+              <User className="h-4 w-4" />
+              <span>Profile</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+            >
+              <Settings className="h-4 w-4" />
+              <span>Settings</span>
+            </button>
+          </div>
+
+          {/* Logout */}
+          <div className="border-t border-white/[0.06] py-1">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-feedback-error transition-colors hover:bg-feedback-error/10"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Log out</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Main dashboard layout                                             */
@@ -113,13 +249,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [role, setRole] = useState<string>("photographer");
-  const [userInfo] = useState<{ display_name?: string; email?: string }>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const stored = localStorage.getItem("user");
-      return stored ? JSON.parse(stored) : {};
-    } catch { return {}; }
-  });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Display profile used by the sidebar avatar and role header. Never
+  // persisted across sessions — the layout fetches a fresh copy on
+  // every mount via getCurrentUser() so a server-side name change
+  // propagates on the next page load. localStorage was intentionally
+  // not used because clearLegacyStoredTokens() actively wipes the
+  // "user" key, which silently reset the avatar back to "U".
+  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string }>({});
 
   useEffect(() => {
     let active = true;
@@ -147,6 +284,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       setRole(getStoredPlatformRole());
       setAuthenticated(true);
+
+      // Populate the avatar + greeting from GET /auth/me. A failure
+      // here degrades the sidebar to the email-local-part fallback,
+      // never to a hardcoded "User".
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && active) {
+          const me = await res.json();
+          setUserInfo({ display_name: me.display_name, email: me.email });
+        }
+      } catch { /* keep empty userInfo — sidebar falls back safely */ }
     }
 
     void ensureSession();
@@ -182,11 +332,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
       {/* Role-specific sidebar — completely different component per role */}
-      <RoleSidebar role={role} userInfo={userInfo} />
+      <RoleSidebar role={role} userInfo={userInfo} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
 
       {/* Header bar — offset from sidebar on desktop */}
-      <header className="glass-surface fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 lg:w-[calc(100%-var(--sidebar-width-expanded))] lg:px-8 md:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)]">
-        <nav className="hidden min-w-0 items-center gap-2 md:flex" aria-label="Workspace quick navigation">
+      <header className="glass-surface fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 lg:w-[calc(100%-var(--sidebar-width-expanded))] lg:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)] lg:px-8">
+        {/* Mobile hamburger — opens sidebar drawer on < lg screens */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-accent lg:hidden"
+        >
+          {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+        <nav className="hidden min-w-0 items-center gap-2 lg:flex" aria-label="Workspace quick navigation">
           {headerNavItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -230,9 +389,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           >
             <Bell className="h-5 w-5" />
           </button>
-          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
-            {(userInfo.display_name || userInfo.email || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-          </div>
+          <UserMenu userInfo={userInfo} role={role} />
         </div>
       </header>
 

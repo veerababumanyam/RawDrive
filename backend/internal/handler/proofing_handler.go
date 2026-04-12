@@ -14,10 +14,17 @@ import (
 // ProofingHandler handles proofing HTTP requests.
 type ProofingHandler struct {
 	proofingSvc *service.ProofingService
+	gallerySvc  *service.GalleryService // optional, for selection limit checks
 }
 
 func NewProofingHandler(svc *service.ProofingService) *ProofingHandler {
 	return &ProofingHandler{proofingSvc: svc}
+}
+
+// WithGalleryService injects the gallery service for selection limit enforcement.
+func (h *ProofingHandler) WithGalleryService(gs *service.GalleryService) *ProofingHandler {
+	h.gallerySvc = gs
+	return h
 }
 
 func (h *ProofingHandler) ListByGallery(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +133,22 @@ func (h *ProofingHandler) SubmitPublic(w http.ResponseWriter, r *http.Request) {
 	if len(input.AssetIDs) == 0 {
 		http.Error(w, `{"error":"at least one asset_id is required"}`, http.StatusBadRequest)
 		return
+	}
+
+	// M22 E74-S1: Selection limit enforcement
+	if h.gallerySvc != nil {
+		gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+		if err == nil && gallery != nil && gallery.MaxSelections > 0 {
+			existing, _ := h.proofingSvc.CountByGallery(r.Context(), gallery.ID)
+			if existing+len(input.AssetIDs) > gallery.MaxSelections {
+				respondJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+					"error":   "selection_limit_reached",
+					"limit":   gallery.MaxSelections,
+					"current": existing,
+				})
+				return
+			}
+		}
 	}
 
 	if err := h.proofingSvc.SubmitPublicBySlug(r.Context(), slug, input.AssetIDs, input.ClientName, input.ClientEmail, input.Note); err != nil {

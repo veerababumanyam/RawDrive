@@ -21,6 +21,15 @@ export interface Gallery {
   };
   faceid_enabled?: boolean;
   settings?: Record<string, unknown>;
+  // Populated by list endpoint via LEFT JOIN on assets — used for card thumbnails
+  cover_thumbnails?: Record<string, string>;
+  // M19: Gallery Enhancement Suite (F-009)
+  cover_template?: string;
+  cover_config?: Record<string, unknown>;
+  expires_at?: string;
+  download_enabled?: boolean;
+  sort_preference?: string;
+  whatsapp_template?: string;
 }
 
 // GAL-FR-115: plan-aware white-label branding response
@@ -101,7 +110,13 @@ export async function listGalleries(token: string, params?: { status?: string; t
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  // Backend may return either a bare array, or {galleries: [...]}, or null
+  // when there are zero rows. Coerce to a proper array so the page never
+  // crashes on .length / .map.
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.galleries)) return body.galleries;
+  return [];
 }
 
 export async function getGallery(token: string, id: string): Promise<Gallery> {
@@ -154,7 +169,10 @@ export async function listGalleryAssets(token: string, galleryId: string): Promi
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list gallery assets: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.assets)) return body.assets;
+  return [];
 }
 
 export async function getPublicGallery(slug: string): Promise<Gallery> {
@@ -174,8 +192,50 @@ export interface PublicAsset {
   sort_order: number;
 }
 
+// ── Gallery Settings ──────────────────────────────────────────────
+export async function updateGallerySettings(
+  token: string,
+  galleryId: string,
+  settings: Record<string, unknown>,
+): Promise<Gallery> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error(`Failed to update gallery settings: ${res.status}`);
+  return res.json();
+}
+
+// ── AI Face Scan ──────────────────────────────────────────────────
+export async function triggerFaceScan(
+  token: string,
+  galleryId: string,
+): Promise<{ job_id: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai/scan-faces`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to trigger face scan: ${res.status}`);
+  return res.json();
+}
+
+export async function getFaceScanStatus(
+  token: string,
+  galleryId: string,
+): Promise<{ status: string; processed: number; total: number; faces_found: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai/scan-status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to get scan status: ${res.status}`);
+  return res.json();
+}
+
 export async function getPublicGalleryAssets(slug: string): Promise<PublicAsset[]> {
   const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/assets`);
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.publicassets)) return body.publicassets;
+  return [];
 }

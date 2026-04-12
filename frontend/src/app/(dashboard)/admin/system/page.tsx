@@ -86,9 +86,9 @@ export default function AdminSystemPage() {
           <InfraCard label="Error Rate" value={`${metrics.error_rate_pct}%`} pct={metrics.error_rate_pct * 10} />
           <InfraCard label="Queue Depth" value={String(metrics.queue_depth)} />
           <InfraCard label="Storage" value={formatBytes(metrics.storage_used_bytes)} />
-          <InfraCard label="CPU" value={`${metrics.cpu_usage_pct}%`} pct={metrics.cpu_usage_pct} />
-          <InfraCard label="Memory" value={`${metrics.memory_usage_pct}%`} pct={metrics.memory_usage_pct} />
-          <InfraCard label="Disk" value={`${metrics.disk_usage_pct}%`} pct={metrics.disk_usage_pct} />
+          <InfraCard label="CPU" value={`${Math.round(metrics.cpu_usage_pct ?? 0)}%`} pct={metrics.cpu_usage_pct ?? 0} />
+          <InfraCard label="Memory" value={`${Math.round(metrics.memory_usage_pct ?? 0)}%`} pct={metrics.memory_usage_pct ?? 0} />
+          <InfraCard label="Disk" value={`${Math.round(metrics.disk_usage_pct ?? 0)}%`} pct={metrics.disk_usage_pct ?? 0} />
         </div>
       </div>
 

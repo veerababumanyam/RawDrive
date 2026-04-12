@@ -7,10 +7,11 @@ import { getAsset, type Asset } from "@/lib/api/assets";
 import {
   getGallery,
   listGalleryAssets,
+  updateGallery,
   type Gallery,
   type GalleryAsset,
 } from "@/lib/api/galleries";
-import { listProofingSelections, type ProofingSelection } from "@/lib/api/proofing";
+import { listProofingSelections, createComment, type ProofingSelection } from "@/lib/api/proofing";
 import {
   galleryStatusClasses,
   galleryTypeClasses,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useUpload } from "@/hooks/use-upload";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 import { FaceFilter } from "@/components/gallery/face-filter";
+import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -34,11 +36,52 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDesc, setDraftDesc] = useState("");
+  const [proofingFilter, setProofingFilter] = useState<string | null>(null);
   // Face-filter state: when non-null, only assets whose id is in this
   // set are rendered in the grid. Populated by the rawdrive:face-filter
   // event that FaceFilter dispatches after fetching cluster assets.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
+  // E71-S1: Album state
+  const [albums, setAlbums] = useState<{ id: string; name: string; gallery_id: string }[]>([]);
+  const [activeAlbum, setActiveAlbum] = useState<string | null>(null);
+  const [newAlbumName, setNewAlbumName] = useState("");
+  const [showAlbumCreate, setShowAlbumCreate] = useState(false);
+
+  // E68-S1: Bulk selection state
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const toggleAssetSelection = (assetId: string) => {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(assetId)) next.delete(assetId); else next.add(assetId);
+      return next;
+    });
+  };
+  const selectAllAssets = () => {
+    setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[]));
+  };
+  const clearSelection = () => { setSelectedAssetIds(new Set()); setBulkMode(false); };
+  const handleBulkDelete = async () => {
+    if (selectedAssetIds.size === 0 || !confirm(`Delete ${selectedAssetIds.size} photos? This cannot be undone.`)) return;
+    const t = getStoredAccessToken();
+    if (!t) return;
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/assets/bulk`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", asset_ids: Array.from(selectedAssetIds) }),
+      });
+      clearSelection();
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk delete failed");
+    }
+  };
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -102,6 +145,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [id]);
 
+  // E71-S1: Fetch albums for this gallery
+  useEffect(() => {
+    const t = getStoredAccessToken();
+    if (!t) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${id}/albums`, {
+      headers: { Authorization: `Bearer ${t}` },
+    })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setAlbums(Array.isArray(data) ? data : data.data || []))
+      .catch(() => setAlbums([]));
+  }, [id]);
+
   // Subscribe to face-filter events from the FaceFilter component. The
   // component doesn't know anything about the page's asset list — it
   // just dispatches the matched ID set via a window CustomEvent, and
@@ -127,10 +182,26 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // Reduce the hydrated asset list to the face-filter match set when a
   // filter is active. useMemo keeps this stable when unrelated state
   // (upload progress, selections) changes.
+  // Build a set of asset IDs that match the active proofing filter
+  const proofingFilterAssetIds = useMemo(() => {
+    if (!proofingFilter) return null;
+    const ids = new Set<string>();
+    for (const s of selections) {
+      if (s.status === proofingFilter) ids.add(s.asset_id);
+    }
+    return ids;
+  }, [proofingFilter, selections]);
+
   const visibleAssets = useMemo(() => {
-    if (!faceFilterIds) return assets;
-    return assets.filter((a) => a.asset && faceFilterIds.has(a.asset.id));
-  }, [assets, faceFilterIds]);
+    let result = assets;
+    if (faceFilterIds) {
+      result = result.filter((a) => a.asset && faceFilterIds.has(a.asset.id));
+    }
+    if (proofingFilterAssetIds) {
+      result = result.filter((a) => a.asset && proofingFilterAssetIds.has(a.asset.id));
+    }
+    return result;
+  }, [assets, faceFilterIds, proofingFilterAssetIds]);
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
@@ -199,10 +270,108 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             Back to galleries
           </Link>
           <div>
-            <h1 className="text-2xl font-semibold text-text-primary">{gallery.title}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-text-secondary">
-              {gallery.description || "This gallery is ready for proofing, delivery, and selection review."}
-            </p>
+            {editingTitle ? (
+              <input
+                type="text"
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onBlur={async () => {
+                  if (draftTitle.trim() && draftTitle.trim() !== gallery.title) {
+                    const t = getStoredAccessToken();
+                    if (t) {
+                      try {
+                        const updated = await updateGallery(t, id, { title: draftTitle.trim() });
+                        setGallery(updated);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Failed to update title");
+                      }
+                    }
+                  }
+                  setEditingTitle(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") { setEditingTitle(false); setDraftTitle(gallery.title); }
+                }}
+                className="text-2xl font-semibold text-text-primary bg-transparent border-b-2 border-accent-primary focus:outline-none w-full"
+                autoFocus
+              />
+            ) : (
+              <h1
+                className="text-2xl font-semibold text-text-primary cursor-pointer hover:text-accent-primary transition-colors group"
+                onClick={() => { setDraftTitle(gallery.title); setEditingTitle(true); }}
+                title="Click to edit title"
+              >
+                {gallery.title}
+                <svg className="inline-block w-4 h-4 ml-2 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+              </h1>
+            )}
+            {editingDesc ? (
+              <textarea
+                value={draftDesc}
+                onChange={(e) => setDraftDesc(e.target.value)}
+                onBlur={async () => {
+                  if (draftDesc !== (gallery.description || "")) {
+                    const t = getStoredAccessToken();
+                    if (t) {
+                      try {
+                        const updated = await updateGallery(t, id, { description: draftDesc.trim() });
+                        setGallery(updated);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Failed to update description");
+                      }
+                    }
+                  }
+                  setEditingDesc(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { setEditingDesc(false); setDraftDesc(gallery.description || ""); }
+                }}
+                className="mt-2 w-full max-w-3xl text-sm leading-relaxed text-text-secondary bg-transparent border border-accent-primary rounded-lg px-3 py-2 focus:outline-none resize-none"
+                rows={2}
+                autoFocus
+              />
+            ) : (
+              <p
+                className="mt-2 max-w-3xl text-sm leading-relaxed text-text-secondary cursor-pointer hover:text-text-primary transition-colors"
+                onClick={() => { setDraftDesc(gallery.description || ""); setEditingDesc(true); }}
+                title="Click to edit description"
+              >
+                {gallery.description || "Click to add a description…"}
+              </p>
+            )}
+            {/* Settings quick links */}
+            <div className="mt-3 flex items-center gap-3">
+              <Link
+                href={`/galleries/${gallery.id}/cover`}
+                className="text-xs text-accent-primary hover:underline"
+              >
+                Cover photo
+              </Link>
+              <span className="text-text-tertiary">·</span>
+              <Link
+                href={`/galleries/${gallery.id}/design`}
+                className="text-xs text-accent-primary hover:underline"
+              >
+                Design & theme
+              </Link>
+              <span className="text-text-tertiary">·</span>
+              <Link
+                href={`/galleries/${gallery.id}/analytics`}
+                className="text-xs text-accent-primary hover:underline"
+              >
+                Analytics
+              </Link>
+              <span className="text-text-tertiary">·</span>
+              <Link
+                href={`/galleries/${gallery.id}/settings`}
+                className="text-xs text-accent-primary hover:underline"
+              >
+                Settings
+              </Link>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -229,15 +398,34 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           <Link href={`/galleries/${gallery.id}/proofing`} className="btn-primary px-4 py-2.5 text-sm">
             Review proofing
           </Link>
-          {/* GAL-FR-130: CSV export of selections */}
-          <a
-            href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/galleries/${gallery.id}/proofing/export.csv`}
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* GAL-FR-130: CSV export of selections — must fetch with auth
+              header since the endpoint is JWT-protected. A bare <a href>
+              would navigate without the Authorization header and get 401. */}
+          <button
             className="btn-tertiary px-4 py-2.5 text-sm"
+            onClick={async () => {
+              const t = getStoredAccessToken();
+              if (!t) return;
+              try {
+                const res = await fetch(
+                  `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${gallery.id}/proofing/export.csv`,
+                  { headers: { Authorization: `Bearer ${t}` } },
+                );
+                if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${gallery.title || "selections"}-proofing.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to export CSV");
+              }
+            }}
           >
             Export selections (CSV)
-          </a>
+          </button>
           {/* GAL-FR-118: view-as-client — opens the public gallery in client mode */}
           {gallery.slug && (
             <a
@@ -309,13 +497,27 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Assets</h2>
               <div className="flex items-center gap-3">
-                <p className="text-sm text-text-secondary">
-                  {assets.length === 0
-                    ? "No assets yet"
-                    : faceFilterIds
-                      ? `${visibleAssets.length} of ${assets.length} assets`
-                      : `${assets.length} assets`}
-                </p>
+                {bulkMode ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-secondary">{selectedAssetIds.size} of {visibleAssets.length} selected</span>
+                    <button onClick={selectAllAssets} className="text-xs text-accent-primary hover:underline">Select All</button>
+                    <button onClick={handleBulkDelete} disabled={selectedAssetIds.size === 0} className="btn-danger px-3 py-1.5 text-xs disabled:opacity-30">Delete</button>
+                    <button onClick={clearSelection} className="text-xs text-text-tertiary hover:underline">Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-text-secondary">
+                      {assets.length === 0
+                        ? "No assets yet"
+                        : (faceFilterIds || proofingFilter)
+                          ? `${visibleAssets.length} of ${assets.length} assets`
+                          : `${assets.length} assets`}
+                    </p>
+                    {assets.length > 0 && (
+                      <button onClick={() => setBulkMode(true)} className="text-xs text-text-tertiary hover:text-text-primary">Select</button>
+                    )}
+                  </>
+                )}
                 <button
                   onClick={handleFileSelect}
                   className="btn-primary px-3 py-1.5 text-xs"
@@ -324,6 +526,51 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </button>
               </div>
             </div>
+
+            {/* E71-S1: Album tabs */}
+            {albums.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setActiveAlbum(null)}
+                  className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", !activeAlbum ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
+                >
+                  All Photos
+                </button>
+                {albums.map((album) => (
+                  <button key={album.id} onClick={() => setActiveAlbum(album.id)}
+                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", activeAlbum === album.id ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
+                  >
+                    {album.name}
+                  </button>
+                ))}
+                {showAlbumCreate ? (
+                  <div className="flex items-center gap-1">
+                    <input type="text" value={newAlbumName} onChange={(e) => setNewAlbumName(e.target.value)}
+                      placeholder="Album name" className="px-2 py-1 text-xs rounded-lg border border-border-default bg-surface-sunken focus:outline-none focus:border-accent-primary w-32"
+                      autoFocus onKeyDown={async (e) => {
+                        if (e.key === "Enter" && newAlbumName.trim()) {
+                          const t = getStoredAccessToken(); if (!t) return;
+                          await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${id}/albums`, {
+                            method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: newAlbumName.trim() }),
+                          });
+                          setNewAlbumName(""); setShowAlbumCreate(false);
+                          window.location.reload();
+                        }
+                        if (e.key === "Escape") { setShowAlbumCreate(false); setNewAlbumName(""); }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button onClick={() => setShowAlbumCreate(true)} className="px-2 py-1.5 text-xs text-text-tertiary hover:text-accent-primary">+ Album</button>
+                )}
+              </div>
+            )}
+            {assets.length > 0 && albums.length === 0 && (
+              <button onClick={() => setShowAlbumCreate(true)} className="text-xs text-text-tertiary hover:text-accent-primary">
+                + Create Album
+              </button>
+            )}
 
             {/* FaceFilter surfaces only when we have an auth token and at
                 least one asset — before uploads there's nothing to
@@ -357,18 +604,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </p>
             ) : visibleAssets.length === 0 ? (
               <p className="text-center text-xs text-text-tertiary py-4">
-                No photos match the selected face filter.
+                {proofingFilter
+                  ? `No photos have been ${proofingFilter} by clients yet.`
+                  : faceFilterIds
+                    ? "No photos match the selected face filter."
+                    : "No photos match the current filter."}
               </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {visibleAssets.map((entry) => {
-                  const previewUrl = getAssetPreviewUrl(entry.asset || undefined);
+                  const previewUrl = getAssetPreviewUrl(entry.asset || undefined, token);
 
                   return (
                     <article
                       key={entry.id}
-                      className="surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg"
+                      className={cn("surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg relative", bulkMode && entry.asset && selectedAssetIds.has(entry.asset.id) && "ring-2 ring-accent-primary")}
                       onClick={() => {
+                        if (bulkMode && entry.asset) { toggleAssetSelection(entry.asset.id); return; }
                         const idx = assets.findIndex((a) => a.id === entry.id);
                         if (idx !== -1) setLightboxIndex(idx);
                       }}
@@ -383,6 +635,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         }
                       }}
                     >
+                      {bulkMode && entry.asset && (
+                        <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedAssetIds.has(entry.asset.id) ? "bg-accent-primary border-accent-primary" : "border-white/60 bg-black/20"}`}>
+                          {selectedAssetIds.has(entry.asset.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                      )}
                       {previewUrl ? (
                         <img
                           src={previewUrl}
@@ -413,17 +670,48 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
         <aside className="space-y-4">
           <div className="surface-panel space-y-4 p-5">
-            <h2 className="text-lg font-semibold text-text-primary">Proofing status</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">Proofing status</h2>
+              {proofingFilter && (
+                <button
+                  onClick={() => setProofingFilter(null)}
+                  className="text-xs text-accent-primary hover:underline"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
-              <span className="status-badge status-badge--accent">
+              <button
+                onClick={() => setProofingFilter((f) => f === "selected" ? null : "selected")}
+                className={cn(
+                  "status-badge status-badge--accent cursor-pointer transition-all",
+                  proofingFilter === "selected" ? "ring-2 ring-accent-primary" : "hover:ring-1 hover:ring-accent-primary/40",
+                )}
+                title="Click to filter assets by selection status"
+              >
                 Selected {selectionCounts.selected || 0}
-              </span>
-              <span className="status-badge status-badge--success">
+              </button>
+              <button
+                onClick={() => setProofingFilter((f) => f === "approved" ? null : "approved")}
+                className={cn(
+                  "status-badge status-badge--success cursor-pointer transition-all",
+                  proofingFilter === "approved" ? "ring-2 ring-accent-primary" : "hover:ring-1 hover:ring-accent-primary/40",
+                )}
+                title="Click to filter assets by approval status"
+              >
                 Approved {selectionCounts.approved || 0}
-              </span>
-              <span className="status-badge status-badge--danger">
+              </button>
+              <button
+                onClick={() => setProofingFilter((f) => f === "rejected" ? null : "rejected")}
+                className={cn(
+                  "status-badge status-badge--danger cursor-pointer transition-all",
+                  proofingFilter === "rejected" ? "ring-2 ring-accent-primary" : "hover:ring-1 hover:ring-accent-primary/40",
+                )}
+                title="Click to filter assets by rejection status"
+              >
                 Rejected {selectionCounts.rejected || 0}
-              </span>
+              </button>
             </div>
           </div>
 
@@ -460,6 +748,95 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </div>
             )}
           </div>
+
+          {/* M19: Cover template selector */}
+          <div className="surface-panel space-y-4 p-5">
+            <h2 className="text-lg font-semibold text-text-primary">Cover page</h2>
+            <p className="text-xs text-text-secondary">
+              Choose a cover template for the public gallery landing page.
+            </p>
+            <select
+              value={gallery.cover_template || "none"}
+              onChange={async (e) => {
+                const t = getStoredAccessToken();
+                if (!t || !gallery) return;
+                try {
+                  const res = await fetch(
+                    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/galleries/${gallery.id}/cover`,
+                    {
+                      method: "PUT",
+                      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+                      body: JSON.stringify({ template: e.target.value }),
+                    },
+                  );
+                  if (res.ok) {
+                    setGallery({ ...gallery, cover_template: e.target.value });
+                  }
+                } catch (err) {
+                  console.error("Failed to update cover template:", err);
+                }
+              }}
+              className="input-base w-full"
+            >
+              <option value="none">None (no cover page)</option>
+              <option value="full_bleed">Full Bleed</option>
+              <option value="split_screen">Split Screen</option>
+              <option value="minimal_white">Minimal White</option>
+              <option value="classic_film">Classic Film Border</option>
+              <option value="festive">Festive</option>
+            </select>
+            {gallery.cover_template && gallery.cover_template !== "none" && gallery.slug && (
+              <a
+                href={`/g/${gallery.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent-primary hover:underline"
+              >
+                Preview cover page
+              </a>
+            )}
+          </div>
+
+          {/* M21: AI Panel — face scan & AI studio link */}
+          {authToken && <GalleryAIPanel galleryId={id} token={authToken} />}
+
+          {/* M19: Client selections summary (grouped by client) */}
+          {selections.length > 0 && (() => {
+            const grouped = selections.reduce<Record<string, { name: string; email: string; count: number; latest: string; notes: string[] }>>((acc, s) => {
+              const key = s.client_email || "anonymous";
+              if (!acc[key]) acc[key] = { name: s.client_name, email: s.client_email, count: 0, latest: s.created_at, notes: [] };
+              acc[key].count++;
+              if (s.created_at > acc[key].latest) acc[key].latest = s.created_at;
+              if (s.note) acc[key].notes.push(s.note);
+              return acc;
+            }, {});
+            return (
+              <div className="surface-panel space-y-4 p-5">
+                <h2 className="text-lg font-semibold text-text-primary">Client submissions</h2>
+                <div className="space-y-3">
+                  {Object.entries(grouped).map(([email, data]) => (
+                    <div key={email} className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-text-primary">{data.name || "Anonymous"}</p>
+                          <p className="text-xs text-text-secondary">{data.email}</p>
+                        </div>
+                        <span className="status-badge status-badge--accent">{data.count} photos</span>
+                      </div>
+                      <p className="mt-1 text-xs text-text-tertiary">
+                        Submitted {new Date(data.latest).toLocaleDateString("en-IN")}
+                      </p>
+                      {data.notes.length > 0 && (
+                        <p className="mt-2 text-xs text-text-secondary italic">
+                          &ldquo;{data.notes[0]}&rdquo;
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </aside>
       </div>
 
@@ -473,6 +850,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < assets.length - 1}
           isProofing={gallery?.gallery_type === "proofing"}
+          onComment={async (assetId, comment) => {
+            const t = getStoredAccessToken();
+            if (!t || !gallery) return;
+            try {
+              await createComment(t, gallery.id, {
+                asset_id: assetId,
+                author_name: "Studio",
+                body: comment,
+              });
+            } catch (err) {
+              console.error("Failed to post comment:", err);
+            }
+          }}
           // M13: feed filmstrip + compare mode + watermark overlay (FR-088,092,093,094)
           allAssets={assets.map((a) => a.asset).filter((a): a is Asset => a !== null)}
           gallery={gallery ?? undefined}

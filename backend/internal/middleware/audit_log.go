@@ -29,7 +29,7 @@ func NewPgAuditLog(pool *pgxpool.Pool) *PgAuditLog {
 // the actor is and 'system' when we don't — this keeps the enterprise
 // audit trail queryable by user while still logging anonymous/system-only
 // access paths.
-func (a *PgAuditLog) LogAccess(ctx context.Context, workspaceID, action string) {
+func (a *PgAuditLog) LogAccess(ctx context.Context, workspaceID, action, ipAddress, userAgent string) {
 	var actorID *uuid.UUID
 	actorType := "system"
 	if claims := JWTClaimsFromContext(ctx); claims != nil {
@@ -41,10 +41,19 @@ func (a *PgAuditLog) LogAccess(ctx context.Context, workspaceID, action string) 
 		}
 	}
 
+	// ip_address and user_agent are nullable TEXT columns — pass nil for empty
+	var ipPtr, uaPtr *string
+	if ipAddress != "" {
+		ipPtr = &ipAddress
+	}
+	if userAgent != "" {
+		uaPtr = &userAgent
+	}
+
 	_, err := a.pool.Exec(ctx,
-		`INSERT INTO audit_logs (workspace_id, actor_id, actor_type, action)
-		 VALUES ($1, $2, $3, $4)`,
-		workspaceID, actorID, actorType, action,
+		`INSERT INTO audit_logs (workspace_id, actor_id, actor_type, action, ip_address, user_agent)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		workspaceID, actorID, actorType, action, ipPtr, uaPtr,
 	)
 	if err != nil {
 		// Don't fail the request if audit logging fails — log and continue

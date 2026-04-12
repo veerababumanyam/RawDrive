@@ -50,6 +50,11 @@ type UserStore interface {
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	Create(ctx context.Context, u *User) (*User, error)
 	LinkOAuth(ctx context.Context, userID, provider, providerID string) error
+	// BackfillProfile updates empty display name and/or avatar URL, e.g.
+	// when an email-registered user later signs in via Google and the
+	// profile provides data they did not enter during registration.
+	// Either field may be empty to skip that update.
+	BackfillProfile(ctx context.Context, userID, displayName, avatarURL string) error
 }
 
 type SecurityNotifier interface {
@@ -659,6 +664,21 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 
 	if existing != nil {
 		_ = s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID)
+		// Backfill display name and avatar from Google profile if the user
+		// registered via email without providing them.
+		backfillName := ""
+		if existing.DisplayName == "" && profile.DisplayName != "" {
+			backfillName = profile.DisplayName
+			existing.DisplayName = profile.DisplayName
+		}
+		backfillAvatar := ""
+		if existing.AvatarURL == "" && profile.AvatarURL != "" {
+			backfillAvatar = profile.AvatarURL
+			existing.AvatarURL = profile.AvatarURL
+		}
+		if backfillName != "" || backfillAvatar != "" {
+			_ = s.store.BackfillProfile(ctx, existing.ID, backfillName, backfillAvatar)
+		}
 		return existing, returnTo, nil
 	}
 

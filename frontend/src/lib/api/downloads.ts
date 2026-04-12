@@ -49,7 +49,10 @@ export async function listDownloadJobs(token: string, galleryId: string): Promis
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list downloads: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.downloadjobs)) return body.downloadjobs;
+  return [];
 }
 
 export async function getDownloadAudit(token: string, galleryId: string): Promise<DownloadEvent[]> {
@@ -57,7 +60,10 @@ export async function getDownloadAudit(token: string, galleryId: string): Promis
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to get audit: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.downloadevents)) return body.downloadevents;
+  return [];
 }
 
 export function getZipDownloadUrl(galleryId: string): string {

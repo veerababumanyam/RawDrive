@@ -38,8 +38,8 @@ func NewDesignAIService(ar *repository.AssetRepo, g DesignReasoner, cr *ai.Confi
 // DesignSuggestion represents an AI-generated design recommendation.
 type DesignSuggestion struct {
 	Theme       string  `json:"theme"`
-	CoverStyle  string  `json:"cover_style"`
-	FontPairing string  `json:"font_pairing"`
+	CoverStyle  string  `json:"coverStyle"`
+	FontPairing string  `json:"fontPairing"`
 	Reasoning   string  `json:"reasoning"`
 	Confidence  float64 `json:"confidence"`
 }

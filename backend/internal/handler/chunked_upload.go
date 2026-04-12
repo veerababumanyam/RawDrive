@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -106,6 +107,15 @@ type ChunkedUploadHandler struct {
 	// M16 E47-S5: optional Tier D validation hook. Wired via WithValidation().
 	// Nil means validation is disabled (legacy behavior).
 	validationSvc service.UploadManifestValidation
+
+	// storageAccountingSvc is the workspace storage quota tracker. Wired
+	// via WithStorageAccounting(). Calls to RecordUpload from finalizeUpload
+	// are best-effort: an accounting failure is logged but does not fail
+	// the upload itself. Added 2026-04-12 after UAT surfaced a real bug —
+	// the chunked upload path never updated workspace_storage, so the
+	// dashboard KPI and quota enforcement saw zero regardless of actual
+	// usage.
+	storageAccountingSvc *service.StorageAccounting
 }
 
 // sessionStreamState is the in-memory working set for an in-flight upload.
@@ -195,6 +205,18 @@ func (h *ChunkedUploadHandler) WithValidation(
 	validationSvc service.UploadManifestValidation,
 ) *ChunkedUploadHandler {
 	h.validationSvc = validationSvc
+	return h
+}
+
+// WithStorageAccounting wires the workspace storage quota tracker.
+// finalizeUpload will call RecordUpload after a successful asset row insert
+// so the dashboard KPI and quota enforcement see live usage. The call is
+// best-effort — an accounting failure is logged but does not fail the
+// upload itself. Returns the same handler for chainable construction.
+func (h *ChunkedUploadHandler) WithStorageAccounting(
+	storageAccountingSvc *service.StorageAccounting,
+) *ChunkedUploadHandler {
+	h.storageAccountingSvc = storageAccountingSvc
 	return h
 }
 
@@ -652,6 +674,20 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		}
 	}
 
+	// Record workspace storage usage so the dashboard KPI, quota
+	// enforcement, and storage analytics all see live state. Best-effort:
+	// an accounting failure is logged but does not fail the upload. Wired
+	// in wave-7 after UAT surfaced that the chunked finalize path never
+	// updated workspace_storage, so the dashboard showed 0 B used
+	// regardless of how many bytes the user had uploaded. The legacy
+	// UploadService path in service/upload_service.go already did this
+	// correctly; this brings the TUS path into parity.
+	if h.storageAccountingSvc != nil {
+		if err := h.storageAccountingSvc.RecordUpload(ctx, row.WorkspaceID, row.TotalSize, 0); err != nil {
+			log.Printf("chunked_upload: record usage failed for workspace %s: %v", row.WorkspaceID, err)
+		}
+	}
+
 	if err := h.sessions.MarkCompleted(ctx, row.TUSUploadID); err != nil {
 		// Not fatal — log-worthy but the upload did succeed. Return the
 		// result so the client is not left retrying.
@@ -804,12 +840,16 @@ func deriveKeyAndUploadID(row *repository.UploadSession) (string, string) {
 			ext = "." + parts[1]
 		}
 	}
-	// The storage key pattern must match CreateSession exactly. Because the
-	// asset uuid is NOT persisted separately on the upload session row, we
-	// recover it by assuming the session id is the asset id. CreateSession
-	// currently generates a fresh assetID — wave 6 threads that id through
-	// the row.id column so finalize can resolve it here. Use row.ID.
-	storageKey := fmt.Sprintf("%s/%s/original%s", row.WorkspaceID.String(), row.ID.String(), ext)
+	// The storage key pattern must match CreateSession exactly. CreateSession
+	// builds the key as "<workspaceID>/<TUSUploadID>/original<ext>" where
+	// TUSUploadID is the uuid minted at session creation time and persisted
+	// on the row. Earlier revisions of this helper used row.ID (the DB PK),
+	// which produced a different key and caused CompleteMultipartUpload to
+	// fail with NoSuchUpload whenever finalize ran on a rehydrated state or
+	// on a different backend instance than the one that created the
+	// session. Always derive from TUSUploadID so CreateSession, UploadChunk,
+	// rehydration, and finalize agree on the same key.
+	storageKey := fmt.Sprintf("%s/%s/original%s", row.WorkspaceID.String(), row.TUSUploadID, ext)
 	mpID := ""
 	if row.R2MultipartUploadID != nil {
 		mpID = *row.R2MultipartUploadID

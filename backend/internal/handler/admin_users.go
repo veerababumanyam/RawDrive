@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -36,7 +37,8 @@ func (h *AdminUsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.ListUsers(r.Context(), filter)
 	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		log.Printf("admin users list: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error":"list users failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 	respondJSON(w, http.StatusOK, result)

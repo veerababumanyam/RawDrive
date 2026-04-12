@@ -37,7 +37,14 @@ func (h *AdminRevenueHandler) GetTimeSeries(w http.ResponseWriter, r *http.Reque
 	q := r.URL.Query()
 	from, _ := time.Parse(time.RFC3339, q.Get("from"))
 	to, _ := time.Parse(time.RFC3339, q.Get("to"))
+	// The frontend revenue page sends ?period=monthly|weekly|daily (see
+	// lib/api/admin.ts getRevenueTimeSeries). The older export handler
+	// sends ?granularity=... for CSV exports. Accept both here so neither
+	// caller is forced to rename. Prefer granularity when both are set.
 	granularity := q.Get("granularity")
+	if granularity == "" {
+		granularity = q.Get("period")
+	}
 	if granularity == "" {
 		granularity = "day"
 	}

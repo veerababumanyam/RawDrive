@@ -13,6 +13,9 @@ export interface Invoice {
   total_paisa: number;
   amount_paid_paisa: number;
   line_items: InvoiceLineItem[];
+  contact_id?: string;
+  deal_id?: string;
+  gallery_id?: string;
   due_date?: string;
   paid_at?: string;
   created_at: string;
@@ -42,7 +45,10 @@ export async function listInvoices(token: string, params?: { status?: string }):
   const query = new URLSearchParams(params as Record<string, string>).toString();
   const res = await fetch(`${API_BASE}/api/v1/billing/invoices?${query}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch invoices");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.invoices)) return body.invoices;
+  return [];
 }
 
 export async function createInvoice(token: string, invoice: Partial<Invoice>): Promise<Invoice> {

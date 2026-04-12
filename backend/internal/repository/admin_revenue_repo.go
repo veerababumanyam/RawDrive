@@ -22,11 +22,18 @@ type RevenueMetrics struct {
 	ARPU      int64   `db:"arpu"`       // paisa
 }
 
+// RevenueTimeSeries matches the frontend contract in
+// frontend/src/lib/api/admin.ts (period / revenue_paisa / subscribers).
+// Period is a pre-formatted "YYYY-MM" (or "YYYY-Www", or "YYYY-MM-DD"
+// depending on granularity) string so the UI can render it directly
+// without reparsing a time.Time. Without these JSON tags Go's default
+// encoder emits PascalCase keys that the frontend silently ignores —
+// that's why Module P12 on the revenue dashboard was showing ₹NaN.
 type RevenueTimeSeries struct {
-	Date          time.Time `db:"date"`
-	Revenue       int64     `db:"revenue"`        // paisa
-	Subscriptions int64     `db:"subscriptions"`
-	Churn         int64     `db:"churn"`
+	Period      string `db:"period" json:"period"`
+	Revenue     int64  `db:"revenue" json:"revenue_paisa"`
+	Subscribers int64  `db:"subscriptions" json:"subscribers"`
+	Churn       int64  `db:"churn" json:"churn"`
 }
 
 // StateRevenue is the JSON shape the frontend revenue page renders
@@ -96,12 +103,20 @@ func (r *AdminRevenueRepo) GetMetrics(ctx context.Context, from time.Time, to ti
 }
 
 func (r *AdminRevenueRepo) GetTimeSeries(ctx context.Context, from time.Time, to time.Time, granularity string) ([]RevenueTimeSeries, error) {
+	// truncFunc picks the date_trunc bucket; periodFmt picks a to_char
+	// pattern that matches the frontend's UX (monthly = "2026-04",
+	// weekly = "2026-W15", daily = "2026-04-12"). Keeping the formatting
+	// in SQL lets us skip an extra round-trip through time.Time on the
+	// Go side and keeps the JSON payload a human-readable string.
 	truncFunc := "day"
+	periodFmt := "YYYY-MM-DD"
 	switch granularity {
 	case "week":
 		truncFunc = "week"
-	case "month":
+		periodFmt = `IYYY-"W"IW`
+	case "month", "monthly":
 		truncFunc = "month"
+		periodFmt = "YYYY-MM"
 	}
 
 	// Time-series computed from subscription created_at/cancelled_at
@@ -110,14 +125,14 @@ func (r *AdminRevenueRepo) GetTimeSeries(ctx context.Context, from time.Time, to
 	// subscription start date using the subscription's amount_paisa.
 	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
 		SELECT
-			date_trunc('%s', s.created_at)::date AS date,
+			to_char(date_trunc('%s', s.created_at), '%s') AS period,
 			COALESCE(SUM(s.amount_paisa), 0) AS revenue,
 			COUNT(DISTINCT s.id) AS subscriptions,
 			COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'churned' AND s.cancelled_at >= date_trunc('%s', s.created_at)) AS churn
 		FROM subscriptions s
 		WHERE s.created_at BETWEEN $1 AND $2
-		GROUP BY date
-		ORDER BY date ASC`, truncFunc, truncFunc), from, to)
+		GROUP BY date_trunc('%s', s.created_at)
+		ORDER BY date_trunc('%s', s.created_at) ASC`, truncFunc, periodFmt, truncFunc, truncFunc, truncFunc), from, to)
 	if err != nil {
 		return nil, fmt.Errorf("revenue time series: %w", err)
 	}

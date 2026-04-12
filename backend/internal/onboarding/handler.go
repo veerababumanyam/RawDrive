@@ -25,6 +25,8 @@ type ProfileRequest struct {
 	BusinessName string `json:"business_name"`
 	GSTIN        string `json:"gstin"`
 	DisplayName  string `json:"display_name"`
+	Phone        string `json:"phone,omitempty"`
+	Plan         string `json:"plan,omitempty"`
 }
 
 // ──────────────────────────── Context helpers ────────────────────────────
@@ -111,10 +113,16 @@ func (h *Handler) SetProfile(w http.ResponseWriter, r *http.Request) {
 		BusinessName: req.BusinessName,
 		GSTIN:        req.GSTIN,
 		DisplayName:  req.DisplayName,
+		Phone:        req.Phone,
+		PlanTier:     req.Plan,
 	})
 	if err != nil {
 		if errors.Is(err, ErrInvalidGSTIN) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid GSTIN"})
+			return
+		}
+		if errors.Is(err, ErrEnterprisePlan) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "enterprise plan requires sales contact"})
 			return
 		}
 		if errors.Is(err, ErrStepRequired) {

@@ -12,7 +12,33 @@ var (
 	ErrInvalidGSTIN        = errors.New("invalid GSTIN")
 	ErrStepRequired        = errors.New("previous step required")
 	ErrWorkspaceCreateFail = errors.New("workspace creation failed")
+	ErrEnterprisePlan      = errors.New("enterprise plan requires sales contact")
 )
+
+// validSelfServePlans is the whitelist of plan tiers a user may select
+// during self-serve onboarding. Enterprise is excluded because it
+// requires a sales-assisted flow.
+var validSelfServePlans = map[string]bool{
+	"free":         true,
+	"starter":      true,
+	"professional": true,
+	"business":     true,
+}
+
+// normalizePlanTier validates and normalises the plan tier string.
+// Empty → "free"; "enterprise" → ErrEnterprisePlan; unknown → "free".
+func normalizePlanTier(plan string) (string, error) {
+	if plan == "" {
+		return "free", nil
+	}
+	if plan == "enterprise" {
+		return "", ErrEnterprisePlan
+	}
+	if validSelfServePlans[plan] {
+		return plan, nil
+	}
+	return "free", nil
+}
 
 type Step string
 
@@ -46,6 +72,8 @@ type ProfileInput struct {
 	BusinessName string `json:"business_name"`
 	GSTIN        string `json:"gstin"`
 	DisplayName  string `json:"display_name"`
+	Phone        string `json:"phone,omitempty"`
+	PlanTier     string `json:"plan,omitempty"`
 }
 
 // WorkspaceCreator is the port used to create the user's workspace at
@@ -53,7 +81,13 @@ type ProfileInput struct {
 // an in-memory stub. Production implementation lives in main.go as
 // onboardingWorkspaceCreator (adapting workspace.Service).
 type WorkspaceCreator interface {
-	CreateWorkspace(ctx context.Context, userID, stateID, businessName string) (string, error)
+	CreateWorkspace(ctx context.Context, userID, stateID, businessName, planTier string) (string, error)
+}
+
+// UserUpdater is the port used to update user profile fields (e.g. phone)
+// during onboarding. Kept as an interface so tests can substitute a stub.
+type UserUpdater interface {
+	UpdatePhone(ctx context.Context, userID, phone string) error
 }
 
 type EventPublisher interface {
@@ -70,19 +104,33 @@ type Service interface {
 // memory — all progress lives in the Repository. This is the fix for
 // the pre-existing "backend restart wipes onboarding progress" bug.
 type service struct {
-	repo Repository
-	wsc  WorkspaceCreator
-	pub  EventPublisher
+	repo    Repository
+	wsc     WorkspaceCreator
+	pub     EventPublisher
+	userUpd UserUpdater
 }
 
-// NewService constructs the Service. repo is required; wsc and pub may
-// be nil (workspace creation and event publishing are best-effort).
-func NewService(repo Repository, wsc WorkspaceCreator, pub EventPublisher) Service {
-	return &service{
+// NewService constructs the Service. repo is required; wsc, pub, and
+// userUpd may be nil (workspace creation, event publishing, and user
+// updates are best-effort when nil).
+func NewService(repo Repository, wsc WorkspaceCreator, pub EventPublisher, opts ...ServiceOption) Service {
+	s := &service{
 		repo: repo,
 		wsc:  wsc,
 		pub:  pub,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// ServiceOption configures optional dependencies on the onboarding service.
+type ServiceOption func(*service)
+
+// WithUserUpdater sets the UserUpdater used to persist phone during onboarding.
+func WithUserUpdater(u UserUpdater) ServiceOption {
+	return func(s *service) { s.userUpd = u }
 }
 
 // SelectState canonicalizes the user-supplied state identifier (any of
@@ -148,6 +196,18 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 		return ErrInvalidGSTIN
 	}
 
+	// Validate and normalise plan tier before doing any side-effects.
+	planTier, err := normalizePlanTier(input.PlanTier)
+	if err != nil {
+		return err
+	}
+
+	// Persist phone if provided and a UserUpdater is wired in.
+	// Best-effort: a failure here does not block onboarding completion.
+	if input.Phone != "" && s.userUpd != nil {
+		_ = s.userUpd.UpdatePhone(ctx, userID, input.Phone)
+	}
+
 	// STEP 1: create workspace (hard prerequisite, not best-effort).
 	// A failure here must NOT advance the step — the user should be
 	// able to retry by resubmitting the profile form.
@@ -159,6 +219,7 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 		userID,
 		strconv.Itoa(*existing.StateID),
 		input.BusinessName,
+		planTier,
 	); err != nil {
 		return fmt.Errorf("%w: %v", ErrWorkspaceCreateFail, err)
 	}

@@ -48,6 +48,7 @@ type AuditLogFilter struct {
 	DateFrom     *time.Time
 	DateTo       *time.Time
 	Severity     string
+	IPAddress    string
 	Cursor       *uuid.UUID
 	Limit        int
 }
@@ -151,8 +152,8 @@ func (r *AuditLogRepo) BulkCreate(ctx context.Context, entries []AuditLogCreate)
 }
 
 func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedResult[AuditLogEntry], error) {
-	if f.Limit <= 0 || f.Limit > 100 {
-		f.Limit = 50
+	if f.Limit <= 0 || f.Limit > 1000 {
+		f.Limit = 500
 	}
 
 	var (
@@ -194,6 +195,11 @@ func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedRe
 	if f.Severity != "" {
 		where = append(where, fmt.Sprintf("a.severity = $%d", idx))
 		args = append(args, f.Severity)
+		idx++
+	}
+	if f.IPAddress != "" {
+		where = append(where, fmt.Sprintf("a.ip_address ILIKE $%d || '%%'", idx))
+		args = append(args, f.IPAddress)
 		idx++
 	}
 
@@ -331,6 +337,11 @@ func (r *AuditLogRepo) Count(ctx context.Context, f AuditLogFilter) (int64, erro
 	if f.Severity != "" {
 		where = append(where, fmt.Sprintf("severity = $%d", idx))
 		args = append(args, f.Severity)
+		idx++
+	}
+	if f.IPAddress != "" {
+		where = append(where, fmt.Sprintf("ip_address ILIKE $%d || '%%'", idx))
+		args = append(args, f.IPAddress)
 		idx++
 	}
 

@@ -174,3 +174,33 @@ func TestWorkspaceName_DefaultsToBusinessName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Acme Corp", ws.Name, "workspace name should default to business name")
 }
+
+func TestCreateWorkspace_PlanTier(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:     "Pro Workspace",
+		StateID:  "state-uuid-008",
+		OwnerID:  "user-uuid-008",
+		PlanTier: "professional",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ws)
+	assert.Equal(t, "professional", ws.PlanTier, "plan tier should be set to professional")
+}
+
+func TestCreateWorkspace_PlanTierDefault(t *testing.T) {
+	svc, _, _ := newTestWorkspaceService()
+	ctx := context.Background()
+
+	ws, err := svc.Create(ctx, workspace.CreateWorkspaceInput{
+		Name:    "Free Workspace",
+		StateID: "state-uuid-009",
+		OwnerID: "user-uuid-009",
+		// PlanTier intentionally omitted
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ws)
+	assert.Equal(t, "free", ws.PlanTier, "plan tier should default to free when not provided")
+}

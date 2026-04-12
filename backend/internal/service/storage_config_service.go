@@ -20,9 +20,9 @@ func NewStorageConfigService(pool *pgxpool.Pool) *StorageConfigService {
 
 func (s *StorageConfigService) GetWorkspacePlanTier(ctx context.Context, wsID uuid.UUID) (string, error) {
 	var tier string
-	err := s.pool.QueryRow(ctx, `SELECT COALESCE(plan_tier, 'standard') FROM workspaces WHERE id = $1`, wsID).Scan(&tier)
+	err := s.pool.QueryRow(ctx, `SELECT COALESCE(plan_tier, 'free') FROM workspaces WHERE id = $1`, wsID).Scan(&tier)
 	if err != nil {
-		return "standard", fmt.Errorf("get plan tier: %w", err)
+		return "free", fmt.Errorf("get plan tier: %w", err)
 	}
 	return tier, nil
 }

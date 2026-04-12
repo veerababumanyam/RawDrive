@@ -1,0 +1,29 @@
+**/*.md
+**/*_test.go
+**/testdata/
+.git
+.gitignore
+coverage/
+*.out
+tests/
+
+# Windows dev artifacts that sometimes live under backend/ on the
+# workstation — do NOT ship into the build context.
+*.exe
+*.exe~
+*.log
+*.sh
+_cobolt-output/
+frontend/
+
+# Seed SQL contains test-user fixtures with known passwords per
+# AGENTS.md M7.5 platform roles. Integration tests consume it via
+# go test, but prod images must not include it. seeds/ is NOT
+# referenced by any go:embed directive (verified), so excluding it
+# only trims the build context; the binary is unaffected.
+seeds/
+
+# NOTE: migrations/*.sql is NOT excluded — it is required at build
+# time by backend/internal/database/database.go line 16's
+# //go:embed migrations/*.sql directive. The .sql files get compiled
+# into the binary; excluding them would break `go build`.

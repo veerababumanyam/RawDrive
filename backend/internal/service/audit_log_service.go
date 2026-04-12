@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"math"
 	"time"
 
@@ -12,10 +12,11 @@ import (
 
 type AuditLogService struct {
 	auditRepo *repository.AuditLogRepo
+	logger    *slog.Logger
 }
 
 func NewAuditLogService(auditRepo *repository.AuditLogRepo) *AuditLogService {
-	return &AuditLogService{auditRepo: auditRepo}
+	return &AuditLogService{auditRepo: auditRepo, logger: slog.Default()}
 }
 
 func (s *AuditLogService) RecordAction(ctx context.Context, entry repository.AuditLogCreate) {
@@ -26,12 +27,19 @@ func (s *AuditLogService) RecordAction(ctx context.Context, entry repository.Aud
 				time.Sleep(time.Duration(float64(100)*math.Pow(2, float64(attempt-1))) * time.Millisecond)
 			}
 			if _, err := s.auditRepo.Create(bgCtx, entry); err != nil {
-				log.Printf("audit log write attempt %d/3 failed: %v", attempt+1, err)
+				s.logger.Warn("audit.insert_failed",
+					slog.String("action", entry.Action),
+					slog.Int("attempt", attempt+1),
+					slog.Any("error", err),
+				)
 				continue
 			}
 			return
 		}
-		log.Printf("AUDIT LOG WRITE FAILED after 3 attempts for action=%s", entry.Action)
+		s.logger.Error("audit.insert_exhausted",
+			slog.String("action", entry.Action),
+			slog.Int("max_attempts", 3),
+		)
 	}()
 }
 

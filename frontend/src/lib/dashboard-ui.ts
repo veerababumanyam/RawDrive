@@ -53,14 +53,46 @@ export const galleryTypeClasses: Record<string, string> = {
   delivery: "status-badge status-badge--info",
 };
 
-export function getAssetPreviewUrl(asset?: {
-  thumbnail_urls?: Record<string, string>;
-  download_url?: string;
-}) {
-  if (!asset) {
-    return "";
-  }
+/**
+ * Build a preview URL for an asset, selecting the best available
+ * thumbnail variant (smallest → largest for card grids, caller is
+ * expected to pass the appropriate variant prefs if they need larger).
+ *
+ * The backend now emits `/storage/{key}` URLs from the thumbnail
+ * worker (see backend/internal/worker/thumbnail_worker.go) so every
+ * thumbnail flows through the backend's JWT-authed streaming proxy.
+ * Because the proxy accepts either an Authorization header OR a
+ * `?token=...` query-param, we append the stored access token to the
+ * URL so bare `<img src>` tags work without a custom fetcher. The
+ * backend re-verifies the token on every request, so the URL stays
+ * bound to the caller's session and cannot be exfiltrated to another
+ * user.
+ *
+ * Legacy rows that still hold presigned R2 URLs are passed through
+ * unchanged, so clients hitting a pre-fix asset row fall back to the
+ * presigned URL (which worked fine against production R2 even if the
+ * UAT bridge was unreachable).
+ */
+export function getAssetPreviewUrl(
+  asset?: {
+    thumbnail_urls?: Record<string, string>;
+    download_url?: string;
+  },
+  token?: string | null,
+): string {
+  if (!asset) return "";
 
-  const thumbnails = asset.thumbnail_urls ? Object.values(asset.thumbnail_urls) : [];
-  return thumbnails[0] ?? asset.download_url ?? "";
+  // Variant preference order — smallest first for grid cards.
+  const variants = asset.thumbnail_urls ?? {};
+  const preferred = variants.thumb_sm_webp ?? variants.thumb_sm ?? variants.thumb_md ?? variants.thumb_lg;
+  const chosen = preferred ?? Object.values(variants)[0] ?? asset.download_url ?? "";
+  if (!chosen) return "";
+
+  // Only append the token when the URL is one of OUR storage proxy
+  // paths — legacy presigned URLs already carry their own auth.
+  if (token && chosen.includes("/storage/")) {
+    const sep = chosen.includes("?") ? "&" : "?";
+    return `${chosen}${sep}token=${encodeURIComponent(token)}`;
+  }
+  return chosen;
 }

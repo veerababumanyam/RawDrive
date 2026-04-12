@@ -1,0 +1,108 @@
+# Docker Compose for VPS 3 (DB node, 187.127.142.46).
+# Runs: Postgres primary, Valkey primary, NATS cluster member 3.
+# PgBouncer is NOT here — it runs on the app nodes (see prod-app.yml).
+
+name: rawdrive-db
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: deploy-postgres-1
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  valkey:
+    image: valkey/valkey:9.0-alpine
+    container_name: deploy-valkey-1
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - /etc/valkey/valkey.conf
+      - --requirepass
+      - ${VALKEY_PASSWORD}
+    environment:
+      # Required by the healthcheck command; the --requirepass flag
+      # above handles the listener but doesn't set this env var inside
+      # the container, so the healthcheck's $${VALKEY_PASSWORD}
+      # expansion would otherwise resolve to empty.
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD}
+    volumes:
+      - valkey_data:/data
+      - ./valkey/valkey.conf:/etc/valkey/valkey.conf:ro
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a $${VALKEY_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: deploy-nats-1
+    restart: unless-stopped
+    command:
+      - -c
+      - /etc/nats/nats-server.conf
+      - -n
+      - nats-3
+      - -cluster_name
+      - rawdrive-nats
+    volumes:
+      - nats_data:/data
+      - ./nats/nats-server.conf:/etc/nats/nats-server.conf:ro
+    ports:
+      - "4222:4222"
+      - "6222:6222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+volumes:
+  postgres_data:
+    driver: local
+  valkey_data:
+    driver: local
+  nats_data:
+    driver: local

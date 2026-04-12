@@ -25,7 +25,10 @@ const headers = (token: string) => ({
 export async function listEvents(token: string, from: string, to: string): Promise<CalendarEvent[]> {
   const res = await fetch(`${API_BASE}/api/v1/calendar/events?from=${from}&to=${to}`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch events");
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.calendarevents)) return body.calendarevents;
+  return [];
 }
 
 export async function createEvent(token: string, event: Partial<CalendarEvent>): Promise<CalendarEvent> {

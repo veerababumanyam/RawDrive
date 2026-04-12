@@ -19,21 +19,120 @@
  * real; nothing else about the gallery shell changes.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import { MapView } from "./map-view";
 import type { Asset } from "@/lib/api/assets";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress } from "@/components/icons";
 
 interface Props {
   slug: string;
   assets: PublicAsset[];
+  galleryType?: string;
+  maxSelections?: number;
+  downloadEnabled?: boolean;
 }
 
 type ViewMode = "grid" | "map";
 
-export function PublicGalleryGrid({ slug, assets }: Props) {
+export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  // Fullscreen mode for lightbox
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!lightboxRef.current) return;
+    if (!document.fullscreenElement) {
+      lightboxRef.current.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // Auto-hide toolbar/filmstrip after 3s idle in fullscreen
+  const resetChromeTimer = useCallback(() => {
+    setChromeVisible(true);
+    if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current);
+    if (isFullscreen) {
+      chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 3000);
+    }
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    if (!isFullscreen) { setChromeVisible(true); return; }
+    // Start the hide timer on entering fullscreen
+    chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 3000);
+    return () => { if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current); };
+  }, [isFullscreen]);
+
+  // Exit fullscreen when lightbox closes
+  useEffect(() => {
+    if (lightboxIdx === null && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, [lightboxIdx]);
+
+  // M19 F-009: Proofing selection state (BUG-GAL-014 fix)
+  const isProofing = galleryType === "proofing";
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [submitName, setSubmitName] = useState("");
+  const [submitEmail, setSubmitEmail] = useState("");
+  const [submitNote, setSubmitNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const toggleSelection = useCallback((assetId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(assetId)) {
+        next.delete(assetId);
+      } else {
+        if (maxSelections > 0 && next.size >= maxSelections) return prev;
+        next.add(assetId);
+      }
+      return next;
+    });
+  }, [maxSelections]);
+
+  const handleSubmitSelections = async () => {
+    if (selectedIds.size === 0 || !submitEmail) return;
+    setSubmitting(true);
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const res = await fetch(`${apiBase}/api/v1/public/galleries/${slug}/proof`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_ids: Array.from(selectedIds),
+          client_name: submitName,
+          client_email: submitEmail,
+          note: submitNote,
+        }),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+        setShowSubmit(false);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // Listen for face filter events dispatched by FaceIDGate (via
   // PublicGalleryEnhancements). The event carries the matched asset IDs;
@@ -59,6 +158,32 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
     if (!faceFilterIds) return assets;
     return assets.filter((a) => faceFilterIds.has(a.id));
   }, [assets, faceFilterIds]);
+
+  // Helper to change photo and reset zoom in one update
+  const goToPhoto = (idx: number | null) => {
+    setLightboxIdx(idx);
+    setZoom(1);
+  };
+
+  // Keyboard handling for the lightbox
+  useEffect(() => {
+    if (lightboxIdx === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      switch (e.key) {
+        case "Escape": setLightboxIdx(null); break;
+        case "ArrowLeft": setLightboxIdx((i) => i !== null && i > 0 ? i - 1 : i); break;
+        case "ArrowRight": setLightboxIdx((i) => i !== null && i < visibleAssets.length - 1 ? i + 1 : i); break;
+        case "+": case "=": setZoom((z) => Math.min(z + 0.25, 3)); break;
+        case "-": setZoom((z) => Math.max(z - 0.25, 0.5)); break;
+        case "0": setZoom(1); break;
+        case "f": case "F": toggleFullscreen(); break;
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [lightboxIdx, visibleAssets.length, toggleFullscreen]);
 
   // Adapt PublicAsset → Asset shape for the MapView component. PublicAsset
   // doesn't carry EXIF GPS, so the map filters based on assets with
@@ -150,7 +275,14 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
       ) : (
         <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4" aria-label={`Grid view for gallery ${slug}`}>
           {visibleAssets.map((asset) => {
+            // Backend thumbnail worker emits keys thumb_lg / thumb_md
+            // / thumb_sm (prefixed) — not the legacy lg/md/sm shape
+            // some earlier code paths expected. Try both so pre-fix
+            // gallery rows still render.
             const thumbUrl =
+              asset.thumbnail_urls?.thumb_lg ||
+              asset.thumbnail_urls?.thumb_md ||
+              asset.thumbnail_urls?.thumb_sm ||
               asset.thumbnail_urls?.lg ||
               asset.thumbnail_urls?.md ||
               asset.thumbnail_urls?.sm;
@@ -158,8 +290,62 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
               <div
                 key={asset.id}
                 id={`asset-${asset.id}`}
-                className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken"
+                className={`break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken cursor-pointer transition-all hover:shadow-lg relative group ${
+                  isProofing && selectedIds.has(asset.id)
+                    ? "ring-3 ring-accent-primary shadow-lg"
+                    : ""
+                }`}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (isProofing) {
+                    toggleSelection(asset.id);
+                  } else {
+                    const idx = visibleAssets.findIndex((a) => a.id === asset.id);
+                    if (idx >= 0) goToPhoto(idx);
+                  }
+                }}
+                onDoubleClick={() => {
+                  // In proofing mode, double-click still opens lightbox
+                  if (isProofing) {
+                    const idx = visibleAssets.findIndex((a) => a.id === asset.id);
+                    if (idx >= 0) goToPhoto(idx);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (isProofing) {
+                      toggleSelection(asset.id);
+                    } else {
+                      const idx = visibleAssets.findIndex((a) => a.id === asset.id);
+                      if (idx >= 0) goToPhoto(idx);
+                    }
+                  }
+                }}
               >
+                {/* M19: Selection checkmark overlay */}
+                {isProofing && selectedIds.has(asset.id) && (
+                  <div className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-accent-primary flex items-center justify-center shadow-md">
+                    <CheckCircle className="w-5 h-5 text-accent-primary-contrast" />
+                  </div>
+                )}
+                {/* M19: Download button (visible on hover when downloads enabled) */}
+                {downloadEnabled && !isProofing && (
+                  <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GlassIconButton
+                      size="sm"
+                      label="Download"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                        window.open(`${apiBase}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`, "_blank");
+                      }}
+                    >
+                      <Download />
+                    </GlassIconButton>
+                  </div>
+                )}
                 {thumbUrl ? (
                   <img
                     src={thumbUrl}
@@ -184,6 +370,228 @@ export function PublicGalleryGrid({ slug, assets }: Props) {
           })}
         </div>
       )}
+
+      {/* End-of-gallery indicator */}
+      <div className="mt-12 text-center pb-8">
+        <div className="inline-block h-px w-16 bg-border-subtle" />
+        <p className="mt-3 text-xs text-text-tertiary">
+          {visibleAssets.length} {visibleAssets.length === 1 ? "photo" : "photos"}
+        </p>
+      </div>
+
+      {/* M19 F-009: Proofing selection floating bar */}
+      {isProofing && selectedIds.size > 0 && !submitted && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface-elevated/95 backdrop-blur-xl border-t border-border-subtle px-4 py-3 shadow-lg">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <span className="text-sm font-medium text-text-primary">
+              {selectedIds.size} {selectedIds.size === 1 ? "photo" : "photos"} selected
+              {maxSelections > 0 && (
+                <span className="text-text-tertiary"> of {maxSelections}</span>
+              )}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="px-3 py-1.5 text-xs rounded-lg border border-border-subtle text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSubmit(true)}
+                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-accent-primary text-accent-primary-contrast hover:opacity-90 transition-opacity"
+              >
+                Submit Selections
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* M19: Submission success message */}
+      {submitted && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-green-600/95 backdrop-blur-xl px-4 py-3 shadow-lg">
+          <div className="max-w-6xl mx-auto text-center">
+            <p className="text-sm font-medium text-white">
+              Your selections have been submitted! The photographer will review them shortly.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* M19: Submit selections dialog */}
+      {showSubmit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSubmit(false)}>
+          <div className="bg-surface-elevated rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-text-primary mb-1">Submit Your Selections</h3>
+            <p className="text-sm text-text-secondary mb-4">
+              {selectedIds.size} {selectedIds.size === 1 ? "photo" : "photos"} selected
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Your name"
+                value={submitName}
+                onChange={(e) => setSubmitName(e.target.value)}
+                className="input-base w-full"
+              />
+              <input
+                type="email"
+                placeholder="Your email *"
+                value={submitEmail}
+                onChange={(e) => setSubmitEmail(e.target.value)}
+                className="input-base w-full"
+                required
+              />
+              <textarea
+                placeholder="Message to photographer (optional)"
+                value={submitNote}
+                onChange={(e) => setSubmitNote(e.target.value)}
+                rows={3}
+                className="input-base w-full resize-none"
+              />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setShowSubmit(false)}
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-border-subtle text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitSelections}
+                disabled={!submitEmail || submitting}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-primary text-accent-primary-contrast hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client-facing lightbox */}
+      {lightboxIdx !== null && visibleAssets[lightboxIdx] && (() => {
+        const photo = visibleAssets[lightboxIdx];
+        const fullUrl =
+          photo.thumbnail_urls?.display_webp ||
+          photo.thumbnail_urls?.thumb_lg_webp ||
+          photo.thumbnail_urls?.thumb_lg ||
+          photo.thumbnail_urls?.lg ||
+          Object.values(photo.thumbnail_urls || {})[0] ||
+          "";
+        return (
+          <div
+            ref={lightboxRef}
+            className="fixed inset-0 z-50 flex flex-col bg-black/95"
+            onClick={(e) => { if (e.target === e.currentTarget) setLightboxIdx(null); }}
+            onMouseMove={resetChromeTimer}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Photo: ${photo.filename}`}
+          >
+            {/* Toolbar — auto-hides in fullscreen after 3s idle */}
+            <div className={`flex items-center justify-between px-4 py-3 shrink-0 transition-opacity duration-300 ${
+              chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}>
+              <span className="text-sm text-white font-medium truncate max-w-[300px]">
+                {photo.filename}
+                {zoom !== 1 && <span className="ml-2 text-white/40 text-xs">{Math.round(zoom * 100)}%</span>}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <GlassIconButton size="sm" label="Zoom out" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
+                <GlassIconButton size="sm" label="Zoom in" onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
+                <div className="w-px h-6 bg-white/10 mx-1" />
+                <GlassIconButton size="sm" label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen}>
+                  {isFullscreen ? <Compress /> : <Expand />}
+                </GlassIconButton>
+                <GlassIconButton size="sm" variant="ghost" label="Close" onClick={() => setLightboxIdx(null)}><XMark /></GlassIconButton>
+              </div>
+            </div>
+
+            {/* Image */}
+            <div className="relative flex flex-1 items-center justify-center overflow-auto">
+              {lightboxIdx > 0 && (
+                <GlassIconButton
+                  size="lg"
+                  label="Previous"
+                  className="absolute left-4 z-10"
+                  onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => i !== null && i > 0 ? i - 1 : i); }}
+                >
+                  <ChevronLeft />
+                </GlassIconButton>
+              )}
+
+              {fullUrl ? (
+                <img
+                  src={fullUrl}
+                  alt={photo.filename}
+                  className="max-h-full max-w-full object-contain p-4 transition-transform duration-200"
+                  style={{ transform: `scale(${zoom})` }}
+                  draggable={false}
+                />
+              ) : (
+                <p className="text-white/40 text-sm">Image unavailable</p>
+              )}
+
+              {lightboxIdx < visibleAssets.length - 1 && (
+                <GlassIconButton
+                  size="lg"
+                  label="Next"
+                  className="absolute right-4 z-10"
+                  onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => i !== null && i < visibleAssets.length - 1 ? i + 1 : i); }}
+                >
+                  <ChevronRight />
+                </GlassIconButton>
+              )}
+            </div>
+
+            {/* Filmstrip — scrollable thumbnail strip for quick navigation, auto-hides in fullscreen */}
+            {visibleAssets.length > 1 && (
+              <div className={`flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 shrink-0 transition-opacity duration-300 ${
+                chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`} role="tablist" aria-label="Photo filmstrip">
+                {visibleAssets.map((a, i) => {
+                  const thumb = a.thumbnail_urls?.thumb_sm || a.thumbnail_urls?.sm || a.thumbnail_urls?.thumb_md || Object.values(a.thumbnail_urls || {})[0] || "";
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={i === lightboxIdx}
+                      onClick={(e) => { e.stopPropagation(); goToPhoto(i); }}
+                      className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+                        i === lightboxIdx ? "border-white scale-105 shadow-lg" : "border-white/20 opacity-50 hover:opacity-100"
+                      }`}
+                    >
+                      {thumb ? (
+                        <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" draggable={false} />
+                      ) : (
+                        <div className="h-full w-full bg-white/5" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Bottom hints */}
+            <div className={`px-4 pb-4 shrink-0 transition-opacity duration-300 ${
+              chromeVisible ? "opacity-100" : "opacity-0"
+            }`}>
+              <div className="flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide">
+                <span>← → Navigate</span>
+                <span>+/- Zoom</span>
+                <span>F Fullscreen</span>
+                <span>Esc Close</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

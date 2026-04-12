@@ -78,11 +78,11 @@ export function Navbar() {
             onMouseEnter={() => setOpenDropdown("solutions")}
             onMouseLeave={() => setOpenDropdown(null)}
           >
-            <button className="flex items-center gap-1 text-sm font-medium text-text-secondary transition-colors hover:text-accent group-hover:text-accent">
+            <button className="flex items-center gap-1 text-sm font-medium text-text-primary transition-colors hover:text-accent group-hover:text-accent">
               Products & Solutions <ChevronDown className="h-4 w-4" />
             </button>
             {openDropdown === "solutions" && (
-              <div className="surface-panel absolute left-0 top-full w-56 p-2">
+              <div className="surface-panel absolute left-0 top-full z-50 w-56 p-2">
                 {solutionsLinks.map((link) => (
                   <Link
                     key={link.href}
@@ -101,11 +101,11 @@ export function Navbar() {
             onMouseEnter={() => setOpenDropdown("marketplaces")}
             onMouseLeave={() => setOpenDropdown(null)}
           >
-            <button className="flex items-center gap-1 text-sm font-medium text-text-secondary transition-colors hover:text-accent group-hover:text-accent">
+            <button className="flex items-center gap-1 text-sm font-medium text-text-primary transition-colors hover:text-accent group-hover:text-accent">
               Marketplaces <ChevronDown className="h-4 w-4" />
             </button>
             {openDropdown === "marketplaces" && (
-              <div className="surface-panel absolute left-0 top-full w-48 p-2">
+              <div className="surface-panel absolute left-0 top-full z-50 w-48 p-2">
                 {marketplacesLinks.map((link) => (
                   <Link
                     key={link.href}
@@ -121,14 +121,14 @@ export function Navbar() {
 
           <Link
             href="/dealership"
-            className="text-sm font-medium text-text-secondary transition-colors hover:text-accent"
+            className="text-sm font-medium text-text-primary transition-colors hover:text-accent"
           >
             Partner Program
           </Link>
 
           <Link
             href="/pricing"
-            className="text-sm font-medium text-text-secondary transition-colors hover:text-accent"
+            className="text-sm font-medium text-text-primary transition-colors hover:text-accent"
           >
             Pricing
           </Link>
@@ -138,11 +138,11 @@ export function Navbar() {
             onMouseEnter={() => setOpenDropdown("company")}
             onMouseLeave={() => setOpenDropdown(null)}
           >
-            <button className="flex items-center gap-1 text-sm font-medium text-text-secondary transition-colors hover:text-accent group-hover:text-accent">
+            <button className="flex items-center gap-1 text-sm font-medium text-text-primary transition-colors hover:text-accent group-hover:text-accent">
               Company <ChevronDown className="h-4 w-4" />
             </button>
             {openDropdown === "company" && (
-              <div className="surface-panel absolute left-0 top-full w-40 p-2">
+              <div className="surface-panel absolute left-0 top-full z-50 w-40 p-2">
                 {companyLinks.map((link) => (
                   <Link
                     key={link.href}
@@ -157,12 +157,12 @@ export function Navbar() {
           </div>
         </nav>
 
-        <div className="hidden items-center gap-4 md:flex">
+        <div className="hidden items-center gap-4 lg:flex">
           <ThemeToggleButton />
 
           <Link
             href="/login"
-            className="inline-flex items-center text-sm font-medium text-text-secondary transition-colors hover:text-accent"
+            className="inline-flex items-center text-sm font-medium text-text-primary transition-colors hover:text-accent"
             style={{ minHeight: "var(--touch-target-min)" }}
           >
             Login

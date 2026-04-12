@@ -90,3 +90,28 @@ func (r *GalleryAssetRepo) GetFirstAssetID(ctx context.Context, galleryID uuid.U
 	}
 	return &assetID, nil
 }
+
+// ReorderItem represents a single asset sort order update.
+type ReorderItem struct {
+	AssetID   uuid.UUID
+	SortOrder int
+}
+
+// Reorder updates sort_order for multiple assets in a single transaction.
+func (r *GalleryAssetRepo) Reorder(ctx context.Context, galleryID uuid.UUID, items []ReorderItem) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("gallery asset reorder begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, item := range items {
+		if _, err := tx.Exec(ctx,
+			`UPDATE gallery_assets SET sort_order=$1 WHERE gallery_id=$2 AND asset_id=$3`,
+			item.SortOrder, galleryID, item.AssetID); err != nil {
+			return fmt.Errorf("gallery asset reorder: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}

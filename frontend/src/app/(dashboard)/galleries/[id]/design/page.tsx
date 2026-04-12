@@ -7,6 +7,10 @@ import { DesignTemplates } from "@/components/gallery/design-templates";
 import { AIDesignSuggest } from "@/components/gallery/ai-design-suggest";
 import { useDesignHistory } from "@/hooks/use-design-history";
 import { useDesignLatency, LATENCY_BUDGET_MS } from "@/hooks/use-design-latency";
+import { getStoredAccessToken } from "@/lib/auth";
+import { listGalleryAssets } from "@/lib/api/galleries";
+import { getAsset, type Asset } from "@/lib/api/assets";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -140,6 +144,26 @@ export default function GalleryDesignStudioPage() {
   const [resetConfirm, setResetConfirm] = useState<string | null>(null);
   const { getSavedDraft, discard } = useDraftPersistence(galleryId, config);
 
+  // Fetch gallery assets for preview
+  const [previewAssets, setPreviewAssets] = useState<Asset[]>([]);
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const entries = await listGalleryAssets(token, galleryId);
+        const hydrated = await Promise.all(
+          entries.slice(0, 12).map(async (e) => {
+            try { return await getAsset(token, e.asset_id); } catch { return null; }
+          })
+        );
+        if (!cancelled) setPreviewAssets(hydrated.filter((a): a is Asset => a !== null));
+      } catch { /* preview is best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [galleryId]);
+
   // Undo/redo
   const history = useDesignHistory(config);
 
@@ -217,7 +241,7 @@ export default function GalleryDesignStudioPage() {
     setPublishStatus("saving");
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const token = localStorage.getItem("rawdrive_token");
+      const token = getStoredAccessToken();
       const res = await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -304,11 +328,11 @@ export default function GalleryDesignStudioPage() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { history.undo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canUndo} className="px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Undo (Ctrl+Z)">↩</button>
-          <button onClick={() => { history.redo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canRedo} className="px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">↪</button>
-          <button onClick={() => { wrappedDispatch({ type: "RESET" }); discard(); }} className="px-4 py-2 text-sm rounded-xl border border-border-default hover:bg-surface-container-low transition-colors">Discard All</button>
-          <button onClick={handlePublish} disabled={publishStatus === "saving"} className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${publishStatus === "success" ? "bg-feedback-success text-text-inverse" : publishStatus === "error" ? "bg-feedback-error text-text-inverse" : "bg-accent-default text-text-inverse hover:bg-accent-hover"}`}>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button onClick={() => { history.undo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canUndo} className="hidden sm:inline-flex px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Undo (Ctrl+Z)">↩</button>
+          <button onClick={() => { history.redo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canRedo} className="hidden sm:inline-flex px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">↪</button>
+          <button onClick={() => { wrappedDispatch({ type: "RESET" }); discard(); }} className="px-4 py-2 text-sm rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-container-low transition-colors min-h-[44px]">Discard All</button>
+          <button onClick={handlePublish} disabled={publishStatus === "saving"} className={`shrink-0 px-6 py-2 text-sm font-medium rounded-xl transition-all min-h-[44px] ${publishStatus === "success" ? "bg-feedback-success text-text-inverse" : publishStatus === "error" ? "bg-feedback-error text-text-inverse" : "bg-accent-default text-text-inverse hover:bg-accent-hover"}`}>
             {publishStatus === "saving" ? "Publishing..." : publishStatus === "success" ? "Published!" : publishStatus === "error" ? "Failed — Retry" : "Publish"}
           </button>
         </div>
@@ -449,6 +473,10 @@ export default function GalleryDesignStudioPage() {
           <div className="mx-auto transition-all duration-300" style={{ maxWidth: PREVIEW_WIDTHS[previewDevice] }}>
             {/* Cover Preview */}
             <div className="aspect-[21/9] rounded-2xl bg-surface-container border border-border-subtle mb-8 flex items-center justify-center relative overflow-hidden">
+              {previewAssets[0] && (() => {
+                const coverUrl = getAssetPreviewUrl(previewAssets[0], getStoredAccessToken());
+                return coverUrl ? <img src={coverUrl} alt="Cover preview" className="absolute inset-0 w-full h-full object-cover" /> : null;
+              })()}
               {COVER_STYLES.find((s) => s.id === config.cover.styleId)?.overlay && (
                 <div className="absolute inset-0" style={{ background: COVER_STYLES.find((s) => s.id === config.cover.styleId)!.overlay }} />
               )}
@@ -457,12 +485,20 @@ export default function GalleryDesignStudioPage() {
 
             {/* Gallery Grid Preview */}
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${previewDevice === "mobile" ? Math.min(config.grid.columns, 1) : previewDevice === "tablet" ? Math.min(config.grid.columns, 2) : config.grid.columns}, 1fr)`, gap: `${config.grid.gap}px` }}>
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="rounded-xl bg-surface-container border border-border-subtle overflow-hidden" style={{ aspectRatio: i % 3 === 0 ? "3/4" : i % 3 === 1 ? "4/3" : "1/1" }}>
-                  <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-high" />
-                  {config.grid.showInfo && <div className="p-2"><p className="text-[10px] text-text-tertiary">IMG_{1000 + i}.jpg</p></div>}
-                </div>
-              ))}
+              {Array.from({ length: Math.max(previewAssets.length, 12) }).map((_, i) => {
+                const asset = previewAssets[i % previewAssets.length];
+                const previewUrl = asset ? getAssetPreviewUrl(asset, getStoredAccessToken()) : "";
+                return (
+                  <div key={i} className="rounded-xl bg-surface-container border border-border-subtle overflow-hidden" style={{ aspectRatio: i % 3 === 0 ? "3/4" : i % 3 === 1 ? "4/3" : "1/1" }}>
+                    {previewUrl ? (
+                      <img src={previewUrl} alt={asset?.filename || ""} className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-high" />
+                    )}
+                    {config.grid.showInfo && <div className="p-2"><p className="text-[10px] text-text-tertiary">{asset?.filename || `IMG_${1000 + i}.jpg`}</p></div>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </main>

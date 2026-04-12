@@ -22,7 +22,7 @@ type stubWorkspaceCreator struct {
 	created []string
 }
 
-func (s *stubWorkspaceCreator) CreateWorkspace(_ context.Context, userID, stateID, businessName string) (string, error) {
+func (s *stubWorkspaceCreator) CreateWorkspace(_ context.Context, userID, stateID, businessName, planTier string) (string, error) {
 	s.created = append(s.created, userID)
 	return "ws-" + userID, nil
 }
@@ -35,9 +35,22 @@ type failingWorkspaceCreator struct {
 	attempts int
 }
 
-func (f *failingWorkspaceCreator) CreateWorkspace(_ context.Context, _, _, _ string) (string, error) {
+func (f *failingWorkspaceCreator) CreateWorkspace(_ context.Context, _, _, _, _ string) (string, error) {
 	f.attempts++
 	return "", errors.New("simulated DB outage")
+}
+
+type stubUserUpdater struct {
+	phones map[string]string // userID → phone
+}
+
+func newStubUserUpdater() *stubUserUpdater {
+	return &stubUserUpdater{phones: map[string]string{}}
+}
+
+func (s *stubUserUpdater) UpdatePhone(_ context.Context, userID, phone string) error {
+	s.phones[userID] = phone
+	return nil
 }
 
 type stubEventPub struct {
@@ -447,4 +460,56 @@ func TestSetProfile_CompletedStepIsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(wsc.created),
 		"idempotent short-circuit should skip re-creating the workspace")
+}
+
+// TestSetProfile_PersistsPhone asserts that when a phone field is
+// provided in the profile request, the onboarding service forwards it
+// to the UserUpdater so the user record is updated.
+func TestSetProfile_PersistsPhone(t *testing.T) {
+	repo := newStubOnboardingRepo()
+	wsc := &stubWorkspaceCreator{}
+	pub := &stubEventPub{}
+	userUpd := newStubUserUpdater()
+	svc := onboarding.NewService(repo, wsc, pub, onboarding.WithUserUpdater(userUpd))
+	ctx := context.Background()
+
+	// Arrange: user has completed state selection.
+	require.NoError(t, svc.SelectState(ctx, "user-phone",
+		onboarding.StateSelectionInput{StateID: "MH"}))
+
+	// Act: set profile with a phone number.
+	err := svc.SetProfile(ctx, "user-phone", onboarding.ProfileInput{
+		BusinessName: "Phone Studio",
+		DisplayName:  "Test Owner",
+		Phone:        "+919876543210",
+	})
+	require.NoError(t, err)
+
+	// Assert: phone was forwarded to the UserUpdater.
+	assert.Equal(t, "+919876543210", userUpd.phones["user-phone"],
+		"phone should be persisted via UserUpdater")
+}
+
+// TestSetProfile_EmptyPhoneSkipsUpdate asserts that when no phone is
+// provided, the UserUpdater is NOT called.
+func TestSetProfile_EmptyPhoneSkipsUpdate(t *testing.T) {
+	repo := newStubOnboardingRepo()
+	wsc := &stubWorkspaceCreator{}
+	pub := &stubEventPub{}
+	userUpd := newStubUserUpdater()
+	svc := onboarding.NewService(repo, wsc, pub, onboarding.WithUserUpdater(userUpd))
+	ctx := context.Background()
+
+	require.NoError(t, svc.SelectState(ctx, "user-nophone",
+		onboarding.StateSelectionInput{StateID: "MH"}))
+
+	err := svc.SetProfile(ctx, "user-nophone", onboarding.ProfileInput{
+		BusinessName: "No Phone Studio",
+		DisplayName:  "Test Owner",
+	})
+	require.NoError(t, err)
+
+	// Assert: UserUpdater was NOT called.
+	_, called := userUpd.phones["user-nophone"]
+	assert.False(t, called, "empty phone should not trigger UserUpdater")
 }

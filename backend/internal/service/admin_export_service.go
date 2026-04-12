@@ -44,11 +44,11 @@ func (s *AdminExportService) ExportRevenueCSV(ctx context.Context, from, to time
 	}
 	w := csv.NewWriter(writer)
 	defer w.Flush()
-	if err := w.Write([]string{"Date", "Revenue", "Subscriptions", "Churn"}); err != nil {
+	if err := w.Write([]string{"Period", "Revenue", "Subscriptions", "Churn"}); err != nil {
 		return err
 	}
 	for _, t := range series {
-		if err := w.Write([]string{t.Date.Format("2006-01-02"), fmt.Sprintf("%d", t.Revenue), fmt.Sprintf("%d", t.Subscriptions), fmt.Sprintf("%d", t.Churn)}); err != nil {
+		if err := w.Write([]string{t.Period, fmt.Sprintf("%d", t.Revenue), fmt.Sprintf("%d", t.Subscribers), fmt.Sprintf("%d", t.Churn)}); err != nil {
 			return err
 		}
 	}

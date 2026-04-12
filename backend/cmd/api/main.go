@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -115,7 +116,7 @@ type onboardingWorkspaceCreator struct {
 	pool  *pgxpool.Pool
 }
 
-func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateCode, businessName string) (string, error) {
+func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateCode, businessName, planTier string) (string, error) {
 	// Resolve state code to integer state ID.
 	// Frontend may send 2-letter codes ("TG"), ISO codes ("IN-TG"), state names ("Telangana"),
 	// or numeric IDs ("24"). Try all patterns for maximum compatibility.
@@ -145,6 +146,7 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 		StateID:      stateIDStr,
 		OwnerID:      userID,
 		BusinessName: businessName,
+		PlanTier:     planTier,
 	})
 	if err != nil {
 		return "", err
@@ -158,6 +160,17 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 		ws.ID, userID)
 
 	return ws.ID, nil
+}
+
+// onboardingUserUpdater adapts user.Service into the onboarding.UserUpdater
+// interface so the onboarding service can persist phone during profile setup.
+type onboardingUserUpdater struct {
+	userSvc user.Service
+}
+
+func (o *onboardingUserUpdater) UpdatePhone(ctx context.Context, userID, phone string) error {
+	_, err := o.userSvc.Update(ctx, userID, user.UpdateUserInput{Phone: &phone})
+	return err
 }
 
 // envOrFatal tries multiple env var names in order. Returns the first non-empty value.
@@ -442,6 +455,7 @@ func main() {
 		onbRepo,
 		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool},
 		eventPublisher,
+		onboarding.WithUserUpdater(&onboardingUserUpdater{userSvc: userSvc}),
 	)
 	onbHandler := onboarding.NewHandler(onbSvc)
 
@@ -517,10 +531,17 @@ func main() {
 	r.With(mfaVerifyLimiter).Post("/api/v1/auth/verify-recovery-code", mfaHandler.VerifyRecoveryCode)
 
 	// Protected routes — JWT auth → tenant context → state check
+	// SOC2 CC6.3: MFA enforcement for photographer workspace routes.
+	// Gated behind MFA_ENFORCE_PHOTOGRAPHERS=1 so rollout is progressive.
+	// When unset (default), RequireMFA is NOT mounted — zero behavioral change.
 	r.Group(func(pr chi.Router) {
 		pr.Use(middleware.JWTAuth(jwtSvc))
 		pr.Use(middleware.TenantContext(dbCtx, auditLog))
 		pr.Use(middleware.RequireState)
+		if os.Getenv("MFA_ENFORCE_PHOTOGRAPHERS") == "1" {
+			pr.Use(middleware.RequireMFA)
+			log.Println("SOC2: MFA enforcement ENABLED for workspace/team routes")
+		}
 
 		pr.Mount("/workspace", wsHandler.Routes())
 		pr.Mount("/team", teamHandler.Routes())
@@ -539,6 +560,14 @@ func main() {
 		r.Use(middleware.JWTAuth(jwtSvc))
 		r.Mount("/auth/mfa", mfaHandler.AuthenticatedRoutes())
 		r.Mount("/api/v1/auth/mfa", mfaHandler.AuthenticatedRoutes())
+	})
+
+	// M18: user profile routes (JWT-only — no tenant context required).
+	profileHandler := handler.NewProfileHandler(userSvc)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.JWTAuth(jwtSvc))
+		r.Get("/api/v1/users/profile", profileHandler.GetProfile)
+		r.Put("/api/v1/users/profile", profileHandler.UpdateProfile)
 	})
 
 	// ──────────────────────── M2: Asset Management & Gallery ────────────────────────
@@ -711,11 +740,32 @@ func main() {
 	var m6Scheduler *scheduler.Scheduler                     // declared here so it can be started below next to workers
 	var publicLeadDispatcher *handler.NotificationDispatcher // set inside protected block, consumed by public lead embed below
 
+	// ──────────────────────── Public marketplace routes ────────────────────────
+	// Freelancer listing browse + detail + availability and gear
+	// browse/detail are intentionally reachable without a bearer token
+	// so anonymous visitors can discover the marketplace from the
+	// public landing page. Mounted BEFORE the authed group so the JWT
+	// middleware never sees them.
+	{
+		marketplaceFreelancerRepo := repository.NewFreelancerRepo(dbPool)
+		marketplaceGearRepo := repository.NewGearRepo(dbPool)
+		handler.RegisterM5PublicRoutes(r, handler.M5Dependencies{
+			DB:             dbPool,
+			FreelancerRepo: marketplaceFreelancerRepo,
+			GearRepo:       marketplaceGearRepo,
+		})
+		log.Println("Public: M5 marketplace read routes registered")
+	}
+
 	// ──────────────────────── Protected API routes (JWT + Tenant) ──────────────
 	// All M2, M3, M4 data-plane endpoints require authentication.
+	// SOC2 CC6.3: MFA enforcement gated behind MFA_ENFORCE_PHOTOGRAPHERS=1.
 	r.Group(func(api chi.Router) {
 		api.Use(middleware.JWTAuth(jwtSvc))
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
+		if os.Getenv("MFA_ENFORCE_PHOTOGRAPHERS") == "1" {
+			api.Use(middleware.RequireMFA)
+		}
 
 		// M2 + M11 Protected routes
 		m2Deps := handler.M2Dependencies{
@@ -760,8 +810,12 @@ func main() {
 			// the AI init block below) is safe and keeps this block self-contained.
 			Pool:     dbPool,
 			FaceRepo: ai.NewFaceRepo(dbPool),
+			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
+			// JobRepo is stateless (same pattern as FaceRepo).
+			FaceSvc: nil,
+			JobRepo: ai.NewJobRepo(dbPool),
 		}
-		handler.RegisterM2Routes(api, m2Deps)
+		galleryHandler := handler.RegisterM2Routes(api, m2Deps)
 
 		// Public gallery routes — registered on outer router (no auth required)
 		handler.RegisterPublicGalleryRoutes(r, m2Deps)
@@ -780,7 +834,8 @@ func main() {
 		// staging path anymore (F-008 hard law).
 		uploadSessionsRepo := repository.NewUploadSessionsRepo(dbPool)
 		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, uploadSessionsRepo).
-			WithValidation(uploadValidationSvc)
+			WithValidation(uploadValidationSvc).
+			WithStorageAccounting(storageAccountingSvc)
 		chunkedHandler.RegisterRoutes(api)
 
 		// M17 audit followup (S-011): register the upload-session cleanup
@@ -824,6 +879,9 @@ func main() {
 
 		// AI services
 		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+
+		// M21: wire face scan deps into gallery handler now that faceSvc is available.
+		galleryHandler.WithAIDeps(faceSvc, assetSvc, aiJobRepo)
 		searchSvc := ai.NewSearchService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
 		duplicateSvc := ai.NewDuplicateService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
 		cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
@@ -852,7 +910,9 @@ func main() {
 
 		log.Println("M3: AI routes + 5 workers registered")
 
-		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available)
+		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available).
+		// Route is registered here (not in routes_m2.go) because DesignAISvc depends on
+		// geminiClient and aiConfigRepo which are only available after AI init.
 		designAISvc := service.NewDesignAIService(assetRepo, geminiClient, aiConfigRepo)
 		designAIHandler := handler.NewDesignAIHandler(designAISvc)
 		api.Get("/api/v1/galleries/{id}/ai-suggest", designAIHandler.Suggest)
@@ -1173,21 +1233,86 @@ func main() {
 	log.Println("Public lead form endpoint registered")
 
 	// ──────────────────────── Authenticated Storage Proxy ────────────────
-	// Proxies storage file requests through JWT auth + R2 presigned URLs.
-	// Photos are stored in R2 only — never on local filesystem.
-	r.Route("/storage", func(sr chi.Router) {
-		sr.Use(middleware.JWTAuth(jwtSvc))
-		sr.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			key := chi.URLParam(r, "*")
-			presigned, err := storageProvider.PresignURL(r.Context(), key, storage.PresignOptions{ExpiresInSeconds: 3600})
-			if err != nil {
-				http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
+	// Streams storage file bytes through the backend with JWT auth so
+	// the browser never learns the R2/MinIO host. Previously this
+	// endpoint issued a 307 redirect to a presigned R2 URL — which
+	// leaked the backend's storage endpoint to the client and broke
+	// completely when the storage host wasn't publicly reachable (as
+	// observed during UAT on 2026-04-12 against the MinIO bridge on a
+	// private VPS IP). Streaming is slightly more bandwidth on the API
+	// node but:
+	//   - keeps "all file serving requires JWT auth" intact
+	//   - hides the storage endpoint, satisfying "no public URL
+	//     access" from AGENTS.md §No Local Storage
+	//   - works identically for R2 (HTTPS) and MinIO (HTTP)
+	//   - lets the thumbnail worker emit stable /storage/{key} URLs
+	//     that never expire
+	// Query-param token fallback lets <img src> tags authenticate
+	// without a custom header — the Authorization header form is
+	// preserved for fetch() callers that already set it.
+	r.Get("/storage/*", func(w http.ResponseWriter, r *http.Request) {
+		key := chi.URLParam(r, "*")
+		if key == "" {
+			http.Error(w, `{"error":"missing key"}`, http.StatusBadRequest)
+			return
+		}
+		// Public gallery access: thumbnails/* objects are derivative
+		// renders (small JPEG/WebP previews) and are safe to serve
+		// anonymously because they are the exact bytes a visitor
+		// already receives from a /g/{slug} client gallery. Originals
+		// (keyed under <workspace>/<upload>/original.<ext>) still
+		// require a bearer token. This is what unlocked the public
+		// gallery grid during UAT — otherwise anonymous visitors
+		// hit 401 on every <img src>.
+		isPublicThumbnail := strings.HasPrefix(key, "thumbnails/")
+
+		if !isPublicThumbnail {
+			// Verify JWT — accept Bearer header OR ?token=... for <img src>.
+			tokenStr := ""
+			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+				tokenStr = strings.TrimPrefix(h, "Bearer ")
+			} else if q := r.URL.Query().Get("token"); q != "" {
+				tokenStr = q
+			}
+			if tokenStr == "" {
+				http.Error(w, `{"error":"unauthenticated"}`, http.StatusUnauthorized)
 				return
 			}
-			http.Redirect(w, r, presigned, http.StatusTemporaryRedirect)
-		})
+			if _, err := jwtSvc.ParseAccessToken(r.Context(), tokenStr); err != nil {
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+		}
+
+		rc, err := storageProvider.Get(r.Context(), key)
+		if err != nil {
+			http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
+			return
+		}
+		defer rc.Close()
+
+		// Best-effort content-type guess from extension — the backend
+		// does not persist content-type for every derivative so we
+		// fall back to octet-stream rather than sniff the body.
+		ct := "application/octet-stream"
+		switch {
+		case strings.HasSuffix(key, ".webp"):
+			ct = "image/webp"
+		case strings.HasSuffix(key, ".jpg"), strings.HasSuffix(key, ".jpeg"):
+			ct = "image/jpeg"
+		case strings.HasSuffix(key, ".png"):
+			ct = "image/png"
+		case strings.HasSuffix(key, ".gif"):
+			ct = "image/gif"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		if _, err := io.Copy(w, rc); err != nil {
+			// Connection dropped mid-stream — nothing we can do.
+			return
+		}
 	})
-	log.Println("Storage: R2 proxy with JWT auth on /storage/*")
+	log.Println("Storage: streaming proxy with JWT auth on /storage/*")
 
 	// ──────────────────────── Background Workers (start after all routes) ────────────────
 	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).WithPublisher(eventBroker)

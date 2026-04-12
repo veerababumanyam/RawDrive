@@ -1,7 +1,7 @@
 # RawDrive — Root Agent Guide
 
-Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.35
-(milestone M16). **Read `frontend/AGENTS.md` before touching anything under `frontend/`**
+Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.50
+(milestone M23). **Read `frontend/AGENTS.md` before touching anything under `frontend/`**
 — Next.js here has breaking changes from public docs.
 
 > The top-level `README.md` is stale (says "React 19 + Vite, Go planned"). Reality is

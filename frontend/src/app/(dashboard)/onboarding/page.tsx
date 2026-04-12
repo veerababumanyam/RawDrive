@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -18,6 +19,7 @@ type IndianState = {
 type Step = "state_selection" | "profile" | "complete";
 
 export default function OnboardingPage() {
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>("state_selection");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +29,13 @@ export default function OnboardingPage() {
   const [states, setStates] = useState<IndianState[]>([]);
   const [statesLoading, setStatesLoading] = useState(true);
 
+  // Plan carried from registration (sessionStorage or query param)
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+
   // Profile
   const [businessName, setBusinessName] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [phone, setPhone] = useState("");
   const [gstin, setGstin] = useState("");
 
   const token = getStoredAccessToken();
@@ -99,6 +105,26 @@ export default function OnboardingPage() {
     }
   }, []);
 
+  // Carry the selected plan from registration into onboarding.
+  // RegisterForm stashes it in sessionStorage as `rawdrive_pending_plan`
+  // (OAuth flow). For local registration the plan arrives as a URL query
+  // param (/activate?plan=...  → /onboarding?plan=...). sessionStorage
+  // takes priority; the query param is the fallback.
+  useEffect(() => {
+    let plan: string | null = null;
+    try {
+      plan = window.sessionStorage.getItem("rawdrive_pending_plan");
+    } catch {
+      // SessionStorage unavailable — fall through to query param.
+    }
+    if (!plan) {
+      plan = searchParams.get("plan");
+    }
+    if (plan) {
+      setPendingPlan(plan);
+    }
+  }, [searchParams]);
+
   async function handleStateSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (selectedStateID == null) return;
@@ -138,7 +164,9 @@ export default function OnboardingPage() {
         business_name: businessName.trim(),
         display_name: displayName.trim(),
       };
+      if (phone.trim()) body.phone = phone.trim();
       if (gstin.trim()) body.gstin = gstin.trim().toUpperCase();
+      if (pendingPlan) body.plan = pendingPlan;
 
       const res = await fetch(`${API_BASE}/onboarding/profile`, {
         method: "POST",
@@ -151,6 +179,14 @@ export default function OnboardingPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to save profile");
+      }
+
+      // Clear registration carry-over keys now that the workspace exists.
+      try {
+        window.sessionStorage.removeItem("rawdrive_pending_plan");
+        window.sessionStorage.removeItem("rawdrive_pending_state_id");
+      } catch {
+        // Non-critical — keys may already be absent or storage unavailable.
       }
 
       // Refresh JWT to get updated workspace_id (no longer "pending-onboarding")
@@ -304,6 +340,19 @@ export default function OnboardingPage() {
                 placeholder="e.g. Rahul Sharma"
                 className="input-base w-full min-h-[44px]"
                 required
+              />
+            </div>
+            <div>
+              <label htmlFor="phone" className="mb-1 block text-sm font-medium text-text-secondary">
+                Phone number
+              </label>
+              <input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="98765 43210"
+                className="input-base w-full min-h-[44px]"
               />
             </div>
             <div>

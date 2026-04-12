@@ -100,13 +100,18 @@ export interface SystemMetrics {
 export interface AuditLogEntry {
   id: string;
   actor_id: string;
+  actor_type?: string;
   actor_email?: string;
   action: string;
   resource_type: string;
   resource_id?: string;
+  metadata?: Record<string, unknown>;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
   ip_address?: string;
+  user_agent?: string;
+  workspace_id?: string;
+  state_id?: string;
   severity: string;
   inserted_at: string;
 }
@@ -276,6 +281,13 @@ export async function listAuditLogs(token: string, params?: Record<string, strin
 
 export async function getAuditLogDetail(token: string, id: string): Promise<AuditLogEntry> {
   return get(token, `/audit-logs/${id}`);
+}
+
+export async function exportAuditLogs(token: string, params?: Record<string, string>): Promise<Blob> {
+  const query = params ? `?${new URLSearchParams(params).toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs/export${query}`, { headers: headers(token) });
+  if (!res.ok) throw new Error("Export failed");
+  return res.blob();
 }
 
 // ── M16: Workspace Upload Policy + Moderation ──

@@ -17,6 +17,7 @@
 
 const CHIPS = [
   "DPDPA-ready",
+  "SOC2-aligned security controls",
   "GST-native invoicing",
   "R2-backed secure delivery",
   "Mobile-first on budget Android",

@@ -106,7 +106,10 @@ export async function getFaceClusters(token: string, galleryId?: string): Promis
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`List clusters failed: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.clustersummarys)) return body.clustersummarys;
+  return [];
 }
 
 export async function renameCluster(token: string, clusterId: string, name: string): Promise<void> {

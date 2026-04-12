@@ -24,7 +24,18 @@ export default function DesktopPage() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.ok ? res.json() : [])
-      .then(setSessions)
+      // Backend returns `null` for an empty collection, which would
+      // crash `sessions.length` on the next render. Coerce to an
+      // array and accept either a bare array or the wrapped
+      // {sessions: [...]} shape.
+      .then((data) => {
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.sessions)
+            ? data.sessions
+            : [];
+        setSessions(list);
+      })
       .catch(() => setSessions([]))
       .finally(() => setLoading(false));
   }, []);

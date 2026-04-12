@@ -26,7 +26,7 @@ type mockAuditLog struct {
 	entries []string
 }
 
-func (m *mockAuditLog) LogAccess(ctx context.Context, workspaceID, action string) {
+func (m *mockAuditLog) LogAccess(ctx context.Context, workspaceID, action, ipAddress, userAgent string) {
 	m.entries = append(m.entries, workspaceID+":"+action)
 }
 

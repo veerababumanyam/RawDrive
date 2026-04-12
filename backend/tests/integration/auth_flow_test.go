@@ -27,7 +27,7 @@ func newTestUserService() *testUserService {
 	return &testUserService{users: make(map[string]string)}
 }
 
-func (s *testUserService) Create(_ context.Context, email, password string) (string, error) {
+func (s *testUserService) Create(_ context.Context, email, password, _, _ string, _ int) (string, error) {
 	id := "test-user-" + email
 	s.users[email] = id
 	return id, nil
@@ -50,13 +50,22 @@ func (s *testUserService) MarkEmailVerified(_ context.Context, userID string) er
 	return nil
 }
 
+func (s *testUserService) GetProfileByID(_ context.Context, userID string) (*auth.UserProfile, bool, error) {
+	for email, id := range s.users {
+		if id == userID {
+			return &auth.UserProfile{ID: id, Email: email, DisplayName: "Test User"}, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
 type testDBContext struct{}
 
 func (d *testDBContext) SetWorkspaceID(_ context.Context, _ string) error { return nil }
 
 type testAuditLog struct{}
 
-func (a *testAuditLog) LogAccess(_ context.Context, _, _ string) {}
+func (a *testAuditLog) LogAccess(_ context.Context, _, _, _, _ string) {}
 
 type testWSRepo struct {
 	workspaces map[string]*workspace.Workspace
@@ -263,7 +272,7 @@ func TestSessionRotation(t *testing.T) {
 	defer ts.Close()
 
 	// Register user
-	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!")
+	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!", "Test User", "9876543210", 11)
 	require.NoError(t, err)
 
 	// Get OTP and verify

@@ -69,6 +69,18 @@ func (s *oauthUserStore) Create(ctx context.Context, record *auth.User) (*auth.U
 	}, nil
 }
 
+func (s *oauthUserStore) BackfillProfile(ctx context.Context, userID, displayName, avatarURL string) error {
+	update := user.UpdateUserInput{}
+	if displayName != "" {
+		update.DisplayName = &displayName
+	}
+	if avatarURL != "" {
+		update.AvatarURL = &avatarURL
+	}
+	_, err := s.users.Update(ctx, userID, update)
+	return err
+}
+
 func (s *oauthUserStore) LinkOAuth(ctx context.Context, userID, provider, providerID string) error {
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO user_auth_methods (user_id, provider, provider_subject)

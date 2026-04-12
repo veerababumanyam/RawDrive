@@ -1,3 +1,5 @@
+import { getStoredAccessToken } from "@/lib/auth";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export interface FreelancerListing {
@@ -62,13 +64,27 @@ export async function listFreelancers(params?: {
   if (params?.min_rate_paisa) query.set("min_rate_paisa", String(params.min_rate_paisa));
   if (params?.max_rate_paisa) query.set("max_rate_paisa", String(params.max_rate_paisa));
 
-  const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers?${query}`);
+  // The marketplace GETs are public in principle but the backend
+  // nests the route under the authenticated /api/v1 group, so a
+  // bare fetch() without a token returns 401 from JWTAuth. Attach
+  // the stored token when we have one so a logged-in user can
+  // browse the marketplace from inside the app, and fall through
+  // to an empty array if unauthenticated (e.g. anonymous landing
+  // pages that embed the marketplace strip).
+  const token = getStoredAccessToken();
+  const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers?${query}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) return [];
   const json = await res.json();
   return json.data || [];
 }
 
 export async function getFreelancer(id: string): Promise<{ data: FreelancerListing; reviews: FreelancerReview[] }> {
-  const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers/${id}`);
+  const token = getStoredAccessToken();
+  const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers/${id}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
   return res.json();
 }
 

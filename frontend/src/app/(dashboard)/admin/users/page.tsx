@@ -9,6 +9,7 @@ import {
   exportUsers,
   type AdminUser,
 } from "@/lib/api/admin";
+import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
@@ -25,20 +26,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type UserRow = AdminUser & Record<string, unknown>;
+
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
 
-  const fetchUsers = async (searchQuery?: string) => {
+  const fetchUsers = async () => {
     const token = getStoredAccessToken();
     try {
-      const params: Record<string, string> = {};
-      if (searchQuery) params.search = searchQuery;
-      const res = await listUsers(token, params);
-      setUsers(res.items);
+      const res = await listUsers(token, {});
+      setUsers(res.items as UserRow[]);
       setTotal(res.total_count);
       setError(null);
     } catch {
@@ -51,18 +51,16 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers(); }, []);
 
-  const handleSearch = () => { setLoading(true); fetchUsers(search); };
-
   const handleSuspend = async (id: string) => {
     const token = getStoredAccessToken();
     await suspendUser(token, id, "Admin action");
-    fetchUsers(search);
+    fetchUsers();
   };
 
   const handleReactivate = async (id: string) => {
     const token = getStoredAccessToken();
     await reactivateUser(token, id);
-    fetchUsers(search);
+    fetchUsers();
   };
 
   const handleExport = async () => {
@@ -76,13 +74,92 @@ export default function AdminUsersPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto space-y-8 p-8">
-        <p className="text-text-secondary">Loading users...</p>
-      </div>
-    );
-  }
+  const columns: ColumnDef<UserRow>[] = [
+    {
+      key: "full_name",
+      label: "Name",
+      sortable: true,
+      render: (value) => (
+        <span className="text-sm font-semibold text-on-surface">{String(value ?? "")}</span>
+      ),
+    },
+    {
+      key: "email",
+      label: "Email",
+      sortable: true,
+      className: "text-text-tertiary",
+    },
+    {
+      key: "platform_role",
+      label: "Role",
+      sortable: true,
+      filterable: true,
+      filterOptions: ["super_admin", "admin", "photographer", "user"],
+      render: (value) => (
+        <span className="text-sm text-secondary font-medium">{String(value ?? "")}</span>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      filterable: true,
+      filterOptions: ["active", "suspended", "deleted"],
+      render: (value) => <StatusBadge status={String(value ?? "")} />,
+    },
+    {
+      key: "state_name",
+      label: "State",
+      sortable: true,
+      className: "text-text-tertiary",
+      render: (value) => <span>{value ? String(value) : "\u2014"}</span>,
+    },
+    {
+      key: "tier_name",
+      label: "Tier",
+      sortable: true,
+      render: (value) => (
+        <span className="text-sm font-medium text-primary">{value ? String(value) : "\u2014"}</span>
+      ),
+    },
+    {
+      key: "workspace_count",
+      label: "Workspaces",
+      sortable: true,
+      render: (value) => <span className="text-sm font-medium">{String(value ?? 0)}</span>,
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      headerAlign: "right",
+      align: "right",
+      render: (_value, row) => {
+        if (row.status === "active") {
+          return (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleSuspend(row.id); }}
+              className="px-3 py-1.5 text-xs rounded-lg bg-feedback-error/10 text-feedback-error hover:bg-feedback-error/20 transition-all font-medium"
+              aria-label={`Suspend ${row.full_name}`}
+            >
+              Suspend
+            </button>
+          );
+        }
+        if (row.status === "suspended") {
+          return (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleReactivate(row.id); }}
+              className="px-3 py-1.5 text-xs rounded-lg bg-feedback-success/10 text-feedback-success hover:bg-feedback-success/20 transition-all font-medium"
+              aria-label={`Reactivate ${row.full_name}`}
+            >
+              Reactivate
+            </button>
+          );
+        }
+        return null;
+      },
+    },
+  ];
 
   if (error) {
     return (
@@ -105,100 +182,35 @@ export default function AdminUsersPage() {
           </h2>
           <p className="text-text-secondary mt-2 font-body text-sm">Manage photographers, studio accounts, and subscription tiers.</p>
         </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
-          aria-label="Export CSV"
-        >
-          Export CSV
-        </button>
       </div>
 
-      {/* Filter Bar */}
-      <section className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-5 rounded-2xl shadow-xl">
-        <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Search users by name, email, phone..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full bg-surface-container-lowest border-none rounded-xl pl-4 pr-4 py-3 text-sm focus:ring-2 focus:ring-secondary/50 transition-all outline-none placeholder:text-gray-600"
-            />
-          </div>
-          <button
-            onClick={handleSearch}
-            className="bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all active:scale-[0.98]"
-          >
-            Search
-          </button>
-        </div>
-      </section>
-
-      {/* Data Table */}
-      {users.length === 0 ? (
-        <div className="text-center py-12 text-text-secondary">No users found.</div>
-      ) : (
-        <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
-                  <th className="px-6 py-4 font-semibold">Name</th>
-                  <th className="px-6 py-4 font-semibold">Email</th>
-                  <th className="px-6 py-4 font-semibold">Role</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold">State</th>
-                  <th className="px-6 py-4 font-semibold">Tier</th>
-                  <th className="px-6 py-4 font-semibold">Workspaces</th>
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.03]">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-white/[0.02] transition-colors group">
-                    <td className="px-6 py-5">
-                      <span className="text-sm font-semibold text-on-surface">{user.full_name}</span>
-                    </td>
-                    <td className="px-6 py-5 text-sm text-text-tertiary">{user.email}</td>
-                    <td className="px-6 py-5">
-                      <span className="text-sm text-secondary font-medium">{user.platform_role}</span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <StatusBadge status={user.status} />
-                    </td>
-                    <td className="px-6 py-5 text-sm text-text-tertiary">{user.state_name || "—"}</td>
-                    <td className="px-6 py-5">
-                      <span className="text-sm font-medium text-primary">{user.tier_name || "—"}</span>
-                    </td>
-                    <td className="px-6 py-5 text-sm font-medium">{user.workspace_count}</td>
-                    <td className="px-6 py-5 text-right">
-                      {user.status === "active" ? (
-                        <button
-                          onClick={() => handleSuspend(user.id)}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-feedback-error/10 text-feedback-error hover:bg-red-500/20 transition-all font-medium"
-                          aria-label={`Suspend ${user.full_name}`}
-                        >
-                          Suspend
-                        </button>
-                      ) : user.status === "suspended" ? (
-                        <button
-                          onClick={() => handleReactivate(user.id)}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-feedback-success/10 text-feedback-success hover:bg-emerald-500/20 transition-all font-medium"
-                          aria-label={`Reactivate ${user.full_name}`}
-                        >
-                          Reactivate
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {loading && (
+        <p className="text-sm text-text-tertiary" aria-live="polite">
+          Loading users...
+        </p>
       )}
+
+      <DataTable<UserRow>
+        columns={columns}
+        data={users}
+        rowKey={(row) => row.id}
+        searchable
+        searchPlaceholder="Search users by name or email..."
+        searchKeys={["full_name", "email"]}
+        pageSize={20}
+        loading={loading}
+        emptyMessage="No users found."
+        emptyStateMessage="No users found."
+        toolbarActions={
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
+            aria-label="Export CSV"
+          >
+            Export CSV
+          </button>
+        }
+      />
     </div>
   );
 }

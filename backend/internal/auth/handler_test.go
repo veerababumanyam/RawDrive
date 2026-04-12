@@ -28,7 +28,7 @@ func newMockUserService() *mockUserService {
 	return &mockUserService{users: make(map[string]string)}
 }
 
-func (m *mockUserService) Create(_ context.Context, email, password string) (string, error) {
+func (m *mockUserService) Create(_ context.Context, email, password, _, _ string, _ int) (string, error) {
 	if m.errOnCreate {
 		return "", errors.New("mock create error")
 	}
@@ -52,6 +52,19 @@ func (m *mockUserService) VerifyPassword(_ context.Context, email, password stri
 
 func (m *mockUserService) MarkEmailVerified(_ context.Context, userID string) error {
 	return nil
+}
+
+func (m *mockUserService) GetProfileByID(_ context.Context, userID string) (*auth.UserProfile, bool, error) {
+	for email, id := range m.users {
+		if id == userID {
+			return &auth.UserProfile{
+				ID:          id,
+				Email:       email,
+				DisplayName: "Mock User",
+			}, true, nil
+		}
+	}
+	return nil, false, nil
 }
 
 // ──────────────────────────── Helper ────────────────────────────

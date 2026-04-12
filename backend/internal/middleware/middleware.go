@@ -64,7 +64,7 @@ type DBContext interface {
 }
 
 type AuditLog interface {
-	LogAccess(ctx context.Context, workspaceID, action string)
+	LogAccess(ctx context.Context, workspaceID, action, ipAddress, userAgent string)
 }
 
 // ──────────────────────────── Tenant Middleware ────────────────────────────
@@ -107,7 +107,16 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 				parts := strings.Split(r.URL.Path, "/workspaces/")
 				if len(parts) > 1 {
 					urlWS := strings.Split(parts[1], "/")[0]
-					if urlWS != "" && urlWS != wsID {
+					// Exempt the literal "current" keyword. Handlers that sit
+					// under /api/v1/workspaces/current/* (e.g. GetCurrentPlan
+					// from F-011) intentionally read the workspace id from
+					// JWT claims rather than the URL so the client cannot
+					// spoof a different workspace. The strict same-uuid
+					// check would otherwise 403 them because "current" never
+					// equals the JWT's workspace UUID. (UAT 2026-04-12 —
+					// /settings/storage loaded with a 403 from
+					// /api/v1/workspaces/current/plan for @pho_pro.)
+					if urlWS != "" && urlWS != wsID && urlWS != "current" {
 						http.Error(w, "Forbidden", http.StatusForbidden)
 						return
 					}
@@ -117,8 +126,21 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 			// Set DB context for RLS
 			_ = db.SetWorkspaceID(r.Context(), wsID)
 
-			// Log access
-			audit.LogAccess(r.Context(), wsID, r.Method+" "+r.URL.Path)
+			// Log access — capture real client IP (proxy-aware) and user-agent
+			clientIP := r.Header.Get("X-Forwarded-For")
+			if clientIP != "" {
+				// X-Forwarded-For may contain multiple IPs; take the first (original client)
+				if i := strings.Index(clientIP, ","); i > 0 {
+					clientIP = strings.TrimSpace(clientIP[:i])
+				}
+			} else if clientIP = r.Header.Get("X-Real-IP"); clientIP == "" {
+				clientIP = r.RemoteAddr
+				// Strip port from host:port
+				if i := strings.LastIndex(clientIP, ":"); i > 0 {
+					clientIP = clientIP[:i]
+				}
+			}
+			audit.LogAccess(r.Context(), wsID, r.Method+" "+r.URL.Path, clientIP, r.UserAgent())
 
 			// Enrich context
 			ctx := context.WithValue(r.Context(), workspaceIDKey, wsID)

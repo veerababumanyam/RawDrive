@@ -1,0 +1,34 @@
+# EXAMPLE FILE — renamed .example to prevent accidental `up`.
+# Observability stack stubs. Requires a Grafana Cloud / Datadog / self-hosted
+# Prometheus+Grafana+Loki setup as a follow-up project.
+#
+# To use: cp docker-compose.observability.yml.example docker-compose.observability.yml,
+# edit the env vars for your provider, then:
+#   docker compose -f docker-compose.observability.yml up -d
+
+name: rawdrive-observability
+
+services:
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: rawdrive-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://rawdrive:${POSTGRES_PASSWORD}@postgres:5432/rawdrive?sslmode=disable"
+    ports:
+      - "127.0.0.1:9187:9187"
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    container_name: rawdrive-valkey-exporter
+    environment:
+      REDIS_ADDR: "redis://valkey:6379"
+      REDIS_PASSWORD: "${VALKEY_PASSWORD}"
+    ports:
+      - "127.0.0.1:9121:9121"
+
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.14.0
+    container_name: rawdrive-nats-exporter
+    command: ["-varz", "-jsz=all", "http://nats:8222"]
+    ports:
+      - "127.0.0.1:7777:7777"

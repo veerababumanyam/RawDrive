@@ -4,6 +4,7 @@ import {
   BarChart3,
   BrainCircuit,
   CalendarDays,
+  Handshake,
   Home,
   ImageIcon,
   MessageSquare,
@@ -12,6 +13,7 @@ import {
   ReceiptText,
   Settings,
   ShoppingBag,
+  UserCircle,
   Users,
 } from "lucide-react";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
@@ -36,7 +38,8 @@ const groups: NavGroup[] = [
     title: "Business",
     items: [
       { href: "/crm/contacts", label: "Clients", icon: Users },
-      { href: "/crm", label: "CRM", icon: BarChart3 },
+      { href: "/crm", label: "Leads", icon: BarChart3 },
+      { href: "/crm/deals", label: "Deals", icon: Handshake },
       { href: "/calendar", label: "Bookings", icon: CalendarDays },
       { href: "/billing", label: "Invoices", icon: ReceiptText },
     ],
@@ -52,7 +55,9 @@ const groups: NavGroup[] = [
     title: "Tools",
     items: [
       { href: "/desktop", label: "Desktop App", icon: Monitor },
-      { href: "/settings/storage", label: "Settings", icon: Settings },
+      { href: "/settings/profile", label: "Profile", icon: UserCircle },
+      { href: "/settings/business", label: "Business Profile", icon: Settings },
+      { href: "/settings/storage", label: "Storage", icon: Settings },
     ],
   },
 ];
@@ -60,13 +65,17 @@ const groups: NavGroup[] = [
 interface StudioSidebarProps {
   userName: string;
   planBadge?: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function StudioSidebar({ userName, planBadge }: StudioSidebarProps) {
+export function StudioSidebar({ userName, planBadge, mobileOpen, onMobileClose }: StudioSidebarProps) {
   return (
     <SidebarShell
       subtitle="Creative Studio"
       groups={groups}
+      mobileOpen={mobileOpen}
+      onMobileClose={onMobileClose}
       footer={
         <SidebarAvatar
           name={userName}

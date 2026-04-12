@@ -26,15 +26,16 @@ func TestRevenueMetrics_Fields(t *testing.T) {
 }
 
 func TestRevenueTimeSeries_Fields(t *testing.T) {
-	now := time.Now()
+	_ = time.Now() // keep import used
 	ts := RevenueTimeSeries{
-		Date:          now,
-		Revenue:       1500000,
-		Subscriptions: 450,
-		Churn:         12,
+		Period:      "2026-04",
+		Revenue:     1500000,
+		Subscribers: 450,
+		Churn:       12,
 	}
+	assert.Equal(t, "2026-04", ts.Period)
 	assert.Equal(t, int64(1500000), ts.Revenue)
-	assert.Equal(t, int64(450), ts.Subscriptions)
+	assert.Equal(t, int64(450), ts.Subscribers)
 	assert.Equal(t, int64(12), ts.Churn)
 }
 

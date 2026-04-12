@@ -28,13 +28,17 @@ const groups: NavGroup[] = [
 
 interface ClientSidebarProps {
   userName: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function ClientSidebar({ userName }: ClientSidebarProps) {
+export function ClientSidebar({ userName, mobileOpen, onMobileClose }: ClientSidebarProps) {
   return (
     <SidebarShell
       subtitle="My Photos"
       groups={groups}
+      mobileOpen={mobileOpen}
+      onMobileClose={onMobileClose}
       footer={
         <SidebarAvatar
           name={userName}

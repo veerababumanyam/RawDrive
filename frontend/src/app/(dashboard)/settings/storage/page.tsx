@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getStoredWorkspaceId } from "@/lib/auth";
+import { getStoredAccessToken, getStoredWorkspaceId } from "@/lib/auth";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -55,7 +55,14 @@ export default function StorageSettingsPage() {
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    fetch(`${apiUrl}/api/v1/storage/analytics`, { credentials: "include" })
+    // Cross-origin fetches against api.rawdrive.in must send the JWT in
+    // the Authorization header — only the refresh cookie is shared via
+    // credentials: include, and protected endpoints expect Bearer tokens
+    // from JWTAuth middleware (see backend/internal/middleware/jwt_auth.go).
+    const token = getStoredAccessToken();
+    fetch(`${apiUrl}/api/v1/storage/analytics`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.data) setAnalytics(data.data); })
       .catch(() => {})
@@ -68,7 +75,10 @@ export default function StorageSettingsPage() {
   // ("standard") which hides the BYOS wizard and shows the upgrade prompt.
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    fetch(`${apiUrl}/api/v1/workspaces/current/plan`, { credentials: "include" })
+    const token = getStoredAccessToken();
+    fetch(`${apiUrl}/api/v1/workspaces/current/plan`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         const tier = data?.plan_tier as PlanTier | undefined;
@@ -104,10 +114,13 @@ export default function StorageSettingsPage() {
         return;
       }
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+      const token = getStoredAccessToken();
       const res = await fetch(`${apiUrl}/api/v1/workspaces/${wsId}/storage-config/test`, {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(config),
       });
       setTestResult(res.ok ? "success" : "error");

@@ -47,12 +47,23 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default method when the client didn't send one. The DB
+	// column is NOT NULL but has a default of 'cash'; Go's zero
+	// value for string bypasses the default, so we normalize here.
+	if p.Method == "" {
+		p.Method = "cash"
+	}
+
 	if err := h.paymentRepo.Create(r.Context(), &p); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		// Verbose error so UAT sees the actual cause of a failed
+		// payment write (check constraint on method, FK to
+		// invoice_id, RLS mismatch, etc.) instead of a generic
+		// "internal error".
+		http.Error(w, fmt.Sprintf(`{"error":"create payment failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
-	// Update invoice amount_paid
+	// Update invoice amount_paid and status based on total payments
 	totalPaid, err := h.paymentRepo.GetTotalPaidForInvoice(r.Context(), workspaceID, invoiceID)
 	if err == nil {
 		inv, err := h.invoiceRepo.GetByID(r.Context(), workspaceID, invoiceID)
@@ -61,7 +72,7 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 			if totalPaid >= inv.TotalPaisa {
 				newStatus = "paid"
 			}
-			_ = h.invoiceRepo.UpdateStatus(r.Context(), workspaceID, invoiceID, newStatus)
+			_ = h.invoiceRepo.UpdateStatusAndPaid(r.Context(), workspaceID, invoiceID, newStatus, totalPaid)
 		}
 	}
 

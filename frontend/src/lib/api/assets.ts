@@ -39,7 +39,10 @@ export async function listAssets(token: string, params?: { status?: string; cont
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to list assets: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.assets)) return body.assets;
+  return [];
 }
 
 export async function getAsset(token: string, id: string): Promise<Asset> {

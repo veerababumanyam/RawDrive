@@ -22,6 +22,7 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 // `https:` token already covers, so this carve-out has zero prod impact.
 const isDev = process.env.NODE_ENV !== "production";
 const devConnectExtras = isDev ? " http://localhost:* ws://localhost:*" : "";
+const devImgExtras = isDev ? " http://localhost:*" : "";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -41,7 +42,7 @@ const securityHeaders = [
       // Inline scripts remain until nonce-based CSP lands; unsafe-eval is dev-only.
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
+      "img-src 'self' data: blob: https:" + devImgExtras,
       // connect-src must include the API origin for same-origin fetches
       // through rewrites() plus any R2 public buckets the client talks to.
       // Dev adds localhost:* so cross-origin dev fetches to the Go API work.
@@ -56,6 +57,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Production bootstrap (2026-04-11): required for slim Docker image
+  // under deploy/docker-compose.prod-app.yml. See docs/superpowers/specs/
+  // 2026-04-11-hostinger-production-bootstrap-design.md §3.3.
+  output: 'standalone',
   turbopack: {
     root: frontendRoot,
   },

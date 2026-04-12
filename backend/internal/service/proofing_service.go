@@ -114,6 +114,15 @@ func (s *ProofingService) ListByGallery(ctx context.Context, galleryID uuid.UUID
 	return s.proofingRepo.ListByGallery(ctx, galleryID)
 }
 
+// CountByGallery returns the total number of selections for a gallery (for limit enforcement).
+func (s *ProofingService) CountByGallery(ctx context.Context, galleryID uuid.UUID) (int, error) {
+	selections, err := s.proofingRepo.ListByGallery(ctx, galleryID)
+	if err != nil {
+		return 0, err
+	}
+	return len(selections), nil
+}
+
 // ListByClient returns selections for a client in a gallery.
 func (s *ProofingService) ListByClient(ctx context.Context, galleryID uuid.UUID, email string) ([]repository.ProofingSelection, error) {
 	return s.proofingRepo.ListByClient(ctx, galleryID, email)

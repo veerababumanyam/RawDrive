@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -45,8 +48,48 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if inv.Currency == "" {
 		inv.Currency = "INR"
 	}
-	if inv.InvoiceType == "" {
+	// Map friendly GST-document invoice_type values the frontend
+	// uses to the CHECK-constraint values the invoices table
+	// actually allows. The DB check is {subscription,addon,service,
+	// credit_note}; the UI naturally sends tax_invoice/proforma/
+	// advance_receipt because that's how Indian accountants talk
+	// about invoices. Rather than migrate the check constraint
+	// (which would risk existing data), we normalize at the handler
+	// boundary: everything that is essentially a billable service
+	// collapses to "service".
+	// M23: proforma and quotation are now first-class types in the
+	// DB CHECK constraint (migration 073). Map legacy aliases; leave
+	// valid types as-is.
+	switch inv.InvoiceType {
+	case "", "tax_invoice", "advance_receipt":
 		inv.InvoiceType = "service"
+	case "proforma", "quotation", "credit_note", "subscription", "addon", "service":
+		// already valid in CHECK constraint
+	default:
+		inv.InvoiceType = "service"
+	}
+
+	// M23: Compute amount-in-words for the invoice total.
+	if inv.TotalPaisa > 0 {
+		inv.AmountInWords = service.AmountInWords(inv.TotalPaisa)
+	}
+
+	// Default the state_id from the caller's JWT state claim when
+	// the client didn't send one. The invoices.state_id column is
+	// NOT NULL with an FK to states, so zero (the Go default) is
+	// never a valid value and was producing a raw 500 from the DB
+	// FK check — a client that knows its user's state gets to
+	// override, otherwise we borrow it from the session.
+	if inv.StateID == 0 {
+		if sid := middleware.StateIDFromContext(r.Context()); sid != "" {
+			if n, convErr := strconv.Atoi(sid); convErr == nil && n > 0 {
+				inv.StateID = n
+			}
+		}
+	}
+	if inv.StateID == 0 {
+		http.Error(w, `{"error":"state_id required: complete onboarding or send explicit state_id"}`, http.StatusBadRequest)
+		return
 	}
 
 	// Generate sequential invoice number
@@ -58,7 +101,13 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	inv.InvoiceNumber = num
 
 	if err := h.repo.Create(r.Context(), &inv); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		// Surface the actual DB error so UAT and callers can see
+		// the underlying reason instead of the old opaque
+		// "internal error" body. Previously this path returned
+		// just "internal error" which silently buried FK failures
+		// (e.g. contact_id pointing at a deleted row) and CHECK
+		// constraint violations on status/type.
+		http.Error(w, fmt.Sprintf(`{"error":"create invoice failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 	respondJSON(w, http.StatusCreated, inv)
@@ -125,6 +174,71 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch studio branding from workspaces row (migration 068 adds
+	// address/phone/email/GSTIN/bank/terms/signature columns). All
+	// fields are optional — missing values collapse gracefully in
+	// the PDF layout.
+	var (
+		wsName, wsAddr1, wsAddr2, wsCity, wsPostal, wsGSTIN   string
+		wsPhone, wsEmail, wsWebsite                            string
+		wsBankName, wsBankHolder, wsBankAcc, wsIFSC, wsBranch  string
+		wsSigName, wsTerms, wsFooter                           string
+	)
+	_ = h.repo.DB.QueryRow(r.Context(), `
+		SELECT
+			COALESCE(name, ''),
+			COALESCE(address_line1, ''),
+			COALESCE(address_line2, ''),
+			COALESCE(city, ''),
+			COALESCE(postal_code, ''),
+			COALESCE(gstin, ''),
+			COALESCE(phone, ''),
+			COALESCE(email, ''),
+			COALESCE(website, ''),
+			COALESCE(bank_name, ''),
+			COALESCE(bank_account_holder, ''),
+			COALESCE(bank_account_number, ''),
+			COALESCE(bank_ifsc, ''),
+			COALESCE(bank_branch, ''),
+			COALESCE(signature_name, ''),
+			COALESCE(invoice_terms, ''),
+			COALESCE(invoice_footer, '')
+		FROM workspaces WHERE id = $1`, workspaceID).Scan(
+		&wsName, &wsAddr1, &wsAddr2, &wsCity, &wsPostal, &wsGSTIN,
+		&wsPhone, &wsEmail, &wsWebsite,
+		&wsBankName, &wsBankHolder, &wsBankAcc, &wsIFSC, &wsBranch,
+		&wsSigName, &wsTerms, &wsFooter,
+	)
+
+	// Fetch bill-to client details from contacts row (if the invoice
+	// has a contact_id). The contacts table has a single free-form
+	// `address` field plus `company`/`phone`/`email`; we split the
+	// address on newlines for the two-line layout. Richer structured
+	// billing fields (gstin/city/postal) are a future extension.
+	var (
+		cName, cEmail, cPhone, cCompany, cAddress string
+	)
+	if inv.ContactID != nil {
+		_ = h.repo.DB.QueryRow(r.Context(), `
+			SELECT
+				COALESCE(name, ''),
+				COALESCE(email, ''),
+				COALESCE(phone, ''),
+				COALESCE(company, ''),
+				COALESCE(address, '')
+			FROM contacts WHERE id = $1 AND workspace_id = $2`,
+			*inv.ContactID, workspaceID,
+		).Scan(&cName, &cEmail, &cPhone, &cCompany, &cAddress)
+	}
+	cAddrLines := splitNonEmpty(cAddress, "\n")
+	var cAddr1, cAddr2 string
+	if len(cAddrLines) > 0 {
+		cAddr1 = cAddrLines[0]
+	}
+	if len(cAddrLines) > 1 {
+		cAddr2 = strings.Join(cAddrLines[1:], ", ")
+	}
+
 	// Build the PDF payload from the repository Invoice. Amounts in the DB
 	// are stored in paisa; convert to rupees for display.
 	payload := service.Invoice{
@@ -136,6 +250,33 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		SGSTText:      formatINR(inv.SGSTPaisa),
 		IGSTText:      formatINR(inv.IGSTPaisa),
 		TotalText:     formatINR(inv.TotalPaisa),
+
+		StudioName:       wsName,
+		StudioAddressL1:  wsAddr1,
+		StudioAddressL2:  wsAddr2,
+		StudioCity:       wsCity,
+		StudioPostalCode: wsPostal,
+		StudioGSTIN:      wsGSTIN,
+		StudioPhone:      wsPhone,
+		StudioEmail:      wsEmail,
+		StudioWebsite:    wsWebsite,
+
+		ClientName:      cName,
+		ClientAddressL1: cAddr1,
+		ClientAddressL2: cAddr2,
+		ClientPhone:     cPhone,
+
+		BankName:          wsBankName,
+		BankAccountHolder: wsBankHolder,
+		BankAccountNumber: wsBankAcc,
+		BankIFSC:          wsIFSC,
+		BankBranch:        wsBranch,
+
+		SignatureName: wsSigName,
+		Terms:         wsTerms,
+		Footer:        wsFooter,
+		AmountInWords: service.AmountInWords(inv.TotalPaisa),
+		PlaceOfSupply: inv.PlaceOfSupplyState,
 	}
 	if inv.DueDate != nil {
 		payload.DueDate = inv.DueDate.Format("2 Jan 2006")
@@ -152,6 +293,7 @@ func (h *InvoiceHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	for _, it := range items {
 		payload.Lines = append(payload.Lines, service.InvoiceLine{
 			Description:  it.Description,
+			HSN:          it.HSNCode,
 			QuantityText: fmt.Sprintf("%d", it.Quantity),
 			UnitText:     formatINR(it.UnitPricePaisa),
 			AmountText:   formatINR(int64(it.Quantity) * it.UnitPricePaisa),
@@ -185,5 +327,40 @@ func formatINR(paisa int64) string {
 	}
 	rupees := paisa / 100
 	remainder := paisa % 100
-	return fmt.Sprintf("%sINR %d.%02d", neg, rupees, remainder)
+	// Indian lakh/crore grouping: last 3 digits, then groups of 2.
+	rupeeStr := fmt.Sprintf("%d", rupees)
+	if len(rupeeStr) > 3 {
+		// Split the last 3 digits, then group the rest in 2s.
+		tail := rupeeStr[len(rupeeStr)-3:]
+		head := rupeeStr[:len(rupeeStr)-3]
+		var parts []string
+		for len(head) > 2 {
+			parts = append([]string{head[len(head)-2:]}, parts...)
+			head = head[:len(head)-2]
+		}
+		if head != "" {
+			parts = append([]string{head}, parts...)
+		}
+		rupeeStr = strings.Join(parts, ",") + "," + tail
+	}
+	return fmt.Sprintf("%sINR %s.%02d", neg, rupeeStr, remainder)
 }
+
+// splitNonEmpty splits s by sep and removes empty strings + trims each piece.
+// Used by the PDF handler to parse multiline contact addresses into layout
+// rows.
+func splitNonEmpty(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// amountInWords was previously defined locally here but has been removed
+// in favour of the canonical service.AmountInWords to avoid divergence.
+// See backend/internal/service/amount_in_words.go.

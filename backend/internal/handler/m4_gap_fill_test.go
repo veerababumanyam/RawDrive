@@ -192,7 +192,7 @@ func TestFormatINR(t *testing.T) {
 		{0, "INR 0.00"},
 		{1, "INR 0.01"},
 		{100, "INR 1.00"},
-		{123456, "INR 1234.56"},
+		{123456, "INR 1,234.56"},
 		{-100, "-INR 1.00"},
 	}
 	for _, c := range cases {

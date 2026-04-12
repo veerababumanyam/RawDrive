@@ -34,6 +34,11 @@ type Invoice struct {
 	Notes           *string         `json:"notes"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
+	// M23: GST compliance fields (migration 073)
+	PlaceOfSupplyState string `json:"place_of_supply_state,omitempty"`
+	PlaceOfSupplyCode  string `json:"place_of_supply_code,omitempty"`
+	AmountInWords      string `json:"amount_in_words,omitempty"`
+	RoundOffPaisa      int64  `json:"round_off_paisa,omitempty"`
 }
 
 // InvoiceLineItem represents a line item on an invoice.
@@ -61,7 +66,7 @@ func NewInvoiceRepo(db *pgxpool.Pool) *InvoiceRepo {
 	return &InvoiceRepo{DB: db}
 }
 
-const invoiceCols = `id, workspace_id, state_id, contact_id, invoice_number, invoice_type, status, currency, subtotal_paisa, cgst_paisa, sgst_paisa, igst_paisa, total_paisa, amount_paid_paisa, discount_paisa, line_items, due_date, paid_at, notes, created_at, updated_at`
+const invoiceCols = `id, workspace_id, state_id, contact_id, invoice_number, invoice_type, status, currency, subtotal_paisa, cgst_paisa, sgst_paisa, igst_paisa, total_paisa, amount_paid_paisa, discount_paisa, line_items, due_date, paid_at, notes, created_at, updated_at, place_of_supply_state, place_of_supply_code, amount_in_words, round_off_paisa`
 
 func scanInvoice(row pgx.Row) (Invoice, error) {
 	var inv Invoice
@@ -72,6 +77,7 @@ func scanInvoice(row pgx.Row) (Invoice, error) {
 		&inv.TotalPaisa, &inv.AmountPaidPaisa, &inv.DiscountPaisa,
 		&inv.LineItems, &inv.DueDate, &inv.PaidAt, &inv.Notes,
 		&inv.CreatedAt, &inv.UpdatedAt,
+		&inv.PlaceOfSupplyState, &inv.PlaceOfSupplyCode, &inv.AmountInWords, &inv.RoundOffPaisa,
 	)
 	return inv, err
 }
@@ -83,13 +89,14 @@ func (r *InvoiceRepo) Create(ctx context.Context, inv *Invoice) error {
 	inv.UpdatedAt = now
 	_, err := r.DB.Exec(ctx, `
 		INSERT INTO invoices (`+invoiceCols+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
 		inv.ID, inv.WorkspaceID, inv.StateID, inv.ContactID,
 		inv.InvoiceNumber, inv.InvoiceType, inv.Status, inv.Currency,
 		inv.SubtotalPaisa, inv.CGSTPaisa, inv.SGSTPaisa, inv.IGSTPaisa,
 		inv.TotalPaisa, inv.AmountPaidPaisa, inv.DiscountPaisa,
 		inv.LineItems, inv.DueDate, inv.PaidAt, inv.Notes,
 		inv.CreatedAt, inv.UpdatedAt,
+		inv.PlaceOfSupplyState, inv.PlaceOfSupplyCode, inv.AmountInWords, inv.RoundOffPaisa,
 	)
 	return err
 }
@@ -140,6 +147,7 @@ func (r *InvoiceRepo) List(ctx context.Context, f InvoiceFilter) ([]Invoice, err
 			&inv.TotalPaisa, &inv.AmountPaidPaisa, &inv.DiscountPaisa,
 			&inv.LineItems, &inv.DueDate, &inv.PaidAt, &inv.Notes,
 			&inv.CreatedAt, &inv.UpdatedAt,
+			&inv.PlaceOfSupplyState, &inv.PlaceOfSupplyCode, &inv.AmountInWords, &inv.RoundOffPaisa,
 		); err != nil {
 			return nil, err
 		}
@@ -152,6 +160,15 @@ func (r *InvoiceRepo) UpdateStatus(ctx context.Context, workspaceID, id uuid.UUI
 	_, err := r.DB.Exec(ctx, `
 		UPDATE invoices SET status=$1, updated_at=$2 WHERE id=$3 AND workspace_id=$4`,
 		status, time.Now().UTC(), id, workspaceID)
+	return err
+}
+
+// UpdateStatusAndPaid atomically updates both status and amount_paid_paisa.
+func (r *InvoiceRepo) UpdateStatusAndPaid(ctx context.Context, workspaceID, id uuid.UUID, status string, amountPaidPaisa int64) error {
+	_, err := r.DB.Exec(ctx, `
+		UPDATE invoices SET status=$1, amount_paid_paisa=$2, updated_at=$3
+		WHERE id=$4 AND workspace_id=$5`,
+		status, amountPaidPaisa, time.Now().UTC(), id, workspaceID)
 	return err
 }
 

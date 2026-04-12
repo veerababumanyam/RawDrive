@@ -12,6 +12,7 @@
 .obsidian/
 .vscode/
 .idea/
+.claude/
 
 _cobolt-output/
 .worktrees/
@@ -32,6 +33,8 @@ tests/photos/
 .storage/
 .tmp/
 backend/.storage/
+backend/api-fixed
+backend/api-fixed~
 *.exe~
 
 # Playwright + E2E test artifacts
@@ -60,3 +63,16 @@ credentials/
 *.key
 *.p12
 *.pfx
+
+# Production credentials file — untracked 2026-04-11 during prod bootstrap.
+# Contains R2/SMTP/MoonShot/CF creds plus SSH key metadata. File stays on
+# disk as operator reference but must never be committed.
+HostingerServerDetails.md
+
+# Local scratch env used during bootstrap (lives in /tmp/, but defensive)
+rawdrive-secrets.env
+
+# Screenshots — root-level captures stay on disk, not in repo
+/*.png
+/*.jpg
+/*.jpeg

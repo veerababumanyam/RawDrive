@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,17 +103,30 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 		return fmt.Errorf("generate thumbnails: %w", err)
 	}
 
-	// Build thumbnail URL map with presigned URLs
+	// Build thumbnail URL map. We deliberately return stable
+	// /storage/{key} URLs rooted at PUBLIC_API_URL rather than signed
+	// R2/MinIO URLs, so:
+	//   1. The browser only ever talks to the public api.rawdrive.in
+	//      origin — R2/MinIO host details never leak to the client.
+	//   2. Each request flows through middleware.JWTAuth, which
+	//      enforces "no public URL access" from AGENTS.md.
+	//   3. The URLs are idempotent — no signature expiry to cache or
+	//      rotate. The `/storage/*` handler re-signs (or streams) on
+	//      every request so the frontend can safely store the URL in
+	//      an asset row indefinitely.
+	// Falls back to PUBLIC_API_URL=https://api.rawdrive.in when the
+	// env var is unset so dev environments keep working. PresignURL
+	// is NOT used here any more: silencing a presign error by
+	// stashing the raw storage key in the URL field would have shown
+	// up as a broken <img src> in the UI, which is exactly the
+	// regression UAT caught on 2026-04-12.
+	publicBase := os.Getenv("PUBLIC_API_URL")
+	if publicBase == "" {
+		publicBase = "https://api.rawdrive.in"
+	}
 	thumbnailURLs := make(map[string]string)
 	for sizeName, key := range result.URLs {
-		url, err := w.store.PresignURL(ctx, key, storage.PresignOptions{
-			ExpiresInSeconds: 86400, // 24 hours
-		})
-		if err != nil {
-			thumbnailURLs[sizeName] = key // fallback to key
-		} else {
-			thumbnailURLs[sizeName] = url
-		}
+		thumbnailURLs[sizeName] = fmt.Sprintf("%s/storage/%s", publicBase, key)
 	}
 
 	// Update asset with thumbnails and dimensions

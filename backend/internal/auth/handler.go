@@ -102,11 +102,28 @@ type LogoutRequest struct {
 // ──────────────────────────── Dependencies ────────────────────────────
 
 // UserService abstracts user creation and lookup for the auth handler.
+// UserProfile is the minimal view of a user exposed by GET /auth/me.
+// Kept small and display-oriented so we do not leak password hashes or
+// verification state to the client. Extended in future if the dashboard
+// needs more fields (avatar URL, phone, preferences).
+type UserProfile struct {
+	ID          string
+	Email       string
+	DisplayName string
+	AvatarURL   string
+}
+
 type UserService interface {
-	Create(ctx context.Context, email, password string) (string, error)
+	Create(ctx context.Context, email, password, displayName, phone string, stateID int) (string, error)
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
 	VerifyPassword(ctx context.Context, email, password string) (string, bool, bool, error)
 	MarkEmailVerified(ctx context.Context, userID string) error
+	// GetProfileByID returns the display fields for a user. Returns
+	// (nil, false, nil) when no user with that id exists so handlers can
+	// translate that into a 404 without an error log. Added 2026-04-12 to
+	// back the GET /api/v1/auth/me endpoint that the dashboard uses to
+	// greet the logged-in user.
+	GetProfileByID(ctx context.Context, userID string) (*UserProfile, bool, error)
 }
 
 // WorkspaceLookup resolves a user's primary workspace, state, workspace role, and platform role.
@@ -170,7 +187,58 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/oauth/google/callback", h.OAuthGoogleCallback)
 	r.Post("/refresh", h.RefreshToken)
 	r.Post("/logout", h.Logout)
+	// GET /auth/me returns the logged-in user's display profile. Reads
+	// the JWT claims out of the request context (populated by the auth
+	// middleware up-stack in main.go) and loads the user row. Used by
+	// the dashboard to greet the actual user instead of a hardcoded
+	// placeholder name. Added 2026-04-12 in response to UAT findings.
+	r.Get("/me", h.Me)
 	return r
+}
+
+// Me returns the display profile for the user identified by the access
+// token in the request. The auth middleware must have already populated
+// the JWT claims into the request context — without a sub claim we
+// return 401. The response is intentionally small: id, email, display
+// name, avatar url. Password hashes, verification flags, MFA state and
+// other sensitive fields are NOT included.
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	// The auth package cannot import middleware (import cycle), so we
+	// parse the bearer token here. JWT verification and expiry checks
+	// live in ParseAccessToken; a parse failure is indistinguishable
+	// from an unauthenticated request as far as this endpoint cares.
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthenticated"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := h.jwt.ParseAccessToken(r.Context(), tokenStr)
+	if err != nil || claims == nil || claims.Sub == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthenticated"})
+		return
+	}
+	profile, found, err := h.users.GetProfileByID(r.Context(), claims.Sub)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load profile"})
+		return
+	}
+	if !found {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		return
+	}
+	// Pass selected claims through to the client so the frontend has a
+	// single network call to populate its user-state store.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":            profile.ID,
+		"email":         profile.Email,
+		"display_name":  profile.DisplayName,
+		"avatar_url":    profile.AvatarURL,
+		"workspace_id":  claims.WorkspaceID,
+		"role":          claims.Role,
+		"platform_role": claims.PlatformRole,
+		"state_id":      claims.StateID,
+	})
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -223,8 +291,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user with password
-	userID, err := h.users.Create(r.Context(), req.Email, req.Password)
+	// Create user with password + mandatory state selection. StateID is
+	// validated > 0 above; persisting it in the same INSERT closes the
+	// gap where onboarding was the sole writer of users.state_id.
+	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone, req.StateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
