@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getRevenueDashboard, getRevenueTimeSeries, type RevenueData, type RevenueTimeSeries } from "@/lib/api/admin";
 
-function formatINR(paisa: number): string {
-  return (paisa / 100).toLocaleString("en-IN");
+// Backend fields can come back null/undefined when there is no data for a
+// given period (e.g. no paid subscriptions yet, empty state buckets). Guard
+// against non-finite math so the UI renders "₹0" instead of "₹NaN".
+function formatINR(paisa: number | null | undefined): string {
+  const n = typeof paisa === "number" && Number.isFinite(paisa) ? paisa : 0;
+  return (n / 100).toLocaleString("en-IN");
 }
 
 function MetricCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
@@ -57,8 +61,8 @@ export default function AdminRevenuePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="MRR" value={`₹${formatINR(revenue.mrr_paisa)}`} accent />
         <MetricCard label="ARR" value={`₹${formatINR(revenue.arr_paisa)}`} accent />
-        <MetricCard label="Churn Rate" value={`${revenue.churn_rate}%`} />
-        <MetricCard label="Subscribers" value={String(revenue.total_subscribers)} />
+        <MetricCard label="Churn Rate" value={`${revenue.churn_rate ?? 0}%`} />
+        <MetricCard label="Subscribers" value={String(revenue.total_subscribers ?? 0)} />
       </div>
 
       <div>
@@ -98,11 +102,13 @@ export default function AdminRevenuePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.03]">
-                {timeSeries.map((ts) => (
-                  <tr key={ts.period} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-5 text-sm text-on-surface">{ts.period}</td>
+                {timeSeries.map((ts, i) => (
+                  // Use index as fallback key since period can be null for the
+                  // current-month bucket on day 1 before any charges hit.
+                  <tr key={ts.period ?? `row-${i}`} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-5 text-sm text-on-surface">{ts.period ?? "—"}</td>
                     <td className="px-6 py-5 text-sm text-primary font-medium">₹{formatINR(ts.revenue_paisa)}</td>
-                    <td className="px-6 py-5 text-sm text-text-tertiary">{ts.subscribers}</td>
+                    <td className="px-6 py-5 text-sm text-text-tertiary">{ts.subscribers ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
