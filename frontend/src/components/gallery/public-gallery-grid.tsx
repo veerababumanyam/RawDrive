@@ -19,12 +19,12 @@
  * real; nothing else about the gallery shell changes.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import { MapView } from "./map-view";
 import type { Asset } from "@/lib/api/assets";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download } from "@/components/icons";
+import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress } from "@/components/icons";
 
 interface Props {
   slug: string;
@@ -41,6 +41,51 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
+
+  // Fullscreen mode for lightbox
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!lightboxRef.current) return;
+    if (!document.fullscreenElement) {
+      lightboxRef.current.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // Auto-hide toolbar/filmstrip after 3s idle in fullscreen
+  const resetChromeTimer = useCallback(() => {
+    setChromeVisible(true);
+    if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current);
+    if (isFullscreen) {
+      chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 3000);
+    }
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    if (!isFullscreen) { setChromeVisible(true); return; }
+    // Start the hide timer on entering fullscreen
+    chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 3000);
+    return () => { if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current); };
+  }, [isFullscreen]);
+
+  // Exit fullscreen when lightbox closes
+  useEffect(() => {
+    if (lightboxIdx === null && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, [lightboxIdx]);
 
   // M19 F-009: Proofing selection state (BUG-GAL-014 fix)
   const isProofing = galleryType === "proofing";
@@ -132,12 +177,13 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
         case "+": case "=": setZoom((z) => Math.min(z + 0.25, 3)); break;
         case "-": setZoom((z) => Math.max(z - 0.25, 0.5)); break;
         case "0": setZoom(1); break;
+        case "f": case "F": toggleFullscreen(); break;
       }
     }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [lightboxIdx, visibleAssets.length]);
+  }, [lightboxIdx, visibleAssets.length, toggleFullscreen]);
 
   // Adapt PublicAsset → Asset shape for the MapView component. PublicAsset
   // doesn't carry EXIF GPS, so the map filters based on assets with
@@ -439,14 +485,18 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           "";
         return (
           <div
+            ref={lightboxRef}
             className="fixed inset-0 z-50 flex flex-col bg-black/95"
             onClick={(e) => { if (e.target === e.currentTarget) setLightboxIdx(null); }}
+            onMouseMove={resetChromeTimer}
             role="dialog"
             aria-modal="true"
             aria-label={`Photo: ${photo.filename}`}
           >
-            {/* Toolbar */}
-            <div className="flex items-center justify-between px-4 py-3 shrink-0">
+            {/* Toolbar — auto-hides in fullscreen after 3s idle */}
+            <div className={`flex items-center justify-between px-4 py-3 shrink-0 transition-opacity duration-300 ${
+              chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}>
               <span className="text-sm text-white font-medium truncate max-w-[300px]">
                 {photo.filename}
                 {zoom !== 1 && <span className="ml-2 text-white/40 text-xs">{Math.round(zoom * 100)}%</span>}
@@ -455,6 +505,9 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 <GlassIconButton size="sm" label="Zoom out" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
                 <GlassIconButton size="sm" label="Zoom in" onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
                 <div className="w-px h-6 bg-white/10 mx-1" />
+                <GlassIconButton size="sm" label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen}>
+                  {isFullscreen ? <Compress /> : <Expand />}
+                </GlassIconButton>
                 <GlassIconButton size="sm" variant="ghost" label="Close" onClick={() => setLightboxIdx(null)}><XMark /></GlassIconButton>
               </div>
             </div>
@@ -496,9 +549,11 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               )}
             </div>
 
-            {/* Filmstrip — scrollable thumbnail strip for quick navigation */}
+            {/* Filmstrip — scrollable thumbnail strip for quick navigation, auto-hides in fullscreen */}
             {visibleAssets.length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 shrink-0" role="tablist" aria-label="Photo filmstrip">
+              <div className={`flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 shrink-0 transition-opacity duration-300 ${
+                chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`} role="tablist" aria-label="Photo filmstrip">
                 {visibleAssets.map((a, i) => {
                   const thumb = a.thumbnail_urls?.thumb_sm || a.thumbnail_urls?.sm || a.thumbnail_urls?.thumb_md || Object.values(a.thumbnail_urls || {})[0] || "";
                   return (
@@ -524,10 +579,13 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
             )}
 
             {/* Bottom hints */}
-            <div className="px-4 pb-4 shrink-0">
+            <div className={`px-4 pb-4 shrink-0 transition-opacity duration-300 ${
+              chromeVisible ? "opacity-100" : "opacity-0"
+            }`}>
               <div className="flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide">
                 <span>← → Navigate</span>
                 <span>+/- Zoom</span>
+                <span>F Fullscreen</span>
                 <span>Esc Close</span>
               </div>
             </div>
