@@ -76,3 +76,9 @@ rawdrive-secrets.env
 /*.png
 /*.jpg
 /*.jpeg
+
+# Dev-machine symlinks to sibling CoBolt checkout — not part of this repo
+/cli
+/lib
+/source
+/tools
