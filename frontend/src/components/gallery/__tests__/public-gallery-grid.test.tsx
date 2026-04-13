@@ -22,6 +22,33 @@ function galleryAsset(overrides: Partial<PublicAsset> = {}): PublicAsset {
 }
 
 describe("PublicGalleryGrid", () => {
+  it("renders backend storage thumbnails against the API origin", () => {
+    render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[
+          galleryAsset({
+            thumbnail_urls: {
+              thumb_md_webp: "/storage/workspaces/w1/public-thumb.webp",
+            },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByAltText("Wedding (42).jpg")).toHaveAttribute(
+      "src",
+      "http://localhost:8080/storage/workspaces/w1/public-thumb.webp",
+    );
+  });
+
+  it("keeps public download controls available on touch screens", () => {
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+
+    const downloadButton = screen.getByRole("button", { name: "Download" });
+    expect(downloadButton.parentElement).toHaveClass("opacity-100", "sm:opacity-0", "sm:group-hover:opacity-100");
+  });
+
   it("lets fullscreen lightbox images fill the viewport while preserving aspect ratio", () => {
     render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
 

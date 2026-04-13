@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import { MapView } from "./map-view";
 import type { Asset } from "@/lib/api/assets";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress } from "@/components/icons";
 
@@ -277,7 +278,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           {visibleAssets.map((asset) => {
             // Prefer the mandatory WebP derivatives for public display,
             // but keep legacy JPEG keys as fallbacks for older rows.
-            const thumbUrl =
+            const thumbUrl = getStorageBackedUrl(
               asset.thumbnail_urls?.thumb_md_webp ||
               asset.thumbnail_urls?.thumb_lg_webp ||
               asset.thumbnail_urls?.thumb_sm_webp ||
@@ -287,7 +288,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               asset.thumbnail_urls?.thumb_sm ||
               asset.thumbnail_urls?.lg ||
               asset.thumbnail_urls?.md ||
-              asset.thumbnail_urls?.sm;
+              asset.thumbnail_urls?.sm,
+            );
             return (
               <div
                 key={asset.id}
@@ -334,7 +336,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 )}
                 {/* M19: Download button (visible on hover when downloads enabled) */}
                 {downloadEnabled && !isProofing && (
-                  <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-2 right-2 z-10 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                     <GlassIconButton
                       size="sm"
                       label="Download"
@@ -478,13 +480,14 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
       {/* Client-facing lightbox */}
       {lightboxIdx !== null && visibleAssets[lightboxIdx] && (() => {
         const photo = visibleAssets[lightboxIdx];
-        const fullUrl =
+        const fullUrl = getStorageBackedUrl(
           photo.thumbnail_urls?.display_webp ||
           photo.thumbnail_urls?.thumb_lg_webp ||
           photo.thumbnail_urls?.thumb_lg ||
           photo.thumbnail_urls?.lg ||
           Object.values(photo.thumbnail_urls || {})[0] ||
-          "";
+          "",
+        );
         return (
           <div
             ref={lightboxRef}
@@ -560,14 +563,15 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
               }`} role="tablist" aria-label="Photo filmstrip">
                 {visibleAssets.map((a, i) => {
-                  const thumb =
+                  const thumb = getStorageBackedUrl(
                     a.thumbnail_urls?.thumb_sm_webp ||
                     a.thumbnail_urls?.thumb_md_webp ||
                     a.thumbnail_urls?.thumb_sm ||
                     a.thumbnail_urls?.sm ||
                     a.thumbnail_urls?.thumb_md ||
                     Object.values(a.thumbnail_urls || {})[0] ||
-                    "";
+                    "",
+                  );
                   return (
                     <button
                       key={a.id}

@@ -6,6 +6,7 @@ import { PublicGalleryGrid } from "@/components/gallery/public-gallery-grid";
 import { PublicGalleryProducts } from "@/components/gallery/public-gallery-products";
 import { PublicGalleryBanners } from "@/components/gallery/public-gallery-banners";
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -79,17 +80,17 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
     if (gallery.cover_asset_id && assets.length > 0) {
       const coverAsset = assets.find(a => a.id === gallery.cover_asset_id);
       if (coverAsset) {
-        return coverAsset.thumbnail_urls?.display_webp ||
+        return getStorageBackedUrl(coverAsset.thumbnail_urls?.display_webp ||
           coverAsset.thumbnail_urls?.thumb_lg_webp ||
           coverAsset.thumbnail_urls?.thumb_lg ||
-          Object.values(coverAsset.thumbnail_urls || {})[0] || "";
+          Object.values(coverAsset.thumbnail_urls || {})[0] || "");
       }
     }
     if (assets.length > 0) {
-      return assets[0].thumbnail_urls?.display_webp ||
+      return getStorageBackedUrl(assets[0].thumbnail_urls?.display_webp ||
         assets[0].thumbnail_urls?.thumb_lg_webp ||
         assets[0].thumbnail_urls?.thumb_lg ||
-        Object.values(assets[0].thumbnail_urls || {})[0] || "";
+        Object.values(assets[0].thumbnail_urls || {})[0] || "");
     }
     return "";
   })();

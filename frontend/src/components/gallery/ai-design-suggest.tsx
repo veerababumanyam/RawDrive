@@ -29,10 +29,12 @@ export function AIDesignSuggest({ galleryId, onApply }: AIDesignSuggestProps) {
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasRequestedSuggestions, setHasRequestedSuggestions] = useState(false);
 
   const fetchSuggestions = async () => {
     setLoading(true);
     setError(null);
+    setHasRequestedSuggestions(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai-suggest`, {
         headers: getAuthHeaders(),
@@ -68,10 +70,16 @@ export function AIDesignSuggest({ galleryId, onApply }: AIDesignSuggestProps) {
         <div className="p-2 rounded-lg bg-feedback-error/10 text-feedback-error text-xs">{error}</div>
       )}
 
-      {suggestions.length === 0 && !loading && !error && (
+      {suggestions.length === 0 && !loading && !error && !hasRequestedSuggestions && (
         <p className="text-xs text-text-tertiary">
           Click &quot;Suggest Design&quot; to get AI-powered recommendations based on your gallery photos.
         </p>
+      )}
+
+      {suggestions.length === 0 && !loading && !error && hasRequestedSuggestions && (
+        <div className="rounded-lg border border-border-subtle bg-surface-container-low p-3 text-xs text-text-secondary">
+          No design suggestions are available for this gallery yet. Run AI analysis after photos finish processing.
+        </div>
       )}
 
       <div className="space-y-2">
