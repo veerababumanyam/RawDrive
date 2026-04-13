@@ -218,16 +218,16 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 			addAny("logo_metadata", map[string]interface{}{})
 			addAny("logo_url", "")
 		} else {
-			metadata, storageKey, err := h.logoMetadataForAsset(r.Context(), wsID, logoAssetID)
+			assetID, metadata, storageKey, err := h.logoMetadataForAsset(r.Context(), wsID, logoAssetID)
 			if err != nil {
 				status := http.StatusInternalServerError
-				if errors.Is(err, pgx.ErrNoRows) {
+				if errors.Is(err, errInvalidLogoAssetID) || errors.Is(err, errLogoAssetUnavailable) || errors.Is(err, pgx.ErrNoRows) {
 					status = http.StatusBadRequest
 				}
 				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), status)
 				return
 			}
-			addAny("logo_asset_id", logoAssetID)
+			addAny("logo_asset_id", assetID)
 			addAny("logo_metadata", metadata)
 			addAny("logo_url", storageKey)
 		}
@@ -272,12 +272,15 @@ func validateBrandAccentColor(value *string) error {
 	return nil
 }
 
-var errInvalidLogoAssetID = errors.New("logo_asset_id must be a valid UUID")
+var (
+	errInvalidLogoAssetID   = errors.New("logo_asset_id must be a valid UUID")
+	errLogoAssetUnavailable = errors.New("logo asset must be an image uploaded to this workspace")
+)
 
-func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, workspaceID uuid.UUID, assetIDRaw string) (map[string]interface{}, string, error) {
+func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, workspaceID uuid.UUID, assetIDRaw string) (uuid.UUID, map[string]interface{}, string, error) {
 	assetID, err := uuid.Parse(assetIDRaw)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %v", errInvalidLogoAssetID, err)
+		return uuid.Nil, nil, "", fmt.Errorf("%w: %v", errInvalidLogoAssetID, err)
 	}
 
 	var filename, contentType, storageKey string
@@ -293,12 +296,12 @@ func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, work
 	).Scan(&filename, &contentType, &sizeBytes, &storageKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, "", fmt.Errorf("logo asset must be an image uploaded to this workspace")
+			return uuid.Nil, nil, "", errLogoAssetUnavailable
 		}
-		return nil, "", fmt.Errorf("failed to validate logo asset: %w", err)
+		return uuid.Nil, nil, "", fmt.Errorf("failed to validate logo asset: %w", err)
 	}
 
-	return map[string]interface{}{
+	return assetID, map[string]interface{}{
 		"asset_id":       assetID.String(),
 		"filename":       filename,
 		"content_type":   contentType,
