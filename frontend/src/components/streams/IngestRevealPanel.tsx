@@ -188,6 +188,16 @@ function CredentialRow({
   onCopy: (v: string) => void;
   sensitive?: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+  // Show a transient "Copied" indicator for 1.5s after a successful click.
+  // Silent clipboard writes are easy to miss; the visual confirmation prevents
+  // users from hammering the button thinking it did nothing.
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
@@ -202,12 +212,16 @@ function CredentialRow({
       </div>
       <GlassIconButton
         size="sm"
-        variant="glass"
-        label={`Copy ${label}`}
-        onClick={() => onCopy(value)}
+        variant={copied ? "success" : "glass"}
+        label={copied ? `Copied ${label}` : `Copy ${label}`}
+        onClick={() => {
+          onCopy(value);
+          setCopied(true);
+        }}
         data-testid={`copy-${slug(label)}`}
+        data-copied={copied ? "true" : undefined}
       >
-        <CopyIcon />
+        {copied ? <CheckCircle /> : <CopyIcon />}
       </GlassIconButton>
     </div>
   );

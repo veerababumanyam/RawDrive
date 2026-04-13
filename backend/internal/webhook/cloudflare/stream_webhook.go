@@ -129,10 +129,19 @@ func (h *Handler) dispatch(ctx context.Context, evt StreamEvent) error {
 		return nil
 	}
 
-	// Best-effort delivery log; errors are logged but do not fail the webhook.
+	// Delivery log is best-effort on the happy path (losing an audit entry
+	// is worse than CF retrying and double-applying an idempotent update)
+	// BUT we upgrade it to Error level with a dedicated alert field so ops
+	// alerting can trigger on "audit_write_failed" without matching on log
+	// text. State writes proceed — CF will re-send on timeout if needed.
 	if h.delivery != nil {
 		if err := h.delivery.LogEvent(ctx, s.ID, evt); err != nil {
-			h.logger.Warn("webhook delivery log error", "err", err.Error())
+			h.logger.Error("webhook delivery log failed",
+				"stream", s.ID,
+				"event_type", string(evt.Type),
+				"alert", "audit_write_failed",
+				"err", err.Error(),
+			)
 		}
 	}
 

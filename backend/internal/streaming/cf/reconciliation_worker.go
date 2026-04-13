@@ -126,7 +126,10 @@ func (w *ReconciliationWorker) reconcileOne(ctx context.Context, s ActiveStream)
 	}
 	cfState := mapCFStatusToLiveState(li.Status, s.LiveState)
 	if cfState == "" || cfState == s.LiveState {
-		return // no drift
+		// Emit a debug line so ops can distinguish "reconciled, no drift"
+		// from "did not run" when investigating missed events.
+		w.logger.Debug("recon: no drift", "stream", s.ID, "db", s.LiveState, "cf", li.Status)
+		return
 	}
 	if err := w.applier.Apply(ctx, s.ID, cfState); err != nil {
 		w.logger.Warn("recon: apply", "stream", s.ID, "err", err.Error())

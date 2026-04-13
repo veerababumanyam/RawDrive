@@ -27,6 +27,11 @@ type Config struct {
 	AccountID      string
 	APIToken       string
 	SigningKey     string
+	// SigningKeyID (kid) identifies the signing-key generation so we can
+	// rotate keys without invalidating in-flight tokens. Sourced from
+	// platform_settings.streaming.cf_signing_key_id; signed_url.go falls
+	// back to "v1" when unset so greenfield deploys keep working.
+	SigningKeyID   string
 	WebhookSecret  string
 	AllowedOrigins []string
 }
@@ -59,6 +64,7 @@ func LoadConfig(ctx context.Context, store SettingsStore) (*Config, error) {
 	cfg.APIToken = lookupString(ctx, store, "cf_api_token", "CF_STREAM_API_TOKEN")
 	cfg.AccountID = lookupString(ctx, store, "cf_account_id", "CF_STREAM_ACCOUNT_ID")
 	cfg.SigningKey = lookupString(ctx, store, "cf_signing_key", "CF_STREAM_SIGNING_KEY")
+	cfg.SigningKeyID = lookupString(ctx, store, "cf_signing_key_id", "CF_STREAM_SIGNING_KEY_ID")
 	cfg.WebhookSecret = lookupString(ctx, store, "cf_webhook_secret", "CF_STREAM_WEBHOOK_SECRET")
 	cfg.AllowedOrigins = splitOrigins(lookupString(ctx, store, "allowed_origins", "CF_STREAM_ALLOWED_ORIGINS"))
 

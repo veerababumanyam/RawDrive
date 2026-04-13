@@ -86,9 +86,18 @@ func TestCreateLiveInput_HappyPath(t *testing.T) {
 	if gotContentType != "application/json" {
 		t.Errorf("content-type = %q", gotContentType)
 	}
-	// AC: RequireSignedURLs must be true on every Create (T-S1-11)
-	if v, ok := gotBody["requireSignedURLs"].(bool); !ok || !v {
-		t.Errorf("requireSignedURLs = %v, want true", gotBody["requireSignedURLs"])
+	// AC: CF Stream API requires requireSignedURLs to live UNDER `recording`,
+	// NOT at the top level of the request body. T-S1-11 verifies the nested
+	// location to catch any regression that re-introduces the flag at top level.
+	if _, leaked := gotBody["requireSignedURLs"]; leaked {
+		t.Errorf("requireSignedURLs must NOT be at top level — CF rejects that shape; got body=%+v", gotBody)
+	}
+	rec, _ := gotBody["recording"].(map[string]any)
+	if rec == nil {
+		t.Fatalf("recording block missing: body=%+v", gotBody)
+	}
+	if v, ok := rec["requireSignedURLs"].(bool); !ok || !v {
+		t.Errorf("recording.requireSignedURLs = %v, want true", rec["requireSignedURLs"])
 	}
 }
 
@@ -191,7 +200,9 @@ func TestUpdateLiveInput_PatchesCorrectly(t *testing.T) {
 	c, _ := newTestClient(t, srv)
 
 	origins := []string{"https://a.example"}
-	_, err := c.Update(context.Background(), "abc123", LiveInputPatch{AllowedOrigins: origins})
+	_, err := c.Update(context.Background(), "abc123", LiveInputPatch{
+		Recording: &RecordingConfig{AllowedOrigins: origins},
+	})
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -201,14 +212,21 @@ func TestUpdateLiveInput_PatchesCorrectly(t *testing.T) {
 	if !strings.HasSuffix(gotPath, "/live_inputs/abc123") {
 		t.Errorf("path = %q", gotPath)
 	}
-	got, _ := json.Marshal(gotBody["allowedOrigins"])
+	rec, _ := gotBody["recording"].(map[string]any)
+	if rec == nil {
+		t.Fatalf("recording block missing: %+v", gotBody)
+	}
+	got, _ := json.Marshal(rec["allowedOrigins"])
 	want, _ := json.Marshal(origins)
 	if string(got) != string(want) {
-		t.Errorf("allowedOrigins = %s, want %s", got, want)
+		t.Errorf("recording.allowedOrigins = %s, want %s", got, want)
 	}
-	// Unspecified fields must not be serialized
+	// Top-level requireSignedURLs/allowedOrigins must never be present.
 	if _, ok := gotBody["requireSignedURLs"]; ok {
-		t.Errorf("unspecified field requireSignedURLs leaked into patch")
+		t.Errorf("requireSignedURLs leaked to top level of patch")
+	}
+	if _, ok := gotBody["allowedOrigins"]; ok {
+		t.Errorf("allowedOrigins leaked to top level of patch")
 	}
 }
 
@@ -293,8 +311,8 @@ func TestCreate_AlwaysSetsRequireSignedURLs(t *testing.T) {
 	c, _ := newTestClient(t, srv)
 	_, _ = c.Create(context.Background(), nil)
 
-	if v, _ := gotBody["requireSignedURLs"].(bool); !v {
-		t.Error("top-level requireSignedURLs must be true")
+	if _, leaked := gotBody["requireSignedURLs"]; leaked {
+		t.Error("requireSignedURLs must NOT be at top level — CF expects it under recording")
 	}
 	rec, _ := gotBody["recording"].(map[string]any)
 	if v, _ := rec["requireSignedURLs"].(bool); !v {

@@ -104,7 +104,12 @@ func (s *RevealService) Reveal(ctx context.Context, req RevealRequest) (*RevealR
 		return nil, err
 	}
 	now := s.clock()
-	windowOpen := !st.ScheduledStartAt.IsZero() && now.After(st.ScheduledStartAt.Add(-s.revealWindow))
+	// Inclusive lower bound — at exactly scheduled-revealWindow the reveal
+	// must succeed. Using !Before makes the T-30 boundary inclusive per
+	// FR-014-UX-04 ("30 min before"), avoiding an off-by-one that would
+	// reject a reveal attempted precisely on the minute.
+	windowStart := st.ScheduledStartAt.Add(-s.revealWindow)
+	windowOpen := !st.ScheduledStartAt.IsZero() && !now.Before(windowStart)
 
 	if !windowOpen && !req.Override {
 		return nil, ErrRevealTooEarly

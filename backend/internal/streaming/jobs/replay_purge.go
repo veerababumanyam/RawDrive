@@ -73,13 +73,29 @@ func (j *PurgeJob) Tick(ctx context.Context) error {
 				// the row in 'available' for retry next tick.
 				var cfErr *cf.CFError
 				if !errors.As(derr, &cfErr) || cfErr.Code != 404 {
-					j.logger.Warn("purge: cf delete", "stream", st.ID, "err", derr.Error())
+					// CF is refusing to delete — the replay is still
+					// consuming customer quota and may serve past the
+					// retention cliff. Error-level + alert field so ops
+					// can page on sustained failures.
+					j.logger.Error("purge: cf delete failed",
+						"stream", st.ID,
+						"video_id", st.ReplayVideoID,
+						"alert", "replay_purge_blocked",
+						"err", derr.Error(),
+					)
 					continue
 				}
 			}
 		}
 		if err := j.repo.UpdateReplayExpired(ctx, st.ID); err != nil {
-			j.logger.Warn("purge: mark expired", "stream", st.ID, "err", err.Error())
+			// DB write failure on the expiry marker — CF recording is
+			// already gone but we lost the state transition. Ops needs
+			// to know since the row will be retried every tick.
+			j.logger.Warn("purge: mark expired failed",
+				"stream", st.ID,
+				"alert", "replay_expiry_state_lost",
+				"err", err.Error(),
+			)
 		}
 	}
 	return nil

@@ -98,10 +98,14 @@ func (s *SignedURLService) Sign(req PlaybackURLRequest) (*PlaybackURLResponse, e
 		},
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	// kid (key ID) distinguishes signing key generations for rotation.
-	if s.cfg.APIToken != "" {
-		tok.Header["kid"] = "v1" // static kid — rotation is future work
+	// kid (key ID) distinguishes signing-key generations for rotation.
+	// Sourced from platform_settings via Config.SigningKeyID; "v1" is the
+	// greenfield default so existing tokens stay valid after cfg is wired.
+	kid := s.cfg.SigningKeyID
+	if kid == "" {
+		kid = "v1"
 	}
+	tok.Header["kid"] = kid
 	signed, err := tok.SignedString([]byte(s.cfg.SigningKey))
 	if err != nil {
 		return nil, fmt.Errorf("signed-url: sign: %w", err)

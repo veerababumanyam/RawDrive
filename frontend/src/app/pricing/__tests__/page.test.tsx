@@ -1,5 +1,37 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+
+// The live streaming-packages grid fetches from the public API on mount.
+// Tests don't stub fetch, so in JSDOM it resolves with empty/error and the
+// grid renders "Live pricing temporarily unavailable". Mock the hook to
+// return a deterministic catalogue so "Streaming Session Packs" can assert
+// package presence without depending on network.
+vi.mock("@/lib/streaming-packages", () => ({
+  useStreamingPackages: () => ({
+    packages: [
+      {
+        id: "pack-5",
+        name: "5 Sessions",
+        price_paise: 249900,
+        minutes: 300,
+        max_concurrent_viewers: 100,
+        replay_ttl_days: 30,
+      },
+      {
+        id: "pack-20",
+        name: "20 Sessions",
+        price_paise: 899900,
+        minutes: 1200,
+        max_concurrent_viewers: 250,
+        replay_ttl_days: 60,
+      },
+    ],
+    loading: false,
+    error: null,
+  }),
+  formatINR: (paise: number) => (paise / 100).toLocaleString("en-IN"),
+}));
+
 import { PricingContent } from "@/components/pricing/PricingContent";
 
 describe("Pricing Page", () => {

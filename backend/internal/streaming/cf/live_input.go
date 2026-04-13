@@ -18,12 +18,23 @@ type LiveInput struct {
 	Meta       map[string]string `json:"meta,omitempty"`
 }
 
-// LiveInputPatch is the update payload. Nil fields are not sent (PATCH semantics).
+// LiveInputPatch is the Update payload. Matches CF PATCH semantics where
+// unspecified fields are left unchanged. Top-level requireSignedURLs/
+// allowedOrigins are intentionally absent — per Cloudflare Stream API,
+// those properties live under `recording` only.
 type LiveInputPatch struct {
-	Meta              map[string]string `json:"meta,omitempty"`
-	RequireSignedURLs *bool             `json:"requireSignedURLs,omitempty"`
-	AllowedOrigins    []string          `json:"allowedOrigins,omitempty"`
-	Recording         *RecordingConfig  `json:"recording,omitempty"`
+	Meta      map[string]string `json:"meta,omitempty"`
+	Recording *RecordingConfig  `json:"recording,omitempty"`
+}
+
+// createBody is the request envelope for POST /stream/live_inputs.
+// Separate from LiveInputPatch because Create has slightly different
+// semantics (defaults, defaultCreator) and we want tests to assert the
+// exact wire shape Cloudflare expects.
+type createBody struct {
+	Meta           map[string]string `json:"meta"`
+	Recording      *RecordingConfig  `json:"recording"`
+	DefaultCreator string            `json:"defaultCreator,omitempty"`
 }
 
 type RecordingConfig struct {
@@ -74,10 +85,11 @@ func (c *cfLiveInputClient) basePath() string {
 
 func (c *cfLiveInputClient) Create(ctx context.Context, meta map[string]string) (*LiveInput, error) {
 	requireSigned := true
-	body := LiveInputPatch{
-		Meta:              meta,
-		RequireSignedURLs: &requireSigned,
-		AllowedOrigins:    c.cfg.AllowedOrigins,
+	if meta == nil {
+		meta = map[string]string{}
+	}
+	body := createBody{
+		Meta: meta,
 		Recording: &RecordingConfig{
 			Mode:              "automatic",
 			RequireSignedURLs: &requireSigned,
@@ -102,11 +114,10 @@ func (c *cfLiveInputClient) Update(ctx context.Context, uid string, patch LiveIn
 }
 
 func (c *cfLiveInputClient) Disable(ctx context.Context, uid string) error {
-	off := "off"
 	requireSigned := true
 	patch := LiveInputPatch{
 		Recording: &RecordingConfig{
-			Mode:              off,
+			Mode:              "off",
 			RequireSignedURLs: &requireSigned,
 		},
 	}
