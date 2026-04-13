@@ -32,7 +32,9 @@ import (
 	"github.com/rawdrive/backend/internal/scheduler"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
+	"github.com/rawdrive/backend/internal/streaming/credit"
 	streamingrate "github.com/rawdrive/backend/internal/streaming/rate"
+	streamingrecharge "github.com/rawdrive/backend/internal/streaming/recharge"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
 	teamPkg "github.com/rawdrive/backend/internal/team"
 	"github.com/rawdrive/backend/internal/user"
@@ -92,6 +94,48 @@ func (p smtpNotificationEmailProvider) Send(ctx context.Context, req service.Del
 // log in again whenever the API container cycled.
 type platformSettingsJWTKeyStore struct {
 	repo *repository.PlatformSettingsRepo
+}
+
+// streamingrechargeSettingsAdapter adapts our PlatformSettingsRepo to the
+// minimal SettingsRepo interface streaming/recharge expects, so the recharge
+// package doesn't import repository directly.
+type streamingrechargeSettingsAdapter struct {
+	repo *repository.PlatformSettingsRepo
+}
+
+func (a streamingrechargeSettingsAdapter) GetByKey(ctx context.Context, category, key string) (*streamingrecharge.PlatformSettingValue, error) {
+	v, err := a.repo.GetByKey(ctx, category, key)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+	return &streamingrecharge.PlatformSettingValue{Value: v.Value}, nil
+}
+
+// streamingrechargePackageLookup adapts a pgxpool.Pool to the recharge
+// PackageLookup interface, returning the package + active rate-card row.
+type streamingrechargePackageLookup struct {
+	pool *pgxpool.Pool
+}
+
+func (l streamingrechargePackageLookup) ActivePackage(ctx context.Context, packageID uuid.UUID) (*streamingrecharge.PackageInfo, error) {
+	var info streamingrecharge.PackageInfo
+	info.PackageID = packageID
+	err := l.pool.QueryRow(ctx, `
+		SELECT r.id, r.price_paise, p.minutes
+		  FROM streaming_rate_cards r
+		  JOIN streaming_packages  p ON p.id = r.package_id
+		 WHERE r.package_id = $1 AND r.effective_from <= now()
+		 ORDER BY r.effective_from DESC
+		 LIMIT 1`,
+		packageID,
+	).Scan(&info.RateCardID, &info.PricePaise, &info.Minutes)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
 }
 
 type platformSettingsSMTPReader struct {
@@ -1238,6 +1282,27 @@ func main() {
 		rateHandler := streamingrate.NewHandler(streamingrate.NewService(dbPool))
 		streamingrate.RegisterAdminStreamingRoutes(api, rateHandler)
 		log.Println("M31/F-014: Admin streaming package + rate-card CRUD registered")
+
+		// M32 / F-014 E104: prepaid recharge (PhonePe primary, Razorpay fallback)
+		// + GST invoicing + super-admin refund.
+		creditSvc := credit.NewService(dbPool)
+		settingsAdapter := streamingrechargeSettingsAdapter{repo: platformSettingsRepo}
+		packageLookup := streamingrechargePackageLookup{pool: dbPool}
+		invoiceNumberer := streamingrecharge.NewInvoiceNumberer(dbPool)
+		gstStateCode := func() string {
+			s, err := platformSettingsRepo.GetByKey(context.Background(), "payments", "gstin_state_code")
+			if err == nil && s != nil && s.Value != "" {
+				return s.Value
+			}
+			return "29" // default Karnataka if unset
+		}()
+		rechargeSvc := streamingrecharge.NewService(
+			dbPool, creditSvc,
+			streamingrecharge.NewPlatformSettingsResolver(settingsAdapter),
+			packageLookup, invoiceNumberer, gstStateCode,
+		)
+		streamingrecharge.RegisterRoutes(r, streamingrecharge.NewHandler(rechargeSvc, dbPool))
+		log.Println("M32/F-014: Recharge + webhooks (PhonePe/Razorpay) + GST invoice + refund registered")
 
 		// F-006 Part A (audit 2026-04-10): replace the JWT service's
 		// ephemeral in-memory RSA signing key with one persisted through

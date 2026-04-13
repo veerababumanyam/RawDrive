@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, HardDrive, Video, Tag } from "lucide-react";
 import { pricingPlans, storageBoosters, streamingPacks } from "@/lib/tokens";
+import { useStreamingPackages, formatINR } from "@/lib/streaming-packages";
 
 const faqItems = [
   {
@@ -257,20 +258,24 @@ export function PricingContent() {
             <Video className="mr-2 inline-block h-6 w-6 text-accent" aria-hidden="true" />
             Streaming Session Packs
           </h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {streamingPacks.map((p) => (
-              <div
-                key={p.name}
-                className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
-              >
-                <h3 className="text-lg font-semibold text-text-primary">{p.name}</h3>
-                <p className="mt-2 text-2xl font-bold text-text-primary">
-                  Rs. {p.price.toLocaleString("en-IN")}
-                </p>
-                <p className="text-sm text-text-tertiary">{p.sessions} streaming sessions</p>
-              </div>
-            ))}
-          </div>
+          <LiveStreamingPackagesGrid />
+          {/* Build-time fallback list, hidden when the API populates above. */}
+          <noscript>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {streamingPacks.map((p) => (
+                <div
+                  key={p.name}
+                  className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
+                >
+                  <h3 className="text-lg font-semibold text-text-primary">{p.name}</h3>
+                  <p className="mt-2 text-2xl font-bold text-text-primary">
+                    Rs. {p.price.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-sm text-text-tertiary">{p.sessions} streaming minutes</p>
+                </div>
+              ))}
+            </div>
+          </noscript>
         </div>
       </section>
 
@@ -343,6 +348,57 @@ export function PricingContent() {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+// LiveStreamingPackagesGrid renders the live, API-sourced streaming
+// packages catalogue. Falls back to the build-time tokens.ts list inside
+// <noscript> for non-JS clients (handled in the parent).
+function LiveStreamingPackagesGrid() {
+  const { packages, loading, error } = useStreamingPackages();
+
+  if (loading) {
+    return (
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="h-32 animate-pulse rounded-xl border border-border bg-surface-elevated/40"
+            aria-hidden="true"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (error || packages.length === 0) {
+    return (
+      <p className="text-center text-sm text-text-tertiary">
+        Live pricing temporarily unavailable. Please refresh.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {packages.map((p) => (
+        <div
+          key={p.id}
+          className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
+        >
+          <h3 className="text-lg font-semibold text-text-primary">{p.name}</h3>
+          <p className="mt-2 text-2xl font-bold text-text-primary">
+            Rs. {formatINR(p.price_paise)}
+          </p>
+          <p className="text-sm text-text-tertiary">
+            {p.minutes} streaming minutes
+          </p>
+          <p className="mt-1 text-xs text-text-tertiary">
+            up to {p.max_concurrent_viewers} viewers · {p.replay_ttl_days}d replay
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

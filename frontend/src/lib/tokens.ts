@@ -243,9 +243,13 @@ export const storageBoosters = [
   { name: "1TB Booster", price: 2000, storage: "1TB" },
 ] as const;
 
+// streamingPacks: kept as a fallback ONLY for SSR / build-time code paths
+// that can't async-fetch. Live pricing is sourced from the API via
+// `useStreamingPackages()` in lib/streaming-packages.ts. Edits here are
+// invisible to the running app; the source of truth is streaming_packages
+// + streaming_rate_cards in the database (M32 / F-014 E104-S6).
 export const streamingPacks = [
-  { name: "5 Sessions", price: 500, sessions: 5 },
-  { name: "10 Sessions", price: 900, sessions: 10 },
-  { name: "25 Sessions", price: 2000, sessions: 25 },
-  { name: "50 Sessions", price: 3500, sessions: 50 },
+  { name: "Basic",      price: 499,  sessions: 60,  tier: "basic"      },
+  { name: "Pro",        price: 1499, sessions: 180, tier: "pro"        },
+  { name: "Enterprise", price: 4999, sessions: 600, tier: "enterprise" },
 ] as const;
