@@ -101,6 +101,12 @@ func newTestServer(handler *auth.Handler) *httptest.Server {
 	return httptest.NewServer(r)
 }
 
+func newSubrouterOnlyTestServer(handler *auth.Handler) *httptest.Server {
+	r := chi.NewRouter()
+	r.Mount("/auth", handler.Routes())
+	return httptest.NewServer(r)
+}
+
 func postJSON(url string, body interface{}) (*http.Response, error) {
 	b, _ := json.Marshal(body)
 	return http.Post(url, "application/json", bytes.NewReader(b))
@@ -118,6 +124,26 @@ func refreshCookieFromResponse(t *testing.T, resp *http.Response) *http.Cookie {
 }
 
 // ──────────────────────────── Tests ────────────────────────────
+
+func TestRoutes_CredentialEndpointsNotMountedInSubrouter(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newSubrouterOnlyTestServer(handler)
+	defer ts.Close()
+
+	for _, path := range []string{"/auth/register", "/auth/login", "/auth/verify-otp"} {
+		resp, err := postJSON(ts.URL+path, map[string]string{})
+		require.NoError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "%s must stay root-mounted for rate limiting", path)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/refresh", nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "non-credential auth routes should remain in Routes()")
+}
 
 func TestRegisterHandler_Success(t *testing.T) {
 	handler, _, _, _ := setupAuthRouter()
