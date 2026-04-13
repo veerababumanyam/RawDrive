@@ -62,9 +62,28 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
-	if (input.AccessMode == "pin" || input.AccessMode == "password") && input.PIN == "" {
+	pin := strings.TrimSpace(input.PIN)
+	accessMode, err := service.NormalizeShareAccessMode(input.AccessMode, pin != "")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	if (accessMode == service.AccessPIN || accessMode == service.AccessPassword) && pin == "" {
 		http.Error(w, `{"error":"pin is required for protected share links"}`, http.StatusBadRequest)
 		return
+	}
+	if accessMode == service.AccessEmail {
+		if len(input.AllowedEmails) == 0 && len(input.RecipientEmails) > 0 {
+			input.AllowedEmails = input.RecipientEmails
+		}
+		if len(input.AllowedEmails) == 0 {
+			http.Error(w, `{"error":"at least one allowed email is required for email share links"}`, http.StatusBadRequest)
+			return
+		}
+		if err := validateRecipientEmails(input.AllowedEmails); err != nil {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+			return
+		}
 	}
 	emailShareRequested := strings.EqualFold(input.Channel, "email") && len(input.RecipientEmails) > 0
 	if emailShareRequested {
@@ -80,19 +99,12 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	createInput := service.CreateShareLinkInput{
 		GalleryID:       galleryID,
-		PIN:             input.PIN,
+		PIN:             pin,
 		DownloadAllowed: input.DownloadAllowed,
 		MaxAccessCount:  input.MaxAccessCount,
 		Permissions: map[string]interface{}{
-			"access_mode": input.AccessMode,
+			"access_mode": string(accessMode),
 		},
-	}
-	if input.AccessMode == "" {
-		if input.PIN != "" {
-			createInput.Permissions["access_mode"] = "pin"
-		} else {
-			createInput.Permissions["access_mode"] = "public"
-		}
 	}
 	if len(input.AllowedEmails) > 0 {
 		createInput.Permissions["allowed_emails"] = input.AllowedEmails
@@ -119,6 +131,9 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if emailShareRequested {
 		if err := h.sendGalleryShareEmails(r, galleryID, link, input.RecipientEmails, input.Message); err != nil {
 			log.Printf("gallery share email failed gallery=%s err=%v", galleryID, err)
+			if revokeErr := h.shareSvc.Revoke(r.Context(), link.ID); revokeErr != nil {
+				log.Printf("gallery share revoke after email failure failed link=%s err=%v", link.ID, revokeErr)
+			}
 			http.Error(w, `{"error":"email send failed"}`, http.StatusBadGateway)
 			return
 		}

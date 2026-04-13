@@ -272,10 +272,12 @@ func validateBrandAccentColor(value *string) error {
 	return nil
 }
 
+var errInvalidLogoAssetID = errors.New("logo_asset_id must be a valid UUID")
+
 func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, workspaceID uuid.UUID, assetIDRaw string) (map[string]interface{}, string, error) {
 	assetID, err := uuid.Parse(assetIDRaw)
 	if err != nil {
-		return nil, "", fmt.Errorf("logo_asset_id must be a valid UUID")
+		return nil, "", fmt.Errorf("%w: %v", errInvalidLogoAssetID, err)
 	}
 
 	var filename, contentType, storageKey string

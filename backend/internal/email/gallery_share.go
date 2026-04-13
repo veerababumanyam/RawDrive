@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 )
 
@@ -46,9 +47,16 @@ func (s *GalleryShareSender) Send(ctx context.Context, to string, data GallerySh
 
 func composeGalleryShareMessage(cfg *SMTPConfig, to string, data GalleryShareData) []byte {
 	var b strings.Builder
+	senderName := sanitizeHeaderValue(data.SenderName)
+	galleryTitle := sanitizeHeaderValue(data.GalleryTitle)
+	safeSenderName := html.EscapeString(senderName)
+	safeGalleryTitle := html.EscapeString(galleryTitle)
+	safeMessage := html.EscapeString(sanitizeHeaderValue(data.Message))
+	safeGalleryLink := html.EscapeString(sanitizeHeaderValue(data.GalleryLink))
+
 	writeFromHeader(&b, cfg)
-	fmt.Fprintf(&b, "To: <%s>\r\n", to)
-	fmt.Fprintf(&b, "Subject: %s shared a gallery with you: %s\r\n", data.SenderName, data.GalleryTitle)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
+	fmt.Fprintf(&b, "Subject: %s\r\n", sanitizeHeaderValue(fmt.Sprintf("%s shared a gallery with you: %s", safeSenderName, safeGalleryTitle)))
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	b.WriteString("\r\n")
@@ -56,13 +64,13 @@ func composeGalleryShareMessage(cfg *SMTPConfig, to string, data GalleryShareDat
 	b.WriteString(`<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:40px;background:#f5f5f7;">`)
 	b.WriteString(`<div style="max-width:480px;margin:0 auto;background:white;border-radius:16px;padding:32px;">`)
 	b.WriteString(`<h2 style="margin:0 0 8px;font-size:20px;color:#1d1d1f;">Gallery shared with you</h2>`)
-	fmt.Fprintf(&b, `<p style="color:#424245;line-height:1.5;"><strong>%s</strong> shared the gallery <strong>%s</strong> with you on RawDrive.</p>`, data.SenderName, data.GalleryTitle)
+	fmt.Fprintf(&b, `<p style="color:#424245;line-height:1.5;"><strong>%s</strong> shared the gallery <strong>%s</strong> with you on RawDrive.</p>`, safeSenderName, safeGalleryTitle)
 
-	if data.Message != "" {
-		fmt.Fprintf(&b, `<div style="margin:16px 0;padding:12px 16px;background:#f5f5f7;border-radius:8px;color:#424245;font-style:italic;">&ldquo;%s&rdquo;</div>`, data.Message)
+	if safeMessage != "" {
+		fmt.Fprintf(&b, `<div style="margin:16px 0;padding:12px 16px;background:#f5f5f7;border-radius:8px;color:#424245;font-style:italic;">&ldquo;%s&rdquo;</div>`, safeMessage)
 	}
 
-	fmt.Fprintf(&b, `<div style="margin:24px 0;text-align:center;"><a href="%s" style="display:inline-block;background:#0071e3;color:white;text-decoration:none;padding:12px 32px;border-radius:12px;font-weight:500;font-size:16px;">View Gallery</a></div>`, data.GalleryLink)
+	fmt.Fprintf(&b, `<div style="margin:24px 0;text-align:center;"><a href="%s" style="display:inline-block;background:#0071e3;color:white;text-decoration:none;padding:12px 32px;border-radius:12px;font-weight:500;font-size:16px;">View Gallery</a></div>`, safeGalleryLink)
 	b.WriteString(`<p style="color:#86868b;font-size:13px;margin:0;">If you didn't expect this, you can safely ignore it.</p>`)
 	b.WriteString(`</div></body></html>`)
 

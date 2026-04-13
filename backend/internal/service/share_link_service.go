@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -110,6 +111,57 @@ const (
 	AccessEmail    AccessMode = "email"
 )
 
+// NormalizeShareAccessMode resolves a raw access_mode string (from JSON permissions or
+// request body) to a validated AccessMode. Empty input defaults to pin when hasPin is
+// true, otherwise public. Unknown modes return an error so handlers can 400.
+func NormalizeShareAccessMode(raw string, hasPin bool) (AccessMode, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	if trimmed == "" {
+		if hasPin {
+			return AccessPIN, nil
+		}
+		return AccessPublic, nil
+	}
+	switch AccessMode(trimmed) {
+	case AccessPublic, AccessPIN, AccessPassword, AccessEmail:
+		return AccessMode(trimmed), nil
+	default:
+		return "", fmt.Errorf("unsupported share link access_mode: %q", trimmed)
+	}
+}
+
+// shareEmailCredentialAllowed reports whether the supplied credential (email)
+// matches any entry in the permissions' allowed_emails list. Both []interface{}
+// (from JSON decode) and []string (native) are supported; matching is case-insensitive
+// and trims whitespace on both sides.
+func shareEmailCredentialAllowed(permissions map[string]interface{}, credential string) bool {
+	target := strings.ToLower(strings.TrimSpace(credential))
+	if target == "" {
+		return false
+	}
+	raw, ok := permissions["allowed_emails"]
+	if !ok {
+		return false
+	}
+	switch list := raw.(type) {
+	case []interface{}:
+		for _, e := range list {
+			if email, ok := e.(string); ok {
+				if strings.ToLower(strings.TrimSpace(email)) == target {
+					return true
+				}
+			}
+		}
+	case []string:
+		for _, email := range list {
+			if strings.ToLower(strings.TrimSpace(email)) == target {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ValidateAccess checks if the given credentials satisfy the share link's access mode.
 func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, credential string) (bool, error) {
 	sl, err := s.repo.GetByToken(ctx, token)
@@ -132,12 +184,18 @@ func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, cre
 		return false, fmt.Errorf("share link access limit reached")
 	}
 
-	// Determine access mode from permissions
-	mode := AccessMode("public")
+	// Determine access mode from permissions. Unsupported modes fail closed.
+	mode := AccessPublic
 	if modeStr, ok := sl.Permissions["access_mode"].(string); ok {
-		mode = AccessMode(modeStr)
-	} else if sl.PinHash != nil {
-		mode = AccessPIN
+		mode, err = NormalizeShareAccessMode(modeStr, sl.PinHash != nil)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		mode, err = NormalizeShareAccessMode("", sl.PinHash != nil)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	switch mode {
@@ -145,29 +203,23 @@ func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, cre
 		return true, nil
 	case AccessPIN:
 		if sl.PinHash == nil {
-			return true, nil
+			return false, fmt.Errorf("share link credential missing")
 		}
 		err := bcrypt.CompareHashAndPassword([]byte(*sl.PinHash), []byte(credential))
 		return err == nil, nil
 	case AccessPassword:
 		if sl.PinHash == nil {
-			return true, nil
+			return false, fmt.Errorf("share link credential missing")
 		}
 		err := bcrypt.CompareHashAndPassword([]byte(*sl.PinHash), []byte(credential))
 		return err == nil, nil
 	case AccessEmail:
-		allowedEmails, ok := sl.Permissions["allowed_emails"].([]interface{})
-		if !ok {
+		if shareEmailCredentialAllowed(sl.Permissions, credential) {
 			return true, nil
-		}
-		for _, e := range allowedEmails {
-			if email, ok := e.(string); ok && email == credential {
-				return true, nil
-			}
 		}
 		return false, fmt.Errorf("email not authorized")
 	default:
-		return true, nil
+		return false, fmt.Errorf("unsupported share link access_mode: %q", mode)
 	}
 }
 

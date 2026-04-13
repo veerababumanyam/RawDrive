@@ -54,6 +54,7 @@ func TestLoadSMTPConfig_EnvVarsOnly(t *testing.T) {
 		"SMTP_PORT":      "587",
 		"SMTP_USERNAME":  "apikey",
 		"SMTP_PASSWORD":  "s3cret",
+		"SMTP_SECURITY":  "starttls",
 		"SMTP_FROM":      "noreply@rawdrive.in",
 		"SMTP_FROM_NAME": "RawDrive Notifications",
 	})
@@ -66,6 +67,7 @@ func TestLoadSMTPConfig_EnvVarsOnly(t *testing.T) {
 	assert.Equal(t, 587, cfg.Port)
 	assert.Equal(t, "apikey", cfg.Username)
 	assert.Equal(t, "s3cret", cfg.Password)
+	assert.Equal(t, "starttls", cfg.Security)
 	assert.Equal(t, "noreply@rawdrive.in", cfg.FromAddress)
 	assert.Equal(t, "RawDrive Notifications", cfg.FromName)
 }
@@ -78,6 +80,7 @@ func TestLoadSMTPConfig_AllMissing_ReturnsNil(t *testing.T) {
 		"SMTP_PORT":      "",
 		"SMTP_USERNAME":  "",
 		"SMTP_PASSWORD":  "",
+		"SMTP_SECURITY":  "",
 		"SMTP_FROM":      "",
 		"SMTP_FROM_NAME": "",
 	})
@@ -92,14 +95,18 @@ func TestLoadSMTPConfig_SettingsReaderBeatsEnvVars(t *testing.T) {
 	// per the AGENTS.md No-Hardcoded-Credentials rule: "(1) platform_settings
 	// table → (2) environment variables → (3) fail".
 	withEnv(t, map[string]string{
-		"SMTP_HOST": "env.example.com",
-		"SMTP_PORT": "25",
-		"SMTP_FROM": "env@rawdrive.in",
+		"SMTP_HOST":      "env.example.com",
+		"SMTP_PORT":      "25",
+		"SMTP_SECURITY":  "starttls",
+		"SMTP_FROM":      "env@rawdrive.in",
+		"SMTP_FROM_NAME": "Env Mail",
 	})
 	reader := &fakeSettingsReader{data: map[string]string{
-		"email/smtp_host": "db.example.com",
-		"email/smtp_port": "587",
-		"email/smtp_from": "db@rawdrive.in",
+		"email/smtp_host":      "db.example.com",
+		"email/smtp_port":      "587",
+		"email/smtp_security":  "ssl",
+		"email/smtp_from":      "db@rawdrive.in",
+		"email/smtp_from_name": "DB Mail",
 	}}
 
 	cfg, err := LoadSMTPConfig(context.Background(), reader)
@@ -108,7 +115,9 @@ func TestLoadSMTPConfig_SettingsReaderBeatsEnvVars(t *testing.T) {
 
 	assert.Equal(t, "db.example.com", cfg.Host, "platform_settings wins over env var")
 	assert.Equal(t, 587, cfg.Port, "platform_settings wins over env var")
+	assert.Equal(t, "ssl", cfg.Security, "platform_settings wins over env var")
 	assert.Equal(t, "db@rawdrive.in", cfg.FromAddress, "platform_settings wins over env var")
+	assert.Equal(t, "DB Mail", cfg.FromName, "platform_settings wins over env var")
 }
 
 func TestLoadSMTPConfig_SettingsReaderPartialFallsBackToEnv(t *testing.T) {
@@ -147,13 +156,25 @@ func TestLoadSMTPConfig_InvalidPort_Errors(t *testing.T) {
 	assert.Contains(t, err.Error(), "SMTP_PORT")
 }
 
-func TestImplicitTLSHost_DetectsSMTPSPort(t *testing.T) {
-	host, ok := implicitTLSHost("smtpout.secureserver.net:465")
-	assert.True(t, ok, "port 465 must use implicit TLS")
-	assert.Equal(t, "smtpout.secureserver.net", host)
+func TestLoadSMTPConfig_InvalidSecurity_Errors(t *testing.T) {
+	withEnv(t, map[string]string{
+		"SMTP_HOST":     "smtp.example.com",
+		"SMTP_PORT":     "587",
+		"SMTP_SECURITY": "definitely-not-valid",
+		"SMTP_FROM":     "noreply@rawdrive.in",
+	})
 
-	_, ok = implicitTLSHost("smtp.example.com:587")
-	assert.False(t, ok, "port 587 stays on the STARTTLS SendMail path")
+	cfg, err := LoadSMTPConfig(context.Background(), nil)
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SMTP_SECURITY")
+}
+
+func TestUsesImplicitTLS_HonorsSecurityMode(t *testing.T) {
+	assert.True(t, usesImplicitTLS(&SMTPConfig{Host: "smtpout.secureserver.net", Port: 465, Security: "auto"}), "auto uses implicit TLS on 465")
+	assert.True(t, usesImplicitTLS(&SMTPConfig{Host: "smtp.example.com", Port: 587, Security: "ssl"}), "ssl forces implicit TLS even off 465")
+	assert.False(t, usesImplicitTLS(&SMTPConfig{Host: "smtpout.secureserver.net", Port: 465, Security: "starttls"}), "explicit starttls disables implicit TLS")
+	assert.False(t, usesImplicitTLS(&SMTPConfig{Host: "smtp.example.com", Port: 587, Security: "auto"}), "auto does not use implicit TLS off 465")
 }
 
 // ──────────────────────── Message composition ────────────────────────
@@ -203,12 +224,56 @@ func TestComposeInvitationMessage_ContainsLink(t *testing.T) {
 // capturedMail records a single SendMail invocation for the fake
 // Mailer used by the delivery tests. Wrapping the values keeps the
 // assertion code simple.
+func TestComposeMessages_SanitizeHeadersAndEscapeGalleryHTML(t *testing.T) {
+	cfg := &SMTPConfig{
+		FromAddress: "noreply@rawdrive.in\r\nBcc: injected@example.com",
+		FromName:    "RawDrive\r\nBcc: injected@example.com",
+	}
+
+	galleryMsg := string(composeGalleryShareMessage(cfg, "client@example.com\r\nBcc: injected@example.com", GalleryShareData{
+		SenderName:   "Planner\r\nBcc: injected@example.com",
+		GalleryTitle: `<img src=x onerror="alert(1)">`,
+		Message:      `<script>alert("xss")</script>`,
+		GalleryLink:  `https://rawdrive.test/g/wedding?share=abc&next="bad"`,
+	}))
+
+	assert.NotContains(t, galleryMsg, "\r\nBcc:", "headers must not allow CRLF injection")
+	assert.NotContains(t, galleryMsg, "<script>", "custom message must be HTML-escaped")
+	assert.NotContains(t, galleryMsg, "<img src=x", "gallery title must be HTML-escaped")
+	assert.Contains(t, galleryMsg, "&lt;script&gt;alert(&#34;xss&#34;)&lt;/script&gt;")
+	assert.Contains(t, galleryMsg, "&lt;img src=x onerror=&#34;alert(1)&#34;&gt;")
+	assert.Contains(t, galleryMsg, "share=abc&amp;next=&#34;bad&#34;")
+
+	notificationMsg := string(composeNotificationMessage(
+		cfg,
+		"owner@example.com\r\nBcc: injected@example.com",
+		"Lead update\r\nBcc: injected@example.com",
+		"Body",
+		"/crm/leads/1",
+	))
+	assert.NotContains(t, notificationMsg, "\r\nBcc:", "notification headers must not allow CRLF injection")
+	assert.Contains(t, notificationMsg, "Subject: Lead update Bcc: injected@example.com\r\n")
+}
+
 type capturedMail struct {
 	addr string
 	auth smtp.Auth
 	from string
 	to   []string
 	msg  []byte
+}
+
+func captureMail(target *capturedMail) Mailer {
+	return func(cfg *SMTPConfig, to []string, msg []byte) error {
+		*target = capturedMail{
+			addr: smtpAddr(cfg),
+			auth: smtpAuth(cfg),
+			from: cfg.FromAddress,
+			to:   append([]string(nil), to...),
+			msg:  append([]byte(nil), msg...),
+		}
+		return nil
+	}
 }
 
 func TestOTPDelivery_SendOTP_CallsMailerWithComposedMessage(t *testing.T) {
@@ -222,11 +287,8 @@ func TestOTPDelivery_SendOTP_CallsMailerWithComposedMessage(t *testing.T) {
 	}
 	var captured capturedMail
 	d := &OTPDelivery{
-		cfg: cfg,
-		mailer: func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-			captured = capturedMail{addr: addr, auth: a, from: from, to: to, msg: msg}
-			return nil
-		},
+		cfg:    cfg,
+		mailer: captureMail(&captured),
 	}
 
 	err := d.SendOTP(context.Background(), "user@example.com", "654321")
@@ -249,11 +311,8 @@ func TestOTPDelivery_SendOTP_NoAuthWhenUsernameEmpty(t *testing.T) {
 	}
 	var captured capturedMail
 	d := &OTPDelivery{
-		cfg: cfg,
-		mailer: func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-			captured = capturedMail{addr: addr, auth: a, from: from, to: to, msg: msg}
-			return nil
-		},
+		cfg:    cfg,
+		mailer: captureMail(&captured),
 	}
 
 	err := d.SendOTP(context.Background(), "user@example.com", "654321")
@@ -271,8 +330,8 @@ func TestDynamicOTPDelivery_ReloadsSettingsPerSend(t *testing.T) {
 	}}
 	var addrs []string
 	d := NewDynamicOTPDelivery(reader)
-	d.mailer = func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-		addrs = append(addrs, addr)
+	d.mailer = func(cfg *SMTPConfig, to []string, msg []byte) error {
+		addrs = append(addrs, smtpAddr(cfg))
 		return nil
 	}
 
@@ -294,11 +353,8 @@ func TestInvitationSender_SendInvitation_CallsMailerWithLink(t *testing.T) {
 	}
 	var captured capturedMail
 	d := &InvitationSender{
-		cfg: cfg,
-		mailer: func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-			captured = capturedMail{addr: addr, auth: a, from: from, to: to, msg: msg}
-			return nil
-		},
+		cfg:    cfg,
+		mailer: captureMail(&captured),
 	}
 
 	link := "https://app.rawdrive.io/invite?token=tok_abc"

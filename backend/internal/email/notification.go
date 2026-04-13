@@ -37,8 +37,8 @@ func (s *NotificationSender) Send(ctx context.Context, to, subject, body, action
 func composeNotificationMessage(cfg *SMTPConfig, to, subject, body, actionURL string) []byte {
 	var b strings.Builder
 	writeFromHeader(&b, cfg)
-	fmt.Fprintf(&b, "To: <%s>\r\n", to)
-	fmt.Fprintf(&b, "Subject: %s\r\n", subject)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
+	fmt.Fprintf(&b, "Subject: %s\r\n", sanitizeHeaderValue(subject))
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
 	b.WriteString("\r\n")
@@ -47,7 +47,7 @@ func composeNotificationMessage(cfg *SMTPConfig, to, subject, body, actionURL st
 		b.WriteString("\r\n\r\n")
 	}
 	if actionURL != "" {
-		fmt.Fprintf(&b, "Open in RawDrive: %s\r\n\r\n", actionURL)
+		fmt.Fprintf(&b, "Open in RawDrive: %s\r\n\r\n", sanitizeHeaderValue(actionURL))
 	}
 	b.WriteString("If you did not expect this notification, you can safely ignore this email.\r\n")
 	return []byte(b.String())

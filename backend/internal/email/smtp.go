@@ -45,6 +45,7 @@ type SMTPConfig struct {
 	Port        int    // 587 (STARTTLS), 465 (TLS), 25 (plaintext), 1025 (Mailpit)
 	Username    string // empty = no auth
 	Password    string
+	Security    string // auto, ssl, starttls
 	FromAddress string // noreply@rawdrive.in - the envelope MAIL FROM
 	FromName    string // "RawDrive", optional display name
 }
@@ -75,17 +76,15 @@ type SettingsReader interface {
 // (backend/internal/database/migrations/039_platform_settings.up.sql):
 //
 //	email.smtp_host, email.smtp_port, email.smtp_user,
-//	email.smtp_password, email.smtp_from
+//	email.smtp_password, email.smtp_from, email.smtp_security,
+//	email.smtp_from_name
 //
 // Env vars follow the names used by the project's .env file (which
 // differs slightly from the DB keys for historical reasons - the
 // env uses SMTP_USERNAME, the DB uses smtp_user):
 //
-//	SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM
-//
-// SMTP_FROM_NAME is an optional env-only override for the display
-// name in the From header. No platform_settings key exists for it;
-// leave it unset to default to "RawDrive".
+//	SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM,
+//	SMTP_SECURITY, SMTP_FROM_NAME
 func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, error) {
 	get := func(dbKey, envName string) (string, error) {
 		if reader != nil {
@@ -120,8 +119,10 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 	if err != nil {
 		return nil, err
 	}
-	// smtp_from_name has no DB seed; env-only. The empty string
-	// path below falls back to "RawDrive" if unset.
+	security, err := get("smtp_security", "SMTP_SECURITY")
+	if err != nil {
+		return nil, err
+	}
 	fromName, err := get("smtp_from_name", "SMTP_FROM_NAME")
 	if err != nil {
 		return nil, err
@@ -137,6 +138,10 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 	if err != nil {
 		return nil, fmt.Errorf("invalid SMTP_PORT %q: %w", portStr, err)
 	}
+	security, err = normalizeSMTPSecurity(security)
+	if err != nil {
+		return nil, err
+	}
 	if fromName == "" {
 		fromName = "RawDrive"
 	}
@@ -145,17 +150,17 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 		Port:        port,
 		Username:    username,
 		Password:    password,
+		Security:    security,
 		FromAddress: fromAddr,
 		FromName:    fromName,
 	}, nil
 }
 
-// Mailer is the minimal SMTP surface this package uses. It matches
-// the signature of net/smtp.SendMail exactly so the default value
-// can be assigned without a wrapper. Tests substitute a capturing
-// function to assert on the composed message without opening a
-// network socket.
-type Mailer func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+// Mailer is the minimal SMTP surface this package uses. Tests
+// substitute a capturing function to assert on the composed message
+// without opening a network socket; production uses sendSMTP, which
+// chooses implicit TLS from the loaded config.
+type Mailer func(cfg *SMTPConfig, to []string, msg []byte) error
 
 type configLoader func(ctx context.Context) (*SMTPConfig, error)
 
@@ -183,38 +188,57 @@ func resolveConfig(ctx context.Context, cfg *SMTPConfig, loader configLoader) (*
 }
 
 func sendConfigured(mailer Mailer, cfg *SMTPConfig, to string, msg []byte) error {
-	return mailer(
-		fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		smtpAuth(cfg),
-		cfg.FromAddress,
-		[]string{to},
-		msg,
-	)
+	if mailer == nil {
+		mailer = defaultMailer
+	}
+	return mailer(cfg, []string{to}, msg)
 }
 
 // defaultMailer is the production sender. Assigned as a var rather
 // than a const so tests can patch the package-level default if they
 // ever need to (though the typical path is to inject via the struct
 // field in the test, which is what the current tests do).
-var defaultMailer Mailer = sendMail
+var defaultMailer Mailer = sendSMTP
 
-// sendMail preserves net/smtp.SendMail behavior for plaintext and
+// sendSMTP preserves net/smtp.SendMail behavior for plaintext and
 // STARTTLS providers, and adds the implicit-TLS path required by
-// SMTPS providers on port 465.
-func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-	host, implicitTLS := implicitTLSHost(addr)
-	if !implicitTLS {
-		return smtp.SendMail(addr, a, from, to, msg)
+// SMTPS providers. Explicit smtp_security settings win; "auto"
+// preserves the conventional port-465 implicit TLS behavior.
+func sendSMTP(cfg *SMTPConfig, to []string, msg []byte) error {
+	addr := smtpAddr(cfg)
+	auth := smtpAuth(cfg)
+	if usesImplicitTLS(cfg) {
+		return sendMailImplicitTLS(cfg.Host, addr, auth, cfg.FromAddress, to, msg)
 	}
-	return sendMailImplicitTLS(host, addr, a, from, to, msg)
+	return smtp.SendMail(addr, auth, cfg.FromAddress, to, msg)
 }
 
-func implicitTLSHost(addr string) (string, bool) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", false
+func smtpAddr(cfg *SMTPConfig) string {
+	return net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+}
+
+func normalizeSMTPSecurity(v string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "auto":
+		return "auto", nil
+	case "ssl", "tls", "implicit_tls", "implicit-tls", "smtps":
+		return "ssl", nil
+	case "starttls", "start_tls", "start-tls":
+		return "starttls", nil
+	default:
+		return "", fmt.Errorf("invalid SMTP_SECURITY %q: expected auto, ssl, or starttls", v)
 	}
-	return host, port == "465"
+}
+
+func usesImplicitTLS(cfg *SMTPConfig) bool {
+	switch strings.ToLower(strings.TrimSpace(cfg.Security)) {
+	case "ssl":
+		return true
+	case "starttls":
+		return false
+	default:
+		return cfg.Port == 465
+	}
 }
 
 func sendMailImplicitTLS(host, addr string, a smtp.Auth, from string, to []string, msg []byte) error {
@@ -344,7 +368,7 @@ func smtpAuth(cfg *SMTPConfig) smtp.Auth {
 func composeOTPMessage(cfg *SMTPConfig, to, code string) []byte {
 	var b strings.Builder
 	writeFromHeader(&b, cfg)
-	fmt.Fprintf(&b, "To: <%s>\r\n", to)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
 	b.WriteString("Subject: Your RawDrive verification code\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
@@ -359,7 +383,7 @@ func composeOTPMessage(cfg *SMTPConfig, to, code string) []byte {
 func composeInvitationMessage(cfg *SMTPConfig, to, inviteLink string) []byte {
 	var b strings.Builder
 	writeFromHeader(&b, cfg)
-	fmt.Fprintf(&b, "To: <%s>\r\n", to)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
 	b.WriteString("Subject: You've been invited to a RawDrive workspace\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
@@ -373,9 +397,16 @@ func composeInvitationMessage(cfg *SMTPConfig, to, inviteLink string) []byte {
 // writeFromHeader emits the RFC 5322 From header, preferring the
 // "Display Name <addr@host>" form when FromName is set.
 func writeFromHeader(b *strings.Builder, cfg *SMTPConfig) {
-	if cfg.FromName != "" {
-		fmt.Fprintf(b, "From: %q <%s>\r\n", cfg.FromName, cfg.FromAddress)
+	fromAddress := sanitizeHeaderValue(cfg.FromAddress)
+	fromName := sanitizeHeaderValue(cfg.FromName)
+	if fromName != "" {
+		fmt.Fprintf(b, "From: %q <%s>\r\n", fromName, fromAddress)
 		return
 	}
-	fmt.Fprintf(b, "From: <%s>\r\n", cfg.FromAddress)
+	fmt.Fprintf(b, "From: <%s>\r\n", fromAddress)
+}
+
+func sanitizeHeaderValue(value string) string {
+	value = strings.NewReplacer("\r", " ", "\n", " ").Replace(value)
+	return strings.Join(strings.Fields(value), " ")
 }

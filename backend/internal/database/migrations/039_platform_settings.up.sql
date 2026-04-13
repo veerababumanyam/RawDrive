@@ -45,5 +45,7 @@ INSERT INTO platform_settings (category, key, value, is_secret, description) VAL
   ('email', 'smtp_port', '465', false, 'SMTP server port'),
   ('email', 'smtp_user', '', false, 'SMTP username'),
   ('email', 'smtp_password', '', true, 'SMTP password (encrypted)'),
-  ('email', 'smtp_from', 'noreply@rawdrive.in', false, 'Default sender email')
+  ('email', 'smtp_security', 'ssl', false, 'SMTP security mode: auto, ssl, or starttls'),
+  ('email', 'smtp_from', 'noreply@rawdrive.in', false, 'Default sender email'),
+  ('email', 'smtp_from_name', 'RawDrive', false, 'Default sender display name')
 ON CONFLICT (category, key) DO NOTHING;

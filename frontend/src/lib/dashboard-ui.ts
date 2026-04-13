@@ -59,7 +59,21 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 export function getStorageBackedUrl(url: string | undefined | null, token?: string | null): string {
   if (!url) return "";
 
-  const absoluteUrl = url.startsWith("/storage/") ? `${API_BASE}${url}` : url;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:") ||
+    url.startsWith("blob:")
+  ) {
+    return url;
+  }
+
+  if (url.startsWith("/") && !url.startsWith("/storage/")) {
+    return url;
+  }
+
+  const storagePath = url.startsWith("/storage/") ? url : `/storage/${url.replace(/^\/+/, "")}`;
+  const absoluteUrl = `${API_BASE}${storagePath}`;
   if (!token || !absoluteUrl.includes("/storage/") || absoluteUrl.includes("token=")) {
     return absoluteUrl;
   }
