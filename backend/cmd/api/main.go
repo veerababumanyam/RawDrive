@@ -32,6 +32,7 @@ import (
 	"github.com/rawdrive/backend/internal/scheduler"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
+	streamingrate "github.com/rawdrive/backend/internal/streaming/rate"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
 	teamPkg "github.com/rawdrive/backend/internal/team"
 	"github.com/rawdrive/backend/internal/user"
@@ -1231,6 +1232,12 @@ func main() {
 		// overhead.
 		handler.RegisterAdminSettingsRoutes(api, platformSettingsRepo)
 		log.Println("Admin: Platform settings CRUD registered (storage, auth, payments, ai, email)")
+
+		// M31 / F-014 E103-S1: super-admin streaming package + rate-card CRUD.
+		// Mounts under /api/v1/admin/streaming/* with RequirePlatformRole("super_admin").
+		rateHandler := streamingrate.NewHandler(streamingrate.NewService(dbPool))
+		streamingrate.RegisterAdminStreamingRoutes(api, rateHandler)
+		log.Println("M31/F-014: Admin streaming package + rate-card CRUD registered")
 
 		// F-006 Part A (audit 2026-04-10): replace the JWT service's
 		// ephemeral in-memory RSA signing key with one persisted through

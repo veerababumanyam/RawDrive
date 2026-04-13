@@ -104,7 +104,21 @@ type ClientProfileResponse struct {
 	Projects        []ProfileProject `json:"projects"`
 	Deals           []ProfileDeal    `json:"deals"`
 	Events          []ProfileEvent   `json:"events"`
+	Streams         []ProfileStream  `json:"streams"`
 	LifetimeRevenue int64            `json:"lifetime_revenue_paisa"`
+}
+
+// ProfileStream is one entry in the client-profile streams aggregator.
+// M31 / E102-S3 — live streams surface alongside galleries/invoices/deals/events.
+type ProfileStream struct {
+	ID          uuid.UUID  `json:"id"`
+	Title       string     `json:"title"`
+	LiveState   string     `json:"live_state"`
+	ReplayState string     `json:"replay_state"`
+	ScheduledAt *time.Time `json:"scheduled_at"`
+	StartedAt   *time.Time `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at"`
+	ReplayURL   *string    `json:"replay_url"`
 }
 
 // TimelineEntry represents one chronological event in the client timeline.
@@ -233,6 +247,27 @@ func (h *ClientProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// 5b. Linked streams (M31 / F-014 E102-S3).
+	streamRows, err := h.db.Query(ctx, `
+		SELECT id, title, live_state, replay_state, scheduled_at, started_at, ended_at, replay_url
+		FROM streams
+		WHERE workspace_id = $2
+		  AND (client_id = $1 OR contact_id = $1)
+		ORDER BY COALESCE(scheduled_at, started_at, created_at) DESC`,
+		contactID, workspaceID)
+	if err == nil {
+		defer streamRows.Close()
+		for streamRows.Next() {
+			var s ProfileStream
+			if scanErr := streamRows.Scan(
+				&s.ID, &s.Title, &s.LiveState, &s.ReplayState,
+				&s.ScheduledAt, &s.StartedAt, &s.EndedAt, &s.ReplayURL,
+			); scanErr == nil {
+				resp.Streams = append(resp.Streams, s)
+			}
+		}
+	}
+
 	// 6. Linked galleries. M26 uses direct contact/project links first and
 	// keeps existing email-derived activity as a fallback.
 	resp.Galleries = h.loadLinkedGalleries(ctx, workspaceID, contactID, c.Email)
@@ -247,6 +282,9 @@ func (h *ClientProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 	}
 	if resp.Events == nil {
 		resp.Events = []ProfileEvent{}
+	}
+	if resp.Streams == nil {
+		resp.Streams = []ProfileStream{}
 	}
 
 	// 7. Lifetime revenue: sum of paid invoices for this contact.
