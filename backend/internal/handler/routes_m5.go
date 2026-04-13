@@ -98,6 +98,7 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 
 	// Messaging routes (all authenticated)
 	r.Route("/api/v1/messages", func(r chi.Router) {
+		r.Get("/", capabilityIndex("messages", []string{"channels", "channels/{channelId}/messages", "search"}))
 		r.Get("/channels", messagingHandler.ListChannels)
 		r.Post("/channels", messagingHandler.CreateChannel)
 		r.Get("/channels/{channelId}/messages", messagingHandler.GetMessages)

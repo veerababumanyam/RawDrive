@@ -181,6 +181,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	// M11: Album detail routes
 	if albumHandler != nil {
 		r.Route("/api/v1/albums", func(r chi.Router) {
+			r.Get("/", capabilityIndex("albums", []string{"{id}", "{id}/breadcrumb", "{id}/assets"}))
 			r.Get("/{id}", albumHandler.GetByID)
 			r.Delete("/{id}", albumHandler.Delete)
 			r.Get("/{id}/breadcrumb", albumHandler.Breadcrumb)
@@ -198,6 +199,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	}
 
 	r.Route("/api/v1/dashboard", func(r chi.Router) {
+		r.Get("/", capabilityIndex("dashboard", []string{"gallery-activity"}))
 		r.Get("/gallery-activity", dashboardHandler.GetGalleryActivity)
 	})
 

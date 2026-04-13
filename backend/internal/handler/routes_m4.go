@@ -103,6 +103,7 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 
 	// Billing routes
 	r.Route("/api/v1/billing", func(r chi.Router) {
+		r.Get("/", capabilityIndex("billing", []string{"invoices", "packages", "reports"}))
 		r.Route("/invoices", func(r chi.Router) {
 			r.Post("/", invoiceHandler.Create)
 			r.Get("/", invoiceHandler.List)
@@ -133,6 +134,7 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 	})
 
 	r.Route("/api/v1/reports", func(r chi.Router) {
+		r.Get("/", capabilityIndex("reports", []string{"gstr1"}))
 		r.Get("/gstr1", gstReportHandler.GSTR1)
 	})
 
@@ -161,6 +163,7 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 
 	// Calendar routes
 	r.Route("/api/v1/calendar", func(r chi.Router) {
+		r.Get("/", capabilityIndex("calendar", []string{"events", "export.ics"}))
 		r.Route("/events", func(r chi.Router) {
 			r.Post("/", calendarHandler.CreateEvent)
 			r.Get("/", calendarHandler.ListEvents)
