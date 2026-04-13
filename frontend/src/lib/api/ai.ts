@@ -267,3 +267,37 @@ export async function getJob(token: string, jobId: string): Promise<AIJob> {
   if (!res.ok) throw new Error(`Get job failed: ${res.status}`);
   return res.json();
 }
+
+// ---- AI Curation / Culling (M38 E99-S1) ----
+
+export interface CullingSuggestion {
+  asset_id: string;
+  score: number;
+  recommendation: "keep" | "remove" | "review";
+  reason?: string;
+}
+
+export async function triggerCulling(
+  token: string,
+  galleryId: string,
+  topPercent = 70,
+): Promise<AIJob> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/cull`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ gallery_id: galleryId, top_percent: topPercent }),
+  });
+  if (!res.ok) throw new Error(`Trigger culling failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getCullingSuggestions(
+  token: string,
+  jobId: string,
+): Promise<{ suggestions: CullingSuggestion[]; total: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/cull/${jobId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Get culling suggestions failed: ${res.status}`);
+  return res.json();
+}

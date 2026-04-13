@@ -34,6 +34,8 @@ import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 import { GalleryShareCenter } from "@/components/gallery/gallery-share-center";
 import { GalleryPublishChecklist } from "@/components/gallery/gallery-publish-checklist";
+import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
+import { SalesContinuityPanel } from "@/components/gallery/sales-continuity-panel";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -854,19 +856,21 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
-          <div id="delivery" className="surface-panel space-y-2 p-5">
-            <h2 className="text-sm font-semibold text-text-primary">Delivery continuity</h2>
-            <p className="text-xs leading-relaxed text-text-secondary">
-              Downloads, proofing exports, and hand-off status stay attached to this gallery workspace.
-            </p>
-          </div>
+          {token && (
+            <DeliveryContinuityPanel
+              galleryId={gallery.id}
+              token={token}
+              selectedCount={(selectionCounts.selected || 0) + (selectionCounts.approved || 0)}
+              totalCount={assets.length}
+            />
+          )}
 
-          <div id="sales" className="surface-panel space-y-2 p-5">
-            <h2 className="text-sm font-semibold text-text-primary">Sales continuity</h2>
-            <p className="text-xs leading-relaxed text-text-secondary">
-              Linked invoices and commerce activity should roll up here instead of becoming separate sidebar tracks.
-            </p>
-          </div>
+          <SalesContinuityPanel
+            invoiceId={gallery.invoice_id}
+            dealId={gallery.deal_id}
+            projectId={gallery.project_id}
+            cartCount={0}
+          />
 
           <div className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
