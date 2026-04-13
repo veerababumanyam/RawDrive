@@ -14,6 +14,7 @@ type M4Dependencies struct {
 	LeadRepo           *repository.LeadRepo
 	ContactRepo        *repository.ContactRepo
 	DealRepo           *repository.DealRepo
+	ProjectRepo        *repository.StudioProjectRepo
 	InvoiceRepo        *repository.InvoiceRepo
 	PaymentRepo        *repository.PaymentRepo
 	ServicePackageRepo *repository.ServicePackageRepo
@@ -28,9 +29,13 @@ type M4Dependencies struct {
 
 // RegisterM4Routes registers all M4 (Business Operations) routes.
 func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
+	if deps.ProjectRepo == nil && deps.DB != nil {
+		deps.ProjectRepo = repository.NewStudioProjectRepo(deps.DB)
+	}
 	leadHandler := NewLeadHandler(deps.LeadRepo).WithNotificationDispatcher(deps.NotificationDispatcher)
 	contactHandler := NewContactHandler(deps.ContactRepo)
-	dealHandler := NewDealHandler(deps.DealRepo)
+	dealHandler := NewDealHandler(deps.DealRepo).WithProjectRepo(deps.ProjectRepo)
+	projectHandler := NewStudioProjectHandler(deps.ProjectRepo, deps.EventRepo, deps.InvoiceRepo, deps.ContractRepo)
 	invoiceHandler := NewInvoiceHandler(deps.InvoiceRepo).WithPDFService(deps.PDFService)
 	paymentHandler := NewPaymentHandler(deps.PaymentRepo, deps.InvoiceRepo)
 	packageHandler := NewServicePackageHandler(deps.ServicePackageRepo)
@@ -73,6 +78,19 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 			r.Get("/", dealHandler.List)
 			r.Get("/{id}", dealHandler.GetByID)
 			r.Put("/{id}", dealHandler.Update)
+		})
+
+		// Studio Projects (M26): canonical photographer job aggregate.
+		r.Route("/projects", func(r chi.Router) {
+			r.Post("/", projectHandler.Create)
+			r.Get("/", projectHandler.List)
+			r.Get("/{id}", projectHandler.GetAggregate)
+			r.Patch("/{id}", projectHandler.Update)
+			r.Put("/{id}", projectHandler.Update)
+			r.Post("/{id}/bookings", projectHandler.CreateBooking)
+			r.Post("/{id}/invoices", projectHandler.CreateInvoice)
+			r.Post("/{id}/contracts", projectHandler.CreateContract)
+			r.Post("/{id}/galleries", projectHandler.LinkGallery)
 		})
 
 		// Follow-ups

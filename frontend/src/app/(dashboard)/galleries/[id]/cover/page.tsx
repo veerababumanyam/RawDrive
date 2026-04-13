@@ -3,9 +3,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getGallery, listGalleryAssets, type Gallery } from "@/lib/api/galleries";
+import { getGallery, listGalleryAssets, updateGalleryCover, type Gallery } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
+import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 type AspectRatio = "16:9" | "4:3" | "1:1";
 
@@ -99,17 +100,15 @@ export default function CoverPhotoPage() {
       return;
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
     setSaving(true);
     setSaveError("");
     setSaveMessage("");
     try {
-      const res = await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/cover`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ asset_id: state.assetId, focal_point: state.focalPoint, aspect_ratio: state.aspectRatio }),
+      await updateGalleryCover(token, galleryId, {
+        asset_id: state.assetId,
+        focal_point: state.focalPoint,
+        aspect_ratio: state.aspectRatio,
       });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
       setGallery((g) => g ? { ...g, cover_asset_id: state.assetId || undefined } : g);
       setSaveMessage("Cover saved.");
     } catch (err) {
@@ -137,7 +136,11 @@ export default function CoverPhotoPage() {
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-64px)]">
+      <div className="px-8 pt-4">
+        <GalleryWorkspaceNav galleryId={galleryId} />
+      </div>
+
+      <div className="flex h-[calc(100vh-136px)]">
         {/* Left: Crop Editor */}
         <div className="w-[55%] p-8 flex flex-col">
           {/* Aspect ratio selector */}

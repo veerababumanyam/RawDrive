@@ -8,7 +8,7 @@ import { AIDesignSuggest } from "@/components/gallery/ai-design-suggest";
 import { useDesignHistory } from "@/hooks/use-design-history";
 import { useDesignLatency, LATENCY_BUDGET_MS } from "@/hooks/use-design-latency";
 import { getStoredAccessToken } from "@/lib/auth";
-import { listGalleryAssets } from "@/lib/api/galleries";
+import { listGalleryAssets, updateGalleryDesign } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
@@ -240,14 +240,8 @@ export default function GalleryDesignStudioPage() {
   const handlePublish = async () => {
     setPublishStatus("saving");
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
       const token = getStoredAccessToken();
-      const res = await fetch(`${apiUrl}/api/v1/galleries/${galleryId}/design`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ ...config, version: config.version + 1 }),
-      });
-      if (!res.ok) throw new Error("Publish failed");
+      await updateGalleryDesign(token, galleryId, { ...config, version: config.version + 1 });
       wrappedDispatch({ type: "LOAD", payload: { ...config, version: config.version + 1 } });
       discard();
       setPublishStatus("success");

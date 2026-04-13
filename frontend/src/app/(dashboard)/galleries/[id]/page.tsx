@@ -3,20 +3,23 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getAsset, type Asset } from "@/lib/api/assets";
+import { bulkAssetAction, getAsset, type Asset } from "@/lib/api/assets";
 import {
   addAlbumAssets,
   createGalleryAlbum,
   getGallery,
+  getGalleryWorkspaceSummary,
   listAlbumAssets,
   listGalleryAlbums,
   listGalleryAssets,
   updateGallery,
+  updateGalleryCover,
   type Gallery,
   type GalleryAlbum,
   type GalleryAsset,
+  type GalleryWorkspaceSummary,
 } from "@/lib/api/galleries";
-import { listProofingSelections, createComment, type ProofingSelection } from "@/lib/api/proofing";
+import { listProofingSelections, createComment, exportProofingSelectionsCsv, type ProofingSelection } from "@/lib/api/proofing";
 import {
   galleryStatusClasses,
   galleryTypeClasses,
@@ -28,6 +31,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 import { FaceFilter } from "@/components/gallery/face-filter";
 import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
+import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -36,6 +40,7 @@ type GalleryAssetRecord = GalleryAsset & {
 export default function GalleryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
+  const [workspaceSummary, setWorkspaceSummary] = useState<GalleryWorkspaceSummary | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,11 +84,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     const t = getStoredAccessToken();
     if (!t) return;
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/assets/bulk`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", asset_ids: Array.from(selectedAssetIds) }),
-      });
+      await bulkAssetAction(t, "delete", Array.from(selectedAssetIds));
       clearSelection();
       window.location.reload();
     } catch (err) {
@@ -108,10 +109,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setError("");
 
       try {
-        const [galleryData, galleryAssets, gallerySelections] = await Promise.all([
+        const [galleryData, galleryAssets, gallerySelections, summary] = await Promise.all([
           getGallery(token, id),
           listGalleryAssets(token, id),
           listProofingSelections(token, id).catch((err) => { console.warn("Failed to load proofing selections:", err?.message); return []; }),
+          getGalleryWorkspaceSummary(token, id).catch(() => null),
         ]);
 
         const hydratedAssets = await Promise.all(
@@ -130,12 +132,14 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         }
 
         setGallery(galleryData);
+        setWorkspaceSummary(summary);
         setAssets(hydratedAssets);
         setSelections(gallerySelections ?? []);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load gallery.");
           setGallery(null);
+          setWorkspaceSummary(null);
           setAssets([]);
           setSelections([]);
         }
@@ -277,7 +281,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   }, [activeAlbum, albumAssetIdsByAlbum, assets, faceFilterIds, proofingFilterAssetIds]);
 
   // ──────── Upload Integration ────────
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
   const token = getStoredAccessToken();
   const upload = useUpload(apiUrl, token);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -337,6 +341,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+      <GalleryWorkspaceNav galleryId={gallery.id} />
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <Link href="/galleries" className="btn-tertiary px-0 py-0 text-sm">
@@ -467,7 +473,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div id="share" className="flex flex-wrap gap-3">
           <Link href={`/galleries/${gallery.id}/proofing`} className="btn-primary px-4 py-2.5 text-sm">
             Review proofing
           </Link>
@@ -480,12 +486,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               const t = getStoredAccessToken();
               if (!t) return;
               try {
-                const res = await fetch(
-                  `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${gallery.id}/proofing/export.csv`,
-                  { headers: { Authorization: `Bearer ${t}` } },
-                );
-                if (!res.ok) throw new Error(`Export failed: ${res.status}`);
-                const blob = await res.blob();
+                const blob = await exportProofingSelectionsCsv(t, gallery.id);
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
@@ -566,7 +567,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          <div className="surface-panel space-y-4 p-5">
+          <div id="photos" className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Assets</h2>
               <div className="flex items-center gap-3">
@@ -600,7 +601,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            <div className="rounded-xl border border-border-subtle bg-surface-sunken/40 p-4 space-y-3">
+            <div id="albums" className="rounded-xl border border-border-subtle bg-surface-sunken/40 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-text-primary">Sub-galleries</h3>
@@ -802,6 +803,68 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         <aside className="space-y-4">
           <div className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Linked CRM</p>
+                <h2 className="mt-1 text-lg font-semibold text-text-primary">Client workspace</h2>
+              </div>
+              <span className="status-badge status-badge--accent">
+                {workspaceSummary?.lifecycle_state || gallery.status || "draft"}
+              </span>
+            </div>
+
+            {workspaceSummary?.primary_contact ? (
+              <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                <p className="font-medium text-text-primary">{workspaceSummary.primary_contact.name}</p>
+                {workspaceSummary.primary_contact.email && (
+                  <p className="mt-1 text-sm text-text-secondary">{workspaceSummary.primary_contact.email}</p>
+                )}
+                {workspaceSummary.primary_contact.phone && (
+                  <p className="text-sm text-text-secondary">{workspaceSummary.primary_contact.phone}</p>
+                )}
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <Link href={`/crm/contacts/${workspaceSummary.primary_contact.id}`} className="btn-tertiary px-3 py-2 text-center">
+                    Client profile
+                  </Link>
+                  <Link href={`/billing?create=true&client=${workspaceSummary.primary_contact.id}`} className="btn-tertiary px-3 py-2 text-center">
+                    Invoice
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                <p className="text-sm text-text-secondary">
+                  No client is linked yet. Link one from the gallery list or settings so proofing, invoices, and delivery history roll up into CRM.
+                </p>
+                <Link href={`/galleries?create=true`} className="mt-3 inline-flex text-xs text-accent-primary hover:underline">
+                  Create a client-linked gallery
+                </Link>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-text-secondary">
+              <span>Project {gallery.project_id ? "linked" : "not linked"}</span>
+              <span>Event {gallery.event_id ? "linked" : "not linked"}</span>
+              <span>Deal {gallery.deal_id ? "linked" : "not linked"}</span>
+              <span>Invoice {gallery.invoice_id ? "linked" : "not linked"}</span>
+            </div>
+          </div>
+
+          <div id="delivery" className="surface-panel space-y-2 p-5">
+            <h2 className="text-sm font-semibold text-text-primary">Delivery continuity</h2>
+            <p className="text-xs leading-relaxed text-text-secondary">
+              Downloads, proofing exports, and hand-off status stay attached to this gallery workspace.
+            </p>
+          </div>
+
+          <div id="sales" className="surface-panel space-y-2 p-5">
+            <h2 className="text-sm font-semibold text-text-primary">Sales continuity</h2>
+            <p className="text-xs leading-relaxed text-text-secondary">
+              Linked invoices and commerce activity should roll up here instead of becoming separate sidebar tracks.
+            </p>
+          </div>
+
+          <div className="surface-panel space-y-4 p-5">
+            <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Proofing status</h2>
               {proofingFilter && (
                 <button
@@ -892,17 +955,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 const t = getStoredAccessToken();
                 if (!t || !gallery) return;
                 try {
-                  const res = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/galleries/${gallery.id}/cover`,
-                    {
-                      method: "PUT",
-                      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
-                      body: JSON.stringify({ template: e.target.value }),
-                    },
-                  );
-                  if (res.ok) {
-                    setGallery({ ...gallery, cover_template: e.target.value });
-                  }
+                  await updateGalleryCover(t, gallery.id, { template: e.target.value });
+                  setGallery({ ...gallery, cover_template: e.target.value });
                 } catch (err) {
                   console.error("Failed to update cover template:", err);
                 }

@@ -17,6 +17,16 @@ export interface AnalyticsDaily {
   shares: number;
 }
 
+export interface TopGalleryAssetAnalytics {
+  id: string;
+  gallery_id: string;
+  asset_id: string;
+  views: number;
+  downloads: number;
+  favorites: number;
+  last_viewed_at?: string;
+}
+
 export async function getAnalyticsSummary(token: string, galleryId: string, days = 30): Promise<AnalyticsSummary> {
   const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/analytics/summary?days=${days}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -33,5 +43,23 @@ export async function getAnalyticsDaily(token: string, galleryId: string, days =
   const body = await res.json();
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.analyticsdailys)) return body.analyticsdailys;
+  return [];
+}
+
+export async function getTopGalleryAssets(
+  token: string,
+  galleryId: string,
+  metric: "views" | "downloads",
+  days = 30,
+  limit = 10,
+): Promise<TopGalleryAssetAnalytics[]> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/galleries/${galleryId}/analytics/top-${metric}?days=${days}&limit=${limit}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`Failed to get top gallery assets: ${res.status}`);
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.data)) return body.data;
   return [];
 }

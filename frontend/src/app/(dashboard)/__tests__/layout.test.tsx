@@ -139,7 +139,8 @@ describe("DashboardLayout role-based sidebar", () => {
     // Key nav items
     expect(screen.getByRole("link", { name: /Galleries/i })).toHaveAttribute("href", "/galleries");
     expect(screen.getByRole("link", { name: /AI Studio/i })).toHaveAttribute("href", "/ai");
-    expect(screen.getByRole("link", { name: /Invoices/i })).toHaveAttribute("href", "/billing");
+    expect(screen.getByRole("link", { name: /Studio CRM/i })).toHaveAttribute("href", "/crm");
+    expect(screen.queryByRole("link", { name: /^Invoices$/i })).not.toBeInTheDocument();
   });
 
   it("renders AdminSidebar with 8 items for admin", async () => {

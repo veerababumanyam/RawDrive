@@ -12,6 +12,8 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import { useDataTable } from "@/hooks/use-data-table";
 import { TableToolbar } from "@/components/ui/table-toolbar";
+import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { CONTACT_TYPE_OPTIONS } from "@/lib/crm-taxonomy";
 
 type ContactRow = Contact & Record<string, unknown>;
 
@@ -107,6 +109,8 @@ export default function ContactsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <CRMSecondaryNav />
+
       {error && (
         <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
           {error}
@@ -173,7 +177,7 @@ export default function ContactsPage() {
         searchPlaceholder="Search by name, email, or phone..."
         searchValue={table.searchQuery}
         onSearchChange={table.setSearchQuery}
-        filters={[{ key: "contact_type", label: "Type", options: ["client", "lead", "vendor"] }]}
+        filters={[{ key: "contact_type", label: "Type", options: CONTACT_TYPE_OPTIONS.map((option) => option.value) }]}
         getFilterValue={table.getColumnFilterValue}
         onFilterChange={table.setColumnFilter}
         sortOptions={[
@@ -220,9 +224,9 @@ export default function ContactsPage() {
               onChange={(e) => setForm({ ...form, contact_type: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
             >
-              <option value="client">Client</option>
-              <option value="lead">Lead</option>
-              <option value="vendor">Vendor</option>
+              {CONTACT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </div>
           <div className="flex gap-2 justify-end">

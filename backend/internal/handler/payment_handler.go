@@ -41,6 +41,11 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	p.WorkspaceID = workspaceID
 	p.InvoiceID = invoiceID
+	if p.ProjectID == nil {
+		if inv, invErr := h.invoiceRepo.GetByID(r.Context(), workspaceID, invoiceID); invErr == nil {
+			p.ProjectID = inv.ProjectID
+		}
+	}
 
 	if p.AmountPaisa <= 0 {
 		http.Error(w, `{"error":"amount must be positive"}`, http.StatusBadRequest)

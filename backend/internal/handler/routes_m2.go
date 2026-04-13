@@ -16,6 +16,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	assetHandler := NewAssetHandler(deps.AssetService, deps.UploadService).
 		WithValidation(deps.UploadValidationSvc)
 	galleryHandler := NewGalleryHandler(deps.GalleryService)
+	if deps.Pool != nil {
+		galleryHandler.WithPool(deps.Pool)
+	}
 	// M21: wire face scan deps when available
 	if deps.FaceSvc != nil && deps.AssetService != nil && deps.JobRepo != nil {
 		galleryHandler.WithAIDeps(deps.FaceSvc, deps.AssetService, deps.JobRepo)
@@ -33,6 +36,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	if deps.StorageAccountingSvc != nil {
 		storageAnalyticsHandler = NewStorageAnalyticsHandler(deps.StorageAccountingSvc)
 	}
+	dashboardHandler := NewDashboardHandler(deps.Pool)
 	var processingStatusHandler *ProcessingStatusHandler
 	if deps.AssetRepo != nil {
 		processingStatusHandler = NewProcessingStatusHandler(deps.AssetRepo)
@@ -78,6 +82,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/{id}", galleryHandler.GetByID)
 		r.Put("/{id}", galleryHandler.Update)
 		r.Delete("/{id}", galleryHandler.SoftDelete)
+		r.Get("/{id}/workspace-summary", galleryHandler.WorkspaceSummary)
+		r.Patch("/{id}/client-link", galleryHandler.LinkRelationships)
 		r.Post("/{id}/duplicate", galleryHandler.DuplicateGallery)
 		r.Post("/{id}/assets", galleryHandler.AddAsset)
 		r.Delete("/{id}/assets/{assetId}", galleryHandler.RemoveAsset)
@@ -97,8 +103,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 		// M11: Albums (sub-galleries)
 		if albumHandler != nil {
-			r.Get("/{id}/albums", albumHandler.List)
-			r.Post("/{id}/albums", albumHandler.Create)
+			r.Get("/{galleryId}/albums", albumHandler.List)
+			r.Post("/{galleryId}/albums", albumHandler.Create)
 		}
 
 		// M11: Processing retry
@@ -189,6 +195,10 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		})
 	}
 
+	r.Route("/api/v1/dashboard", func(r chi.Router) {
+		r.Get("/gallery-activity", dashboardHandler.GetGalleryActivity)
+	})
+
 	// M12: Design Templates (top-level, not nested under galleries/{id})
 	if deps.DesignTemplateSvc != nil {
 		templateHandler := NewDesignTemplateHandler(deps.DesignTemplateSvc)
@@ -259,12 +269,17 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 	// M14: Analytics routes (includes GAL-FR-185/186/187 breakdowns)
 	if deps.GalleryAnalyticsSvc != nil {
+		if deps.Pool != nil {
+			deps.GalleryAnalyticsSvc.WithAssetAnalyticsRepo(repository.NewGalleryAssetAnalyticsRepo(deps.Pool))
+		}
 		analyticsHandler := NewGalleryAnalyticsHandler(deps.GalleryAnalyticsSvc)
 		r.Get("/api/v1/galleries/{id}/analytics/summary", analyticsHandler.GetSummary)
 		r.Get("/api/v1/galleries/{id}/analytics/daily", analyticsHandler.GetDailyStats)
 		r.Get("/api/v1/galleries/{id}/analytics/devices", analyticsHandler.GetDeviceBreakdown)
 		r.Get("/api/v1/galleries/{id}/analytics/download-velocity", analyticsHandler.GetDownloadVelocity)
 		r.Get("/api/v1/galleries/{id}/analytics/share-channels", analyticsHandler.GetShareChannels)
+		r.Get("/api/v1/galleries/{id}/analytics/top-views", analyticsHandler.GetTopViews)
+		r.Get("/api/v1/galleries/{id}/analytics/top-downloads", analyticsHandler.GetTopDownloads)
 	}
 
 	// M14: Product catalog routes (GAL-FR-155)

@@ -2,14 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { listGalleries, createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
+import { useRouter, useSearchParams } from "next/navigation";
+import { listGalleries, createGallery, deleteGallery, duplicateGallery, type Gallery } from "@/lib/api/galleries";
+import { createContact, listContacts, type Contact } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { galleryStatusClasses, galleryTypeClasses, getAssetPreviewUrl } from "@/lib/dashboard-ui";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { Grid, ListBullet, Trash } from "@/components/icons";
 
 export default function GalleriesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +21,12 @@ export default function GalleriesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState<"proofing" | "delivery">("proofing");
+  const [linkedContactId, setLinkedContactId] = useState("");
+  const [linkedProjectId, setLinkedProjectId] = useState("");
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [creatingClient, setCreatingClient] = useState(false);
   const [creating, setCreating] = useState(false);
   const [titleError, setTitleError] = useState("");
   const [filterType, setFilterType] = useState<string | null>(null);
@@ -62,7 +72,25 @@ export default function GalleriesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(refresh, []);
+  const refreshContacts = () => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    listContacts(token)
+      .then(setContacts)
+      .catch(() => setContacts([]));
+  };
+
+  useEffect(() => {
+    refresh();
+    refreshContacts();
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "true") return;
+    setLinkedContactId(searchParams.get("client") || "");
+    setLinkedProjectId(searchParams.get("project") || "");
+    setShowCreate(true);
+  }, [searchParams]);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) {
@@ -74,15 +102,46 @@ export default function GalleriesPage() {
     setError(null);
     try {
       const token = getStoredAccessToken();
-      await createGallery(token, { title: newTitle.trim(), gallery_type: newType });
+      await createGallery(token, {
+        title: newTitle.trim(),
+        gallery_type: newType,
+        primary_contact_id: linkedContactId || undefined,
+        project_id: linkedProjectId || undefined,
+      });
       setShowCreate(false);
       setNewTitle("");
       setNewType("proofing");
+      setLinkedContactId("");
+      setLinkedProjectId("");
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create gallery");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleCreateClient = async () => {
+    const name = newClientName.trim();
+    if (!name) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setCreatingClient(true);
+    setError(null);
+    try {
+      const contact = await createContact(token, {
+        name,
+        email: newClientEmail.trim() || undefined,
+        contact_type: "client",
+      });
+      setContacts((prev) => [contact, ...prev]);
+      setLinkedContactId(contact.id);
+      setNewClientName("");
+      setNewClientEmail("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create client");
+    } finally {
+      setCreatingClient(false);
     }
   };
 
@@ -132,34 +191,22 @@ export default function GalleriesPage() {
           >
             + New Gallery
           </button>
-          <button
+          <GlassIconButton
             onClick={() => setViewMode("grid")}
-            className={cn(
-              "segmented-control-button h-11 w-11 p-0",
-              viewMode === "grid"
-                ? "segmented-control-button--active"
-                : "segmented-control-button--inactive",
-            )}
-            aria-label="Grid view"
+            variant="accent"
+            active={viewMode === "grid"}
+            label="Grid view"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-            </svg>
-          </button>
-          <button
+            <Grid />
+          </GlassIconButton>
+          <GlassIconButton
             onClick={() => setViewMode("list")}
-            className={cn(
-              "segmented-control-button h-11 w-11 p-0",
-              viewMode === "list"
-                ? "segmented-control-button--active"
-                : "segmented-control-button--inactive",
-            )}
-            aria-label="List view"
+            variant="accent"
+            active={viewMode === "list"}
+            label="List view"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-          </button>
+            <ListBullet />
+          </GlassIconButton>
         </div>
       </div>
 
@@ -243,10 +290,62 @@ export default function GalleriesPage() {
                 <option value="delivery">Delivery — final hand-off</option>
               </select>
             </div>
+            <div className="rounded-xl border border-border-default bg-surface-sunken/40 p-4">
+              <label className="text-xs text-text-tertiary uppercase tracking-wider">Linked client</label>
+              <select
+                value={linkedContactId}
+                onChange={(e) => setLinkedContactId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              >
+                <option value="">No client linked yet</option>
+                {contacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name}{contact.email ? ` - ${contact.email}` : ""}
+                  </option>
+                ))}
+              </select>
+              {linkedProjectId && (
+                <p className="mt-2 text-xs text-text-secondary">
+                  This gallery will also stay attached to project {linkedProjectId.slice(0, 8)}.
+                </p>
+              )}
+              <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <input
+                  type="text"
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                  placeholder="New client name"
+                  className="rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary"
+                />
+                <input
+                  type="email"
+                  value={newClientEmail}
+                  onChange={(e) => setNewClientEmail(e.target.value)}
+                  placeholder="Email optional"
+                  className="rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateClient}
+                  disabled={creatingClient || !newClientName.trim()}
+                  className="btn-tertiary px-3 py-2 text-sm disabled:opacity-50"
+                >
+                  {creatingClient ? "Adding..." : "Add client"}
+                </button>
+              </div>
+            </div>
           </div>
           <div className="flex gap-2 justify-end">
             <button
-              onClick={() => { setShowCreate(false); setNewTitle(""); setTitleError(""); }}
+              onClick={() => {
+                setShowCreate(false);
+                setNewTitle("");
+                setTitleError("");
+                setLinkedContactId("");
+                setLinkedProjectId("");
+                setNewClientName("");
+                setNewClientEmail("");
+              }}
               className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
               disabled={creating}
             >
@@ -342,11 +441,8 @@ export default function GalleriesPage() {
                           e.preventDefault(); e.stopPropagation();
                           const t = getStoredAccessToken(); if (!t) return;
                           try {
-                            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229"}/api/v1/galleries/${g.id}/duplicate`, {
-                              method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
-                              body: JSON.stringify({ title: `${g.title} (Copy)` }),
-                            });
-                            if (res.ok) refresh();
+                            await duplicateGallery(t, g.id, `${g.title} (Copy)`);
+                            refresh();
                           } catch { /* ignore */ }
                         }}
                         className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
@@ -438,15 +534,15 @@ export default function GalleriesPage() {
                     {new Date(g.created_at).toLocaleDateString("en-IN")}
                   </span>
                   {viewMode === "list" && (
-                    <button
+                    <GlassIconButton
                       onClick={(e) => handleDelete(e, g.id)}
-                      className="ml-2 rounded-lg p-1.5 text-text-tertiary hover:text-error hover:bg-error/10 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
-                      title="Delete gallery"
+                      className="ml-2"
+                      size="sm"
+                      variant="danger"
+                      label="Delete gallery"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                      </svg>
-                    </button>
+                      <Trash />
+                    </GlassIconButton>
                   )}
                 </div>
               </Link>

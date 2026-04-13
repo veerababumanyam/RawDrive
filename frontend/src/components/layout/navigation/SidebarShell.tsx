@@ -15,6 +15,7 @@ export interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  activeHrefs?: string[];
 }
 
 export interface NavGroup {
@@ -38,7 +39,7 @@ interface SidebarShellProps {
 export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClose }: SidebarShellProps) {
   const pathname = usePathname();
   // Collect all hrefs to resolve prefix-match collisions (e.g., /crm vs /crm/contacts)
-  const allHrefs = groups.flatMap((g) => g.items.map((i) => i.href));
+  const allHrefs = groups.flatMap((g) => g.items.flatMap((i) => [i.href, ...(i.activeHrefs ?? [])]));
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -107,8 +108,10 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
               {group.items.map((item) => {
                 const Icon = item.icon;
                 // Exact match or prefix match — but only if no sibling is a deeper match
-                const isMatch =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const activeTargets = [item.href, ...(item.activeHrefs ?? [])];
+                const isMatch = activeTargets.some(
+                  (href) => pathname === href || pathname.startsWith(`${href}/`),
+                );
                 const hasDeeperSibling = isMatch && allHrefs.some(
                   (h) => h !== item.href && h.startsWith(`${item.href}/`) && pathname.startsWith(h),
                 );

@@ -117,9 +117,19 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
 		return
 	}
+	var projectID *uuid.UUID
+	if raw := r.URL.Query().Get("project_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			http.Error(w, `{"error":"invalid project_id"}`, http.StatusBadRequest)
+			return
+		}
+		projectID = &id
+	}
 	invoices, err := h.repo.List(r.Context(), repository.InvoiceFilter{
 		WorkspaceID: workspaceID,
 		Status:      r.URL.Query().Get("status"),
+		ProjectID:   projectID,
 		Limit:       50,
 	})
 	if err != nil {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { DocumentText, CalendarDays, ChatBubble, ChevronLeft } from "@/components/icons";
 import { ClientTimeline } from "@/components/crm/client-timeline";
-import { GalleryList, InvoiceList, DealList, BookingList } from "@/components/crm/client-linked-entities";
+import { GalleryList, InvoiceList, ProjectList, BookingList } from "@/components/crm/client-linked-entities";
 
 type Tab = "timeline" | "galleries" | "invoices" | "deals" | "bookings";
 
@@ -118,14 +118,28 @@ export default function ClientDetailPage() {
     );
   }
 
-  const { contact, galleries, invoices, deals, events } = profile;
+  const { contact, galleries, invoices, projects = [], deals, events } = profile;
+  const projectRows = projects.length > 0
+    ? projects
+    : deals.map((deal) => ({
+        id: deal.id,
+        name: deal.title,
+        status: deal.stage === "confirmed" ? "booked" : deal.stage === "completed" ? "delivered" : "quoted",
+        project_type: deal.event_type || "other",
+        event_date: deal.event_date,
+        expected_value_paisa: deal.amount_paisa,
+        booked_value_paisa: deal.amount_paisa,
+        balance_due_paisa: 0,
+        contract_status: "not_started",
+        gallery_status: "not_started",
+      }));
   const token = getStoredAccessToken();
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "timeline", label: "Timeline", count: timeline.length },
     { key: "galleries", label: "Galleries", count: galleries.length },
     { key: "invoices", label: "Invoices", count: invoices.length },
-    { key: "deals", label: "Deals", count: deals.length },
+    { key: "deals", label: "Projects", count: projectRows.length },
     { key: "bookings", label: "Bookings", count: events.length },
   ];
 
@@ -221,6 +235,12 @@ export default function ClientDetailPage() {
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-3 pt-2">
             <button
+              onClick={() => router.push(`/crm/projects?create=true&client=${contactId}`)}
+              className="inline-flex items-center gap-2 rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-sunken min-h-[44px] transition-colors"
+            >
+              Create Project
+            </button>
+            <button
               onClick={() => router.push(`/billing?create=true&client=${contactId}`)}
               className="inline-flex items-center gap-2 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] transition-colors"
             >
@@ -270,8 +290,8 @@ export default function ClientDetailPage() {
                 <p className="text-lg font-semibold text-text-primary">{invoices.length}</p>
               </div>
               <div>
-                <p className="text-xs text-text-tertiary">Deals</p>
-                <p className="text-lg font-semibold text-text-primary">{deals.length}</p>
+                <p className="text-xs text-text-tertiary">Projects</p>
+                <p className="text-lg font-semibold text-text-primary">{projectRows.length}</p>
               </div>
             </div>
             {contact.birthday && (
@@ -336,7 +356,7 @@ export default function ClientDetailPage() {
         )}
         {activeTab === "galleries" && <GalleryList galleries={galleries} token={token} />}
         {activeTab === "invoices" && <InvoiceList invoices={invoices} />}
-        {activeTab === "deals" && <DealList deals={deals} />}
+        {activeTab === "deals" && <ProjectList projects={projectRows} />}
         {activeTab === "bookings" && <BookingList events={events} />}
       </div>
     </div>

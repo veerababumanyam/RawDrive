@@ -4,7 +4,8 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getGallery, type Gallery } from "@/lib/api/galleries";
-import { getAnalyticsSummary, getAnalyticsDaily, type AnalyticsSummary, type AnalyticsDaily } from "@/lib/api/analytics";
+import { getAnalyticsSummary, getAnalyticsDaily, getTopGalleryAssets, type AnalyticsSummary, type AnalyticsDaily } from "@/lib/api/analytics";
+import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -85,6 +86,7 @@ export default function GalleryAnalyticsPage({ params }: { params: Promise<{ id:
         <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
           Back to gallery
         </Link>
+        <GalleryWorkspaceNav galleryId={id} />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-text-primary">Analytics</h1>
@@ -164,12 +166,8 @@ function PerPhotoSection({ title, galleryId, metric, token, days }: {
 
   useEffect(() => {
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    fetch(`${apiUrl}/api/v1/galleries/${galleryId}/analytics/top-${metric}?days=${days}&limit=10`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => setItems(d.data || []))
+    getTopGalleryAssets(token, galleryId, metric, days, 10)
+      .then((data) => setItems(data))
       .catch(() => setItems([]));
   }, [galleryId, metric, token, days]);
 

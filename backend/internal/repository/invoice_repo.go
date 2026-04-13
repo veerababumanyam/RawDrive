@@ -17,6 +17,7 @@ type Invoice struct {
 	WorkspaceID     uuid.UUID       `json:"workspace_id"`
 	StateID         int             `json:"state_id"`
 	ContactID       *uuid.UUID      `json:"contact_id"`
+	ProjectID       *uuid.UUID      `json:"project_id,omitempty"`
 	InvoiceNumber   string          `json:"invoice_number"`
 	InvoiceType     string          `json:"invoice_type"`
 	Status          string          `json:"status"`
@@ -59,6 +60,7 @@ type InvoiceFilter struct {
 	WorkspaceID uuid.UUID
 	Status      string
 	ContactID   *uuid.UUID
+	ProjectID   *uuid.UUID
 	Limit       int
 	Cursor      *time.Time
 }
@@ -71,12 +73,12 @@ func NewInvoiceRepo(db *pgxpool.Pool) *InvoiceRepo {
 	return &InvoiceRepo{DB: db}
 }
 
-const invoiceCols = `id, workspace_id, state_id, contact_id, invoice_number, invoice_type, status, currency, subtotal_paisa, cgst_paisa, sgst_paisa, igst_paisa, total_paisa, amount_paid_paisa, discount_paisa, line_items, due_date, paid_at, notes, created_at, updated_at, place_of_supply_state, place_of_supply_code, amount_in_words, round_off_paisa, quotation_valid_until, credit_note_invoice_id, credit_note_reason, source_package_id`
+const invoiceCols = `id, workspace_id, state_id, contact_id, project_id, invoice_number, invoice_type, status, currency, subtotal_paisa, cgst_paisa, sgst_paisa, igst_paisa, total_paisa, amount_paid_paisa, discount_paisa, line_items, due_date, paid_at, notes, created_at, updated_at, place_of_supply_state, place_of_supply_code, amount_in_words, round_off_paisa, quotation_valid_until, credit_note_invoice_id, credit_note_reason, source_package_id`
 
 func scanInvoice(row pgx.Row) (Invoice, error) {
 	var inv Invoice
 	err := row.Scan(
-		&inv.ID, &inv.WorkspaceID, &inv.StateID, &inv.ContactID,
+		&inv.ID, &inv.WorkspaceID, &inv.StateID, &inv.ContactID, &inv.ProjectID,
 		&inv.InvoiceNumber, &inv.InvoiceType, &inv.Status, &inv.Currency,
 		&inv.SubtotalPaisa, &inv.CGSTPaisa, &inv.SGSTPaisa, &inv.IGSTPaisa,
 		&inv.TotalPaisa, &inv.AmountPaidPaisa, &inv.DiscountPaisa,
@@ -95,8 +97,8 @@ func (r *InvoiceRepo) Create(ctx context.Context, inv *Invoice) error {
 	inv.UpdatedAt = now
 	_, err := r.DB.Exec(ctx, `
 		INSERT INTO invoices (`+invoiceCols+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
-		inv.ID, inv.WorkspaceID, inv.StateID, inv.ContactID,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
+		inv.ID, inv.WorkspaceID, inv.StateID, inv.ContactID, inv.ProjectID,
 		inv.InvoiceNumber, inv.InvoiceType, inv.Status, inv.Currency,
 		inv.SubtotalPaisa, inv.CGSTPaisa, inv.SGSTPaisa, inv.IGSTPaisa,
 		inv.TotalPaisa, inv.AmountPaidPaisa, inv.DiscountPaisa,
@@ -131,6 +133,11 @@ func (r *InvoiceRepo) List(ctx context.Context, f InvoiceFilter) ([]Invoice, err
 		args = append(args, *f.ContactID)
 		idx++
 	}
+	if f.ProjectID != nil {
+		query += fmt.Sprintf(` AND project_id = $%d`, idx)
+		args = append(args, *f.ProjectID)
+		idx++
+	}
 	if f.Cursor != nil {
 		query += fmt.Sprintf(` AND created_at < $%d`, idx)
 		args = append(args, *f.Cursor)
@@ -148,7 +155,7 @@ func (r *InvoiceRepo) List(ctx context.Context, f InvoiceFilter) ([]Invoice, err
 	for rows.Next() {
 		var inv Invoice
 		if err := rows.Scan(
-			&inv.ID, &inv.WorkspaceID, &inv.StateID, &inv.ContactID,
+			&inv.ID, &inv.WorkspaceID, &inv.StateID, &inv.ContactID, &inv.ProjectID,
 			&inv.InvoiceNumber, &inv.InvoiceType, &inv.Status, &inv.Currency,
 			&inv.SubtotalPaisa, &inv.CGSTPaisa, &inv.SGSTPaisa, &inv.IGSTPaisa,
 			&inv.TotalPaisa, &inv.AmountPaidPaisa, &inv.DiscountPaisa,

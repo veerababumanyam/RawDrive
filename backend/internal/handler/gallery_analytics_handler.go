@@ -110,3 +110,35 @@ func (h *GalleryAnalyticsHandler) GetShareChannels(w http.ResponseWriter, r *htt
 	}
 	respondJSON(w, http.StatusOK, points)
 }
+
+// GetTopViews handles GET /galleries/{id}/analytics/top-views.
+func (h *GalleryAnalyticsHandler) GetTopViews(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	points, err := h.analyticsSvc.TopViewed(r.Context(), galleryID, limit)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"data": points})
+}
+
+// GetTopDownloads handles GET /galleries/{id}/analytics/top-downloads.
+func (h *GalleryAnalyticsHandler) GetTopDownloads(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	points, err := h.analyticsSvc.TopDownloaded(r.Context(), galleryID, limit)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"data": points})
+}

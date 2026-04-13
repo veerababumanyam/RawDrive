@@ -1,11 +1,16 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
@@ -22,6 +27,7 @@ type GalleryHandler struct {
 	faceSvc  *ai.FaceService
 	assetSvc *service.AssetService
 	jobRepo  *ai.JobRepo
+	pool     *pgxpool.Pool
 }
 
 // NewGalleryHandler creates a new GalleryHandler.
@@ -39,6 +45,73 @@ func (h *GalleryHandler) WithAIDeps(faceSvc *ai.FaceService, assetSvc *service.A
 	return h
 }
 
+// WithPool injects DB access for workspace relationship validation and
+// summary hydration. Gallery CRUD still goes through GalleryService.
+func (h *GalleryHandler) WithPool(pool *pgxpool.Pool) *GalleryHandler {
+	h.pool = pool
+	return h
+}
+
+var galleryRelationshipEntityTables = map[string]string{
+	"contact_id":         "contacts",
+	"primary_contact_id": "contacts",
+	"project_id":         "studio_projects",
+	"event_id":           "events",
+	"deal_id":            "deals",
+	"invoice_id":         "invoices",
+}
+
+func parseOptionalUUIDString(value, field string) (*uuid.UUID, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s", field)
+	}
+	return &id, nil
+}
+
+func parseOptionalUUIDRaw(raw map[string]json.RawMessage, field string) (bool, *uuid.UUID, error) {
+	value, ok := raw[field]
+	if !ok {
+		return false, nil, nil
+	}
+	trimmed := strings.TrimSpace(string(value))
+	if trimmed == "" || trimmed == "null" || trimmed == `""` {
+		return true, nil, nil
+	}
+	var text string
+	if err := json.Unmarshal(value, &text); err != nil {
+		return true, nil, fmt.Errorf("invalid %s", field)
+	}
+	id, err := uuid.Parse(text)
+	if err != nil {
+		return true, nil, fmt.Errorf("invalid %s", field)
+	}
+	return true, &id, nil
+}
+
+func (h *GalleryHandler) validateLinkedEntity(ctx context.Context, workspaceID uuid.UUID, field string, id *uuid.UUID) error {
+	if h.pool == nil || id == nil {
+		return nil
+	}
+	table, ok := galleryRelationshipEntityTables[field]
+	if !ok {
+		return fmt.Errorf("unsupported relationship field %s", field)
+	}
+	var exists bool
+	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s WHERE id = $1 AND workspace_id = $2)`, table)
+	if err := h.pool.QueryRow(ctx, query, *id, workspaceID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%s not found in workspace", field)
+	}
+	return nil
+}
+
 // Create handles POST /api/v1/galleries
 func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := getWorkspaceID(r)
@@ -49,9 +122,15 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := getUserID(r)
 
 	var input struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		GalleryType string `json:"gallery_type"`
+		Title            string `json:"title"`
+		Description      string `json:"description"`
+		GalleryType      string `json:"gallery_type"`
+		ContactID        string `json:"contact_id"`
+		PrimaryContactID string `json:"primary_contact_id"`
+		ProjectID        string `json:"project_id"`
+		EventID          string `json:"event_id"`
+		DealID           string `json:"deal_id"`
+		InvoiceID        string `json:"invoice_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -64,13 +143,64 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if input.GalleryType == "" {
 		input.GalleryType = "proofing"
 	}
+	if input.PrimaryContactID != "" && input.ContactID != "" && input.PrimaryContactID != input.ContactID {
+		http.Error(w, `{"error":"primary_contact_id and contact_id must match"}`, http.StatusBadRequest)
+		return
+	}
+	contactValue := input.PrimaryContactID
+	if contactValue == "" {
+		contactValue = input.ContactID
+	}
+	primaryContactID, err := parseOptionalUUIDString(contactValue, "primary_contact_id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	projectID, err := parseOptionalUUIDString(input.ProjectID, "project_id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	eventID, err := parseOptionalUUIDString(input.EventID, "event_id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	dealID, err := parseOptionalUUIDString(input.DealID, "deal_id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	invoiceID, err := parseOptionalUUIDString(input.InvoiceID, "invoice_id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	for field, id := range map[string]*uuid.UUID{
+		"primary_contact_id": primaryContactID,
+		"project_id":         projectID,
+		"event_id":           eventID,
+		"deal_id":            dealID,
+		"invoice_id":         invoiceID,
+	} {
+		if err := h.validateLinkedEntity(r.Context(), workspaceID, field, id); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+	}
 
 	gallery, err := h.gallerySvc.Create(r.Context(), service.CreateGalleryInput{
-		WorkspaceID: workspaceID,
-		Title:       input.Title,
-		Description: input.Description,
-		GalleryType: input.GalleryType,
-		CreatedBy:   userID,
+		WorkspaceID:      workspaceID,
+		Title:            input.Title,
+		Description:      input.Description,
+		GalleryType:      input.GalleryType,
+		CreatedBy:        userID,
+		ContactID:        primaryContactID,
+		PrimaryContactID: primaryContactID,
+		ProjectID:        projectID,
+		EventID:          eventID,
+		DealID:           dealID,
+		InvoiceID:        invoiceID,
 	})
 	if err != nil {
 		http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
@@ -137,29 +267,76 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
-
-	var input struct {
-		Title       *string `json:"title,omitempty"`
-		Description *string `json:"description,omitempty"`
-		Status      *string `json:"status,omitempty"`
-		IsPublished *bool   `json:"is_published,omitempty"`
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if gallery.WorkspaceID != workspaceID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
 
-	if input.Title != nil {
-		gallery.Title = *input.Title
+	if value, ok := raw["title"]; ok {
+		if err := json.Unmarshal(value, &gallery.Title); err != nil {
+			http.Error(w, `{"error":"invalid title"}`, http.StatusBadRequest)
+			return
+		}
 	}
-	if input.Description != nil {
-		gallery.Description = *input.Description
+	if value, ok := raw["description"]; ok {
+		if err := json.Unmarshal(value, &gallery.Description); err != nil {
+			http.Error(w, `{"error":"invalid description"}`, http.StatusBadRequest)
+			return
+		}
 	}
-	if input.Status != nil {
-		gallery.Status = *input.Status
+	if value, ok := raw["status"]; ok {
+		if err := json.Unmarshal(value, &gallery.Status); err != nil {
+			http.Error(w, `{"error":"invalid status"}`, http.StatusBadRequest)
+			return
+		}
 	}
-	if input.IsPublished != nil {
-		gallery.IsPublished = *input.IsPublished
+	if value, ok := raw["is_published"]; ok {
+		if err := json.Unmarshal(value, &gallery.IsPublished); err != nil {
+			http.Error(w, `{"error":"invalid is_published"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	for _, field := range []string{"primary_contact_id", "contact_id", "project_id", "event_id", "deal_id", "invoice_id"} {
+		present, value, err := parseOptionalUUIDRaw(raw, field)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		if !present {
+			continue
+		}
+		validateField := field
+		if field == "contact_id" {
+			validateField = "primary_contact_id"
+		}
+		if err := h.validateLinkedEntity(r.Context(), workspaceID, validateField, value); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		switch field {
+		case "primary_contact_id", "contact_id":
+			gallery.PrimaryContactID = value
+			gallery.ContactID = value
+		case "project_id":
+			gallery.ProjectID = value
+		case "event_id":
+			gallery.EventID = value
+		case "deal_id":
+			gallery.DealID = value
+		case "invoice_id":
+			gallery.InvoiceID = value
+		}
 	}
 
 	if err := h.gallerySvc.Update(r.Context(), gallery); err != nil {
@@ -168,6 +345,158 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, gallery)
+}
+
+type galleryWorkspaceContact struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Email *string   `json:"email,omitempty"`
+	Phone *string   `json:"phone,omitempty"`
+}
+
+type galleryWorkspaceSection struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Href  string `json:"href"`
+}
+
+// LinkRelationships handles PATCH /api/v1/galleries/{id}/client-link.
+func (h *GalleryHandler) LinkRelationships(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil || gallery == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if gallery.WorkspaceID != workspaceID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	for _, field := range []string{"primary_contact_id", "contact_id", "project_id", "event_id", "deal_id", "invoice_id"} {
+		present, value, err := parseOptionalUUIDRaw(raw, field)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		if !present {
+			continue
+		}
+		validateField := field
+		if field == "contact_id" {
+			validateField = "primary_contact_id"
+		}
+		if err := h.validateLinkedEntity(r.Context(), workspaceID, validateField, value); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		switch field {
+		case "primary_contact_id", "contact_id":
+			gallery.PrimaryContactID = value
+			gallery.ContactID = value
+		case "project_id":
+			gallery.ProjectID = value
+		case "event_id":
+			gallery.EventID = value
+		case "deal_id":
+			gallery.DealID = value
+		case "invoice_id":
+			gallery.InvoiceID = value
+		}
+	}
+
+	if err := h.gallerySvc.Update(r.Context(), gallery); err != nil {
+		http.Error(w, `{"error":"link update failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, gallery)
+}
+
+// WorkspaceSummary handles GET /api/v1/galleries/{id}/workspace-summary.
+func (h *GalleryHandler) WorkspaceSummary(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if gallery == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if gallery.WorkspaceID != workspaceID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var contact *galleryWorkspaceContact
+	if h.pool != nil && gallery.PrimaryContactID != nil {
+		var c galleryWorkspaceContact
+		err := h.pool.QueryRow(r.Context(),
+			`SELECT id, name, email, phone FROM contacts WHERE id = $1 AND workspace_id = $2`,
+			*gallery.PrimaryContactID, workspaceID,
+		).Scan(&c.ID, &c.Name, &c.Email, &c.Phone)
+		if err == nil {
+			contact = &c
+		} else if err != pgx.ErrNoRows {
+			http.Error(w, `{"error":"summary failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	sections := []galleryWorkspaceSection{
+		{Key: "overview", Label: "Overview", Href: fmt.Sprintf("/galleries/%s", gallery.ID)},
+		{Key: "photos", Label: "Photos", Href: fmt.Sprintf("/galleries/%s#photos", gallery.ID)},
+		{Key: "albums", Label: "Albums", Href: fmt.Sprintf("/galleries/%s#albums", gallery.ID)},
+		{Key: "cover-design", Label: "Cover & Design", Href: fmt.Sprintf("/galleries/%s/cover", gallery.ID)},
+		{Key: "share", Label: "Share", Href: fmt.Sprintf("/galleries/%s#share", gallery.ID)},
+		{Key: "proofing", Label: "Proofing", Href: fmt.Sprintf("/galleries/%s/proofing", gallery.ID)},
+		{Key: "delivery", Label: "Delivery", Href: fmt.Sprintf("/galleries/%s#delivery", gallery.ID)},
+		{Key: "sales", Label: "Sales", Href: fmt.Sprintf("/galleries/%s#sales", gallery.ID)},
+		{Key: "insights", Label: "Insights", Href: fmt.Sprintf("/galleries/%s/analytics", gallery.ID)},
+		{Key: "ai", Label: "AI", Href: fmt.Sprintf("/galleries/%s/ai", gallery.ID)},
+		{Key: "settings", Label: "Settings", Href: fmt.Sprintf("/galleries/%s/settings", gallery.ID)},
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"gallery":         gallery,
+		"primary_contact": contact,
+		"lifecycle_state": service.GalleryWorkspaceLifecycleState(gallery),
+		"relationships": map[string]any{
+			"primary_contact_id": gallery.PrimaryContactID,
+			"contact_id":         gallery.ContactID,
+			"project_id":         gallery.ProjectID,
+			"event_id":           gallery.EventID,
+			"deal_id":            gallery.DealID,
+			"invoice_id":         gallery.InvoiceID,
+		},
+		"sections": sections,
+	})
 }
 
 // SetFaceDetection handles PATCH /api/v1/galleries/{id}/face-detection
@@ -196,8 +525,8 @@ func (h *GalleryHandler) SetFaceDetection(w http.ResponseWriter, r *http.Request
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]any{
-		"gallery_id":              id,
-		"face_detection_enabled":  *input.Enabled,
+		"gallery_id":             id,
+		"face_detection_enabled": *input.Enabled,
 	})
 }
 

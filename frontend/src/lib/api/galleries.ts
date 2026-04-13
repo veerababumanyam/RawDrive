@@ -3,6 +3,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 export interface Gallery {
   id: string;
   workspace_id: string;
+  contact_id?: string;
+  primary_contact_id?: string;
+  project_id?: string;
+  event_id?: string;
+  deal_id?: string;
+  invoice_id?: string;
   title: string;
   slug: string;
   description: string;
@@ -13,6 +19,8 @@ export interface Gallery {
   status: string;
   created_at: string;
   updated_at: string;
+  published_at?: string;
+  archived_at?: string;
   // M13 deferred-FR fields (optional)
   watermark_config?: {
     text?: string;
@@ -30,6 +38,43 @@ export interface Gallery {
   download_enabled?: boolean;
   sort_preference?: string;
   whatsapp_template?: string;
+}
+
+export interface GalleryWorkspaceContact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface GalleryWorkspaceSection {
+  key: string;
+  label: string;
+  href: string;
+}
+
+export interface GalleryWorkspaceSummary {
+  gallery: Gallery;
+  primary_contact?: GalleryWorkspaceContact | null;
+  lifecycle_state: string;
+  relationships: {
+    contact_id?: string | null;
+    primary_contact_id?: string | null;
+    project_id?: string | null;
+    event_id?: string | null;
+    deal_id?: string | null;
+    invoice_id?: string | null;
+  };
+  sections: GalleryWorkspaceSection[];
+}
+
+export interface GalleryRelationshipPayload {
+  contact_id?: string | null;
+  primary_contact_id?: string | null;
+  project_id?: string | null;
+  event_id?: string | null;
+  deal_id?: string | null;
+  invoice_id?: string | null;
 }
 
 // GAL-FR-115: plan-aware white-label branding response
@@ -148,7 +193,14 @@ export async function getGallery(token: string, id: string): Promise<Gallery> {
   return res.json();
 }
 
-export async function createGallery(token: string, data: { title: string; description?: string; gallery_type?: string }): Promise<Gallery> {
+export async function createGallery(
+  token: string,
+  data: {
+    title: string;
+    description?: string;
+    gallery_type?: string;
+  } & GalleryRelationshipPayload,
+): Promise<Gallery> {
   const res = await fetch(`${API_BASE}/api/v1/galleries`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -166,6 +218,81 @@ export async function updateGallery(token: string, id: string, data: Partial<Gal
   });
   if (!res.ok) throw new Error(`Failed to update gallery: ${res.status}`);
   return res.json();
+}
+
+export async function linkGalleryRelationships(
+  token: string,
+  id: string,
+  data: GalleryRelationshipPayload,
+): Promise<Gallery> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/client-link`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to link gallery relationships: ${res.status}`);
+  return res.json();
+}
+
+export async function getGalleryWorkspaceSummary(token: string, id: string): Promise<GalleryWorkspaceSummary> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/workspace-summary`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to get gallery workspace: ${res.status}`);
+  return res.json();
+}
+
+export async function duplicateGallery(token: string, id: string, title?: string): Promise<Gallery> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/duplicate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`Failed to duplicate gallery: ${res.status}`);
+  return res.json();
+}
+
+export async function updateGalleryCover(
+  token: string,
+  id: string,
+  data: {
+    asset_id?: string | null;
+    cover_asset_id?: string | null;
+    focal_point?: { x: number; y: number };
+    aspect_ratio?: string;
+    template?: string;
+    template_config?: Record<string, unknown>;
+    config?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { cover_asset_id, config, ...rest } = data;
+  const body = {
+    ...rest,
+    asset_id: data.asset_id ?? cover_asset_id ?? undefined,
+    template_config: data.template_config ?? config,
+  };
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/cover`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Failed to update gallery cover: ${res.status}`);
+}
+
+export async function updateGalleryDesign(
+  token: string | null,
+  id: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/design`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to update gallery design: ${res.status}`);
 }
 
 export async function deleteGallery(token: string, id: string): Promise<void> {

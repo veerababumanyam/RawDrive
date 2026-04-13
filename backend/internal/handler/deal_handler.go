@@ -11,11 +11,17 @@ import (
 )
 
 type DealHandler struct {
-	repo *repository.DealRepo
+	repo        *repository.DealRepo
+	projectRepo *repository.StudioProjectRepo
 }
 
 func NewDealHandler(repo *repository.DealRepo) *DealHandler {
 	return &DealHandler{repo: repo}
+}
+
+func (h *DealHandler) WithProjectRepo(repo *repository.StudioProjectRepo) *DealHandler {
+	h.projectRepo = repo
+	return h
 }
 
 func (h *DealHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +59,12 @@ func (h *DealHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// old opaque "internal error" body.
 		http.Error(w, fmt.Sprintf(`{"error":"create deal failed: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
+	}
+	if h.projectRepo != nil {
+		if err := h.projectRepo.CreateFromDeal(r.Context(), d); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"create project compatibility record failed: %s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
 	}
 	respondJSON(w, http.StatusCreated, d)
 }

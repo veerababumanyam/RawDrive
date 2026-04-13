@@ -12,19 +12,19 @@ import (
 
 // Deal represents a CRM deal/booking.
 type Deal struct {
-	ID          uuid.UUID  `json:"id"`
-	WorkspaceID uuid.UUID  `json:"workspace_id"`
-	ContactID   uuid.UUID  `json:"contact_id"`
-	Title       string     `json:"title"`
-	Stage       string     `json:"stage"`
-	AmountPaisa int64      `json:"amount_paisa"`
-	AdvancePaisa int64     `json:"advance_paisa"`
-	EventType   *string    `json:"event_type"`
-	EventDate   *time.Time `json:"event_date"`
-	Venue       *string    `json:"venue"`
-	Notes       *string    `json:"notes"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID           uuid.UUID  `json:"id"`
+	WorkspaceID  uuid.UUID  `json:"workspace_id"`
+	ContactID    uuid.UUID  `json:"contact_id"`
+	Title        string     `json:"title"`
+	Stage        string     `json:"stage"`
+	AmountPaisa  int64      `json:"amount_paisa"`
+	AdvancePaisa int64      `json:"advance_paisa"`
+	EventType    *string    `json:"event_type"`
+	EventDate    *time.Time `json:"event_date"`
+	Venue        *string    `json:"venue"`
+	Notes        *string    `json:"notes"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 type DealFilter struct {
@@ -43,6 +43,7 @@ type FollowUp struct {
 	LeadID      *uuid.UUID `json:"lead_id"`
 	ContactID   *uuid.UUID `json:"contact_id"`
 	DealID      *uuid.UUID `json:"deal_id"`
+	ProjectID   *uuid.UUID `json:"project_id,omitempty"`
 	AssignedTo  *uuid.UUID `json:"assigned_to"`
 	Type        string     `json:"type"`
 	DueAt       time.Time  `json:"due_at"`
@@ -62,7 +63,7 @@ func NewDealRepo(db *pgxpool.Pool) *DealRepo {
 }
 
 const dealCols = `id, workspace_id, contact_id, title, stage, amount_paisa, advance_paisa, event_type, event_date, venue, notes, created_at, updated_at`
-const followUpCols = `id, workspace_id, lead_id, contact_id, deal_id, assigned_to, type, due_at, notes, status, completed_at, created_at, updated_at`
+const followUpCols = `id, workspace_id, lead_id, contact_id, deal_id, project_id, assigned_to, type, due_at, notes, status, completed_at, created_at, updated_at`
 
 func scanDeal(row pgx.Row) (Deal, error) {
 	var d Deal
@@ -170,8 +171,8 @@ func (r *DealRepo) CreateFollowUp(ctx context.Context, f *FollowUp) error {
 	f.UpdatedAt = now
 	_, err := r.DB.Exec(ctx, `
 		INSERT INTO follow_ups (`+followUpCols+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-		f.ID, f.WorkspaceID, f.LeadID, f.ContactID, f.DealID,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+		f.ID, f.WorkspaceID, f.LeadID, f.ContactID, f.DealID, f.ProjectID,
 		f.AssignedTo, f.Type, f.DueAt, f.Notes, f.Status, f.CompletedAt,
 		f.CreatedAt, f.UpdatedAt,
 	)
@@ -201,7 +202,7 @@ func (r *DealRepo) ListFollowUps(ctx context.Context, workspaceID uuid.UUID, dea
 	var out []FollowUp
 	for rows.Next() {
 		var f FollowUp
-		if err := rows.Scan(&f.ID, &f.WorkspaceID, &f.LeadID, &f.ContactID, &f.DealID,
+		if err := rows.Scan(&f.ID, &f.WorkspaceID, &f.LeadID, &f.ContactID, &f.DealID, &f.ProjectID,
 			&f.AssignedTo, &f.Type, &f.DueAt, &f.Notes, &f.Status, &f.CompletedAt,
 			&f.CreatedAt, &f.UpdatedAt); err != nil {
 			return nil, err
@@ -236,7 +237,7 @@ func (r *DealRepo) ListOverdue(ctx context.Context, workspaceID uuid.UUID, limit
 	var out []FollowUp
 	for rows.Next() {
 		var f FollowUp
-		if err := rows.Scan(&f.ID, &f.WorkspaceID, &f.LeadID, &f.ContactID, &f.DealID,
+		if err := rows.Scan(&f.ID, &f.WorkspaceID, &f.LeadID, &f.ContactID, &f.DealID, &f.ProjectID,
 			&f.AssignedTo, &f.Type, &f.DueAt, &f.Notes, &f.Status, &f.CompletedAt,
 			&f.CreatedAt, &f.UpdatedAt); err != nil {
 			return nil, err

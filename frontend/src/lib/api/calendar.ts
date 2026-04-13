@@ -11,6 +11,7 @@ export interface CalendarEvent {
   location?: string;
   contact_id?: string;
   deal_id?: string;
+  project_id?: string;
   status: string;
   color?: string;
   notes?: string;
@@ -27,6 +28,7 @@ export async function listEvents(token: string, from: string, to: string): Promi
   if (!res.ok) throw new Error("Failed to fetch events");
   const body = await res.json();
   if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.events)) return body.events;
   if (body && Array.isArray(body.calendarevents)) return body.calendarevents;
   return [];
 }

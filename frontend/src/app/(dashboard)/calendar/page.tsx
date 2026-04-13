@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { calendarEventClasses } from "@/lib/dashboard-ui";
 import { listContacts, type Contact } from "@/lib/api/crm";
+import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { CALENDAR_EVENT_TYPE_OPTIONS } from "@/lib/crm-taxonomy";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -19,18 +22,10 @@ interface CalendarEvent {
   color?: string;
   contact_id?: string;
   deal_id?: string;
+  project_id?: string;
   notes?: string;
   all_day?: boolean;
 }
-
-const EVENT_TYPES = [
-  { value: "shoot", label: "Photography shoot" },
-  { value: "consultation", label: "Consultation" },
-  { value: "edit_session", label: "Editing session" },
-  { value: "delivery", label: "Delivery / handover" },
-  { value: "personal", label: "Personal / blocked" },
-  { value: "other", label: "Other" },
-];
 
 function toLocalInput(d: Date): string {
   // Convert a Date to the "YYYY-MM-DDTHH:MM" format expected by
@@ -41,6 +36,7 @@ function toLocalInput(d: Date): string {
 }
 
 export default function CalendarPage() {
+  const searchParams = useSearchParams();
   const [currentDate, setCurrentDate] = useState(new Date());
   const token = getStoredAccessToken();
 
@@ -72,6 +68,7 @@ export default function CalendarPage() {
     all_day: false,
     location: "",
     contact_id: "",
+    project_id: "",
     notes: "",
   };
   const [form, setForm] = useState(emptyForm);
@@ -139,6 +136,22 @@ export default function CalendarPage() {
     listContacts(token).then(setContacts).catch(() => setContacts([]));
   }, [token]);
 
+  useEffect(() => {
+    if (searchParams.get("create") !== "true") return;
+    const clientId = searchParams.get("client") || "";
+    const projectId = searchParams.get("project") || "";
+    const base = new Date();
+    const endBase = new Date(base.getTime() + 2 * 60 * 60 * 1000);
+    setForm((current) => ({
+      ...current,
+      contact_id: clientId || current.contact_id,
+      project_id: projectId || current.project_id,
+      start_at: toLocalInput(base),
+      end_at: toLocalInput(endBase),
+    }));
+    setShowCreate(true);
+  }, [searchParams]);
+
   const openCreate = (defaultDay?: number) => {
     const base = defaultDay
       ? new Date(currentDate.getFullYear(), currentDate.getMonth(), defaultDay, 10, 0)
@@ -170,6 +183,7 @@ export default function CalendarPage() {
           all_day: form.all_day,
           location: form.location.trim() || undefined,
           contact_id: form.contact_id || undefined,
+          project_id: form.project_id || undefined,
           notes: form.notes.trim() || undefined,
         }),
       });
@@ -202,6 +216,8 @@ export default function CalendarPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <CRMSecondaryNav />
+
       {error && (
         <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
           {error}
@@ -256,7 +272,7 @@ export default function CalendarPage() {
               onChange={(e) => setForm({ ...form, event_type: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
             >
-              {EVENT_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
+              {CALENDAR_EVENT_TYPE_OPTIONS.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
             </select>
             <select
               value={form.contact_id}

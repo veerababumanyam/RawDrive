@@ -36,11 +36,17 @@ func (s *GalleryService) WithAlbumService(as *AlbumService) *GalleryService {
 
 // CreateInput holds the input for creating a gallery.
 type CreateGalleryInput struct {
-	WorkspaceID uuid.UUID
-	Title       string
-	Description string
-	GalleryType string
-	CreatedBy   uuid.UUID
+	WorkspaceID      uuid.UUID
+	Title            string
+	Description      string
+	GalleryType      string
+	CreatedBy        uuid.UUID
+	ContactID        *uuid.UUID
+	PrimaryContactID *uuid.UUID
+	ProjectID        *uuid.UUID
+	EventID          *uuid.UUID
+	DealID           *uuid.UUID
+	InvoiceID        *uuid.UUID
 }
 
 // SetFaceDetectionEnabled toggles the privacy opt-out flag for face
@@ -60,15 +66,30 @@ func (s *GalleryService) SetFaceDetectionEnabled(ctx context.Context, galleryID 
 
 // Create creates a new gallery.
 func (s *GalleryService) Create(ctx context.Context, input CreateGalleryInput) (*repository.Gallery, error) {
+	primaryContactID := input.PrimaryContactID
+	if primaryContactID == nil {
+		primaryContactID = input.ContactID
+	}
+	contactID := input.ContactID
+	if contactID == nil {
+		contactID = primaryContactID
+	}
+
 	g := &repository.Gallery{
-		WorkspaceID: input.WorkspaceID,
-		Title:       input.Title,
-		Description: input.Description,
-		GalleryType: input.GalleryType,
-		Status:      "draft",
-		CreatedBy:   &input.CreatedBy,
-		Settings:    map[string]interface{}{},
-		WatermarkConfig: map[string]interface{}{},
+		WorkspaceID:      input.WorkspaceID,
+		Title:            input.Title,
+		Description:      input.Description,
+		GalleryType:      input.GalleryType,
+		Status:           "draft",
+		CreatedBy:        &input.CreatedBy,
+		ContactID:        contactID,
+		PrimaryContactID: primaryContactID,
+		ProjectID:        input.ProjectID,
+		EventID:          input.EventID,
+		DealID:           input.DealID,
+		InvoiceID:        input.InvoiceID,
+		Settings:         map[string]interface{}{},
+		WatermarkConfig:  map[string]interface{}{},
 	}
 	if err := s.galleryRepo.Create(ctx, g); err != nil {
 		return nil, err
@@ -80,6 +101,27 @@ func (s *GalleryService) Create(ctx context.Context, input CreateGalleryInput) (
 	}
 
 	return g, nil
+}
+
+// GalleryWorkspaceLifecycleState normalizes the gallery lifecycle language
+// used by CRM, gallery workspace, and public sharing surfaces.
+func GalleryWorkspaceLifecycleState(g *repository.Gallery) string {
+	if g == nil {
+		return "unknown"
+	}
+	if g.DeletedAt != nil || g.Status == "deleted" {
+		return "deleted"
+	}
+	if g.ArchivedAt != nil || g.Status == "archived" {
+		return "archived"
+	}
+	if g.IsPublished || g.PublishedAt != nil || g.Status == "shared" || g.Status == "protected" || g.Status == "published" {
+		return "shared"
+	}
+	if g.Status != "" {
+		return g.Status
+	}
+	return "draft"
 }
 
 // GetByID retrieves a gallery by ID.

@@ -24,6 +24,7 @@ export const calendarEventClasses: Record<string, string> = {
   personal: "status-badge status-badge--success",
   travel: "status-badge status-badge--warning",
   blocked: "status-badge status-badge--danger",
+  other: "status-badge status-badge--neutral",
 };
 
 export const moderationReasonClasses: Record<string, string> = {

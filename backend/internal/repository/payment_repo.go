@@ -10,15 +10,16 @@ import (
 
 // Payment represents a payment against an invoice.
 type Payment struct {
-	ID              uuid.UUID `json:"id"`
-	WorkspaceID     uuid.UUID `json:"workspace_id"`
-	InvoiceID       uuid.UUID `json:"invoice_id"`
-	AmountPaisa     int64     `json:"amount_paisa"`
-	Method          string    `json:"method"`
-	ReferenceNumber *string   `json:"reference_number"`
-	PaymentDate     time.Time `json:"payment_date"`
-	Notes           *string   `json:"notes"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID              uuid.UUID  `json:"id"`
+	WorkspaceID     uuid.UUID  `json:"workspace_id"`
+	InvoiceID       uuid.UUID  `json:"invoice_id"`
+	ProjectID       *uuid.UUID `json:"project_id,omitempty"`
+	AmountPaisa     int64      `json:"amount_paisa"`
+	Method          string     `json:"method"`
+	ReferenceNumber *string    `json:"reference_number"`
+	PaymentDate     time.Time  `json:"payment_date"`
+	Notes           *string    `json:"notes"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type PaymentRepo struct {
@@ -36,9 +37,9 @@ func (r *PaymentRepo) Create(ctx context.Context, p *Payment) error {
 		p.PaymentDate = p.CreatedAt
 	}
 	_, err := r.DB.Exec(ctx, `
-		INSERT INTO payments (id, workspace_id, invoice_id, amount_paisa, method, reference_number, payment_date, notes, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		p.ID, p.WorkspaceID, p.InvoiceID, p.AmountPaisa, p.Method,
+		INSERT INTO payments (id, workspace_id, invoice_id, project_id, amount_paisa, method, reference_number, payment_date, notes, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		p.ID, p.WorkspaceID, p.InvoiceID, p.ProjectID, p.AmountPaisa, p.Method,
 		p.ReferenceNumber, p.PaymentDate, p.Notes, p.CreatedAt,
 	)
 	return err
@@ -46,7 +47,7 @@ func (r *PaymentRepo) Create(ctx context.Context, p *Payment) error {
 
 func (r *PaymentRepo) ListByInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) ([]Payment, error) {
 	rows, err := r.DB.Query(ctx, `
-		SELECT id, workspace_id, invoice_id, amount_paisa, method, reference_number, payment_date, notes, created_at
+		SELECT id, workspace_id, invoice_id, project_id, amount_paisa, method, reference_number, payment_date, notes, created_at
 		FROM payments WHERE invoice_id=$1 AND workspace_id=$2 ORDER BY payment_date ASC`,
 		invoiceID, workspaceID)
 	if err != nil {
@@ -56,7 +57,7 @@ func (r *PaymentRepo) ListByInvoice(ctx context.Context, workspaceID, invoiceID 
 	var out []Payment
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(&p.ID, &p.WorkspaceID, &p.InvoiceID, &p.AmountPaisa,
+		if err := rows.Scan(&p.ID, &p.WorkspaceID, &p.InvoiceID, &p.ProjectID, &p.AmountPaisa,
 			&p.Method, &p.ReferenceNumber, &p.PaymentDate, &p.Notes, &p.CreatedAt); err != nil {
 			return nil, err
 		}

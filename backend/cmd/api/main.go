@@ -923,6 +923,7 @@ func main() {
 		leadRepo := repository.NewLeadRepo(dbPool)
 		contactRepo := repository.NewContactRepo(dbPool)
 		dealRepo := repository.NewDealRepo(dbPool)
+		projectRepo := repository.NewStudioProjectRepo(dbPool)
 		invoiceRepo := repository.NewInvoiceRepo(dbPool)
 		paymentRepo := repository.NewPaymentRepo(dbPool)
 		servicePackageRepo := repository.NewServicePackageRepo(dbPool)
@@ -958,6 +959,7 @@ func main() {
 			LeadRepo:               leadRepo,
 			ContactRepo:            contactRepo,
 			DealRepo:               dealRepo,
+			ProjectRepo:            projectRepo,
 			InvoiceRepo:            invoiceRepo,
 			PaymentRepo:            paymentRepo,
 			ServicePackageRepo:     servicePackageRepo,

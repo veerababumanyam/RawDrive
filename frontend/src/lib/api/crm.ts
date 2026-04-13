@@ -11,6 +11,7 @@ export interface Lead {
   event_type?: string;
   event_date?: string;
   budget_paisa?: number;
+  follow_up_date?: string;
   assigned_to?: string;
   notes?: string;
   created_at: string;
@@ -46,9 +47,40 @@ export interface Deal {
   created_at: string;
 }
 
+export interface StudioProject {
+  id: string;
+  workspace_id: string;
+  contact_id: string;
+  contact_name?: string;
+  lead_id?: string;
+  source_deal_id?: string;
+  package_id?: string;
+  name: string;
+  project_type: string;
+  status: string;
+  event_date?: string;
+  event_end_date?: string;
+  venue_name?: string;
+  venue_address?: string;
+  city?: string;
+  state_code?: string;
+  expected_value_paisa: number;
+  booked_value_paisa: number;
+  balance_due_paisa: number;
+  contract_status: string;
+  gallery_status: string;
+  next_action?: string;
+  next_action_due_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  archived_at?: string;
+}
+
 export interface FollowUp {
   id: string;
   type: string;
+  project_id?: string;
   due_at: string;
   status: string;
   notes?: string;
@@ -177,6 +209,20 @@ export interface ProfileDeal {
   event_date?: string;
 }
 
+export interface ProfileProject {
+  id: string;
+  name: string;
+  status: string;
+  project_type: string;
+  event_date?: string;
+  expected_value_paisa: number;
+  booked_value_paisa: number;
+  balance_due_paisa: number;
+  contract_status: string;
+  gallery_status: string;
+  next_action?: string;
+}
+
 export interface ProfileEvent {
   id: string;
   title: string;
@@ -184,6 +230,7 @@ export interface ProfileEvent {
   start_at: string;
   end_at: string;
   location?: string;
+  project_id?: string;
 }
 
 export interface ProfileGallery {
@@ -198,9 +245,66 @@ export interface ClientProfileResponse {
   contact: ProfileContact;
   galleries: ProfileGallery[];
   invoices: ProfileInvoice[];
+  projects: ProfileProject[];
   deals: ProfileDeal[];
   events: ProfileEvent[];
   lifetime_revenue_paisa: number;
+}
+
+export interface ProjectTimelineEntry {
+  timestamp: string;
+  type: string;
+  title: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface StudioProjectAggregate {
+  project: StudioProject;
+  contact?: Contact;
+  inquiry?: Lead;
+  bookings: Array<{
+    id: string;
+    title: string;
+    event_type: string;
+    start_at: string;
+    end_at: string;
+    location?: string;
+    status: string;
+  }>;
+  contracts: Array<{
+    id: string;
+    title: string;
+    status: string;
+    total_value_paisa?: number;
+    created_at: string;
+  }>;
+  invoices: Array<{
+    id: string;
+    invoice_number: string;
+    invoice_type: string;
+    status: string;
+    total_paisa: number;
+    amount_paid_paisa: number;
+    created_at: string;
+  }>;
+  payments: Array<{
+    id: string;
+    invoice_id: string;
+    amount_paisa: number;
+    method: string;
+    payment_date: string;
+  }>;
+  galleries: Array<{
+    id: string;
+    title: string;
+    slug: string;
+    gallery_type: string;
+    status: string;
+    photo_count: number;
+    created_at: string;
+  }>;
+  follow_ups: FollowUp[];
+  timeline: ProjectTimelineEntry[];
 }
 
 export interface TimelineEntry {
@@ -235,4 +339,32 @@ export async function listDeals(token: string, params?: { stage?: string }): Pro
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.deals)) return body.deals;
   return [];
+}
+
+export async function listProjects(token: string, params?: { status?: string; contact_id?: string; search?: string }): Promise<StudioProject[]> {
+  const query = new URLSearchParams(params as Record<string, string>).toString();
+  const res = await fetch(`${API_BASE}/api/v1/crm/projects?${query}`, { headers: headers(token) });
+  if (!res.ok) throw new Error("Failed to fetch projects");
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.projects)) return body.projects;
+  return [];
+}
+
+export async function createProject(token: string, project: Partial<StudioProject>): Promise<StudioProject> {
+  const res = await fetch(`${API_BASE}/api/v1/crm/projects`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(project),
+  });
+  if (!res.ok) throw new Error("Failed to create project");
+  return res.json();
+}
+
+export async function getProject(token: string, id: string): Promise<StudioProjectAggregate> {
+  const res = await fetch(`${API_BASE}/api/v1/crm/projects/${id}`, {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error("Failed to fetch project");
+  return res.json();
 }

@@ -2,10 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,6 +40,10 @@ type WorkspaceProfile struct {
 	Email             *string `json:"email,omitempty"`
 	Website           *string `json:"website,omitempty"`
 	LogoURL           *string `json:"logo_url,omitempty"`
+	BrandName         *string `json:"brand_name,omitempty"`
+	BrandAccentColor  *string `json:"brand_accent_color,omitempty"`
+	PublicBranding    *bool   `json:"public_branding_enabled,omitempty"`
+	LogoAssetID       *string `json:"logo_asset_id,omitempty"`
 	BankName          *string `json:"bank_name,omitempty"`
 	BankAccountHolder *string `json:"bank_account_holder,omitempty"`
 	BankAccountNumber *string `json:"bank_account_number,omitempty"`
@@ -73,6 +80,11 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 			COALESCE(email, ''),
 			COALESCE(website, ''),
 			COALESCE(logo_url, ''),
+			COALESCE(brand_name, ''),
+			COALESCE(brand_accent_color, ''),
+			COALESCE(public_branding_enabled, true),
+			COALESCE(logo_asset_id::text, ''),
+			COALESCE(logo_metadata, '{}'::jsonb),
 			COALESCE(bank_name, ''),
 			COALESCE(bank_account_holder, ''),
 			COALESCE(bank_account_number, ''),
@@ -88,10 +100,14 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		FROM workspaces WHERE id = $1`, wsID)
 	var (
 		name, gstin, addr1, addr2, city, postal, phone, email, website, logo string
+		brandName, brandAccent, logoAssetID                                  string
+		publicBranding                                                       bool
+		logoMetadata                                                         map[string]interface{}
 		bankName, bankHolder, bankAcc, ifsc, branch, sig, terms, footer      string
 		upiID, panNumber, instaHandle, stateCode                             string
 	)
 	if err := row.Scan(&name, &gstin, &addr1, &addr2, &city, &postal, &phone, &email, &website, &logo,
+		&brandName, &brandAccent, &publicBranding, &logoAssetID, &logoMetadata,
 		&bankName, &bankHolder, &bankAcc, &ifsc, &branch, &sig, &terms, &footer,
 		&upiID, &panNumber, &instaHandle, &stateCode); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"failed to load profile: %s"}`, err.Error()), http.StatusInternalServerError)
@@ -108,6 +124,11 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		"email":               email,
 		"website":             website,
 		"logo_url":            logo,
+		"brand_name":          brandName,
+		"brand_accent_color":  brandAccent,
+		"public_branding_enabled": publicBranding,
+		"logo_asset_id":       logoAssetID,
+		"logo_metadata":       logoMetadata,
 		"bank_name":           bankName,
 		"bank_account_holder": bankHolder,
 		"bank_account_number": bankAcc,
@@ -137,6 +158,10 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
+	if err := validateBrandAccentColor(p.BrandAccentColor); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
 	// Build a dynamic UPDATE with only the fields the client sent. This
 	// lets the settings page PATCH just a subset without clobbering
 	// other columns to empty strings.
@@ -150,6 +175,16 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 			idx++
 		}
 	}
+	addAny := func(col string, v any) {
+		sets = append(sets, fmt.Sprintf("%s=$%d", col, idx))
+		args = append(args, v)
+		idx++
+	}
+	addBool := func(col string, v *bool) {
+		if v != nil {
+			addAny(col, *v)
+		}
+	}
 	add("name", p.Name)
 	add("gstin", p.GSTIN)
 	add("address_line1", p.AddressLine1)
@@ -159,7 +194,9 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 	add("phone", p.Phone)
 	add("email", p.Email)
 	add("website", p.Website)
-	add("logo_url", p.LogoURL)
+	add("brand_name", p.BrandName)
+	add("brand_accent_color", p.BrandAccentColor)
+	addBool("public_branding_enabled", p.PublicBranding)
 	add("bank_name", p.BankName)
 	add("bank_account_holder", p.BankAccountHolder)
 	add("bank_account_number", p.BankAccountNumber)
@@ -172,6 +209,31 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 	add("pan_number", p.PANNumber)
 	add("instagram_handle", p.InstagramHandle)
 	add("state_code", p.StateCode)
+
+	if p.LogoAssetID != nil {
+		logoAssetID := strings.TrimSpace(*p.LogoAssetID)
+		if logoAssetID == "" {
+			addAny("logo_asset_id", nil)
+			addAny("logo_metadata", map[string]interface{}{})
+			addAny("logo_url", "")
+		} else {
+			metadata, storageKey, err := h.logoMetadataForAsset(r.Context(), wsID, logoAssetID)
+			if err != nil {
+				status := http.StatusInternalServerError
+				if errors.Is(err, pgx.ErrNoRows) {
+					status = http.StatusBadRequest
+				}
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), status)
+				return
+			}
+			addAny("logo_asset_id", logoAssetID)
+			addAny("logo_metadata", metadata)
+			addAny("logo_url", storageKey)
+		}
+	} else {
+		add("logo_url", p.LogoURL)
+	}
+
 	if len(sets) == 0 {
 		respondJSON(w, http.StatusOK, map[string]any{"updated": 0})
 		return
@@ -187,4 +249,58 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 
 func joinComma(parts []string) string {
 	return strings.Join(parts, ", ")
+}
+
+func validateBrandAccentColor(value *string) error {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	if len(trimmed) != 7 || trimmed[0] != '#' {
+		return fmt.Errorf("brand_accent_color must be a #RRGGBB hex color")
+	}
+	for _, ch := range trimmed[1:] {
+		if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') {
+			continue
+		}
+		return fmt.Errorf("brand_accent_color must be a #RRGGBB hex color")
+	}
+	return nil
+}
+
+func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, workspaceID uuid.UUID, assetIDRaw string) (map[string]interface{}, string, error) {
+	assetID, err := uuid.Parse(assetIDRaw)
+	if err != nil {
+		return nil, "", fmt.Errorf("logo_asset_id must be a valid UUID")
+	}
+
+	var filename, contentType, storageKey string
+	var sizeBytes int64
+	err = h.DB.QueryRow(ctx, `
+		SELECT filename, content_type, size_bytes, storage_key
+		FROM assets
+		WHERE id = $1
+		  AND workspace_id = $2
+		  AND deleted_at IS NULL
+		  AND content_type LIKE 'image/%'`,
+		assetID, workspaceID,
+	).Scan(&filename, &contentType, &sizeBytes, &storageKey)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", fmt.Errorf("logo asset must be an image uploaded to this workspace")
+		}
+		return nil, "", fmt.Errorf("failed to validate logo asset: %w", err)
+	}
+
+	return map[string]interface{}{
+		"asset_id":      assetID.String(),
+		"filename":      filename,
+		"content_type":  contentType,
+		"size_bytes":    sizeBytes,
+		"storage_key":   storageKey,
+		"storage_driver": "r2",
+	}, storageKey, nil
 }

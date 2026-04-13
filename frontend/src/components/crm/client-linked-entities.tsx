@@ -1,11 +1,12 @@
 "use client";
 
-import type { ProfileInvoice, ProfileDeal, ProfileEvent, ProfileGallery } from "@/lib/api/crm";
+import type { ProfileInvoice, ProfileDeal, ProfileEvent, ProfileGallery, ProfileProject } from "@/lib/api/crm";
 import { cn } from "@/lib/utils";
-import { invoiceStatusClasses, leadStageClasses, calendarEventClasses } from "@/lib/dashboard-ui";
+import { invoiceStatusClasses, calendarEventClasses } from "@/lib/dashboard-ui";
+import { DEAL_STAGE_CLASS, PROJECT_STATUS_CLASS, getDealStageLabel, getProjectStatusLabel } from "@/lib/crm-taxonomy";
 
 /**
- * Tabbed lists of invoices, deals, and bookings linked to a client.
+ * Tabbed lists of invoices, projects, and bookings linked to a client.
  * Each entity renders as a card row with a status badge and amount.
  */
 
@@ -154,6 +155,59 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
 
 // ---- Deal List ----
 
+interface ProjectListProps {
+  projects: ProfileProject[];
+}
+
+export function ProjectList({ projects }: ProjectListProps) {
+  if (projects.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-text-secondary text-sm">No projects yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {projects.map((project) => (
+        <a
+          key={project.id}
+          href={`/crm/projects/${project.id}`}
+          className="block bg-surface-raised rounded-xl p-4 border border-border-default hover:border-accent-primary/30 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-text-primary text-sm">{project.name}</p>
+              <div className="flex items-center gap-2 mt-1">
+                {project.project_type && (
+                  <span className="text-xs text-text-tertiary capitalize">{project.project_type.replaceAll("_", " ")}</span>
+                )}
+                {project.event_date && (
+                  <span className="text-xs text-text-tertiary">{formatDate(project.event_date)}</span>
+                )}
+              </div>
+            </div>
+            <div className="text-right">
+              <span
+                className={cn(
+                  "capitalize",
+                  PROJECT_STATUS_CLASS[project.status] || "status-badge status-badge--neutral",
+                )}
+              >
+                {getProjectStatusLabel(project.status)}
+              </span>
+              <p className="text-sm font-medium text-text-primary mt-1">
+                {formatPaisa(project.expected_value_paisa)}
+              </p>
+            </div>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 interface DealListProps {
   deals: ProfileDeal[];
 }
@@ -162,7 +216,7 @@ export function DealList({ deals }: DealListProps) {
   if (deals.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-text-secondary text-sm">No deals yet.</p>
+        <p className="text-text-secondary text-sm">No projects yet.</p>
       </div>
     );
   }
@@ -190,10 +244,10 @@ export function DealList({ deals }: DealListProps) {
               <span
                 className={cn(
                   "capitalize",
-                  leadStageClasses[deal.stage] || "status-badge status-badge--neutral",
+                  DEAL_STAGE_CLASS[deal.stage] || "status-badge status-badge--neutral",
                 )}
               >
-                {deal.stage}
+                {getDealStageLabel(deal.stage)}
               </span>
               <p className="text-sm font-medium text-text-primary mt-1">
                 {formatPaisa(deal.amount_paisa)}

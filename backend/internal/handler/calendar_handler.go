@@ -20,6 +20,10 @@ func NewCalendarHandler(repo *repository.EventRepo) *CalendarHandler {
 	return &CalendarHandler{repo: repo}
 }
 
+func calendarUpdateNeedsConflictCheck(e repository.Event) bool {
+	return e.Status == "confirmed"
+}
+
 func (h *CalendarHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := getWorkspaceID(r)
 	if !ok {
@@ -115,11 +119,21 @@ func (h *CalendarHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	if to.IsZero() {
 		to = time.Now().AddDate(0, 1, 0)
 	}
+	var projectID *uuid.UUID
+	if raw := r.URL.Query().Get("project_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			http.Error(w, `{"error":"invalid project_id"}`, http.StatusBadRequest)
+			return
+		}
+		projectID = &id
+	}
 	events, err := h.repo.List(r.Context(), repository.EventFilter{
 		WorkspaceID: workspaceID,
 		From:        from,
 		To:          to,
 		EventType:   r.URL.Query().Get("type"),
+		ProjectID:   projectID,
 	})
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
@@ -165,6 +179,20 @@ func (h *CalendarHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	e.ID = id
 	e.WorkspaceID = workspaceID
+	if e.Status == "" {
+		e.Status = "confirmed"
+	}
+	if calendarUpdateNeedsConflictCheck(e) {
+		conflict, err := h.repo.CheckConflict(r.Context(), workspaceID, e.StartAt, e.EndAt, &id)
+		if err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		if conflict {
+			http.Error(w, `{"error":"time slot conflict with existing confirmed event"}`, http.StatusConflict)
+			return
+		}
+	}
 	if err := h.repo.Update(r.Context(), &e); err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return

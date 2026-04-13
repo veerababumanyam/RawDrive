@@ -10,12 +10,20 @@ import (
 
 // GalleryAnalyticsService handles gallery analytics tracking and retrieval.
 type GalleryAnalyticsService struct {
-	analyticsRepo *repository.GalleryAnalyticsRepo
+	analyticsRepo      *repository.GalleryAnalyticsRepo
+	assetAnalyticsRepo *repository.GalleryAssetAnalyticsRepo
 }
 
 // NewGalleryAnalyticsService creates a new GalleryAnalyticsService.
 func NewGalleryAnalyticsService(ar *repository.GalleryAnalyticsRepo) *GalleryAnalyticsService {
 	return &GalleryAnalyticsService{analyticsRepo: ar}
+}
+
+// WithAssetAnalyticsRepo enables per-photo top asset analytics for gallery
+// workspace insights without changing existing constructor call sites.
+func (s *GalleryAnalyticsService) WithAssetAnalyticsRepo(repo *repository.GalleryAssetAnalyticsRepo) *GalleryAnalyticsService {
+	s.assetAnalyticsRepo = repo
+	return s
 }
 
 // TrackEvent records a raw analytics event (fire-and-forget pattern).
@@ -43,4 +51,21 @@ func (s *GalleryAnalyticsService) GetDailyStats(ctx context.Context, galleryID u
 // GetSummary returns aggregate analytics for a gallery.
 func (s *GalleryAnalyticsService) GetSummary(ctx context.Context, galleryID uuid.UUID, days int) (map[string]int64, error) {
 	return s.analyticsRepo.GetGallerySummary(ctx, galleryID, days)
+}
+
+// TopViewed returns top viewed gallery assets. A nil repo degrades to an
+// empty list so older route wiring remains safe.
+func (s *GalleryAnalyticsService) TopViewed(ctx context.Context, galleryID uuid.UUID, limit int) ([]repository.AssetAnalytics, error) {
+	if s.assetAnalyticsRepo == nil {
+		return []repository.AssetAnalytics{}, nil
+	}
+	return s.assetAnalyticsRepo.TopViewed(ctx, galleryID, limit)
+}
+
+// TopDownloaded returns top downloaded gallery assets.
+func (s *GalleryAnalyticsService) TopDownloaded(ctx context.Context, galleryID uuid.UUID, limit int) ([]repository.AssetAnalytics, error) {
+	if s.assetAnalyticsRepo == nil {
+		return []repository.AssetAnalytics{}, nil
+	}
+	return s.assetAnalyticsRepo.TopDownloaded(ctx, galleryID, limit)
 }

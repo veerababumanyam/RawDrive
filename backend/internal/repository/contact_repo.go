@@ -12,20 +12,20 @@ import (
 
 // Contact represents a client/vendor record.
 type Contact struct {
-	ID               uuid.UUID  `json:"id"`
-	WorkspaceID      uuid.UUID  `json:"workspace_id"`
-	UserID           *uuid.UUID `json:"user_id"`
-	Name             string     `json:"name"`
-	Phone            *string    `json:"phone"`
-	Email            *string    `json:"email"`
-	ContactType      string     `json:"contact_type"`
-	Company          *string    `json:"company"`
-	Address          *string    `json:"address"`
-	Tags             []string   `json:"tags"`
-	Notes            *string    `json:"notes"`
-	TotalRevenuePaisa int64     `json:"total_revenue_paisa"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	WorkspaceID       uuid.UUID  `json:"workspace_id"`
+	UserID            *uuid.UUID `json:"user_id"`
+	Name              string     `json:"name"`
+	Phone             *string    `json:"phone"`
+	Email             *string    `json:"email"`
+	ContactType       string     `json:"contact_type"`
+	Company           *string    `json:"company"`
+	Address           *string    `json:"address"`
+	Tags              []string   `json:"tags"`
+	Notes             *string    `json:"notes"`
+	TotalRevenuePaisa int64      `json:"total_revenue_paisa"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type ContactFilter struct {
@@ -158,6 +158,13 @@ func (r *ContactRepo) MergeContacts(ctx context.Context, workspaceID, targetID, 
 		return fmt.Errorf("reassign deals: %w", err)
 	}
 
+	// Reassign Studio Projects.
+	_, err = tx.Exec(ctx, `UPDATE studio_projects SET contact_id=$1, updated_at=$2 WHERE contact_id=$3 AND workspace_id=$4`,
+		targetID, now, sourceID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("reassign studio projects: %w", err)
+	}
+
 	// Reassign follow-ups
 	_, err = tx.Exec(ctx, `UPDATE follow_ups SET contact_id=$1, updated_at=$2 WHERE contact_id=$3 AND workspace_id=$4`,
 		targetID, now, sourceID, workspaceID)
@@ -177,6 +184,18 @@ func (r *ContactRepo) MergeContacts(ctx context.Context, workspaceID, targetID, 
 		targetID, now, sourceID, workspaceID)
 	if err != nil {
 		return fmt.Errorf("reassign invoices: %w", err)
+	}
+
+	// Reassign direct calendar and gallery links.
+	_, err = tx.Exec(ctx, `UPDATE events SET contact_id=$1, updated_at=$2 WHERE contact_id=$3 AND workspace_id=$4`,
+		targetID, now, sourceID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("reassign events: %w", err)
+	}
+	_, err = tx.Exec(ctx, `UPDATE galleries SET contact_id=$1, updated_at=$2 WHERE contact_id=$3 AND workspace_id=$4`,
+		targetID, now, sourceID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("reassign galleries: %w", err)
 	}
 
 	// Delete source contact

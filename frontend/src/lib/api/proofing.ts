@@ -22,6 +22,14 @@ export async function listProofingSelections(token: string, galleryId: string): 
   return [];
 }
 
+export async function exportProofingSelectionsCsv(token: string, galleryId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/proofing/export.csv`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to export proofing selections: ${res.status}`);
+  return res.blob();
+}
+
 export async function updateSelectionStatus(token: string, galleryId: string, selectionId: string, status: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/proofing/${selectionId}`, {
     method: "PATCH",

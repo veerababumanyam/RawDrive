@@ -73,19 +73,35 @@ type ProfileDeal struct {
 	EventDate   *time.Time `json:"event_date"`
 }
 
+type ProfileProject struct {
+	ID                 uuid.UUID  `json:"id"`
+	Name               string     `json:"name"`
+	Status             string     `json:"status"`
+	ProjectType        string     `json:"project_type"`
+	EventDate          *time.Time `json:"event_date"`
+	ExpectedValuePaisa int64      `json:"expected_value_paisa"`
+	BookedValuePaisa   int64      `json:"booked_value_paisa"`
+	BalanceDuePaisa    int64      `json:"balance_due_paisa"`
+	ContractStatus     string     `json:"contract_status"`
+	GalleryStatus      string     `json:"gallery_status"`
+	NextAction         *string    `json:"next_action"`
+}
+
 type ProfileEvent struct {
-	ID        uuid.UUID `json:"id"`
-	Title     string    `json:"title"`
-	EventType string    `json:"event_type"`
-	StartAt   time.Time `json:"start_at"`
-	EndAt     time.Time `json:"end_at"`
-	Location  *string   `json:"location"`
+	ID        uuid.UUID  `json:"id"`
+	Title     string     `json:"title"`
+	EventType string     `json:"event_type"`
+	StartAt   time.Time  `json:"start_at"`
+	EndAt     time.Time  `json:"end_at"`
+	Location  *string    `json:"location"`
+	ProjectID *uuid.UUID `json:"project_id"`
 }
 
 type ClientProfileResponse struct {
 	Contact         ProfileContact   `json:"contact"`
 	Galleries       []ProfileGallery `json:"galleries"`
 	Invoices        []ProfileInvoice `json:"invoices"`
+	Projects        []ProfileProject `json:"projects"`
 	Deals           []ProfileDeal    `json:"deals"`
 	Events          []ProfileEvent   `json:"events"`
 	LifetimeRevenue int64            `json:"lifetime_revenue_paisa"`
@@ -159,7 +175,28 @@ func (h *ClientProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// 3. Linked deals.
+	// 3. Linked Studio Projects.
+	projectRows, err := h.db.Query(ctx, `
+		SELECT id, name, status, project_type, event_date, expected_value_paisa,
+		       booked_value_paisa, balance_due_paisa, contract_status, gallery_status, next_action
+		FROM studio_projects
+		WHERE contact_id = $1 AND workspace_id = $2
+		ORDER BY event_date NULLS LAST, updated_at DESC`, contactID, workspaceID)
+	if err == nil {
+		defer projectRows.Close()
+		for projectRows.Next() {
+			var p ProfileProject
+			if scanErr := projectRows.Scan(
+				&p.ID, &p.Name, &p.Status, &p.ProjectType, &p.EventDate,
+				&p.ExpectedValuePaisa, &p.BookedValuePaisa, &p.BalanceDuePaisa,
+				&p.ContractStatus, &p.GalleryStatus, &p.NextAction,
+			); scanErr == nil {
+				resp.Projects = append(resp.Projects, p)
+			}
+		}
+	}
+
+	// 4. Legacy linked deals retained for compatibility.
 	dealRows, err := h.db.Query(ctx, `
 		SELECT id, title, stage, amount_paisa, event_type, event_date
 		FROM deals
@@ -178,9 +215,9 @@ func (h *ClientProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// 4. Linked events.
+	// 5. Linked events.
 	eventRows, err := h.db.Query(ctx, `
-		SELECT id, title, event_type, start_at, end_at, location
+		SELECT id, title, event_type, start_at, end_at, location, project_id
 		FROM events
 		WHERE contact_id = $1 AND workspace_id = $2
 		ORDER BY start_at DESC`, contactID, workspaceID)
@@ -189,18 +226,21 @@ func (h *ClientProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 		for eventRows.Next() {
 			var e ProfileEvent
 			if scanErr := eventRows.Scan(
-				&e.ID, &e.Title, &e.EventType, &e.StartAt, &e.EndAt, &e.Location,
+				&e.ID, &e.Title, &e.EventType, &e.StartAt, &e.EndAt, &e.Location, &e.ProjectID,
 			); scanErr == nil {
 				resp.Events = append(resp.Events, e)
 			}
 		}
 	}
 
-	// 5. Linked galleries. Galleries do not have a direct contact_id FK, but
-	// existing activity still provides email-based links without adding a new table.
-	resp.Galleries = h.loadLinkedGalleries(ctx, workspaceID, c.Email)
+	// 6. Linked galleries. M26 uses direct contact/project links first and
+	// keeps existing email-derived activity as a fallback.
+	resp.Galleries = h.loadLinkedGalleries(ctx, workspaceID, contactID, c.Email)
 	if resp.Invoices == nil {
 		resp.Invoices = []ProfileInvoice{}
+	}
+	if resp.Projects == nil {
+		resp.Projects = []ProfileProject{}
 	}
 	if resp.Deals == nil {
 		resp.Deals = []ProfileDeal{}
@@ -209,7 +249,7 @@ func (h *ClientProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 		resp.Events = []ProfileEvent{}
 	}
 
-	// 6. Lifetime revenue: sum of paid invoices for this contact.
+	// 7. Lifetime revenue: sum of paid invoices for this contact.
 	var lifetimeRevenue int64
 	_ = h.db.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_paid_paisa), 0)
@@ -352,7 +392,7 @@ func (h *ClientProfileHandler) GetTimeline(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	h.appendGalleryTimelineEntries(ctx, workspaceID, contactEmail, &timeline)
+	h.appendGalleryTimelineEntries(ctx, workspaceID, contactID, contactEmail, &timeline)
 
 	// Sort timeline by timestamp descending.
 	sortTimelineDesc(timeline)
@@ -386,55 +426,57 @@ func normalizedEmail(email *string) (string, bool) {
 	return value, value != ""
 }
 
-func (h *ClientProfileHandler) loadLinkedGalleries(ctx context.Context, workspaceID uuid.UUID, email *string) []ProfileGallery {
-	emailValue, ok := normalizedEmail(email)
-	if !ok {
-		return []ProfileGallery{}
-	}
+func (h *ClientProfileHandler) loadLinkedGalleries(ctx context.Context, workspaceID, contactID uuid.UUID, email *string) []ProfileGallery {
+	emailValue, hasEmail := normalizedEmail(email)
 
 	rows, err := h.db.Query(ctx, `
 		WITH linked_gallery_ids AS (
+			SELECT g_direct.id AS gallery_id
+			FROM galleries g_direct
+			WHERE g_direct.workspace_id = $1
+			  AND COALESCE(g_direct.primary_contact_id, g_direct.contact_id) = $3
+			UNION
 			SELECT cc.gallery_id
 			FROM client_conversations cc
-			WHERE cc.workspace_id = $1 AND lower(cc.client_email) = lower($2)
+			WHERE $4 AND cc.workspace_id = $1 AND lower(cc.client_email) = lower($2)
 			UNION
 			SELECT ps.gallery_id
 			FROM proofing_selections ps
 			JOIN galleries g_ps ON g_ps.id = ps.gallery_id
-			WHERE g_ps.workspace_id = $1 AND lower(ps.client_email) = lower($2)
+			WHERE $4 AND g_ps.workspace_id = $1 AND lower(ps.client_email) = lower($2)
 			UNION
 			SELECT pc.gallery_id
 			FROM proofing_comments pc
 			JOIN galleries g_pc ON g_pc.id = pc.gallery_id
-			WHERE g_pc.workspace_id = $1 AND lower(pc.author_email) = lower($2)
+			WHERE $4 AND g_pc.workspace_id = $1 AND lower(pc.author_email) = lower($2)
 			UNION
 			SELECT aa.gallery_id
 			FROM album_approvals aa
 			JOIN galleries g_aa ON g_aa.id = aa.gallery_id
-			WHERE g_aa.workspace_id = $1 AND lower(aa.approved_by_email) = lower($2)
+			WHERE $4 AND g_aa.workspace_id = $1 AND lower(aa.approved_by_email) = lower($2)
 			UNION
 			SELECT gal.gallery_id
 			FROM gallery_access_logs gal
 			JOIN galleries g_gal ON g_gal.id = gal.gallery_id
-			WHERE g_gal.workspace_id = $1 AND lower(gal.visitor_email) = lower($2)
+			WHERE $4 AND g_gal.workspace_id = $1 AND lower(gal.visitor_email) = lower($2)
 			UNION
 			SELECT go.gallery_id
 			FROM gallery_orders go
-			WHERE go.workspace_id = $1 AND lower(go.client_email) = lower($2)
+			WHERE $4 AND go.workspace_id = $1 AND lower(go.client_email) = lower($2)
 			UNION
 			SELECT gc.gallery_id
 			FROM gallery_carts gc
 			JOIN galleries g_gc ON g_gc.id = gc.gallery_id
-			WHERE g_gc.workspace_id = $1 AND lower(gc.client_email) = lower($2)
+			WHERE $4 AND g_gc.workspace_id = $1 AND lower(gc.client_email) = lower($2)
 			UNION
 			SELECT de.gallery_id
 			FROM download_events de
 			JOIN galleries g_de ON g_de.id = de.gallery_id
-			WHERE g_de.workspace_id = $1 AND lower(de.downloader_email) = lower($2)
+			WHERE $4 AND g_de.workspace_id = $1 AND lower(de.downloader_email) = lower($2)
 			UNION
 			SELECT dj.gallery_id
 			FROM download_jobs dj
-			WHERE dj.workspace_id = $1 AND lower(dj.requested_by_email) = lower($2)
+			WHERE $4 AND dj.workspace_id = $1 AND lower(dj.requested_by_email) = lower($2)
 		)
 		SELECT
 			g.id,
@@ -461,7 +503,7 @@ func (h *ClientProfileHandler) loadLinkedGalleries(ctx context.Context, workspac
 		) asset_counts ON asset_counts.gallery_id = g.id
 		WHERE g.workspace_id = $1 AND g.deleted_at IS NULL
 		ORDER BY g.created_at DESC
-		LIMIT 50`, workspaceID, emailValue)
+		LIMIT 50`, workspaceID, emailValue, contactID, hasEmail)
 	if err != nil {
 		return []ProfileGallery{}
 	}
@@ -480,53 +522,55 @@ func (h *ClientProfileHandler) loadLinkedGalleries(ctx context.Context, workspac
 	return galleries
 }
 
-func (h *ClientProfileHandler) appendGalleryTimelineEntries(ctx context.Context, workspaceID uuid.UUID, email *string, timeline *[]TimelineEntry) {
-	emailValue, ok := normalizedEmail(email)
-	if !ok {
-		return
-	}
+func (h *ClientProfileHandler) appendGalleryTimelineEntries(ctx context.Context, workspaceID, contactID uuid.UUID, email *string, timeline *[]TimelineEntry) {
+	emailValue, hasEmail := normalizedEmail(email)
 
 	rows, err := h.db.Query(ctx, `
 		WITH source AS (
+			SELECT g_direct.id AS gallery_id, g_direct.created_at, 'gallery_linked'::text AS event_type, 'Gallery linked'::text AS label
+			FROM galleries g_direct
+			WHERE g_direct.workspace_id = $1
+			  AND COALESCE(g_direct.primary_contact_id, g_direct.contact_id) = $3
+			UNION ALL
 			SELECT cc.gallery_id, cc.created_at, 'gallery_shared'::text AS event_type, 'Gallery shared'::text AS label
 			FROM client_conversations cc
-			WHERE cc.workspace_id = $1 AND lower(cc.client_email) = lower($2)
+			WHERE $4 AND cc.workspace_id = $1 AND lower(cc.client_email) = lower($2)
 			UNION ALL
 			SELECT ps.gallery_id, ps.created_at, 'gallery_selection'::text, 'Gallery selection'
 			FROM proofing_selections ps
 			JOIN galleries g_ps ON g_ps.id = ps.gallery_id
-			WHERE g_ps.workspace_id = $1 AND lower(ps.client_email) = lower($2)
+			WHERE $4 AND g_ps.workspace_id = $1 AND lower(ps.client_email) = lower($2)
 			UNION ALL
 			SELECT pc.gallery_id, pc.created_at, 'gallery_review'::text, 'Gallery review'
 			FROM proofing_comments pc
 			JOIN galleries g_pc ON g_pc.id = pc.gallery_id
-			WHERE g_pc.workspace_id = $1 AND lower(pc.author_email) = lower($2)
+			WHERE $4 AND g_pc.workspace_id = $1 AND lower(pc.author_email) = lower($2)
 			UNION ALL
 			SELECT aa.gallery_id, aa.created_at, 'album_approved'::text, 'Album approved'
 			FROM album_approvals aa
 			JOIN galleries g_aa ON g_aa.id = aa.gallery_id
-			WHERE g_aa.workspace_id = $1 AND lower(aa.approved_by_email) = lower($2)
+			WHERE $4 AND g_aa.workspace_id = $1 AND lower(aa.approved_by_email) = lower($2)
 			UNION ALL
 			SELECT gal.gallery_id, gal.created_at, 'gallery_accessed'::text, 'Gallery accessed'
 			FROM gallery_access_logs gal
 			JOIN galleries g_gal ON g_gal.id = gal.gallery_id
-			WHERE g_gal.workspace_id = $1 AND lower(gal.visitor_email) = lower($2)
+			WHERE $4 AND g_gal.workspace_id = $1 AND lower(gal.visitor_email) = lower($2)
 			UNION ALL
 			SELECT go.gallery_id, go.created_at, 'gallery_order'::text, 'Gallery order'
 			FROM gallery_orders go
-			WHERE go.workspace_id = $1 AND lower(go.client_email) = lower($2)
+			WHERE $4 AND go.workspace_id = $1 AND lower(go.client_email) = lower($2)
 			UNION ALL
 			SELECT de.gallery_id, de.created_at, 'gallery_download'::text, 'Gallery download'
 			FROM download_events de
 			JOIN galleries g_de ON g_de.id = de.gallery_id
-			WHERE g_de.workspace_id = $1 AND lower(de.downloader_email) = lower($2)
+			WHERE $4 AND g_de.workspace_id = $1 AND lower(de.downloader_email) = lower($2)
 		)
 		SELECT source.created_at, source.event_type, source.label || ': ' || g.title, g.id
 		FROM source
 		JOIN galleries g ON g.id = source.gallery_id
 		WHERE g.workspace_id = $1 AND g.deleted_at IS NULL
 		ORDER BY source.created_at DESC
-		LIMIT 100`, workspaceID, emailValue)
+		LIMIT 100`, workspaceID, emailValue, contactID, hasEmail)
 	if err != nil {
 		return
 	}

@@ -1,53 +1,70 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { listLeads, createLead, type Lead } from "@/lib/api/crm";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { listEvents, type CalendarEvent } from "@/lib/api/calendar";
+import { listInvoices, formatPaisa, type Invoice } from "@/lib/api/billing";
+import { listGalleries, type Gallery } from "@/lib/api/galleries";
+import { listLeads, listProjects, type Lead, type StudioProject } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
-import { cn } from "@/lib/utils";
-import { leadStageClasses } from "@/lib/dashboard-ui";
 
-const STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
+interface OverviewState {
+  leads: Lead[];
+  projects: StudioProject[];
+  invoices: Invoice[];
+  events: CalendarEvent[];
+  galleries: Gallery[];
+  error: string | null;
+}
+
+const initialState: OverviewState = {
+  leads: [],
+  projects: [],
+  invoices: [],
+  events: [],
+  galleries: [],
+  error: null,
+};
+
+function isOpenInquiry(lead: Lead) {
+  return lead.stage !== "won" && lead.stage !== "lost";
+}
+
+function isOverdueInvoice(invoice: Invoice) {
+  const outstanding = invoice.total_paisa - invoice.amount_paid_paisa;
+  if (outstanding <= 0 || invoice.status === "paid") return false;
+  if (invoice.status === "overdue") return true;
+  return Boolean(invoice.due_date && new Date(invoice.due_date).getTime() < Date.now());
+}
+
+function StatCard({ label, value, detail, href }: { label: string; value: string; detail: string; href: string }) {
+  return (
+    <Link href={href} className="rounded-2xl border border-border-default bg-surface-raised p-4 transition-colors hover:bg-surface-sunken">
+      <p className="text-xs font-medium uppercase tracking-wide text-text-tertiary">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-text-primary">{value}</p>
+      <p className="mt-1 text-sm text-text-secondary">{detail}</p>
+    </Link>
+  );
+}
+
+function ActionLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex min-h-[44px] items-center rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken"
+    >
+      {children}
+    </Link>
+  );
+}
 
 export default function CRMPage() {
-  const [activeStage, setActiveStage] = useState<string | "">("");
-  const token = getStoredAccessToken();
-  const requestKey = activeStage || "__all__";
-  const [requestState, setRequestState] = useState<{
-    key: string;
-    leads: Lead[];
-    error: string | null;
-  }>({
-    key: "",
-    leads: [],
-    error: null,
-  });
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [refreshTick, setRefreshTick] = useState(0);
-  // View mode: "list" is a single scannable column (default — kanban's
-  // 7-column horizontal scroll is noise when there's little data), and
-  // "kanban" is the pipeline board. Photographers with under ~10 leads
-  // get list by default; heavier users can flip to kanban for visual
-  // flow across stages. Previously the page was kanban-only which
-  // meant every new account saw seven identical "No leads" columns in
-  // a ~1960px-wide horizontal scroller — noisy and confusing.
-  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    source: "website",
-    event_type: "wedding",
-    stage: "new",
-  });
-
-  const leads = requestState.key === requestKey ? requestState.leads : [];
-  const error = token
-    ? requestState.key === requestKey
-      ? requestState.error
-      : null
-    : "Missing access token";
-  const loading = Boolean(token) && requestState.key !== requestKey;
+  const [token] = useState(() => getStoredAccessToken());
+  const [state, setState] = useState<OverviewState>(() =>
+    token ? initialState : { ...initialState, error: "Missing access token" },
+  );
+  const [loading, setLoading] = useState(Boolean(token));
 
   useEffect(() => {
     if (!token) {
@@ -55,317 +72,139 @@ export default function CRMPage() {
     }
 
     let ignore = false;
+    const from = new Date();
+    const to = new Date(from.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    listLeads(token, activeStage ? { stage: activeStage } : undefined)
-      .then((data) => {
-        if (!ignore) {
-          setRequestState({
-            key: requestKey,
-            leads: data,
-            error: null,
-          });
-        }
-      })
-      .catch((err) => {
-        if (!ignore) {
-          setRequestState({
-            key: requestKey,
-            leads: [],
-            error: err?.message || "Failed to load leads",
-          });
-        }
+    Promise.allSettled([
+      listLeads(token),
+      listProjects(token),
+      listInvoices(token),
+      listEvents(token, from.toISOString(), to.toISOString()),
+      listGalleries(token),
+    ]).then((results) => {
+      if (ignore) return;
+      const [leads, projects, invoices, events, galleries] = results;
+      const failed = results.find((result) => result.status === "rejected");
+      setState({
+        leads: leads.status === "fulfilled" ? leads.value : [],
+        projects: projects.status === "fulfilled" ? projects.value : [],
+        invoices: invoices.status === "fulfilled" ? invoices.value : [],
+        events: events.status === "fulfilled" ? events.value : [],
+        galleries: galleries.status === "fulfilled" ? galleries.value : [],
+        error: failed?.status === "rejected" ? failed.reason?.message || "Some CRM data could not be loaded" : null,
       });
+      setLoading(false);
+    });
 
     return () => {
       ignore = true;
     };
-  }, [activeStage, requestKey, token, refreshTick]);
+  }, [token]);
 
-  const handleCreate = async () => {
-    if (!form.name.trim() || creating) return;
-    setCreating(true);
-    try {
-      await createLead(token, {
-        name: form.name.trim(),
-        email: form.email.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        source: form.source,
-        event_type: form.event_type,
-        stage: form.stage,
-      });
-      setShowCreate(false);
-      setForm({ name: "", email: "", phone: "", source: "website", event_type: "wedding", stage: "new" });
-      setRefreshTick((n) => n + 1);
-    } catch (err) {
-      setRequestState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : "Failed to create lead",
-      }));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const groupedLeads = STAGES.reduce(
-    (acc, stage) => {
-      acc[stage] = leads.filter((lead) => lead.stage === stage);
-      return acc;
-    },
-    {} as Record<string, Lead[]>,
-  );
-
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 bg-surface-sunken rounded" />
-          <div className="flex gap-4 overflow-x-auto">
-            {[1, 2, 3, 4].map((item) => (
-              <div key={item} className="min-w-[280px] h-96 bg-surface-sunken rounded-xl" />
-            ))}
-          </div>
-        </div>
-      </div>
+  const summary = useMemo(() => {
+    const hotInquiries = state.leads.filter(isOpenInquiry);
+    const upcomingShoots = state.events.filter((event) => event.event_type === "shoot" && event.status !== "cancelled");
+    const overdueInvoices = state.invoices.filter(isOverdueInvoice);
+    const bookedValue = state.projects
+      .filter((project) => ["booked", "shooting", "editing", "proofing", "delivered"].includes(project.status))
+      .reduce((sum, project) => sum + (project.booked_value_paisa || project.expected_value_paisa || 0), 0);
+    const outstanding = state.invoices.reduce(
+      (sum, invoice) => sum + Math.max(0, invoice.total_paisa - invoice.amount_paid_paisa),
+      0,
     );
-  }
+    const taxCollected = state.invoices.reduce(
+      (sum, invoice) => sum + invoice.cgst_paisa + invoice.sgst_paisa + invoice.igst_paisa,
+      0,
+    );
+
+    return { hotInquiries, upcomingShoots, overdueInvoices, bookedValue, outstanding, taxCollected };
+  }, [state]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      {error && (
-        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
+      <CRMSecondaryNav />
+
+      {state.error && (
+        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+          {state.error}
         </div>
       )}
-      <div className="flex items-center justify-between">
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Lead Pipeline</h1>
-          <p className="text-sm text-text-secondary mt-1">
-            {leads.length} {leads.length === 1 ? "lead" : "leads"}
+          <p className="text-sm font-medium text-accent-primary">Studio CRM</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-primary">Studio CRM</h1>
+          <p className="mt-2 max-w-3xl text-sm text-text-secondary">
+            Today in your studio: inquiries, projects, bookings, billing, delivery, and tax in one operating view.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
-        >
-          + New Lead
-        </button>
-      </div>
-
-      {showCreate && (
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">New Lead</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              type="text" placeholder="Name *"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
-              autoFocus
-            />
-            <input
-              type="email" placeholder="Email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
-            />
-            <input
-              type="tel" placeholder="Phone"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
-            />
-            <select
-              value={form.event_type}
-              onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
-            >
-              <option value="wedding">Wedding</option>
-              <option value="portrait">Portrait</option>
-              <option value="event">Corporate event</option>
-              <option value="commercial">Commercial</option>
-              <option value="other">Other</option>
-            </select>
-            <select
-              value={form.source}
-              onChange={(e) => setForm({ ...form, source: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
-            >
-              <option value="website">Website</option>
-              <option value="referral">Referral</option>
-              <option value="instagram">Instagram</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="other">Other</option>
-            </select>
-            <select
-              value={form.stage}
-              onChange={(e) => setForm({ ...form, stage: e.target.value })}
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary capitalize"
-            >
-              {STAGES.map((s) => (<option key={s} value={s}>{s}</option>))}
-            </select>
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => setShowCreate(false)}
-              className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
-              disabled={creating}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreate}
-              disabled={creating || !form.name.trim()}
-              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
-            >
-              {creating ? "Creating…" : "Save Lead"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          <button
-            onClick={() => setActiveStage("")}
-            className={cn(
-              "segmented-control-button whitespace-nowrap text-sm",
-              activeStage === ""
-                ? "segmented-control-button--active"
-                : "segmented-control-button--inactive",
-            )}
-          >
-            All
-          </button>
-          {STAGES.map((stage) => (
-            <button
-              key={stage}
-              onClick={() => setActiveStage(stage)}
-              className={cn(
-                "segmented-control-button whitespace-nowrap text-sm capitalize",
-                activeStage === stage
-                  ? "segmented-control-button--active"
-                  : "segmented-control-button--inactive",
-              )}
-            >
-              {stage} ({groupedLeads[stage]?.length || 0})
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1 rounded-xl bg-surface-sunken p-1">
-          <button
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-              viewMode === "list" ? "bg-accent-primary text-white" : "text-text-secondary hover:text-text-primary",
-            )}
-          >
-            List
-          </button>
-          <button
-            onClick={() => setViewMode("kanban")}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-              viewMode === "kanban" ? "bg-accent-primary text-white" : "text-text-secondary hover:text-text-primary",
-            )}
-          >
-            Kanban
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <ActionLink href="/crm/inquiries">New Inquiry</ActionLink>
+          <ActionLink href="/crm/projects?create=true">New Project</ActionLink>
+          <ActionLink href="/calendar?create=true">Book Shoot</ActionLink>
+          <ActionLink href="/billing?create=true">Create Invoice</ActionLink>
         </div>
       </div>
 
-      {leads.length === 0 ? (
-        /* Collapsed empty state — replaces the old "seven identical
-           'No leads' columns in a horizontal scroller" layout that was
-           noisy for new accounts. */
-        <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
-          <p className="text-text-primary font-medium">No leads yet</p>
-          <p className="text-sm text-text-secondary mt-1">
-            Capture enquiries from your website, Instagram, or WhatsApp and track them through the pipeline.
-          </p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
-          >
-            + Create your first lead
-          </button>
-        </div>
-      ) : viewMode === "list" ? (
-        /* List view — vertical scannable table. Stage is rendered as
-           a badge column; source/event/budget fit on one row each. */
-        <div className="rounded-2xl border border-border-default bg-surface-raised overflow-hidden">
-          {(activeStage ? leads.filter((l) => l.stage === activeStage) : leads).map((lead) => (
-            <div
-              key={lead.id}
-              className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 border-b border-border-default last:border-b-0 hover:bg-surface-sunken/40 transition-colors cursor-pointer"
-            >
-              <div>
-                <p className="font-medium text-text-primary text-sm">{lead.name}</p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-text-secondary">
-                  {lead.event_type && <span className="capitalize">{lead.event_type}</span>}
-                  {lead.source && <span className="capitalize">via {lead.source}</span>}
-                  {lead.budget_paisa ? (
-                    <span>₹{(lead.budget_paisa / 100).toLocaleString("en-IN")}</span>
-                  ) : null}
-                </div>
-              </div>
-              <span
-                className={cn(
-                  "self-center capitalize",
-                  leadStageClasses[lead.stage] || "status-badge status-badge--neutral",
-                )}
-              >
-                {lead.stage}
-              </span>
-            </div>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+            <div key={item} className="h-32 animate-pulse rounded-2xl bg-surface-sunken" />
           ))}
         </div>
       ) : (
-        /* Kanban view — the previous horizontal board. Keep the
-           min-w-[280px] column sizing because kanban intrinsically
-           needs to be wide enough to show card content. */
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {STAGES.filter((stage) => !activeStage || stage === activeStage).map((stage) => (
-            <div key={stage} className="min-w-[280px] flex-shrink-0">
-              <div className="flex items-center gap-2 mb-3">
-                <span
-                  className={cn(
-                    "capitalize",
-                    leadStageClasses[stage] || "status-badge status-badge--neutral",
-                  )}
-                >
-                  {stage}
-                </span>
-                <span className="text-xs text-text-tertiary">{groupedLeads[stage]?.length || 0}</span>
+        <>
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="Hot inquiries" value={String(summary.hotInquiries.length)} detail="Open leads needing conversion" href="/crm/inquiries" />
+            <StatCard label="Upcoming shoots" value={String(summary.upcomingShoots.length)} detail="Next 30 days on calendar" href="/calendar" />
+            <StatCard label="Pending contracts" value="0" detail="Documents workspace lands next" href="/crm/documents" />
+            <StatCard label="Overdue invoices" value={String(summary.overdueInvoices.length)} detail={`${formatPaisa(summary.outstanding)} outstanding`} href="/billing" />
+            <StatCard label="Active galleries" value={String(state.galleries.length)} detail="Delivery and proofing work" href="/galleries" />
+            <StatCard label="Booked value" value={formatPaisa(summary.bookedValue)} detail="Booked and delivered projects" href="/crm/projects" />
+            <StatCard label="GST tracked" value={formatPaisa(summary.taxCollected)} detail="From listed invoices" href="/reports/gstr1" />
+            <StatCard label="Price book" value="Open" detail="Packages that feed quotes and invoices" href="/settings/packages" />
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="rounded-2xl border border-border-default bg-surface-raised p-5 xl:col-span-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-text-primary">Project pipeline</h2>
+                  <p className="mt-1 text-sm text-text-secondary">Projects are the shared job record for bookings, billing, documents, and galleries.</p>
+                </div>
+                <Link href="/crm/projects" className="text-sm font-medium text-accent-primary hover:underline">Open Projects</Link>
               </div>
-              <div className="space-y-2">
-                {(groupedLeads[stage] || []).map((lead) => (
-                  <div
-                    key={lead.id}
-                    className="bg-surface-raised rounded-xl p-3 border border-border-default hover:border-accent/30 transition-colors cursor-pointer"
-                  >
-                    <p className="font-medium text-text-primary text-sm">{lead.name}</p>
-                    {lead.event_type && (
-                      <p className="text-xs text-text-secondary mt-1 capitalize">{lead.event_type}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      {lead.source && (
-                        <span className="text-xs text-text-tertiary capitalize">{lead.source}</span>
-                      )}
-                      {lead.budget_paisa && (
-                        <span className="text-xs text-text-tertiary">
-                          ₹{(lead.budget_paisa / 100).toLocaleString("en-IN")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+              <div className="mt-4 space-y-2">
+                {state.projects.slice(0, 5).map((project) => (
+                  <Link key={project.id} href={`/crm/projects/${project.id}`} className="flex items-center justify-between rounded-xl border border-border-default px-4 py-3 hover:bg-surface-sunken">
+                    <span className="font-medium text-text-primary">{project.name}</span>
+                    <span className="text-sm text-text-secondary">{formatPaisa(project.expected_value_paisa || 0)}</span>
+                  </Link>
                 ))}
-                {(groupedLeads[stage] || []).length === 0 && (
-                  <div className="text-center py-8 text-text-tertiary text-sm">No leads</div>
-                )}
+                {state.projects.length === 0 && <p className="text-sm text-text-secondary">No projects yet. Convert an inquiry or create a project.</p>}
               </div>
             </div>
-          ))}
-        </div>
+
+            <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-text-primary">Follow-up queue</h2>
+                  <p className="mt-1 text-sm text-text-secondary">M25 surfaces the queue; M28 adds cross-entity automation.</p>
+                </div>
+                <Link href="/crm/inquiries" className="text-sm font-medium text-accent-primary hover:underline">Review</Link>
+              </div>
+              <div className="mt-4 space-y-2">
+                {summary.hotInquiries.slice(0, 5).map((lead) => (
+                  <Link key={lead.id} href="/crm/inquiries" className="block rounded-xl border border-border-default px-4 py-3 hover:bg-surface-sunken">
+                    <p className="font-medium text-text-primary">{lead.name}</p>
+                    <p className="mt-1 text-xs capitalize text-text-secondary">{lead.event_type || "event"} via {lead.source || "unknown source"}</p>
+                  </Link>
+                ))}
+                {summary.hotInquiries.length === 0 && <p className="text-sm text-text-secondary">No open inquiries need action.</p>}
+              </div>
+            </div>
+          </section>
+        </>
       )}
     </div>
   );

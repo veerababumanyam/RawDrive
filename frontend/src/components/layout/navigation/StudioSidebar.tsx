@@ -3,25 +3,21 @@
 import {
   BarChart3,
   BrainCircuit,
-  CalendarDays,
-  Handshake,
   Home,
   ImageIcon,
   MessageSquare,
   Monitor,
   Radio,
-  ReceiptText,
   Settings,
   ShoppingBag,
   UserCircle,
-  Users,
 } from "lucide-react";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
 import type { NavGroup } from "./SidebarShell";
 
 /* ------------------------------------------------------------------ */
 /*  Studio / Photographer sidebar — PRD §6.2 Studio navigation       */
-/*  10 items in 4 groups: Creative, Business, Grow, Settings          */
+/*  Business operations are grouped under Studio CRM.                 */
 /* ------------------------------------------------------------------ */
 
 const groups: NavGroup[] = [
@@ -37,13 +33,12 @@ const groups: NavGroup[] = [
   {
     title: "Business",
     items: [
-      { href: "/crm/contacts", label: "Clients", icon: Users },
-      { href: "/crm", label: "Leads", icon: BarChart3 },
-      { href: "/crm/deals", label: "Deals", icon: Handshake },
-      { href: "/calendar", label: "Bookings", icon: CalendarDays },
-      { href: "/billing", label: "Invoices", icon: ReceiptText },
-      { href: "/settings/packages", label: "Packages", icon: ShoppingBag },
-      { href: "/reports/gstr1", label: "GSTR-1", icon: ReceiptText },
+      {
+        href: "/crm",
+        label: "Studio CRM",
+        icon: BarChart3,
+        activeHrefs: ["/crm", "/calendar", "/billing", "/settings/packages", "/reports/gstr1"],
+      },
     ],
   },
   {

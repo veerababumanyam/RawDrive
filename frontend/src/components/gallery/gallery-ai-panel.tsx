@@ -179,7 +179,7 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
               Re-scan
             </button>
             <Link
-              href={`/galleries/${galleryId}/ai-studio`}
+              href={`/galleries/${galleryId}/ai`}
               className="text-xs text-accent-primary hover:underline"
             >
               Open AI Studio

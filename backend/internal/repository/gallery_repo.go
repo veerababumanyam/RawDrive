@@ -13,23 +13,31 @@ import (
 
 // Gallery represents a photo gallery.
 type Gallery struct {
-	ID              uuid.UUID              `json:"id"`
-	WorkspaceID     uuid.UUID              `json:"workspace_id"`
-	Title           string                 `json:"title"`
-	Slug            string                 `json:"slug"`
-	Description     string                 `json:"description"`
-	CoverAssetID    *uuid.UUID             `json:"cover_asset_id,omitempty"`
-	GalleryType     string                 `json:"gallery_type"`
-	Settings        map[string]interface{} `json:"settings"`
-	PasswordHash    *string                `json:"-"`
-	WatermarkConfig map[string]interface{} `json:"watermark_config"`
-	IsPublished     bool                   `json:"is_published"`
-	MaxSelections   int                    `json:"max_selections"`
-	Status          string                 `json:"status"`
-	CreatedBy       *uuid.UUID             `json:"created_by,omitempty"`
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
-	DeletedAt       *time.Time             `json:"deleted_at,omitempty"`
+	ID               uuid.UUID              `json:"id"`
+	WorkspaceID      uuid.UUID              `json:"workspace_id"`
+	ContactID        *uuid.UUID             `json:"contact_id,omitempty"`
+	PrimaryContactID *uuid.UUID             `json:"primary_contact_id,omitempty"`
+	ProjectID        *uuid.UUID             `json:"project_id,omitempty"`
+	EventID          *uuid.UUID             `json:"event_id,omitempty"`
+	DealID           *uuid.UUID             `json:"deal_id,omitempty"`
+	InvoiceID        *uuid.UUID             `json:"invoice_id,omitempty"`
+	Title            string                 `json:"title"`
+	Slug             string                 `json:"slug"`
+	Description      string                 `json:"description"`
+	CoverAssetID     *uuid.UUID             `json:"cover_asset_id,omitempty"`
+	GalleryType      string                 `json:"gallery_type"`
+	Settings         map[string]interface{} `json:"settings"`
+	PasswordHash     *string                `json:"-"`
+	WatermarkConfig  map[string]interface{} `json:"watermark_config"`
+	IsPublished      bool                   `json:"is_published"`
+	MaxSelections    int                    `json:"max_selections"`
+	Status           string                 `json:"status"`
+	CreatedBy        *uuid.UUID             `json:"created_by,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
+	PublishedAt      *time.Time             `json:"published_at,omitempty"`
+	ArchivedAt       *time.Time             `json:"archived_at,omitempty"`
+	DeletedAt        *time.Time             `json:"deleted_at,omitempty"`
 	// M19: Gallery Enhancement Suite (F-009) fields
 	CoverTemplate    string                 `json:"cover_template"`
 	CoverConfig      map[string]interface{} `json:"cover_config"`
@@ -62,6 +70,30 @@ func NewGalleryRepo(pool *pgxpool.Pool) *GalleryRepo {
 	return &GalleryRepo{pool: pool}
 }
 
+func (g *Gallery) normalizeWorkspaceLinks() {
+	if g.PrimaryContactID == nil && g.ContactID != nil {
+		g.PrimaryContactID = g.ContactID
+	}
+	if g.ContactID == nil && g.PrimaryContactID != nil {
+		g.ContactID = g.PrimaryContactID
+	}
+}
+
+func (g *Gallery) normalizeLifecycleTimestamps(now time.Time) {
+	if g.IsPublished && g.PublishedAt == nil {
+		publishedAt := now
+		g.PublishedAt = &publishedAt
+	}
+	if g.Status == "archived" {
+		if g.ArchivedAt == nil {
+			archivedAt := now
+			g.ArchivedAt = &archivedAt
+		}
+		return
+	}
+	g.ArchivedAt = nil
+}
+
 // generateSlug creates a URL-safe slug from the title.
 func generateSlug(title string) string {
 	slug := strings.ToLower(title)
@@ -89,6 +121,8 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 	}
 	g.CreatedAt = time.Now()
 	g.UpdatedAt = g.CreatedAt
+	g.normalizeWorkspaceLinks()
+	g.normalizeLifecycleTimestamps(g.CreatedAt)
 
 	if g.CoverTemplate == "" {
 		g.CoverTemplate = "none"
@@ -99,14 +133,17 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 	g.DownloadEnabled = true
 
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO galleries (id, workspace_id, title, slug, description, cover_asset_id,
+		`INSERT INTO galleries (id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
+		 title, slug, description, cover_asset_id,
 		 gallery_type, settings, password_hash, watermark_config, is_published, max_selections,
-		 status, created_by, created_at, updated_at,
+		 status, created_by, created_at, updated_at, published_at, archived_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
-		g.ID, g.WorkspaceID, g.Title, g.Slug, g.Description, g.CoverAssetID,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
+		g.ID, g.WorkspaceID, g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
+		g.Title, g.Slug, g.Description, g.CoverAssetID,
 		g.GalleryType, g.Settings, g.PasswordHash, g.WatermarkConfig, g.IsPublished,
 		g.MaxSelections, g.Status, g.CreatedBy, g.CreatedAt, g.UpdatedAt,
+		g.PublishedAt, g.ArchivedAt,
 		g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled, g.SortPreference, g.WhatsappTemplate,
 	)
 	if err != nil {
@@ -126,6 +163,12 @@ func (r *GalleryRepo) Duplicate(ctx context.Context, sourceID uuid.UUID, newTitl
 	dup := &Gallery{
 		ID:               uuid.New(),
 		WorkspaceID:      src.WorkspaceID,
+		ContactID:        src.ContactID,
+		PrimaryContactID: src.PrimaryContactID,
+		ProjectID:        src.ProjectID,
+		EventID:          src.EventID,
+		DealID:           src.DealID,
+		InvoiceID:        src.InvoiceID,
 		Title:            newTitle,
 		Slug:             generateSlug(newTitle),
 		Description:      src.Description,
@@ -152,14 +195,16 @@ func (r *GalleryRepo) Duplicate(ctx context.Context, sourceID uuid.UUID, newTitl
 func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, error) {
 	g := &Gallery{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, title, slug, description, cover_asset_id, gallery_type,
+		`SELECT id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
+		 title, slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
-		 created_by, created_at, updated_at, deleted_at,
+		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&g.ID, &g.WorkspaceID, &g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
+	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
+		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
-		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.DeletedAt,
+		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
 	)
 	if err == pgx.ErrNoRows {
@@ -168,6 +213,7 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 	if err != nil {
 		return nil, fmt.Errorf("gallery repo get: %w", err)
 	}
+	g.normalizeWorkspaceLinks()
 	return g, nil
 }
 
@@ -175,14 +221,16 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, error) {
 	g := &Gallery{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, title, slug, description, cover_asset_id, gallery_type,
+		`SELECT id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
+		 title, slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
-		 created_by, created_at, updated_at, deleted_at,
+		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
-	).Scan(&g.ID, &g.WorkspaceID, &g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
+	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
+		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
-		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.DeletedAt,
+		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
 	)
 	if err == pgx.ErrNoRows {
@@ -191,6 +239,7 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 	if err != nil {
 		return nil, fmt.Errorf("gallery repo get by slug: %w", err)
 	}
+	g.normalizeWorkspaceLinks()
 	return g, nil
 }
 
@@ -202,10 +251,12 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		limit = 50
 	}
 
-	query := `SELECT g.id, g.workspace_id, g.title, g.slug, g.description, g.cover_asset_id,
+	query := `SELECT g.id, g.workspace_id, g.contact_id, g.primary_contact_id, g.project_id, g.event_id, g.deal_id, g.invoice_id,
+		g.title, g.slug, g.description, g.cover_asset_id,
 		g.gallery_type, g.settings, g.password_hash, g.watermark_config, g.is_published,
 		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
-		g.cover_template, g.cover_config, g.expires_at, g.download_enabled, g.sort_preference, g.whatsapp_template,
+		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
+		g.download_enabled, g.sort_preference, g.whatsapp_template,
 		cover_asset.thumbnail_urls
 		FROM galleries g
 		LEFT JOIN LATERAL (
@@ -254,15 +305,17 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 	for rows.Next() {
 		var g Gallery
 		var coverThumbs *map[string]string
-		if err := rows.Scan(&g.ID, &g.WorkspaceID, &g.Title, &g.Slug, &g.Description,
+		if err := rows.Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
+			&g.Title, &g.Slug, &g.Description,
 			&g.CoverAssetID, &g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig,
 			&g.IsPublished, &g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt,
-			&g.UpdatedAt, &g.DeletedAt,
+			&g.UpdatedAt, &g.DeletedAt, &g.PublishedAt, &g.ArchivedAt,
 			&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
 			&coverThumbs,
 		); err != nil {
 			return nil, fmt.Errorf("gallery repo list scan: %w", err)
 		}
+		g.normalizeWorkspaceLinks()
 		if coverThumbs != nil {
 			g.CoverThumbnails = *coverThumbs
 		}
@@ -274,16 +327,20 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 // Update modifies a gallery's fields.
 func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 	g.UpdatedAt = time.Now()
+	g.normalizeWorkspaceLinks()
+	g.normalizeLifecycleTimestamps(g.UpdatedAt)
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE galleries SET title=$1, slug=$2, description=$3, cover_asset_id=$4,
-		 gallery_type=$5, settings=$6, password_hash=$7, watermark_config=$8,
-		 is_published=$9, max_selections=$10, status=$11, updated_at=$12,
-		 cover_template=$13, cover_config=$14, expires_at=$15, download_enabled=$16,
-		 sort_preference=$17, whatsapp_template=$18
-		 WHERE id=$19 AND deleted_at IS NULL`,
+		`UPDATE galleries SET contact_id=$1, primary_contact_id=$2, project_id=$3, event_id=$4, deal_id=$5, invoice_id=$6,
+		 title=$7, slug=$8, description=$9, cover_asset_id=$10,
+		 gallery_type=$11, settings=$12, password_hash=$13, watermark_config=$14,
+		 is_published=$15, max_selections=$16, status=$17, updated_at=$18, published_at=$19, archived_at=$20,
+		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24,
+		 sort_preference=$25, whatsapp_template=$26
+		 WHERE id=$27 AND deleted_at IS NULL`,
+		g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, g.Settings,
 		g.PasswordHash, g.WatermarkConfig, g.IsPublished, g.MaxSelections, g.Status,
-		g.UpdatedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
+		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
 		g.SortPreference, g.WhatsappTemplate, g.ID,
 	)
 	if err != nil {
@@ -326,7 +383,13 @@ func (r *GalleryRepo) UpdateCover(ctx context.Context, galleryID uuid.UUID, cove
 // UpdateStatus changes the gallery's status field.
 func (r *GalleryRepo) UpdateStatus(ctx context.Context, galleryID uuid.UUID, status string) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE galleries SET status=$1, updated_at=now() WHERE id=$2`,
+		`UPDATE galleries
+		 SET status=$1,
+		     is_published = CASE WHEN $1 IN ('shared', 'protected', 'published') THEN true WHEN $1 = 'draft' THEN false ELSE is_published END,
+		     published_at = CASE WHEN $1 IN ('shared', 'protected', 'published') THEN COALESCE(published_at, now()) ELSE published_at END,
+		     archived_at = CASE WHEN $1 = 'archived' THEN COALESCE(archived_at, now()) ELSE NULL END,
+		     updated_at=now()
+		 WHERE id=$2`,
 		status, galleryID,
 	)
 	if err != nil {
@@ -344,6 +407,9 @@ func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, fiel
 		// M19: Gallery Enhancement Suite (F-009)
 		"cover_template": true, "expires_at": true, "download_enabled": true,
 		"sort_preference": true, "whatsapp_template": true, "watermark_config": true,
+		"contact_id": true, "primary_contact_id": true, "project_id": true,
+		"event_id": true, "deal_id": true, "invoice_id": true,
+		"published_at": true, "archived_at": true,
 	}
 	if !allowedFields[field] {
 		return fmt.Errorf("gallery repo: field %q is not updatable via UpdateField", field)

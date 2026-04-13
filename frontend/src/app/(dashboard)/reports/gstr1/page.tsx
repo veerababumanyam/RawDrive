@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { downloadGSTR1CSV, formatPaisa, getGSTR1Report, type GSTR1Report } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
 
 function currentFinancialYear(): string {
   const now = new Date();
@@ -66,6 +67,8 @@ export default function GSTR1ReportPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      <CRMSecondaryNav />
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">GSTR-1 Export</h1>

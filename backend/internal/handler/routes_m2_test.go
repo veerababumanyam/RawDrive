@@ -65,6 +65,11 @@ func TestM2Routes_ProofingEndpoints(t *testing.T) {
 	assert.True(t, routeExists(r, "GET", "/api/v1/galleries/test-id/proofing"), "GET proofing")
 }
 
+func TestM2Routes_DashboardEndpoints(t *testing.T) {
+	r := setupM2Router()
+	assert.True(t, routeExists(r, "GET", "/api/v1/dashboard/gallery-activity"), "GET /api/v1/dashboard/gallery-activity")
+}
+
 func TestM2Routes_PublicEndpoints(t *testing.T) {
 	r := setupM2Router()
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug"), "GET public gallery")

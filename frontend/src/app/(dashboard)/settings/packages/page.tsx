@@ -11,6 +11,7 @@ import {
   type ServicePackage,
 } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
+import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
 
 type PackageForm = {
   name: string;
@@ -131,6 +132,8 @@ export default function ServicePackagesPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <CRMSecondaryNav />
+
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Service Packages</h1>
         <p className="mt-1 text-sm text-text-secondary">Wedding packages that fill invoice line items in one click.</p>

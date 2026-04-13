@@ -60,3 +60,16 @@ export async function deleteAsset(token: string, id: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`Failed to delete asset: ${res.status}`);
 }
+
+export async function bulkAssetAction(
+  token: string,
+  action: "delete",
+  assetIds: string[],
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/assets/bulk`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ action, asset_ids: assetIds }),
+  });
+  if (!res.ok) throw new Error(`Failed to run bulk asset action: ${res.status}`);
+}

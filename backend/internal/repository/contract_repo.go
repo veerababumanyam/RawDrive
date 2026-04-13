@@ -27,22 +27,23 @@ type ContractTemplate struct {
 
 // Contract represents a signed or pending service agreement.
 type Contract struct {
-	ID             uuid.UUID  `json:"id"`
-	WorkspaceID    uuid.UUID  `json:"workspace_id"`
-	ContactID      uuid.UUID  `json:"contact_id"`
-	TemplateID     *uuid.UUID `json:"template_id"`
-	Title          string     `json:"title"`
-	ContentHTML    string     `json:"content_html"`
-	Status         string     `json:"status"`
-	TotalValuePaisa *int64    `json:"total_value_paisa"`
-	SignedAt       *time.Time `json:"signed_at"`
-	SignerIP       *net.IP    `json:"signer_ip"`
-	SignerUserAgent *string   `json:"signer_user_agent"`
-	SignatureData  *string    `json:"signature_data"`
-	ExpiresAt      *time.Time `json:"expires_at"`
-	EventID        *uuid.UUID `json:"event_id"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	WorkspaceID     uuid.UUID  `json:"workspace_id"`
+	ContactID       uuid.UUID  `json:"contact_id"`
+	ProjectID       *uuid.UUID `json:"project_id,omitempty"`
+	TemplateID      *uuid.UUID `json:"template_id"`
+	Title           string     `json:"title"`
+	ContentHTML     string     `json:"content_html"`
+	Status          string     `json:"status"`
+	TotalValuePaisa *int64     `json:"total_value_paisa"`
+	SignedAt        *time.Time `json:"signed_at"`
+	SignerIP        *net.IP    `json:"signer_ip"`
+	SignerUserAgent *string    `json:"signer_user_agent"`
+	SignatureData   *string    `json:"signature_data"`
+	ExpiresAt       *time.Time `json:"expires_at"`
+	EventID         *uuid.UUID `json:"event_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type ContractRepo struct {
@@ -114,11 +115,11 @@ func (r *ContractRepo) UpdateTemplate(ctx context.Context, t *ContractTemplate) 
 
 // Contract methods
 
-const contractCols = `id, workspace_id, contact_id, template_id, title, content_html, status, total_value_paisa, signed_at, signer_ip, signer_user_agent, signature_data, expires_at, event_id, created_at, updated_at`
+const contractCols = `id, workspace_id, contact_id, project_id, template_id, title, content_html, status, total_value_paisa, signed_at, signer_ip, signer_user_agent, signature_data, expires_at, event_id, created_at, updated_at`
 
 func scanContract(row pgx.Row) (Contract, error) {
 	var c Contract
-	err := row.Scan(&c.ID, &c.WorkspaceID, &c.ContactID, &c.TemplateID,
+	err := row.Scan(&c.ID, &c.WorkspaceID, &c.ContactID, &c.ProjectID, &c.TemplateID,
 		&c.Title, &c.ContentHTML, &c.Status, &c.TotalValuePaisa,
 		&c.SignedAt, &c.SignerIP, &c.SignerUserAgent, &c.SignatureData,
 		&c.ExpiresAt, &c.EventID, &c.CreatedAt, &c.UpdatedAt)
@@ -132,8 +133,8 @@ func (r *ContractRepo) Create(ctx context.Context, c *Contract) error {
 	c.UpdatedAt = now
 	_, err := r.DB.Exec(ctx, `
 		INSERT INTO contracts (`+contractCols+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-		c.ID, c.WorkspaceID, c.ContactID, c.TemplateID,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+		c.ID, c.WorkspaceID, c.ContactID, c.ProjectID, c.TemplateID,
 		c.Title, c.ContentHTML, c.Status, c.TotalValuePaisa,
 		c.SignedAt, c.SignerIP, c.SignerUserAgent, c.SignatureData,
 		c.ExpiresAt, c.EventID, c.CreatedAt, c.UpdatedAt,
@@ -170,7 +171,7 @@ func (r *ContractRepo) List(ctx context.Context, workspaceID uuid.UUID, status s
 	var out []Contract
 	for rows.Next() {
 		var c Contract
-		if err := rows.Scan(&c.ID, &c.WorkspaceID, &c.ContactID, &c.TemplateID,
+		if err := rows.Scan(&c.ID, &c.WorkspaceID, &c.ContactID, &c.ProjectID, &c.TemplateID,
 			&c.Title, &c.ContentHTML, &c.Status, &c.TotalValuePaisa,
 			&c.SignedAt, &c.SignerIP, &c.SignerUserAgent, &c.SignatureData,
 			&c.ExpiresAt, &c.EventID, &c.CreatedAt, &c.UpdatedAt); err != nil {

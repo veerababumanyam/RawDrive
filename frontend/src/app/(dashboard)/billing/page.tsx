@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   listInvoices,
   createInvoice,
@@ -16,6 +17,7 @@ import { listContacts, type Contact } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { invoiceStatusClasses } from "@/lib/dashboard-ui";
+import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -36,6 +38,7 @@ const BLANK_LINE: LineRow = {
 };
 
 export default function BillingPage() {
+  const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [packages, setPackages] = useState<ServicePackage[]>([]);
@@ -52,6 +55,7 @@ export default function BillingPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     contact_id: "",
+    project_id: "",
     invoice_type: "tax_invoice",
     package_id: "",
     quotation_valid_until: "",
@@ -75,6 +79,18 @@ export default function BillingPage() {
     listContacts(token).then(setContacts).catch(() => setContacts([]));
     listServicePackages(token).then(setPackages).catch(() => setPackages([]));
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "true") return;
+    setShowCreate(true);
+    const clientId = searchParams.get("client");
+    const projectId = searchParams.get("project");
+    if (clientId) {
+      setForm((current) => ({ ...current, contact_id: clientId, project_id: projectId || current.project_id }));
+    } else if (projectId) {
+      setForm((current) => ({ ...current, project_id: projectId }));
+    }
+  }, [searchParams]);
 
   const totalRupees = form.lines.reduce((sum, l) => sum + l.quantity * l.unit_price_rupees, 0);
   const taxRupees = form.lines.reduce(
@@ -148,6 +164,7 @@ export default function BillingPage() {
 
       await createInvoice(token, {
         contact_id: form.contact_id,
+        project_id: form.project_id || undefined,
         invoice_type: form.invoice_type,
         source_package_id: form.package_id || undefined,
         quotation_valid_until: form.invoice_type === "quotation" ? form.quotation_valid_until || undefined : undefined,
@@ -165,6 +182,7 @@ export default function BillingPage() {
       setShowCreate(false);
       setForm({
         contact_id: "",
+        project_id: "",
         invoice_type: "tax_invoice",
         package_id: "",
         quotation_valid_until: "",
@@ -273,6 +291,8 @@ export default function BillingPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <CRMSecondaryNav />
+
       {error && (
         <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
           {error}
