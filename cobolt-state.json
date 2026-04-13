@@ -1707,21 +1707,30 @@
     }
   },
   "build": {
-    "version": "2.0.0",
+    "version": "2.1.0",
     "currentStep": "08-milestone-complete",
     "currentMilestone": "M37",
     "autoMode": true,
     "parallelMode": false,
-    "startedAt": "2026-04-12T10:29:43Z",
+    "startedAt": "2026-04-13T11:45:17.101Z",
     "fixIterations": 0,
     "reviewCycles": 0,
     "phantomRates": {},
     "agentScoring": {},
     "milestoneLoop": {
       "autoMode": true,
-      "totalMilestones": 4,
+      "autonomous": true,
       "completed": [],
-      "currentIteration": 1
+      "totalMilestones": 6,
+      "current": "M30",
+      "remaining": [
+        "M30",
+        "M31",
+        "M32",
+        "M33",
+        "M34",
+        "M35"
+      ]
     },
     "totalTasks": 22,
     "totalWaves": 3,
@@ -1753,6 +1762,32 @@
       "workerLifecycle": "pass",
       "strictPreflight": "advisory",
       "artifactsDir": "_cobolt-output/latest/build/M37"
-    }
+    },
+    "milestone": "M30",
+    "stepsCompleted": [
+      "00-preflight",
+      "01-milestone-setup",
+      "01a-story-specs",
+      "01b-spec-validation",
+      "02-tdd-red",
+      "03-tdd-green",
+      "03a-code-gap-analysis",
+      "03b-integration-smoke",
+      "04-tdd-refactor",
+      "04a-deep-verification"
+    ],
+    "tddPhase": null,
+    "currentRound": null,
+    "roundsCompleted": [],
+    "reviewFixLoop": {
+      "iteration": 0,
+      "maxIterations": 5,
+      "escalated": false
+    },
+    "retryCount": 0,
+    "escalationCount": 0,
+    "artifactsProduced": 0,
+    "storiesComplete": 7,
+    "milestoneStatus": "M30=shipped"
   }
 }

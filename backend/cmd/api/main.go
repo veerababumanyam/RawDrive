@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -30,6 +32,7 @@ import (
 	"github.com/rawdrive/backend/internal/scheduler"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
+	"github.com/rawdrive/backend/internal/streaming/viewer"
 	teamPkg "github.com/rawdrive/backend/internal/team"
 	"github.com/rawdrive/backend/internal/user"
 	"github.com/rawdrive/backend/internal/worker"
@@ -204,6 +207,62 @@ func (o *onboardingUserUpdater) UpdatePhone(ctx context.Context, userID, phone s
 
 // envOrFatal tries multiple env var names in order. Returns the first non-empty value.
 // Logs fatal if none are set.
+// buildViewerJWTService loads (or creates and persists) the viewer-session
+// JWT signing key from platform_settings.streaming.viewer_jwt_signing_key
+// and constructs the viewer.Service. The key is independent of the main
+// auth JWT key so it can be rotated on its own cadence.
+//
+// M30 / E100-S2 / FR-014-SEC-02. The persisted key is hex-encoded, 32 bytes
+// (256 bits), generated via crypto/rand on first boot. The PlatformSettings
+// envelope (F-005) handles at-rest encryption transparently.
+func buildViewerJWTService(ctx context.Context, repo *repository.PlatformSettingsRepo) (*viewer.Service, error) {
+	const (
+		category = "streaming"
+		key      = "viewer_jwt_signing_key"
+	)
+
+	row, err := repo.GetByKey(ctx, category, key)
+	if err == nil && row != nil && len(strings.TrimSpace(row.Value)) > 0 {
+		raw, decErr := decodeHexKey(row.Value)
+		if decErr != nil {
+			return nil, fmt.Errorf("viewer JWT key in platform_settings is corrupt: %w", decErr)
+		}
+		return newViewerService(raw), nil
+	}
+
+	// First boot — generate, persist, return.
+	raw, genErr := generateRandomKey(32)
+	if genErr != nil {
+		return nil, fmt.Errorf("generate viewer JWT key: %w", genErr)
+	}
+	if upErr := repo.Upsert(ctx, category, key, encodeHexKey(raw), true,
+		"M30/F-014 viewer-session JWT signing key (HS256, 256 bits)", nil); upErr != nil {
+		return nil, fmt.Errorf("persist viewer JWT key: %w", upErr)
+	}
+	log.Println("M30/F-014: generated and persisted viewer-session JWT signing key")
+	return newViewerService(raw), nil
+}
+
+func newViewerService(signingKey []byte) *viewer.Service {
+	return viewer.NewService(viewer.Config{
+		SigningKey:  signingKey,
+		SlidingTTL:  15 * time.Minute,
+		MaxLifetime: 4 * time.Hour,
+	})
+}
+
+func generateRandomKey(n int) ([]byte, error) {
+	buf := make([]byte, n)
+	if _, err := cryptorand.Read(buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func encodeHexKey(b []byte) string { return hex.EncodeToString(b) }
+
+func decodeHexKey(s string) ([]byte, error) { return hex.DecodeString(strings.TrimSpace(s)) }
+
 func envOrFatal(names ...string) string {
 	for _, name := range names {
 		if v := os.Getenv(name); v != "" {
@@ -1194,9 +1253,33 @@ func main() {
 		streamSvc := service.NewStreamService(streamRepo, streamChatRepo)
 		videoSvc := service.NewVideoService(videoRepo)
 		desktopSvc := service.NewDesktopService(desktopSessionRepo)
-		m8Deps = handler.M8Dependencies{StreamService: streamSvc, VideoService: videoSvc, DesktopService: desktopSvc}
+
+		// M30 / F-014 — viewer-session JWT service for public stream access.
+		// Signing key is loaded from platform_settings (KEK-encrypted at rest
+		// per F-005). On first boot the key is generated and persisted.
+		viewerJWT, err := buildViewerJWTService(context.Background(), platformSettingsRepo)
+		if err != nil {
+			log.Printf("WARNING: viewer JWT service disabled: %v", err)
+			viewerJWT = nil
+		}
+
+		// PIN brute-force defence: in-memory limiter, 5 attempts per 5min
+		// per (IP, stream). Sufficient for single-node staging; production
+		// should swap a Valkey-backed limiter behind the same interface.
+		pinLimiter := middleware.NewMemoryPINRateLimiter(5, 5*time.Minute)
+
+		m8Deps = handler.M8Dependencies{
+			StreamService:  streamSvc,
+			VideoService:   videoSvc,
+			DesktopService: desktopSvc,
+			ViewerJWT:      viewerJWT,
+			PINRateLimiter: pinLimiter,
+		}
 		handler.RegisterM8Routes(api, m8Deps)
 		log.Println("M8: Live Streaming, Video, Desktop routes registered")
+		if viewerJWT != nil {
+			log.Println("M30/F-014: viewer-session JWT + PIN rate limiter wired into public stream routes")
+		}
 
 		// ──────────────────────── M9: Developer Platform — API Keys ──────────────────
 		// API key management lives under the JWT-protected dashboard group:

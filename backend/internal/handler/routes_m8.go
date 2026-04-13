@@ -2,14 +2,27 @@ package handler
 
 import (
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/streaming/viewer"
 )
 
 // M8Dependencies holds all dependencies needed for M8 route registration.
+//
+// M30 / F-014 security stabilization extends this with ViewerJWT (issues
+// and verifies viewer-session tokens for public stream access) and
+// PINRateLimiter (brute-force defence for verify-pin). Both are optional —
+// when nil, the public routes fall back to the legacy open-access path.
 type M8Dependencies struct {
 	StreamService  *service.StreamService
 	VideoService   *service.VideoService
 	DesktopService *service.DesktopService
+
+	// Optional: nil disables viewer-session binding (open-access only).
+	ViewerJWT *viewer.Service
+
+	// Optional: nil disables PIN rate limiting.
+	PINRateLimiter middleware.PINRateLimiter
 }
 
 // RegisterM8Routes registers all M8 (Live Streaming & Desktop Companion) routes.
@@ -19,20 +32,38 @@ func RegisterM8Routes(r chi.Router, deps M8Dependencies) {
 	desktopHandler := NewDesktopHandler(deps.DesktopService)
 
 	// Stream management (authenticated)
+	//
+	// M30 / E101-S2 / FR-014-SEC-07: team members without an Admin (or
+	// higher) workspace role cannot create, control, or delete streams.
+	// Read-only routes (List, Get) remain available to any authenticated
+	// workspace member. Chat moderation requires at least Editor.
 	r.Route("/api/v1/streams", func(r chi.Router) {
-		r.Post("/", streamHandler.Create)
+		// Read-only — any workspace member can see their streams.
 		r.Get("/", streamHandler.List)
 		r.Get("/{id}", streamHandler.Get)
-		r.Put("/{id}/start", streamHandler.Start)
-		r.Put("/{id}/end", streamHandler.End)
-		r.Delete("/{id}", streamHandler.Delete)
-
-		// Chat endpoints
 		r.Get("/{id}/chat", streamHandler.ChatHistory)
-		r.Post("/{id}/chat", streamHandler.SendChat)
-		r.Put("/{id}/chat/mute", streamHandler.MuteUser)
-		r.Delete("/{id}/chat/{messageId}", streamHandler.DeleteChat)
-		r.Put("/{id}/chat/settings", streamHandler.UpdateChatSettings)
+
+		// Mutating — Admin+ only (streams:create / control / delete).
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireWorkspaceRole("Admin"))
+			r.Post("/", streamHandler.Create)
+			r.Put("/{id}/start", streamHandler.Start)
+			r.Put("/{id}/end", streamHandler.End)
+			r.Delete("/{id}", streamHandler.Delete)
+			r.Put("/{id}/chat/settings", streamHandler.UpdateChatSettings)
+		})
+
+		// Chat — posting and moderating. Editor+ can post on behalf of
+		// the workspace; moderation and mute require Admin.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireWorkspaceRole("Editor"))
+			r.Post("/{id}/chat", streamHandler.SendChat)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireWorkspaceRole("Admin"))
+			r.Put("/{id}/chat/mute", streamHandler.MuteUser)
+			r.Delete("/{id}/chat/{messageId}", streamHandler.DeleteChat)
+		})
 	})
 
 	// Video asset management (authenticated)
@@ -61,12 +92,21 @@ func RegisterM8PublicRoutes(r chi.Router, deps M8Dependencies) {
 	streamHandler := NewStreamHandler(deps.StreamService)
 	desktopHandler := NewDesktopHandler(deps.DesktopService)
 
-	// Public stream viewer (no auth — viewers don't need accounts)
+	// Public stream viewer (no auth — viewers don't need accounts).
+	//
+	// M30 / F-014 hardening:
+	//   - ViewerContext attaches the verified viewer-session JWT (if any)
+	//     to the request so GetPublic can decide whether to surface
+	//     cf_playback_url for PIN-protected streams.
+	//   - RequirePINRateLimit caps verify-pin attempts to defend against
+	//     brute-force PIN guessing per FR-014-SEC / NFR-014-SEC-02.
 	r.Route("/api/v1/public/streams", func(r chi.Router) {
+		r.Use(middleware.ViewerContext(deps.ViewerJWT))
 		r.Get("/{id}", streamHandler.GetPublic)
-		r.Post("/{id}/verify-pin", streamHandler.VerifyPin)
 		r.Get("/{id}/chat", streamHandler.ChatHistory)
 		r.Post("/{id}/chat", streamHandler.SendChat)
+		r.With(middleware.RequirePINRateLimit(deps.PINRateLimiter)).
+			Post("/{id}/verify-pin", streamHandler.VerifyPin)
 	})
 
 	// Desktop app download info (public)

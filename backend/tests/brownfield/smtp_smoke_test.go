@@ -69,24 +69,12 @@ func mailpitReachable(t *testing.T) bool {
 	return buf[0] == '2'
 }
 
-// clearMailpitInbox deletes every message currently in Mailpit's
-// inbox so assertions on message count / content are not polluted
-// by previous runs. Best-effort: a 204 or 200 is success; anything
-// else is a warning logged to the test output.
-func clearMailpitInbox(t *testing.T) {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodDelete, mailpitHTTPHost+"/api/v1/messages", nil)
-	require.NoError(t, err, "new delete request")
-	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
-	if err != nil {
-		t.Logf("mailpit clear inbox: %v (ignored)", err)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		t.Logf("mailpit clear inbox unexpected status %d (ignored)", resp.StatusCode)
-	}
-}
+// Note: this package deliberately does NOT clear the Mailpit inbox.
+// `go test ./...` runs packages concurrently, and a global DELETE
+// against /api/v1/messages races with the integration package's
+// SMTP delivery tests (which fetch a specific message ID and fail
+// with 404 if the inbox was wiped mid-flight). Each test here uses
+// a unique UUID recipient, so filtering by address is sufficient.
 
 // mailpitMessage is a partial shape of the Mailpit /api/v1/messages
 // response. Only the fields the smoke test asserts on are modeled.
@@ -144,7 +132,6 @@ func TestIssue002_SMTP_OTPDelivery_ReachesMailpit(t *testing.T) {
 	if !mailpitReachable(t) {
 		t.Skip("mailpit not reachable at 127.0.0.1:1025 (compose down or container hung)")
 	}
-	clearMailpitInbox(t)
 
 	cfg := &email.SMTPConfig{
 		Host:        mailpitSMTPHost,
@@ -198,7 +185,6 @@ func TestIssue002_SMTP_InvitationSender_ReachesMailpit(t *testing.T) {
 	if !mailpitReachable(t) {
 		t.Skip("mailpit not reachable at 127.0.0.1:1025 (compose down or container hung)")
 	}
-	clearMailpitInbox(t)
 
 	cfg := &email.SMTPConfig{
 		Host:        mailpitSMTPHost,

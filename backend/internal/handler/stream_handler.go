@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -116,7 +117,21 @@ func (h *StreamHandler) GetPublic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"stream not found"}`, http.StatusNotFound)
 		return
 	}
-	// Public DTO — never expose RTMPS credentials or PIN to unauthenticated viewers
+
+	// M30 / E100-S3 / FR-014-SEC-01:
+	// The playback URL must NOT be returned to unauthenticated viewers when
+	// the stream is PIN-protected. The gate is satisfied when either:
+	//   (a) no PIN is set (open stream), OR
+	//   (b) a valid viewer-session JWT matching THIS stream is present in
+	//       the request context (attached by middleware.ViewerContext).
+	pinRequired := stream.PinCode != nil && *stream.PinCode != ""
+	includePlayback := !pinRequired
+	if pinRequired {
+		if sess := middleware.ViewerSessionFromContext(r.Context()); sess != nil && sess.StreamID == stream.ID.String() {
+			includePlayback = true
+		}
+	}
+
 	publicStream := map[string]any{
 		"id":                    stream.ID,
 		"title":                 stream.Title,
@@ -125,14 +140,16 @@ func (h *StreamHandler) GetPublic(w http.ResponseWriter, r *http.Request) {
 		"scheduled_at":          stream.ScheduledAt,
 		"started_at":            stream.StartedAt,
 		"ended_at":              stream.EndedAt,
-		"cf_playback_url":       stream.CFPlaybackURL,
 		"max_quality":           stream.MaxQuality,
 		"chat_enabled":          stream.ChatEnabled,
 		"chat_slow_mode_seconds": stream.ChatSlowModeSecs,
 		"peak_viewers":          stream.PeakViewers,
 		"total_views":           stream.TotalViews,
 		"duration_seconds":      stream.DurationSeconds,
-		"pin_required":          stream.PinCode != nil && *stream.PinCode != "",
+		"pin_required":          pinRequired,
+	}
+	if includePlayback {
+		publicStream["cf_playback_url"] = stream.CFPlaybackURL
 	}
 	respondJSON(w, http.StatusOK, publicStream)
 }
