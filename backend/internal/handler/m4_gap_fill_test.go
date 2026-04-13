@@ -55,7 +55,9 @@ func TestNewNotificationDispatcher_NilInputs_ReturnsNil(t *testing.T) {
 	if got := NewNotificationDispatcher(nil, nil); got != nil {
 		t.Errorf("expected nil when both inputs nil, got %v", got)
 	}
-	fakeLookup := func(ctx context.Context, id uuid.UUID) (uuid.UUID, error) { return uuid.Nil, nil }
+	fakeLookup := func(ctx context.Context, id uuid.UUID) (OwnerLookupResult, error) {
+		return OwnerLookupResult{}, nil
+	}
 	if got := NewNotificationDispatcher(nil, fakeLookup); got != nil {
 		t.Errorf("expected nil when delivery nil, got %v", got)
 	}
@@ -75,9 +77,9 @@ func TestNotificationDispatcher_HappyPath_CallsDelivery(t *testing.T) {
 	wsID := uuid.New()
 	ownerID := uuid.New()
 	var lookedUp uuid.UUID
-	lookup := func(_ context.Context, id uuid.UUID) (uuid.UUID, error) {
+	lookup := func(_ context.Context, id uuid.UUID) (OwnerLookupResult, error) {
 		lookedUp = id
-		return ownerID, nil
+		return OwnerLookupResult{UserID: ownerID, Email: "owner@example.com"}, nil
 	}
 	d := NewNotificationDispatcher(delivery, lookup)
 	if d == nil {
@@ -111,8 +113,8 @@ func TestNotificationDispatcher_HappyPath_CallsDelivery(t *testing.T) {
 func TestNotificationDispatcher_LookupError_SwallowsError(t *testing.T) {
 	store := &fakeNotifStore{}
 	delivery := service.NewNotificationDeliveryService(store)
-	lookup := func(_ context.Context, _ uuid.UUID) (uuid.UUID, error) {
-		return uuid.Nil, context.DeadlineExceeded
+	lookup := func(_ context.Context, _ uuid.UUID) (OwnerLookupResult, error) {
+		return OwnerLookupResult{}, context.DeadlineExceeded
 	}
 	d := NewNotificationDispatcher(delivery, lookup)
 	d.Notify(context.Background(), uuid.New(), "bookings", "t", "b", "/")
@@ -128,9 +130,9 @@ func TestNotificationDispatcher_NilWorkspace_IsNoOp(t *testing.T) {
 	store := &fakeNotifStore{}
 	delivery := service.NewNotificationDeliveryService(store)
 	calls := 0
-	lookup := func(_ context.Context, _ uuid.UUID) (uuid.UUID, error) {
+	lookup := func(_ context.Context, _ uuid.UUID) (OwnerLookupResult, error) {
 		calls++
-		return uuid.New(), nil
+		return OwnerLookupResult{UserID: uuid.New()}, nil
 	}
 	d := NewNotificationDispatcher(delivery, lookup)
 	d.Notify(context.Background(), uuid.Nil, "bookings", "t", "b", "/")
@@ -290,7 +292,9 @@ func TestLeadHandler_WithNotificationDispatcher_FluentChain(t *testing.T) {
 	h := NewLeadHandler(nil)
 	store := &fakeNotifStore{}
 	delivery := service.NewNotificationDeliveryService(store)
-	lookup := func(_ context.Context, _ uuid.UUID) (uuid.UUID, error) { return uuid.New(), nil }
+	lookup := func(_ context.Context, _ uuid.UUID) (OwnerLookupResult, error) {
+		return OwnerLookupResult{UserID: uuid.New()}, nil
+	}
 	d := NewNotificationDispatcher(delivery, lookup)
 
 	got := h.WithNotificationDispatcher(d)

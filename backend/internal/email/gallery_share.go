@@ -1,6 +1,7 @@
 package email
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -8,6 +9,7 @@ import (
 // GalleryShareSender sends gallery share emails via SMTP.
 type GalleryShareSender struct {
 	cfg    *SMTPConfig
+	loader configLoader
 	mailer Mailer
 }
 
@@ -19,6 +21,12 @@ func NewGalleryShareSender(cfg *SMTPConfig) *GalleryShareSender {
 	return &GalleryShareSender{cfg: cfg, mailer: defaultMailer}
 }
 
+// NewDynamicGalleryShareSender reloads SMTP settings from platform_settings
+// for every send, falling back to SMTP_* env vars per key.
+func NewDynamicGalleryShareSender(reader SettingsReader) *GalleryShareSender {
+	return &GalleryShareSender{loader: dynamicConfigLoader(reader), mailer: defaultMailer}
+}
+
 // GalleryShareData holds data for a gallery share email.
 type GalleryShareData struct {
 	SenderName   string
@@ -28,15 +36,12 @@ type GalleryShareData struct {
 }
 
 // Send sends a gallery share notification email.
-func (s *GalleryShareSender) Send(to string, data GalleryShareData) error {
-	msg := composeGalleryShareMessage(s.cfg, to, data)
-	return s.mailer(
-		fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port),
-		smtpAuth(s.cfg),
-		s.cfg.FromAddress,
-		[]string{to},
-		msg,
-	)
+func (s *GalleryShareSender) Send(ctx context.Context, to string, data GalleryShareData) error {
+	cfg, err := resolveConfig(ctx, s.cfg, s.loader)
+	if err != nil {
+		return err
+	}
+	return sendConfigured(s.mailer, cfg, to, composeGalleryShareMessage(cfg, to, data))
 }
 
 func composeGalleryShareMessage(cfg *SMTPConfig, to string, data GalleryShareData) []byte {

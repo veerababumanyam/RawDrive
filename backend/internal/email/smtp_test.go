@@ -50,12 +50,12 @@ func withEnv(t *testing.T, kv map[string]string) {
 
 func TestLoadSMTPConfig_EnvVarsOnly(t *testing.T) {
 	withEnv(t, map[string]string{
-		"SMTP_HOST":         "smtp.example.com",
-		"SMTP_PORT":         "587",
-		"SMTP_USERNAME":     "apikey",
-		"SMTP_PASSWORD":     "s3cret",
-		"SMTP_FROM": "noreply@rawdrive.in",
-		"SMTP_FROM_NAME":    "RawDrive Notifications",
+		"SMTP_HOST":      "smtp.example.com",
+		"SMTP_PORT":      "587",
+		"SMTP_USERNAME":  "apikey",
+		"SMTP_PASSWORD":  "s3cret",
+		"SMTP_FROM":      "noreply@rawdrive.in",
+		"SMTP_FROM_NAME": "RawDrive Notifications",
 	})
 
 	cfg, err := LoadSMTPConfig(context.Background(), nil)
@@ -74,12 +74,12 @@ func TestLoadSMTPConfig_AllMissing_ReturnsNil(t *testing.T) {
 	// Clear every env var. t.Setenv with empty string counts as set
 	// but empty, which the loader treats as unset.
 	withEnv(t, map[string]string{
-		"SMTP_HOST":         "",
-		"SMTP_PORT":         "",
-		"SMTP_USERNAME":     "",
-		"SMTP_PASSWORD":     "",
-		"SMTP_FROM": "",
-		"SMTP_FROM_NAME":    "",
+		"SMTP_HOST":      "",
+		"SMTP_PORT":      "",
+		"SMTP_USERNAME":  "",
+		"SMTP_PASSWORD":  "",
+		"SMTP_FROM":      "",
+		"SMTP_FROM_NAME": "",
 	})
 
 	cfg, err := LoadSMTPConfig(context.Background(), nil)
@@ -92,13 +92,13 @@ func TestLoadSMTPConfig_SettingsReaderBeatsEnvVars(t *testing.T) {
 	// per the AGENTS.md No-Hardcoded-Credentials rule: "(1) platform_settings
 	// table → (2) environment variables → (3) fail".
 	withEnv(t, map[string]string{
-		"SMTP_HOST":         "env.example.com",
-		"SMTP_PORT":         "25",
+		"SMTP_HOST": "env.example.com",
+		"SMTP_PORT": "25",
 		"SMTP_FROM": "env@rawdrive.in",
 	})
 	reader := &fakeSettingsReader{data: map[string]string{
-		"email/smtp_host":         "db.example.com",
-		"email/smtp_port":         "587",
+		"email/smtp_host": "db.example.com",
+		"email/smtp_port": "587",
 		"email/smtp_from": "db@rawdrive.in",
 	}}
 
@@ -115,8 +115,8 @@ func TestLoadSMTPConfig_SettingsReaderPartialFallsBackToEnv(t *testing.T) {
 	// DB has host + port but not the from address. Loader must fall
 	// back to the env var for the missing key.
 	withEnv(t, map[string]string{
-		"SMTP_HOST":         "env.example.com",
-		"SMTP_PORT":         "25",
+		"SMTP_HOST": "env.example.com",
+		"SMTP_PORT": "25",
 		"SMTP_FROM": "env@rawdrive.in",
 	})
 	reader := &fakeSettingsReader{data: map[string]string{
@@ -136,8 +136,8 @@ func TestLoadSMTPConfig_SettingsReaderPartialFallsBackToEnv(t *testing.T) {
 
 func TestLoadSMTPConfig_InvalidPort_Errors(t *testing.T) {
 	withEnv(t, map[string]string{
-		"SMTP_HOST":         "smtp.example.com",
-		"SMTP_PORT":         "not-a-number",
+		"SMTP_HOST": "smtp.example.com",
+		"SMTP_PORT": "not-a-number",
 		"SMTP_FROM": "noreply@rawdrive.in",
 	})
 
@@ -145,6 +145,15 @@ func TestLoadSMTPConfig_InvalidPort_Errors(t *testing.T) {
 	assert.Nil(t, cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "SMTP_PORT")
+}
+
+func TestImplicitTLSHost_DetectsSMTPSPort(t *testing.T) {
+	host, ok := implicitTLSHost("smtpout.secureserver.net:465")
+	assert.True(t, ok, "port 465 must use implicit TLS")
+	assert.Equal(t, "smtpout.secureserver.net", host)
+
+	_, ok = implicitTLSHost("smtp.example.com:587")
+	assert.False(t, ok, "port 587 stays on the STARTTLS SendMail path")
 }
 
 // ──────────────────────── Message composition ────────────────────────
@@ -252,6 +261,27 @@ func TestOTPDelivery_SendOTP_NoAuthWhenUsernameEmpty(t *testing.T) {
 
 	assert.Equal(t, "mailpit:1025", captured.addr)
 	assert.Nil(t, captured.auth, "PLAIN auth must be nil when username is empty")
+}
+
+func TestDynamicOTPDelivery_ReloadsSettingsPerSend(t *testing.T) {
+	reader := &fakeSettingsReader{data: map[string]string{
+		"email/smtp_host": "first.example.com",
+		"email/smtp_port": "587",
+		"email/smtp_from": "noreply@rawdrive.in",
+	}}
+	var addrs []string
+	d := NewDynamicOTPDelivery(reader)
+	d.mailer = func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+		addrs = append(addrs, addr)
+		return nil
+	}
+
+	require.NoError(t, d.SendOTP(context.Background(), "user@example.com", "111111"))
+	reader.data["email/smtp_host"] = "smtpout.secureserver.net"
+	reader.data["email/smtp_port"] = "465"
+	require.NoError(t, d.SendOTP(context.Background(), "user@example.com", "222222"))
+
+	assert.Equal(t, []string{"first.example.com:587", "smtpout.secureserver.net:465"}, addrs)
 }
 
 func TestInvitationSender_SendInvitation_CallsMailerWithLink(t *testing.T) {

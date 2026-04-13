@@ -83,8 +83,10 @@ export interface GalleryBranding {
   can_customize: boolean;
   brand_name: string;
   logo_url?: string | null;
+  logo_asset_id?: string | null;
   accent_color?: string | null;
   hide_footer: boolean;
+  public_branding_enabled?: boolean;
 }
 
 export async function getPublicGalleryBranding(slug: string): Promise<GalleryBranding> {
@@ -139,6 +141,75 @@ export async function verifyShareLink(
   if (res.ok) return { ok: true };
   const body = await res.json().catch(() => ({}));
   return { ok: false, reason: body.error || `http_${res.status}` };
+}
+
+export interface GalleryShareLink {
+  id: string;
+  gallery_id: string;
+  token: string;
+  expires_at?: string | null;
+  permissions: {
+    access_mode?: "public" | "pin" | "password" | "email" | string;
+    allowed_emails?: string[];
+    recipient_emails?: string[];
+    message?: string;
+    channel?: string;
+    [key: string]: unknown;
+  };
+  download_allowed: boolean;
+  max_access_count?: number | null;
+  access_count: number;
+  created_at: string;
+  revoked_at?: string | null;
+}
+
+export interface CreateGalleryShareLinkInput {
+  access_mode?: "public" | "pin" | "password" | "email";
+  pin?: string;
+  expiry_days?: number;
+  download_allowed?: boolean;
+  max_access_count?: number;
+  allowed_emails?: string[];
+  recipient_emails?: string[];
+  message?: string;
+  channel?: "copy" | "whatsapp" | "email" | string;
+}
+
+export async function listGalleryShareLinks(token: string, galleryId: string): Promise<GalleryShareLink[]> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/share`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to list gallery share links: ${res.status}`);
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.links)) return body.links;
+  return [];
+}
+
+export async function createGalleryShareLink(
+  token: string,
+  galleryId: string,
+  data: CreateGalleryShareLinkInput,
+): Promise<GalleryShareLink> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/share`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to create gallery share link: ${res.status}`);
+  return res.json();
+}
+
+export async function revokeGalleryShareLink(
+  token: string,
+  galleryId: string,
+  linkId: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/share/${linkId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to revoke gallery share link: ${res.status}`);
 }
 
 export interface GalleryAsset {

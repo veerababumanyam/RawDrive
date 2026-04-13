@@ -62,6 +62,20 @@ func (p *logEmailSender) SendInvitation(_ context.Context, email, link string) e
 	return nil
 }
 
+type smtpNotificationEmailProvider struct {
+	sender *email.NotificationSender
+}
+
+func (p smtpNotificationEmailProvider) Channel() string { return "email" }
+
+func (p smtpNotificationEmailProvider) Send(ctx context.Context, req service.DeliveryRequest) error {
+	if req.EmailTo == "" {
+		log.Printf("email[smtp]: no address for user=%s category=%s - skipping", req.UserID, req.Category)
+		return nil
+	}
+	return p.sender.Send(ctx, req.EmailTo, req.Title, req.Body, req.ActionURL)
+}
+
 // platformSettingsJWTKeyStore adapts *repository.PlatformSettingsRepo to
 // the auth.JWTKeyStore interface so the JWT signing key can be persisted
 // alongside other platform secrets. When the F-005 envelope is wired on
@@ -74,6 +88,21 @@ func (p *logEmailSender) SendInvitation(_ context.Context, email, link string) e
 // log in again whenever the API container cycled.
 type platformSettingsJWTKeyStore struct {
 	repo *repository.PlatformSettingsRepo
+}
+
+type platformSettingsSMTPReader struct {
+	repo *repository.PlatformSettingsRepo
+}
+
+func (s *platformSettingsSMTPReader) Get(ctx context.Context, category, key string) (string, bool, error) {
+	row, err := s.repo.GetByKey(ctx, category, key)
+	if err != nil {
+		return "", false, err
+	}
+	if row == nil {
+		return "", false, nil
+	}
+	return row.Value, true, nil
 }
 
 const (
@@ -234,6 +263,30 @@ func main() {
 	sqlDB := stdlib.OpenDBFromPool(dbPool)
 	defer sqlDB.Close()
 
+	// Platform settings are the primary source for service configuration.
+	// Construct this before email so SMTP follows the documented
+	// platform_settings -> environment -> fail lookup order.
+	platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
+	{
+		kekHex := os.Getenv("PLATFORM_SETTINGS_KEK")
+		if kekHex != "" {
+			envelope, err := backendcrypto.NewEnvelopeFromHex(kekHex)
+			if err != nil {
+				log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is invalid: %v", err)
+			}
+			platformSettingsRepo = platformSettingsRepo.WithEnvelope(envelope)
+			log.Println("F-005: platform_settings at-rest encryption ENABLED (envelope wired)")
+		} else {
+			appEnv := strings.ToLower(os.Getenv("APP_ENV"))
+			if appEnv == "production" || appEnv == "prod" {
+				log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required in production (APP_ENV=%s). "+
+					"Generate a 32-byte hex KEK and set it in your secret store. "+
+					"See F-005 in docs/audits/rawdrive-v0.0.35-m16-360-audit-2026-04-10.md.", appEnv)
+			}
+			log.Println("WARNING: PLATFORM_SETTINGS_KEK not set - platform settings secrets will be stored in PLAINTEXT. This is only acceptable in non-production environments.")
+		}
+	}
+
 	// ──────────────────────── M1: Auth, Users, Workspaces, Teams ──────────────────
 
 	// Real user service backed by DB
@@ -247,24 +300,29 @@ func main() {
 	// there was no compile-time or runtime guard preventing production
 	// use, which meant signup OTPs, password resets, team invitations
 	// and MFA enrolment mails all silently vanished in any non-local
-	// environment. Load SMTP settings from env vars (the platform_settings
-	// DB path is not yet available this early in boot) and construct the
-	// real email.OTPDelivery + email.InvitationSender. If no SMTP config
+	// environment. Load SMTP settings from platform_settings first, then
+	// fall back to env vars, and construct the real email.OTPDelivery +
+	// email.InvitationSender. If no SMTP config
 	// is present, require an explicit DEV_STUB_EMAIL=true escape hatch
 	// AND a non-production APP_ENV — otherwise FATAL so misconfigurations
 	// cannot ship.
-	smtpCfg, smtpErr := email.LoadSMTPConfig(context.Background(), nil)
+	smtpReader := &platformSettingsSMTPReader{repo: platformSettingsRepo}
+	smtpCfg, smtpErr := email.LoadSMTPConfig(context.Background(), smtpReader)
 	if smtpErr != nil {
 		log.Fatalf("FATAL: SMTP config error (ISSUE-002): %v", smtpErr)
 	}
 
 	var otpDelivery auth.EmailDelivery
 	var teamEmailSender teamPkg.EmailSender
+	var galleryShareSender *email.GalleryShareSender
+	var notificationEmailSender *email.NotificationSender
 
 	if smtpCfg != nil {
-		otpDelivery = email.NewOTPDelivery(smtpCfg)
-		teamEmailSender = email.NewInvitationSender(smtpCfg)
-		log.Printf("Email: SMTP transport wired to %s:%d (from=%s)",
+		otpDelivery = email.NewDynamicOTPDelivery(smtpReader)
+		teamEmailSender = email.NewDynamicInvitationSender(smtpReader)
+		galleryShareSender = email.NewDynamicGalleryShareSender(smtpReader)
+		notificationEmailSender = email.NewDynamicNotificationSender(smtpReader)
+		log.Printf("Email: SMTP transport wired dynamically to %s:%d (from=%s)",
 			smtpCfg.Host, smtpCfg.Port, smtpCfg.FromAddress)
 	} else {
 		stubAllowed := strings.EqualFold(os.Getenv("DEV_STUB_EMAIL"), "true")
@@ -600,6 +658,7 @@ func main() {
 	galleryRepo := repository.NewGalleryRepo(dbPool)
 	galleryAssetRepo := repository.NewGalleryAssetRepo(dbPool)
 	shareLinkRepo := repository.NewShareLinkRepo(dbPool)
+	galleryShareLogRepo := repository.NewGalleryShareLogRepo(dbPool)
 	proofingRepo := repository.NewProofingRepo(dbPool)
 
 	// M11 Services (initialized early — used by M2 services)
@@ -773,6 +832,9 @@ func main() {
 			UploadService:        uploadSvc,
 			GalleryService:       gallerySvc,
 			ShareLinkService:     shareLinkSvc,
+			GalleryShareSender:   galleryShareSender,
+			GalleryShareLogRepo:  galleryShareLogRepo,
+			PublicBaseURL:        os.Getenv("FRONTEND_URL"),
 			ProofingService:      proofingSvc,
 			StorageConfigService: storageConfigSvc,
 			// M11
@@ -936,18 +998,25 @@ func main() {
 		// them via the same With* chain without touching handlers.
 		pdfSvc := service.NewPDFService()
 		notifDeliverySvc := service.NewNotificationDeliveryService(notificationRepo).
-			WithProvider(service.LogEmailProvider{}).
 			WithProvider(service.LogWhatsAppProvider{}).
 			WithProvider(service.LogPushProvider{})
+		if notificationEmailSender != nil {
+			notifDeliverySvc.WithProvider(smtpNotificationEmailProvider{sender: notificationEmailSender})
+		} else {
+			notifDeliverySvc.WithProvider(service.LogEmailProvider{})
+		}
 
 		// Workspace owner lookup used by the notification dispatcher. Reads
 		// the owner_id column on workspaces — the same column the onboarding
 		// flow writes when a user first creates their workspace.
-		ownerLookup := func(ctx context.Context, wsID uuid.UUID) (uuid.UUID, error) {
-			var ownerID uuid.UUID
+		ownerLookup := func(ctx context.Context, wsID uuid.UUID) (handler.OwnerLookupResult, error) {
+			var out handler.OwnerLookupResult
 			err := dbPool.QueryRow(ctx,
-				`SELECT owner_id FROM workspaces WHERE id = $1`, wsID).Scan(&ownerID)
-			return ownerID, err
+				`SELECT w.owner_id, COALESCE(u.email, '')
+				 FROM workspaces w
+				 LEFT JOIN users u ON u.id = w.owner_id
+				 WHERE w.id = $1`, wsID).Scan(&out.UserID, &out.Email)
+			return out, err
 		}
 		notifDispatcher := handler.NewNotificationDispatcher(notifDeliverySvc, ownerLookup)
 		publicLeadDispatcher = notifDispatcher
@@ -1101,26 +1170,6 @@ func main() {
 		// environments a missing KEK logs a warning and the repo runs in
 		// legacy plaintext mode so local dev still works without bootstrap
 		// overhead.
-		platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
-		{
-			kekHex := os.Getenv("PLATFORM_SETTINGS_KEK")
-			if kekHex != "" {
-				envelope, err := backendcrypto.NewEnvelopeFromHex(kekHex)
-				if err != nil {
-					log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is invalid: %v", err)
-				}
-				platformSettingsRepo = platformSettingsRepo.WithEnvelope(envelope)
-				log.Println("F-005: platform_settings at-rest encryption ENABLED (envelope wired)")
-			} else {
-				appEnv := strings.ToLower(os.Getenv("APP_ENV"))
-				if appEnv == "production" || appEnv == "prod" {
-					log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required in production (APP_ENV=%s). "+
-						"Generate a 32-byte hex KEK and set it in your secret store. "+
-						"See F-005 in docs/audits/rawdrive-v0.0.35-m16-360-audit-2026-04-10.md.", appEnv)
-				}
-				log.Println("WARNING: PLATFORM_SETTINGS_KEK not set — platform settings secrets will be stored in PLAINTEXT. This is only acceptable in non-production environments.")
-			}
-		}
 		handler.RegisterAdminSettingsRoutes(api, platformSettingsRepo)
 		log.Println("Admin: Platform settings CRUD registered (storage, auth, payments, ai, email)")
 

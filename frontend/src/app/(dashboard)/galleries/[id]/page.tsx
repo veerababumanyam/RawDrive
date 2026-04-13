@@ -32,6 +32,8 @@ import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 import { FaceFilter } from "@/components/gallery/face-filter";
 import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryShareCenter } from "@/components/gallery/gallery-share-center";
+import { GalleryPublishChecklist } from "@/components/gallery/gallery-publish-checklist";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -801,6 +803,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         </section>
 
         <aside className="space-y-4">
+          <GalleryPublishChecklist gallery={gallery} assets={assets} />
+          {authToken && <GalleryShareCenter gallery={gallery} token={authToken} />}
+
           <div className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
               <div>

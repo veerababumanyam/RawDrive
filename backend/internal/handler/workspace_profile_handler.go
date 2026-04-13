@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,10 +54,10 @@ type WorkspaceProfile struct {
 	InvoiceTerms      *string `json:"invoice_terms,omitempty"`
 	InvoiceFooter     *string `json:"invoice_footer,omitempty"`
 	// M23 additions (migration 073)
-	UPIID             *string `json:"upi_id,omitempty"`
-	PANNumber         *string `json:"pan_number,omitempty"`
-	InstagramHandle   *string `json:"instagram_handle,omitempty"`
-	StateCode         *string `json:"state_code,omitempty"`
+	UPIID           *string `json:"upi_id,omitempty"`
+	PANNumber       *string `json:"pan_number,omitempty"`
+	InstagramHandle *string `json:"instagram_handle,omitempty"`
+	StateCode       *string `json:"state_code,omitempty"`
 }
 
 // GetProfile returns the current workspace's business profile. Any NULL
@@ -114,33 +115,33 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]any{
-		"name":                name,
-		"gstin":               gstin,
-		"address_line1":       addr1,
-		"address_line2":       addr2,
-		"city":                city,
-		"postal_code":         postal,
-		"phone":               phone,
-		"email":               email,
-		"website":             website,
-		"logo_url":            logo,
-		"brand_name":          brandName,
-		"brand_accent_color":  brandAccent,
+		"name":                    name,
+		"gstin":                   gstin,
+		"address_line1":           addr1,
+		"address_line2":           addr2,
+		"city":                    city,
+		"postal_code":             postal,
+		"phone":                   phone,
+		"email":                   email,
+		"website":                 website,
+		"logo_url":                logo,
+		"brand_name":              brandName,
+		"brand_accent_color":      brandAccent,
 		"public_branding_enabled": publicBranding,
-		"logo_asset_id":       logoAssetID,
-		"logo_metadata":       logoMetadata,
-		"bank_name":           bankName,
-		"bank_account_holder": bankHolder,
-		"bank_account_number": bankAcc,
-		"bank_ifsc":           ifsc,
-		"bank_branch":         branch,
-		"signature_name":      sig,
-		"invoice_terms":       terms,
-		"invoice_footer":      footer,
-		"upi_id":              upiID,
-		"pan_number":          panNumber,
-		"instagram_handle":    instaHandle,
-		"state_code":          stateCode,
+		"logo_asset_id":           logoAssetID,
+		"logo_metadata":           logoMetadata,
+		"bank_name":               bankName,
+		"bank_account_holder":     bankHolder,
+		"bank_account_number":     bankAcc,
+		"bank_ifsc":               ifsc,
+		"bank_branch":             branch,
+		"signature_name":          sig,
+		"invoice_terms":           terms,
+		"invoice_footer":          footer,
+		"upi_id":                  upiID,
+		"pan_number":              panNumber,
+		"instagram_handle":        instaHandle,
+		"state_code":              stateCode,
 	})
 }
 
@@ -296,11 +297,11 @@ func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, work
 	}
 
 	return map[string]interface{}{
-		"asset_id":      assetID.String(),
-		"filename":      filename,
-		"content_type":  contentType,
-		"size_bytes":    sizeBytes,
-		"storage_key":   storageKey,
+		"asset_id":       assetID.String(),
+		"filename":       filename,
+		"content_type":   contentType,
+		"size_bytes":     sizeBytes,
+		"storage_key":    storageKey,
 		"storage_driver": "r2",
 	}, storageKey, nil
 }

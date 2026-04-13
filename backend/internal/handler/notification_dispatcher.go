@@ -37,7 +37,12 @@ import (
 // OwnerLookupFunc resolves the user ID of a workspace's primary owner.
 // Returns uuid.Nil if the workspace has no resolvable owner — the
 // dispatcher treats that as "nothing to notify" and logs a debug line.
-type OwnerLookupFunc func(ctx context.Context, workspaceID uuid.UUID) (uuid.UUID, error)
+type OwnerLookupResult struct {
+	UserID uuid.UUID
+	Email  string
+}
+
+type OwnerLookupFunc func(ctx context.Context, workspaceID uuid.UUID) (OwnerLookupResult, error)
 
 // NotificationDispatcher bundles the delivery service with the owner lookup.
 type NotificationDispatcher struct {
@@ -66,26 +71,27 @@ func (d *NotificationDispatcher) Notify(ctx context.Context, workspaceID uuid.UU
 	if workspaceID == uuid.Nil {
 		return
 	}
-	ownerID, err := d.lookup(ctx, workspaceID)
+	owner, err := d.lookup(ctx, workspaceID)
 	if err != nil {
 		log.Printf("notification dispatcher: owner lookup failed workspace=%s err=%v", workspaceID, err)
 		return
 	}
-	if ownerID == uuid.Nil {
+	if owner.UserID == uuid.Nil {
 		log.Printf("notification dispatcher: no owner resolved for workspace=%s — skipping", workspaceID)
 		return
 	}
 	wsCopy := workspaceID
 	intent := service.NotificationIntent{
-		UserID:      ownerID,
+		UserID:      owner.UserID,
 		WorkspaceID: &wsCopy,
 		Category:    category,
 		Title:       title,
 		Body:        body,
 		ActionURL:   actionURL,
+		EmailTo:     owner.Email,
 	}
 	if _, err := d.delivery.Deliver(ctx, intent); err != nil {
 		log.Printf("notification dispatcher: delivery failed workspace=%s owner=%s category=%s err=%v",
-			workspaceID, ownerID, category, err)
+			workspaceID, owner.UserID, category, err)
 	}
 }

@@ -9,11 +9,13 @@ import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 type AspectRatio = "16:9" | "4:3" | "1:1";
+type CoverTemplate = "none" | "full_bleed" | "split_screen" | "minimal_white" | "classic_film" | "festive";
 
 interface CoverState {
   assetId: string | null;
   focalPoint: { x: number; y: number };
   aspectRatio: AspectRatio;
+  template: CoverTemplate;
   zoom: number;
 }
 
@@ -29,6 +31,7 @@ export default function CoverPhotoPage() {
     assetId: null,
     focalPoint: { x: 50, y: 50 },
     aspectRatio: "16:9",
+    template: "full_bleed",
     zoom: 1,
   });
   const [saving, setSaving] = useState(false);
@@ -60,9 +63,17 @@ export default function CoverPhotoPage() {
         const assets = hydrated.filter((a): a is Asset => a !== null);
         setRealAssets(assets);
         const initialAssetId = g.cover_asset_id || assets[0]?.id || null;
-        if (initialAssetId) {
-          setState((s) => ({ ...s, assetId: initialAssetId }));
-        }
+        const coverStyle = g.settings?.cover_style as { focal_point?: { x?: number; y?: number }; aspect_ratio?: AspectRatio } | undefined;
+        setState((s) => ({
+          ...s,
+          assetId: initialAssetId,
+          focalPoint: {
+            x: coverStyle?.focal_point?.x ?? s.focalPoint.x,
+            y: coverStyle?.focal_point?.y ?? s.focalPoint.y,
+          },
+          aspectRatio: coverStyle?.aspect_ratio ?? s.aspectRatio,
+          template: (g.cover_template as CoverTemplate) || s.template,
+        }));
       } catch (err) {
         console.error("Failed to load cover page data:", err);
       }
@@ -108,8 +119,9 @@ export default function CoverPhotoPage() {
         asset_id: state.assetId,
         focal_point: state.focalPoint,
         aspect_ratio: state.aspectRatio,
+        template: state.template,
       });
-      setGallery((g) => g ? { ...g, cover_asset_id: state.assetId || undefined } : g);
+      setGallery((g) => g ? { ...g, cover_asset_id: state.assetId || undefined, cover_template: state.template } : g);
       setSaveMessage("Cover saved.");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save cover.");
@@ -155,6 +167,22 @@ export default function CoverPhotoPage() {
               Focal: {state.focalPoint.x}%, {state.focalPoint.y}%
             </span>
           </div>
+
+          <label className="mb-4 flex flex-col gap-1 text-xs text-on-surface-variant">
+            Cover template
+            <select
+              value={state.template}
+              onChange={(e) => setState((s) => ({ ...s, template: e.target.value as CoverTemplate }))}
+              className="input-base"
+            >
+              <option value="none">No cover page</option>
+              <option value="full_bleed">Full bleed</option>
+              <option value="split_screen">Split screen</option>
+              <option value="minimal_white">Minimal white</option>
+              <option value="classic_film">Classic film</option>
+              <option value="festive">Festive</option>
+            </select>
+          </label>
 
           {/* Cover image with focal point */}
           <div
@@ -250,6 +278,15 @@ export default function CoverPhotoPage() {
               ))}
             </div>
           </section>
+
+          {gallery?.slug && (
+            <section>
+              <h3 className="text-sm font-semibold mb-3">Public Preview</h3>
+              <a href={`/g/${gallery.slug}?mode=client`} target="_blank" rel="noopener noreferrer" className="btn-tertiary inline-flex px-4 py-2 text-sm">
+                Open client preview
+              </a>
+            </section>
+          )}
 
           {/* Version History — populated when API returns cover history */}
           <section>

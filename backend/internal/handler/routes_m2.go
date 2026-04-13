@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/ai"
+	"github.com/rawdrive/backend/internal/email"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -23,7 +24,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	if deps.FaceSvc != nil && deps.AssetService != nil && deps.JobRepo != nil {
 		galleryHandler.WithAIDeps(deps.FaceSvc, deps.AssetService, deps.JobRepo)
 	}
-	shareHandler := NewShareLinkHandler(deps.ShareLinkService)
+	shareHandler := NewShareLinkHandler(deps.ShareLinkService).
+		WithGalleryShareEmail(deps.GalleryShareSender, deps.GalleryService, deps.PublicBaseURL, deps.GalleryShareLogRepo)
 	proofingHandler := NewProofingHandler(deps.ProofingService)
 	storageConfigHandler := NewStorageConfigHandler(deps.StorageConfigService)
 
@@ -349,6 +351,7 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 
 		// GAL-FR-115: Plan-aware white-label branding for public gallery
 		r.Get("/galleries/{slug}/branding", publicHandler.GetBranding)
+		r.Get("/galleries/{slug}/branding/logo", publicHandler.GetBrandingLogo)
 
 		// GAL-FR-107/108: FaceID gallery entry (scoped to current gallery)
 		r.Post("/galleries/{slug}/face-match", publicHandler.FaceMatch)
@@ -431,6 +434,9 @@ type M2Dependencies struct {
 	UploadService        *service.UploadService
 	GalleryService       *service.GalleryService
 	ShareLinkService     *service.ShareLinkService
+	GalleryShareSender   *email.GalleryShareSender
+	GalleryShareLogRepo  *repository.GalleryShareLogRepo
+	PublicBaseURL        string
 	ProofingService      *service.ProofingService
 	StorageConfigService *service.StorageConfigService
 	// M11 dependencies (nil-safe — routes register only when non-nil)

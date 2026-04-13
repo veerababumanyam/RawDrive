@@ -3,22 +3,41 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
+	mailaddr "net/mail"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/email"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
 
 // ShareLinkHandler handles share link HTTP requests.
 type ShareLinkHandler struct {
-	shareSvc *service.ShareLinkService
+	shareSvc          *service.ShareLinkService
+	gallerySvc        *service.GalleryService
+	galleryShareEmail *email.GalleryShareSender
+	shareLogRepo      *repository.GalleryShareLogRepo
+	publicBaseURL     string
 }
 
 func NewShareLinkHandler(svc *service.ShareLinkService) *ShareLinkHandler {
 	return &ShareLinkHandler{shareSvc: svc}
+}
+
+func (h *ShareLinkHandler) WithGalleryShareEmail(sender *email.GalleryShareSender, gallerySvc *service.GalleryService, publicBaseURL string, logRepo *repository.GalleryShareLogRepo) *ShareLinkHandler {
+	h.galleryShareEmail = sender
+	h.gallerySvc = gallerySvc
+	h.publicBaseURL = strings.TrimRight(publicBaseURL, "/")
+	h.shareLogRepo = logRepo
+	return h
 }
 
 func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -29,14 +48,34 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		PIN             string `json:"pin"`
-		ExpiryDays      *int   `json:"expiry_days"`
-		DownloadAllowed bool   `json:"download_allowed"`
-		MaxAccessCount  *int   `json:"max_access_count"`
+		PIN             string   `json:"pin"`
+		ExpiryDays      *int     `json:"expiry_days"`
+		DownloadAllowed bool     `json:"download_allowed"`
+		MaxAccessCount  *int     `json:"max_access_count"`
+		AccessMode      string   `json:"access_mode"`
+		AllowedEmails   []string `json:"allowed_emails"`
+		RecipientEmails []string `json:"recipient_emails"`
+		Message         string   `json:"message"`
+		Channel         string   `json:"channel"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
+	}
+	if (input.AccessMode == "pin" || input.AccessMode == "password") && input.PIN == "" {
+		http.Error(w, `{"error":"pin is required for protected share links"}`, http.StatusBadRequest)
+		return
+	}
+	emailShareRequested := strings.EqualFold(input.Channel, "email") && len(input.RecipientEmails) > 0
+	if emailShareRequested {
+		if h.galleryShareEmail == nil || h.gallerySvc == nil {
+			http.Error(w, `{"error":"smtp email is not configured"}`, http.StatusServiceUnavailable)
+			return
+		}
+		if err := validateRecipientEmails(input.RecipientEmails); err != nil {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	createInput := service.CreateShareLinkInput{
@@ -44,7 +83,28 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PIN:             input.PIN,
 		DownloadAllowed: input.DownloadAllowed,
 		MaxAccessCount:  input.MaxAccessCount,
-		Permissions:     map[string]interface{}{},
+		Permissions: map[string]interface{}{
+			"access_mode": input.AccessMode,
+		},
+	}
+	if input.AccessMode == "" {
+		if input.PIN != "" {
+			createInput.Permissions["access_mode"] = "pin"
+		} else {
+			createInput.Permissions["access_mode"] = "public"
+		}
+	}
+	if len(input.AllowedEmails) > 0 {
+		createInput.Permissions["allowed_emails"] = input.AllowedEmails
+	}
+	if len(input.RecipientEmails) > 0 {
+		createInput.Permissions["recipient_emails"] = input.RecipientEmails
+	}
+	if input.Message != "" {
+		createInput.Permissions["message"] = input.Message
+	}
+	if input.Channel != "" {
+		createInput.Permissions["channel"] = input.Channel
 	}
 	if input.ExpiryDays != nil && *input.ExpiryDays > 0 {
 		d := time.Duration(*input.ExpiryDays) * 24 * time.Hour
@@ -56,8 +116,100 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
 		return
 	}
+	if emailShareRequested {
+		if err := h.sendGalleryShareEmails(r, galleryID, link, input.RecipientEmails, input.Message); err != nil {
+			log.Printf("gallery share email failed gallery=%s err=%v", galleryID, err)
+			http.Error(w, `{"error":"email send failed"}`, http.StatusBadGateway)
+			return
+		}
+	}
 
 	respondJSON(w, http.StatusCreated, link)
+}
+
+func validateRecipientEmails(recipients []string) error {
+	for _, recipient := range recipients {
+		if _, err := mailaddr.ParseAddress(strings.TrimSpace(recipient)); err != nil {
+			return fmt.Errorf("invalid recipient email")
+		}
+	}
+	return nil
+}
+
+func (h *ShareLinkHandler) sendGalleryShareEmails(r *http.Request, galleryID uuid.UUID, link *repository.ShareLink, recipients []string, message string) error {
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil {
+		return err
+	}
+	if gallery == nil {
+		return fmt.Errorf("gallery not found")
+	}
+
+	shareURL := h.galleryShareURL(r, gallery.Slug, link.Token)
+	message = strings.ReplaceAll(message, "{link}", shareURL)
+	senderName, sentBy := shareSenderFromClaims(r)
+	for _, recipient := range recipients {
+		recipient = strings.TrimSpace(recipient)
+		err := h.galleryShareEmail.Send(r.Context(), recipient, email.GalleryShareData{
+			SenderName:   senderName,
+			GalleryTitle: gallery.Title,
+			Message:      message,
+			GalleryLink:  shareURL,
+		})
+		if err != nil {
+			return err
+		}
+		if h.shareLogRepo != nil && sentBy != uuid.Nil {
+			if err := h.shareLogRepo.Create(r.Context(), repository.GalleryShareLog{
+				ID:           uuid.New(),
+				GalleryID:    galleryID,
+				SentToEmail:  recipient,
+				SentByUserID: sentBy,
+				Message:      message,
+				SentAt:       time.Now(),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (h *ShareLinkHandler) galleryShareURL(r *http.Request, slug, token string) string {
+	base := h.publicBaseURL
+	if base == "" {
+		scheme := r.Header.Get("X-Forwarded-Proto")
+		if scheme == "" {
+			if r.TLS != nil {
+				scheme = "https"
+			} else {
+				scheme = "http"
+			}
+		}
+		host := r.Header.Get("X-Forwarded-Host")
+		if host == "" {
+			host = r.Host
+		}
+		base = scheme + "://" + host
+	}
+	return strings.TrimRight(base, "/") + "/g/" + url.PathEscape(slug) + "?share=" + url.QueryEscape(token)
+}
+
+func shareSenderFromClaims(r *http.Request) (string, uuid.UUID) {
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims == nil {
+		return "RawDrive", uuid.Nil
+	}
+	senderName := "RawDrive"
+	if emailAddr, _ := claims["email"].(string); emailAddr != "" {
+		senderName = emailAddr
+	}
+	sub, _ := claims["sub"].(string)
+	userID, err := uuid.Parse(sub)
+	if err != nil {
+		return senderName, uuid.Nil
+	}
+	return senderName, userID
 }
 
 func (h *ShareLinkHandler) ListByGallery(w http.ResponseWriter, r *http.Request) {

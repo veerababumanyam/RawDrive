@@ -2,7 +2,7 @@
 // transactional mail (OTP codes, team invitations, password reset
 // notifications). ISSUE-002 (brownfield P0, production-readiness):
 // before this package existed, every email code path in
-// cmd/api/main.go was backed by a stdout-logging stub — the comment
+// cmd/api/main.go was backed by a stdout-logging stub - the comment
 // on logOTPDelivery said "DO NOT USE IN PRODUCTION" but it was
 // wired unconditionally. Users could not complete signup, recover
 // passwords, or accept invitations in any non-local environment.
@@ -12,39 +12,28 @@
 // 5321 / 5322 path via net/smtp. It works against:
 //   - Mailpit on port 1025 (dev, no auth)
 //   - SMTP PLAIN auth with STARTTLS (Postmark, SendGrid, SES on 587)
-//   - Implicit TLS on 465 (older SES / Mailgun endpoints — via DialTLS,
-//     which net/smtp.SendMail handles transparently via the server's
-//     EHLO response when STARTTLS is offered)
+//   - Implicit TLS on 465 (GoDaddy / legacy SMTPS providers)
 //
-// Config lookup order — AS CURRENTLY WIRED:
+// Config lookup order - AS WIRED:
 //
-// The LoadSMTPConfig signature accepts a SettingsReader for
-// platform_settings lookups, but cmd/api/main.go currently passes
-// nil because the platform_settings repository is not yet
-// constructed at the point where the email transport is wired.
-// That means the env-var path is the only one exercised at boot
-// today. Changes made through the admin UI (category "email") will
-// NOT take effect until:
-//
-//  1. The backend is restarted, AND
-//  2. The new values are also reflected in the SMTP_* env vars.
-//
-// Post-boot hot-reload from platform_settings is a deferred
-// follow-up — the interface and DB category exist so the refresh
-// path can be added without changing this package's public API,
-// but that path is NOT wired today. Until it is, treat smtp.go as
-// env-var-only and document the reality in operator runbooks.
-// See docs/runbooks/production-launch-checklist.md for the env
-// var list.
+// cmd/api/main.go supplies a platform_settings reader, so
+// LoadSMTPConfig reads platform_settings first and falls back to
+// SMTP_* env vars per key. The dynamic senders reload this config
+// for each send, so admin UI changes in category "email" take
+// effect without a nightly sync job or backend restart.
 package email
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
+	"net"
 	"net/smtp"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // SMTPConfig holds everything needed to authenticate with and send
@@ -56,7 +45,7 @@ type SMTPConfig struct {
 	Port        int    // 587 (STARTTLS), 465 (TLS), 25 (plaintext), 1025 (Mailpit)
 	Username    string // empty = no auth
 	Password    string
-	FromAddress string // noreply@rawdrive.in — the envelope MAIL FROM
+	FromAddress string // noreply@rawdrive.in - the envelope MAIL FROM
 	FromName    string // "RawDrive", optional display name
 }
 
@@ -74,16 +63,13 @@ type SettingsReader interface {
 // required fields (Host, Port, FromAddress). Callers MUST decide how
 // to handle a nil config:
 //
-//   - Production: log.Fatalf — mail is a critical path.
+//   - Production: log.Fatalf - mail is a critical path.
 //   - Development: accept a DEV_STUB_EMAIL=true escape hatch and
 //     fall through to the stdout stubs.
 //
-// Precedence per key: platform_settings wins over env var WHEN a
-// non-nil reader is supplied. The current boot path in
-// cmd/api/main.go passes reader == nil (the platform_settings repo
-// is not yet constructed at that point), so in practice only the
-// env var branch is exercised at startup today. See the package
-// doc comment for the follow-up plan.
+// Precedence per key: platform_settings wins over env var when a
+// non-nil reader is supplied. cmd/api/main.go supplies that reader
+// during normal API startup.
 //
 // Key names follow the canonical ones seeded by migration 039
 // (backend/internal/database/migrations/039_platform_settings.up.sql):
@@ -92,7 +78,7 @@ type SettingsReader interface {
 //	email.smtp_password, email.smtp_from
 //
 // Env vars follow the names used by the project's .env file (which
-// differs slightly from the DB keys for historical reasons — the
+// differs slightly from the DB keys for historical reasons - the
 // env uses SMTP_USERNAME, the DB uses smtp_user):
 //
 //	SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM
@@ -142,7 +128,7 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 	}
 
 	// Minimum required fields: host, port, from_address. If any are
-	// missing, return (nil, nil) — caller decides whether to FATAL
+	// missing, return (nil, nil) - caller decides whether to FATAL
 	// or fall back to stubs.
 	if host == "" || portStr == "" || fromAddr == "" {
 		return nil, nil
@@ -171,37 +157,145 @@ func LoadSMTPConfig(ctx context.Context, reader SettingsReader) (*SMTPConfig, er
 // network socket.
 type Mailer func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
 
+type configLoader func(ctx context.Context) (*SMTPConfig, error)
+
+func dynamicConfigLoader(reader SettingsReader) configLoader {
+	return func(ctx context.Context) (*SMTPConfig, error) {
+		return LoadSMTPConfig(ctx, reader)
+	}
+}
+
+func resolveConfig(ctx context.Context, cfg *SMTPConfig, loader configLoader) (*SMTPConfig, error) {
+	if loader != nil {
+		loaded, err := loader(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if loaded == nil {
+			return nil, errors.New("smtp: config incomplete")
+		}
+		return loaded, nil
+	}
+	if cfg == nil {
+		return nil, errors.New("smtp: config incomplete")
+	}
+	return cfg, nil
+}
+
+func sendConfigured(mailer Mailer, cfg *SMTPConfig, to string, msg []byte) error {
+	return mailer(
+		fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		smtpAuth(cfg),
+		cfg.FromAddress,
+		[]string{to},
+		msg,
+	)
+}
+
 // defaultMailer is the production sender. Assigned as a var rather
 // than a const so tests can patch the package-level default if they
 // ever need to (though the typical path is to inject via the struct
 // field in the test, which is what the current tests do).
-var defaultMailer Mailer = smtp.SendMail
+var defaultMailer Mailer = sendMail
+
+// sendMail preserves net/smtp.SendMail behavior for plaintext and
+// STARTTLS providers, and adds the implicit-TLS path required by
+// SMTPS providers on port 465.
+func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+	host, implicitTLS := implicitTLSHost(addr)
+	if !implicitTLS {
+		return smtp.SendMail(addr, a, from, to, msg)
+	}
+	return sendMailImplicitTLS(host, addr, a, from, to, msg)
+}
+
+func implicitTLSHost(addr string) (string, bool) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", false
+	}
+	return host, port == "465"
+}
+
+func sendMailImplicitTLS(host, addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
+		ServerName: host,
+		MinVersion: tls.VersionTLS12,
+	})
+	if err != nil {
+		return err
+	}
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	defer c.Close()
+
+	if err := c.Hello("localhost"); err != nil {
+		return err
+	}
+	if a != nil {
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err := c.Auth(a); err != nil {
+			return err
+		}
+	}
+	if err := c.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range to {
+		if err := c.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		_ = w.Close()
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return c.Quit()
+}
 
 // OTPDelivery is the SMTP-backed implementation of
 // auth.EmailDelivery. It is wired into auth.NewOTPServiceWithDelivery
 // from main.go.
 type OTPDelivery struct {
 	cfg    *SMTPConfig
+	loader configLoader
 	mailer Mailer
 }
 
 // NewOTPDelivery constructs a production OTPDelivery. cfg must not
-// be nil — LoadSMTPConfig returns nil when config is absent and
+// be nil - LoadSMTPConfig returns nil when config is absent and
 // main.go is expected to FATAL before constructing the delivery.
 func NewOTPDelivery(cfg *SMTPConfig) *OTPDelivery {
 	return &OTPDelivery{cfg: cfg, mailer: defaultMailer}
 }
 
+// NewDynamicOTPDelivery reloads SMTP settings from platform_settings
+// for every send, falling back to SMTP_* env vars per key.
+func NewDynamicOTPDelivery(reader SettingsReader) *OTPDelivery {
+	return &OTPDelivery{loader: dynamicConfigLoader(reader), mailer: defaultMailer}
+}
+
 // SendOTP implements auth.EmailDelivery.
-func (d *OTPDelivery) SendOTP(_ context.Context, email, code string) error {
-	msg := composeOTPMessage(d.cfg, email, code)
-	return d.mailer(
-		fmt.Sprintf("%s:%d", d.cfg.Host, d.cfg.Port),
-		smtpAuth(d.cfg),
-		d.cfg.FromAddress,
-		[]string{email},
-		msg,
-	)
+func (d *OTPDelivery) SendOTP(ctx context.Context, email, code string) error {
+	cfg, err := resolveConfig(ctx, d.cfg, d.loader)
+	if err != nil {
+		return err
+	}
+	return sendConfigured(d.mailer, cfg, email, composeOTPMessage(cfg, email, code))
 }
 
 // InvitationSender is the SMTP-backed implementation of
@@ -209,29 +303,33 @@ func (d *OTPDelivery) SendOTP(_ context.Context, email, code string) error {
 // main.go.
 type InvitationSender struct {
 	cfg    *SMTPConfig
+	loader configLoader
 	mailer Mailer
 }
 
 // NewInvitationSender constructs a production InvitationSender.
-// cfg must not be nil — see NewOTPDelivery.
+// cfg must not be nil - see NewOTPDelivery.
 func NewInvitationSender(cfg *SMTPConfig) *InvitationSender {
 	return &InvitationSender{cfg: cfg, mailer: defaultMailer}
 }
 
+// NewDynamicInvitationSender reloads SMTP settings from platform_settings
+// for every send, falling back to SMTP_* env vars per key.
+func NewDynamicInvitationSender(reader SettingsReader) *InvitationSender {
+	return &InvitationSender{loader: dynamicConfigLoader(reader), mailer: defaultMailer}
+}
+
 // SendInvitation implements team.EmailSender.
-func (d *InvitationSender) SendInvitation(_ context.Context, email, inviteLink string) error {
-	msg := composeInvitationMessage(d.cfg, email, inviteLink)
-	return d.mailer(
-		fmt.Sprintf("%s:%d", d.cfg.Host, d.cfg.Port),
-		smtpAuth(d.cfg),
-		d.cfg.FromAddress,
-		[]string{email},
-		msg,
-	)
+func (d *InvitationSender) SendInvitation(ctx context.Context, email, inviteLink string) error {
+	cfg, err := resolveConfig(ctx, d.cfg, d.loader)
+	if err != nil {
+		return err
+	}
+	return sendConfigured(d.mailer, cfg, email, composeInvitationMessage(cfg, email, inviteLink))
 }
 
 // smtpAuth returns smtp.PlainAuth when credentials are configured.
-// Returns nil for unauthenticated transports — most commonly the
+// Returns nil for unauthenticated transports - most commonly the
 // dev Mailpit listener on port 1025 which does not require auth.
 func smtpAuth(cfg *SMTPConfig) smtp.Auth {
 	if cfg.Username == "" {

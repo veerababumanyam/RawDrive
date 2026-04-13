@@ -233,12 +233,14 @@ func (h *PublicGalleryHandler) VerifyPIN(w http.ResponseWriter, r *http.Request)
 // gallery shell — tier, platform brand defaults, and a can_customize flag
 // the frontend uses to decide whether to apply studio-level overrides.
 type brandingResponse struct {
-	TierSlug     string  `json:"tier_slug"`     // free, standard, pro, enterprise
-	CanCustomize bool    `json:"can_customize"` // true when tier supports white-label overrides
-	BrandName    string  `json:"brand_name"`
-	LogoURL      *string `json:"logo_url,omitempty"`
-	AccentColor  *string `json:"accent_color,omitempty"`
-	HideFooter   bool    `json:"hide_footer"` // enterprise-only: hide "Powered by RawDrive"
+	TierSlug              string  `json:"tier_slug"`     // free, standard, pro, enterprise
+	CanCustomize          bool    `json:"can_customize"` // true when tier supports white-label overrides
+	BrandName             string  `json:"brand_name"`
+	LogoURL               *string `json:"logo_url,omitempty"`
+	LogoAssetID           *string `json:"logo_asset_id,omitempty"`
+	AccentColor           *string `json:"accent_color,omitempty"`
+	HideFooter            bool    `json:"hide_footer"` // enterprise-only: hide "Powered by RawDrive"
+	PublicBrandingEnabled bool    `json:"public_branding_enabled"`
 }
 
 // canCustomizeForTier returns true for tiers that may override platform
@@ -271,11 +273,38 @@ func (h *PublicGalleryHandler) GetBranding(w http.ResponseWriter, r *http.Reques
 	}
 
 	tier := h.lookupWorkspaceTier(r.Context(), gallery.WorkspaceID)
+	workspaceBranding := h.lookupWorkspaceBranding(r.Context(), gallery.WorkspaceID)
+	canCustomize := canCustomizeForTier(tier) && workspaceBranding.PublicBrandingEnabled
+
+	brandName := "RawDrive"
+	var logoURL *string
+	var logoAssetID *string
+	var accentColor *string
+	if canCustomize {
+		if workspaceBranding.BrandName != "" {
+			brandName = workspaceBranding.BrandName
+		} else if workspaceBranding.WorkspaceName != "" {
+			brandName = workspaceBranding.WorkspaceName
+		}
+		if workspaceBranding.BrandAccentColor != "" {
+			accentColor = &workspaceBranding.BrandAccentColor
+		}
+		if workspaceBranding.LogoAssetID != "" {
+			logoAssetID = &workspaceBranding.LogoAssetID
+			url := "/api/v1/public/galleries/" + slug + "/branding/logo"
+			logoURL = &url
+		}
+	}
+
 	respondJSON(w, http.StatusOK, brandingResponse{
-		TierSlug:     tier,
-		CanCustomize: canCustomizeForTier(tier),
-		BrandName:    "RawDrive",
-		HideFooter:   tier == "enterprise",
+		TierSlug:              tier,
+		CanCustomize:          canCustomize,
+		BrandName:             brandName,
+		LogoURL:               logoURL,
+		LogoAssetID:           logoAssetID,
+		AccentColor:           accentColor,
+		HideFooter:            tier == "enterprise",
+		PublicBrandingEnabled: workspaceBranding.PublicBrandingEnabled,
 	})
 }
 
@@ -296,10 +325,109 @@ func (h *PublicGalleryHandler) lookupWorkspaceTier(ctx context.Context, workspac
 		  LIMIT 1`,
 		workspaceID,
 	).Scan(&tier)
+	if err == nil && tier != "" {
+		return tier
+	}
+
+	err = h.pool.QueryRow(ctx,
+		`SELECT COALESCE(plan_tier, 'free') FROM workspaces WHERE id = $1`,
+		workspaceID,
+	).Scan(&tier)
 	if err != nil || tier == "" {
 		return "free"
 	}
 	return tier
+}
+
+type publicWorkspaceBranding struct {
+	WorkspaceName         string
+	BrandName             string
+	BrandAccentColor      string
+	PublicBrandingEnabled bool
+	LogoAssetID           string
+}
+
+func (h *PublicGalleryHandler) lookupWorkspaceBranding(ctx context.Context, workspaceID uuid.UUID) publicWorkspaceBranding {
+	result := publicWorkspaceBranding{PublicBrandingEnabled: true}
+	if h.pool == nil {
+		return result
+	}
+
+	err := h.pool.QueryRow(ctx, `
+		SELECT
+			COALESCE(name, ''),
+			COALESCE(brand_name, ''),
+			COALESCE(brand_accent_color, ''),
+			COALESCE(public_branding_enabled, true),
+			COALESCE(logo_asset_id::text, '')
+		FROM workspaces
+		WHERE id = $1`,
+		workspaceID,
+	).Scan(&result.WorkspaceName, &result.BrandName, &result.BrandAccentColor, &result.PublicBrandingEnabled, &result.LogoAssetID)
+	if err != nil {
+		return publicWorkspaceBranding{PublicBrandingEnabled: true}
+	}
+	return result
+}
+
+// GetBrandingLogo streams the workspace logo through the application after
+// resolving the public gallery slug and plan gate. It never exposes the R2
+// storage key or public bucket URL to the browser.
+func (h *PublicGalleryHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
+		return
+	}
+	if h.assetSvc == nil || h.pool == nil {
+		http.Error(w, `{"error":"branding logo unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+
+	tier := h.lookupWorkspaceTier(r.Context(), gallery.WorkspaceID)
+	workspaceBranding := h.lookupWorkspaceBranding(r.Context(), gallery.WorkspaceID)
+	if !canCustomizeForTier(tier) || !workspaceBranding.PublicBrandingEnabled || workspaceBranding.LogoAssetID == "" {
+		http.Error(w, `{"error":"branding logo not available"}`, http.StatusNotFound)
+		return
+	}
+
+	logoAssetID, err := uuid.Parse(workspaceBranding.LogoAssetID)
+	if err != nil {
+		http.Error(w, `{"error":"branding logo invalid"}`, http.StatusNotFound)
+		return
+	}
+
+	var storageKey, contentType, filename string
+	err = h.pool.QueryRow(r.Context(), `
+		SELECT storage_key, content_type, filename
+		FROM assets
+		WHERE id = $1
+		  AND workspace_id = $2
+		  AND deleted_at IS NULL
+		  AND content_type LIKE 'image/%'`,
+		logoAssetID, gallery.WorkspaceID,
+	).Scan(&storageKey, &contentType, &filename)
+	if err != nil {
+		http.Error(w, `{"error":"branding logo not found"}`, http.StatusNotFound)
+		return
+	}
+
+	reader, err := h.assetSvc.GetStorageReader(r.Context(), storageKey)
+	if err != nil {
+		http.Error(w, `{"error":"branding logo retrieval failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
+	_, _ = io.Copy(w, reader)
 }
 
 // faceMatchRequest accepts a pre-computed face embedding from the client.
