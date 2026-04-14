@@ -20,13 +20,20 @@ import type { ChatMessage } from "@/components/streams/live/ChatModeratorPanel";
 
 const MAX_BODY = 500;
 
+export type ChatConnectionState = "connecting" | "open" | "reconnecting" | "closed";
+
 export interface ChatBoxProps {
   streamId: string;
   messages: ChatMessage[];
   disabled?: boolean;
+  /**
+   * SSE connection state from `useChatStream`. When `"reconnecting"` we surface
+   * a small warning banner so viewers know the live feed is temporarily paused.
+   */
+  connectionState?: ChatConnectionState;
 }
 
-export function ChatBox({ streamId, messages, disabled }: ChatBoxProps) {
+export function ChatBox({ streamId, messages, disabled, connectionState }: ChatBoxProps) {
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
   const [retryAfter, setRetryAfter] = useState(0);
@@ -126,6 +133,17 @@ export function ChatBox({ streamId, messages, disabled }: ChatBoxProps) {
           </li>
         ))}
       </ul>
+
+      {connectionState === "reconnecting" && !banned && (
+        <div
+          data-testid="chat-reconnecting"
+          role="status"
+          aria-live="polite"
+          className="rounded-md border border-feedback-warning/30 bg-feedback-warning/10 px-3 py-2 text-xs text-feedback-warning"
+        >
+          Reconnecting…
+        </div>
+      )}
 
       {banned && (
         <div

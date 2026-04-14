@@ -108,8 +108,10 @@ func (h *ViewerPublicHandler) authViewer(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusNotFound, "not_found")
 		return uuid.Nil, false
 	}
+	// API-001: stream-mismatch returns 404 (anti-enumeration) so a viewer
+	// holding a token for a different stream cannot probe existence.
 	if !strings.EqualFold(claims.StreamID, streamID.String()) {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		writeJSONError(w, http.StatusNotFound, "not_found")
 		return uuid.Nil, false
 	}
 	return streamID, true

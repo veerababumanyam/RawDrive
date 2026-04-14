@@ -31,13 +31,21 @@ export function BarList({
 
   return (
     <ul
+      role="list"
       aria-label={ariaLabel}
       className={["flex flex-col gap-2", className ?? ""].join(" ")}
     >
       {visible.map((it) => {
         const pct = (it.value / max) * 100;
+        const srLabel = `${it.label}: ${it.value}${it.hint ? ` ${it.hint}` : ""}`;
         return (
-          <li key={it.label} className="flex flex-col gap-1">
+          <li
+            key={it.label}
+            role="listitem"
+            tabIndex={0}
+            aria-label={srLabel}
+            className="flex flex-col gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+          >
             <div className="flex items-baseline justify-between text-xs">
               <span className="text-text-primary">{it.label}</span>
               <span className="text-text-secondary tabular-nums">

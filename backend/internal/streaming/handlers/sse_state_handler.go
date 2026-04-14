@@ -84,8 +84,12 @@ func (h *SSEStateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "invalid_viewer_session")
 		return
 	}
+	// API-001: stream-mismatch returns 404 to match the anti-enumeration
+	// behaviour of chat_viewer + viewer_public. A viewer holding a token
+	// bound to a different stream must not be able to distinguish "your
+	// token is for the wrong stream" from "the path stream does not exist".
 	if !strings.EqualFold(claims.StreamID, streamID.String()) {
-		writeJSONError(w, http.StatusUnauthorized, "invalid_viewer_session")
+		writeJSONError(w, http.StatusNotFound, "not_found")
 		return
 	}
 

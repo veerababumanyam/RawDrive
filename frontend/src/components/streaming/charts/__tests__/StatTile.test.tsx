@@ -15,6 +15,19 @@ describe("StatTile", () => {
     expect(screen.getByText("last 10 min")).toBeTruthy();
   });
 
+  it("exposes role=group with aria-labelledby binding label and value", () => {
+    const { container } = render(<StatTile label="Peak Viewers" value={1234} />);
+    const group = container.querySelector("[role='group']");
+    expect(group).toBeTruthy();
+    const labelledBy = group?.getAttribute("aria-labelledby") ?? "";
+    const ids = labelledBy.split(/\s+/).filter(Boolean);
+    expect(ids.length).toBe(2);
+    const labelEl = container.querySelector(`#${CSS.escape(ids[0])}`);
+    const valueEl = container.querySelector(`#${CSS.escape(ids[1])}`);
+    expect(labelEl?.textContent).toBe("Peak Viewers");
+    expect(valueEl?.textContent).toBe("1234");
+  });
+
   it("applies tone styling via data attribute", () => {
     const { container } = render(
       <StatTile label="Errors" value={5} tone="danger" />,

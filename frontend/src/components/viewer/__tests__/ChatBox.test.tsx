@@ -90,6 +90,17 @@ describe("ChatBox", () => {
     );
   });
 
+  it("renders a reconnecting banner only when connectionState='reconnecting'", () => {
+    const { rerender, queryByTestId } = render(
+      <ChatBox streamId="s1" messages={[]} connectionState="open" />,
+    );
+    expect(queryByTestId("chat-reconnecting")).toBeNull();
+    rerender(<ChatBox streamId="s1" messages={[]} connectionState="reconnecting" />);
+    expect(queryByTestId("chat-reconnecting")).not.toBeNull();
+    rerender(<ChatBox streamId="s1" messages={[]} connectionState="open" />);
+    expect(queryByTestId("chat-reconnecting")).toBeNull();
+  });
+
   it("shows banned state on 403 and disables composer permanently", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: "viewer_banned" }), {

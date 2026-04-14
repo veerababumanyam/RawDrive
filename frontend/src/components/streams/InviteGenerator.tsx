@@ -5,19 +5,13 @@
  *
  * Photographer-facing tool that mints a shortlink+QR for a stream:
  *  1. Click "Generate" → POST /api/v1/streaming/streams/{id}/invites.
- *  2. Renders returned code + short_url + a QR placeholder encoding qr_payload.
+ *  2. Renders returned code + short_url + a QR canvas encoding qr_payload via
+ *     the `qrcode` package (client-side only, per spec — no server QR endpoint).
  *  3. "Copy" button writes the short URL to the clipboard via navigator.clipboard.
- *
- * NOTE: The `qrcode` npm package is NOT installed in this workspace and adding
- * a new dependency is out of scope for this story. Rather than faking QR output
- * with a server round-trip (which the spec explicitly forbids: "CLIENT-SIDE
- * rendering only, no server QR endpoint"), we render a visible placeholder that
- * surfaces the exact payload consumers must encode. When `qrcode` ships as a
- * workspace dep, swap the placeholder for `<canvas>` + `QRCode.toCanvas(...)`.
- * Tracked as follow-up frontend tech-debt on story 34-5.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import QRCodeLib from "qrcode";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { CheckCircle, QRCode, Sparkle } from "@/components/icons";
 
@@ -41,6 +35,19 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
   const [invite, setInvite] = useState<InviteResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Render the QR onto the canvas whenever a fresh payload arrives. Uses the
+  // `qrcode` package client-side per spec (no server QR endpoint).
+  useEffect(() => {
+    if (phase !== "ready" || !invite || !qrCanvasRef.current) return;
+    QRCodeLib.toCanvas(qrCanvasRef.current, invite.qr_payload, {
+      width: 192,
+      margin: 1,
+    }).catch(() => {
+      /* swallow — surfaced indirectly via missing visual */
+    });
+  }, [phase, invite]);
 
   async function onGenerate() {
     setPhase("generating");
@@ -142,22 +149,20 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
 
           <div>
             <div className="text-xs uppercase tracking-wider text-white/50">QR</div>
-            {/*
-              Placeholder QR surface. The `qrcode` npm package is not installed
-              in this workspace; rather than introduce a new dependency or
-              silently stub it, we render the payload in a visible container
-              annotated as a QR target. Swap for <canvas> + QRCode.toCanvas
-              when the dep lands. data-qr-payload lets tests assert the value
-              without needing a real QR renderer.
-            */}
             <div
               data-testid="invite-qr"
-              data-qr-payload={invite.qr_payload}
               role="img"
               aria-label={`QR code for ${invite.short_url}`}
-              className="mt-1 inline-flex h-40 w-40 items-center justify-center rounded-xl border border-white/10 bg-white/10 p-2 text-center font-mono text-[10px] text-white/70"
+              className="mt-1 inline-flex items-center justify-center rounded-xl border border-white/10 bg-white p-2"
             >
-              {invite.qr_payload}
+              <canvas
+                ref={qrCanvasRef}
+                data-testid="invite-qr-canvas"
+                data-qr-payload={invite.qr_payload}
+                width={192}
+                height={192}
+                aria-hidden="true"
+              />
             </div>
           </div>
         </div>

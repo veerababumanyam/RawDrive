@@ -34,10 +34,12 @@ import (
 	"github.com/rawdrive/backend/internal/storage"
 	"github.com/rawdrive/backend/internal/featureflag"
 	streaminganalytics "github.com/rawdrive/backend/internal/streaming/analytics"
+	streamingchat "github.com/rawdrive/backend/internal/streaming/chat"
 	"github.com/rawdrive/backend/internal/streaming/credit"
 	streaminghandlers "github.com/rawdrive/backend/internal/streaming/handlers"
 	streamingrate "github.com/rawdrive/backend/internal/streaming/rate"
 	streamingrecharge "github.com/rawdrive/backend/internal/streaming/recharge"
+	streamingrepo "github.com/rawdrive/backend/internal/streaming/repository"
 	"github.com/rawdrive/backend/internal/streaming/shortlink"
 	"github.com/rawdrive/backend/internal/streaming/statepusher"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
@@ -1387,16 +1389,21 @@ func main() {
 			}
 		}
 
-		// Viewer public handler (story 35-4). PresenceSource / PlaybackSigner /
-		// ReplayStreamRepo remain nil — endpoint 500s until the upstream shim and
-		// repo are wired in a later M35 wave. Handler itself is safe to mount.
+		// Viewer public handler (story 35-4). Backed by:
+		//   * PgReplayStreamRepo  — pgxpool over streams.replay_state/expires.
+		//   * ZeroPresenceSource  — stub upstream until the NATS-backed viewer
+		//                           presence broker lands; reports 0 viewers.
+		//   * CFPlaybackSigner    — wraps cf.SignedURLService when configured;
+		//                           nil until cf signing key is wired through
+		//                           platform_settings (replay 500s gracefully).
 		var viewerPublicHandler *streaminghandlers.ViewerPublicHandler
 		if m35ViewerJWT != nil {
-			viewerCountCache := viewer.NewViewerCountCache(nil /* TODO: presence shim */, 5*time.Second, nil)
-			replayGate := viewer.NewReplayGate(nil /* TODO: playback signer */, 48*time.Hour, nil)
+			viewerCountCache := viewer.NewViewerCountCache(streaminghandlers.ZeroPresenceSource{}, 5*time.Second, nil)
+			replayGate := viewer.NewReplayGate(nil /* TODO: cf signer when configured */, 48*time.Hour, nil)
 			viewerPublicHandler = streaminghandlers.NewViewerPublicHandler(
 				viewerCountCache, replayGate, m35ViewerJWT,
-				nil /* TODO: ReplayStreamRepo */, streamingFlag, uuid.Nil, nil,
+				streaminghandlers.NewPgReplayStreamRepo(dbPool),
+				streamingFlag, uuid.Nil, nil,
 			)
 		}
 
@@ -1404,20 +1411,55 @@ func main() {
 		analyticsHandler := streaminghandlers.NewAnalyticsHandler(streaminganalytics.New(dbPool), dbPool).
 			WithFeatureFlag(streamingFlag)
 
-		// ChatViewer handler (story 35-3) remains nil — requires a ChatServiceAPI
-		// adapter and a StreamWorkspaceResolver implementation not yet present in
-		// the streaming/chat package. TODO: M35 wave.
-		// var chatViewerHandler *streaminghandlers.ChatViewerHandler = nil
+		// Console handler (story 34-1). Backed by PgConsoleStore — owner-scoped
+		// reads from the streams + ingest_reveal_audit tables.
+		consoleHandler := streaminghandlers.NewConsoleHandler(
+			streaminghandlers.NewPgConsoleStore(dbPool),
+			streamingFlag,
+			nil, // default clock
+		)
+
+		// ChatViewer handler (story 35-3). Real chat.Service backed by:
+		//   * repository.ChatRepo over pgxpool
+		//   * In-memory slow-mode + reaction rate-limit gate
+		//   * PgChatLivenessChecker reading streams.status + chat_slow_mode
+		// StreamWorkspaceResolver is the pgx adapter that maps stream → ws id.
+		chatRepo := streamingrepo.NewChatRepo(dbPool)
+		slowModeGate := streamingchat.NewInMemorySlowModeGate(nil)
+		liveness := streaminghandlers.NewPgChatLivenessChecker(dbPool)
+		chatSvc := streamingchat.NewService(chatRepo, slowModeGate, liveness)
+		chatViewerHandler := streaminghandlers.NewChatViewerHandler(
+			chatSvc,
+			m35ViewerJWT,
+			streaminghandlers.NewPgStreamWorkspaceResolver(dbPool),
+			streamingFlag,
+		)
 
 		streamingDeps := streaminghandlers.Dependencies{
+			Console:         consoleHandler,
 			CreditBalance:   creditBalanceHandler,
 			Invite:          inviteHandler,
 			PublicShortlink: publicShortlinkHandler,
 			Analytics:       analyticsHandler,
 			SSEState:        sseStateHandler,
 			ViewerPublic:    viewerPublicHandler,
-			// Console, StreamCreate, IngestReveal, LiveConsole, Preflight, ChatViewer
-			// remain nil until their services are fully wired (M34/M35 later waves).
+			ChatViewer:      chatViewerHandler,
+			// StreamCreate, IngestReveal, LiveConsole, Preflight remain nil:
+			//   * StreamCreate  — needs a fully-wired StreamWriter + idempotency
+			//                    layer that lands with M34 wave 2.
+			//   * IngestReveal  — services.RevealService requires a StreamLookup
+			//                    + KeyRotator + envelope-decryption pipeline that
+			//                    is not yet wired through platform_settings.
+			//   * LiveConsole   — 8-method LiveConsoleDeps facade (presence,
+			//                    moderation persistence, slow-mode set, end-stream)
+			//                    spans services not yet built.
+			//   * Preflight     — preflight.Service exposes Start() but not the
+			//                    SessionWorkspace/RecordBandwidth/OBSProfile/
+			//                    TestBroadcast/Complete methods the handler
+			//                    requires (R3 stubs not yet present).
+			// Each route is gated by `if deps.X != nil` in routes.go so a nil
+			// handler simply collapses its routes to "not registered" — no
+			// panic, no partial mount.
 		}
 		streaminghandlers.RegisterRoutes(api, streamingDeps)
 		streaminghandlers.RegisterPublicRoutes(r, streamingDeps)

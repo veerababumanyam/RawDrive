@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useId } from "react";
 
 /**
  * StatTile — KPI tile (label + value + optional sublabel/icon/tone).
@@ -33,9 +34,14 @@ export function StatTile({
   icon,
   className,
 }: StatTileProps) {
+  const reactId = useId();
+  const labelId = `stat-${reactId}-label`;
+  const valueId = `stat-${reactId}-value`;
   return (
     <div
       data-tone={tone}
+      role="group"
+      aria-labelledby={`${labelId} ${valueId}`}
       className={[
         "flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface-elevated p-4",
         "shadow-sm",
@@ -43,10 +49,13 @@ export function StatTile({
       ].join(" ")}
     >
       <div className="flex items-center justify-between text-xs text-text-secondary">
-        <span>{label}</span>
+        <span id={labelId}>{label}</span>
         {icon ? <span className="text-text-tertiary">{icon}</span> : null}
       </div>
-      <div className={["text-2xl font-semibold tabular-nums", toneClass[tone]].join(" ")}>
+      <div
+        id={valueId}
+        className={["text-2xl font-semibold tabular-nums", toneClass[tone]].join(" ")}
+      >
         {value}
       </div>
       {sublabel ? (

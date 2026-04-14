@@ -87,13 +87,16 @@ func BuildSelect(f Filter, forCSV bool) (sql string, args []any) {
 	}
 	if f.Search != "" {
 		// Prefix match on id/reservation_id/stream_id/idempotency_key — cast
-		// UUIDs to text. Bound as a single param so the clause is safe.
+		// UUIDs to text. Escape %, _, and \ in user input so wildcards in the
+		// query string become literal characters; ESCAPE '\' tells PG to honour
+		// the backslash escape we just inserted.
+		esc := escapeLikeOperand(f.Search)
 		add(`(
-			idempotency_key LIKE $? || '%'
-			OR id::text       LIKE $? || '%'
-			OR reservation_id::text LIKE $? || '%'
-			OR stream_id::text      LIKE $? || '%'
-		)`, f.Search, f.Search, f.Search, f.Search)
+			idempotency_key LIKE $? || '%' ESCAPE '\'
+			OR id::text       LIKE $? || '%' ESCAPE '\'
+			OR reservation_id::text LIKE $? || '%' ESCAPE '\'
+			OR stream_id::text      LIKE $? || '%' ESCAPE '\'
+		)`, esc, esc, esc, esc)
 	}
 	if f.Cursor != nil {
 		// Keyset: (created_at, id) < (cursor.created_at, cursor.id)
@@ -270,6 +273,14 @@ func rowToCSV(r Row) []string {
 		uuidPtrStr(r.CreatedBy),
 		r.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+// escapeLikeOperand escapes LIKE meta-characters (%, _, \) in the operand so
+// user-supplied search input cannot inject wildcards. Pair with `ESCAPE '\'`
+// in the SQL clause.
+func escapeLikeOperand(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
 
 func uuidPtrStr(p *uuid.UUID) string {

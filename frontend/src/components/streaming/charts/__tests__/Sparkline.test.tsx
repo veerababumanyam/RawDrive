@@ -32,6 +32,37 @@ describe("Sparkline", () => {
     expect(container.querySelector("svg")).toBeTruthy();
   });
 
+  it("renders a <title> describing the trend and is keyboard focusable", () => {
+    const { container } = render(
+      <Sparkline
+        points={[
+          { x: 0, y: 1 },
+          { x: 1, y: 5 },
+          { x: 2, y: 9 },
+        ]}
+        ariaLabel="viewers"
+      />,
+    );
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("tabindex")).toBe("0");
+    const title = container.querySelector("title");
+    expect(title?.textContent).toMatch(/3 data points/);
+    expect(title?.textContent).toMatch(/trending up/);
+  });
+
+  it("describes a downward trend in <title>", () => {
+    const { container } = render(
+      <Sparkline
+        points={[
+          { x: 0, y: 9 },
+          { x: 1, y: 1 },
+        ]}
+        ariaLabel="errors"
+      />,
+    );
+    expect(container.querySelector("title")?.textContent).toMatch(/trending down/);
+  });
+
   it("uses the requested stroke token via CSS var class", () => {
     const { container } = render(
       <Sparkline points={[{ x: 0, y: 1 }, { x: 1, y: 2 }]} ariaLabel="t" strokeToken="success" />,

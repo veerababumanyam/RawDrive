@@ -42,6 +42,28 @@ describe("BarList", () => {
     expect(widths[2]).toBe(25);
   });
 
+  it("exposes role=list with focusable listitem rows labelled label: value", () => {
+    const { container } = render(
+      <BarList
+        ariaLabel="sources"
+        items={[
+          { label: "QR", value: 40, hint: "scans" },
+          { label: "WhatsApp", value: 20 },
+        ]}
+      />,
+    );
+    const list = container.querySelector("ul");
+    expect(list?.getAttribute("role")).toBe("list");
+    const items = container.querySelectorAll("li");
+    expect(items.length).toBe(2);
+    items.forEach((li) => {
+      expect(li.getAttribute("role")).toBe("listitem");
+      expect(li.getAttribute("tabindex")).toBe("0");
+    });
+    expect(items[0].getAttribute("aria-label")).toMatch(/QR: 40/);
+    expect(items[1].getAttribute("aria-label")).toMatch(/WhatsApp: 20/);
+  });
+
   it("respects maxItems", () => {
     render(
       <BarList

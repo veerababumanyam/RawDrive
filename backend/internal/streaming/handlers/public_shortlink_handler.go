@@ -65,6 +65,12 @@ type PublicShortlinkHandler struct {
 	meta     StreamMetaLoader
 	rlPerMin int
 
+	// TrustedProxies lists CIDRs whose connecting RemoteAddr we trust to set
+	// X-Forwarded-For. When the immediate peer is NOT in this list we ignore
+	// XFF and use RemoteAddr directly — preventing arbitrary clients from
+	// spoofing their source IP and bypassing the per-IP rate limit.
+	TrustedProxies []net.IPNet
+
 	mu      sync.Mutex
 	buckets map[string][]time.Time
 }
@@ -83,18 +89,46 @@ func NewPublicShortlinkHandler(res PublicResolver, meta StreamMetaLoader, rlPerM
 	}
 }
 
-func publicClientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		if i := strings.Index(fwd, ","); i >= 0 {
-			return strings.TrimSpace(fwd[:i])
-		}
-		return strings.TrimSpace(fwd)
-	}
+// remoteHost returns the host portion of r.RemoteAddr (without the port).
+func remoteHost(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// publicClientIP picks the source IP for rate-limiting. When the connecting
+// peer (RemoteAddr) is in TrustedProxies we honour the left-most X-Forwarded-
+// For hop; otherwise we use the peer address directly to defeat XFF spoofing
+// from untrusted clients.
+func (h *PublicShortlinkHandler) publicClientIP(r *http.Request) string {
+	peer := remoteHost(r)
+	if h.peerIsTrusted(peer) {
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			if i := strings.Index(fwd, ","); i >= 0 {
+				return strings.TrimSpace(fwd[:i])
+			}
+			return strings.TrimSpace(fwd)
+		}
+	}
+	return peer
+}
+
+func (h *PublicShortlinkHandler) peerIsTrusted(peer string) bool {
+	if len(h.TrustedProxies) == 0 {
+		return false
+	}
+	ip := net.ParseIP(peer)
+	if ip == nil {
+		return false
+	}
+	for _, cidr := range h.TrustedProxies {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *PublicShortlinkHandler) allow(ip string) bool {
@@ -119,7 +153,7 @@ func (h *PublicShortlinkHandler) allow(ip string) bool {
 
 // Resolve serves GET /public/s/{code}.
 func (h *PublicShortlinkHandler) Resolve(w http.ResponseWriter, r *http.Request) {
-	ip := publicClientIP(r)
+	ip := h.publicClientIP(r)
 	if !h.allow(ip) {
 		w.Header().Set("Retry-After", "60")
 		w.Header().Set("Content-Type", "application/json")

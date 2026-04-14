@@ -129,7 +129,9 @@ func TestSSEState_InvalidToken_401(t *testing.T) {
 	}
 }
 
-func TestSSEState_StreamIDMismatch_401(t *testing.T) {
+func TestSSEState_StreamIDMismatch_404(t *testing.T) {
+	// API-001: cross-stream mismatch must return 404 (anti-enumeration) so a
+	// viewer holding a token for a different stream cannot probe existence.
 	streamID := uuid.New()
 	otherID := uuid.New()
 	h := &SSEStateHandler{
@@ -145,8 +147,8 @@ func TestSSEState_StreamIDMismatch_401(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d want 401", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d want 404", resp.StatusCode)
 	}
 }
 

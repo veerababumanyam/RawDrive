@@ -28,6 +28,20 @@ const tokenToVar: Record<SparklineStroke, string> = {
   danger: "var(--color-feedback-error)",
 };
 
+// Tailwind v4 picks the focus ring color from --color-focus-ring (design token).
+const focusClasses =
+  "outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-sm";
+
+function describeTrend(points: SparklinePoint[]): string {
+  if (points.length === 0) return "no data";
+  if (points.length === 1) return `${points.length} data point`;
+  const first = points[0].y;
+  const last = points[points.length - 1].y;
+  const direction =
+    last > first ? "trending up" : last < first ? "trending down" : "flat";
+  return `${points.length} data points, ${direction}`;
+}
+
 export function Sparkline({
   points,
   height = 48,
@@ -37,16 +51,20 @@ export function Sparkline({
   className,
 }: SparklineProps) {
   const stroke = tokenToVar[strokeToken];
+  const trendDesc = `${ariaLabel}: ${describeTrend(points)}`;
+  const svgClassName = [focusClasses, className ?? ""].join(" ").trim();
   if (points.length === 0) {
     return (
       <svg
         role="img"
         aria-label={ariaLabel}
+        tabIndex={0}
         viewBox={`0 0 ${width} ${height}`}
         width={width}
         height={height}
-        className={className}
+        className={svgClassName}
       >
+        <title>{trendDesc}</title>
         <line
           x1={0}
           y1={height / 2}
@@ -78,11 +96,13 @@ export function Sparkline({
     <svg
       role="img"
       aria-label={ariaLabel}
+      tabIndex={0}
       viewBox={`0 0 ${width} ${height}`}
       width={width}
       height={height}
-      className={className}
+      className={svgClassName}
     >
+      <title>{trendDesc}</title>
       <polyline
         points={coords}
         fill="none"

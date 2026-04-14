@@ -277,15 +277,16 @@ func TestPostChat_EmptyBody_400(t *testing.T) {
 	}
 }
 
-func TestPostChat_StreamIDMismatch_403(t *testing.T) {
+func TestPostChat_StreamIDMismatch_404(t *testing.T) {
 	// Viewer token bound to different stream than path param.
+	// API-001: cross-stream mismatches return 404 (anti-enumeration), not 403.
 	svc := &fakeChatService{}
 	h, vsvc, streamID, _ := newTestHandler(t, svc, true)
 	other := uuid.New()
 	tok := issueToken(t, vsvc, other)
 	rec := doPost(t, h.PostMessage, streamID, tok, "/chat", `{"body":"x"}`)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("want 403 on stream mismatch, got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("want 404 on stream mismatch, got %d", rec.Code)
 	}
 	if svc.postCalls != 0 {
 		t.Fatalf("service should not be called on mismatch")

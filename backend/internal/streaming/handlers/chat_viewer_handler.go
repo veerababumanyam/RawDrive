@@ -96,8 +96,12 @@ func (h *ChatViewerHandler) resolveStreamAndAuth(w http.ResponseWriter, r *http.
 	}
 
 	// 3. Stream binding: the viewer session JWT MUST be bound to the path stream.
+	// API-001: collapse cross-stream mismatches to 404 to match the anti-
+	// enumeration response of viewer_public + sse_state. The previous 403
+	// leaked the existence of the path stream to a viewer holding a token
+	// for a different stream.
 	if claims.StreamID != streamID.String() {
-		writeJSONError(w, http.StatusForbidden, "stream_mismatch")
+		writeJSONError(w, http.StatusNotFound, "not_found")
 		return uuid.Nil, uuid.Nil, uuid.Nil, false
 	}
 	viewerSessionID, err := uuid.Parse(claims.ViewerSessionID)
