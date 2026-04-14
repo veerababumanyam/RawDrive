@@ -29,6 +29,7 @@ export const ChevronRight = (p: IconProps) => <Icon {...p}><path d="M9 5l7 7-7 7
 
 // Actions
 export const XMark = (p: IconProps) => <Icon {...p}><path d="M6 18L18 6M6 6l12 12" /></Icon>;
+export const Plus = (p: IconProps) => <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>;
 export const Download = (p: IconProps) => <Icon {...p}><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></Icon>;
 export const Trash = (p: IconProps) => <Icon {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" /></Icon>;
 export const Expand = (p: IconProps) => <Icon {...p}><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></Icon>;
@@ -80,6 +81,13 @@ export const CalendarDays = (p: IconProps) => <Icon {...p}><path d="M8 7V3m8 4V3
 
 // Phone / WhatsApp
 export const Phone = (p: IconProps) => <Icon {...p}><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></Icon>;
+
+// Streaming console tabs
+export const Broadcast = (p: IconProps) => <Icon {...p}><path d="M4.5 8.5a7 7 0 010 7M7.5 6a10 10 0 010 12M16.5 6a10 10 0 010 12M19.5 8.5a7 7 0 010 7" /><circle cx="12" cy="12" r="2" /></Icon>;
+export const Replay = (p: IconProps) => <Icon {...p}><path d="M3 12a9 9 0 109-9v4m0-4L8 7m4-4l4 4" /><path d="M10 10l5 3-5 3v-6z" fill="currentColor" stroke="none" /></Icon>;
+export const Shield = (p: IconProps) => <Icon {...p}><path d="M12 3l8 3v6c0 4.97-3.58 8.5-8 9-4.42-.5-8-4.03-8-9V6l8-3z" /></Icon>;
+export const ClipboardList = (p: IconProps) => <Icon {...p}><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1zM8 6H6a2 2 0 00-2 2v11a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-2M9 12h6M9 16h6" /></Icon>;
+export const Wrench = (p: IconProps) => <Icon {...p}><path d="M14.7 6.3a4 4 0 015.5 5.5l-2.1-2.1-2.2.7-.7 2.2 2.1 2.1a4 4 0 01-5.5-5.5L3.6 17l3.4 3.4 9.2-9.1" /></Icon>;
 
 // People / Face — used by FaceFilter
 export const FaceCircle = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="9" /><circle cx="9" cy="10" r="0.5" fill="currentColor" /><circle cx="15" cy="10" r="0.5" fill="currentColor" /><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" /></Icon>;

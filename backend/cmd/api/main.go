@@ -32,9 +32,12 @@ import (
 	"github.com/rawdrive/backend/internal/scheduler"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
+	"github.com/rawdrive/backend/internal/featureflag"
 	"github.com/rawdrive/backend/internal/streaming/credit"
+	streaminghandlers "github.com/rawdrive/backend/internal/streaming/handlers"
 	streamingrate "github.com/rawdrive/backend/internal/streaming/rate"
 	streamingrecharge "github.com/rawdrive/backend/internal/streaming/recharge"
+	"github.com/rawdrive/backend/internal/streaming/shortlink"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
 	teamPkg "github.com/rawdrive/backend/internal/team"
 	"github.com/rawdrive/backend/internal/user"
@@ -94,6 +97,30 @@ func (p smtpNotificationEmailProvider) Send(ctx context.Context, req service.Del
 // log in again whenever the API container cycled.
 type platformSettingsJWTKeyStore struct {
 	repo *repository.PlatformSettingsRepo
+}
+
+// streamingCreditBalanceAdapter adapts credit.Service.GetBalance to the
+// streaminghandlers.BalanceProvider interface expected by CreditBalanceHandler.
+// Returning an empty BalanceView on any error keeps the pill resilient — the
+// handler then reports 0 minutes with the low_balance flag set.
+type streamingCreditBalanceAdapter struct {
+	svc *credit.Service
+}
+
+func (a *streamingCreditBalanceAdapter) BalanceForWorkspace(ctx context.Context, workspaceID uuid.UUID) (streaminghandlers.BalanceView, error) {
+	b, err := a.svc.GetBalance(ctx, workspaceID)
+	if err != nil {
+		return streaminghandlers.BalanceView{UpdatedAt: time.Now().UTC()}, err
+	}
+	updated := time.Now().UTC()
+	if b.LastEntryAt != nil {
+		updated = *b.LastEntryAt
+	}
+	return streaminghandlers.BalanceView{
+		Minutes:   b.BalanceMinutes,
+		Seconds:   b.BalanceMinutes * 60,
+		UpdatedAt: updated,
+	}, nil
 }
 
 // streamingrechargeSettingsAdapter adapts our PlatformSettingsRepo to the
@@ -1303,6 +1330,48 @@ func main() {
 		)
 		streamingrecharge.RegisterRoutes(r, streamingrecharge.NewHandler(rechargeSvc, dbPool))
 		log.Println("M32/F-014: Recharge + webhooks (PhonePe/Razorpay) + GST invoice + refund registered")
+
+		// ──────────────────────── M34 / F-014: streaming commercial v1 ──────────────
+		// Wire the M34 handlers package. Each handler performs its own feature-flag
+		// check, so the flag being off collapses all routes to 404. Handlers whose
+		// downstream services are not yet wired remain nil — their routes are simply
+		// not registered (safe; no partial mounts).
+		streamingFlagEnv := os.Getenv("FEATURE_STREAMING_COMMERCIAL_V1") == "true"
+		streamingFlag := featureflag.NewStreamingCommercialFlag(platformSettingsRepo, streamingFlagEnv)
+
+		// CreditBalance: adapt credit.Service.GetBalance → BalanceProvider.
+		creditBalanceAdapter := &streamingCreditBalanceAdapter{svc: creditSvc}
+		creditBalanceHandler := &streaminghandlers.CreditBalanceHandler{
+			Balance:     creditBalanceAdapter,
+			FeatureFlag: func(name string) bool {
+				ok, _ := streamingFlag.IsEnabled(context.Background(), uuid.Nil)
+				return ok
+			},
+		}
+
+		// Invite handler: real shortlink service + DB ownership check.
+		shortlinkSvc := shortlink.NewService(dbPool)
+		inviteBaseURL := os.Getenv("APP_PUBLIC_BASE_URL")
+		if inviteBaseURL == "" {
+			inviteBaseURL = "https://app.rawdrive.io"
+		}
+		inviteHandler := streaminghandlers.NewInviteHandler(shortlinkSvc, streamingFlag, dbPool, inviteBaseURL)
+
+		// Public shortlink resolver: resolver + hit recorder from the same service.
+		// StreamMetaLoader remains nil for now — handler returns the empty whitelisted
+		// meta object, which is the documented fallback.
+		publicShortlinkHandler := streaminghandlers.NewPublicShortlinkHandler(shortlinkSvc, nil, 60)
+
+		streamingDeps := streaminghandlers.Dependencies{
+			CreditBalance:   creditBalanceHandler,
+			Invite:          inviteHandler,
+			PublicShortlink: publicShortlinkHandler,
+			// Console, StreamCreate, IngestReveal, LiveConsole, Preflight
+			// remain nil until their services are fully wired (M34 R4+).
+		}
+		streaminghandlers.RegisterRoutes(api, streamingDeps)
+		streaminghandlers.RegisterPublicRoutes(r, streamingDeps)
+		log.Println("M34/F-014: streaming handlers registered (credit balance, invite, public shortlink)")
 
 		// F-006 Part A (audit 2026-04-10): replace the JWT service's
 		// ephemeral in-memory RSA signing key with one persisted through

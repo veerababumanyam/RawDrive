@@ -1,7 +1,7 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "brownfield",
-  "currentStage": "M38-validated",
+  "currentStage": "feature-planning",
   "version": "0.0.61",
   "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
   "flags": {
@@ -24,1643 +24,91 @@
     "generate-skills": "skipped",
     "create-claude-md": "completed"
   },
-  "lastUpdated": "2026-04-13T19:46:34.348Z",
-  "planning": {
-    "completedAt": "2026-04-07T13:39:14.048Z",
-    "phases": 5,
-    "artifacts": 63,
-    "totalSize": "1.2MB",
-    "milestones": 16,
-    "epics": 46,
-    "stories": 138,
-    "mode": "feature",
-    "requirements": {
-      "FRs": 705,
-      "NFRs": 259,
-      "TRs": 66,
-      "IRs": 110,
-      "Day2NFRs": 77,
-      "total": 1217
-    },
-    "readinessVerdict": "BUILD_AUTHORIZED",
-    "readinessScore": 4.5,
-    "firstMilestone": "M1",
-    "featureName": "gallery-workspace-unification",
-    "featureMilestone": "M36",
-    "featureSource": "architectural-audit-gallery-workspace-2026-04-13",
-    "lastFeatureRun": "2026-04-13T07:15:09.931Z"
-  },
-  "currentMilestone": "M33",
+  "lastUpdated": "2026-04-14T06:39:51.526Z",
   "pipeline": {
-    "currentStage": "S7-validate-complete",
-    "currentMilestone": "M31",
+    "currentStage": "pre-plan",
     "infra_verified": true,
     "infra_started": true,
     "infra_healthy": true,
+    "teamActive": true,
     "stages": {
       "S1-S4": {
         "filesWritten": [
-          "_cobolt-output/runs/2026-04-08/run-008/planning/agent-grounding-and-anti-hallucination.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/api-contracts.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/architecture.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/architecture-decisions.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/cross-milestone-analysis.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/data-model-spec.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/delivery-plan.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/dependency-register.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/dependency-tracker.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/deterministic-quality-gates.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/domain-knowledge-base.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/engineering-quality-standards.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/epics.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/feature-architecture-delta.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/feature-epics.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/feature-prd.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/implicit-requirements.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/issue-and-blocker-tracker.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/master-plan.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/milestone-tracker.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/milestones.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase1-product-intent.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/phase-1-gap-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase2-technical-guardrails.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/phase-2-gap-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase3-system-design.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/phase-3-gap-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase4-delivery-breakdown.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/phase-4-gap-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase5-build-authorization.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/phase-5-gap-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/planning-progress.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/prd.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/prd-day2-addendum.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/prd-validation-report.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/prd-validation-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/project-knowledge-base.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/agent-grounding-and-anti-hallucination.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/api-contracts.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/architecture.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/architecture-decisions.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/capability-edge-proof-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/capability-graph.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/cross-milestone-blocked-tasks.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/data-model-spec.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/delivery-plan.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-register.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-tracker.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/deterministic-quality-gates.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/domain-knowledge-base.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/engineering-quality-standards.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/enriched-requirements.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/epics.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-architecture-delta.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-coverage-matrix.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-epics.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-gap-report.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-prd.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-readiness-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-registry.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-service-blueprints.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/frontend-completeness-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/implicit-requirements.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/issue-and-blocker-tracker.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/master-plan.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/milestone-tracker.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/milestones.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase1-product-intent.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-1-gap-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase2-technical-guardrails.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-2-gap-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase3-system-design.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-3-gap-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase4-delivery-breakdown.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-4-gap-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase5-build-authorization.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-5-gap-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/planning-progress.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/prd.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/prd-day2-addendum.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/prd-validation-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/project-knowledge-base.md",
           "README.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/project-skills-manifest.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/readiness-report.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/readiness-report.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/release-readiness-checklist.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/rtm.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/secure-coding-standard.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/security-requirements.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/source-document-consolidation.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/sprint-status.yaml",
-          "_cobolt-output/latest/planning/stories/0-1-seo-geo-landing-page.md",
-          "_cobolt-output/latest/planning/stories/0-2-pricing-page.md",
-          "_cobolt-output/latest/planning/stories/0-3-features-page.md",
-          "_cobolt-output/latest/planning/stories/0-4-legal-pages.md",
-          "_cobolt-output/latest/planning/stories/1-1-email-otp-registration.md",
-          "_cobolt-output/latest/planning/stories/1-2-google-oauth-sign-in.md",
-          "_cobolt-output/latest/planning/stories/1-3-magic-link-authentication.md",
-          "_cobolt-output/latest/planning/stories/1-4-session-management-jwt.md",
-          "_cobolt-output/latest/planning/stories/2-1-mandatory-state-selection.md",
-          "_cobolt-output/latest/planning/stories/2-2-onboarding-funnel.md",
-          "_cobolt-output/latest/planning/stories/2-3-workspace-creation.md",
-          "_cobolt-output/latest/planning/stories/3-1-role-hierarchy.md",
-          "_cobolt-output/latest/planning/stories/3-2-permission-policy-enforcement.md",
-          "_cobolt-output/latest/planning/stories/3-3-state-first-tenancy-middleware.md",
-          "_cobolt-output/latest/planning/stories/4-1-tus-resumable-chunked-upload.md",
-          "_cobolt-output/latest/planning/stories/4-2-drag-drop-upload-ui.md",
-          "_cobolt-output/latest/planning/stories/4-3-raw-file-handling.md",
-          "_cobolt-output/latest/planning/stories/5-1-cloudflare-r2-storage.md",
-          "_cobolt-output/latest/planning/stories/5-2-byos-configuration-ui.md",
-          "_cobolt-output/latest/planning/stories/6-1-gallery-crud.md",
-          "_cobolt-output/latest/planning/stories/6-2-auto-thumbnails-cover.md",
-          "_cobolt-output/latest/planning/stories/6-3-gallery-organization.md",
-          "_cobolt-output/latest/planning/stories/7-1-pwa-gallery-viewer.md",
-          "_cobolt-output/latest/planning/stories/7-2-pwa-offline-support.md",
-          "_cobolt-output/latest/planning/stories/7-3-client-proofing.md",
-          "_cobolt-output/latest/planning/stories/8-1-face-detection-pipeline.md",
-          "_cobolt-output/latest/planning/stories/8-2-face-naming-clusters.md",
-          "_cobolt-output/latest/planning/stories/8-3-faceid-selfie-entry.md",
-          "_cobolt-output/latest/planning/stories/9-1-gemini-byok-setup.md",
-          "_cobolt-output/latest/planning/stories/9-2-auto-tags-captions.md",
-          "_cobolt-output/latest/planning/stories/9-3-ai-spend-cap.md",
-          "_cobolt-output/latest/planning/stories/10-1-semantic-search-pgvector.md",
-          "_cobolt-output/latest/planning/stories/10-2-duplicate-detection.md",
-          "_cobolt-output/latest/planning/stories/10-3-smart-culling.md",
-          "_cobolt-output/latest/planning/stories/11-1-lead-capture-form.md",
-          "_cobolt-output/latest/planning/stories/11-2-client-database.md",
-          "_cobolt-output/latest/planning/stories/11-3-crm-pipeline.md",
-          "_cobolt-output/latest/planning/stories/12-1-contract-templates.md",
-          "_cobolt-output/latest/planning/stories/12-2-e-signature-flow.md",
-          "_cobolt-output/latest/planning/stories/13-1-gst-invoice-generation.md",
-          "_cobolt-output/latest/planning/stories/13-2-gst-calculation-engine.md",
-          "_cobolt-output/latest/planning/stories/13-3-package-pricing.md",
-          "_cobolt-output/latest/planning/stories/14-1-calendar-booking.md",
-          "_cobolt-output/latest/planning/stories/14-2-multi-channel-notifications.md",
-          "_cobolt-output/latest/planning/stories/14-3-notification-preferences.md",
-          "_cobolt-output/latest/planning/stories/15-1-freelancer-profile.md",
-          "_cobolt-output/latest/planning/stories/15-2-freelancer-search.md",
-          "_cobolt-output/latest/planning/stories/15-3-freelancer-booking.md",
-          "_cobolt-output/latest/planning/stories/16-1-gear-listing.md",
-          "_cobolt-output/latest/planning/stories/16-2-gear-booking.md",
-          "_cobolt-output/latest/planning/stories/16-3-gear-availability-calendar.md",
-          "_cobolt-output/latest/planning/stories/17-1-workspace-messaging.md",
-          "_cobolt-output/latest/planning/stories/17-2-content-moderation.md",
-          "_cobolt-output/latest/planning/stories/17-3-automated-flagging.md",
-          "_cobolt-output/latest/planning/stories/18-1-dealer-registration.md",
-          "_cobolt-output/latest/planning/stories/18-2-dealer-dashboard.md",
-          "_cobolt-output/latest/planning/stories/18-3-dealer-state-isolation.md",
-          "_cobolt-output/latest/planning/stories/19-1-margin-ratios.md",
-          "_cobolt-output/latest/planning/stories/19-2-coupon-engine.md",
-          "_cobolt-output/latest/planning/stories/19-3-monthly-payout.md",
-          "_cobolt-output/latest/planning/stories/20-1-user-management.md",
-          "_cobolt-output/latest/planning/stories/20-2-content-moderation-queue.md",
-          "_cobolt-output/latest/planning/stories/20-3-workspace-oversight.md",
-          "_cobolt-output/latest/planning/stories/21-1-revenue-dashboard.md",
-          "_cobolt-output/latest/planning/stories/21-2-bi-dashboards.md",
-          "_cobolt-output/latest/planning/stories/21-3-report-export.md",
-          "_cobolt-output/latest/planning/stories/22-1-system-health-dashboard.md",
-          "_cobolt-output/latest/planning/stories/22-2-audit-log-viewer.md",
-          "_cobolt-output/latest/planning/stories/23-1-live-stream-creation.md",
-          "_cobolt-output/latest/planning/stories/23-2-stream-viewer-chat.md",
-          "_cobolt-output/latest/planning/stories/23-3-stream-recording-vod.md",
-          "_cobolt-output/latest/planning/stories/24-1-tauri-desktop-app.md",
-          "_cobolt-output/latest/planning/stories/24-2-bulk-folder-upload.md",
-          "_cobolt-output/latest/planning/stories/24-3-tethered-shooting.md",
-          "_cobolt-output/latest/planning/stories/24-4-offline-queue.md",
-          "_cobolt-output/latest/planning/stories/25-1-api-key-management.md",
-          "_cobolt-output/latest/planning/stories/25-2-rest-endpoints.md",
-          "_cobolt-output/latest/planning/stories/25-3-openapi-spec.md",
-          "_cobolt-output/latest/planning/stories/26-1-webhook-registration.md",
-          "_cobolt-output/latest/planning/stories/26-2-webhook-delivery.md",
-          "_cobolt-output/latest/planning/stories/26-3-cli-tool.md",
-          "_cobolt-output/latest/planning/stories/27-1-data-encryption.md",
-          "_cobolt-output/latest/planning/stories/27-2-consent-management.md",
-          "_cobolt-output/latest/planning/stories/27-3-dsr-workflow.md",
-          "_cobolt-output/latest/planning/stories/27-4-dpdpa-notice.md",
-          "_cobolt-output/latest/planning/stories/28-1-iac-deployment.md",
-          "_cobolt-output/latest/planning/stories/28-2-incident-response.md",
-          "_cobolt-output/latest/planning/stories/28-3-disaster-recovery.md",
-          "_cobolt-output/latest/planning/stories/28-4-vulnerability-scanning.md",
-          "_cobolt-output/latest/planning/stories/28-5-penetration-testing.md",
-          "_cobolt-output/latest/planning/stories/32-1-exif-extraction.md",
-          "_cobolt-output/latest/planning/stories/32-2-thumbnail-derivative-generation.md",
-          "_cobolt-output/latest/planning/stories/32-3-progressive-loading-lqip.md",
-          "_cobolt-output/latest/planning/stories/32-4-processing-status-tracking.md",
-          "_cobolt-output/latest/planning/stories/33-1-storage-calculations-quota.md",
-          "_cobolt-output/latest/planning/stories/33-2-asset-lifecycle-states.md",
-          "_cobolt-output/latest/planning/stories/33-3-virtual-collections.md",
-          "_cobolt-output/latest/planning/stories/33-4-storage-analytics.md",
-          "_cobolt-output/latest/planning/stories/34-1-albums-sub-galleries.md",
-          "_cobolt-output/latest/planning/stories/34-2-gallery-states-settings.md",
-          "_cobolt-output/latest/planning/stories/34-3-filters-sorting-bulk.md",
-          "_cobolt-output/latest/planning/stories/34-4-timeline-asset-detail.md",
-          "_cobolt-output/latest/planning/stories/35-1-split-screen-editor.md",
-          "_cobolt-output/latest/planning/stories/35-2-cover-photo-management.md",
-          "_cobolt-output/latest/planning/stories/35-3-theme-engine-typography.md",
-          "_cobolt-output/latest/planning/stories/35-4-grid-controls-responsive.md",
-          "_cobolt-output/latest/planning/stories/35-5-templates.md",
-          "_cobolt-output/latest/planning/stories/36-1-collaborative-editing.md",
-          "_cobolt-output/latest/planning/stories/36-2-ai-design-recommendations.md",
-          "_cobolt-output/latest/planning/stories/36-3-undo-redo-section-reset.md",
-          "_cobolt-output/latest/planning/stories/37-1-masonry-virtual-scrolling.md",
-          "_cobolt-output/latest/planning/stories/37-2-full-screen-lightbox.md",
-          "_cobolt-output/latest/planning/stories/37-3-photo-card-states.md",
-          "_cobolt-output/latest/planning/stories/37-4-video-compare-map.md",
-          "_cobolt-output/latest/planning/stories/38-1-password-pin-entry.md",
-          "_cobolt-output/latest/planning/stories/38-2-magic-links-sharing.md",
-          "_cobolt-output/latest/planning/stories/38-3-faceid-gallery-entry.md",
-          "_cobolt-output/latest/planning/stories/38-4-view-as-client.md",
-          "_cobolt-output/latest/planning/stories/39-1-selection-lists-ratings.md",
-          "_cobolt-output/latest/planning/stories/39-2-comments-region-pins.md",
-          "_cobolt-output/latest/planning/stories/39-3-proofing-dashboard.md",
-          "_cobolt-output/latest/planning/stories/39-4-album-approval-consent.md",
-          "_cobolt-output/latest/planning/stories/40-1-download-center.md",
-          "_cobolt-output/latest/planning/stories/40-2-watermark-permissions.md",
-          "_cobolt-output/latest/planning/stories/40-3-delivery-audit.md",
-          "_cobolt-output/latest/planning/stories/41-1-product-sales.md",
-          "_cobolt-output/latest/planning/stories/41-2-cart-coupons.md",
-          "_cobolt-output/latest/planning/stories/42-1-gallery-asset-analytics.md",
-          "_cobolt-output/latest/planning/stories/42-2-share-download-analytics.md",
-          "_cobolt-output/latest/planning/stories/42-3-workspace-dashboard.md",
-          "_cobolt-output/latest/planning/stories/43-1-gallery-rest-api.md",
-          "_cobolt-output/latest/planning/stories/43-2-webhooks.md",
-          "_cobolt-output/latest/planning/stories/43-3-rate-limiting-activity.md",
-          "_cobolt-output/latest/planning/stories/44-1-installable-pwa.md",
-          "_cobolt-output/latest/planning/stories/44-2-caching-offline.md",
-          "_cobolt-output/latest/planning/stories/44-3-performance-optimization.md",
-          "_cobolt-output/latest/planning/stories/45-1-consent-biometric-privacy.md",
-          "_cobolt-output/latest/planning/stories/45-2-audit-dsar.md",
-          "_cobolt-output/latest/planning/stories/45-3-moderation.md",
-          "_cobolt-output/latest/planning/stories/46-1-advanced-search.md",
-          "_cobolt-output/latest/planning/stories/46-2-burst-culling.md",
-          "_cobolt-output/latest/planning/stories/46-3-duplicates-ai-tags.md",
-          "_cobolt-output/latest/planning/stories/47-1-browser-worker-scaffold.md",
-          "_cobolt-output/latest/planning/stories/47-2-format-parsers.md",
-          "_cobolt-output/latest/planning/stories/47-3-manifest-builder.md",
-          "_cobolt-output/latest/planning/stories/47-4-use-upload-integration.md",
-          "_cobolt-output/latest/planning/stories/47-5-backend-manifest-validation.md",
-          "_cobolt-output/latest/planning/stories/47-6-e2e-tests.md",
-          "_cobolt-output/latest/planning/stories/48-1-desktop-https-handshake.md",
-          "_cobolt-output/latest/planning/stories/48-2-deep-tiff-heic-signer.md",
-          "_cobolt-output/latest/planning/stories/48-3-libraw-raw-scanner.md",
-          "_cobolt-output/latest/planning/stories/48-4-browser-loopback-client.md",
-          "_cobolt-output/latest/planning/stories/48-5-tier-d-signature-verify.md",
-          "_cobolt-output/latest/planning/stories/49-1-workspace-policy-db.md",
-          "_cobolt-output/latest/planning/stories/49-2-admin-policy-ui.md",
-          "_cobolt-output/latest/planning/stories/49-3-tier-d-policy-enforce.md",
-          "_cobolt-output/latest/planning/stories/50-1-moderation-dashboard.md",
-          "_cobolt-output/latest/planning/stories/50-2-fp-override-token.md",
-          "_cobolt-output/latest/planning/stories/50-3-policy-analytics.md",
-          "_cobolt-output/latest/planning/stories/50-4-observability-alerts.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/story-tracker.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/system-architecture.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/test-strategy.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/traceability-matrix.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/trd.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/trd-gap-findings.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/ux-design-specification.md",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/ux-tracker.json",
-          "_cobolt-output/runs/2026-04-08/run-008/planning/wireframes-and-user-flows.md"
+          "_cobolt-output/runs/2026-04-14/run-001/planning/project-skills-manifest.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/release-readiness-checklist.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/rtm.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/secure-coding-standard.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/security-requirements.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/source-conflicts.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/source-document-consolidation.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/source-gap-summary.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/source-index.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/source-retrieval-map.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/sprint-status.yaml",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/story-tracker.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/surface-impact-matrix.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/system-architecture.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/test-strategy.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/traceability-matrix.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/trd.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/trd-gap-findings.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/ux-design-specification.md",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/ux-tracker.json",
+          "_cobolt-output/runs/2026-04-14/run-001/planning/wireframes-and-user-flows.md"
         ]
       }
     }
   },
-  "gates": {
-    "preflight": "passed",
-    "planning-regroup": {
-      "passed": true,
-      "gate_name": "planning-regroup",
-      "status": "skipped",
-      "stale": false,
-      "skipped": true,
-      "artifactPath": "_cobolt-output/latest/planning/milestone-regroup-plan.json",
-      "appliedCount": 0,
-      "pendingCount": 0,
-      "invalidCount": 0,
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "planning-artifacts": {
-      "passed": true,
-      "gate_name": "planning-artifacts",
-      "registered": 57,
-      "requiredPresent": 7,
-      "requiredMissing": 0,
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    }
-  },
   "checkpoints": {
     "setup": "passed"
-  },
-  "planningArtifacts": {
-    "agentGrounding": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/agent-grounding-and-anti-hallucination.md",
-      "size": 5509,
-      "producedBy": "cobolt-create-test-strategy",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "apiContracts": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/api-contracts.md",
-      "size": 74817,
-      "producedBy": "cobolt-create-api-contracts",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "architecture": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/architecture.md",
-      "size": 12085,
-      "producedBy": "cobolt-create-architecture",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "architectureDecisions": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/architecture-decisions.md",
-      "size": 26820,
-      "producedBy": "cobolt-create-architecture-decisions",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "crossMilestoneAnalysis": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/cross-milestone-analysis.md",
-      "size": 23310,
-      "producedBy": "cobolt-create-cross-milestone-analysis",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "dataModelSpec": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/data-model-spec.md",
-      "size": 62548,
-      "producedBy": "cobolt-create-data-model",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "deliveryPlan": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/delivery-plan.md",
-      "size": 16959,
-      "producedBy": "cobolt-create-delivery-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "dependencyRegister": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/dependency-register.md",
-      "size": 19326,
-      "producedBy": "cobolt-create-dependency-register",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "dependencyTracker": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/dependency-tracker.json",
-      "size": 10336,
-      "producedBy": "cobolt-create-dependency-register",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "deterministicQualityGates": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/deterministic-quality-gates.json",
-      "size": 7254,
-      "producedBy": "cobolt-create-test-strategy",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "domainKnowledgeBase": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/domain-knowledge-base.md",
-      "size": 22941,
-      "producedBy": "cobolt-create-domain-knowledge",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "engineeringQualityStandards": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/engineering-quality-standards.md",
-      "size": 20241,
-      "producedBy": "cobolt-create-engineering-standards",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "epics": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/epics.md",
-      "size": 126880,
-      "producedBy": "cobolt-create-epics-and-stories",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "featureArchitectureDelta": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/feature-architecture-delta.md",
-      "size": 26221,
-      "producedBy": "cobolt-create-architecture",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "featureEpics": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/feature-epics.md",
-      "size": 14582,
-      "producedBy": "cobolt-create-epics-and-stories",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "featurePrd": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/feature-prd.md",
-      "size": 30285,
-      "producedBy": "cobolt-create-prd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "implicitRequirements": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/implicit-requirements.md",
-      "size": 94447,
-      "producedBy": "cobolt-extract-implicit-reqs",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "issueTracker": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/issue-and-blocker-tracker.json",
-      "size": 13558,
-      "producedBy": "cobolt-create-milestone-trackers",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "masterPlan": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/master-plan.md",
-      "size": 19450,
-      "producedBy": "cobolt-master-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "milestoneTracker": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/milestone-tracker.json",
-      "size": 18768,
-      "producedBy": "cobolt-create-milestone-trackers",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "milestones": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/milestones.md",
-      "size": 39816,
-      "producedBy": "cobolt-decompose-milestones",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase1Checkpoint": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase1-product-intent.json",
-      "size": 353,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase1GapReport": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/phase-1-gap-report.json",
-      "size": 448,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase2Checkpoint": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase2-technical-guardrails.json",
-      "size": 373,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase2GapReport": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/phase-2-gap-report.json",
-      "size": 450,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase3Checkpoint": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase3-system-design.json",
-      "size": 430,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase3GapReport": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/phase-3-gap-report.json",
-      "size": 479,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase4Checkpoint": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase4-delivery-breakdown.json",
-      "size": 433,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase4GapReport": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/phase-4-gap-report.json",
-      "size": 479,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase5Checkpoint": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/phase5-build-authorization.json",
-      "size": 307,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "phase5GapReport": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/phase-5-gap-report.json",
-      "size": 427,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "planningCheckpoint": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/checkpoints/planning-progress.json",
-      "size": 300,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "prd": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/prd.md",
-      "size": 89743,
-      "producedBy": "cobolt-create-prd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "prdDay2Addendum": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/prd-day2-addendum.md",
-      "size": 36080,
-      "producedBy": "cobolt-enhance-prd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "prdValidation": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/prd-validation-report.md",
-      "size": 18054,
-      "producedBy": "cobolt-validate-prd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "prdValidationReportJson": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/prd-validation-report.json",
-      "size": 6475,
-      "producedBy": "cobolt-validate-prd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "projectKnowledgeBase": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/project-knowledge-base.md",
-      "size": 5141,
-      "producedBy": "cobolt-create-project-knowledge",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "projectReadme": {
-      "exists": true,
-      "path": "README.md",
-      "size": 7389,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "projectSkillsManifest": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/project-skills-manifest.md",
-      "size": 20471,
-      "producedBy": "cobolt-create-skills-manifest",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "readinessReport": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/readiness-report.md",
-      "size": 11193,
-      "producedBy": "cobolt-check-implementation-readiness",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "readinessReportJson": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/readiness-report.json",
-      "size": 5543,
-      "producedBy": "cobolt-check-implementation-readiness",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "releaseReadinessChecklist": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/release-readiness-checklist.md",
-      "size": 16257,
-      "producedBy": "cobolt-create-release-readiness",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "rtm": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/rtm.json",
-      "size": 89692,
-      "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "secureCodingStandard": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/secure-coding-standard.md",
-      "size": 18397,
-      "producedBy": "cobolt-create-secure-coding-standard",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "securityRequirements": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/security-requirements.md",
-      "size": 28645,
-      "producedBy": "cobolt-create-security-reqs",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "sourceDocumentConsolidation": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/source-document-consolidation.md",
-      "size": 16539,
-      "producedBy": "cobolt-create-prd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "sprintStatus": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/sprint-status.yaml",
-      "size": 26132,
-      "producedBy": "cobolt-sprint-planning",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "storyFiles": [
-      {
-        "key": "E0-S1",
-        "path": "_cobolt-output/latest/planning/stories/0-1-seo-geo-landing-page.md",
-        "size": 7238,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E0-S2",
-        "path": "_cobolt-output/latest/planning/stories/0-2-pricing-page.md",
-        "size": 6545,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E0-S3",
-        "path": "_cobolt-output/latest/planning/stories/0-3-features-page.md",
-        "size": 10078,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E0-S4",
-        "path": "_cobolt-output/latest/planning/stories/0-4-legal-pages.md",
-        "size": 10650,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E1-S1",
-        "path": "_cobolt-output/latest/planning/stories/1-1-email-otp-registration.md",
-        "size": 1749,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E1-S2",
-        "path": "_cobolt-output/latest/planning/stories/1-2-google-oauth-sign-in.md",
-        "size": 1623,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E1-S3",
-        "path": "_cobolt-output/latest/planning/stories/1-3-magic-link-authentication.md",
-        "size": 1891,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E1-S4",
-        "path": "_cobolt-output/latest/planning/stories/1-4-session-management-jwt.md",
-        "size": 1689,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E2-S1",
-        "path": "_cobolt-output/latest/planning/stories/2-1-mandatory-state-selection.md",
-        "size": 1762,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E2-S2",
-        "path": "_cobolt-output/latest/planning/stories/2-2-onboarding-funnel.md",
-        "size": 1860,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E2-S3",
-        "path": "_cobolt-output/latest/planning/stories/2-3-workspace-creation.md",
-        "size": 1778,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E3-S1",
-        "path": "_cobolt-output/latest/planning/stories/3-1-role-hierarchy.md",
-        "size": 1799,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E3-S2",
-        "path": "_cobolt-output/latest/planning/stories/3-2-permission-policy-enforcement.md",
-        "size": 1967,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E3-S3",
-        "path": "_cobolt-output/latest/planning/stories/3-3-state-first-tenancy-middleware.md",
-        "size": 2079,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E4-S1",
-        "path": "_cobolt-output/latest/planning/stories/4-1-tus-resumable-chunked-upload.md",
-        "size": 1568,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E4-S2",
-        "path": "_cobolt-output/latest/planning/stories/4-2-drag-drop-upload-ui.md",
-        "size": 1747,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E4-S3",
-        "path": "_cobolt-output/latest/planning/stories/4-3-raw-file-handling.md",
-        "size": 1439,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E5-S1",
-        "path": "_cobolt-output/latest/planning/stories/5-1-cloudflare-r2-storage.md",
-        "size": 1368,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E5-S2",
-        "path": "_cobolt-output/latest/planning/stories/5-2-byos-configuration-ui.md",
-        "size": 1608,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E6-S1",
-        "path": "_cobolt-output/latest/planning/stories/6-1-gallery-crud.md",
-        "size": 1531,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E6-S2",
-        "path": "_cobolt-output/latest/planning/stories/6-2-auto-thumbnails-cover.md",
-        "size": 1384,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E6-S3",
-        "path": "_cobolt-output/latest/planning/stories/6-3-gallery-organization.md",
-        "size": 1276,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E7-S1",
-        "path": "_cobolt-output/latest/planning/stories/7-1-pwa-gallery-viewer.md",
-        "size": 1489,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E7-S2",
-        "path": "_cobolt-output/latest/planning/stories/7-2-pwa-offline-support.md",
-        "size": 1484,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E7-S3",
-        "path": "_cobolt-output/latest/planning/stories/7-3-client-proofing.md",
-        "size": 1572,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E8-S1",
-        "path": "_cobolt-output/latest/planning/stories/8-1-face-detection-pipeline.md",
-        "size": 1454,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E8-S2",
-        "path": "_cobolt-output/latest/planning/stories/8-2-face-naming-clusters.md",
-        "size": 1455,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E8-S3",
-        "path": "_cobolt-output/latest/planning/stories/8-3-faceid-selfie-entry.md",
-        "size": 1393,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E9-S1",
-        "path": "_cobolt-output/latest/planning/stories/9-1-gemini-byok-setup.md",
-        "size": 1437,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E9-S2",
-        "path": "_cobolt-output/latest/planning/stories/9-2-auto-tags-captions.md",
-        "size": 1554,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E9-S3",
-        "path": "_cobolt-output/latest/planning/stories/9-3-ai-spend-cap.md",
-        "size": 1268,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E10-S1",
-        "path": "_cobolt-output/latest/planning/stories/10-1-semantic-search-pgvector.md",
-        "size": 1497,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E10-S2",
-        "path": "_cobolt-output/latest/planning/stories/10-2-duplicate-detection.md",
-        "size": 1389,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E10-S3",
-        "path": "_cobolt-output/latest/planning/stories/10-3-smart-culling.md",
-        "size": 1428,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E11-S1",
-        "path": "_cobolt-output/latest/planning/stories/11-1-lead-capture-form.md",
-        "size": 1529,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E11-S2",
-        "path": "_cobolt-output/latest/planning/stories/11-2-client-database.md",
-        "size": 1434,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E11-S3",
-        "path": "_cobolt-output/latest/planning/stories/11-3-crm-pipeline.md",
-        "size": 1473,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E12-S1",
-        "path": "_cobolt-output/latest/planning/stories/12-1-contract-templates.md",
-        "size": 1222,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E12-S2",
-        "path": "_cobolt-output/latest/planning/stories/12-2-e-signature-flow.md",
-        "size": 1476,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E13-S1",
-        "path": "_cobolt-output/latest/planning/stories/13-1-gst-invoice-generation.md",
-        "size": 1523,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E13-S2",
-        "path": "_cobolt-output/latest/planning/stories/13-2-gst-calculation-engine.md",
-        "size": 1482,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E13-S3",
-        "path": "_cobolt-output/latest/planning/stories/13-3-package-pricing.md",
-        "size": 1377,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E14-S1",
-        "path": "_cobolt-output/latest/planning/stories/14-1-calendar-booking.md",
-        "size": 1531,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E14-S2",
-        "path": "_cobolt-output/latest/planning/stories/14-2-multi-channel-notifications.md",
-        "size": 1545,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E14-S3",
-        "path": "_cobolt-output/latest/planning/stories/14-3-notification-preferences.md",
-        "size": 1373,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E15-S1",
-        "path": "_cobolt-output/latest/planning/stories/15-1-freelancer-profile.md",
-        "size": 1466,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E15-S2",
-        "path": "_cobolt-output/latest/planning/stories/15-2-freelancer-search.md",
-        "size": 1373,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E15-S3",
-        "path": "_cobolt-output/latest/planning/stories/15-3-freelancer-booking.md",
-        "size": 1358,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E16-S1",
-        "path": "_cobolt-output/latest/planning/stories/16-1-gear-listing.md",
-        "size": 1423,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E16-S2",
-        "path": "_cobolt-output/latest/planning/stories/16-2-gear-booking.md",
-        "size": 1417,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E16-S3",
-        "path": "_cobolt-output/latest/planning/stories/16-3-gear-availability-calendar.md",
-        "size": 1257,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E17-S1",
-        "path": "_cobolt-output/latest/planning/stories/17-1-workspace-messaging.md",
-        "size": 1376,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E17-S2",
-        "path": "_cobolt-output/latest/planning/stories/17-2-content-moderation.md",
-        "size": 1457,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E17-S3",
-        "path": "_cobolt-output/latest/planning/stories/17-3-automated-flagging.md",
-        "size": 1316,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E18-S1",
-        "path": "_cobolt-output/latest/planning/stories/18-1-dealer-registration.md",
-        "size": 1462,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E18-S2",
-        "path": "_cobolt-output/latest/planning/stories/18-2-dealer-dashboard.md",
-        "size": 1381,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E18-S3",
-        "path": "_cobolt-output/latest/planning/stories/18-3-dealer-state-isolation.md",
-        "size": 1476,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E19-S1",
-        "path": "_cobolt-output/latest/planning/stories/19-1-margin-ratios.md",
-        "size": 1356,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E19-S2",
-        "path": "_cobolt-output/latest/planning/stories/19-2-coupon-engine.md",
-        "size": 1408,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E19-S3",
-        "path": "_cobolt-output/latest/planning/stories/19-3-monthly-payout.md",
-        "size": 1404,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E20-S1",
-        "path": "_cobolt-output/latest/planning/stories/20-1-user-management.md",
-        "size": 1539,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E20-S2",
-        "path": "_cobolt-output/latest/planning/stories/20-2-content-moderation-queue.md",
-        "size": 1465,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E20-S3",
-        "path": "_cobolt-output/latest/planning/stories/20-3-workspace-oversight.md",
-        "size": 1415,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E21-S1",
-        "path": "_cobolt-output/latest/planning/stories/21-1-revenue-dashboard.md",
-        "size": 1420,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E21-S2",
-        "path": "_cobolt-output/latest/planning/stories/21-2-bi-dashboards.md",
-        "size": 1583,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E21-S3",
-        "path": "_cobolt-output/latest/planning/stories/21-3-report-export.md",
-        "size": 1471,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E22-S1",
-        "path": "_cobolt-output/latest/planning/stories/22-1-system-health-dashboard.md",
-        "size": 1428,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E22-S2",
-        "path": "_cobolt-output/latest/planning/stories/22-2-audit-log-viewer.md",
-        "size": 1443,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E23-S1",
-        "path": "_cobolt-output/latest/planning/stories/23-1-live-stream-creation.md",
-        "size": 1467,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E23-S2",
-        "path": "_cobolt-output/latest/planning/stories/23-2-stream-viewer-chat.md",
-        "size": 1373,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E23-S3",
-        "path": "_cobolt-output/latest/planning/stories/23-3-stream-recording-vod.md",
-        "size": 1499,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E24-S1",
-        "path": "_cobolt-output/latest/planning/stories/24-1-tauri-desktop-app.md",
-        "size": 1627,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E24-S2",
-        "path": "_cobolt-output/latest/planning/stories/24-2-bulk-folder-upload.md",
-        "size": 1399,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E24-S3",
-        "path": "_cobolt-output/latest/planning/stories/24-3-tethered-shooting.md",
-        "size": 1568,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E24-S4",
-        "path": "_cobolt-output/latest/planning/stories/24-4-offline-queue.md",
-        "size": 1454,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E25-S1",
-        "path": "_cobolt-output/latest/planning/stories/25-1-api-key-management.md",
-        "size": 1378,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E25-S2",
-        "path": "_cobolt-output/latest/planning/stories/25-2-rest-endpoints.md",
-        "size": 1568,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E25-S3",
-        "path": "_cobolt-output/latest/planning/stories/25-3-openapi-spec.md",
-        "size": 1557,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E26-S1",
-        "path": "_cobolt-output/latest/planning/stories/26-1-webhook-registration.md",
-        "size": 1420,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E26-S2",
-        "path": "_cobolt-output/latest/planning/stories/26-2-webhook-delivery.md",
-        "size": 1423,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E26-S3",
-        "path": "_cobolt-output/latest/planning/stories/26-3-cli-tool.md",
-        "size": 1576,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E27-S1",
-        "path": "_cobolt-output/latest/planning/stories/27-1-data-encryption.md",
-        "size": 1539,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E27-S2",
-        "path": "_cobolt-output/latest/planning/stories/27-2-consent-management.md",
-        "size": 1524,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E27-S3",
-        "path": "_cobolt-output/latest/planning/stories/27-3-dsr-workflow.md",
-        "size": 1575,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E27-S4",
-        "path": "_cobolt-output/latest/planning/stories/27-4-dpdpa-notice.md",
-        "size": 1549,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E28-S1",
-        "path": "_cobolt-output/latest/planning/stories/28-1-iac-deployment.md",
-        "size": 1580,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E28-S2",
-        "path": "_cobolt-output/latest/planning/stories/28-2-incident-response.md",
-        "size": 1512,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E28-S3",
-        "path": "_cobolt-output/latest/planning/stories/28-3-disaster-recovery.md",
-        "size": 1534,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E28-S4",
-        "path": "_cobolt-output/latest/planning/stories/28-4-vulnerability-scanning.md",
-        "size": 1463,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E28-S5",
-        "path": "_cobolt-output/latest/planning/stories/28-5-penetration-testing.md",
-        "size": 1371,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E32-S1",
-        "path": "_cobolt-output/latest/planning/stories/32-1-exif-extraction.md",
-        "size": 2339,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E32-S2",
-        "path": "_cobolt-output/latest/planning/stories/32-2-thumbnail-derivative-generation.md",
-        "size": 2738,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E32-S3",
-        "path": "_cobolt-output/latest/planning/stories/32-3-progressive-loading-lqip.md",
-        "size": 1796,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E32-S4",
-        "path": "_cobolt-output/latest/planning/stories/32-4-processing-status-tracking.md",
-        "size": 2369,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E33-S1",
-        "path": "_cobolt-output/latest/planning/stories/33-1-storage-calculations-quota.md",
-        "size": 2758,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E33-S2",
-        "path": "_cobolt-output/latest/planning/stories/33-2-asset-lifecycle-states.md",
-        "size": 2388,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E33-S3",
-        "path": "_cobolt-output/latest/planning/stories/33-3-virtual-collections.md",
-        "size": 2040,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E33-S4",
-        "path": "_cobolt-output/latest/planning/stories/33-4-storage-analytics.md",
-        "size": 1771,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E34-S1",
-        "path": "_cobolt-output/latest/planning/stories/34-1-albums-sub-galleries.md",
-        "size": 2381,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E34-S2",
-        "path": "_cobolt-output/latest/planning/stories/34-2-gallery-states-settings.md",
-        "size": 2363,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E34-S3",
-        "path": "_cobolt-output/latest/planning/stories/34-3-filters-sorting-bulk.md",
-        "size": 2450,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E34-S4",
-        "path": "_cobolt-output/latest/planning/stories/34-4-timeline-asset-detail.md",
-        "size": 1983,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E35-S1",
-        "path": "_cobolt-output/latest/planning/stories/35-1-split-screen-editor.md",
-        "size": 3835,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E35-S2",
-        "path": "_cobolt-output/latest/planning/stories/35-2-cover-photo-management.md",
-        "size": 3517,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E35-S3",
-        "path": "_cobolt-output/latest/planning/stories/35-3-theme-engine-typography.md",
-        "size": 3644,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E35-S4",
-        "path": "_cobolt-output/latest/planning/stories/35-4-grid-controls-responsive.md",
-        "size": 2720,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E35-S5",
-        "path": "_cobolt-output/latest/planning/stories/35-5-templates.md",
-        "size": 2944,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E36-S1",
-        "path": "_cobolt-output/latest/planning/stories/36-1-collaborative-editing.md",
-        "size": 3254,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E36-S2",
-        "path": "_cobolt-output/latest/planning/stories/36-2-ai-design-recommendations.md",
-        "size": 3039,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E36-S3",
-        "path": "_cobolt-output/latest/planning/stories/36-3-undo-redo-section-reset.md",
-        "size": 2708,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E37-S1",
-        "path": "_cobolt-output/latest/planning/stories/37-1-masonry-virtual-scrolling.md",
-        "size": 3278,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E37-S2",
-        "path": "_cobolt-output/latest/planning/stories/37-2-full-screen-lightbox.md",
-        "size": 3124,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E37-S3",
-        "path": "_cobolt-output/latest/planning/stories/37-3-photo-card-states.md",
-        "size": 3008,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E37-S4",
-        "path": "_cobolt-output/latest/planning/stories/37-4-video-compare-map.md",
-        "size": 2516,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E38-S1",
-        "path": "_cobolt-output/latest/planning/stories/38-1-password-pin-entry.md",
-        "size": 2948,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E38-S2",
-        "path": "_cobolt-output/latest/planning/stories/38-2-magic-links-sharing.md",
-        "size": 3047,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E38-S3",
-        "path": "_cobolt-output/latest/planning/stories/38-3-faceid-gallery-entry.md",
-        "size": 3083,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E38-S4",
-        "path": "_cobolt-output/latest/planning/stories/38-4-view-as-client.md",
-        "size": 2874,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E39-S1",
-        "path": "_cobolt-output/latest/planning/stories/39-1-selection-lists-ratings.md",
-        "size": 3017,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E39-S2",
-        "path": "_cobolt-output/latest/planning/stories/39-2-comments-region-pins.md",
-        "size": 2741,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E39-S3",
-        "path": "_cobolt-output/latest/planning/stories/39-3-proofing-dashboard.md",
-        "size": 2878,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E39-S4",
-        "path": "_cobolt-output/latest/planning/stories/39-4-album-approval-consent.md",
-        "size": 2914,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E40-S1",
-        "path": "_cobolt-output/latest/planning/stories/40-1-download-center.md",
-        "size": 3372,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E40-S2",
-        "path": "_cobolt-output/latest/planning/stories/40-2-watermark-permissions.md",
-        "size": 2392,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E40-S3",
-        "path": "_cobolt-output/latest/planning/stories/40-3-delivery-audit.md",
-        "size": 1810,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E41-S1",
-        "path": "_cobolt-output/latest/planning/stories/41-1-product-sales.md",
-        "size": 3136,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E41-S2",
-        "path": "_cobolt-output/latest/planning/stories/41-2-cart-coupons.md",
-        "size": 2715,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E42-S1",
-        "path": "_cobolt-output/latest/planning/stories/42-1-gallery-asset-analytics.md",
-        "size": 3127,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E42-S2",
-        "path": "_cobolt-output/latest/planning/stories/42-2-share-download-analytics.md",
-        "size": 2214,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E42-S3",
-        "path": "_cobolt-output/latest/planning/stories/42-3-workspace-dashboard.md",
-        "size": 2485,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E43-S1",
-        "path": "_cobolt-output/latest/planning/stories/43-1-gallery-rest-api.md",
-        "size": 2776,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E43-S2",
-        "path": "_cobolt-output/latest/planning/stories/43-2-webhooks.md",
-        "size": 2820,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E43-S3",
-        "path": "_cobolt-output/latest/planning/stories/43-3-rate-limiting-activity.md",
-        "size": 2267,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E44-S1",
-        "path": "_cobolt-output/latest/planning/stories/44-1-installable-pwa.md",
-        "size": 2644,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E44-S2",
-        "path": "_cobolt-output/latest/planning/stories/44-2-caching-offline.md",
-        "size": 2463,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E44-S3",
-        "path": "_cobolt-output/latest/planning/stories/44-3-performance-optimization.md",
-        "size": 3050,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E45-S1",
-        "path": "_cobolt-output/latest/planning/stories/45-1-consent-biometric-privacy.md",
-        "size": 3099,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E45-S2",
-        "path": "_cobolt-output/latest/planning/stories/45-2-audit-dsar.md",
-        "size": 2790,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E45-S3",
-        "path": "_cobolt-output/latest/planning/stories/45-3-moderation.md",
-        "size": 2601,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E46-S1",
-        "path": "_cobolt-output/latest/planning/stories/46-1-advanced-search.md",
-        "size": 3061,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E46-S2",
-        "path": "_cobolt-output/latest/planning/stories/46-2-burst-culling.md",
-        "size": 2737,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E46-S3",
-        "path": "_cobolt-output/latest/planning/stories/46-3-duplicates-ai-tags.md",
-        "size": 3003,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E47-S1",
-        "path": "_cobolt-output/latest/planning/stories/47-1-browser-worker-scaffold.md",
-        "size": 3467,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E47-S2",
-        "path": "_cobolt-output/latest/planning/stories/47-2-format-parsers.md",
-        "size": 4567,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E47-S3",
-        "path": "_cobolt-output/latest/planning/stories/47-3-manifest-builder.md",
-        "size": 3948,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E47-S4",
-        "path": "_cobolt-output/latest/planning/stories/47-4-use-upload-integration.md",
-        "size": 4093,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E47-S5",
-        "path": "_cobolt-output/latest/planning/stories/47-5-backend-manifest-validation.md",
-        "size": 8179,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E47-S6",
-        "path": "_cobolt-output/latest/planning/stories/47-6-e2e-tests.md",
-        "size": 4227,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E48-S1",
-        "path": "_cobolt-output/latest/planning/stories/48-1-desktop-https-handshake.md",
-        "size": 5298,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E48-S2",
-        "path": "_cobolt-output/latest/planning/stories/48-2-deep-tiff-heic-signer.md",
-        "size": 4449,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E48-S3",
-        "path": "_cobolt-output/latest/planning/stories/48-3-libraw-raw-scanner.md",
-        "size": 3935,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E48-S4",
-        "path": "_cobolt-output/latest/planning/stories/48-4-browser-loopback-client.md",
-        "size": 4939,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E48-S5",
-        "path": "_cobolt-output/latest/planning/stories/48-5-tier-d-signature-verify.md",
-        "size": 4882,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E49-S1",
-        "path": "_cobolt-output/latest/planning/stories/49-1-workspace-policy-db.md",
-        "size": 3991,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E49-S2",
-        "path": "_cobolt-output/latest/planning/stories/49-2-admin-policy-ui.md",
-        "size": 4761,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E49-S3",
-        "path": "_cobolt-output/latest/planning/stories/49-3-tier-d-policy-enforce.md",
-        "size": 6028,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E50-S1",
-        "path": "_cobolt-output/latest/planning/stories/50-1-moderation-dashboard.md",
-        "size": 5039,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E50-S2",
-        "path": "_cobolt-output/latest/planning/stories/50-2-fp-override-token.md",
-        "size": 5246,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E50-S3",
-        "path": "_cobolt-output/latest/planning/stories/50-3-policy-analytics.md",
-        "size": 4453,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      },
-      {
-        "key": "E50-S4",
-        "path": "_cobolt-output/latest/planning/stories/50-4-observability-alerts.md",
-        "size": 5820,
-        "timestamp": "2026-04-10T12:03:40.242Z"
-      }
-    ],
-    "storyTracker": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/story-tracker.json",
-      "size": 50434,
-      "producedBy": "cobolt-create-milestone-trackers",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "systemArchitecture": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/system-architecture.md",
-      "size": 31096,
-      "producedBy": "cobolt-create-system-architecture",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "testStrategy": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/test-strategy.md",
-      "size": 24766,
-      "producedBy": "cobolt-create-test-strategy",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "traceabilityMatrix": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/traceability-matrix.md",
-      "size": 7436,
-      "producedBy": "cobolt-create-traceability-matrix",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "trd": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/trd.md",
-      "size": 52530,
-      "producedBy": "cobolt-create-trd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "trdGapFindings": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/trd-gap-findings.md",
-      "size": 15421,
-      "producedBy": "cobolt-create-trd",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "uxDesign": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/ux-design-specification.md",
-      "size": 35274,
-      "producedBy": "cobolt-create-ux-design",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "uxTracker": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/ux-tracker.json",
-      "size": 31978,
-      "producedBy": "cobolt-create-dependency-register",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    },
-    "wireframesAndUserFlows": {
-      "exists": true,
-      "path": "_cobolt-output/runs/2026-04-08/run-008/planning/wireframes-and-user-flows.md",
-      "size": 39483,
-      "producedBy": "cobolt-create-wireframes",
-      "timestamp": "2026-04-10T12:03:40.242Z"
-    }
   },
   "brownfield": {
     "requestedPath": "C:/Users/admin/Desktop/rawdrive",
@@ -1708,62 +156,25 @@
   },
   "build": {
     "version": "2.1.0",
-    "currentStep": "complete",
-    "currentMilestone": "M33",
+    "currentMilestone": "M34",
     "autoMode": true,
-    "parallelMode": false,
-    "startedAt": "2026-04-13T13:12:03Z",
-    "fixIterations": 0,
-    "reviewCycles": 0,
-    "phantomRates": {},
-    "agentScoring": {},
     "milestoneLoop": {
       "autoMode": true,
       "autonomous": true,
-      "completed": [],
-      "totalMilestones": 6,
-      "current": "M32",
+      "current": "M34",
       "remaining": [
-        "M30",
-        "M31",
-        "M32",
-        "M33",
         "M34",
         "M35"
-      ]
+      ],
+      "completed": [
+        "M31",
+        "M32",
+        "M33"
+      ],
+      "totalMilestones": 2
     },
-    "totalTasks": 22,
-    "totalWaves": 3,
-    "storyTracking": {
-      "totalStories": 4,
-      "expectedStories": 4,
-      "completedStories": 4
-    },
-    "lastCompletedStep": "07-validate",
-    "completedSteps": [
-      "01-milestone-setup",
-      "02-spec-generation",
-      "03-tdd-red-green",
-      "03a-code-gap-analysis",
-      "03b-integration-smoke",
-      "04-tdd-refactor",
-      "04a-deep-verification",
-      "07-validate"
-    ],
-    "validation": {
-      "milestone": "M37",
-      "status": "pass",
-      "completedAt": "2026-04-13T08:48:48.2094674Z",
-      "tests": "pass",
-      "lint": "pass",
-      "build": "pass",
-      "dockerPlaywrightSmoke": "pass",
-      "specVerify": "pass",
-      "workerLifecycle": "pass",
-      "strictPreflight": "advisory",
-      "artifactsDir": "_cobolt-output/latest/build/M37"
-    },
-    "milestone": "M33",
+    "currentStep": "08-milestone-complete",
+    "startedAt": "2026-04-14T00:26:02Z",
     "stepsCompleted": [
       "00-preflight",
       "01-milestone-setup",
@@ -1779,24 +190,526 @@
       "06-fix",
       "07-validate"
     ],
-    "tddPhase": "red",
     "currentRound": 5,
+    "currentRoundPhase": "red",
+    "currentRoundName": "finalize",
     "roundsCompleted": [
       "round-01-foundation",
       "round-02-core",
       "round-03-api",
       "round-04-frontend",
       "round-05-finalize"
-    ],
-    "reviewFixLoop": {
-      "iteration": 0,
-      "maxIterations": 5,
-      "escalated": false
+    ]
+  },
+  "planning": {
+    "mode": "feature"
+  },
+  "planningArtifacts": {
+    "agentGrounding": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/agent-grounding-and-anti-hallucination.md",
+      "size": 1543,
+      "producedBy": "cobolt-create-test-strategy",
+      "timestamp": "2026-04-14T00:14:32.509Z"
     },
-    "retryCount": 0,
-    "escalationCount": 0,
-    "artifactsProduced": 0,
-    "storiesComplete": 0,
-    "milestoneStatus": "M33=shipped"
-  }
+    "apiContracts": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/api-contracts.md",
+      "size": 5970,
+      "producedBy": "cobolt-create-api-contracts",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "architecture": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/architecture.md",
+      "size": 2262,
+      "producedBy": "cobolt-create-architecture",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "architectureDecisions": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/architecture-decisions.md",
+      "size": 3525,
+      "producedBy": "cobolt-create-architecture-decisions",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "capabilityEdgeProofReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/capability-edge-proof-report.json",
+      "size": 870,
+      "producedBy": "cobolt-capability-graph",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "capabilityGraph": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/capability-graph.json",
+      "size": 146583,
+      "producedBy": "cobolt-capability-graph",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "crossMilestoneBlockedTasks": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/cross-milestone-blocked-tasks.json",
+      "size": 132,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "dataModelSpec": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/data-model-spec.md",
+      "size": 2677,
+      "producedBy": "cobolt-create-data-model",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "deliveryPlan": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/delivery-plan.md",
+      "size": 8044,
+      "producedBy": "cobolt-create-delivery-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "dependencyRegister": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-register.md",
+      "size": 3672,
+      "producedBy": "cobolt-create-dependency-register",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "dependencyTracker": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-tracker.json",
+      "size": 1098,
+      "producedBy": "cobolt-create-dependency-register",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "deterministicQualityGates": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/deterministic-quality-gates.json",
+      "size": 2433,
+      "producedBy": "cobolt-create-test-strategy",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "domainKnowledgeBase": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/domain-knowledge-base.md",
+      "size": 3550,
+      "producedBy": "cobolt-create-domain-knowledge",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "engineeringQualityStandards": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/engineering-quality-standards.md",
+      "size": 1250,
+      "producedBy": "cobolt-create-engineering-standards",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "enrichedRequirements": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/enriched-requirements.md",
+      "size": 2218,
+      "producedBy": "cobolt-analyze-features",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "epics": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/epics.md",
+      "size": 89328,
+      "producedBy": "cobolt-create-epics-and-stories",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureArchitectureDelta": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-architecture-delta.md",
+      "size": 11731,
+      "producedBy": "cobolt-create-architecture",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureCoverageMatrix": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-coverage-matrix.json",
+      "size": 6656,
+      "producedBy": "cobolt-feature-coverage",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureEpics": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-epics.md",
+      "size": 16460,
+      "producedBy": "cobolt-create-epics-and-stories",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureGapReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-gap-report.md",
+      "size": 272,
+      "producedBy": "cobolt-feature-coverage",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featurePrd": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-prd.md",
+      "size": 17249,
+      "producedBy": "cobolt-create-prd",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureReadinessReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-readiness-report.json",
+      "size": 22745,
+      "producedBy": "cobolt-feature-coverage",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureRegistry": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-registry.json",
+      "size": 15073,
+      "producedBy": "cobolt-analyze-features",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "featureServiceBlueprints": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-service-blueprints.md",
+      "size": 6807,
+      "producedBy": "cobolt-analyze-features",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "frontendCompletenessReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/frontend-completeness-report.json",
+      "size": 1565,
+      "producedBy": "cobolt-frontend-completeness",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "implicitRequirements": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/implicit-requirements.md",
+      "size": 5874,
+      "producedBy": "cobolt-extract-implicit-reqs",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "issueTracker": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/issue-and-blocker-tracker.json",
+      "size": 478,
+      "producedBy": "cobolt-create-milestone-trackers",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "masterPlan": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/master-plan.md",
+      "size": 5479,
+      "producedBy": "cobolt-master-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "milestoneTracker": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/milestone-tracker.json",
+      "size": 20398,
+      "producedBy": "cobolt-create-milestone-trackers",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "milestones": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/milestones.md",
+      "size": 26023,
+      "producedBy": "cobolt-decompose-milestones",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase1Checkpoint": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase1-product-intent.json",
+      "size": 185,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase1GapReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-1-gap-report.json",
+      "size": 303,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase2Checkpoint": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase2-technical-guardrails.json",
+      "size": 189,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase2GapReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-2-gap-report.json",
+      "size": 303,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase3Checkpoint": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase3-system-design.json",
+      "size": 187,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase3GapReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-3-gap-report.json",
+      "size": 303,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase4Checkpoint": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase4-delivery-breakdown.json",
+      "size": 473,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase4GapReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-4-gap-report.json",
+      "size": 303,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase5Checkpoint": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase5-build-authorization.json",
+      "size": 161,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "phase5GapReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-5-gap-report.json",
+      "size": 303,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "planningCheckpoint": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/planning-progress.json",
+      "size": 687,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "prd": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/prd.md",
+      "size": 9770,
+      "producedBy": "cobolt-create-prd",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "prdDay2Addendum": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/prd-day2-addendum.md",
+      "size": 2274,
+      "producedBy": "cobolt-enhance-prd",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "prdValidationReportJson": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/prd-validation-report.json",
+      "size": 1138,
+      "producedBy": "cobolt-validate-prd",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "projectKnowledgeBase": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/project-knowledge-base.md",
+      "size": 2050,
+      "producedBy": "cobolt-create-project-knowledge",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "projectReadme": {
+      "exists": true,
+      "path": "README.md",
+      "size": 10627,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "projectSkillsManifest": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/project-skills-manifest.md",
+      "size": 1246,
+      "producedBy": "cobolt-create-skills-manifest",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "readinessReport": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.md",
+      "size": 1445,
+      "producedBy": "cobolt-check-implementation-readiness",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "readinessReportJson": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.json",
+      "size": 1124,
+      "producedBy": "cobolt-check-implementation-readiness",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "releaseReadinessChecklist": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/release-readiness-checklist.md",
+      "size": 4831,
+      "producedBy": "cobolt-create-release-readiness",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "rtm": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/rtm.json",
+      "size": 97548,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "secureCodingStandard": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/secure-coding-standard.md",
+      "size": 1359,
+      "producedBy": "cobolt-create-secure-coding-standard",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "securityRequirements": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/security-requirements.md",
+      "size": 5349,
+      "producedBy": "cobolt-create-security-reqs",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "sourceConflicts": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-conflicts.json",
+      "size": 2133,
+      "producedBy": "cobolt-cli-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "sourceDocumentConsolidation": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-document-consolidation.md",
+      "size": 8713,
+      "producedBy": "cobolt-create-prd / cobolt-analyze-features",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "sourceGapSummary": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-gap-summary.md",
+      "size": 5006,
+      "producedBy": "cobolt-cli-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "sourceIndex": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-index.json",
+      "size": 8771,
+      "producedBy": "cobolt-cli-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "sourceRetrievalMap": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-retrieval-map.json",
+      "size": 3918,
+      "producedBy": "cobolt-cli-plan",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "sprintStatus": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/sprint-status.yaml",
+      "size": 3783,
+      "producedBy": "cobolt-sprint-planning",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "storyTracker": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/story-tracker.json",
+      "size": 18982,
+      "producedBy": "cobolt-create-milestone-trackers",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "surfaceImpactMatrix": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/surface-impact-matrix.md",
+      "size": 5734,
+      "producedBy": "cobolt-capability-graph",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "systemArchitecture": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/system-architecture.md",
+      "size": 11939,
+      "producedBy": "cobolt-create-system-architecture",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "testStrategy": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/test-strategy.md",
+      "size": 4622,
+      "producedBy": "cobolt-create-test-strategy",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "traceabilityMatrix": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/traceability-matrix.md",
+      "size": 750,
+      "producedBy": "cobolt-create-traceability-matrix",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "trd": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/trd.md",
+      "size": 9348,
+      "producedBy": "cobolt-create-trd",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "trdGapFindings": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/trd-gap-findings.md",
+      "size": 975,
+      "producedBy": "cobolt-create-trd",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "uxDesign": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/ux-design-specification.md",
+      "size": 9361,
+      "producedBy": "cobolt-create-ux-design",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "uxTracker": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/ux-tracker.json",
+      "size": 2772,
+      "producedBy": "cobolt-create-dependency-register",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "wireframesAndUserFlows": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/wireframes-and-user-flows.md",
+      "size": 4481,
+      "producedBy": "cobolt-create-wireframes",
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    }
+  },
+  "gates": {
+    "planning-regroup": {
+      "passed": true,
+      "gate_name": "planning-regroup",
+      "status": "skipped",
+      "stale": false,
+      "skipped": true,
+      "artifactPath": "_cobolt-output/latest/planning/milestone-regroup-plan.json",
+      "appliedCount": 0,
+      "pendingCount": 0,
+      "invalidCount": 0,
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    },
+    "planning-artifacts": {
+      "passed": false,
+      "gate_name": "planning-artifacts",
+      "registered": 69,
+      "requiredPresent": 6,
+      "requiredMissing": 1,
+      "timestamp": "2026-04-14T00:14:32.509Z"
+    }
+  },
+  "currentMilestone": "M34"
 }
