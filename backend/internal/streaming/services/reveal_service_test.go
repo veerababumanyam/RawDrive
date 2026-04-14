@@ -240,6 +240,21 @@ func TestReveal_StreamNotFound_ReturnsError(t *testing.T) {
 	}
 }
 
+// M34/M35 wiring — convenience constructor returns a non-nil service that
+// satisfies the *RevealService type even with a nil pool. Reveal calls will
+// fail (pool unreachable) but construction itself must not panic so main.go
+// can eagerly wire it at boot before the DB is guaranteed ready.
+func TestNewRevealServiceFromPool_NilPool_DoesNotPanic(t *testing.T) {
+	svc := NewRevealServiceFromPool(nil, nil, Options{})
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	_, err := svc.Reveal(context.Background(), RevealRequest{StreamID: uuid.New(), ActorID: uuid.New()})
+	if err == nil {
+		t.Error("expected error with nil pool")
+	}
+}
+
 // Reason is always valid per enum
 func TestReveal_ReasonIsValid(t *testing.T) {
 	scheduled := time.Date(2026, 5, 1, 18, 0, 0, 0, time.UTC)

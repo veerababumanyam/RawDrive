@@ -54,6 +54,73 @@ func TestPreflight_StartHappyPathContract(t *testing.T) {
 	assert.Equal(t, preflight.SessionTTL, delta)
 }
 
+// --- methods added for M34/M35 handler wiring ---
+
+func TestPreflight_GenerateOBSProfile_DefaultTier(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	body, filename, err := svc.GenerateOBSProfile(context.Background(), uuid.New())
+	require.NoError(t, err)
+	assert.Contains(t, filename, "720p30") // default without sample
+	assert.Contains(t, string(body), "video_bitrate=2500")
+	assert.Contains(t, string(body), "resolution=1280x720")
+}
+
+func TestPreflight_RecordBandwidth_Persists(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	sid := uuid.New()
+	err := svc.RecordBandwidth(context.Background(), sid, preflight.BandwidthResult{
+		UplinkKbps: 5000, JitterMs: 10, LossPct: 0.5,
+	})
+	require.NoError(t, err)
+	// classify should now pick 1080p30
+	_, kbps := svc.Classify(sid)
+	assert.Equal(t, 4200, kbps)
+}
+
+func TestPreflight_CompleteSession_Warn_OnHighLoss(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	sid := uuid.New()
+	_ = svc.RecordBandwidth(context.Background(), sid, preflight.BandwidthResult{
+		UplinkKbps: 5000, LossPct: 5, JitterMs: 5,
+	})
+	v, err := svc.CompleteSession(context.Background(), sid)
+	require.NoError(t, err)
+	assert.Equal(t, "warn", v.Status)
+	assert.NotEmpty(t, v.Reasons)
+}
+
+func TestPreflight_CompleteSession_Fail_OnLowUplink(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	sid := uuid.New()
+	_ = svc.RecordBandwidth(context.Background(), sid, preflight.BandwidthResult{
+		UplinkKbps: 1500,
+	})
+	v, err := svc.CompleteSession(context.Background(), sid)
+	require.NoError(t, err)
+	assert.Equal(t, "fail", v.Status)
+}
+
+func TestPreflight_SessionWorkspace_NilDB_ReturnsNotFound(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	_, err := svc.SessionWorkspace(context.Background(), uuid.New())
+	assert.ErrorIs(t, err, preflight.ErrSessionNotFound)
+}
+
+func TestPreflight_StopTestBroadcast_NilDB_NoError(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	err := svc.StopTestBroadcast(context.Background(), uuid.New())
+	assert.NoError(t, err)
+}
+
+func TestPreflight_StartSession_HappyPath(t *testing.T) {
+	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: true})
+	sess, err := svc.StartSession(context.Background(), uuid.New(), uuid.New())
+	require.NoError(t, err)
+	assert.Equal(t, "cf-ephemeral-abc", sess.TestBroadcastID)
+	assert.Equal(t, 4500, sess.RecommendedBitrateKbps)
+	assert.NotEqual(t, uuid.Nil, sess.ID)
+}
+
 // If the permission check fails internally (DB down), surface 500 not 200.
 func TestPreflight_PermErrorSurfaces500(t *testing.T) {
 	svc := preflight.New(nil, fakeCF{}, fakePerm{allow: false, err: errors.New("db down")})
