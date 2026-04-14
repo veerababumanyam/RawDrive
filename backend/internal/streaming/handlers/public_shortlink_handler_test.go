@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,8 +29,17 @@ type recordedHit struct {
 	code, src, ip, ua string
 }
 
-func (s *stubResolver) Resolve(_ context.Context, _ string) (uuid.UUID, bool, error) {
-	return s.streamID, s.revoked, s.err
+func (s *stubResolver) ResolveDetailed(_ context.Context, _ string) (shortlink.ResolveResult, error) {
+	if s.err != nil {
+		return shortlink.ResolveResult{}, s.err
+	}
+	res := shortlink.ResolveResult{StreamID: s.streamID}
+	if s.revoked {
+		now := time.Now()
+		res.RevokedAt = &now
+		return res, shortlink.ErrRevoked
+	}
+	return res, nil
 }
 
 func (s *stubResolver) RecordHit(_ context.Context, code, src, ip, ua string) error {
@@ -79,6 +89,72 @@ func TestPublicResolve_ExpiredCode_410(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusGone {
 		t.Fatalf("want 410 got %d", rr.Code)
+	}
+}
+
+// TestPublicResolve_RevokedCode_410 asserts that a revoked shortcode surfaces
+// 410 with {"error":"revoked"} — distinct from the 404 {"error":"not_found"}
+// branch. Guarantees handler honours shortlink.ErrRevoked from ResolveDetailed.
+func TestPublicResolve_RevokedCode_410(t *testing.T) {
+	res := &stubResolver{streamID: uuid.New(), revoked: true}
+	h := NewPublicShortlinkHandler(res, &stubMetaLoader{}, 60)
+	r := mountPublic(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/public/s/REVOKED1", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusGone {
+		t.Fatalf("want 410 got %d", rr.Code)
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["error"] != "revoked" {
+		t.Errorf("want error=revoked, got %v", body["error"])
+	}
+
+	// And a fresh handler/resolver with ErrNotFound must NOT return 410 —
+	// guards against overloading revoked and not-found into the same branch.
+	res404 := &stubResolver{err: shortlink.ErrNotFound}
+	h404 := NewPublicShortlinkHandler(res404, &stubMetaLoader{}, 60)
+	r404 := mountPublic(h404)
+	req2 := httptest.NewRequest(http.MethodGet, "/public/s/NOTREAL1", nil)
+	rr2 := httptest.NewRecorder()
+	r404.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusNotFound {
+		t.Fatalf("want 404 for not-found, got %d (revoked branch overreached)", rr2.Code)
+	}
+}
+
+// TestPublicResolve_IncludesStreamID_InResponse asserts 35-5 surface: the 200
+// JSON must carry stream_id so the Next.js server component can redirect to
+// /stream/{id} without a second round-trip.
+func TestPublicResolve_IncludesStreamID_InResponse(t *testing.T) {
+	sid := uuid.New()
+	res := &stubResolver{streamID: sid}
+	meta := PublicStreamMeta{Title: "Livestream"}
+	h := NewPublicShortlinkHandler(res, &stubMetaLoader{meta: meta}, 60)
+	r := mountPublic(h)
+	req := httptest.NewRequest(http.MethodGet, "/public/s/ABCDEFGH?src=wa", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("want 200 got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["stream_id"] != sid.String() {
+		t.Errorf("want stream_id=%s, got %v", sid, body["stream_id"])
+	}
+	// Must not leak internal fields.
+	for _, bad := range []string{"playback_url", "ingest_key", "workspace_id", "cf_rtmps_key", "cf_playback_url"} {
+		if _, ok := body[bad]; ok {
+			t.Errorf("response must not contain %q", bad)
+		}
 	}
 }
 

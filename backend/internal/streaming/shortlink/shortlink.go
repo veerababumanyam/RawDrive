@@ -15,6 +15,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,46 @@ const (
 
 // ErrNotFound is returned by Resolve when no shortlink matches.
 var ErrNotFound = errors.New("shortlink: not found")
+
+// ErrRevoked is returned by ResolveDetailed when the shortcode exists but has
+// been revoked. Kept distinct from ErrNotFound so callers can surface a 410
+// (revoked) versus 404 (not found) without overloading a single error.
+var ErrRevoked = errors.New("shortlink: revoked")
+
+// ResolveResult is the extended resolver return surface introduced in M35/35-5.
+// It carries the stream id plus lifecycle timestamps that let handlers
+// differentiate revoked from (future) expired shortlinks without squashing
+// both into a single bool.
+type ResolveResult struct {
+	StreamID  uuid.UUID
+	RevokedAt *time.Time
+	ExpiresAt *time.Time // reserved for a future TTL column; always nil today
+}
+
+// allowedSrcValues is the attribution whitelist shared by the shortlink service
+// and the public HTTP resolver. Must match the CHECK constraint on
+// streaming_shortlink_hits.src.
+var allowedSrcValues = map[string]struct{}{
+	"qr": {}, "wa": {}, "email": {}, "invite": {}, "direct": {},
+}
+
+// NormalizeSrc lower-cases, trims and coerces any non-whitelisted attribution
+// value to "other" so callers can feed it directly into the hits insert and
+// the redirect query param without leaking URL-injected junk. Pass-through
+// values are qr|wa|email|invite|direct; anything else → "other".
+//
+// Note: the HTTP handler currently coerces to "direct" for the DB CHECK
+// constraint; this helper intentionally returns "other" so callers that want
+// to record an anomaly bucket (analytics, audit logs) can distinguish a user
+// who clicked a raw link (→ "direct") from an injected garbage value (→
+// "other"). The public handler keeps its own strict coercion.
+func NormalizeSrc(src string) string {
+	s := strings.ToLower(strings.TrimSpace(src))
+	if _, ok := allowedSrcValues[s]; ok {
+		return s
+	}
+	return "other"
+}
 
 // denyShortcode blocks codes that resemble reserved path prefixes.
 // /s/admin, /s/api, /s/null would be confusing operationally.
@@ -89,11 +130,15 @@ func (s *Service) Generate(ctx context.Context, streamID, workspaceID uuid.UUID)
 }
 
 // Resolve looks up a shortcode; returns (streamID, revoked, error).
+//
+// Preserved for backwards compatibility with M33/M34 callers (handler.go,
+// public_shortlink_handler.go, integration tests). New callers should prefer
+// ResolveDetailed which returns a ResolveResult with lifecycle timestamps.
 func (s *Service) Resolve(ctx context.Context, shortcode string) (uuid.UUID, bool, error) {
 	var streamID uuid.UUID
-	var revokedAt *string
+	var revokedAt *time.Time
 	err := s.db.QueryRow(ctx,
-		`SELECT stream_id, revoked_at::text FROM streaming_shortlinks WHERE shortcode = $1`,
+		`SELECT stream_id, revoked_at FROM streaming_shortlinks WHERE shortcode = $1`,
 		shortcode,
 	).Scan(&streamID, &revokedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -103,6 +148,28 @@ func (s *Service) Resolve(ctx context.Context, shortcode string) (uuid.UUID, boo
 		return uuid.Nil, false, err
 	}
 	return streamID, revokedAt != nil, nil
+}
+
+// ResolveDetailed returns the extended resolver surface introduced in M35/35-5.
+// Returns ErrNotFound if the shortcode does not exist, ErrRevoked if it exists
+// but has been revoked (handlers can distinguish 404 vs 410), or a populated
+// ResolveResult with RevokedAt == nil on the happy path.
+func (s *Service) ResolveDetailed(ctx context.Context, shortcode string) (ResolveResult, error) {
+	var res ResolveResult
+	err := s.db.QueryRow(ctx,
+		`SELECT stream_id, revoked_at FROM streaming_shortlinks WHERE shortcode = $1`,
+		shortcode,
+	).Scan(&res.StreamID, &res.RevokedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ResolveResult{}, ErrNotFound
+	}
+	if err != nil {
+		return ResolveResult{}, err
+	}
+	if res.RevokedAt != nil {
+		return res, ErrRevoked
+	}
+	return res, nil
 }
 
 // Revoke marks all shortlinks for a stream as revoked.

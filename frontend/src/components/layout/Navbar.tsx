@@ -194,7 +194,7 @@ export function Navbar() {
 
       <div
         className={cn(
-          "glass-surface absolute left-0 right-0 top-full overflow-y-auto border-t border-border lg:hidden",
+          "surface-panel absolute left-0 right-0 top-full overflow-y-auto border-t border-border lg:hidden",
           "transition-all",
           mobileMenuOpen ? "max-h-[80vh] opacity-100" : "max-h-0 opacity-0",
         )}

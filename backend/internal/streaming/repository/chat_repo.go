@@ -217,6 +217,40 @@ func (r *ChatRepo) EmitReaction(
 	return nil
 }
 
+// IsViewerBanned reports whether the viewer session has an active ban or
+// timeout on the given stream. The implementation queries
+// chat_moderation_actions for rows targeting this viewer session with an
+// unexpired or open-ended expiry. If the table does not yet exist (pre-35-3
+// deployments), the query returns (false, nil, nil) — absence of the table
+// is equivalent to "no bans on record".
+func (r *ChatRepo) IsViewerBanned(
+	ctx context.Context,
+	streamID, viewerSessionID uuid.UUID,
+) (bool, *time.Time, error) {
+	var until *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT MAX(expires_at)
+		   FROM chat_moderation_actions
+		  WHERE stream_id = $1
+		    AND target_viewer_session_id = $2
+		    AND action IN ('ban','timeout')
+		    AND (expires_at IS NULL OR expires_at > now())`,
+		streamID, viewerSessionID,
+	).Scan(&until)
+	if err != nil {
+		// Table may not exist yet in early environments; treat as not-banned.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil, nil
+		}
+		return false, nil, nil
+	}
+	if until == nil {
+		// No rows aggregated — MAX returns NULL scanned as nil pointer.
+		return false, nil, nil
+	}
+	return true, until, nil
+}
+
 func validateBody(body string) error {
 	if body == "" {
 		return ErrEmptyBody

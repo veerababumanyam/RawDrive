@@ -19,9 +19,13 @@ type Dependencies struct {
 	Invite         *InviteHandler
 	LiveConsole    *LiveConsoleHandler
 	Preflight      *PreflightHandler
+	Analytics      *AnalyticsHandler
 
-	// Public (no auth).
+	// Public (no auth on transport; viewer-session JWT inside handler).
 	PublicShortlink *PublicShortlinkHandler
+	ChatViewer      *ChatViewerHandler
+	SSEState        *SSEStateHandler
+	ViewerPublic    *ViewerPublicHandler
 }
 
 // RegisterRoutes mounts the F-014 streaming authed surface. Call inside the
@@ -59,6 +63,11 @@ func RegisterRoutes(r chi.Router, deps Dependencies) {
 		r.Post("/api/v1/streaming/streams/preflight/{sid}/test-broadcast/stop", deps.Preflight.TestBroadcastStop)
 		r.Post("/api/v1/streaming/streams/preflight/{sid}/complete", deps.Preflight.Complete)
 	}
+	if deps.Analytics != nil {
+		// Story 35-6 — per-stream + workspace analytics.
+		r.Get("/api/v1/streaming/streams/{id}/analytics", deps.Analytics.StreamAnalytics)
+		r.Get("/api/v1/streaming/workspace/analytics", deps.Analytics.WorkspaceAnalytics)
+	}
 }
 
 // RegisterPublicRoutes mounts routes that MUST NOT traverse JWT auth. The
@@ -67,5 +76,25 @@ func RegisterRoutes(r chi.Router, deps Dependencies) {
 func RegisterPublicRoutes(r chi.Router, deps Dependencies) {
 	if deps.PublicShortlink != nil {
 		r.Get("/api/v1/public/s/{code}", deps.PublicShortlink.Resolve)
+	}
+	if deps.ChatViewer != nil {
+		// Story 35-3 — viewer chat + reactions. Auth = viewer-session JWT
+		// parsed inside the handler (not workspace JWT). Public mount so the
+		// workspace auth middleware does not reject these requests.
+		r.Post("/api/v1/public/streams/{streamID}/chat", deps.ChatViewer.PostMessage)
+		r.Post("/api/v1/public/streams/{streamID}/reactions", deps.ChatViewer.PostReaction)
+	}
+	if deps.ViewerPublic != nil {
+		// Story 35-4 — public viewer-count widget + replay playback gate.
+		// Viewer-JWT authed inside the handler; do NOT add workspace JWT
+		// middleware here.
+		r.Get("/api/v1/public/streams/{id}/viewer-count", deps.ViewerPublic.GetViewerCount)
+		r.Get("/api/v1/public/streams/{id}/replay", deps.ViewerPublic.GetReplay)
+	}
+	if deps.SSEState != nil {
+		// Story 35-2 — viewer SSE state channel. Auth = viewer-session JWT
+		// parsed inside the handler (EventSource accepts the token via
+		// ?access_token= query param since it cannot set headers).
+		r.Get("/api/v1/public/streams/{streamID}/state", deps.SSEState.ServeHTTP)
 	}
 }

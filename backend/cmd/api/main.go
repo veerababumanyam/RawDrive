@@ -33,11 +33,13 @@ import (
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
 	"github.com/rawdrive/backend/internal/featureflag"
+	streaminganalytics "github.com/rawdrive/backend/internal/streaming/analytics"
 	"github.com/rawdrive/backend/internal/streaming/credit"
 	streaminghandlers "github.com/rawdrive/backend/internal/streaming/handlers"
 	streamingrate "github.com/rawdrive/backend/internal/streaming/rate"
 	streamingrecharge "github.com/rawdrive/backend/internal/streaming/recharge"
 	"github.com/rawdrive/backend/internal/streaming/shortlink"
+	"github.com/rawdrive/backend/internal/streaming/statepusher"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
 	teamPkg "github.com/rawdrive/backend/internal/team"
 	"github.com/rawdrive/backend/internal/user"
@@ -1362,16 +1364,64 @@ func main() {
 		// meta object, which is the documented fallback.
 		publicShortlinkHandler := streaminghandlers.NewPublicShortlinkHandler(shortlinkSvc, nil, 60)
 
+		// ──────────────────────── M35 / F-014: viewer + analytics handlers ───────────
+		// Build the viewer JWT service early so SSE/ViewerPublic handlers can reuse
+		// it as their ViewerTokenParser. Key is loaded from platform_settings.
+		m35ViewerJWT, m35ViewerJWTErr := buildViewerJWTService(context.Background(), platformSettingsRepo)
+		if m35ViewerJWTErr != nil {
+			log.Printf("WARNING: M35 viewer JWT service disabled: %v", m35ViewerJWTErr)
+			m35ViewerJWT = nil
+		}
+
+		// statePusher singleton — per-process in-memory broker for SSE state fan-out.
+		// 64-slot ring buffer per stream matches the 35-2 spec.
+		m35StatePusher := statepusher.NewStatePusher(nil /* system clock */, 64)
+
+		// SSE state handler (story 35-2). Viewer JWT + in-process pusher + flag.
+		var sseStateHandler *streaminghandlers.SSEStateHandler
+		if m35ViewerJWT != nil {
+			sseStateHandler = &streaminghandlers.SSEStateHandler{
+				Parser: m35ViewerJWT,
+				Pusher: m35StatePusher,
+				Flag:   streamingFlag,
+			}
+		}
+
+		// Viewer public handler (story 35-4). PresenceSource / PlaybackSigner /
+		// ReplayStreamRepo remain nil — endpoint 500s until the upstream shim and
+		// repo are wired in a later M35 wave. Handler itself is safe to mount.
+		var viewerPublicHandler *streaminghandlers.ViewerPublicHandler
+		if m35ViewerJWT != nil {
+			viewerCountCache := viewer.NewViewerCountCache(nil /* TODO: presence shim */, 5*time.Second, nil)
+			replayGate := viewer.NewReplayGate(nil /* TODO: playback signer */, 48*time.Hour, nil)
+			viewerPublicHandler = streaminghandlers.NewViewerPublicHandler(
+				viewerCountCache, replayGate, m35ViewerJWT,
+				nil /* TODO: ReplayStreamRepo */, streamingFlag, uuid.Nil, nil,
+			)
+		}
+
+		// Analytics handler (story 35-6). Real aggregator + dbPool, flag-gated.
+		analyticsHandler := streaminghandlers.NewAnalyticsHandler(streaminganalytics.New(dbPool), dbPool).
+			WithFeatureFlag(streamingFlag)
+
+		// ChatViewer handler (story 35-3) remains nil — requires a ChatServiceAPI
+		// adapter and a StreamWorkspaceResolver implementation not yet present in
+		// the streaming/chat package. TODO: M35 wave.
+		// var chatViewerHandler *streaminghandlers.ChatViewerHandler = nil
+
 		streamingDeps := streaminghandlers.Dependencies{
 			CreditBalance:   creditBalanceHandler,
 			Invite:          inviteHandler,
 			PublicShortlink: publicShortlinkHandler,
-			// Console, StreamCreate, IngestReveal, LiveConsole, Preflight
-			// remain nil until their services are fully wired (M34 R4+).
+			Analytics:       analyticsHandler,
+			SSEState:        sseStateHandler,
+			ViewerPublic:    viewerPublicHandler,
+			// Console, StreamCreate, IngestReveal, LiveConsole, Preflight, ChatViewer
+			// remain nil until their services are fully wired (M34/M35 later waves).
 		}
 		streaminghandlers.RegisterRoutes(api, streamingDeps)
 		streaminghandlers.RegisterPublicRoutes(r, streamingDeps)
-		log.Println("M34/F-014: streaming handlers registered (credit balance, invite, public shortlink)")
+		log.Println("M34/M35/F-014: streaming handlers registered (credit balance, invite, public shortlink, analytics, SSE state, viewer public)")
 
 		// F-006 Part A (audit 2026-04-10): replace the JWT service's
 		// ephemeral in-memory RSA signing key with one persisted through

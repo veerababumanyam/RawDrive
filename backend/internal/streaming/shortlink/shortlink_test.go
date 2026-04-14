@@ -36,3 +36,44 @@ func TestErrNotFoundExists(t *testing.T) {
 	assert.NotNil(t, shortlink.ErrNotFound)
 	assert.Contains(t, shortlink.ErrNotFound.Error(), "not found")
 }
+
+// M35-35-5 — ErrRevoked distinct from ErrNotFound so handlers can return 410
+// vs 404 without overloading a single sentinel.
+func TestErrRevoked_DistinctSentinel(t *testing.T) {
+	assert.NotNil(t, shortlink.ErrRevoked)
+	assert.NotEqual(t, shortlink.ErrNotFound, shortlink.ErrRevoked)
+	assert.Contains(t, shortlink.ErrRevoked.Error(), "revoked")
+}
+
+// M35-35-5 — ResolveResult shape: must carry StreamID + nullable RevokedAt +
+// reserved ExpiresAt. Prevents regressing to the old (uuid, bool) shape.
+func TestResolveResult_StructShape(t *testing.T) {
+	var r shortlink.ResolveResult
+	// Zero value: no stream, no timestamps.
+	assert.Equal(t, "00000000-0000-0000-0000-000000000000", r.StreamID.String())
+	assert.Nil(t, r.RevokedAt)
+	assert.Nil(t, r.ExpiresAt)
+}
+
+// M35-35-5 — NormalizeSrc whitelist: qr|wa|email|invite|direct pass through
+// (case-insensitive, trimmed); anything else coerces to "other".
+func TestNormalizeSrc_Whitelist(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"qr", "qr"},
+		{"wa", "wa"},
+		{"email", "email"},
+		{"invite", "invite"},
+		{"direct", "direct"},
+		{"QR", "qr"},
+		{"  wa  ", "wa"},
+		{"javascript:", "other"},
+		{"", "other"},
+		{"unknown", "other"},
+		{"<script>", "other"},
+	}
+	for _, c := range cases {
+		assert.Equalf(t, c.want, shortlink.NormalizeSrc(c.in), "NormalizeSrc(%q)", c.in)
+	}
+}

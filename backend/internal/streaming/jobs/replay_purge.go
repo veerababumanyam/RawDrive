@@ -26,6 +26,9 @@ type PurgeJob struct {
 	interval time.Duration
 	batch    int
 	logger   *slog.Logger
+	// audit is optional; when non-nil every Tick writes one BatchAudit row
+	// with Job="replays" for DPDP observability (M35 / 35-8).
+	audit AuditWriter
 }
 
 func NewPurgeJob(repo cf.ReplayRepo, deleter RecordingDeleter, logger *slog.Logger) *PurgeJob {
@@ -57,12 +60,30 @@ func (j *PurgeJob) Run(ctx context.Context) error {
 	}
 }
 
+// SetAuditWriter wires an AuditWriter so every Tick emits one row to
+// streaming_retention_audit (M35 / 35-8). Safe to call once at construction.
+func (j *PurgeJob) SetAuditWriter(a AuditWriter) { j.audit = a }
+
 // Tick runs a single purge sweep.
 func (j *PurgeJob) Tick(ctx context.Context) error {
-	list, err := j.repo.ListExpired(ctx, j.clock(), j.batch)
+	started := j.clock()
+	cutoff := started
+	list, err := j.repo.ListExpired(ctx, cutoff, j.batch)
 	if err != nil {
+		if j.audit != nil {
+			_ = j.audit.WriteBatch(ctx, BatchAudit{
+				Job:        "replays",
+				StartedAt:  started,
+				FinishedAt: j.clock(),
+				Cutoff:     cutoff,
+				Count:      0,
+				Failures:   1,
+			})
+		}
 		return err
 	}
+	purged := 0
+	failures := 0
 	for _, st := range list {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -83,6 +104,7 @@ func (j *PurgeJob) Tick(ctx context.Context) error {
 						"alert", "replay_purge_blocked",
 						"err", derr.Error(),
 					)
+					failures++
 					continue
 				}
 			}
@@ -95,6 +117,24 @@ func (j *PurgeJob) Tick(ctx context.Context) error {
 				"stream", st.ID,
 				"alert", "replay_expiry_state_lost",
 				"err", err.Error(),
+			)
+			failures++
+			continue
+		}
+		purged++
+	}
+	if j.audit != nil {
+		if aerr := j.audit.WriteBatch(ctx, BatchAudit{
+			Job:        "replays",
+			StartedAt:  started,
+			FinishedAt: j.clock(),
+			Cutoff:     cutoff,
+			Count:      purged,
+			Failures:   failures,
+		}); aerr != nil {
+			j.logger.Error("purge: audit write failed",
+				"alert", "retention_audit_write_failed",
+				"err", aerr.Error(),
 			)
 		}
 	}

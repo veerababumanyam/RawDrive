@@ -17,9 +17,11 @@ import (
 )
 
 // PublicResolver abstracts the shortlink service lookup/record surface
-// needed by the public JSON resolver.
+// needed by the public JSON resolver. Migrated in M35/35-5 to ResolveDetailed
+// so the handler can distinguish 410 (revoked) from 404 (not found) without
+// overloading a single bool.
 type PublicResolver interface {
-	Resolve(ctx context.Context, code string) (uuid.UUID, bool, error)
+	ResolveDetailed(ctx context.Context, code string) (shortlink.ResolveResult, error)
 	RecordHit(ctx context.Context, code, src, ip, userAgent string) error
 }
 
@@ -133,7 +135,7 @@ func (h *PublicShortlinkHandler) Resolve(w http.ResponseWriter, r *http.Request)
 		code = parts[len(parts)-1]
 	}
 
-	streamID, revoked, err := h.res.Resolve(r.Context(), code)
+	result, err := h.res.ResolveDetailed(r.Context(), code)
 	if err != nil {
 		if errors.Is(err, shortlink.ErrNotFound) {
 			w.Header().Set("Content-Type", "application/json")
@@ -141,17 +143,24 @@ func (h *PublicShortlinkHandler) Resolve(w http.ResponseWriter, r *http.Request)
 			_, _ = w.Write([]byte(`{"error":"not_found"}`))
 			return
 		}
+		if errors.Is(err, shortlink.ErrRevoked) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusGone)
+			_, _ = w.Write([]byte(`{"error":"revoked"}`))
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"error":"internal"}`))
 		return
 	}
-	if revoked {
+	if result.RevokedAt != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusGone)
-		_, _ = w.Write([]byte(`{"error":"gone"}`))
+		_, _ = w.Write([]byte(`{"error":"revoked"}`))
 		return
 	}
+	streamID := result.StreamID
 
 	src := normalizeSrc(r.URL.Query().Get("src"))
 	// Record the impression best-effort — never block the response.
@@ -165,7 +174,26 @@ func (h *PublicShortlinkHandler) Resolve(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Whitelisted response: flatten meta fields and add stream_id + src.
+	// Intentionally does NOT include playback_url, ingest_key, workspace_id,
+	// or any cf_rtmps_* values — see the 35-5 security invariants.
+	payload := map[string]interface{}{
+		"stream_id":          streamID.String(),
+		"src":                src,
+		"stream_title":       meta.Title,
+		"protected":          meta.Protected,
+		"status":             meta.Status,
+		"scheduled_start_at": meta.ScheduledStartAt,
+		"access_policy":      meta.AccessPolicy,
+	}
+	// Drop empty omitempty-style fields to preserve the M34 response shape.
+	for _, k := range []string{"status", "scheduled_start_at", "access_policy"} {
+		if payload[k] == "" {
+			delete(payload, k)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(meta)
+	_ = json.NewEncoder(w).Encode(payload)
 }
