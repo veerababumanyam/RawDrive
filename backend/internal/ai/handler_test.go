@@ -10,11 +10,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/ctxkeys"
 )
 
 // withWorkspaceCtx adds workspace_id to request context (simulates middleware).
 func withWorkspaceCtx(r *http.Request, wsID uuid.UUID) *http.Request {
-	ctx := context.WithValue(r.Context(), "workspace_id", wsID)
+	ctx := context.WithValue(r.Context(), ctxkeys.WorkspaceID, wsID)
 	return r.WithContext(ctx)
 }
 

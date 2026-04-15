@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/ctxkeys"
 )
 
 // ──────────────────────────── Context Keys ────────────────────────────
@@ -145,7 +146,7 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 			// Enrich context
 			ctx := context.WithValue(r.Context(), workspaceIDKey, wsID)
 			ctx = context.WithValue(ctx, stateIDKey, stateID)
-			ctx = context.WithValue(ctx, "workspace_id", wsID) // plain key for ai package (import cycle prevents typed key sharing)
+			ctx = context.WithValue(ctx, ctxkeys.WorkspaceID, wsID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

@@ -10,9 +10,9 @@ package middleware
 //	Authorization: Api-Key rd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 //
 // On success, the request context is enriched with:
-//	- workspaceIDKey   (so RLS works without a JWT)
-//	- "workspace_id"   (plain key for the ai package — same convention as TenantContext)
-//	- apiKeyKey        (the *repository.APIKey itself, for scope checks)
+//	- workspaceIDKey      (so RLS works without a JWT)
+//	- ctxkeys.WorkspaceID (typed key for the ai package)
+//	- apiKeyKey           (the *repository.APIKey itself, for scope checks)
 //
 // On failure, returns 401 with a JSON error body. The verifier is passed
 // in as an interface so the middleware doesn't depend on the service
@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rawdrive/backend/internal/ctxkeys"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -82,7 +83,7 @@ func APIKeyAuth(verifier APIKeyVerifier) func(http.Handler) http.Handler {
 			// rest of the request stack behaves as if a JWT had been used.
 			ctx := context.WithValue(r.Context(), apiKeyKey, key)
 			ctx = context.WithValue(ctx, workspaceIDKey, key.WorkspaceID.String())
-			ctx = context.WithValue(ctx, "workspace_id", key.WorkspaceID.String())
+			ctx = context.WithValue(ctx, ctxkeys.WorkspaceID, key.WorkspaceID.String())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

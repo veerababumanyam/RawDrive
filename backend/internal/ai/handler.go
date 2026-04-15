@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/ctxkeys"
 )
 
 // AlbumCreator is the narrow surface the AI handler needs to create a
@@ -775,9 +776,9 @@ func respondError(w http.ResponseWriter, status int, msg string) {
 }
 
 // getWorkspaceID extracts the workspace ID from request context.
-// Uses the same plain string key as handler/asset_handler.go:129.
+// Uses the typed ctxkeys.WorkspaceID key shared with middleware.
 func getWorkspaceID(r *http.Request) uuid.UUID {
-	val := r.Context().Value("workspace_id")
+	val := r.Context().Value(ctxkeys.WorkspaceID)
 	if val == nil {
 		return uuid.Nil
 	}
