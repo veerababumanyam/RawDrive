@@ -1,12 +1,136 @@
 {
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "brownfield",
-  "currentStage": "feature-planning",
-  "version": "0.0.61",
-  "resolvedRoot": "C:/Users/admin/Desktop/RawDriveCobolt",
+  "runtime": "ide-plugin",
+  "currentStage": "build",
+  "version": "0.13.1",
+  "scope": "mvp",
+  "skills": [
+    "cobolt-init",
+    "cobolt-plan",
+    "cobolt-build",
+    "cobolt-review",
+    "cobolt-fix",
+    "cobolt-deploy",
+    "cobolt-release",
+    "cobolt-version"
+  ],
+  "agentsCount": 163,
+  "customAgentsCount": 0,
+  "agentTeamsCount": 0,
+  "pipeline": {
+    "currentStage": "pre-plan",
+    "infra_verified": true,
+    "infra_started": true,
+    "infra_healthy": true,
+    "teamActive": true,
+    "stages": {
+      "S1-S4": {
+        "filesWritten": [
+          "_cobolt-output/runs/2026-04-15/run-001/planning/agent-grounding-and-anti-hallucination.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/api-contracts.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/architecture.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/architecture-decisions.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/bounded-contexts.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/codebase-research.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/cross-milestone-analysis.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/data-model-spec.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/delivery-plan.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/dependency-register.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/dependency-tracker.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/deterministic-quality-gates.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/domain-knowledge-base.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/engineering-quality-standards.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/enriched-requirements.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/epics.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/feature-coverage-matrix.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/feature-gap-report.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/feature-readiness-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/feature-registry.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/feature-service-blueprints.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/implicit-requirements.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/issue-and-blocker-tracker.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/master-plan.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/milestone-tracker.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/milestones.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase1-product-intent.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/phase-1-gap-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase2-technical-guardrails.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/phase-2-gap-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase3-system-design.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/phase-3-gap-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase4-delivery-breakdown.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/phase-4-gap-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase5-build-authorization.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/phase-5-gap-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/planning-progress.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/prd.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/prd-day2-addendum.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/prd-validation-report.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/prd-validation-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/project-knowledge-base.md",
+          "README.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/project-skills-manifest.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/readiness-report.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/readiness-report.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/release-readiness-checklist.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/rtm.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/secure-coding-standard.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/security-requirements.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/source-document-consolidation.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/source-gap-summary.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/sprint-status.yaml",
+          "_cobolt-output/latest/planning/stories/1-1-remove-jwt-secret-hardcoded-default.md",
+          "_cobolt-output/latest/planning/stories/1-2-delete-local-storage-driver.md",
+          "_cobolt-output/latest/planning/stories/2-1-create-shared-context-keys-package.md",
+          "_cobolt-output/latest/planning/stories/2-2-distributed-rate-limiter-via-valkey.md",
+          "_cobolt-output/latest/planning/stories/3-1-replace-archived-goexif-library.md",
+          "_cobolt-output/latest/planning/stories/4-1-structured-logging-with-slog.md",
+          "_cobolt-output/latest/planning/stories/4-2-resolve-backend-todo-fixme-markers.md",
+          "_cobolt-output/latest/planning/stories/4-3-resolve-frontend-todo-fixme-markers.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/story-tracker.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/system-architecture.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/test-strategy.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/traceability-matrix.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/trd.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/trd-gap-findings.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/ux-design-specification.md",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/ux-tracker.json",
+          "_cobolt-output/runs/2026-04-15/run-001/planning/wireframes-and-user-flows.md"
+        ]
+      }
+    },
+    "dispatchDepth": 0
+  },
+  "prQueue": {
+    "watchedRepos": [],
+    "active": null,
+    "queued": [],
+    "completed": [],
+    "lastPollAt": null,
+    "pollIntervalMinutes": 5
+  },
+  "resilience": {
+    "escalations": 0,
+    "lastEscalation": null,
+    "hardEscalations": 0,
+    "autoRecoveries": 0
+  },
   "flags": {
-    "generateSkills": false,
+    "tddMode": "sequential",
+    "useWorktrees": true,
+    "generateSkills": true,
+    "autonomous": false,
     "hasUI": true
+  },
+  "designMCP": {
+    "stitchProjectId": null,
+    "stitchProjectTitle": null,
+    "stitchDesignSystemId": null,
+    "figmaFileId": null,
+    "figmaFileUrl": null,
+    "createdAt": null,
+    "createdByMilestone": null
   },
   "playwright": {
     "installed": true,
@@ -14,97 +138,43 @@
     "lastSmokeTest": "2026-04-13T08:48:48.2094674Z",
     "smokeTestPassed": true
   },
-  "initCheckpoints": {
-    "detect-configure": "completed",
-    "create-directories": "completed",
-    "create-config": "completed",
-    "generate-docker": "completed",
-    "generate-playwright": "completed",
-    "install-quality": "completed",
-    "generate-skills": "skipped",
-    "create-claude-md": "completed"
+  "metrics": {
+    "stages": {},
+    "crossMilestoneSmokeFailures": 0,
+    "contractViolations": 0,
+    "behaviorCoverageGaps": 0,
+    "fixLoopPlateaus": 0,
+    "perfBudgetExceeded": 0,
+    "productionReadyScore": {}
   },
-  "lastUpdated": "2026-04-14T08:22:51.418Z",
-  "pipeline": {
-    "currentStage": "pre-plan",
-    "infra_verified": true,
-    "infra_started": true,
-    "infra_healthy": true,
-    "teamActive": false,
-    "stages": {
-      "S1-S4": {
-        "filesWritten": [
-          "_cobolt-output/runs/2026-04-14/run-001/planning/agent-grounding-and-anti-hallucination.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/api-contracts.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/architecture.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/architecture-decisions.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/capability-edge-proof-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/capability-graph.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/cross-milestone-blocked-tasks.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/data-model-spec.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/delivery-plan.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-register.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-tracker.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/deterministic-quality-gates.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/domain-knowledge-base.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/engineering-quality-standards.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/enriched-requirements.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/epics.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-architecture-delta.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-coverage-matrix.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-epics.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-gap-report.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-prd.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-readiness-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-registry.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/feature-service-blueprints.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/frontend-completeness-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/implicit-requirements.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/issue-and-blocker-tracker.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/master-plan.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/milestone-tracker.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/milestones.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase1-product-intent.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-1-gap-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase2-technical-guardrails.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-2-gap-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase3-system-design.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-3-gap-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase4-delivery-breakdown.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-4-gap-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase5-build-authorization.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/phase-5-gap-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/planning-progress.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/prd.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/prd-day2-addendum.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/prd-validation-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/project-knowledge-base.md",
-          "README.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/project-skills-manifest.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/release-readiness-checklist.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/rtm.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/secure-coding-standard.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/security-requirements.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/source-conflicts.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/source-document-consolidation.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/source-gap-summary.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/source-index.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/source-retrieval-map.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/sprint-status.yaml",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/story-tracker.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/surface-impact-matrix.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/system-architecture.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/test-strategy.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/traceability-matrix.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/trd.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/trd-gap-findings.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/ux-design-specification.md",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/ux-tracker.json",
-          "_cobolt-output/runs/2026-04-14/run-001/planning/wireframes-and-user-flows.md"
-        ]
-      }
+  "lastUpdated": "2026-04-15T11:35:28.916Z",
+  "resolvedRoot": "/Users/madhuthota/merupuai/rawdrive/RawDrive",
+  "initCheckpoints": {
+    "detect-configure": {
+      "completedAt": "2026-04-15T10:23:50.612Z"
+    },
+    "create-directories": {
+      "completedAt": "2026-04-15T10:23:50.619Z"
+    },
+    "create-config": {
+      "completedAt": "2026-04-15T10:23:50.637Z"
+    },
+    "generate-docker": {
+      "completedAt": "2026-04-15T10:23:50.650Z"
+    },
+    "generate-playwright": {
+      "completedAt": "2026-04-15T10:23:50.659Z"
+    },
+    "install-quality": {
+      "completedAt": "2026-04-15T10:23:50.666Z"
+    },
+    "generate-skills": {
+      "completedAt": "2026-04-15T10:23:50.669Z",
+      "skipped": true,
+      "reason": "deferred to interactive init workflow"
+    },
+    "create-claude-md": {
+      "completedAt": "2026-04-15T10:23:50.671Z"
     }
   },
   "checkpoints": {
@@ -156,7 +226,7 @@
   },
   "build": {
     "version": "2.1.0",
-    "currentMilestone": "M35",
+    "currentMilestone": "M36",
     "autoMode": true,
     "milestoneLoop": {
       "autoMode": true,
@@ -172,7 +242,7 @@
       ],
       "totalMilestones": 2
     },
-    "currentStep": "08-milestone-complete",
+    "currentStep": "03-tdd-green",
     "startedAt": "2026-04-14T00:26:02Z",
     "stepsCompleted": [
       "00-preflight",
@@ -198,39 +268,43 @@
       "round-02-core",
       "round-03-api",
       "round-04-frontend"
-    ]
+    ],
+    "tddPhase": "green"
   },
   "planning": {
-    "mode": "feature"
+    "auto": 1,
+    "enhance": 1,
+    "scope": "enterprise",
+    "rigorous": 0
   },
   "planningArtifacts": {
     "agentGrounding": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/agent-grounding-and-anti-hallucination.md",
-      "size": 1543,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/agent-grounding-and-anti-hallucination.md",
+      "size": 1303,
       "producedBy": "cobolt-create-test-strategy",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "apiContracts": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/api-contracts.md",
-      "size": 5970,
-      "producedBy": "cobolt-create-api-contracts",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/api-contracts.md",
+      "size": 1077,
+      "producedBy": "cobolt-create-architecture",
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "architecture": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/architecture.md",
-      "size": 2262,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/architecture.md",
+      "size": 1931,
       "producedBy": "cobolt-create-architecture",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "architectureDecisions": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/architecture-decisions.md",
-      "size": 3525,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/architecture-decisions.md",
+      "size": 2649,
       "producedBy": "cobolt-create-architecture-decisions",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "capabilityEdgeProofReport": {
       "exists": true,
@@ -255,66 +329,66 @@
     },
     "dataModelSpec": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/data-model-spec.md",
-      "size": 2677,
-      "producedBy": "cobolt-create-data-model",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/data-model-spec.md",
+      "size": 987,
+      "producedBy": "cobolt-create-architecture",
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "deliveryPlan": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/delivery-plan.md",
-      "size": 8044,
-      "producedBy": "cobolt-create-delivery-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/delivery-plan.md",
+      "size": 1609,
+      "producedBy": "cobolt-create-architecture",
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "dependencyRegister": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-register.md",
-      "size": 3672,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/dependency-register.md",
+      "size": 1264,
       "producedBy": "cobolt-create-dependency-register",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "dependencyTracker": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/dependency-tracker.json",
-      "size": 1098,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/dependency-tracker.json",
+      "size": 497,
       "producedBy": "cobolt-create-dependency-register",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "deterministicQualityGates": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/deterministic-quality-gates.json",
-      "size": 2433,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/deterministic-quality-gates.json",
+      "size": 1274,
       "producedBy": "cobolt-create-test-strategy",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "domainKnowledgeBase": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/domain-knowledge-base.md",
-      "size": 3550,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/domain-knowledge-base.md",
+      "size": 1578,
       "producedBy": "cobolt-create-domain-knowledge",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "engineeringQualityStandards": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/engineering-quality-standards.md",
-      "size": 1250,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/engineering-quality-standards.md",
+      "size": 1540,
       "producedBy": "cobolt-create-engineering-standards",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "enrichedRequirements": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/enriched-requirements.md",
-      "size": 2218,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/enriched-requirements.md",
+      "size": 2817,
       "producedBy": "cobolt-analyze-features",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "epics": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/epics.md",
-      "size": 89328,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/epics.md",
+      "size": 4567,
       "producedBy": "cobolt-create-epics-and-stories",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "featureArchitectureDelta": {
       "exists": true,
@@ -325,10 +399,10 @@
     },
     "featureCoverageMatrix": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-coverage-matrix.json",
-      "size": 6656,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/feature-coverage-matrix.json",
+      "size": 23807,
       "producedBy": "cobolt-feature-coverage",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "featureEpics": {
       "exists": true,
@@ -339,10 +413,10 @@
     },
     "featureGapReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-gap-report.md",
-      "size": 272,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/feature-gap-report.md",
+      "size": 619,
       "producedBy": "cobolt-feature-coverage",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "featurePrd": {
       "exists": true,
@@ -353,24 +427,24 @@
     },
     "featureReadinessReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-readiness-report.json",
-      "size": 22745,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/feature-readiness-report.json",
+      "size": 94553,
       "producedBy": "cobolt-feature-coverage",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "featureRegistry": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-registry.json",
-      "size": 15073,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/feature-registry.json",
+      "size": 19812,
       "producedBy": "cobolt-analyze-features",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "featureServiceBlueprints": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/feature-service-blueprints.md",
-      "size": 6807,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/feature-service-blueprints.md",
+      "size": 1377,
       "producedBy": "cobolt-analyze-features",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "frontendCompletenessReport": {
       "exists": true,
@@ -381,199 +455,199 @@
     },
     "implicitRequirements": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/implicit-requirements.md",
-      "size": 5874,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/implicit-requirements.md",
+      "size": 2316,
       "producedBy": "cobolt-extract-implicit-reqs",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "issueTracker": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/issue-and-blocker-tracker.json",
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/issue-and-blocker-tracker.json",
       "size": 478,
       "producedBy": "cobolt-create-milestone-trackers",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "masterPlan": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/master-plan.md",
-      "size": 5479,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/master-plan.md",
+      "size": 2222,
       "producedBy": "cobolt-master-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "milestoneTracker": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/milestone-tracker.json",
-      "size": 20398,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/milestone-tracker.json",
+      "size": 2669,
       "producedBy": "cobolt-create-milestone-trackers",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "milestones": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/milestones.md",
-      "size": 26023,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/milestones.md",
+      "size": 1124,
       "producedBy": "cobolt-decompose-milestones",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase1Checkpoint": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase1-product-intent.json",
-      "size": 185,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase1-product-intent.json",
+      "size": 311,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase1GapReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-1-gap-report.json",
-      "size": 303,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/phase-1-gap-report.json",
+      "size": 263,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase2Checkpoint": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase2-technical-guardrails.json",
-      "size": 189,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase2-technical-guardrails.json",
+      "size": 355,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase2GapReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-2-gap-report.json",
-      "size": 303,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/phase-2-gap-report.json",
+      "size": 263,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase3Checkpoint": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase3-system-design.json",
-      "size": 187,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase3-system-design.json",
+      "size": 429,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase3GapReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-3-gap-report.json",
-      "size": 303,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/phase-3-gap-report.json",
+      "size": 263,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase4Checkpoint": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase4-delivery-breakdown.json",
-      "size": 473,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase4-delivery-breakdown.json",
+      "size": 397,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase4GapReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-4-gap-report.json",
-      "size": 303,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/phase-4-gap-report.json",
+      "size": 263,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase5Checkpoint": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/phase5-build-authorization.json",
-      "size": 161,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/phase5-build-authorization.json",
+      "size": 136,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "phase5GapReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/phase-5-gap-report.json",
-      "size": 303,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/phase-5-gap-report.json",
+      "size": 263,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "planningCheckpoint": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/checkpoints/planning-progress.json",
-      "size": 687,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/checkpoints/planning-progress.json",
+      "size": 160,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "prd": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/prd.md",
-      "size": 9770,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/prd.md",
+      "size": 10174,
       "producedBy": "cobolt-create-prd",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "prdDay2Addendum": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/prd-day2-addendum.md",
-      "size": 2274,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/prd-day2-addendum.md",
+      "size": 882,
       "producedBy": "cobolt-enhance-prd",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "prdValidationReportJson": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/prd-validation-report.json",
-      "size": 1138,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/prd-validation-report.json",
+      "size": 474,
       "producedBy": "cobolt-validate-prd",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "projectKnowledgeBase": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/project-knowledge-base.md",
-      "size": 2050,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/project-knowledge-base.md",
+      "size": 1629,
       "producedBy": "cobolt-create-project-knowledge",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "projectReadme": {
       "exists": true,
       "path": "README.md",
       "size": 10627,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "projectSkillsManifest": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/project-skills-manifest.md",
-      "size": 1246,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/project-skills-manifest.md",
+      "size": 569,
       "producedBy": "cobolt-create-skills-manifest",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "readinessReport": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.md",
-      "size": 1445,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/readiness-report.md",
+      "size": 747,
       "producedBy": "cobolt-check-implementation-readiness",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "readinessReportJson": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/readiness-report.json",
-      "size": 1124,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/readiness-report.json",
+      "size": 548,
       "producedBy": "cobolt-check-implementation-readiness",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "releaseReadinessChecklist": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/release-readiness-checklist.md",
-      "size": 4831,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/release-readiness-checklist.md",
+      "size": 1343,
       "producedBy": "cobolt-create-release-readiness",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "rtm": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/rtm.json",
-      "size": 97548,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/rtm.json",
+      "size": 36047,
       "producedBy": "cobolt-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "secureCodingStandard": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/secure-coding-standard.md",
-      "size": 1359,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/secure-coding-standard.md",
+      "size": 1812,
       "producedBy": "cobolt-create-secure-coding-standard",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "securityRequirements": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/security-requirements.md",
-      "size": 5349,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/security-requirements.md",
+      "size": 2353,
       "producedBy": "cobolt-create-security-reqs",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "sourceConflicts": {
       "exists": true,
@@ -584,17 +658,17 @@
     },
     "sourceDocumentConsolidation": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-document-consolidation.md",
-      "size": 8713,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/source-document-consolidation.md",
+      "size": 3199,
       "producedBy": "cobolt-create-prd / cobolt-analyze-features",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "sourceGapSummary": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/source-gap-summary.md",
-      "size": 5006,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/source-gap-summary.md",
+      "size": 659,
       "producedBy": "cobolt-cli-plan",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "sourceIndex": {
       "exists": true,
@@ -612,17 +686,17 @@
     },
     "sprintStatus": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/sprint-status.yaml",
-      "size": 3783,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/sprint-status.yaml",
+      "size": 1998,
       "producedBy": "cobolt-sprint-planning",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "storyTracker": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/story-tracker.json",
-      "size": 18982,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/story-tracker.json",
+      "size": 5930,
       "producedBy": "cobolt-create-milestone-trackers",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "surfaceImpactMatrix": {
       "exists": true,
@@ -633,60 +707,138 @@
     },
     "systemArchitecture": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/system-architecture.md",
-      "size": 11939,
-      "producedBy": "cobolt-create-system-architecture",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/system-architecture.md",
+      "size": 2237,
+      "producedBy": "cobolt-create-architecture",
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "testStrategy": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/test-strategy.md",
-      "size": 4622,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/test-strategy.md",
+      "size": 1803,
       "producedBy": "cobolt-create-test-strategy",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "traceabilityMatrix": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/traceability-matrix.md",
-      "size": 750,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/traceability-matrix.md",
+      "size": 10646,
       "producedBy": "cobolt-create-traceability-matrix",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "trd": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/trd.md",
-      "size": 9348,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/trd.md",
+      "size": 2585,
       "producedBy": "cobolt-create-trd",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "trdGapFindings": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/trd-gap-findings.md",
-      "size": 975,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/trd-gap-findings.md",
+      "size": 371,
       "producedBy": "cobolt-create-trd",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "uxDesign": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/ux-design-specification.md",
-      "size": 9361,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/ux-design-specification.md",
+      "size": 818,
       "producedBy": "cobolt-create-ux-design",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "uxTracker": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/ux-tracker.json",
-      "size": 2772,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/ux-tracker.json",
+      "size": 95,
       "producedBy": "cobolt-create-dependency-register",
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "wireframesAndUserFlows": {
       "exists": true,
-      "path": "_cobolt-output/runs/2026-04-14/run-001/planning/wireframes-and-user-flows.md",
-      "size": 4481,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/wireframes-and-user-flows.md",
+      "size": 865,
       "producedBy": "cobolt-create-wireframes",
-      "timestamp": "2026-04-14T00:14:32.509Z"
-    }
+      "timestamp": "2026-04-15T11:30:20.073Z"
+    },
+    "boundedContexts": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/bounded-contexts.json",
+      "size": 443,
+      "producedBy": "cobolt-decompose-bounded-contexts",
+      "timestamp": "2026-04-15T11:30:20.073Z"
+    },
+    "codebaseResearch": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/codebase-research.md",
+      "size": 6348,
+      "producedBy": "cobolt-plan",
+      "timestamp": "2026-04-15T11:30:20.073Z"
+    },
+    "crossMilestoneAnalysis": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/cross-milestone-analysis.md",
+      "size": 1467,
+      "producedBy": "cobolt-create-cross-milestone-analysis",
+      "timestamp": "2026-04-15T11:30:20.073Z"
+    },
+    "prdValidation": {
+      "exists": true,
+      "path": "_cobolt-output/runs/2026-04-15/run-001/planning/prd-validation-report.md",
+      "size": 1440,
+      "producedBy": "cobolt-validate-prd",
+      "timestamp": "2026-04-15T11:30:20.073Z"
+    },
+    "storyFiles": [
+      {
+        "key": "E1-S1",
+        "path": "_cobolt-output/latest/planning/stories/1-1-remove-jwt-secret-hardcoded-default.md",
+        "size": 4453,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E1-S2",
+        "path": "_cobolt-output/latest/planning/stories/1-2-delete-local-storage-driver.md",
+        "size": 2150,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E2-S1",
+        "path": "_cobolt-output/latest/planning/stories/2-1-create-shared-context-keys-package.md",
+        "size": 2453,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E2-S2",
+        "path": "_cobolt-output/latest/planning/stories/2-2-distributed-rate-limiter-via-valkey.md",
+        "size": 2998,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E3-S1",
+        "path": "_cobolt-output/latest/planning/stories/3-1-replace-archived-goexif-library.md",
+        "size": 2461,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E4-S1",
+        "path": "_cobolt-output/latest/planning/stories/4-1-structured-logging-with-slog.md",
+        "size": 2584,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E4-S2",
+        "path": "_cobolt-output/latest/planning/stories/4-2-resolve-backend-todo-fixme-markers.md",
+        "size": 1876,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      },
+      {
+        "key": "E4-S3",
+        "path": "_cobolt-output/latest/planning/stories/4-3-resolve-frontend-todo-fixme-markers.md",
+        "size": 1596,
+        "timestamp": "2026-04-15T11:30:20.073Z"
+      }
+    ]
   },
   "gates": {
     "planning-regroup": {
@@ -699,17 +851,37 @@
       "appliedCount": 0,
       "pendingCount": 0,
       "invalidCount": 0,
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "planning-artifacts": {
       "passed": false,
       "gate_name": "planning-artifacts",
-      "registered": 69,
-      "requiredPresent": 6,
+      "registered": 63,
+      "requiredPresent": 59,
       "requiredMissing": 1,
-      "timestamp": "2026-04-14T00:14:32.509Z"
+      "timestamp": "2026-04-15T11:30:20.073Z"
     }
   },
   "currentMilestone": "M35",
-  "stage": "completed"
+  "stage": "completed",
+  "_integrity": {
+    "sha256": "6ce0f62c5c28aecb93ab4748265e8394484b6573bd7fbd6aa669b8a697e81042",
+    "verifiedAt": "2026-04-15T10:23:50.671Z"
+  },
+  "gitRemote": "git@github.com:merupuai/RawDrive.git",
+  "planningProgress": {
+    "cobolt_create_story": {
+      "completedAt": "2026-04-15T11:13:27.882Z",
+      "phase": 5
+    }
+  },
+  "mode": "rigorous",
+  "productionTrack": {
+    "autoImpliesRigorous": true,
+    "updatedAt": "2026-04-15T11:16:42.766Z"
+  },
+  "infra": {
+    "status": "verified",
+    "target": "dev"
+  }
 }
