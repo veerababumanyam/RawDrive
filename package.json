@@ -16,10 +16,14 @@
     "test:frontend": "cd frontend && pnpm test",
     "test:backend": "cd backend && go test ./... -count=1 -timeout 120s",
     "lint": "cd frontend && pnpm lint",
+    "uat": "NODE_PATH=./node_modules node tools/cobolt-uat.js run --milestone M39 --mode build --base-url http://localhost:3000 --json",
     "version:check": "node -e \"console.log(require('./package.json').version)\""
   },
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.54.0"
   }
 }
