@@ -375,7 +375,13 @@ export default function AdminAuditLogsPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const fetchLogs = useCallback(async (f: FilterState) => {
-    const token = getStoredAccessToken();
+    let token = getStoredAccessToken();
+    if (!token) {
+      const { refreshAuthSession } = await import("@/lib/auth");
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      token = await refreshAuthSession(API_BASE);
+    }
+    if (!token) { setError("Session expired. Please log in again."); setLoading(false); return; }
     setLoading(true);
     try {
       const params: Record<string, string> = { limit: "1000" };
@@ -389,7 +395,7 @@ export default function AdminAuditLogsPage() {
       setTotal(res.total_count);
       setError(null);
     } catch {
-      setError("Failed to load audit logs");
+      setError("Failed to load audit logs. Try refreshing the page.");
       setLogs([]);
     } finally {
       setLoading(false);

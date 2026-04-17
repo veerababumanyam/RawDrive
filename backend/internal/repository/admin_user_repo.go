@@ -157,6 +157,11 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 		where = append(where, fmt.Sprintf("u.platform_role = $%d", idx))
 		args = append(args, f.Role)
 		idx++
+	} else {
+		// Exclude dealers from the general user list — they have their own
+		// management screen (/admin/dealers). Only show them when the role
+		// filter explicitly requests "dealer".
+		where = append(where, "u.platform_role != 'dealer'")
 	}
 	if f.Status != "" {
 		where = append(where, fmt.Sprintf("u.status = $%d", idx))
