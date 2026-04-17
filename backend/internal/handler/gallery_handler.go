@@ -307,6 +307,36 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if value, ok := raw["download_enabled"]; ok {
+		if err := json.Unmarshal(value, &gallery.DownloadEnabled); err != nil {
+			http.Error(w, `{"error":"invalid download_enabled"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if value, ok := raw["sort_preference"]; ok {
+		if err := json.Unmarshal(value, &gallery.SortPreference); err != nil {
+			http.Error(w, `{"error":"invalid sort_preference"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if value, ok := raw["max_selections"]; ok {
+		if err := json.Unmarshal(value, &gallery.MaxSelections); err != nil {
+			http.Error(w, `{"error":"invalid max_selections"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if value, ok := raw["expires_at"]; ok {
+		if err := json.Unmarshal(value, &gallery.ExpiresAt); err != nil {
+			http.Error(w, `{"error":"invalid expires_at"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if value, ok := raw["whatsapp_template"]; ok {
+		if err := json.Unmarshal(value, &gallery.WhatsappTemplate); err != nil {
+			http.Error(w, `{"error":"invalid whatsapp_template"}`, http.StatusBadRequest)
+			return
+		}
+	}
 	for _, field := range []string{"primary_contact_id", "contact_id", "project_id", "event_id", "deal_id", "invoice_id"} {
 		present, value, err := parseOptionalUUIDRaw(raw, field)
 		if err != nil {
