@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
+import { useAdminFetch } from "@/hooks/use-admin-fetch";
 import {
   listUsers,
   listWorkspaces,
@@ -45,7 +46,8 @@ interface DashboardData {
 }
 
 export default function AdminDashboardPage() {
-  const token = getStoredAccessToken();
+  const { ready, getToken } = useAdminFetch();
+  const token = ready ? getToken() : "";
   const requestKey = token ? "dashboard" : "unauthenticated";
   const [requestState, setRequestState] = useState<{
     key: string;
