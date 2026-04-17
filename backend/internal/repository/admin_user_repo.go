@@ -259,7 +259,7 @@ func (r *AdminUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminUserDe
 	if err != nil {
 		return nil, fmt.Errorf("admin user get: %w", err)
 	}
-	detail, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[AdminUserDetail])
+	detail, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[AdminUserDetail])
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrNotFound
@@ -304,7 +304,7 @@ func (r *AdminUserRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status s
 	}
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO audit_logs (id, actor_id, actor_type, action, resource_type, resource_id, metadata, severity, created_at)
-		VALUES ($1, $2, 'admin', 'user.status_change', 'user', $3, jsonb_build_object('status', $4, 'reason', $5), 'warning', NOW())`,
+		VALUES ($1, $2, 'admin', 'user.status_change', 'user', $3, jsonb_build_object('status', $4::text, 'reason', $5::text), 'warning', NOW())`,
 		uuid.New(), actorID, id, status, reason)
 	return err
 }
@@ -319,7 +319,7 @@ func (r *AdminUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role strin
 	}
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO audit_logs (id, actor_id, actor_type, action, resource_type, resource_id, metadata, severity, created_at)
-		VALUES ($1, $2, 'admin', 'user.role_change', 'user', $3, jsonb_build_object('role', $4), 'critical', NOW())`,
+		VALUES ($1, $2, 'admin', 'user.role_change', 'user', $3, jsonb_build_object('role', $4::text), 'critical', NOW())`,
 		uuid.New(), actorID, id, role)
 	return err
 }
