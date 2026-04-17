@@ -126,7 +126,11 @@ export default function AdminUsersPage() {
       label: "Role",
       sortable: true,
       filterable: true,
-      filterOptions: ["super_admin", "admin", "photographer", "dealer", "client", "team_member", "user"],
+      // QA #44: role filter must mirror the DB CHECK constraint exactly
+      // (backend/internal/database/migrations/035_add_platform_roles.up.sql).
+      // Previously "user" was listed — no rows carry that value, so the
+      // filter returned zero results and looked broken.
+      filterOptions: ["super_admin", "admin", "photographer", "dealer", "client", "team_member"],
       render: (value) => (
         <span className="text-sm text-secondary font-medium">{String(value ?? "")}</span>
       ),

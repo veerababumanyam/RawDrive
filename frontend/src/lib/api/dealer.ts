@@ -95,6 +95,18 @@ export async function rejectDealer(token: string, id: string, reason: string): P
   if (!res.ok) throw new Error("Failed to reject dealer");
 }
 
+// QA #49: admin can suspend an approved dealer (freezes commissions + hides
+// from live listings) without deleting the audit trail. Backend endpoint
+// exists at backend/internal/handler/dealer_handler.go:120 SuspendDealer.
+export async function suspendDealer(token: string, id: string, reason: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${id}/suspend`, {
+    method: "PUT",
+    headers: headers(token),
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) throw new Error("Failed to suspend dealer");
+}
+
 export async function getDealerDashboard(token: string): Promise<Dealer> {
   const res = await fetch(`${API_BASE}/api/v1/dealers/dashboard`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch dealer dashboard");

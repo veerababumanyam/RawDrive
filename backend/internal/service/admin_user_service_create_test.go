@@ -78,7 +78,7 @@ func TestAdminUserService_Create_WeakPasswordRejected(t *testing.T) {
 	weak := "short"
 	_, err := svc.Create(context.Background(), CreateInput{
 		Email:           "u@example.com",
-		Role:            "user",
+		Role:            "photographer",
 		InitialPassword: &weak,
 		ActorID:         uuid.New(),
 	})
@@ -91,7 +91,7 @@ func TestAdminUserService_Create_MissingPathRejected(t *testing.T) {
 	svc := &AdminUserService{}
 	_, err := svc.Create(context.Background(), CreateInput{
 		Email:   "u@example.com",
-		Role:    "user",
+		Role:    "photographer",
 		ActorID: uuid.New(),
 	})
 	if err != ErrMissingPasswordOrInvite {
@@ -116,6 +116,49 @@ func TestAdminUserService_Create_AdminRoleAllowed_EvenPasswordPath(t *testing.T)
 	// Any non-ErrInvalidRole / non-ErrWeakPassword result means validation passed.
 	if err == nil {
 		t.Fatal("expected repo-not-configured error (nil repo), got nil")
+	}
+}
+
+// QA #44: 'user' and 'customer' are NOT valid platform roles (migration 035
+// CHECK constraint forbids them). The previous whitelist mistakenly allowed
+// them, which would have failed the INSERT with a constraint violation.
+func TestAdminUserService_Create_UserRoleRejected(t *testing.T) {
+	svc := &AdminUserService{}
+	_, err := svc.Create(context.Background(), CreateInput{
+		Email:   "u@example.com",
+		Role:    "user",
+		ActorID: uuid.New(),
+	})
+	if err != ErrInvalidRole {
+		t.Fatalf("expected ErrInvalidRole for role='user' (not in DB CHECK), got %v", err)
+	}
+}
+
+func TestAdminUserService_Create_CustomerRoleRejected(t *testing.T) {
+	svc := &AdminUserService{}
+	_, err := svc.Create(context.Background(), CreateInput{
+		Email:   "c@example.com",
+		Role:    "customer",
+		ActorID: uuid.New(),
+	})
+	if err != ErrInvalidRole {
+		t.Fatalf("expected ErrInvalidRole for role='customer' (not in DB CHECK), got %v", err)
+	}
+}
+
+func TestAdminUserService_Create_TeamMemberAndClientAllowed(t *testing.T) {
+	svc := &AdminUserService{}
+	strong := "SuperStr0ng!Pass"
+	for _, role := range []string{"team_member", "client"} {
+		_, err := svc.Create(context.Background(), CreateInput{
+			Email:           role + "@example.com",
+			Role:            role,
+			InitialPassword: &strong,
+			ActorID:         uuid.New(),
+		})
+		if err == ErrInvalidRole {
+			t.Errorf("role=%q must pass the whitelist, got ErrInvalidRole", role)
+		}
 	}
 }
 

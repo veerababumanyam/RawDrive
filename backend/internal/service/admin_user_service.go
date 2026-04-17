@@ -41,12 +41,15 @@ type CreateInput struct {
 
 // E5-S1 role whitelist. superadmin / super_admin are explicitly rejected so
 // privilege escalation via the admin create API is impossible (SEC-F05).
+// QA #44 aligns the whitelist with the users.platform_role CHECK constraint
+// in migration 035 — 'user' and 'customer' are NOT valid platform roles and
+// previously caused the INSERT to fail with a constraint violation.
 var allowedCreateRoles = map[string]struct{}{
 	"admin":        {},
 	"photographer": {},
 	"dealer":       {},
-	"user":         {},
-	"customer":     {},
+	"team_member":  {},
+	"client":       {},
 }
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)

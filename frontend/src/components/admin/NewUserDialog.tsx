@@ -8,7 +8,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 // flows, rejects superadmin role at the UI by not offering it, and surfaces
 // backend errors (invalid email, duplicate, weak password) inline.
 
-type Role = "admin" | "photographer" | "dealer" | "user" | "customer";
+type Role = "admin" | "photographer" | "dealer" | "team_member" | "client";
 
 interface NewUserDialogProps {
   open: boolean;
@@ -16,7 +16,7 @@ interface NewUserDialogProps {
   onCreated?: () => void;
 }
 
-const ALLOWED_ROLES: Role[] = ["admin", "photographer", "dealer", "user", "customer"];
+const ALLOWED_ROLES: Role[] = ["admin", "photographer", "dealer", "team_member", "client"];
 
 export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialogProps) {
   const [email, setEmail] = useState("");

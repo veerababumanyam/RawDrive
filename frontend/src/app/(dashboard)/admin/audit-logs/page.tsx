@@ -107,15 +107,19 @@ function DetailPanel({
           </div>
 
           {/* Key fields */}
+          {/* QA #53: Actor and User Agent hold emails / UUIDs / long UA
+              strings that were being truncated at the ellipsis, hiding
+              the very data an admin is auditing. Use the mono (break-all)
+              variant so the full value wraps within the cell. */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Actor" value={entry.actor_email || entry.actor_id} />
+            <Field label="Actor" value={entry.actor_email || entry.actor_id} mono />
             <Field label="Actor Type" value={entry.actor_type || "—"} />
             <Field label="Action" value={entry.action} mono />
             <Field label="Resource Type" value={entry.resource_type || "—"} />
             <Field label="Resource ID" value={entry.resource_id || "—"} mono />
             <Field label="Workspace ID" value={entry.workspace_id || "—"} mono />
             <Field label="IP Address" value={entry.ip_address || "—"} mono />
-            <Field label="User Agent" value={entry.user_agent || "—"} className="col-span-2" />
+            <Field label="User Agent" value={entry.user_agent || "—"} mono className="col-span-2" />
           </div>
 
           {/* Metadata */}

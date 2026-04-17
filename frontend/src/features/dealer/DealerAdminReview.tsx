@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { listDealers, approveDealer, rejectDealer, type Dealer } from "@/lib/api/dealer";
+import { listDealers, approveDealer, rejectDealer, suspendDealer, type Dealer } from "@/lib/api/dealer";
 import { getStoredAccessToken } from "@/lib/auth";
 
 // Public GET /api/v1/states returns a sorted list of Indian states, already
@@ -71,6 +71,21 @@ export default function DealerAdminReview() {
     }
   };
 
+  // QA #49: inline suspend action for approved dealers. Uses window.prompt
+  // for the reason (the backend requires a non-empty reason). A dialog would
+  // be preferable — tracked as UX polish in a follow-up.
+  const handleSuspend = async (id: string) => {
+    const reason = window.prompt("Suspension reason:")?.trim();
+    if (!reason) return;
+    try {
+      const token = getStoredAccessToken();
+      await suspendDealer(token, id, reason);
+      setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "suspended" as const } : d)));
+    } catch (err) {
+      console.error("Suspend failed:", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -106,6 +121,20 @@ export default function DealerAdminReview() {
                 className="btn-primary px-4 min-h-[44px] rounded-full text-sm"
               >
                 Review
+              </button>
+            </div>
+          )}
+
+          {/* QA #49: suspend lives on the approved row so admins can freeze
+              commissions without deleting history. Suspended dealers
+              require a manual unsuspend via the backend API. */}
+          {dealer.status === "approved" && (
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleSuspend(dealer.id)}
+                className="bg-feedback-warning/20 text-feedback-warning px-4 py-2 rounded-full min-h-[44px] text-sm font-medium hover:bg-feedback-warning/30 transition-colors"
+              >
+                Suspend dealer
               </button>
             </div>
           )}
