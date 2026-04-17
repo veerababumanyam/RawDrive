@@ -2,7 +2,7 @@
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "brownfield",
   "runtime": "ide-plugin",
-  "currentStage": "build",
+  "currentStage": "shipped",
   "version": "0.13.1",
   "scope": "mvp",
   "skills": [
@@ -19,11 +19,11 @@
   "customAgentsCount": 0,
   "agentTeamsCount": 0,
   "pipeline": {
-    "currentStage": "pre-plan",
+    "currentStage": "complete",
     "infra_verified": true,
     "infra_started": true,
     "infra_healthy": true,
-    "teamActive": true,
+    "teamActive": false,
     "stages": {
       "S1-S4": {
         "filesWritten": [
@@ -100,7 +100,8 @@
         ]
       }
     },
-    "dispatchDepth": 0
+    "dispatchDepth": 0,
+    "autonomousStopBlock": 0
   },
   "prQueue": {
     "watchedRepos": [],
@@ -147,7 +148,7 @@
     "perfBudgetExceeded": 0,
     "productionReadyScore": {}
   },
-  "lastUpdated": "2026-04-15T11:35:28.916Z",
+  "lastUpdated": "2026-04-17T13:08:04.697Z",
   "resolvedRoot": "/Users/madhuthota/merupuai/rawdrive/RawDrive",
   "initCheckpoints": {
     "detect-configure": {
@@ -226,7 +227,6 @@
   },
   "build": {
     "version": "2.1.0",
-    "currentMilestone": "M36",
     "autoMode": true,
     "milestoneLoop": {
       "autoMode": true,
@@ -242,7 +242,7 @@
       ],
       "totalMilestones": 2
     },
-    "currentStep": "03-tdd-green",
+    "currentStep": "complete",
     "startedAt": "2026-04-14T00:26:02Z",
     "stepsCompleted": [
       "00-preflight",
@@ -269,7 +269,7 @@
       "round-03-api",
       "round-04-frontend"
     ],
-    "tddPhase": "green"
+    "status": "complete"
   },
   "planning": {
     "auto": 1,

@@ -82,3 +82,5 @@ rawdrive-secrets.env
 /lib
 /source
 /tools
+env
+env.cobolt
