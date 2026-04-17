@@ -387,14 +387,30 @@ export default function AdminAuditLogsPage() {
     }
     if (!token) { setError("Session expired. Please log in again."); setLoading(false); return; }
     setLoading(true);
+    const params: Record<string, string> = { limit: "1000" };
+    if (f.dateFrom) params.date_from = f.dateFrom;
+    if (f.dateTo) params.date_to = f.dateTo;
+    if (f.actorId) params.actor_id = f.actorId;
+    if (f.ipAddress) params.ip_address = f.ipAddress;
+    if (f.severity) params.severity = f.severity;
+    // QA #59: one-shot retry on transient failure. The admin audit log
+    // endpoint occasionally 5xx's under load (Valkey rate-limit false
+    // positive, pgxpool saturation). Single 500ms-delayed retry catches
+    // most of those without compounding load; persistent failures fall
+    // through to the existing error banner.
+    const fetchOnce = () => listAuditLogs(token!, params);
     try {
-      const params: Record<string, string> = { limit: "1000" };
-      if (f.dateFrom) params.date_from = f.dateFrom;
-      if (f.dateTo) params.date_to = f.dateTo;
-      if (f.actorId) params.actor_id = f.actorId;
-      if (f.ipAddress) params.ip_address = f.ipAddress;
-      if (f.severity) params.severity = f.severity;
-      const res = await listAuditLogs(token, params);
+      let res;
+      try {
+        res = await fetchOnce();
+      } catch (firstErr) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          res = await fetchOnce();
+        } catch {
+          throw firstErr;
+        }
+      }
       setLogs(res.items as AuditLogRow[]);
       setTotal(res.total_count);
       setError(null);

@@ -32,6 +32,11 @@ export function InquiryPipeline() {
   // meant every new account saw seven identical "No inquiries" columns in
   // a ~1960px-wide horizontal scroller â€” noisy and confusing.
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  // QA #29: per-inquiry detail drawer — clicking a row opens a side panel
+  // with the full lead details so the portal shows more than top-level
+  // totals. Previously there was no drill-down path and the portal looked
+  // like the metrics were broken ("0 in breakdown").
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -296,6 +301,15 @@ export function InquiryPipeline() {
           {(activeStage ? leads.filter((l) => l.stage === activeStage) : leads).map((lead) => (
             <div
               key={lead.id}
+              onClick={() => setSelectedLead(lead)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedLead(lead);
+                }
+              }}
               className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 border-b border-border-default last:border-b-0 hover:bg-surface-sunken/40 transition-colors cursor-pointer"
             >
               <div>
@@ -341,6 +355,15 @@ export function InquiryPipeline() {
                 {(groupedLeads[stage] || []).map((lead) => (
                   <div
                     key={lead.id}
+                    onClick={() => setSelectedLead(lead)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedLead(lead);
+                      }
+                    }}
                     className="bg-surface-raised rounded-xl p-3 border border-border-default hover:border-accent/30 transition-colors cursor-pointer"
                   >
                     <p className="font-medium text-text-primary text-sm">{lead.name}</p>
@@ -365,6 +388,101 @@ export function InquiryPipeline() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* QA #29: per-inquiry detail drawer. Opens when a row/card is
+          clicked. Shows every field from the Lead record — contact,
+          event, source, stage, budget, notes, created/updated timestamps.
+          Close on backdrop click or Escape. */}
+      {selectedLead && (
+        <div
+          className="fixed inset-0 z-50 flex"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Inquiry detail"
+        >
+          <div
+            className="flex-1 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSelectedLead(null)}
+            aria-hidden
+          />
+          <aside className="w-full max-w-md bg-surface-raised border-l border-border-default overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-text-primary">
+                {selectedLead.name}
+              </h3>
+              <button
+                onClick={() => setSelectedLead(null)}
+                aria-label="Close"
+                className="rounded-full p-1 hover:bg-surface-sunken/40"
+              >
+                ✕
+              </button>
+            </div>
+            <span
+              className={cn(
+                "capitalize",
+                leadStageClasses[selectedLead.stage] || "status-badge status-badge--neutral",
+              )}
+            >
+              {selectedLead.stage}
+            </span>
+            <dl className="text-sm space-y-2">
+              {selectedLead.email && (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Email</dt>
+                  <dd className="text-text-primary font-mono text-xs break-all">{selectedLead.email}</dd>
+                </div>
+              )}
+              {selectedLead.phone && (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Phone</dt>
+                  <dd className="text-text-primary font-mono text-xs">{selectedLead.phone}</dd>
+                </div>
+              )}
+              {selectedLead.event_type && (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Event type</dt>
+                  <dd className="text-text-primary capitalize">{selectedLead.event_type}</dd>
+                </div>
+              )}
+              {selectedLead.source && (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Source</dt>
+                  <dd className="text-text-primary capitalize">{selectedLead.source}</dd>
+                </div>
+              )}
+              {selectedLead.budget_paisa ? (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Budget</dt>
+                  <dd className="text-text-primary">
+                    ₹{(selectedLead.budget_paisa / 100).toLocaleString("en-IN")}
+                  </dd>
+                </div>
+              ) : null}
+              {selectedLead.notes && (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Notes</dt>
+                  <dd className="text-text-primary whitespace-pre-wrap">{selectedLead.notes}</dd>
+                </div>
+              )}
+              {selectedLead.created_at && (
+                <div>
+                  <dt className="text-xs text-text-tertiary">Created</dt>
+                  <dd className="text-text-primary text-xs">
+                    {new Date(selectedLead.created_at).toLocaleString("en-IN")}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <a
+              href={`/crm/projects?create=true&lead=${selectedLead.id}`}
+              className="block w-full text-center rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90"
+            >
+              Convert to project
+            </a>
+          </aside>
         </div>
       )}
     </div>

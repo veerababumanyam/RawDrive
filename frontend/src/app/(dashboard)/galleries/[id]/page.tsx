@@ -707,8 +707,44 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </button>
                 {albums.map((album) => {
                   const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
+                  // QA #18: per-album drop target. When a user drags selected
+                  // assets (or a native file list) onto an album chip, assign
+                  // those assets to the album via addAlbumAssets. This lets
+                  // photographers re-organize the gallery without leaving the
+                  // page. Native file drops are intentionally ignored here —
+                  // new uploads go through the page-level dropzone; the album
+                  // chip is only a sub-gallery-membership target.
                   return (
-                    <div key={album.id} className="flex shrink-0 items-center gap-1 rounded-lg border border-border-subtle px-1 py-1">
+                    <div
+                      key={album.id}
+                      className="flex shrink-0 items-center gap-1 rounded-lg border border-border-subtle px-1 py-1 transition-colors"
+                      onDragOver={(e) => {
+                        const hasInternal = e.dataTransfer.types.includes("application/x-rawdrive-asset-ids");
+                        if (hasInternal) {
+                          e.preventDefault();
+                          e.currentTarget.classList.add("ring-2", "ring-accent-primary");
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove("ring-2", "ring-accent-primary");
+                      }}
+                      onDrop={async (e) => {
+                        e.currentTarget.classList.remove("ring-2", "ring-accent-primary");
+                        const raw = e.dataTransfer.getData("application/x-rawdrive-asset-ids");
+                        if (!raw) return;
+                        e.preventDefault();
+                        try {
+                          const ids = JSON.parse(raw) as string[];
+                          if (!Array.isArray(ids) || ids.length === 0) return;
+                          const t = getStoredAccessToken();
+                          if (!t) return;
+                          await addAlbumAssets(t, album.id, ids);
+                          await refreshAlbums();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Failed to add photos to sub-gallery");
+                        }
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => setActiveAlbum(album.id)}
@@ -781,6 +817,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     <article
                       key={entry.id}
                       className={cn("surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg relative", bulkMode && entry.asset && selectedAssetIds.has(entry.asset.id) && "ring-2 ring-accent-primary")}
+                      // QA #18: in bulk mode, each tile is draggable. Drop
+                      // target is the album chip above. Carries either the
+                      // whole selection set (when the dragged asset is part
+                      // of the selection) or just this one asset (when
+                      // dragging an unselected tile).
+                      draggable={bulkMode && !!entry.asset}
+                      onDragStart={(e) => {
+                        if (!bulkMode || !entry.asset) return;
+                        const ids = selectedAssetIds.has(entry.asset.id)
+                          ? Array.from(selectedAssetIds)
+                          : [entry.asset.id];
+                        e.dataTransfer.setData("application/x-rawdrive-asset-ids", JSON.stringify(ids));
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                       onClick={() => {
                         if (bulkMode && entry.asset) { toggleAssetSelection(entry.asset.id); return; }
                         const idx = assets.findIndex((a) => a.id === entry.id);

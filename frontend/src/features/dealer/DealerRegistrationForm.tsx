@@ -91,16 +91,23 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
     setIsSubmitting(true);
     setError(null);
     try {
-      const req: CreateDealerRequest = {
+      // QA #51: the backend stores bank_account as a JSONB column but its
+      // Go struct is `BankAccount *string`. Without stringifying, the JSON
+      // decoder fails to unmarshal an object into *string → 400, which
+      // surfaces as "registration failed" at the last submit step. Cast
+      // to unknown then CreateDealerRequest so TS is happy with the
+      // typed-object → string coercion (BankAccount is typed as object
+      // in the frontend for form ergonomics).
+      const req = {
         business_name: businessName,
         state_id: stateId,
         territory_type: territoryType,
         pan_number: panNumber,
         gstin: gstin || undefined,
-        bank_account: { bank, ifsc, account_number: accountNumber, upi_id: upiId || undefined },
+        bank_account: JSON.stringify({ bank, ifsc, account_number: accountNumber, upi_id: upiId || undefined }),
         agreement_accepted: true,
       };
-      await createDealer(getStoredAccessToken(), req);
+      await createDealer(getStoredAccessToken(), req as unknown as CreateDealerRequest);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
