@@ -195,6 +195,14 @@ export async function changeUserRole(token: string, id: string, role: string): P
   await put(token, `/users/${id}/role`, { role });
 }
 
+export async function deleteUser(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/users/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to delete user: ${res.status}`);
+}
+
 // ── Moderation ──
 
 export async function listModerationQueue(token: string, params?: Record<string, string>): Promise<PaginatedResponse<ModerationItem>> {

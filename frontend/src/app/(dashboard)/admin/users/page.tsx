@@ -6,6 +6,8 @@ import {
   listUsers,
   suspendUser,
   reactivateUser,
+  deleteUser,
+  changeUserRole,
   exportUsers,
   type AdminUser,
 } from "@/lib/api/admin";
@@ -69,6 +71,27 @@ export default function AdminUsersPage() {
       fetchUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reactivate user");
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Permanently delete user "${name}"? This action cannot be undone.`)) return;
+    try {
+      const token = getStoredAccessToken();
+      await deleteUser(token, id);
+      fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+    }
+  };
+
+  const handleRoleChange = async (id: string, newRole: string) => {
+    try {
+      const token = getStoredAccessToken();
+      await changeUserRole(token, id, newRole);
+      fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change user role");
     }
   };
 
@@ -143,29 +166,50 @@ export default function AdminUsersPage() {
       headerAlign: "right",
       align: "right",
       render: (_value, row) => {
-        if (row.status === "active") {
-          return (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleSuspend(row.id); }}
-              className="px-3 py-1.5 text-xs rounded-lg bg-feedback-error/10 text-feedback-error hover:bg-feedback-error/20 transition-all font-medium"
-              aria-label={`Suspend ${row.full_name}`}
+        return (
+          <div className="flex items-center gap-1.5 justify-end">
+            {row.status === "active" && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleSuspend(row.id); }}
+                className="px-2.5 py-1 text-xs rounded-lg bg-feedback-error/10 text-feedback-error hover:bg-feedback-error/20 transition-all font-medium"
+                aria-label={`Suspend ${row.full_name}`}
+              >
+                Suspend
+              </button>
+            )}
+            {row.status === "suspended" && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleReactivate(row.id); }}
+                className="px-2.5 py-1 text-xs rounded-lg bg-feedback-success/10 text-feedback-success hover:bg-feedback-success/20 transition-all font-medium"
+                aria-label={`Reactivate ${row.full_name}`}
+              >
+                Reactivate
+              </button>
+            )}
+            <select
+              onClick={(e) => e.stopPropagation()}
+              value={row.platform_role}
+              onChange={(e) => handleRoleChange(row.id, e.target.value)}
+              className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-lg px-2 py-1 text-xs text-on-surface cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
+              aria-label={`Change role for ${row.full_name}`}
             >
-              Suspend
-            </button>
-          );
-        }
-        if (row.status === "suspended") {
-          return (
+              <option value="photographer">Photographer</option>
+              <option value="admin">Admin</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="dealer">Dealer</option>
+              <option value="client">Client</option>
+              <option value="team_member">Team Member</option>
+            </select>
             <button
-              onClick={(e) => { e.stopPropagation(); handleReactivate(row.id); }}
-              className="px-3 py-1.5 text-xs rounded-lg bg-feedback-success/10 text-feedback-success hover:bg-feedback-success/20 transition-all font-medium"
-              aria-label={`Reactivate ${row.full_name}`}
+              onClick={(e) => { e.stopPropagation(); handleDelete(row.id, row.full_name); }}
+              className="px-2.5 py-1 text-xs rounded-lg text-text-tertiary hover:bg-feedback-error/10 hover:text-feedback-error transition-all"
+              aria-label={`Delete ${row.full_name}`}
+              title="Delete user"
             >
-              Reactivate
+              ✕
             </button>
-          );
-        }
-        return null;
+          </div>
+        );
       },
     },
   ];
