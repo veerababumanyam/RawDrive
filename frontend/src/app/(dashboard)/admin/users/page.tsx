@@ -11,6 +11,7 @@ import {
   exportUsers,
   type AdminUser,
 } from "@/lib/api/admin";
+import { requestPasswordReset } from "@/lib/api/auth";
 import { Download } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
@@ -92,6 +93,24 @@ export default function AdminUsersPage() {
       fetchUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to change user role");
+    }
+  };
+
+  // QA #40: admin-initiated password reset.
+  // Triggers the same public /auth/request-password-reset flow that a user
+  // would self-initiate from /forgot-password. The backend sends the reset
+  // OTP to the email on file (via Mailpit in dev, real SMTP in prod). No
+  // admin-specific endpoint is required — the public endpoint is safe to
+  // call with any email and returns 202 regardless (enumeration defense,
+  // SEC-F02). The admin sees a confirmation toast so they know it was sent.
+  const handleSendPasswordReset = async (email: string, name: string) => {
+    if (!confirm(`Send password reset email to ${name} (${email})?`)) return;
+    try {
+      await requestPasswordReset(email);
+      setError(null);
+      alert(`Password reset email sent to ${email}. They can use the link to set a new password.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send password reset");
     }
   };
 
@@ -204,6 +223,21 @@ export default function AdminUsersPage() {
               <option value="client">Client</option>
               <option value="team_member">Team Member</option>
             </select>
+            {/* QA #40: admin can send a password-reset link to the user's
+                email. Uses the shared /auth/request-password-reset flow so
+                the backend (PasswordService) handles OTP mint + rate limit
+                + Mailpit delivery uniformly with the user-initiated flow. */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSendPasswordReset(row.email, row.full_name);
+              }}
+              className="px-2.5 py-1 text-xs rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-all font-medium"
+              aria-label={`Send password reset to ${row.full_name}`}
+              title="Send password reset email"
+            >
+              Reset pw
+            </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleDelete(row.id, row.full_name); }}
               className="px-2.5 py-1 text-xs rounded-lg text-text-tertiary hover:bg-feedback-error/10 hover:text-feedback-error transition-all"

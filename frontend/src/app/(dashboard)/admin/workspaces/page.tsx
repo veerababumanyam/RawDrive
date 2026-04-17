@@ -51,8 +51,13 @@ const columns: ColumnDef<WorkspaceRow>[] = [
     key: "subscription_tier",
     label: "Tier",
     sortable: true,
-    filterable: true,
-    filterOptions: ["Free", "Standard", "Professional", "Enterprise"],
+    // QA #69: filterOptions previously advertised Free/Standard/Pro/Enterprise
+    // but the subscriptions integration is not wired — every workspace
+    // returns null (rendered as "Free"). Selecting any non-Free option
+    // returned zero rows, which read as "filter broken". Disabling the
+    // filter until workspace_subscriptions has real data. Sorting still
+    // works for debugging.
+    filterable: false,
     className: "font-medium text-primary",
     render: (value) => (value as string) || "Free",
   },

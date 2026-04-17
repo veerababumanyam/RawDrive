@@ -201,10 +201,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       }
       setNewAlbumName("");
       setShowAlbumCreate(false);
-      setActiveAlbum(album.id);
+      // QA #17: previously setActiveAlbum fired BEFORE refreshAlbums
+      // resolved, so visibleAssets (filtered by albumAssetIdsByAlbum[activeAlbum])
+      // was computed against an empty map and the sub-gallery appeared
+      // "unopenable" with zero photos. Await refreshAlbums first, THEN
+      // switch the active album — by that point albumAssetIdsByAlbum
+      // contains the new album's asset IDs.
       setSelectedAssetIds(new Set());
       setBulkMode(false);
       await refreshAlbums();
+      setActiveAlbum(album.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create sub-gallery");
     } finally {
