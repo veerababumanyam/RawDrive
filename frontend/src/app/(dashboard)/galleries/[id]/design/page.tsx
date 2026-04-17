@@ -301,6 +301,15 @@ export default function GalleryDesignStudioPage() {
       {/* Top Bar */}
       <header className="flex items-center justify-between px-6 py-3 border-b border-border-subtle backdrop-blur-md bg-surface-overlay">
         <div className="flex items-center gap-3">
+          <a
+            href={`/galleries/${galleryId}`}
+            className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+            Back
+          </a>
           <h1 className="text-lg font-semibold">Gallery Design Studio</h1>
           <span className="text-xs text-text-tertiary">{draftAge}</span>
           {history.canUndo && <span className="text-xs text-text-tertiary">· {history.historySize} changes</span>}
