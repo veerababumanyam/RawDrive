@@ -1,15 +1,3 @@
-/**
- * authFetch — Authenticated fetch wrapper with automatic token refresh.
- *
- * Fixes the pervasive 401 pattern: all API modules call getStoredAccessToken()
- * which returns empty if the session hasn't been established yet, or the token
- * has expired. This wrapper:
- *  1. Attaches the current Bearer token
- *  2. On 401, attempts token refresh via HttpOnly cookie
- *  3. Retries the original request once with the new token
- *  4. On refresh failure, redirects to /login
- */
-
 import {
   getStoredAccessToken,
   refreshAuthSession,
@@ -23,6 +11,10 @@ function resolveUrl(input: string): string {
   return `${API_BASE}${input}`;
 }
 
+/**
+ * Authenticated fetch with automatic token refresh on 401.
+ * Drop-in replacement for fetch() in authenticated contexts.
+ */
 export async function authFetch(
   input: string,
   init: RequestInit = {},
@@ -33,10 +25,8 @@ export async function authFetch(
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(url, { ...init, headers, credentials: "include" });
-
   if (response.status !== 401) return response;
 
-  // Attempt token refresh
   const newToken = await refreshAuthSession(API_BASE);
   if (!newToken) {
     clearAuthTokens();
@@ -44,7 +34,6 @@ export async function authFetch(
     return response;
   }
 
-  // Retry with new token
   const retryHeaders = new Headers(init.headers);
   retryHeaders.set("Authorization", `Bearer ${newToken}`);
   return fetch(url, { ...init, headers: retryHeaders, credentials: "include" });

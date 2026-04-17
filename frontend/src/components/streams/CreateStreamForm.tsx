@@ -19,6 +19,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createStream } from "@/lib/api/streams";
+import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { CheckCircle, XMark, Plus } from "@/components/icons";
@@ -132,7 +133,6 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
 
     setSubmitting(true);
     try {
-      const token = getStoredAccessToken();
       const payload = {
         title: state.title.trim(),
         description: state.description.trim() || undefined,
@@ -144,18 +144,24 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
         client_profile_id: state.client_profile_id || undefined,
         deal_link: state.deal_link || undefined,
         timezone: state.timezone,
-      } as Parameters<typeof createStream>[1];
+      };
 
-      const created = await createStream(token, payload);
+      // Use authFetch for automatic token refresh on 401 (fixes QA #23/#24)
+      const res = await authFetch("/api/v1/streams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 402) { setInsufficientCredits(true); return; }
+        throw new Error(body.error || `Failed to create stream: ${res.status}`);
+      }
+      const created = await res.json();
       const id = (created as { id?: string } | null)?.id;
       if (id) router.push(`/streams/${id}/invite`);
     } catch (err: unknown) {
-      const status = extractStatus(err);
-      if (status === 402) {
-        setInsufficientCredits(true);
-      } else {
-        setFormError(err instanceof Error ? err.message : "Failed to create stream");
-      }
+      setFormError(err instanceof Error ? err.message : "Failed to create stream");
     } finally {
       setSubmitting(false);
     }

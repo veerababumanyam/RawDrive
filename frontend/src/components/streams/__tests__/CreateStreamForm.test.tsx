@@ -10,14 +10,17 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: () => "test-token",
 }));
 
-// Mock streams API so we can intercept createStream calls.
-const createStreamMock = vi.fn();
+// Mock authFetch so we can intercept the direct fetch call.
+const authFetchMock = vi.fn();
+vi.mock("@/lib/api/authFetch", () => ({
+  authFetch: (...args: unknown[]) => authFetchMock(...args),
+}));
+
+// Keep streams mock for backward compat (unused after migration but
+// prevents import errors).
 vi.mock("@/lib/api/streams", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("@/lib/api/streams");
-  return {
-    ...actual,
-    createStream: (...args: unknown[]) => createStreamMock(...args),
-  };
+  return { ...actual };
 });
 
 import { CreateStreamForm } from "../CreateStreamForm";
@@ -30,7 +33,7 @@ function fill(id: string, value: string) {
 describe("CreateStreamForm", () => {
   beforeEach(() => {
     pushMock.mockReset();
-    createStreamMock.mockReset();
+    authFetchMock.mockReset();
   });
 
   it("renders all expected fields", () => {
@@ -55,7 +58,7 @@ describe("CreateStreamForm", () => {
     await waitFor(() => {
       expect(screen.getByTestId("error-title")).toBeTruthy();
     });
-    expect(createStreamMock).not.toHaveBeenCalled();
+    expect(authFetchMock).not.toHaveBeenCalled();
   });
 
   it("shows error for invalid timezone string", async () => {
@@ -67,7 +70,7 @@ describe("CreateStreamForm", () => {
     await waitFor(() => {
       expect(screen.getByTestId("error-timezone")).toBeTruthy();
     });
-    expect(createStreamMock).not.toHaveBeenCalled();
+    expect(authFetchMock).not.toHaveBeenCalled();
   });
 
   it("shows error for invalid calendar URL and deal_link URL", async () => {
@@ -81,11 +84,15 @@ describe("CreateStreamForm", () => {
       expect(screen.getByTestId("error-calendar_event_url")).toBeTruthy();
       expect(screen.getByTestId("error-deal_link")).toBeTruthy();
     });
-    expect(createStreamMock).not.toHaveBeenCalled();
+    expect(authFetchMock).not.toHaveBeenCalled();
   });
 
   it("submits with correct payload shape and navigates on 201", async () => {
-    createStreamMock.mockResolvedValueOnce({ id: "stream-123" });
+    authFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ id: "stream-123" }),
+    });
 
     render(<CreateStreamForm />);
     fill("field-title", "Sharma-Patel Wedding");
@@ -102,11 +109,13 @@ describe("CreateStreamForm", () => {
     fireEvent.click(screen.getByTestId("submit-button"));
 
     await waitFor(() => {
-      expect(createStreamMock).toHaveBeenCalledTimes(1);
+      expect(authFetchMock).toHaveBeenCalledTimes(1);
     });
 
-    const [token, payload] = createStreamMock.mock.calls[0];
-    expect(token).toBe("test-token");
+    const [url, options] = authFetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/streams");
+    expect(options.method).toBe("POST");
+    const payload = JSON.parse(options.body);
     expect(payload).toMatchObject({
       title: "Sharma-Patel Wedding",
       description: "Live coverage",
@@ -126,9 +135,11 @@ describe("CreateStreamForm", () => {
   });
 
   it("shows top up credits CTA on 402 insufficient credits", async () => {
-    const err = new Error("Failed to create stream: 402") as Error & { status?: number };
-    err.status = 402;
-    createStreamMock.mockRejectedValueOnce(err);
+    authFetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 402,
+      json: () => Promise.resolve({ error: "insufficient credits" }),
+    });
 
     render(<CreateStreamForm />);
     fill("field-title", "Short Stream");

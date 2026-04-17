@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { listStreams, deleteStream, type Stream } from "@/lib/api/streams";
+import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +23,12 @@ export default function StreamsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadStreams = () => {
-    const token = getStoredAccessToken();
-    listStreams(token)
+    authFetch("/api/v1/streams")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Failed to list streams: ${res.status}`);
+        const body = await res.json();
+        return Array.isArray(body) ? body : body.streams || [];
+      })
       .then(setStreams)
       .catch((err) => {
         setError(err?.message || "Failed to load streams");
@@ -39,8 +44,7 @@ export default function StreamsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this stream? This action cannot be undone.")) return;
     try {
-      const token = getStoredAccessToken();
-      await deleteStream(token, id);
+      await authFetch(`/api/v1/streams/${id}`, { method: "DELETE" });
       loadStreams();
     } catch {
       setError("Failed to delete stream");

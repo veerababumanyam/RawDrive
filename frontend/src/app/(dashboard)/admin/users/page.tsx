@@ -53,15 +53,23 @@ export default function AdminUsersPage() {
   useEffect(() => { fetchUsers(); }, []);
 
   const handleSuspend = async (id: string) => {
-    const token = getStoredAccessToken();
-    await suspendUser(token, id, "Admin action");
-    fetchUsers();
+    try {
+      const token = getStoredAccessToken();
+      await suspendUser(token, id, "Admin action");
+      fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to suspend user. Check that the user exists and you have admin permissions.");
+    }
   };
 
   const handleReactivate = async (id: string) => {
-    const token = getStoredAccessToken();
-    await reactivateUser(token, id);
-    fetchUsers();
+    try {
+      const token = getStoredAccessToken();
+      await reactivateUser(token, id);
+      fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reactivate user");
+    }
   };
 
   const handleExport = async () => {

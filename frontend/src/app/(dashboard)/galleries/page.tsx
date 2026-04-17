@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { listGalleries, createGallery, deleteGallery, duplicateGallery, type Gallery } from "@/lib/api/galleries";
 import { createContact, listContacts, type Contact } from "@/lib/api/crm";
+import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { galleryStatusClasses, galleryTypeClasses, getAssetPreviewUrl } from "@/lib/dashboard-ui";
@@ -65,8 +66,12 @@ export default function GalleriesPage() {
   };
 
   const refresh = () => {
-    const token = getStoredAccessToken();
-    listGalleries(token)
+    authFetch("/api/v1/galleries")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
+        const body = await res.json();
+        return Array.isArray(body) ? body : body.galleries || [];
+      })
       .then(setGalleries)
       .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
       .finally(() => setLoading(false));
