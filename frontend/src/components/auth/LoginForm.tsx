@@ -137,9 +137,7 @@ export function LoginForm() {
     } catch {
       setError("Network error. Please confirm the API server is running.");
     } finally {
-      if (!error && loading) {
-        setLoading(false); // only reset loading if not redirecting
-      }
+      setLoading(false);
     }
   }
 

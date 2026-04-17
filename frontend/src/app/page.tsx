@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AiMomentSection } from "@/components/landing/AiMomentSection";
+import { AuthRedirect } from "@/components/landing/AuthRedirect";
 import { FinalCta } from "@/components/landing/FinalCta";
 import { GallerySection } from "@/components/landing/GallerySection";
 import { Hero } from "@/components/landing/Hero";
@@ -48,6 +49,7 @@ export const metadata: Metadata = {
 export default function LandingPage() {
   return (
     <div className="landing-root bg-surface text-text-primary selection:bg-accent-muted selection:text-text-primary">
+      <AuthRedirect />
       <Hero />
       <WorkflowPipeline />
       <GallerySection />
