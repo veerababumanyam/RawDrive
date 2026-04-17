@@ -98,7 +98,18 @@ export default function DealerAdminReview() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-text-primary">Dealer Applications</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-text-primary">Dealer Applications</h2>
+        {/* QA #47: point admins to the dealer onboarding flow. New dealers
+            self-register via /dealer/register; admin workflow is
+            approve/reject/suspend from here. */}
+        <a
+          href="/dealer/register"
+          className="text-sm text-accent-secondary hover:underline"
+        >
+          Dealer onboarding flow →
+        </a>
+      </div>
 
       {dealers.map((dealer) => (
         <div key={dealer.id} className="glass-card p-6 space-y-4">
@@ -152,6 +163,22 @@ export default function DealerAdminReview() {
                   className="input-base w-32 min-h-[44px]"
                 />
               </div>
+              {/* QA #48: replaced window.prompt with an inline textarea so
+                  admins can review + edit the rejection reason before
+                  submitting. prompt() was a non-styled native modal that
+                  broke the glass-card aesthetic and didn't allow multiline. */}
+              <div>
+                <label className="text-sm text-text-secondary block mb-1">
+                  Rejection reason (required for reject)
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={2}
+                  placeholder="e.g., PAN verification failed, duplicate territory, etc."
+                  className="input-base w-full text-sm"
+                />
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => handleApprove(dealer.id)}
@@ -160,14 +187,9 @@ export default function DealerAdminReview() {
                   Approve
                 </button>
                 <button
-                  onClick={() => {
-                    const reason = prompt("Rejection reason:");
-                    if (reason) {
-                      setRejectReason(reason);
-                      handleReject(dealer.id);
-                    }
-                  }}
-                  className="bg-feedback-error/20 text-feedback-error px-4 py-2 rounded-full min-h-[44px] text-sm font-medium hover:bg-feedback-error/30 transition-colors"
+                  onClick={() => handleReject(dealer.id)}
+                  disabled={!rejectReason.trim()}
+                  className="bg-feedback-error/20 text-feedback-error px-4 py-2 rounded-full min-h-[44px] text-sm font-medium hover:bg-feedback-error/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Reject
                 </button>
