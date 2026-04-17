@@ -9,6 +9,9 @@ import (
 )
 
 // M6Dependencies holds all dependencies needed for M6 route registration.
+//
+// AuditLogSvc is optional (nil-safe). When provided, admin mutations such as
+// DELETE /api/v1/admin/dealers/{id} (M39 E7-S2) emit audit rows.
 type M6Dependencies struct {
 	DB              *pgxpool.Pool
 	DealerRepo      *repository.DealerRepo
@@ -17,6 +20,7 @@ type M6Dependencies struct {
 	PayoutRepo      *repository.PayoutRepo
 	KycDocumentRepo *repository.KycDocumentRepo
 	DealerAnalytics *service.DealerAnalyticsService
+	AuditLogSvc     *service.AuditLogService
 }
 
 // RegisterM6Routes registers all M6 (Revenue & Dealership Engine) routes.
@@ -25,7 +29,7 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	marginSvc := service.NewMarginService(deps.MarginRepo, deps.DealerRepo)
 	couponValidationSvc := service.NewCouponValidationService(deps.CouponRepo)
 
-	dealerHandler := NewDealerHandler(dealerSvc)
+	dealerHandler := NewDealerHandler(dealerSvc).WithAuditLog(deps.AuditLogSvc)
 	marginHandler := NewMarginHandler(marginSvc)
 	couponHandler := NewCouponHandler(deps.CouponRepo)
 	couponHandler.dealerRepo = deps.DealerRepo
@@ -41,6 +45,8 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 		r.Put("/{id}/approve", dealerHandler.Approve)
 		r.Put("/{id}/reject", dealerHandler.Reject)
 		r.Put("/{id}/suspend", dealerHandler.Suspend)
+		// M39 E7-S2: admin soft-delete of dealer.
+		r.Delete("/{id}", dealerHandler.Delete)
 	})
 
 	// Dealer self-service

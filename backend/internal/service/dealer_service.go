@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	ErrDealerAlreadyExists = errors.New("dealer already registered for this user")
-	ErrDealerNotFound      = errors.New("dealer not found")
-	ErrAgreementRequired   = errors.New("agreement acceptance is required")
-	ErrInvalidPAN          = errors.New("invalid PAN number format")
-	ErrInvalidGSTIN        = errors.New("invalid GSTIN format")
+	ErrDealerAlreadyExists  = errors.New("dealer already registered for this user")
+	ErrDealerNotFound       = errors.New("dealer not found")
+	ErrDealerAlreadyDeleted = errors.New("dealer is already deleted")
+	ErrAgreementRequired    = errors.New("agreement acceptance is required")
+	ErrInvalidPAN           = errors.New("invalid PAN number format")
+	ErrInvalidGSTIN         = errors.New("invalid GSTIN format")
 )
 
 var (
@@ -123,6 +124,28 @@ func (s *DealerService) GetDealerDashboard(ctx context.Context, userID uuid.UUID
 
 func (s *DealerService) ListDealers(ctx context.Context, filter repository.DealerFilter) ([]repository.Dealer, error) {
 	return s.repo.List(ctx, filter)
+}
+
+// SoftDeleteDealer soft-deletes a dealer (M39 E7-S2).
+// Returns (service.ErrDealerNotFound) when the dealer does not exist.
+// Returns (ErrDealerAlreadyDeleted) when the dealer is already soft-deleted.
+func (s *DealerService) SoftDeleteDealer(ctx context.Context, dealerID uuid.UUID) error {
+	existing, err := s.repo.GetByID(ctx, dealerID)
+	if err != nil {
+		return ErrDealerNotFound
+	}
+	if existing.DeletedAt != nil {
+		return ErrDealerAlreadyDeleted
+	}
+	updated, err := s.repo.SoftDelete(ctx, dealerID)
+	if err != nil {
+		return err
+	}
+	if !updated {
+		// Race: row turned into deleted state between our read and write.
+		return ErrDealerAlreadyDeleted
+	}
+	return nil
 }
 
 func nilIfEmpty(s string) *string {

@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -17,7 +20,63 @@ var (
 	ErrCannotImpersonateSuperAdmin = errors.New("cannot impersonate a super_admin")
 	ErrInvalidRole                 = errors.New("invalid role")
 	ErrUserNotFound                = errors.New("user not found")
+
+	// M39 E5-S1 (FR-F01): admin user creation sentinels.
+	ErrDuplicateEmail          = errors.New("email already registered")
+	ErrInvalidEmail            = errors.New("invalid email format")
+	ErrWeakPassword            = errors.New("password does not meet complexity requirements")
+	ErrMissingPasswordOrInvite = errors.New("either initial_password or send_invite=true is required")
+	ErrMissingActor            = errors.New("actor id required")
 )
+
+// M39 E5-S1: CreateInput describes the admin user create payload.
+type CreateInput struct {
+	Email           string
+	FullName        string
+	Role            string
+	InitialPassword *string
+	SendInvite      bool
+	ActorID         uuid.UUID
+}
+
+// E5-S1 role whitelist. superadmin / super_admin are explicitly rejected so
+// privilege escalation via the admin create API is impossible (SEC-F05).
+var allowedCreateRoles = map[string]struct{}{
+	"admin":        {},
+	"photographer": {},
+	"dealer":       {},
+	"user":         {},
+	"customer":     {},
+}
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+// validatePasswordComplexity enforces the minimum floor for admin-created
+// passwords: >=12 chars, at least one upper, one lower, one digit, one
+// special (M39 E5-S1 SEC-F05 auxiliary, aligns with existing password-reset
+// rules in auth.PasswordService).
+func validatePasswordComplexity(pw string) error {
+	if len(pw) < 12 {
+		return ErrWeakPassword
+	}
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	for _, c := range pw {
+		switch {
+		case c >= 'A' && c <= 'Z':
+			hasUpper = true
+		case c >= 'a' && c <= 'z':
+			hasLower = true
+		case c >= '0' && c <= '9':
+			hasDigit = true
+		default:
+			hasSpecial = true
+		}
+	}
+	if !(hasUpper && hasLower && hasDigit && hasSpecial) {
+		return ErrWeakPassword
+	}
+	return nil
+}
 
 type AdminUserService struct {
 	userRepo  *repository.AdminUserRepo
@@ -158,6 +217,78 @@ func (s *AdminUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID
 // admin user detail page for incident investigations.
 func (s *AdminUserService) GetUserActivity(ctx context.Context, userID uuid.UUID, limit int) ([]repository.AuditLogEntry, error) {
 	return s.userRepo.GetActivityTimeline(ctx, userID, limit)
+}
+
+// Create persists a new user and optionally kicks off an invite flow or
+// immediately marks the user email_verified when a password is supplied
+// (M39 E5-S1 FR-F01). Superadmin escalation is refused at this layer.
+func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repository.AdminUserDetail, error) {
+	email := strings.TrimSpace(strings.ToLower(input.Email))
+	if !emailRegex.MatchString(email) {
+		return nil, ErrInvalidEmail
+	}
+	if input.ActorID == uuid.Nil {
+		return nil, ErrMissingActor
+	}
+	role := strings.TrimSpace(strings.ToLower(input.Role))
+	if role == "superadmin" || role == "super_admin" {
+		return nil, ErrInvalidRole
+	}
+	if _, ok := allowedCreateRoles[role]; !ok {
+		return nil, ErrInvalidRole
+	}
+	if input.InitialPassword == nil && !input.SendInvite {
+		return nil, ErrMissingPasswordOrInvite
+	}
+	var passwordHash *string
+	emailVerified := false
+	if input.InitialPassword != nil {
+		if err := validatePasswordComplexity(*input.InitialPassword); err != nil {
+			return nil, err
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(*input.InitialPassword), 12)
+		if err != nil {
+			return nil, fmt.Errorf("hashing password: %w", err)
+		}
+		h := string(hashed)
+		passwordHash = &h
+		emailVerified = true
+	}
+	// Persist via repo. nil-safe behavior: when repo is unset (unit tests with
+	// no backing DB) we surface a sentinel error rather than panicking so the
+	// test can detect the wiring gap.
+	if s.userRepo == nil {
+		return nil, fmt.Errorf("admin user service: repository not configured")
+	}
+	detail, err := s.userRepo.CreateUser(ctx, repository.AdminUserCreate{
+		Email:         email,
+		FullName:      strings.TrimSpace(input.FullName),
+		Role:          role,
+		PasswordHash:  passwordHash,
+		EmailVerified: emailVerified,
+	})
+	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateEmail) {
+			return nil, ErrDuplicateEmail
+		}
+		return nil, fmt.Errorf("creating user: %w", err)
+	}
+	if s.auditLog != nil {
+		s.auditLog.RecordAction(ctx, repository.AuditLogCreate{
+			ActorID:      input.ActorID,
+			ActorType:    "admin",
+			Action:       "admin.user.create",
+			ResourceType: "user",
+			ResourceID:   detail.ID.String(),
+			Severity:     "info",
+		})
+	}
+	// TODO (M39 E5-S1 follow-up): when SendInvite is true, call the shared
+	// OTPService.Generate + EmailDelivery.SendOTP. The current Round 2 GREEN
+	// lands the user row with email_verified=false so the existing /activate
+	// flow can re-issue an OTP on first login attempt; dedicated invite
+	// emission is wired in a later wave.
+	return detail, nil
 }
 
 func (s *AdminUserService) BulkSuspend(ctx context.Context, ids []uuid.UUID, reason string, actorID uuid.UUID) (int64, error) {

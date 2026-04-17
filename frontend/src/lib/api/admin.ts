@@ -405,3 +405,69 @@ export async function getUploadModerationAnalytics(
   if (since) q.since = since;
   return get(token, "/upload-moderation/analytics", q);
 }
+
+// ── M39 E5-S2: admin user create ──
+export interface CreateUserInput {
+  email: string;
+  full_name: string;
+  role: string;
+  initial_password?: string;
+  send_invite?: boolean;
+}
+
+/**
+ * Create a new user as an admin. Returns the created user detail.
+ * 201 password-path, 202 invite-path — both resolve as OK.
+ * Rejects superadmin role, duplicate email, or invalid email with
+ * a thrown Error whose message contains the backend `code`.
+ */
+export async function createUser(token: string, input: CreateUserInput): Promise<AdminUserDetail> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/users`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    let msg = `Create user failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = String(b.error);
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+// ── M39 E7-S2/E7-S3: dealer admin actions ──
+/**
+ * Soft-delete a dealer (204 on success, 404 missing, 409 already deleted).
+ */
+export async function deleteDealer(token: string, dealerId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${dealerId}`, {
+    method: "DELETE",
+    headers: headers(token),
+  });
+  if (!res.ok) {
+    let msg = `Delete dealer failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = String(b.error);
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+/**
+ * Search admin dealers by business name / email / phone (q=). Preserves
+ * pagination contract of GET /api/v1/admin/dealers.
+ */
+export async function searchDealers(token: string, q: string, limit = 20): Promise<unknown[]> {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (limit) params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/v1/admin/dealers?${params.toString()}`, {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Dealers search failed: ${res.status}`);
+  return res.json();
+}

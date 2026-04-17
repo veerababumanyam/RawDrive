@@ -22,6 +22,62 @@ func NewAdminUsersHandler(svc *service.AdminUserService) *AdminUsersHandler {
 	return &AdminUsersHandler{svc: svc}
 }
 
+// M39 E5-S1 (FR-F01): admin user create.
+type adminUserCreateRequest struct {
+	Email           string  `json:"email"`
+	FullName        string  `json:"full_name"`
+	Role            string  `json:"role"`
+	InitialPassword *string `json:"initial_password,omitempty"`
+	SendInvite      bool    `json:"send_invite,omitempty"`
+}
+
+// Create handles POST /api/v1/admin/users. Returns 202 for invite flow,
+// 201 for password flow. Rejects superadmin role with 400, duplicate email
+// with 409. Emits audit.admin.user.create on success (SEC-F10).
+func (h *AdminUsersHandler) Create(w http.ResponseWriter, r *http.Request) {
+	actorID := middleware.GetActorID(r.Context())
+	if actorID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	var req adminUserCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	detail, err := h.svc.Create(r.Context(), service.CreateInput{
+		Email:           req.Email,
+		FullName:        req.FullName,
+		Role:            req.Role,
+		InitialPassword: req.InitialPassword,
+		SendInvite:      req.SendInvite,
+		ActorID:         actorID,
+	})
+	if err != nil {
+		switch err {
+		case service.ErrInvalidRole:
+			http.Error(w, `{"error":"invalid role","code":"invalid_role"}`, http.StatusBadRequest)
+		case service.ErrInvalidEmail:
+			http.Error(w, `{"error":"invalid email","code":"invalid_email"}`, http.StatusBadRequest)
+		case service.ErrWeakPassword:
+			http.Error(w, `{"error":"password does not meet complexity","code":"weak_password"}`, http.StatusBadRequest)
+		case service.ErrMissingPasswordOrInvite:
+			http.Error(w, `{"error":"supply either initial_password or send_invite","code":"missing_auth_path"}`, http.StatusBadRequest)
+		case service.ErrDuplicateEmail:
+			http.Error(w, `{"error":"email already registered","code":"duplicate_email"}`, http.StatusConflict)
+		default:
+			log.Printf("admin: user create failed: %v", err)
+			http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+	if req.InitialPassword != nil {
+		respondJSON(w, http.StatusCreated, detail)
+		return
+	}
+	respondJSON(w, http.StatusAccepted, detail)
+}
+
 func (h *AdminUsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
@@ -29,11 +85,11 @@ func (h *AdminUsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = 25
 	}
 	filter := repository.AdminUserFilter{
-		Search:  q.Get("search"),
-		Role:    q.Get("role"),
-		Status:  q.Get("status"),
-		Sort:    q.Get("sort"),
-		Limit:   limit,
+		Search: q.Get("search"),
+		Role:   q.Get("role"),
+		Status: q.Get("status"),
+		Sort:   q.Get("sort"),
+		Limit:  limit,
 	}
 	result, err := h.svc.ListUsers(r.Context(), filter)
 	if err != nil {

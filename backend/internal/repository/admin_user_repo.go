@@ -28,6 +28,20 @@ type AdminUserFilter struct {
 	TierSlug string
 }
 
+// M39 E5-S1 (FR-F01): AdminUserCreate is the admin user-create payload
+// shape for AdminUserRepo.CreateUser.
+type AdminUserCreate struct {
+	Email         string
+	FullName      string
+	Role          string
+	PasswordHash  *string // nil for invite-only path
+	EmailVerified bool
+}
+
+// ErrDuplicateEmail is surfaced when INSERT INTO users collides with the
+// unique index on email. The service layer maps this to HTTP 409.
+var ErrDuplicateEmail = fmt.Errorf("users.email uniqueness violation")
+
 // AdminUserRow is the wire shape returned by GET /api/v1/admin/users.
 // JSON tags match the frontend AdminUser interface in
 // frontend/src/lib/api/admin.ts exactly; Go field names remain PascalCase
@@ -40,12 +54,12 @@ type AdminUserFilter struct {
 // is computed from workspace_members. tier_slug / tier_name are reserved
 // for a future subscriptions integration and currently always null.
 type AdminUserRow struct {
-	ID             uuid.UUID  `db:"id" json:"id"`
-	FullName       string     `db:"full_name" json:"full_name"`
-	Email          string     `db:"email" json:"email"`
-	Phone          *string    `db:"phone" json:"phone,omitempty"`
-	PlatformRole   string     `db:"platform_role" json:"platform_role"`
-	Status         string     `db:"status" json:"status"`
+	ID           uuid.UUID `db:"id" json:"id"`
+	FullName     string    `db:"full_name" json:"full_name"`
+	Email        string    `db:"email" json:"email"`
+	Phone        *string   `db:"phone" json:"phone,omitempty"`
+	PlatformRole string    `db:"platform_role" json:"platform_role"`
+	Status       string    `db:"status" json:"status"`
 	// state_id is the integer primary key from states.id — NOT a
 	// UUID. Declared as *int32 (nullable) so the scan tolerates
 	// users whose state has not been set during onboarding.
@@ -63,13 +77,13 @@ type AdminUserRow struct {
 // Adds avatar_url, updated_at, workspaces and activity timeline on top of
 // the row shape.
 type AdminUserDetail struct {
-	ID               uuid.UUID            `db:"id" json:"id"`
-	FullName         string               `db:"full_name" json:"full_name"`
-	Email            string               `db:"email" json:"email"`
-	Phone            *string              `db:"phone" json:"phone,omitempty"`
-	AvatarURL        *string              `db:"avatar_url" json:"avatar_url,omitempty"`
-	PlatformRole     string               `db:"platform_role" json:"platform_role"`
-	Status           string               `db:"status" json:"status"`
+	ID           uuid.UUID `db:"id" json:"id"`
+	FullName     string    `db:"full_name" json:"full_name"`
+	Email        string    `db:"email" json:"email"`
+	Phone        *string   `db:"phone" json:"phone,omitempty"`
+	AvatarURL    *string   `db:"avatar_url" json:"avatar_url,omitempty"`
+	PlatformRole string    `db:"platform_role" json:"platform_role"`
+	Status       string    `db:"status" json:"status"`
 	// states.id is integer, not UUID — see AdminUserRow for the
 	// same correction.
 	StateID          *int32               `db:"state_id" json:"state_id,omitempty"`
@@ -249,6 +263,33 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 		NextCursor: nextCursor,
 		TotalCount: totalCount,
 	}, nil
+}
+
+// CreateUser inserts a new users row and returns the hydrated AdminUserDetail
+// (M39 E5-S1 FR-F01). Returns ErrDuplicateEmail when the email already exists.
+//
+// Role validation, password complexity, and audit log emission happen at the
+// service layer — the repo only enforces the uniqueness constraint.
+func (r *AdminUserRepo) CreateUser(ctx context.Context, in AdminUserCreate) (*AdminUserDetail, error) {
+	id := uuid.New()
+	// INSERT via COALESCE on optional columns so the schema's DEFAULTs apply.
+	// display_name is the persistence name for full_name (see migration 002).
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO users (id, email, display_name, platform_role, password_hash, email_verified, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'active', now(), now())`,
+		id, in.Email, in.FullName, in.Role, in.PasswordHash, in.EmailVerified,
+	)
+	if err != nil {
+		msg := err.Error()
+		// pgconn surfaces uniqueness via SQLSTATE 23505 or a message
+		// that contains "unique" / "duplicate key". Check both since the
+		// plain pgx path we are on does not decode SQLSTATE here.
+		if strings.Contains(msg, "duplicate key") || strings.Contains(msg, "unique constraint") || strings.Contains(msg, "23505") {
+			return nil, ErrDuplicateEmail
+		}
+		return nil, fmt.Errorf("users insert: %w", err)
+	}
+	return r.GetByID(ctx, id)
 }
 
 func (r *AdminUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminUserDetail, error) {
@@ -437,8 +478,8 @@ func (r *AdminUserRepo) ExportCSV(ctx context.Context, f AdminUserFilter, writer
 	for rows.Next() {
 		var (
 			id, fullName, email, phone, role, status, stateName string
-			storageUsed                                          int64
-			createdAt                                            time.Time
+			storageUsed                                         int64
+			createdAt                                           time.Time
 		)
 		if err := rows.Scan(&id, &fullName, &email, &phone, &role, &status, &stateName, &storageUsed, &createdAt); err != nil {
 			return fmt.Errorf("admin export row scan: %w", err)

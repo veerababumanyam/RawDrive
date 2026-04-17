@@ -47,6 +47,8 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Use(middleware.RequirePlatformRole("super_admin", "admin"))
 
 		r.Get("/users", users.List)
+		// M39 E5-S1: admin user create (POST /api/v1/admin/users).
+		r.Post("/users", users.Create)
 		r.Get("/users/{id}", users.GetByID)
 		r.Post("/users/{id}/suspend", users.Suspend)
 		r.Post("/users/{id}/reactivate", users.Reactivate)

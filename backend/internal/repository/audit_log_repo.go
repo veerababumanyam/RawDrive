@@ -51,6 +51,10 @@ type AuditLogFilter struct {
 	IPAddress    string
 	Cursor       *uuid.UUID
 	Limit        int
+	// ActorTerm — M39 E8-S1 (FR-F04): case-insensitive substring match on
+	// users.full_name OR users.email via LEFT JOIN. Ignored when ActorID
+	// is set (ActorID wins per precedence rule).
+	ActorTerm string
 }
 
 type AuditLogCreate struct {
@@ -162,9 +166,18 @@ func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedRe
 		idx   = 1
 	)
 
+	// M39 E8-S1: actor_id wins over actor term; apply one or the other.
+	actorTerm := strings.TrimSpace(f.ActorTerm)
+	joinUsers := false
 	if f.ActorID != nil {
 		where = append(where, fmt.Sprintf("a.actor_id = $%d", idx))
 		args = append(args, *f.ActorID)
+		idx++
+	} else if actorTerm != "" {
+		joinUsers = true
+		pattern := "%" + actorTerm + "%"
+		where = append(where, fmt.Sprintf("(u.full_name ILIKE $%d OR u.email ILIKE $%d)", idx, idx))
+		args = append(args, pattern)
 		idx++
 	}
 	if f.Action != "" {
@@ -224,9 +237,18 @@ func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedRe
 		countWhere = "WHERE " + strings.Join(countParts, " AND ")
 	}
 
+	// M39 E8-S1: actor-term filter needs a LEFT JOIN on users so the ILIKE
+	// can match full_name OR email. LEFT JOIN (not INNER) preserves rows
+	// whose actor_id no longer references a users row (deleted users
+	// historically kept their audit trail).
+	joinClause := ""
+	if joinUsers {
+		joinClause = "LEFT JOIN users u ON u.id = a.actor_id"
+	}
+
 	var totalCount int64
 	err := r.pool.QueryRow(ctx,
-		fmt.Sprintf("SELECT COUNT(*) FROM audit_logs a %s", countWhere), countArgs...).Scan(&totalCount)
+		fmt.Sprintf("SELECT COUNT(*) FROM audit_logs a %s %s", joinClause, countWhere), countArgs...).Scan(&totalCount)
 	if err != nil {
 		return nil, fmt.Errorf("audit log count: %w", err)
 	}
@@ -247,8 +269,9 @@ func (r *AuditLogRepo) List(ctx context.Context, f AuditLogFilter) (*PaginatedRe
 			a.workspace_id, a.state_id, a.severity, a.created_at
 		FROM audit_logs a
 		%s
+		%s
 		ORDER BY a.created_at DESC, a.id DESC
-		LIMIT $%d`, whereClause, idx)
+		LIMIT $%d`, joinClause, whereClause, idx)
 
 	args = append(args, f.Limit+1)
 

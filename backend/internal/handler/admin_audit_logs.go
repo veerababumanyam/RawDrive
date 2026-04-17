@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,23 @@ type AdminAuditLogsHandler struct {
 
 func NewAdminAuditLogsHandler(svc *service.AuditLogService) *AdminAuditLogsHandler {
 	return &AdminAuditLogsHandler{svc: svc}
+}
+
+// parseAuditLogTime accepts RFC3339 (preferred) or YYYY-MM-DD (backward compat).
+// Returns (nil, nil) when the input is empty so the caller can distinguish
+// "no filter requested" from "invalid filter supplied". Returns (nil, err)
+// on garbage input so the handler can respond with 400 (M39 FR-F05).
+func parseAuditLogTime(s string) (*time.Time, error) {
+	if s == "" {
+		return nil, nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return &t, nil
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return &t, nil
+	}
+	return nil, fmt.Errorf("invalid time value %q: expected RFC3339 or YYYY-MM-DD", s)
 }
 
 func (h *AdminAuditLogsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -39,21 +57,42 @@ func (h *AdminAuditLogsHandler) List(w http.ResponseWriter, r *http.Request) {
 			filter.Cursor = &id
 		}
 	}
+	// M39 E8-S1: actor_id takes precedence over actor term; if actor_id is
+	// supplied AND parses, it wins regardless of actor term. An unparseable
+	// actor_id is ignored so that a typo in the id doesn't swallow the request.
 	if actorStr := q.Get("actor_id"); actorStr != "" {
 		if id, err := uuid.Parse(actorStr); err == nil {
 			filter.ActorID = &id
 		}
 	}
-	if dateFrom := q.Get("date_from"); dateFrom != "" {
-		if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
-			filter.DateFrom = &t
+	if filter.ActorID == nil {
+		if term := q.Get("actor"); term != "" {
+			filter.ActorTerm = term
 		}
 	}
-	if dateTo := q.Get("date_to"); dateTo != "" {
-		if t, err := time.Parse("2006-01-02", dateTo); err == nil {
-			// Set to end of day
-			endOfDay := t.Add(24*time.Hour - time.Second)
+	// M39 FR-F05: date parsing must reject garbage with 400 rather than
+	// silently dropping the filter (previous behavior hid data leaks).
+	dateFrom, err := parseAuditLogTime(q.Get("date_from"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	filter.DateFrom = dateFrom
+	dateTo, err := parseAuditLogTime(q.Get("date_to"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	if dateTo != nil {
+		// For date-only input the backward-compat path previously extended to
+		// end-of-day. Keep that behavior: if the user supplied a YYYY-MM-DD
+		// format (truncated to midnight UTC), push to 23:59:59. RFC3339 times
+		// are already explicit so we leave them alone.
+		if dateTo.Equal(dateTo.Truncate(24*time.Hour)) && !strings.Contains(q.Get("date_to"), "T") {
+			endOfDay := dateTo.Add(24*time.Hour - time.Second)
 			filter.DateTo = &endOfDay
+		} else {
+			filter.DateTo = dateTo
 		}
 	}
 	result, err := h.svc.ListLogs(r.Context(), filter)

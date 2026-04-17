@@ -32,3 +32,50 @@ export async function getCurrentUser(token: string | null): Promise<CurrentUser 
     return null;
   }
 }
+
+// ── M39 E6-S2: password reset helpers ──
+
+/**
+ * Request a password reset OTP. Always resolves (even for unregistered
+ * emails — the backend returns 202 in both cases to defeat enumeration).
+ * Throws on 429 rate limit so the caller can render a retry-later toast.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/request-password-reset`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (res.status === 429) {
+    throw new Error("Too many requests. Try again later.");
+  }
+  if (!res.ok && res.status !== 202) {
+    // 400 from malformed email is surfaced; any other failure is silent
+    // so the UI shows "if this email is registered..." copy uniformly.
+    let msg = `Request failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = String(b.error);
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+/**
+ * Consume an OTP + new password. Returns on 204; throws with backend
+ * error detail on 400/429 so the UI can render the right banner.
+ */
+export async function resetPassword(email: string, otp: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, otp, new_password: newPassword }),
+  });
+  if (res.status === 204) return;
+  let msg = `Reset failed: ${res.status}`;
+  try {
+    const b = await res.json();
+    if (b?.error) msg = String(b.error);
+  } catch {}
+  throw new Error(msg);
+}
