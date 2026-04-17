@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
+import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 import { listWorkspaces, type WorkspaceOverview } from "@/lib/api/admin";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
@@ -79,11 +79,25 @@ export default function AdminWorkspacesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    listWorkspaces(token)
-      .then((res) => { setWorkspaces(res.items as WorkspaceRow[]); setTotal(res.total_count); setError(null); })
-      .catch(() => setError("Failed to load workspaces"))
-      .finally(() => setLoading(false));
+    async function load() {
+      let token = getStoredAccessToken();
+      if (!token) {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+        token = await refreshAuthSession(API_BASE);
+      }
+      if (!token) { setError("Session expired"); setLoading(false); return; }
+      try {
+        const res = await listWorkspaces(token);
+        setWorkspaces(res.items as WorkspaceRow[]);
+        setTotal(res.total_count);
+        setError(null);
+      } catch {
+        setError("Failed to load workspaces");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error}</p></div>;

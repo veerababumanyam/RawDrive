@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
+import { useCallback, useEffect, useState } from "react";
+import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 import {
   listModerationQueue,
   approveModeration,
@@ -26,22 +26,31 @@ export default function AdminModerationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchQueue = async () => {
-    const token = getStoredAccessToken();
+  const fetchQueue = useCallback(async () => {
+    let token = getStoredAccessToken();
+    if (!token) {
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      token = await refreshAuthSession(API_BASE);
+    }
+    if (!token) {
+      setError("Session expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
     try {
       const res = await listModerationQueue(token, { status: "pending" });
       setItems(res.items);
       setTotal(res.total_count);
       setError(null);
     } catch {
-      setError("Failed to load moderation queue");
+      setError("Failed to load moderation queue. The API may be unreachable.");
       setItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchQueue(); }, []);
+  useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
   const handleApprove = async (id: string) => { const token = getStoredAccessToken(); await approveModeration(token, id); fetchQueue(); };
   const handleReject = async (id: string) => { const token = getStoredAccessToken(); await rejectModeration(token, id, "Admin rejected"); fetchQueue(); };

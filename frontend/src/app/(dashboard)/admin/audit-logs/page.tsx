@@ -309,11 +309,29 @@ const columns: ColumnDef<AuditLogRow>[] = [
     ),
   },
   {
+    key: "actor_type",
+    label: "Actor Type",
+    sortable: true,
+    render: (value) => (
+      <span className="text-sm text-text-tertiary capitalize">{(value as string) || "—"}</span>
+    ),
+  },
+  {
     key: "resource_type",
     label: "Resource Type",
     sortable: true,
     render: (value) => (
-      <span className="text-sm text-text-tertiary">{value as string}</span>
+      <span className="text-sm text-text-tertiary">{(value as string) || "—"}</span>
+    ),
+  },
+  {
+    key: "workspace_id",
+    label: "Workspace",
+    sortable: true,
+    render: (value) => (
+      <span className="text-xs font-mono text-text-tertiary" title={value as string}>
+        {(value as string)?.slice(0, 8) || "—"}
+      </span>
     ),
   },
   {
@@ -398,11 +416,23 @@ export default function AdminAuditLogsPage() {
   // Row click → open detail
   const handleRowClick = useCallback(async (row: AuditLogRow) => {
     setDetailLoading(true);
-    setDetailEntry(row as AuditLogEntry);
+    // Show list-level data immediately so panel isn't blank
+    setDetailEntry({ ...row, metadata: row.metadata || null } as AuditLogEntry);
     try {
       const token = getStoredAccessToken();
-      const detail = await getAuditLogDetail(token, row.id);
-      setDetailEntry(detail);
+      if (!token) {
+        // Token expired — try refreshing
+        const { refreshAuthSession } = await import("@/lib/auth");
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+        const newToken = await refreshAuthSession(API_BASE);
+        if (newToken) {
+          const detail = await getAuditLogDetail(newToken, row.id);
+          setDetailEntry(detail);
+        }
+      } else {
+        const detail = await getAuditLogDetail(token, row.id);
+        setDetailEntry(detail);
+      }
     } catch {
       // Keep the list-level data if detail fetch fails
     } finally {
