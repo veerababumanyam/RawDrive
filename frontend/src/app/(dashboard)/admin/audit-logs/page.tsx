@@ -148,7 +148,7 @@ function Field({
   return (
     <div className={className}>
       <p className="text-[10px] font-label uppercase tracking-[0.1em] text-text-tertiary mb-0.5">{label}</p>
-      <p className={`text-sm text-text-primary truncate ${mono ? "font-mono" : ""}`}>{value}</p>
+      <p className={`text-sm text-text-primary ${mono ? "font-mono break-all" : "truncate"}`} title={value}>{value}</p>
     </div>
   );
 }
@@ -310,7 +310,7 @@ const columns: ColumnDef<AuditLogRow>[] = [
   },
   {
     key: "resource_type",
-    label: "Resource",
+    label: "Resource Type",
     sortable: true,
     render: (value) => (
       <span className="text-sm text-text-tertiary">{value as string}</span>

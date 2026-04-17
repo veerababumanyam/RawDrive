@@ -176,7 +176,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 <select
                   value={table.getColumnFilterValue(col.key)}
                   onChange={(e) => table.setColumnFilter(col.key, e.target.value)}
-                  className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-xl pl-3 pr-8 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-secondary/50 outline-none cursor-pointer"
+                  className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-xl pl-3 pr-8 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-secondary/50 outline-none cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
                 >
                   <option value="">All {col.label}</option>
                   {col.filterOptions!.map((opt) => (
