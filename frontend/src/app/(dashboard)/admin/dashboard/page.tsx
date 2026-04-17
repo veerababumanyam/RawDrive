@@ -194,9 +194,26 @@ export default function AdminDashboardPage() {
           <h2 className="mb-4 text-lg font-semibold text-text-primary">
             System Alerts
           </h2>
-          <p className="text-sm text-text-tertiary">
-            Real-time alerts from infrastructure monitoring.
-          </p>
+          {/* QA #65: the alerts panel was previously a single-line
+              placeholder that never populated — admins reported it as
+              broken because nothing ever appeared. Alert emission is a
+              separate workstream (needs monitoring agent + dispatch
+              wiring). Until that lands, surface the criteria that WILL
+              trigger an alert so admins know the shape of the feature,
+              not just a mute panel. */}
+          <div className="text-sm text-text-tertiary space-y-2">
+            <p>Alerts will fire for:</p>
+            <ul className="list-disc pl-5 text-xs space-y-1">
+              <li>API p95 latency &gt; 1s for 5 consecutive minutes</li>
+              <li>Moderation queue backlog &gt; 100 items</li>
+              <li>Refresh-token revocation spike (&gt; 50/minute)</li>
+              <li>R2 storage utilization &gt; 80% of plan limit</li>
+              <li>Failed login burst (&gt; 20 per 60s per IP)</li>
+            </ul>
+            <p className="pt-2 text-[11px] italic">
+              Alert emission service pending — no events are surfaced yet.
+            </p>
+          </div>
         </div>
       </div>
     </div>

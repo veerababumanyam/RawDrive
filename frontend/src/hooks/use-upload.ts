@@ -7,6 +7,7 @@ import { screen } from "@/lib/upload-screening/screen";
 import { sha256HexChunked } from "@/lib/upload-screening/hash";
 import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
@@ -40,6 +41,14 @@ export function useUpload(apiUrl: string, token: string) {
   const chunkedUpload = useCallback(async (item: UploadItem) => {
     const controller = new AbortController();
     abortControllers.current.set(item.id, controller);
+
+    // QA #16: fetch the access token fresh at request time rather than
+    // using the closure-captured `token` from hook mount. When the page
+    // renders before auth hydrates (token=""), the closure captures the
+    // empty string and every upload 401s even though the user is logged
+    // in. getStoredAccessToken() reads the current cached value, so the
+    // Authorization header reflects the latest refreshed token.
+    const currentToken = getStoredAccessToken() || token;
 
     try {
       updateItem(item.id, { status: "screening" });
@@ -77,7 +86,7 @@ export function useUpload(apiUrl: string, token: string) {
       const createRes = await fetch(`${apiUrl}/api/v1/uploads`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -124,7 +133,7 @@ export function useUpload(apiUrl: string, token: string) {
         const patchRes = await fetch(`${apiUrl}/api/v1/uploads/${upload_id}`, {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${currentToken}`,
             "Content-Type": "application/offset+octet-stream",
             "Upload-Offset": String(offset),
           },

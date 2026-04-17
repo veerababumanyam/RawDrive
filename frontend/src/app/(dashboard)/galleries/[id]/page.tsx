@@ -563,16 +563,36 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {upload.items.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 text-xs">
-                    <span className="truncate flex-1 text-text-primary">{item.file.name}</span>
-                    <div className="w-24 h-1.5 rounded-full bg-surface-sunken overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-danger" : "bg-accent"}`} style={{ width: `${item.progress}%` }} />
+                {upload.items.map((item) => {
+                  // QA #22: surface low-severity scan findings (duplicates,
+                  // near-duplicates, metadata warnings) next to the item so
+                  // the photographer sees why a file was flagged, rather
+                  // than the UI dropping them silently. High/medium
+                  // severity findings already block the upload via the
+                  // status="blocked" path.
+                  const warnings = (item.scanManifest?.findings || []).filter(
+                    (f) => f.severity === "low",
+                  );
+                  return (
+                    <div key={item.id} className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="truncate flex-1 text-text-primary">{item.file.name}</span>
+                        <div className="w-24 h-1.5 rounded-full bg-surface-sunken overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-danger" : "bg-accent"}`} style={{ width: `${item.progress}%` }} />
+                        </div>
+                        <span className="w-8 text-right text-text-tertiary">{item.progress}%</span>
+                        <span className={`w-16 text-right ${item.status === "complete" ? "text-success" : item.status === "error" ? "text-danger" : "text-text-secondary"}`}>{item.status}</span>
+                      </div>
+                      {warnings.length > 0 && (
+                        <div className="pl-2 text-[10px] text-feedback-warning">
+                          ⚠ {warnings.length === 1
+                            ? warnings[0].message
+                            : `${warnings.length} scan warnings`}
+                        </div>
+                      )}
                     </div>
-                    <span className="w-8 text-right text-text-tertiary">{item.progress}%</span>
-                    <span className={`w-16 text-right ${item.status === "complete" ? "text-success" : item.status === "error" ? "text-danger" : "text-text-secondary"}`}>{item.status}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
