@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  createServicePackage,
+  createServicePackageAuth,
   deleteServicePackage,
   formatPaisa,
   listServicePackages,
@@ -84,7 +84,9 @@ export default function ServicePackagesPage() {
       if (editingId) {
         await updateServicePackage(token, editingId, payload);
       } else {
-        await createServicePackage(token, payload);
+        // QA #27: use createServicePackageAuth (authFetch 401 refresh) so
+        // the package form never 401s mid-session.
+        await createServicePackageAuth(payload);
       }
       setForm(blankForm);
       setEditingId(null);

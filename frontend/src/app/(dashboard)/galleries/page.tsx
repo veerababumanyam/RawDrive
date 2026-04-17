@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { listGalleries, createGallery, deleteGallery, duplicateGallery, type Gallery } from "@/lib/api/galleries";
-import { createContact, listContacts, type Contact } from "@/lib/api/crm";
+import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -129,12 +129,14 @@ export default function GalleriesPage() {
   const handleCreateClient = async () => {
     const name = newClientName.trim();
     if (!name) return;
-    const token = getStoredAccessToken();
-    if (!token) return;
     setCreatingClient(true);
     setError(null);
     try {
-      const contact = await createContact(token, {
+      // QA #19: previously createContact used a raw fetch with a stale
+      // token, which silently 401'd and surfaced as "Add Client does
+      // nothing". createContactAuth wraps authFetch so the token is
+      // refreshed on 401 and the contact lands.
+      const contact = await createContactAuth({
         name,
         email: newClientEmail.trim() || undefined,
         contact_type: "client",

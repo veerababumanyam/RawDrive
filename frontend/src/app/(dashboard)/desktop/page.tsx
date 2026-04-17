@@ -55,26 +55,45 @@ export default function DesktopPage() {
           and work offline with automatic resume.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="https://releases.rawdrive.app/desktop/latest/RawDrive-Setup.exe"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-medium text-white hover:bg-accent/90 transition-colors min-h-[44px]"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
-            </svg>
-            Download for Windows
-          </a>
-          <a
-            href="https://releases.rawdrive.app/desktop/latest/RawDrive.dmg"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border-primary bg-surface-base px-6 py-3 text-sm font-medium text-text-primary hover:bg-surface-raised transition-colors min-h-[44px]"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z" />
-            </svg>
-            Download for macOS
-          </a>
-        </div>
+        {/* QA #32: desktop binaries are not yet published to
+            releases.rawdrive.app. Rather than ship broken links that
+            404, surface a clear "Beta — early access" CTA so users know
+            the state. When the binaries are published, flip the
+            NEXT_PUBLIC_DESKTOP_RELEASE_URL env flag to re-enable the
+            download anchors below. */}
+        {process.env.NEXT_PUBLIC_DESKTOP_RELEASE_URL ? (
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <a
+              href={`${process.env.NEXT_PUBLIC_DESKTOP_RELEASE_URL}/RawDrive-Setup.exe`}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-medium text-white hover:bg-accent/90 transition-colors min-h-[44px]"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+              </svg>
+              Download for Windows
+            </a>
+            <a
+              href={`${process.env.NEXT_PUBLIC_DESKTOP_RELEASE_URL}/RawDrive.dmg`}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border-primary bg-surface-base px-6 py-3 text-sm font-medium text-text-primary hover:bg-surface-raised transition-colors min-h-[44px]"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z" />
+              </svg>
+              Download for macOS
+            </a>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border-primary bg-surface-raised/50 p-6 max-w-md mx-auto">
+            <p className="text-sm text-text-primary font-medium mb-1">Beta — early access coming soon</p>
+            <p className="text-xs text-text-secondary">
+              RawDrive Desktop binaries are in private beta. Contact{" "}
+              <a href="mailto:desktop@rawdrive.app" className="text-accent hover:underline">
+                desktop@rawdrive.app
+              </a>{" "}
+              for early access.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Features */}

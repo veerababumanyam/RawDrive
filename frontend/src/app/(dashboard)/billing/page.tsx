@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   listInvoices,
-  createInvoice,
+  createInvoiceAuth,
   convertQuotation,
   expandPackageLineItems,
   listServicePackages,
@@ -162,7 +162,11 @@ export default function BillingPage() {
       const sgstPaisa = totalTaxPaisa - cgstPaisa;
       const totalPaisa = subtotalPaisa + totalTaxPaisa;
 
-      await createInvoice(token, {
+      // QA #26: use createInvoiceAuth which wraps authFetch so an expired
+      // access token triggers a refresh+retry instead of surfacing 401 as
+      // "Invoice creation fails". The legacy createInvoice is retained in
+      // the API module for any caller still passing token explicitly.
+      await createInvoiceAuth({
         contact_id: form.contact_id,
         project_id: form.project_id || undefined,
         invoice_type: form.invoice_type,

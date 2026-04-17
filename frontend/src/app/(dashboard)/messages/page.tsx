@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { listChannels, getMessages, sendMessage, type Channel, type Message } from "@/lib/api/messaging";
+import { listChannels, getMessages, sendMessage, createChannelAuth, type Channel, type Message } from "@/lib/api/messaging";
 import { getStoredAccessToken } from "@/lib/auth";
 
 export default function MessagesPage() {
@@ -12,6 +12,10 @@ export default function MessagesPage() {
   const [error, setError] = useState<string | null>(null);
   const [msgText, setMsgText] = useState("");
   const [sending, setSending] = useState(false);
+  // QA #31: new-channel dialog state
+  const [showNewChannel, setShowNewChannel] = useState(false);
+  const [newChannelName, setNewChannelName] = useState("");
+  const [creatingChannel, setCreatingChannel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const token = getStoredAccessToken();
 
@@ -95,10 +99,56 @@ export default function MessagesPage() {
       <aside className="w-72 shrink-0 border-r border-border-default bg-white/[0.02] flex flex-col">
         <div className="p-4 border-b border-border-default flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text-primary">Channels</h2>
-          <button className="surface-button h-8 w-8 p-0">
+          {/* QA #31: + button now opens an inline form that creates a new channel
+               via createChannelAuth (authFetch wrapper with 401 refresh). */}
+          <button
+            type="button"
+            onClick={() => setShowNewChannel((v) => !v)}
+            aria-label="New channel"
+            className="surface-button h-8 w-8 p-0"
+          >
             +
           </button>
         </div>
+        {showNewChannel && (
+          <form
+            className="p-3 border-b border-border-default flex gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const name = newChannelName.trim();
+              if (!name) return;
+              setCreatingChannel(true);
+              setError(null);
+              try {
+                const ch = await createChannelAuth({ name, channel_type: "group" });
+                setChannels((prev) => [ch, ...prev]);
+                setActiveChannel(ch.id);
+                setNewChannelName("");
+                setShowNewChannel(false);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to create channel");
+              } finally {
+                setCreatingChannel(false);
+              }
+            }}
+          >
+            <input
+              type="text"
+              value={newChannelName}
+              onChange={(e) => setNewChannelName(e.target.value)}
+              placeholder="channel name"
+              className="input-base flex-1 h-9 text-xs"
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={creatingChannel || !newChannelName.trim()}
+              className="btn-primary px-3 text-xs disabled:opacity-50"
+            >
+              {creatingChannel ? "…" : "Create"}
+            </button>
+          </form>
+        )}
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {channels.length === 0 ? (
             <div className="text-center py-8 text-text-secondary text-sm">No channels yet</div>

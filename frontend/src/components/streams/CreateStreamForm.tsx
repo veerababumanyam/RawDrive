@@ -18,7 +18,6 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { createStream } from "@/lib/api/streams";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
