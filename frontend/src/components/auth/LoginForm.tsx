@@ -206,6 +206,15 @@ export function LoginForm() {
           </div>
         </div>
 
+        <div className="flex justify-end">
+          <Link
+            href="/forgot-password"
+            className="text-sm text-accent transition-colors hover:text-accent-hover"
+          >
+            Forgot password?
+          </Link>
+        </div>
+
         <button
           type="submit"
           disabled={loading || !email.trim() || !password}

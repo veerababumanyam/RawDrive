@@ -473,7 +473,7 @@ export function RegisterForm() {
           htmlFor="register-email"
           className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
-          Email address
+          Email address <span className="text-feedback-error">*</span>
         </label>
         <input
           id="register-email"
@@ -483,6 +483,7 @@ export function RegisterForm() {
           placeholder="arjun@studio.in"
           className="input-base w-full"
           autoComplete="email"
+          required
         />
       </div>
 
@@ -509,7 +510,7 @@ export function RegisterForm() {
           htmlFor="register-password"
           className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
-          Password
+          Password <span className="text-feedback-error">*</span>
         </label>
         <div className="relative">
           <input
@@ -520,6 +521,7 @@ export function RegisterForm() {
             placeholder="••••••••"
             className="input-base w-full pr-12"
             autoComplete="new-password"
+            required
           />
           <button
             type="button"
