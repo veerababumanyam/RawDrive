@@ -368,3 +368,42 @@ export async function getProject(token: string, id: string): Promise<StudioProje
   if (!res.ok) throw new Error("Failed to fetch project");
   return res.json();
 }
+
+// ── Auto-authenticated versions (no token parameter needed) ─────────
+import { authFetch } from "./authFetch";
+
+/** Create a project with automatic token refresh. Cleans empty optional UUID fields. */
+export async function createProjectAuth(project: Partial<StudioProject>): Promise<StudioProject> {
+  // Clean empty string UUIDs — backend rejects "" for uuid.UUID fields
+  const cleaned = { ...project };
+  for (const key of ["lead_id", "source_deal_id", "package_id", "event_id"] as const) {
+    if (cleaned[key as keyof typeof cleaned] === "") {
+      delete cleaned[key as keyof typeof cleaned];
+    }
+  }
+  const res = await authFetch("/api/v1/crm/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cleaned),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create project");
+  }
+  return res.json();
+}
+
+/** Import CSV contacts with automatic token refresh. */
+export async function importContactsCsvAuth(file: File): Promise<{ imported: number; skipped: number }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await authFetch("/api/v1/crm/contacts/import", {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to import contacts");
+  }
+  return res.json();
+}

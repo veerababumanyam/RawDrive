@@ -81,3 +81,20 @@ export async function searchMessages(token: string, query: string): Promise<Mess
   const json = await res.json();
   return json.data || [];
 }
+
+// ── Auto-authenticated version ──────────────────────────────────────
+import { authFetch } from "./authFetch";
+
+export async function createChannelAuth(data: { name: string; channel_type?: string }): Promise<Channel> {
+  const res = await authFetch("/api/v1/messages/channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create channel");
+  }
+  const json = await res.json();
+  return json.data || json;
+}

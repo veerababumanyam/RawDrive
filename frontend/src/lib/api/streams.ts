@@ -316,3 +316,43 @@ export async function getDesktopDownloadInfo(): Promise<{ app_name: string; plat
   if (!res.ok) throw new Error(`Failed to get download info: ${res.status}`);
   return res.json();
 }
+
+// ── Auto-authenticated versions (no token parameter needed) ─────────
+// These use authFetch for automatic token injection + 401 refresh.
+// Prefer these in new code; legacy token-param functions above are
+// kept for backward compatibility.
+
+import { authFetch } from "./authFetch";
+
+export async function listStreamsAuth(params?: { status?: string; limit?: number; offset?: number }): Promise<Stream[]> {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  const q = qs.toString();
+  const res = await authFetch(`/api/v1/streams${q ? `?${q}` : ""}`);
+  if (!res.ok) throw new Error(`Failed to list streams: ${res.status}`);
+  const body = await res.json();
+  return Array.isArray(body) ? body : body.streams || [];
+}
+
+export async function createStreamAuth(data: {
+  title: string;
+  description?: string;
+  gallery_id?: string;
+  scheduled_at?: string;
+  pin_code?: string;
+  max_quality?: string;
+  chat_enabled?: boolean;
+}): Promise<Stream> {
+  const res = await authFetch("/api/v1/streams", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Failed to create stream: ${res.status}`);
+  }
+  return res.json();
+}

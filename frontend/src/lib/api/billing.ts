@@ -182,3 +182,32 @@ export async function downloadGSTR1CSV(token: string, financialYear: string): Pr
   if (!res.ok) throw new Error("Failed to download GSTR-1 CSV");
   return res.blob();
 }
+
+// ── Auto-authenticated versions ─────────────────────────────────────
+import { authFetch } from "./authFetch";
+
+export async function createInvoiceAuth(invoice: Partial<Invoice>): Promise<Invoice> {
+  const res = await authFetch("/api/v1/billing/invoices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(invoice),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create invoice");
+  }
+  return res.json();
+}
+
+export async function createServicePackageAuth(pkg: Partial<ServicePackage>): Promise<ServicePackage> {
+  const res = await authFetch("/api/v1/billing/packages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(pkg),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create service package");
+  }
+  return res.json();
+}

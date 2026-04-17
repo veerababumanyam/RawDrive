@@ -45,3 +45,21 @@ export async function createEvent(token: string, event: Partial<CalendarEvent>):
   }
   return res.json();
 }
+
+// ── Auto-authenticated version ──────────────────────────────────────
+import { authFetch } from "./authFetch";
+
+/** Create an event with automatic token refresh and better error messages. */
+export async function createEventAuth(event: Partial<CalendarEvent>): Promise<CalendarEvent> {
+  const res = await authFetch("/api/v1/calendar/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 409) throw new Error(body.error || "Time slot conflict with existing event");
+    throw new Error(body.error || "Failed to create event");
+  }
+  return res.json();
+}
