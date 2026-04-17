@@ -95,7 +95,7 @@ describe("DashboardLayout header", () => {
   it("keeps the search field in the centered desktop slot", async () => {
     renderDashboardLayout();
 
-    const searchInput = await screen.findByRole("textbox", {
+    const searchInput = await screen.findByRole("searchbox", {
       name: "Search galleries, clients, or files...",
     });
 
@@ -116,7 +116,7 @@ describe("DashboardLayout header", () => {
 
   it("notification bell has aria-label for screen readers", async () => {
     renderDashboardLayout();
-    const bell = await screen.findByRole("button", { name: "Notifications" });
+    const bell = await screen.findByRole("link", { name: "Notifications" });
     expect(bell).toBeInTheDocument();
   });
 });
@@ -229,7 +229,7 @@ describe("DashboardLayout role-specific header", () => {
     mockUsePathname.mockReturnValue("/admin/users");
     renderDashboardLayout();
 
-    const searchInput = await screen.findByRole("textbox", {
+    const searchInput = await screen.findByRole("searchbox", {
       name: "Search users, workspaces, or logs...",
     });
     expect(searchInput).toHaveAttribute("placeholder", "Search users, workspaces, or logs...");
@@ -240,7 +240,7 @@ describe("DashboardLayout role-specific header", () => {
     mockUsePathname.mockReturnValue("/dealer");
     renderDashboardLayout();
 
-    const searchInput = await screen.findByRole("textbox", {
+    const searchInput = await screen.findByRole("searchbox", {
       name: "Search registrations or coupons...",
     });
     expect(searchInput).toBeInTheDocument();
@@ -251,7 +251,7 @@ describe("DashboardLayout role-specific header", () => {
     mockUsePathname.mockReturnValue("/galleries");
     renderDashboardLayout();
 
-    const searchInput = await screen.findByRole("textbox", {
+    const searchInput = await screen.findByRole("searchbox", {
       name: "Search your photos...",
     });
     expect(searchInput).toBeInTheDocument();
