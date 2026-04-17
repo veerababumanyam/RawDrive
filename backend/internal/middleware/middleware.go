@@ -187,10 +187,25 @@ type rateLimitEntry struct {
 }
 
 func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Handler {
+	h, _ := RateLimitWithReset(maxRequests, window)
+	return h
+}
+
+// RateLimitWithReset is identical to RateLimit but also returns a reset func
+// that clears all counters. Intended for development/test use: register the
+// reset func behind a dev-only HTTP endpoint so automated test suites can
+// drain the in-memory bucket between test runs without restarting the server.
+func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handler) http.Handler, func()) {
 	var mu sync.Mutex
 	entries := make(map[string]*rateLimitEntry)
 
-	return func(next http.Handler) http.Handler {
+	reset := func() {
+		mu.Lock()
+		entries = make(map[string]*rateLimitEntry)
+		mu.Unlock()
+	}
+
+	handler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 			if ip == "" {
@@ -221,6 +236,8 @@ func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Ha
 			next.ServeHTTP(w, r)
 		})
 	}
+
+	return handler, reset
 }
 
 // ──────────────────────────── Admin Auth Middleware ────────────────────────────

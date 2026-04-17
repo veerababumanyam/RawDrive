@@ -368,7 +368,11 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(middleware.SecurityHeaders)
-	r.Use(middleware.RateLimit(60, time.Minute))
+	globalRateMax := 60
+	if os.Getenv("APP_ENV") == "development" {
+		globalRateMax = 10000 // effectively unlimited in dev/test
+	}
+	r.Use(middleware.RateLimit(globalRateMax, time.Minute))
 
 	// ──────────────────────── Database Connection (shared M1 + M2) ────────────────
 	dbURL := os.Getenv("DATABASE_URL")
@@ -679,13 +683,40 @@ func main() {
 	// both the /auth and /api/v1/auth prefixes so an attacker cannot
 	// double their budget by alternating. Same rationale as the MFA
 	// verify limiter below.
-	credLimiter := middleware.RateLimit(5, time.Minute)
+	credLimiter, resetCredLimiter := middleware.RateLimitWithReset(5, time.Minute)
 	r.With(credLimiter).Post("/auth/register", authHandler.Register)
 	r.With(credLimiter).Post("/auth/login", authHandler.Login)
 	r.With(credLimiter).Post("/auth/verify-otp", authHandler.VerifyOTP)
 	r.With(credLimiter).Post("/api/v1/auth/register", authHandler.Register)
 	r.With(credLimiter).Post("/api/v1/auth/login", authHandler.Login)
 	r.With(credLimiter).Post("/api/v1/auth/verify-otp", authHandler.VerifyOTP)
+
+	// Development-only endpoints so automated test suites can reset
+	// in-process state between runs without restarting the server.
+	// Never registered in production.
+	if os.Getenv("APP_ENV") == "development" {
+		r.Post("/internal/test/reset-rate-limit", func(w http.ResponseWriter, r *http.Request) {
+			resetCredLimiter()
+			w.WriteHeader(http.StatusNoContent)
+		})
+		// Purge all refresh sessions for a given user so MaxSessions never
+		// blocks test logins that run the same account multiple times.
+		r.Post("/internal/test/purge-sessions", func(w http.ResponseWriter, r *http.Request) {
+			email := r.URL.Query().Get("email")
+			if email == "" {
+				http.Error(w, "email query param required", http.StatusBadRequest)
+				return
+			}
+			_, err := sqlDB.ExecContext(r.Context(),
+				`DELETE FROM refresh_sessions WHERE sub = (SELECT id::text FROM users WHERE email = $1)`,
+				email)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+	}
 
 	// Mount the rest of the auth routes (oauth, refresh, logout). The
 	// credential endpoints above are deliberately NOT inside Routes()
