@@ -202,24 +202,24 @@ function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email
 
           {/* Menu items */}
           <div className="py-1">
-            <button
-              type="button"
+            <a
+              href="/settings/profile"
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
             >
               <User className="h-4 w-4" />
               <span>Profile</span>
-            </button>
-            <button
-              type="button"
+            </a>
+            <a
+              href="/settings"
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
             >
               <Settings className="h-4 w-4" />
               <span>Settings</span>
-            </button>
+            </a>
           </div>
 
           {/* Logout */}
@@ -370,25 +370,33 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="relative min-w-0 w-full max-w-md md:justify-self-center">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+        <form
+          className="relative min-w-0 w-full max-w-md md:justify-self-center"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = (e.currentTarget.elements.namedItem("global-search") as HTMLInputElement)?.value?.trim();
+            if (q) window.location.assign(`/galleries?q=${encodeURIComponent(q)}`);
+          }}
+        >
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <input
-            type="text"
+            type="search"
+            name="global-search"
             aria-label={searchPlaceholder}
             placeholder={searchPlaceholder}
             className="input-base w-full pl-10 pr-4 text-sm"
           />
-        </div>
+        </form>
 
         <div className="flex items-center justify-self-end gap-3">
           <ThemeToggleButton />
-          <button
-            type="button"
+          <a
+            href="/notifications"
             aria-label="Notifications"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-accent"
           >
             <Bell className="h-5 w-5" />
-          </button>
+          </a>
           <UserMenu userInfo={userInfo} role={role} />
         </div>
       </header>
