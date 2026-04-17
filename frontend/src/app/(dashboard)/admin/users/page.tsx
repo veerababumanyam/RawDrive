@@ -9,6 +9,7 @@ import {
   exportUsers,
   type AdminUser,
 } from "@/lib/api/admin";
+import { Download } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
 function StatusBadge({ status }: { status: string }) {
@@ -94,7 +95,7 @@ export default function AdminUsersPage() {
       label: "Role",
       sortable: true,
       filterable: true,
-      filterOptions: ["super_admin", "admin", "photographer", "user"],
+      filterOptions: ["super_admin", "admin", "photographer", "dealer", "client", "team_member", "user"],
       render: (value) => (
         <span className="text-sm text-secondary font-medium">{String(value ?? "")}</span>
       ),
@@ -104,7 +105,7 @@ export default function AdminUsersPage() {
       label: "Status",
       sortable: true,
       filterable: true,
-      filterOptions: ["active", "suspended", "deleted"],
+      filterOptions: ["active", "suspended", "inactive", "deleted"],
       render: (value) => <StatusBadge status={String(value ?? "")} />,
     },
     {
@@ -207,6 +208,7 @@ export default function AdminUsersPage() {
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
             aria-label="Export CSV"
           >
+            <Download className="h-4 w-4" />
             Export CSV
           </button>
         }
