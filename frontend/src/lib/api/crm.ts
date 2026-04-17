@@ -393,6 +393,20 @@ export async function createProjectAuth(project: Partial<StudioProject>): Promis
   return res.json();
 }
 
+/** Create a contact with automatic token refresh (QA #30 sibling). */
+export async function createContactAuth(contact: Partial<Contact>): Promise<Contact> {
+  const res = await authFetch("/api/v1/crm/contacts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(contact),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create contact");
+  }
+  return res.json();
+}
+
 /** Import CSV contacts with automatic token refresh. */
 export async function importContactsCsvAuth(file: File): Promise<{ imported: number; skipped: number }> {
   const fd = new FormData();

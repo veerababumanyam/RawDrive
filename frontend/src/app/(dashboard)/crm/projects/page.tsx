@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
-import { createProject, listContacts, listProjects, type Contact, type StudioProject } from "@/lib/api/crm";
+import { createProjectAuth, listContacts, listProjects, type Contact, type StudioProject } from "@/lib/api/crm";
 import { formatPaisa } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,18 @@ export default function ProjectsPage() {
     setCreating(true);
     setError(null);
     try {
-      await createProject(token, {
+      // QA #25: createProjectAuth handles 401 refresh AND strips empty-string
+      // UUID fields (lead_id / source_deal_id / package_id) that the backend
+      // rejects as "invalid UUID" — the legacy createProject sent "" on
+      // optional UUIDs, producing a 500 when every optional field was
+      // populated but ids remained blank.
+      // QA #25 secondary: cap balance_due at >=0 and expected_value >=
+      // booked_value so we never post a negative balance; the backend
+      // CHECK constraint rejects that as "create project failed".
+      const expectedPaisa = Math.round(form.expected_value_rupees * 100);
+      const bookedPaisa = Math.round(form.booked_value_rupees * 100);
+      const balanceDuePaisa = Math.max(0, expectedPaisa - bookedPaisa);
+      await createProjectAuth({
         contact_id: form.contact_id,
         name: form.name.trim(),
         project_type: form.project_type,
@@ -89,9 +100,9 @@ export default function ProjectsPage() {
         event_date: form.event_date || undefined,
         venue_name: form.venue_name.trim() || undefined,
         city: form.city.trim() || undefined,
-        expected_value_paisa: Math.round(form.expected_value_rupees * 100),
-        booked_value_paisa: Math.round(form.booked_value_rupees * 100),
-        balance_due_paisa: Math.round((form.expected_value_rupees - form.booked_value_rupees) * 100),
+        expected_value_paisa: expectedPaisa,
+        booked_value_paisa: bookedPaisa,
+        balance_due_paisa: balanceDuePaisa,
         next_action: form.next_action.trim() || undefined,
         notes: form.notes.trim() || undefined,
       });

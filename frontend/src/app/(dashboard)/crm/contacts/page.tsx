@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   listContacts,
   createContact,
-  importContactsCSV,
+  importContactsCsvAuth,
   type Contact,
   type ContactImportResult,
 } from "@/lib/api/crm";
@@ -60,8 +60,10 @@ export default function ContactsPage() {
     setImporting(true);
     setError(null);
     try {
-      const token = getStoredAccessToken();
-      const result = await importContactsCSV(token, file);
+      // QA #30: use the authFetch wrapper so an expired access token
+      // triggers a refresh+retry instead of surfacing "invalid or expired
+      // token" to the user. The non-auth variant is kept for tests.
+      const result = await importContactsCsvAuth(file);
       setImportResult(result);
       refresh();
     } catch (err) {

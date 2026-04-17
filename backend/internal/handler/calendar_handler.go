@@ -37,18 +37,25 @@ func (h *CalendarHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	e.WorkspaceID = workspaceID
 	if e.Status == "" {
-		e.Status = "confirmed"
+		e.Status = "tentative"
 	}
 
-	// Check for conflicts
-	conflict, err := h.repo.CheckConflict(r.Context(), workspaceID, e.StartAt, e.EndAt, nil)
-	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	if conflict {
-		http.Error(w, `{"error":"time slot conflict with existing event"}`, http.StatusConflict)
-		return
+	// M39 fix #28: conflict check must only fire when the new event is
+	// itself confirmed. Previously every POST defaulted to "confirmed"
+	// AND ran the conflict check, so photographers booking speculative
+	// shoots always tripped the 409 even when no real overlap existed.
+	// Tentative events coexist freely; the check also intentionally
+	// only considers existing confirmed events (see repo query).
+	if e.Status == "confirmed" {
+		conflict, err := h.repo.CheckConflict(r.Context(), workspaceID, e.StartAt, e.EndAt, nil)
+		if err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		if conflict {
+			http.Error(w, `{"error":"time slot conflict with existing event"}`, http.StatusConflict)
+			return
+		}
 	}
 
 	if err := h.repo.Create(r.Context(), &e); err != nil {
