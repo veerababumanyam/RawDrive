@@ -70,7 +70,16 @@ export default function GalleriesPage() {
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
         const body = await res.json();
-        return Array.isArray(body) ? body : body.galleries || [];
+        // The backend returns one of: a bare array, `{galleries: [...]}`,
+        // or `null` when there are zero rows. The previous fallback
+        // (`body.galleries || []`) crashed with
+        // "Cannot read properties of null (reading 'galleries')" because
+        // `Array.isArray(null) === false` falls through to `null.galleries`.
+        // Mirror the safe coercion from `lib/api/galleries.ts` so the page
+        // tolerates an empty workspace.
+        if (Array.isArray(body)) return body;
+        if (body && Array.isArray(body.galleries)) return body.galleries;
+        return [];
       })
       .then(setGalleries)
       .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })

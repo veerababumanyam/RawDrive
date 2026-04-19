@@ -7,7 +7,7 @@ import { screen } from "@/lib/upload-screening/screen";
 import { sha256HexChunked } from "@/lib/upload-screening/hash";
 import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
-import { getStoredAccessToken } from "@/lib/auth";
+import { authFetch } from "@/lib/api/authFetch";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
@@ -42,13 +42,13 @@ export function useUpload(apiUrl: string, token: string) {
     const controller = new AbortController();
     abortControllers.current.set(item.id, controller);
 
-    // QA #16: fetch the access token fresh at request time rather than
-    // using the closure-captured `token` from hook mount. When the page
-    // renders before auth hydrates (token=""), the closure captures the
-    // empty string and every upload 401s even though the user is logged
-    // in. getStoredAccessToken() reads the current cached value, so the
-    // Authorization header reflects the latest refreshed token.
-    const currentToken = getStoredAccessToken() || token;
+    // QA #16 (historic): refresh the token fresh at request time so
+    // Authorization reflects the latest cached value. authFetch now
+    // owns this — it reads getStoredAccessToken() internally AND
+    // auto-refreshes via /auth/refresh on 401, so the upload survives
+    // tokens that expire mid-session instead of stalling with a
+    // permanent 401 on every subsequent chunk PATCH.
+    void token; // kept in the signature for caller compatibility
 
     try {
       updateItem(item.id, { status: "screening" });
@@ -83,10 +83,9 @@ export function useUpload(apiUrl: string, token: string) {
 
       updateItem(item.id, { status: "uploading", scanManifest: manifest });
 
-      const createRes = await fetch(`${apiUrl}/api/v1/uploads`, {
+      const createRes = await authFetch("/api/v1/uploads", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -130,10 +129,9 @@ export function useUpload(apiUrl: string, token: string) {
         const end = Math.min(offset + CHUNK_SIZE, item.file.size);
         const chunk = item.file.slice(offset, end);
 
-        const patchRes = await fetch(`${apiUrl}/api/v1/uploads/${upload_id}`, {
+        const patchRes = await authFetch(`/api/v1/uploads/${upload_id}`, {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${currentToken}`,
             "Content-Type": "application/offset+octet-stream",
             "Upload-Offset": String(offset),
           },

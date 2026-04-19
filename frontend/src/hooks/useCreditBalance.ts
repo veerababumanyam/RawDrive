@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+import { authFetch } from "@/lib/api/authFetch";
 
 export type CreditBalance = {
   workspaceId: string;
@@ -52,14 +50,15 @@ export function useCreditBalance(opts: UseCreditBalanceOptions = {}) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const token = typeof window !== "undefined" ? getStoredAccessToken() : "";
-      const res = await fetch(`${API_BASE}/api/v1/credits/balance`, {
+      // QA: the prior raw `fetch` read the access token once and sent it
+      // with no refresh-on-401 recovery. When the 15-minute JWT TTL
+      // lapsed mid-session the balance widget kept producing 401s until
+      // the user reloaded. authFetch transparently refreshes the token
+      // via /auth/refresh on 401 and replays the request — matching the
+      // pattern every other authenticated client in the app already uses.
+      const res = await authFetch("/api/v1/credits/balance", {
         method: "GET",
-        headers: {
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: "include",
+        headers: { Accept: "application/json" },
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
