@@ -24,6 +24,7 @@ import {
 } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
+import { HeaderClock } from "@/components/layout/HeaderClock";
 import {
   AdminSidebar,
   DealerSidebar,
@@ -393,6 +394,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </form>
 
         <div className="flex items-center justify-self-end gap-3">
+          {/* Issue #1: dashboard-wide live clock. Mounted in the
+              shared header so every authenticated route surfaces the
+              current time without per-page work. */}
+          <HeaderClock />
           <ThemeToggleButton />
           <a
             href="/notifications"
