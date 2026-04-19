@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +14,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
+
+// ErrPhoneTaken is returned by UserService.Create when the phone column
+// would violate users_phone_key. Defined here so the auth package can
+// react (translate to 409) without importing the user package — which
+// would create a cycle because user imports auth. The user package's
+// AuthAdapter translates its own user.ErrPhoneTaken into this sentinel.
+var ErrPhoneTaken = errors.New("auth: phone number already registered")
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
 
@@ -296,6 +305,22 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// gap where onboarding was the sole writer of users.state_id.
 	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone, req.StateID)
 	if err != nil {
+		// Phone is unique in the users table (users_phone_key). A second
+		// registration with an already-taken phone used to surface as an
+		// opaque 500 "failed to create user" — indistinguishable from a
+		// real server error and impossible for the user to self-correct.
+		// Translate it to a targeted 409 with an actionable message, same
+		// shape as the duplicate-email path above.
+		if errors.Is(err, ErrPhoneTaken) {
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "phone number is already registered — use a different number or log in instead",
+			})
+			return
+		}
+		// Any other DB error: log the underlying cause so future drift is
+		// visible in the server log instead of vanishing. Response body
+		// stays generic to avoid leaking DB internals to the client.
+		log.Printf("auth.Register: create user failed email=%s: %v", req.Email, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
 	}

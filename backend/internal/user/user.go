@@ -10,8 +10,16 @@ import (
 )
 
 var (
-	ErrConflict = errors.New("conflict: resource already exists")
-	ErrNotFound = errors.New("not found")
+	ErrConflict     = errors.New("conflict: resource already exists")
+	ErrNotFound     = errors.New("not found")
+	// ErrPhoneTaken distinguishes phone-uniqueness violations from
+	// generic DB errors so the register handler can respond with a
+	// targeted 409 + actionable message instead of an opaque 500.
+	// The email uniqueness path is handled upstream by the register
+	// handler's FindByEmail pre-check; phone has no analogous
+	// pre-check (users don't always supply it), so the repo must
+	// detect the constraint-name-specific 23505 at INSERT time.
+	ErrPhoneTaken = errors.New("phone number is already registered")
 )
 
 type User struct {

@@ -25,9 +25,18 @@ func NewAuthAdapter(svc Service) *AuthAdapter {
 // mandatory Indian state selection from the register form; it is
 // persisted directly in the INSERT so the user row never has a NULL
 // state_id even if onboarding is skipped or interrupted.
+//
+// Phone-uniqueness collisions come back from the repo as
+// user.ErrPhoneTaken. We translate those to auth.ErrPhoneTaken so the
+// auth package can recognize the condition and respond 409 without
+// needing to import this package (which would create a cycle —
+// user already imports auth for UserProfile).
 func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, phone string, stateID int) (string, error) {
 	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, DisplayName: displayName, Phone: phone, StateID: stateID})
 	if err != nil {
+		if errors.Is(err, ErrPhoneTaken) {
+			return "", auth.ErrPhoneTaken
+		}
 		return "", err
 	}
 	return u.ID, nil

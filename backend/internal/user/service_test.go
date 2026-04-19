@@ -13,12 +13,14 @@ import (
 type mockUserRepo struct {
 	users   map[string]*user.User
 	byEmail map[string]*user.User
+	byPhone map[string]*user.User
 }
 
 func newMockUserRepo() *mockUserRepo {
 	return &mockUserRepo{
 		users:   map[string]*user.User{},
 		byEmail: map[string]*user.User{},
+		byPhone: map[string]*user.User{},
 	}
 }
 
@@ -26,9 +28,20 @@ func (m *mockUserRepo) Create(ctx context.Context, u *user.User) (*user.User, er
 	if _, exists := m.byEmail[u.Email]; exists {
 		return nil, user.ErrConflict
 	}
+	if u.Phone != "" {
+		if _, exists := m.byPhone[u.Phone]; exists {
+			// Mirrors the real PgRepo: users_phone_key violations come
+			// back as ErrPhoneTaken so the adapter + auth handler can
+			// respond 409 instead of a generic 500.
+			return nil, user.ErrPhoneTaken
+		}
+	}
 	m.users[u.ID] = u
 	if u.Email != "" {
 		m.byEmail[u.Email] = u
+	}
+	if u.Phone != "" {
+		m.byPhone[u.Phone] = u
 	}
 	return u, nil
 }
@@ -99,6 +112,29 @@ func TestCreateUser_DuplicateEmail(t *testing.T) {
 
 	_, err = svc.Create(ctx, user.CreateUserInput{Email: "dup@example.com"})
 	assert.ErrorIs(t, err, user.ErrConflict, "duplicate email should return conflict error")
+}
+
+// TestCreateUser_DuplicatePhone pins the repo contract used by the
+// register handler: a second user with an already-taken phone must
+// come back as ErrPhoneTaken, not a generic DB error. Previously this
+// surfaced as a 500 "failed to create user" in production because the
+// handler swallowed the raw pg 23505 — the auth handler now recognizes
+// this sentinel and responds 409 with an actionable message.
+func TestCreateUser_DuplicatePhone(t *testing.T) {
+	svc := newTestUserService()
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, user.CreateUserInput{
+		Email: "first@example.com",
+		Phone: "+919876543210",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.Create(ctx, user.CreateUserInput{
+		Email: "second@example.com",
+		Phone: "+919876543210",
+	})
+	assert.ErrorIs(t, err, user.ErrPhoneTaken, "duplicate phone must return ErrPhoneTaken")
 }
 
 func TestGetUserByID(t *testing.T) {

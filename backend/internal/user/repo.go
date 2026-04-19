@@ -2,11 +2,26 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// isPhoneUniqueViolation recognizes Postgres 23505 (unique_violation)
+// specifically on the users_phone_key constraint. Other unique
+// violations (e.g. users_email_key) surface as generic errors; the
+// register handler's FindByEmail pre-check already catches the email
+// case, so phone is the only one that reaches this path.
+func isPhoneUniqueViolation(err error) bool {
+	var pg *pgconn.PgError
+	if !errors.As(err, &pg) {
+		return false
+	}
+	return pg.Code == "23505" && pg.ConstraintName == "users_phone_key"
+}
 
 // PgRepo implements Repository using PostgreSQL.
 type PgRepo struct {
@@ -34,6 +49,9 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole, u.StateID,
 	).Scan(&u.ID)
 	if err != nil {
+		if isPhoneUniqueViolation(err) {
+			return nil, ErrPhoneTaken
+		}
 		return nil, fmt.Errorf("user repo create: %w", err)
 	}
 	return u, nil
