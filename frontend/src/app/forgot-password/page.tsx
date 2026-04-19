@@ -1,20 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { requestPasswordReset } from "@/lib/api/auth";
 
 // M39 E6-S2: forgot-password page. Accepts an email, calls
 // /auth/request-password-reset which always returns 202 (enumeration
 // defense), and redirects to /reset-password with the email prefilled.
+// Issue #4: when arrived from an admin invitation email the URL carries
+// ?email= so we pre-fill the field to cut one click from the flow.
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const param = searchParams.get("email");
+    if (param && !email) {
+      setEmail(param);
+    }
+    // intentionally only react to searchParams — we do not want to
+    // overwrite a value the user has typed if the query later changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,5 +94,15 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// Next 15 requires useSearchParams() to sit inside a Suspense boundary
+// during static rendering; wrap the client form accordingly.
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <ForgotPasswordForm />
+    </Suspense>
   );
 }

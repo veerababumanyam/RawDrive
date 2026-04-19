@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -13,6 +15,12 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// AdminInviteSender delivers a platform-role invitation email to a
+// newly created user (Issue #4). Satisfied by *email.InvitationSender.
+type AdminInviteSender interface {
+	SendAdminInvitation(ctx context.Context, email, role, inviteLink string) error
+}
 
 var (
 	ErrCannotSuspendSelf           = errors.New("cannot suspend your own account")
@@ -82,13 +90,24 @@ func validatePasswordComplexity(pw string) error {
 }
 
 type AdminUserService struct {
-	userRepo  *repository.AdminUserRepo
-	auditLog  *AuditLogService
-	jwtSecret []byte
+	userRepo     *repository.AdminUserRepo
+	auditLog     *AuditLogService
+	jwtSecret    []byte
+	inviteSender AdminInviteSender
+	frontendURL  string
 }
 
 func NewAdminUserService(userRepo *repository.AdminUserRepo, auditLog *AuditLogService, jwtSecret []byte) *AdminUserService {
 	return &AdminUserService{userRepo: userRepo, auditLog: auditLog, jwtSecret: jwtSecret}
+}
+
+// SetAdminInviteSender wires the platform-role invitation email sender
+// used by the SendInvite branch of Create (Issue #4). Kept as a setter
+// so existing callers (main.go, tests) using the original 3-arg
+// constructor do not need to change.
+func (s *AdminUserService) SetAdminInviteSender(sender AdminInviteSender, frontendURL string) {
+	s.inviteSender = sender
+	s.frontendURL = frontendURL
 }
 
 func (s *AdminUserService) ListUsers(ctx context.Context, filter repository.AdminUserFilter) (*repository.PaginatedResult[repository.AdminUserRow], error) {
@@ -286,11 +305,26 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 			Severity:     "info",
 		})
 	}
-	// TODO (M39 E5-S1 follow-up): when SendInvite is true, call the shared
-	// OTPService.Generate + EmailDelivery.SendOTP. The current Round 2 GREEN
-	// lands the user row with email_verified=false so the existing /activate
-	// flow can re-issue an OTP on first login attempt; dedicated invite
-	// emission is wired in a later wave.
+	// Issue #4 (RawDrive_NewUniqueIssues.xlsx): when SendInvite is true and
+	// no initial password was supplied, deliver a platform-role invitation
+	// email pointing the invitee at the existing /forgot-password flow so
+	// they can request a one-time code and set a password in a single
+	// round-trip (the QA #40 flow already drives this path, so we reuse
+	// the same rate-limited public endpoint instead of inventing a new
+	// invite-token table). Email failure is non-fatal — the user row is
+	// already persisted with email_verified=false, and an admin can resend
+	// via the Reset-pw button so the account is never orphaned by a
+	// transient SMTP hiccup.
+	if input.SendInvite && passwordHash == nil && s.inviteSender != nil {
+		base := strings.TrimRight(s.frontendURL, "/")
+		if base == "" {
+			base = "https://app.rawdrive.io"
+		}
+		inviteLink := fmt.Sprintf("%s/forgot-password?email=%s", base, url.QueryEscape(email))
+		if err := s.inviteSender.SendAdminInvitation(ctx, email, role, inviteLink); err != nil {
+			log.Printf("admin: invite email to %s failed: %v", email, err)
+		}
+	}
 	return detail, nil
 }
 

@@ -219,6 +219,46 @@ func TestComposeInvitationMessage_ContainsLink(t *testing.T) {
 	assert.Contains(t, msg, link, "body MUST include the invitation link verbatim")
 }
 
+// Issue #4 (RawDrive_NewUniqueIssues.xlsx): platform-role invitation
+// emails must name the granted role in the subject and body, and
+// include the activation link verbatim so the invitee can reach the
+// existing /activate OTP flow.
+func TestComposeAdminInvitationMessage_IncludesRoleAndLink(t *testing.T) {
+	cfg := &SMTPConfig{
+		FromAddress: "noreply@rawdrive.in",
+		FromName:    "RawDrive",
+	}
+	link := "https://app.rawdrive.io/activate?email=new-admin%40example.com"
+	msg := string(composeAdminInvitationMessage(cfg, "new-admin@example.com", "admin", link))
+
+	assert.Contains(t, msg, "To:")
+	assert.Contains(t, msg, "new-admin@example.com")
+	assert.Contains(t, msg, "Subject:")
+	assert.Contains(t, msg, "as Admin", "subject must display the human-readable role label")
+	assert.Contains(t, msg, "granted the Admin role", "body must spell out the role being granted")
+	assert.Contains(t, msg, link, "body must include the activation link verbatim")
+}
+
+func TestComposeAdminInvitationMessage_UnknownRoleIsPassedThrough(t *testing.T) {
+	cfg := &SMTPConfig{FromAddress: "noreply@rawdrive.in"}
+	msg := string(composeAdminInvitationMessage(cfg, "x@example.com", "custom_role", "https://app.rawdrive.io/activate"))
+	assert.Contains(t, msg, "as custom_role", "fallback must reuse the raw role string")
+}
+
+func TestHumanRoleLabel_KnownRoles(t *testing.T) {
+	cases := map[string]string{
+		"admin":        "Admin",
+		"photographer": "Photographer",
+		"dealer":       "Dealer",
+		"team_member":  "Team Member",
+		"client":       "Client",
+		"unknown":      "unknown",
+	}
+	for in, want := range cases {
+		assert.Equal(t, want, humanRoleLabel(in), "role label mismatch for %q", in)
+	}
+}
+
 // ──────────────────────── Delivery adapters ────────────────────────
 
 // capturedMail records a single SendMail invocation for the fake

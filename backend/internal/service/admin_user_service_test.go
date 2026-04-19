@@ -168,6 +168,42 @@ func TestErrorSentinels_Messages(t *testing.T) {
 	}
 }
 
+// ──────────────────────── Admin invitation (Issue #4) ────────────────────────
+
+// fakeAdminInviteSender captures each SendAdminInvitation call so
+// invite-path tests can assert the target email, role, and activation
+// link without a real SMTP server.
+type fakeAdminInviteSender struct {
+	calls []struct {
+		email string
+		role  string
+		link  string
+	}
+	err error
+}
+
+func (f *fakeAdminInviteSender) SendAdminInvitation(_ context.Context, email, role, link string) error {
+	f.calls = append(f.calls, struct {
+		email string
+		role  string
+		link  string
+	}{email, role, link})
+	return f.err
+}
+
+func TestSetAdminInviteSender_StoresSenderAndURL(t *testing.T) {
+	svc := NewAdminUserService(nil, nil, nil)
+	sender := &fakeAdminInviteSender{}
+	svc.SetAdminInviteSender(sender, "https://app.example.com/")
+	require.NotNil(t, svc.inviteSender)
+	assert.Equal(t, "https://app.example.com/", svc.frontendURL)
+}
+
+// Compile-time assertion: fakeAdminInviteSender satisfies the interface
+// the service consumes. If someone renames or removes the interface
+// method, this file fails to compile rather than failing a live test.
+var _ AdminInviteSender = (*fakeAdminInviteSender)(nil)
+
 // ──────────────────────── AuditLogCreate struct ────────────────────────
 
 func TestAuditLogCreate_FieldAssignment(t *testing.T) {

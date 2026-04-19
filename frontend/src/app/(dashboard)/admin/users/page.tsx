@@ -12,8 +12,12 @@ import {
   type AdminUser,
 } from "@/lib/api/admin";
 import { requestPasswordReset } from "@/lib/api/auth";
-import { Download } from "lucide-react";
+import { Download, UserPlus } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+// Issue #4: the M39 E5-S2 NewUserDialog ships the create flow but was
+// never wired to the admin users page — QA #4 in RawDrive_NewUniqueIssues
+// flagged the missing button. Reuse the existing tested component.
+import NewUserDialog from "@/components/admin/NewUserDialog";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
@@ -37,6 +41,8 @@ export default function AdminUsersPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Issue #4: modal state for admin-initiated user creation.
+  const [createOpen, setCreateOpen] = useState(false);
 
   const fetchUsers = async () => {
     const token = getStoredAccessToken();
@@ -293,15 +299,33 @@ export default function AdminUsersPage() {
         emptyMessage="No users found."
         emptyStateMessage="No users found."
         toolbarActions={
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
-            aria-label="Export CSV"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-on-accent hover:bg-accent-hover transition-all text-sm font-semibold"
+              aria-label="Create user"
+            >
+              <UserPlus className="h-4 w-4" />
+              Create user
+            </button>
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
+              aria-label="Export CSV"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
+          </div>
         }
+      />
+      <NewUserDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          setCreateOpen(false);
+          fetchUsers();
+        }}
       />
     </div>
   );

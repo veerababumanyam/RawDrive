@@ -1406,8 +1406,18 @@ func main() {
 		// rows in audit_logs after a PUT /upload-policy request.
 		workspacePolicySvc.WithAuditLog(auditLogSvc)
 
+		adminUserSvc := service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret)
+		// Issue #4: wire platform-role invitation email. The concrete
+		// *email.InvitationSender satisfies both teamPkg.EmailSender and
+		// service.AdminInviteSender, so we type-assert to reuse the same
+		// SMTP config + envelope settings across team and platform invites.
+		// Admin invites are skipped silently in envs that substitute
+		// logEmailSender — admin can resend via the Reset-pw button.
+		if adminInv, ok := teamEmailSender.(service.AdminInviteSender); ok {
+			adminUserSvc.SetAdminInviteSender(adminInv, os.Getenv("FRONTEND_URL"))
+		}
 		handler.RegisterAdminRoutes(api, handler.AdminDeps{
-			UserSvc:       service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret),
+			UserSvc:       adminUserSvc,
 			ModerationSvc: service.NewAdminModerationService(adminModerationRepo, auditLogSvc),
 			WorkspaceSvc:  service.NewAdminWorkspaceService(adminWorkspaceRepo),
 			RevenueSvc:    service.NewAdminRevenueService(adminRevenueRepo),

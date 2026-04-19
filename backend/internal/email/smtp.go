@@ -352,6 +352,19 @@ func (d *InvitationSender) SendInvitation(ctx context.Context, email, inviteLink
 	return sendConfigured(d.mailer, cfg, email, composeInvitationMessage(cfg, email, inviteLink))
 }
 
+// SendAdminInvitation sends a platform-role invitation email for the
+// admin user create flow (Issue #4 / RawDrive_NewUniqueIssues.xlsx).
+// The message tells the invitee they have been granted a platform role
+// (admin / dealer / etc.) and points them at the activation link so the
+// existing /activate OTP flow can set their password.
+func (d *InvitationSender) SendAdminInvitation(ctx context.Context, email, role, inviteLink string) error {
+	cfg, err := resolveConfig(ctx, d.cfg, d.loader)
+	if err != nil {
+		return err
+	}
+	return sendConfigured(d.mailer, cfg, email, composeAdminInvitationMessage(cfg, email, role, inviteLink))
+}
+
 // smtpAuth returns smtp.PlainAuth when credentials are configured.
 // Returns nil for unauthenticated transports - most commonly the
 // dev Mailpit listener on port 1025 which does not require auth.
@@ -375,6 +388,46 @@ func composeOTPMessage(cfg *SMTPConfig, to, code string) []byte {
 	b.WriteString("\r\n")
 	fmt.Fprintf(&b, "Your RawDrive verification code is: %s\r\n\r\n", code)
 	b.WriteString("This code expires in 10 minutes. If you did not request a verification code, you can safely ignore this email.\r\n")
+	return []byte(b.String())
+}
+
+// humanRoleLabel returns a display label for a platform role in
+// invitation email copy. Falls back to the raw value for unknown roles.
+func humanRoleLabel(role string) string {
+	switch role {
+	case "admin":
+		return "Admin"
+	case "photographer":
+		return "Photographer"
+	case "dealer":
+		return "Dealer"
+	case "team_member":
+		return "Team Member"
+	case "client":
+		return "Client"
+	default:
+		return role
+	}
+}
+
+// composeAdminInvitationMessage builds an RFC 5322 text/plain platform
+// invitation email (Issue #4). Distinct from the team/workspace
+// invitation so the copy correctly reflects a platform-role grant.
+// The link lands the invitee on the existing /forgot-password flow,
+// which issues a one-time code and then directs them to /reset-password
+// to set their first password — no net-new auth primitives.
+func composeAdminInvitationMessage(cfg *SMTPConfig, to, role, inviteLink string) []byte {
+	var b strings.Builder
+	writeFromHeader(&b, cfg)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
+	fmt.Fprintf(&b, "Subject: You've been invited to RawDrive as %s\r\n", humanRoleLabel(role))
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	b.WriteString("\r\n")
+	fmt.Fprintf(&b, "You have been granted the %s role on RawDrive.\r\n\r\n", humanRoleLabel(role))
+	fmt.Fprintf(&b, "Set your password by visiting: %s\r\n\r\n", inviteLink)
+	b.WriteString("You will receive a one-time code by email; use it to confirm your account and choose a password.\r\n\r\n")
+	b.WriteString("If you did not expect this invitation, you can safely ignore this email.\r\n")
 	return []byte(b.String())
 }
 
