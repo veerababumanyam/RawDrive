@@ -11,6 +11,14 @@ import (
 
 var (
 	ErrNotFound = errors.New("workspace not found")
+	// ErrDuplicateName signals that the (owner_id, lower(name)) tuple
+	// is already present (Issue #5 / migration 096). Surfaced by the
+	// repo when PostgreSQL raises a unique_violation on the
+	// workspaces_owner_lower_name_uniq index. Callers (notably the
+	// onboarding adapter in cmd/api/main.go) treat this as an
+	// idempotent retry signal — fetch the existing row instead of
+	// surfacing a raw 23505 error to the user.
+	ErrDuplicateName = errors.New("workspace name already exists for this owner")
 )
 
 type contextKey string
@@ -48,6 +56,10 @@ type CreateWorkspaceInput struct {
 type Repository interface {
 	Create(ctx context.Context, ws *Workspace) (*Workspace, error)
 	GetByID(ctx context.Context, id string) (*Workspace, error)
+	// Issue #5: case-insensitive lookup used by the onboarding
+	// adapter to recover the existing row when Create returned
+	// ErrDuplicateName on a partial-failure retry.
+	GetByOwnerAndName(ctx context.Context, ownerID, name string) (*Workspace, error)
 }
 
 type EventPublisher interface {
@@ -61,6 +73,9 @@ type StorageBucket interface {
 type Service interface {
 	Create(ctx context.Context, input CreateWorkspaceInput) (*Workspace, error)
 	GetByID(ctx context.Context, id string) (*Workspace, error)
+	// GetByOwnerAndName is the recovery seam for Issue #5; see
+	// Repository.GetByOwnerAndName for the case-insensitivity contract.
+	GetByOwnerAndName(ctx context.Context, ownerID, name string) (*Workspace, error)
 }
 
 type service struct {
@@ -121,4 +136,8 @@ func (s *service) Create(ctx context.Context, input CreateWorkspaceInput) (*Work
 
 func (s *service) GetByID(ctx context.Context, id string) (*Workspace, error) {
 	return s.repo.GetByID(ctx, id)
+}
+
+func (s *service) GetByOwnerAndName(ctx context.Context, ownerID, name string) (*Workspace, error) {
+	return s.repo.GetByOwnerAndName(ctx, ownerID, name)
 }

@@ -5,6 +5,7 @@ import (
 	cryptorand "crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -257,7 +258,25 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 		PlanTier:     planTier,
 	})
 	if err != nil {
-		return "", err
+		// Issue #5 + onboarding.go:164-169 caveat: if a previous
+		// onboarding attempt succeeded at the workspace insert but
+		// failed before advancing to step=complete (e.g., the
+		// workspace_members write below or the profile upsert),
+		// the user retries and migration 096 raises a unique
+		// violation here. The right behavior is idempotent recovery
+		// — fetch the prior row's ID and continue rather than
+		// surfacing a duplicate-name error to a user who is just
+		// retrying their own onboarding.
+		if errors.Is(err, workspace.ErrDuplicateName) {
+			existing, lookupErr := o.wsSvc.GetByOwnerAndName(ctx, userID, businessName)
+			if lookupErr == nil && existing != nil {
+				ws = existing
+			} else {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
 	}
 
 	// Ensure workspace_members row exists (for AuthLookup to find)

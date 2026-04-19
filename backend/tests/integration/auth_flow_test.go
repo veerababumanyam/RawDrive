@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,15 @@ func (r *testWSRepo) GetByID(_ context.Context, id string) (*workspace.Workspace
 		return nil, workspace.ErrNotFound
 	}
 	return ws, nil
+}
+
+func (r *testWSRepo) GetByOwnerAndName(_ context.Context, ownerID, name string) (*workspace.Workspace, error) {
+	for _, ws := range r.workspaces {
+		if ws.OwnerID == ownerID && strings.EqualFold(ws.Name, name) {
+			return ws, nil
+		}
+	}
+	return nil, workspace.ErrNotFound
 }
 
 type testEventPub struct{}

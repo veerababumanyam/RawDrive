@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -44,6 +45,19 @@ func (m *mockWorkspaceService) GetByID(_ context.Context, id string) (*workspace
 		return nil, workspace.ErrNotFound
 	}
 	return ws, nil
+}
+
+// GetByOwnerAndName satisfies the Service interface added for Issue #5.
+// The mock has no real index so this is a linear scan over the seeded
+// workspaces; sufficient for handler-tier tests that do not exercise
+// the duplicate-recovery path directly.
+func (m *mockWorkspaceService) GetByOwnerAndName(_ context.Context, ownerID, name string) (*workspace.Workspace, error) {
+	for _, ws := range m.workspaces {
+		if ws.OwnerID == ownerID && strings.EqualFold(ws.Name, name) {
+			return ws, nil
+		}
+	}
+	return nil, workspace.ErrNotFound
 }
 
 // ──────────────────────────── Helpers ────────────────────────────
@@ -217,5 +231,9 @@ func (e *errorWorkspaceService) Create(_ context.Context, _ workspace.CreateWork
 }
 
 func (e *errorWorkspaceService) GetByID(_ context.Context, _ string) (*workspace.Workspace, error) {
+	return nil, errors.New("db error")
+}
+
+func (e *errorWorkspaceService) GetByOwnerAndName(_ context.Context, _, _ string) (*workspace.Workspace, error) {
 	return nil, errors.New("db error")
 }
