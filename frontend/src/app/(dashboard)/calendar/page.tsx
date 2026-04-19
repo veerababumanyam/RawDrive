@@ -73,6 +73,28 @@ export default function CalendarPage() {
   };
   const [form, setForm] = useState(emptyForm);
 
+  // QA Issue #2B (RawDrive_NewUniqueIssues.xlsx): the prior calendar
+  // grid only rendered the event title. The fields the create form
+  // collected (location, notes, contact, type, end_at) were never
+  // visible after save because the page had no detail view at all.
+  // selectedEvent drives a small read-only modal that shows every
+  // persisted field for the clicked event chip.
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const contactNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of contacts) map.set(c.id, c.name);
+    return map;
+  }, [contacts]);
+  const formatEventInstant = (iso?: string, allDay?: boolean) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const opts: Intl.DateTimeFormatOptions = allDay
+      ? { weekday: "short", month: "short", day: "numeric", year: "numeric" }
+      : { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" };
+    return d.toLocaleString("en-IN", opts);
+  };
+
   const events = requestState.key === requestKey ? requestState.events : [];
   const error = token
     ? requestState.key === requestKey
@@ -207,9 +229,29 @@ export default function CalendarPage() {
   const firstDayOfWeek = monthStart.getDay();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
+  // QA Issue #2A (RawDrive_NewUniqueIssues.xlsx): the previous version
+  // matched only events whose start_at YYYY-MM-DD prefix equalled the
+  // cell day, which made multi-day events disappear from every day
+  // except the start. We now treat each event as a half-open
+  // [start, end) date range and include the day if it intersects
+  // [00:00 of cell day, 00:00 of next day). Events with no end_at fall
+  // back to a 1-day span so single-day events render unchanged.
   const eventsOnDay = (day: number) => {
-    const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return (events ?? []).filter((event) => event?.start_at?.startsWith(dayStr));
+    const cellStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), day, 0, 0, 0, 0);
+    const cellEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), day + 1, 0, 0, 0, 0);
+    return (events ?? []).filter((event) => {
+      if (!event?.start_at) return false;
+      const startMs = Date.parse(event.start_at);
+      if (Number.isNaN(startMs)) return false;
+      const rawEnd = event.end_at && Date.parse(event.end_at);
+      const endMs = typeof rawEnd === "number" && !Number.isNaN(rawEnd) ? rawEnd : startMs;
+      // Half-open intersection: event overlaps the cell day if it
+      // starts before the cell's next-day boundary AND ends after the
+      // cell's start. Equal-instant boundaries are excluded so an
+      // event that ends at 00:00 of the next day does not bleed into
+      // that day's chip list.
+      return startMs < cellEnd.getTime() && endMs > cellStart.getTime();
+    });
   };
 
   const monthName = currentDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
@@ -379,15 +421,24 @@ export default function CalendarPage() {
                   </span>
                   <div className="mt-1 space-y-0.5">
                     {dayEvents.slice(0, 2).map((event) => (
-                      <div
+                      <button
+                        type="button"
                         key={event.id}
+                        onClick={(e) => {
+                          // Stop propagation so the day cell's
+                          // openCreate handler does not also fire when
+                          // the user is trying to view an event chip.
+                          e.stopPropagation();
+                          setSelectedEvent(event);
+                        }}
                         className={cn(
-                          "w-full justify-start rounded-md px-1 py-0.5 text-[10px] font-medium truncate",
+                          "w-full justify-start rounded-md px-1 py-0.5 text-[10px] font-medium truncate text-left hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-accent/40",
                           calendarEventClasses[event.event_type] || "status-badge status-badge--neutral",
                         )}
+                        aria-label={`View event: ${event.title}`}
                       >
                         {event.title}
-                      </div>
+                      </button>
                     ))}
                     {dayEvents.length > 2 && (
                       <div className="text-[10px] text-text-tertiary px-1">+{dayEvents.length - 2} more</div>
@@ -396,6 +447,95 @@ export default function CalendarPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {selectedEvent && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-detail-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSelectedEvent(null);
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-border-default bg-surface-raised p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <h2 id="event-detail-title" className="font-headline text-xl font-bold text-text-primary">
+                {selectedEvent.title}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectedEvent(null)}
+                className="rounded-lg px-2 py-1 text-text-tertiary hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-accent/40"
+                aria-label="Close event details"
+              >
+                ✕
+              </button>
+            </div>
+
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-text-tertiary mb-1">Type</dt>
+                <dd className="text-text-primary">
+                  {CALENDAR_EVENT_TYPE_OPTIONS.find((t) => t.value === selectedEvent.event_type)?.label ?? selectedEvent.event_type}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-text-tertiary mb-1">When</dt>
+                <dd className="text-text-primary">
+                  {formatEventInstant(selectedEvent.start_at, selectedEvent.all_day)}
+                  {selectedEvent.end_at && (
+                    <>
+                      {" — "}
+                      {formatEventInstant(selectedEvent.end_at, selectedEvent.all_day)}
+                    </>
+                  )}
+                  {selectedEvent.all_day ? <span className="ml-2 text-xs text-text-secondary">(all day)</span> : null}
+                </dd>
+              </div>
+
+              {selectedEvent.contact_id ? (
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-text-tertiary mb-1">Client</dt>
+                  <dd className="text-text-primary">{contactNameById.get(selectedEvent.contact_id) ?? selectedEvent.contact_id}</dd>
+                </div>
+              ) : null}
+
+              {selectedEvent.location ? (
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-text-tertiary mb-1">Location</dt>
+                  <dd className="text-text-primary whitespace-pre-wrap">{selectedEvent.location}</dd>
+                </div>
+              ) : null}
+
+              {selectedEvent.notes ? (
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-text-tertiary mb-1">Notes</dt>
+                  <dd className="text-text-primary whitespace-pre-wrap">{selectedEvent.notes}</dd>
+                </div>
+              ) : null}
+
+              {selectedEvent.status ? (
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-text-tertiary mb-1">Status</dt>
+                  <dd className="text-text-primary capitalize">{selectedEvent.status}</dd>
+                </div>
+              ) : null}
+            </dl>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedEvent(null)}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/40"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
