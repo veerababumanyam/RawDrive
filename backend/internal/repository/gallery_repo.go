@@ -352,10 +352,48 @@ func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 	return nil
 }
 
-// SoftDelete marks a gallery as deleted.
+// SoftDelete marks a gallery as deleted and best-effort cleans up any
+// orphaned contact rows that were only linked through this gallery.
+//
+// QA Issue #3 (RawDrive_NewUniqueIssues.xlsx): the prior implementation
+// only set deleted_at on the gallery row, leaving the gallery's
+// primary_contact_id / contact_id contact visible on the Clients screen.
+// Most photographers create a contact implicitly when setting up a
+// gallery (the "client" name on the form), so an orphan check tied to
+// gallery deletion is the right cleanup boundary.
+//
+// Cleanup contract (intentionally conservative):
+//   - Only contacts referenced by NO other live (deleted_at IS NULL)
+//     gallery row are eligible.
+//   - The plain DELETE is attempted; any FK RESTRICT from leads, deals,
+//     contracts, invoices, calendar_events, or projects causes the
+//     delete to fail at the database level. We swallow that error
+//     because it is the signal that the contact has independent CRM
+//     activity and must be preserved.
+//   - The whole sequence runs in a single transaction so a partial
+//     failure cannot leave the gallery soft-deleted but the cleanup
+//     half-applied.
 func (r *GalleryRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("gallery repo delete: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck — Commit() shadows; Rollback on error is best-effort
+
+	// Capture both contact links before mutating the row so we know
+	// what to consider for cleanup. Both columns are nullable; either
+	// (or both) may be set depending on the era of the gallery row.
+	var primaryContactID, legacyContactID *uuid.UUID
+	err = tx.QueryRow(ctx,
+		`SELECT primary_contact_id, contact_id FROM galleries WHERE id=$1 AND deleted_at IS NULL`,
+		id,
+	).Scan(&primaryContactID, &legacyContactID)
+	if err != nil {
+		return fmt.Errorf("gallery repo delete: read contact links: %w", err)
+	}
+
 	now := time.Now()
-	tag, err := r.pool.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE galleries SET deleted_at=$1, updated_at=$1 WHERE id=$2 AND deleted_at IS NULL`,
 		now, id,
 	)
@@ -364,6 +402,42 @@ func (r *GalleryRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("gallery not found or already deleted")
+	}
+
+	// Best-effort cleanup of contacts that were only linked through
+	// this gallery. The NOT EXISTS guard ensures we never delete a
+	// contact that is still referenced by another live gallery (which
+	// would silently null-out that gallery's link via ON DELETE SET
+	// NULL). The DELETE itself is guarded by the FK RESTRICT semantics
+	// on every CRM-side reference, so any contact with leads, deals,
+	// contracts, invoices, projects, or calendar events survives.
+	cleanup := func(contactID uuid.UUID) {
+		if contactID == uuid.Nil {
+			return
+		}
+		_, _ = tx.Exec(ctx,
+			`DELETE FROM contacts c WHERE c.id = $1
+			 AND NOT EXISTS (
+			   SELECT 1 FROM galleries g
+			   WHERE (g.primary_contact_id = $1 OR g.contact_id = $1)
+			     AND g.deleted_at IS NULL
+			     AND g.id <> $2
+			 )`,
+			contactID, id,
+		)
+	}
+	if primaryContactID != nil {
+		cleanup(*primaryContactID)
+	}
+	// Skip the legacy column when it duplicates the primary link to
+	// avoid a redundant query against the same contact id.
+	if legacyContactID != nil &&
+		(primaryContactID == nil || *primaryContactID != *legacyContactID) {
+		cleanup(*legacyContactID)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("gallery repo delete: commit: %w", err)
 	}
 	return nil
 }
