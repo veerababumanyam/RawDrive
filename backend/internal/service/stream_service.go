@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -27,6 +29,11 @@ func NewStreamService(sr *repository.StreamRepo, cr *repository.StreamChatRepo) 
 }
 
 // CreateStreamInput holds input for creating a stream.
+//
+// Pin is the *plaintext* PIN supplied by the caller (empty = no PIN
+// protection). CreateStream hashes it with argon2id before persisting to
+// streams.pin_hash — the service never writes a plaintext PIN to the DB
+// (the legacy pin_code column was dropped in migration 093).
 type CreateStreamInput struct {
 	WorkspaceID uuid.UUID  `json:"workspace_id"`
 	GalleryID   *uuid.UUID `json:"gallery_id"`
@@ -34,7 +41,7 @@ type CreateStreamInput struct {
 	Title       string     `json:"title"`
 	Description *string    `json:"description"`
 	ScheduledAt *time.Time `json:"scheduled_at"`
-	PinCode     *string    `json:"pin_code"`
+	Pin         string     `json:"pin,omitempty"`
 	MaxQuality  string     `json:"max_quality"`
 	ChatEnabled bool       `json:"chat_enabled"`
 }
@@ -55,10 +62,20 @@ func (s *StreamService) CreateStream(ctx context.Context, input CreateStreamInpu
 		Title:            input.Title,
 		Description:      input.Description,
 		ScheduledAt:      input.ScheduledAt,
-		PinCode:          input.PinCode,
 		MaxQuality:       input.MaxQuality,
 		ChatEnabled:      input.ChatEnabled,
 		ChatSlowModeSecs: 0,
+	}
+
+	// F-014 E100-S1: streams.pin_code was dropped in migration 093. We
+	// hash the plaintext PIN on the way in and store only the argon2id
+	// PHC in streams.pin_hash.
+	if input.Pin != "" {
+		hash, err := auth.HashPIN(input.Pin)
+		if err != nil {
+			return nil, fmt.Errorf("hash pin: %w", err)
+		}
+		stream.PinHash = &hash
 	}
 
 	if err := s.streamRepo.Create(ctx, stream); err != nil {
@@ -167,15 +184,28 @@ func (s *StreamService) DeleteChatMessage(ctx context.Context, messageID uuid.UU
 }
 
 // VerifyStreamPin checks if the provided PIN matches the stream's PIN.
+//
+// Backed by argon2id (auth.VerifyPIN) against streams.pin_hash. The
+// plaintext streams.pin_code column was dropped in migration 093, so
+// constant-time hash comparison is the only supported verification path.
+// A stream with no pin_hash set is "open" and accepts any PIN (including
+// empty), matching the legacy behavior before M30.
 func (s *StreamService) VerifyStreamPin(ctx context.Context, streamID uuid.UUID, pin string) (bool, error) {
 	stream, err := s.streamRepo.GetByID(ctx, streamID)
 	if err != nil {
 		return false, err
 	}
-	if stream.PinCode == nil || *stream.PinCode == "" {
+	if stream.PinHash == nil || *stream.PinHash == "" {
 		return true, nil // No PIN required
 	}
-	return *stream.PinCode == pin, nil
+	ok, verr := auth.VerifyPIN(pin, *stream.PinHash)
+	if verr != nil {
+		// Malformed PHC in DB — log loudly but do not leak the reason
+		// to callers. Treat as "no match" to preserve the 403 path.
+		log.Printf("VerifyStreamPin: malformed pin_hash for stream %s: %v", streamID, verr)
+		return false, nil
+	}
+	return ok, nil
 }
 
 // envFirst returns the first non-empty value from the given env var names.

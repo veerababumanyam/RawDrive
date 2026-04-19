@@ -26,7 +26,11 @@ type Stream struct {
 	CFRtmpsKey        *string    `json:"cf_rtmps_key"`
 	CFPlaybackURL     *string    `json:"cf_playback_url"`
 	CFVodUID          *string    `json:"cf_vod_uid"`
-	PinCode           *string    `json:"pin_code,omitempty"`
+	// PinHash is the argon2id PHC string for the stream's PIN gate
+	// (replaces the plaintext pin_code column dropped in migration 093).
+	// Never returned to unauthenticated viewers — GetPublic strips it via
+	// the explicit map projection and only exposes `pin_required` boolean.
+	PinHash           *string    `json:"-"`
 	MaxQuality        string     `json:"max_quality"`
 	ChatEnabled       bool       `json:"chat_enabled"`
 	ChatSlowModeSecs  int        `json:"chat_slow_mode_seconds"`
@@ -54,9 +58,14 @@ func NewStreamRepo(db *pgxpool.Pool) *StreamRepo {
 	return &StreamRepo{DB: db}
 }
 
+// streamCols lists every column selected from the streams table. Must be
+// kept in lock-step with the migration sequence — migration 093 (M35 /
+// F-014 security stabilization) dropped the plaintext `pin_code` column
+// and migration 082 introduced `pin_hash` (argon2id PHC), so every read
+// path selects pin_hash instead. scanStream below matches this order.
 const streamCols = `id, workspace_id, gallery_id, created_by, title, description, status,
 	scheduled_at, started_at, ended_at, cf_stream_uid, cf_rtmps_url, cf_rtmps_key,
-	cf_playback_url, cf_vod_uid, pin_code, max_quality, chat_enabled, chat_slow_mode_seconds,
+	cf_playback_url, cf_vod_uid, pin_hash, max_quality, chat_enabled, chat_slow_mode_seconds,
 	peak_viewers, total_views, duration_seconds, created_at, updated_at`
 
 func scanStream(row pgx.Row) (Stream, error) {
@@ -64,7 +73,7 @@ func scanStream(row pgx.Row) (Stream, error) {
 	err := row.Scan(&s.ID, &s.WorkspaceID, &s.GalleryID, &s.CreatedBy, &s.Title,
 		&s.Description, &s.Status, &s.ScheduledAt, &s.StartedAt, &s.EndedAt,
 		&s.CFStreamUID, &s.CFRtmpsURL, &s.CFRtmpsKey, &s.CFPlaybackURL, &s.CFVodUID,
-		&s.PinCode, &s.MaxQuality, &s.ChatEnabled, &s.ChatSlowModeSecs,
+		&s.PinHash, &s.MaxQuality, &s.ChatEnabled, &s.ChatSlowModeSecs,
 		&s.PeakViewers, &s.TotalViews, &s.DurationSeconds, &s.CreatedAt, &s.UpdatedAt)
 	return s, err
 }
@@ -78,11 +87,11 @@ func (r *StreamRepo) Create(ctx context.Context, s *Stream) error {
 	_, err := r.DB.Exec(ctx,
 		`INSERT INTO streams (id, workspace_id, gallery_id, created_by, title, description,
 			status, scheduled_at, cf_stream_uid, cf_rtmps_url, cf_rtmps_key, cf_playback_url,
-			pin_code, max_quality, chat_enabled, chat_slow_mode_seconds, created_at, updated_at)
+			pin_hash, max_quality, chat_enabled, chat_slow_mode_seconds, created_at, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
 		s.ID, s.WorkspaceID, s.GalleryID, s.CreatedBy, s.Title, s.Description,
 		s.Status, s.ScheduledAt, s.CFStreamUID, s.CFRtmpsURL, s.CFRtmpsKey, s.CFPlaybackURL,
-		s.PinCode, s.MaxQuality, s.ChatEnabled, s.ChatSlowModeSecs, s.CreatedAt, s.UpdatedAt)
+		s.PinHash, s.MaxQuality, s.ChatEnabled, s.ChatSlowModeSecs, s.CreatedAt, s.UpdatedAt)
 	return err
 }
 

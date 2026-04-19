@@ -42,6 +42,11 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description *string `json:"description"`
 		GalleryID   *string `json:"gallery_id"`
 		ScheduledAt *string `json:"scheduled_at"`
+		// Accept both `pin` and the legacy `pin_code` JSON key from existing
+		// frontend clients. Either maps to the plaintext PIN the service
+		// will hash before persisting (column `pin_code` was dropped in
+		// migration 093 — only `pin_hash` is written now).
+		Pin         *string `json:"pin"`
 		PinCode     *string `json:"pin_code"`
 		MaxQuality  string  `json:"max_quality"`
 		ChatEnabled *bool   `json:"chat_enabled"`
@@ -56,6 +61,13 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pin := ""
+	if req.Pin != nil {
+		pin = *req.Pin
+	} else if req.PinCode != nil {
+		pin = *req.PinCode
+	}
+
 	input := service.CreateStreamInput{
 		WorkspaceID: wsID,
 		CreatedBy:   userID,
@@ -63,7 +75,7 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 		MaxQuality:  req.MaxQuality,
 		ChatEnabled: true,
-		PinCode:     req.PinCode,
+		Pin:         pin,
 	}
 	if req.ChatEnabled != nil {
 		input.ChatEnabled = *req.ChatEnabled
@@ -124,7 +136,7 @@ func (h *StreamHandler) GetPublic(w http.ResponseWriter, r *http.Request) {
 	//   (a) no PIN is set (open stream), OR
 	//   (b) a valid viewer-session JWT matching THIS stream is present in
 	//       the request context (attached by middleware.ViewerContext).
-	pinRequired := stream.PinCode != nil && *stream.PinCode != ""
+	pinRequired := stream.PinHash != nil && *stream.PinHash != ""
 	includePlayback := !pinRequired
 	if pinRequired {
 		if sess := middleware.ViewerSessionFromContext(r.Context()); sess != nil && sess.StreamID == stream.ID.String() {
@@ -167,6 +179,11 @@ func (h *StreamHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	streams, err := h.svc.ListStreams(r.Context(), wsID, status, limit, offset)
 	if err != nil {
+		// Log the underlying error so schema drift or query failures are
+		// visible in the server log instead of vanishing into a blank
+		// 500. The response body stays generic to avoid leaking DB
+		// internals to the client.
+		log.Printf("StreamHandler.List: list streams for workspace %s: %v", wsID, err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
