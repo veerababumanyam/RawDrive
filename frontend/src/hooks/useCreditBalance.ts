@@ -43,11 +43,17 @@ export function useCreditBalance(opts: UseCreditBalanceOptions = {}) {
   const [balance, setBalance] = useState<CreditBalance | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  // Feature-gated endpoint: the backend returns 404 when
+  // `streaming.credit_pill_v1` is off. Treat that as "feature disabled"
+  // instead of an error — stop polling and let callers hide the UI.
+  const [disabled, setDisabled] = useState(false);
 
   const mountedRef = useRef(true);
   const tabHiddenRef = useRef(false);
+  const disabledRef = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (disabledRef.current) return;
     setLoading(true);
     try {
       // QA: the prior raw `fetch` read the access token once and sent it
@@ -60,6 +66,14 @@ export function useCreditBalance(opts: UseCreditBalanceOptions = {}) {
         method: "GET",
         headers: { Accept: "application/json" },
       });
+      if (res.status === 404) {
+        if (!mountedRef.current) return;
+        disabledRef.current = true;
+        setDisabled(true);
+        setBalance(null);
+        setError(null);
+        return;
+      }
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -100,6 +114,10 @@ export function useCreditBalance(opts: UseCreditBalanceOptions = {}) {
 
     const id = setInterval(() => {
       if (tabHiddenRef.current) return;
+      if (disabledRef.current) {
+        clearInterval(id);
+        return;
+      }
       void refresh();
     }, intervalMs);
 
@@ -109,5 +127,5 @@ export function useCreditBalance(opts: UseCreditBalanceOptions = {}) {
     };
   }, [intervalMs, paused, refresh]);
 
-  return { balance, loading, error, refresh };
+  return { balance, loading, error, disabled, refresh };
 }

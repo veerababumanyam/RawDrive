@@ -121,6 +121,31 @@ describe("useCreditBalance", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it("marks hook disabled and stops polling when endpoint returns 404", async () => {
+    // Backend gates the /credits/balance endpoint behind
+    // `streaming.credit_pill_v1`. When the flag is off the handler
+    // returns 404 — the hook must swallow that as "feature disabled"
+    // (no error surfaced) and stop polling so the console is quiet.
+    const fetcher = vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: "not_found" }),
+    }) as unknown as Response);
+    vi.stubGlobal("fetch", fetcher);
+
+    const { result } = renderHook(() => useCreditBalance());
+    await flushAsync();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.current.disabled).toBe(true);
+    expect(result.current.balance).toBeNull();
+    expect(result.current.error).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180_000);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("pauses polling when paused=true", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

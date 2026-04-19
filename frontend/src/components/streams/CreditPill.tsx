@@ -11,7 +11,13 @@ export type CreditPillProps = {
 
 export function CreditPill({ className }: CreditPillProps) {
   const [open, setOpen] = useState(false);
-  const { balance, refresh } = useCreditBalance({ intervalMs: open ? 5_000 : 60_000 });
+  const { balance, disabled, refresh } = useCreditBalance({ intervalMs: open ? 5_000 : 60_000 });
+
+  // Backend returns 404 for /credits/balance when the
+  // `streaming.credit_pill_v1` feature flag is off. In that case the
+  // streaming commercial surface is not enabled for this deployment —
+  // hide the pill entirely rather than rendering a perpetual "—".
+  if (disabled) return null;
 
   const minutes = balance?.balanceMinutes ?? 0;
   const low = balance?.lowBalance ?? false;
