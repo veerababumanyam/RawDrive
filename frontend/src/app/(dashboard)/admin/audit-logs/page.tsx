@@ -198,16 +198,23 @@ function AdvancedFilters({
         )}
       </div>
       <div className="flex flex-wrap items-end gap-3">
+        {/* QA T-093 (RawDrive_Testing.xlsx Super Admin sheet): the
+            audit-log filters used `type="date"` which truncated the
+            query window to whole days. Investigators following a
+            sub-hour incident need minute-precision filtering — the
+            backend already accepts RFC3339 timestamps, only the input
+            type was missing. `datetime-local` keeps the same string
+            format the existing onChange + queryString plumbing uses. */}
         <FilterInput
           label="Date from"
-          type="date"
+          type="datetime-local"
           value={filters.dateFrom}
           onChange={(v) => onChange({ ...filters, dateFrom: v })}
           icon={<Calendar className="h-3.5 w-3.5" />}
         />
         <FilterInput
           label="Date to"
-          type="date"
+          type="datetime-local"
           value={filters.dateTo}
           onChange={(v) => onChange({ ...filters, dateTo: v })}
           icon={<Calendar className="h-3.5 w-3.5" />}
