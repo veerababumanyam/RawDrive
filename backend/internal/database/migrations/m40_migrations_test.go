@@ -109,6 +109,47 @@ var m40Migrations = []m40Migration{
 			"credit_reservation_id",
 		},
 	},
+	{
+		// M40 PERF-002: rollup table + trigger so the balance view and
+		// the reserveDB gate are O(1) per workspace instead of O(n) over
+		// the ledger. See docs/decisions/M40-PERF-002-credit-balance-rollup.md.
+		Number:      "101",
+		Description: "upload_credit_balance_rollup",
+		UpMustContain: []string{
+			"CREATE TABLE IF NOT EXISTS upload_credit_balance_rollup",
+			"workspace_id",
+			"total_credits",
+			"plan_granted",
+			"purchased",
+			"reserved",
+			"consumed",
+			"refunded",
+			"last_entry_at",
+			// Trigger function — column math must mirror view 099 semantics.
+			"CREATE OR REPLACE FUNCTION upload_credit_rollup_update",
+			"ON CONFLICT (workspace_id) DO NOTHING",
+			// Trigger wiring.
+			"CREATE TRIGGER upload_credit_rollup_trg",
+			"AFTER INSERT ON upload_ledger_entries",
+			// Backfill existing workspaces.
+			"INSERT INTO upload_credit_balance_rollup",
+			"FROM upload_credit_balances",
+			// View recreated as passthrough.
+			"CREATE OR REPLACE VIEW upload_credit_balances",
+			"FROM upload_credit_balance_rollup",
+		},
+		DownMustContain: []string{
+			// The view must be restored to the SUM body BEFORE the rollup
+			// table is dropped, otherwise the DROP TABLE fails with the
+			// view depending on it.
+			"CREATE OR REPLACE VIEW upload_credit_balances",
+			"SUM(amount_credits)",
+			"FROM upload_ledger_entries",
+			"DROP TRIGGER IF EXISTS upload_credit_rollup_trg",
+			"DROP FUNCTION IF EXISTS upload_credit_rollup_update",
+			"DROP TABLE IF EXISTS upload_credit_balance_rollup",
+		},
+	},
 }
 
 func TestM40_MigrationFilesExist(t *testing.T) {
@@ -233,4 +274,58 @@ func TestM40_100_SessionsReservationColumn_Down(t *testing.T) {
 	for _, substr := range m40Migrations[3].DownMustContain {
 		assert.Contains(t, sql, substr, "100 down must contain %q", substr)
 	}
+}
+
+// M40 PERF-002: balance-view scaling fix. Migration 101 adds a rollup
+// table maintained by an AFTER INSERT trigger on upload_ledger_entries
+// and replaces the view body with a passthrough over the rollup, so
+// reads go from O(n) ledger sums to O(1) per workspace.
+
+func TestM40_101_BalanceRollup_Schema(t *testing.T) {
+	dir := migrationDir(t)
+	content, err := os.ReadFile(filepath.Join(dir, "101_upload_credit_balance_rollup.up.sql"))
+	require.NoError(t, err)
+	sql := string(content)
+
+	for _, substr := range m40Migrations[4].UpMustContain {
+		assert.Contains(t, sql, substr,
+			"101 up must establish the rollup table + trigger + view passthrough — missing %q", substr)
+	}
+
+	// View replacement ordering: the CREATE OR REPLACE VIEW pass must
+	// reference the rollup table, not the old SUM body. Catches a future
+	// edit that reintroduces the slow path "under" the new name.
+	viewIdx := strings.Index(sql, "CREATE OR REPLACE VIEW upload_credit_balances")
+	rollupRefIdx := strings.Index(sql[viewIdx:], "FROM upload_credit_balance_rollup")
+	require.Greater(t, rollupRefIdx, 0,
+		"101 up must recreate upload_credit_balances as a rollup passthrough")
+
+	// Backfill must happen before the view is replaced, otherwise the
+	// INSERT ... SELECT FROM upload_credit_balances would read from the
+	// (already-empty) rollup.
+	backfillIdx := strings.Index(sql, "INSERT INTO upload_credit_balance_rollup")
+	require.Greater(t, backfillIdx, 0, "101 up must include a backfill INSERT")
+	assert.Less(t, backfillIdx, viewIdx,
+		"101 up must backfill from the old SUM view BEFORE replacing the view body")
+}
+
+func TestM40_101_BalanceRollup_Down(t *testing.T) {
+	dir := migrationDir(t)
+	content, err := os.ReadFile(filepath.Join(dir, "101_upload_credit_balance_rollup.down.sql"))
+	require.NoError(t, err)
+	sql := string(content)
+
+	for _, substr := range m40Migrations[4].DownMustContain {
+		assert.Contains(t, sql, substr, "101 down must contain %q", substr)
+	}
+
+	// Ordering: view restored BEFORE the rollup table is dropped,
+	// otherwise Postgres refuses the DROP TABLE because the view
+	// (post-up) depends on it.
+	viewIdx := strings.Index(sql, "CREATE OR REPLACE VIEW upload_credit_balances")
+	dropTableIdx := strings.Index(sql, "DROP TABLE IF EXISTS upload_credit_balance_rollup")
+	require.GreaterOrEqual(t, viewIdx, 0, "101 down must recreate the pre-101 view body")
+	require.GreaterOrEqual(t, dropTableIdx, 0, "101 down must drop the rollup table")
+	assert.Less(t, viewIdx, dropTableIdx,
+		"101 down must restore the view BEFORE dropping the rollup table")
 }

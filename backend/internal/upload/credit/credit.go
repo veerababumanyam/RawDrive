@@ -219,18 +219,29 @@ func (s *Service) reserveDB(ctx context.Context, in ReserveInput, entryType Entr
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Balance gate — only when NOT in enterprise unlimited mode. The
-	// SELECT ... FOR UPDATE serialises concurrent reservations against
-	// the same workspace so only one can commit when balance is tight.
+	// Balance gate — only when NOT in enterprise unlimited mode.
+	//
+	// M40 PERF-002: the gate now reads from upload_credit_balance_rollup
+	// (migration 101) in O(1) per workspace instead of scanning every
+	// ledger row. SELECT ... FOR UPDATE on the single rollup row still
+	// serialises concurrent reservations against the same workspace so
+	// only one can commit when balance is tight — the NFR-UCR-R2 contract
+	// is preserved. ErrNoRows means the workspace has never had a ledger
+	// entry (trigger-created row is absent), which is equivalent to
+	// available=0; the reserve below will create the row via its trigger.
 	if entryType == EntryReserve {
 		var available int64
 		err = tx.QueryRow(ctx, `
-			SELECT COALESCE(SUM(amount_credits), 0)
-			  FROM upload_ledger_entries
+			SELECT total_credits
+			  FROM upload_credit_balance_rollup
 			 WHERE workspace_id = $1
 			 FOR UPDATE
 		`, in.WorkspaceID).Scan(&available)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
+			available = 0
+			err = nil
+		}
+		if err != nil {
 			return nil, fmt.Errorf("upload/credit: balance query: %w", err)
 		}
 		if available < in.AmountCredits {
