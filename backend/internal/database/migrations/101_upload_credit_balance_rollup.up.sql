@@ -96,8 +96,17 @@ SELECT
     ON CONFLICT (workspace_id) DO NOTHING;
 
 -- 5. Replace the view body with a thin passthrough over the rollup. Same
--- column set + ordering as 099 so existing callers see no shape change.
-CREATE OR REPLACE VIEW upload_credit_balances AS
+-- column set + ordering as 099. `DROP VIEW` first because migration 099
+-- declared these columns as `numeric` (Postgres SUM(BIGINT) returns
+-- numeric to avoid overflow) but the rollup table stores them as BIGINT.
+-- `CREATE OR REPLACE VIEW` rejects column-type changes (SQLSTATE 42P16)
+-- so the view must be dropped and recreated. Migration 099 down.sql drops
+-- the view on rollback too, so callers already tolerate its absence
+-- across migration boundaries. No Go code scans the view directly — all
+-- reads go through the credit.Service, and the view columns' application
+-- types (int64) are numerically identical across numeric and BIGINT.
+DROP VIEW IF EXISTS upload_credit_balances;
+CREATE VIEW upload_credit_balances AS
 SELECT
     workspace_id,
     total_credits,

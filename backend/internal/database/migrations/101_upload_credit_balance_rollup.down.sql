@@ -6,7 +6,13 @@
 -- 1. Restore the view to 099's original body (signed-sum over ledger).
 --    The post-101 view references upload_credit_balance_rollup which we
 --    are about to drop, so this must run BEFORE the DROP TABLE.
-CREATE OR REPLACE VIEW upload_credit_balances AS
+--
+--    DROP + CREATE (not CREATE OR REPLACE) because the up-migrated view
+--    stores BIGINT columns (via the rollup table) and the restored view
+--    stores numeric columns (via SUM), which SQLSTATE 42P16 forbids in
+--    a plain replace. See 101 up.sql for the mirrored rationale.
+DROP VIEW IF EXISTS upload_credit_balances;
+CREATE VIEW upload_credit_balances AS
 SELECT
     workspace_id,
     SUM(amount_credits)                                               AS total_credits,
