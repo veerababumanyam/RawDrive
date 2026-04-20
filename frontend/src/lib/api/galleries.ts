@@ -1,3 +1,5 @@
+import { authFetch } from "@/lib/api/authFetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export interface Gallery {
@@ -175,10 +177,8 @@ export interface CreateGalleryShareLinkInput {
   channel?: "copy" | "whatsapp" | "email" | string;
 }
 
-export async function listGalleryShareLinks(token: string, galleryId: string): Promise<GalleryShareLink[]> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/share`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function listGalleryShareLinks(_token: string, galleryId: string): Promise<GalleryShareLink[]> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/share`);
   if (!res.ok) throw new Error(`Failed to list gallery share links: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -187,13 +187,13 @@ export async function listGalleryShareLinks(token: string, galleryId: string): P
 }
 
 export async function createGalleryShareLink(
-  token: string,
+  _token: string,
   galleryId: string,
   data: CreateGalleryShareLinkInput,
 ): Promise<GalleryShareLink> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/share`, {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/share`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to create gallery share link: ${res.status}`);
@@ -201,14 +201,11 @@ export async function createGalleryShareLink(
 }
 
 export async function revokeGalleryShareLink(
-  token: string,
+  _token: string,
   galleryId: string,
   linkId: string,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/share/${linkId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/share/${linkId}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Failed to revoke gallery share link: ${res.status}`);
 }
 
@@ -241,50 +238,43 @@ export interface AlbumAsset {
   added_at: string;
 }
 
-export async function listGalleries(token: string, params?: { status?: string; type?: string; search?: string }): Promise<Gallery[]> {
+export async function listGalleries(_token: string, params?: { status?: string; type?: string; search?: string }): Promise<Gallery[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/galleries?${query}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`/api/v1/galleries?${query}`);
   if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
   const body = await res.json();
-  // Backend may return either a bare array, or {galleries: [...]}, or null
-  // when there are zero rows. Coerce to a proper array so the page never
-  // crashes on .length / .map.
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.galleries)) return body.galleries;
   return [];
 }
 
-export async function getGallery(token: string, id: string): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getGallery(_token: string, id: string): Promise<Gallery> {
+  const res = await authFetch(`/api/v1/galleries/${id}`);
   if (!res.ok) throw new Error(`Failed to get gallery: ${res.status}`);
   return res.json();
 }
 
 export async function createGallery(
-  token: string,
+  _token: string,
   data: {
     title: string;
     description?: string;
     gallery_type?: string;
   } & GalleryRelationshipPayload,
 ): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries`, {
+  const res = await authFetch(`/api/v1/galleries`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to create gallery: ${res.status}`);
   return res.json();
 }
 
-export async function updateGallery(token: string, id: string, data: Partial<Gallery>): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}`, {
+export async function updateGallery(_token: string, id: string, data: Partial<Gallery>): Promise<Gallery> {
+  const res = await authFetch(`/api/v1/galleries/${id}`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to update gallery: ${res.status}`);
@@ -292,23 +282,21 @@ export async function updateGallery(token: string, id: string, data: Partial<Gal
 }
 
 export async function linkGalleryRelationships(
-  token: string,
+  _token: string,
   id: string,
   data: GalleryRelationshipPayload,
 ): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/client-link`, {
+  const res = await authFetch(`/api/v1/galleries/${id}/client-link`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to link gallery relationships: ${res.status}`);
   return res.json();
 }
 
-export async function getGalleryWorkspaceSummary(token: string, id: string): Promise<GalleryWorkspaceSummary> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/workspace-summary`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getGalleryWorkspaceSummary(_token: string, id: string): Promise<GalleryWorkspaceSummary> {
+  const res = await authFetch(`/api/v1/galleries/${id}/workspace-summary`);
   if (!res.ok) throw new Error(`Failed to get gallery workspace: ${res.status}`);
   return res.json();
 }
@@ -323,8 +311,18 @@ export async function duplicateGallery(token: string, id: string, title?: string
   return res.json();
 }
 
+export async function duplicateGalleryAuth(id: string, title?: string): Promise<Gallery> {
+  const res = await authFetch(`/api/v1/galleries/${id}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`Failed to duplicate gallery: ${res.status}`);
+  return res.json();
+}
+
 export async function updateGalleryCover(
-  token: string,
+  _token: string,
   id: string,
   data: {
     asset_id?: string | null;
@@ -342,51 +340,43 @@ export async function updateGalleryCover(
     asset_id: data.asset_id ?? cover_asset_id ?? undefined,
     template_config: data.template_config ?? config,
   };
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/cover`, {
+  const res = await authFetch(`/api/v1/galleries/${id}/cover`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Failed to update gallery cover: ${res.status}`);
 }
 
 export async function updateGalleryDesign(
-  token: string | null,
+  _token: string | null,
   id: string,
   data: Record<string, unknown>,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/design`, {
+  const res = await authFetch(`/api/v1/galleries/${id}/design`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to update gallery design: ${res.status}`);
 }
 
-export async function deleteGallery(token: string, id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function deleteGallery(_token: string, id: string): Promise<void> {
+  const res = await authFetch(`/api/v1/galleries/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Failed to delete gallery: ${res.status}`);
 }
 
-export async function addAssetToGallery(token: string, galleryId: string, assetId: string, sortOrder: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/assets`, {
+export async function addAssetToGallery(_token: string, galleryId: string, assetId: string, sortOrder: number): Promise<void> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/assets`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ asset_id: assetId, sort_order: sortOrder }),
   });
   if (!res.ok) throw new Error(`Failed to add asset: ${res.status}`);
 }
 
-export async function listGalleryAssets(token: string, galleryId: string): Promise<GalleryAsset[]> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/assets`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function listGalleryAssets(_token: string, galleryId: string): Promise<GalleryAsset[]> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/assets`);
   if (!res.ok) throw new Error(`Failed to list gallery assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -394,10 +384,8 @@ export async function listGalleryAssets(token: string, galleryId: string): Promi
   return [];
 }
 
-export async function listGalleryAlbums(token: string, galleryId: string): Promise<GalleryAlbum[]> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/albums`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function listGalleryAlbums(_token: string, galleryId: string): Promise<GalleryAlbum[]> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/albums`);
   if (!res.ok) throw new Error(`Failed to list albums: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -406,13 +394,13 @@ export async function listGalleryAlbums(token: string, galleryId: string): Promi
 }
 
 export async function createGalleryAlbum(
-  token: string,
+  _token: string,
   galleryId: string,
   data: { name: string; description?: string; parent_id?: string },
 ): Promise<GalleryAlbum> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/albums`, {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/albums`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to create album: ${res.status}`);
@@ -420,10 +408,8 @@ export async function createGalleryAlbum(
   return body.data ?? body;
 }
 
-export async function listAlbumAssets(token: string, albumId: string): Promise<AlbumAsset[]> {
-  const res = await fetch(`${API_BASE}/api/v1/albums/${albumId}/assets`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function listAlbumAssets(_token: string, albumId: string): Promise<AlbumAsset[]> {
+  const res = await authFetch(`/api/v1/albums/${albumId}/assets`);
   if (!res.ok) throw new Error(`Failed to list album assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -431,10 +417,10 @@ export async function listAlbumAssets(token: string, albumId: string): Promise<A
   return [];
 }
 
-export async function addAlbumAssets(token: string, albumId: string, assetIds: string[]): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/albums/${albumId}/assets`, {
+export async function addAlbumAssets(_token: string, albumId: string, assetIds: string[]): Promise<void> {
+  const res = await authFetch(`/api/v1/albums/${albumId}/assets`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ asset_ids: assetIds }),
   });
   if (!res.ok) throw new Error(`Failed to add album assets: ${res.status}`);
@@ -459,13 +445,13 @@ export interface PublicAsset {
 
 // ── Gallery Settings ──────────────────────────────────────────────
 export async function updateGallerySettings(
-  token: string,
+  _token: string,
   galleryId: string,
   settings: Record<string, unknown>,
 ): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}`, {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
   if (!res.ok) throw new Error(`Failed to update gallery settings: ${res.status}`);

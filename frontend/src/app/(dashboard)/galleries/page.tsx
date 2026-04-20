@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { listGalleries, createGallery, deleteGallery, duplicateGallery, type Gallery } from "@/lib/api/galleries";
+import { listGalleries, createGallery, deleteGallery, duplicateGalleryAuth, type Gallery } from "@/lib/api/galleries";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -109,6 +109,13 @@ export default function GalleriesPage() {
   const handleCreate = async () => {
     if (!newTitle.trim()) {
       setTitleError("Title is required");
+      return;
+    }
+    const isDuplicate = galleries.some(
+      (g) => g.title?.toLowerCase() === newTitle.trim().toLowerCase(),
+    );
+    if (isDuplicate) {
+      setTitleError("A gallery with this name already exists");
       return;
     }
     setTitleError("");
@@ -455,11 +462,12 @@ export default function GalleriesPage() {
                       <button
                         onClick={async (e) => {
                           e.preventDefault(); e.stopPropagation();
-                          const t = getStoredAccessToken(); if (!t) return;
                           try {
-                            await duplicateGallery(t, g.id, `${g.title} (Copy)`);
+                            await duplicateGalleryAuth(g.id, `${g.title} (Copy)`);
                             refresh();
-                          } catch { /* ignore */ }
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Failed to duplicate gallery");
+                          }
                         }}
                         className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
                       >

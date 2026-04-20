@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -75,7 +76,11 @@ func (h *MessagingHandler) CreateChannel(w http.ResponseWriter, r *http.Request)
 		CreatedBy:   userID,
 	}
 	if err := h.repo.CreateChannel(r.Context(), ch); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		log.Printf("MessagingHandler.CreateChannel: %v", err)
+		msg, _ := json.Marshal(map[string]string{"error": fmt.Sprintf("failed to create channel: %v", err)})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(msg)
 		return
 	}
 	// Auto-add creator as admin member

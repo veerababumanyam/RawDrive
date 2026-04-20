@@ -91,9 +91,10 @@ const headers = (token: string) => ({
   "Content-Type": "application/json",
 });
 
-export async function listLeads(token: string, params?: { stage?: string; source?: string; search?: string }): Promise<Lead[]> {
+export async function listLeads(_token: string, params?: { stage?: string; source?: string; search?: string }): Promise<Lead[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/crm/leads?${query}`, { headers: headers(token) });
+  const { authFetch: af } = await import("./authFetch");
+  const res = await af(`/api/v1/crm/leads?${query}`);
   if (!res.ok) throw new Error("Failed to fetch leads");
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -120,9 +121,10 @@ export async function updateLeadStage(token: string, id: string, stage: string):
   if (!res.ok) throw new Error("Failed to update lead stage");
 }
 
-export async function listContacts(token: string, params?: { type?: string; search?: string }): Promise<Contact[]> {
+export async function listContacts(_token: string, params?: { type?: string; search?: string }): Promise<Contact[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/crm/contacts?${query}`, { headers: headers(token) });
+  const { authFetch: af } = await import("./authFetch");
+  const res = await af(`/api/v1/crm/contacts?${query}`);
   if (!res.ok) throw new Error("Failed to fetch contacts");
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -130,13 +132,17 @@ export async function listContacts(token: string, params?: { type?: string; sear
   return [];
 }
 
-export async function createContact(token: string, contact: Partial<Contact>): Promise<Contact> {
-  const res = await fetch(`${API_BASE}/api/v1/crm/contacts`, {
+export async function createContact(_token: string, contact: Partial<Contact>): Promise<Contact> {
+  const { authFetch: af } = await import("./authFetch");
+  const res = await af(`/api/v1/crm/contacts`, {
     method: "POST",
-    headers: headers(token),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(contact),
   });
-  if (!res.ok) throw new Error("Failed to create contact");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create contact");
+  }
   return res.json();
 }
 
@@ -341,9 +347,10 @@ export async function listDeals(token: string, params?: { stage?: string }): Pro
   return [];
 }
 
-export async function listProjects(token: string, params?: { status?: string; contact_id?: string; search?: string }): Promise<StudioProject[]> {
+export async function listProjects(_token: string, params?: { status?: string; contact_id?: string; search?: string }): Promise<StudioProject[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/crm/projects?${query}`, { headers: headers(token) });
+  const { authFetch: af } = await import("./authFetch");
+  const res = await af(`/api/v1/crm/projects?${query}`);
   if (!res.ok) throw new Error("Failed to fetch projects");
   const body = await res.json();
   if (Array.isArray(body)) return body;

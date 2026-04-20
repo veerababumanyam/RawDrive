@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   listContacts,
-  createContact,
+  createContactAuth,
   importContactsCsvAuth,
   type Contact,
   type ContactImportResult,
@@ -77,11 +77,17 @@ export default function ContactsPage() {
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
+    const isDuplicate = contacts.some(
+      (c) => c.name?.toLowerCase() === form.name.trim().toLowerCase(),
+    );
+    if (isDuplicate) {
+      setError(`A client named "${form.name.trim()}" already exists`);
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
-      const token = getStoredAccessToken();
-      await createContact(token, form);
+      await createContactAuth(form);
       setShowCreate(false);
       setForm({ name: "", email: "", phone: "", contact_type: "client" });
       refresh();

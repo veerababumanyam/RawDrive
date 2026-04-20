@@ -1,4 +1,7 @@
+import { authFetch } from "@/lib/api/authFetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+void API_BASE; // kept for any remaining public/unauthenticated calls
 
 // Normalised face bounding box in [0,1] image-space (matches backend ai.BoundingBox).
 export interface FaceBBox {
@@ -33,11 +36,9 @@ export interface Asset {
   gps_longitude?: number;           // GAL-FR-099 — map view
 }
 
-export async function listAssets(token: string, params?: { status?: string; content_type?: string }): Promise<Asset[]> {
+export async function listAssets(_token: string, params?: { status?: string; content_type?: string }): Promise<Asset[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/assets?${query}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`/api/v1/assets?${query}`);
   if (!res.ok) throw new Error(`Failed to list assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -45,30 +46,25 @@ export async function listAssets(token: string, params?: { status?: string; cont
   return [];
 }
 
-export async function getAsset(token: string, id: string): Promise<Asset> {
-  const res = await fetch(`${API_BASE}/api/v1/assets/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getAsset(_token: string, id: string): Promise<Asset> {
+  const res = await authFetch(`/api/v1/assets/${id}`);
   if (!res.ok) throw new Error(`Failed to get asset: ${res.status}`);
   return res.json();
 }
 
-export async function deleteAsset(token: string, id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/assets/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function deleteAsset(_token: string, id: string): Promise<void> {
+  const res = await authFetch(`/api/v1/assets/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Failed to delete asset: ${res.status}`);
 }
 
 export async function bulkAssetAction(
-  token: string,
+  _token: string,
   action: "delete",
   assetIds: string[],
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/assets/bulk`, {
+  const res = await authFetch(`/api/v1/assets/bulk`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, asset_ids: assetIds }),
   });
   if (!res.ok) throw new Error(`Failed to run bulk asset action: ${res.status}`);

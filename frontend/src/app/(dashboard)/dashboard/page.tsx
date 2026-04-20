@@ -12,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { getStoredAccessToken } from "@/lib/auth";
+import { authFetch } from "@/lib/api/authFetch";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
 import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
 import { cn } from "@/lib/utils";
@@ -97,12 +98,8 @@ export default function DashboardPage() {
   const [storageMeta, setStorageMeta] = useState<string>("loading");
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    fetch(`${apiUrl}/api/v1/storage/usage`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    if (!getStoredAccessToken()) return;
+    authFetch("/api/v1/storage/usage")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data?.data) {
@@ -357,10 +354,8 @@ function GalleryActivityWidget() {
   const [stats, setStats] = useState<{ views: number; downloads: number; selections: number; activeGalleries: number } | null>(null);
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    fetch(`${apiUrl}/api/v1/dashboard/gallery-activity?days=7`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!getStoredAccessToken()) return;
+    authFetch("/api/v1/dashboard/gallery-activity?days=7")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.data) setStats(d.data); })
       .catch(() => {});

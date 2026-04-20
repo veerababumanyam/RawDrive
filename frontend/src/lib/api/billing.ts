@@ -1,4 +1,7 @@
+import { authFetch } from "./authFetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+void API_BASE;
 
 export interface Invoice {
   id: string;
@@ -96,9 +99,9 @@ export function formatPaisa(paisa: number): string {
   return `${sign}₹${rupees.toLocaleString("en-IN")}.${remainder.toString().padStart(2, "0")}`;
 }
 
-export async function listInvoices(token: string, params?: { status?: string }): Promise<Invoice[]> {
+export async function listInvoices(_token: string, params?: { status?: string }): Promise<Invoice[]> {
   const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/billing/invoices?${query}`, { headers: headers(token) });
+  const res = await authFetch(`/api/v1/billing/invoices?${query}`);
   if (!res.ok) throw new Error("Failed to fetch invoices");
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -106,13 +109,16 @@ export async function listInvoices(token: string, params?: { status?: string }):
   return [];
 }
 
-export async function createInvoice(token: string, invoice: Partial<Invoice>): Promise<Invoice> {
-  const res = await fetch(`${API_BASE}/api/v1/billing/invoices`, {
+export async function createInvoice(_token: string, invoice: Partial<Invoice>): Promise<Invoice> {
+  const res = await authFetch(`/api/v1/billing/invoices`, {
     method: "POST",
-    headers: headers(token),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(invoice),
   });
-  if (!res.ok) throw new Error("Failed to create invoice");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create invoice");
+  }
   return res.json();
 }
 
@@ -125,20 +131,23 @@ export async function convertQuotation(token: string, id: string): Promise<Invoi
   return res.json();
 }
 
-export async function listServicePackages(token: string): Promise<ServicePackage[]> {
-  const res = await fetch(`${API_BASE}/api/v1/billing/packages`, { headers: headers(token) });
+export async function listServicePackages(_token: string): Promise<ServicePackage[]> {
+  const res = await authFetch(`/api/v1/billing/packages`);
   if (!res.ok) throw new Error("Failed to fetch service packages");
   const body = await res.json();
   return Array.isArray(body) ? body : [];
 }
 
-export async function createServicePackage(token: string, pkg: Partial<ServicePackage>): Promise<ServicePackage> {
-  const res = await fetch(`${API_BASE}/api/v1/billing/packages`, {
+export async function createServicePackage(_token: string, pkg: Partial<ServicePackage>): Promise<ServicePackage> {
+  const res = await authFetch(`/api/v1/billing/packages`, {
     method: "POST",
-    headers: headers(token),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(pkg),
   });
-  if (!res.ok) throw new Error("Failed to create service package");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to create service package");
+  }
   return res.json();
 }
 
@@ -184,8 +193,6 @@ export async function downloadGSTR1CSV(token: string, financialYear: string): Pr
 }
 
 // ── Auto-authenticated versions ─────────────────────────────────────
-import { authFetch } from "./authFetch";
-
 export async function createInvoiceAuth(invoice: Partial<Invoice>): Promise<Invoice> {
   const res = await authFetch("/api/v1/billing/invoices", {
     method: "POST",

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { bulkAssetAction, getAsset, type Asset } from "@/lib/api/assets";
 import {
   addAlbumAssets,
+  addAssetToGallery,
   createGalleryAlbum,
   getGallery,
   getGalleryWorkspaceSummary,
@@ -294,6 +295,47 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
   const token = getStoredAccessToken();
   const upload = useUpload(apiUrl, token);
+  const linkedAssetIdsRef = useRef<Set<string>>(new Set());
+
+  // Link each newly-completed upload to this gallery then reload the asset list.
+  useEffect(() => {
+    const t = getStoredAccessToken();
+    if (!t || !id) return;
+    const toLink = upload.items.filter(
+      (item) => item.status === "complete" && item.assetId && !linkedAssetIdsRef.current.has(item.assetId),
+    );
+    if (toLink.length === 0) return;
+
+    (async () => {
+      for (const item of toLink) {
+        if (!item.assetId) continue;
+        try {
+          await addAssetToGallery(t, id, item.assetId, 0);
+          linkedAssetIdsRef.current.add(item.assetId);
+        } catch (err) {
+          console.warn("Failed to link asset to gallery:", err);
+        }
+      }
+      // Reload assets list after linking
+      try {
+        const galleryAssets = await listGalleryAssets(t, id);
+        const hydratedAssets = await Promise.all(
+          galleryAssets.map(async (entry) => {
+            try {
+              const asset = await getAsset(t, entry.asset_id);
+              return { ...entry, asset };
+            } catch {
+              return { ...entry, asset: null };
+            }
+          }),
+        );
+        setAssets(hydratedAssets);
+      } catch (err) {
+        console.warn("Failed to reload assets after upload:", err);
+      }
+    })();
+  }, [upload.items, id]);
+
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -551,7 +593,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <div className="surface-panel space-y-3 p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-text-primary">
-                  Uploading {upload.items.filter(i => i.status === "uploading" || i.status === "pending").length} files
+                  Uploading {upload.items.filter(i => i.status === "uploading" || i.status === "pending" || i.status === "screening").length} files
                 </h2>
                 <div className="flex gap-2">
                   {upload.isPaused ? (
@@ -822,10 +864,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       // whole selection set (when the dragged asset is part
                       // of the selection) or just this one asset (when
                       // dragging an unselected tile).
-                      draggable={bulkMode && !!entry.asset}
+                      draggable={!!entry.asset}
                       onDragStart={(e) => {
-                        if (!bulkMode || !entry.asset) return;
-                        const ids = selectedAssetIds.has(entry.asset.id)
+                        if (!entry.asset) return;
+                        const ids = bulkMode && selectedAssetIds.has(entry.asset.id)
                           ? Array.from(selectedAssetIds)
                           : [entry.asset.id];
                         e.dataTransfer.setData("application/x-rawdrive-asset-ids", JSON.stringify(ids));

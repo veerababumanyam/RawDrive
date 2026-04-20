@@ -25,6 +25,9 @@ export interface UploadItem {
    *  finding details and by the upload hook to attach to the session
    *  create payload. */
   scanManifest?: ScanManifest;
+  /** Asset UUID returned by the backend on finalization. Set once upload
+   *  is complete so callers (e.g. gallery page) can link the asset. */
+  assetId?: string;
 }
 
 interface UploadProgressProps {

@@ -129,6 +129,7 @@ export function LoginForm() {
 
       if (!response.ok) {
         setError(payload.error || "Login failed. Please check your credentials.");
+        setLoading(false);
         return;
       }
 

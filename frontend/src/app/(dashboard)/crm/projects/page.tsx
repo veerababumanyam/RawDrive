@@ -78,6 +78,14 @@ export default function ProjectsPage() {
 
   const handleCreate = async () => {
     if (!token || !form.contact_id || !form.name.trim() || creating) return;
+    const isDuplicate = projects.some(
+      (p) => p.name?.toLowerCase() === form.name.trim().toLowerCase() &&
+             p.contact_id === form.contact_id,
+    );
+    if (isDuplicate) {
+      setError(`A project named "${form.name.trim()}" already exists for this client`);
+      return;
+    }
     setCreating(true);
     setError(null);
     try {

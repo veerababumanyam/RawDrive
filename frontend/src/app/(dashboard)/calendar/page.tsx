@@ -3,13 +3,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
+import { authFetch } from "@/lib/api/authFetch";
 import { cn } from "@/lib/utils";
 import { calendarEventClasses } from "@/lib/dashboard-ui";
 import { listContacts, type Contact } from "@/lib/api/crm";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
 import { CALENDAR_EVENT_TYPE_OPTIONS } from "@/lib/crm-taxonomy";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 interface CalendarEvent {
   id: string;
@@ -112,9 +112,7 @@ export default function CalendarPage() {
     const from = monthStart.toISOString();
     const to = monthEnd.toISOString();
 
-    fetch(`${API_BASE}/api/v1/calendar/events?from=${from}&to=${to}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch(`/api/v1/calendar/events?from=${from}&to=${to}`)
       .then((res) => res.json())
       .then((data) => {
         if (!ignore) {
@@ -191,10 +189,9 @@ export default function CalendarPage() {
     if (!form.title.trim() || creating) return;
     setCreating(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/calendar/events`, {
+      const res = await authFetch(`/api/v1/calendar/events`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

@@ -119,6 +119,7 @@ export function useUpload(apiUrl: string, token: string) {
 
       const { upload_id } = await createRes.json();
       let offset = 0;
+      let finalAssetId: string | undefined;
 
       while (offset < item.file.size) {
         while (pausedRef.current) {
@@ -144,12 +145,16 @@ export function useUpload(apiUrl: string, token: string) {
         }
 
         offset = end;
+        if (offset >= item.file.size) {
+          const body = await patchRes.json().catch(() => ({})) as { asset?: { id?: string } };
+          finalAssetId = body.asset?.id;
+        }
         updateItem(item.id, {
           progress: Math.round((offset / item.file.size) * 100),
         });
       }
 
-      updateItem(item.id, { status: "complete", progress: 100 });
+      updateItem(item.id, { status: "complete", progress: 100, assetId: finalAssetId });
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         return;

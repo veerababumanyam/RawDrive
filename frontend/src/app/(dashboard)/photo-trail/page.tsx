@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
+import { authFetch } from "@/lib/api/authFetch";
 
 // M39 E9-S2: photo-trail feed page. Consumes GET /api/v1/photo-trail
 // (see backend/internal/handler/photo_trail_handler.go) and renders
 // recent events grouped by time bucket.
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 interface PhotoTrailEvent {
   id: string;
@@ -60,12 +58,11 @@ export default function PhotoTrailPage() {
     const controller = new AbortController();
     (async () => {
       try {
-        const token = getStoredAccessToken() || "";
-        const res = await fetch(`${API_BASE}/api/v1/photo-trail?limit=50`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await authFetch("/api/v1/photo-trail?limit=50", {
           signal: controller.signal,
         });
-        if (!res.ok) throw new Error(`Failed: ${res.status}`);
+        if (res.status === 403) throw new Error("Photo Trail requires a Pro plan. Please upgrade to access this feature.");
+        if (!res.ok) throw new Error(`Failed to load trail: ${res.status}`);
         const body = (await res.json()) as PhotoTrailResponse;
         setEvents(Array.isArray(body.events) ? body.events : []);
       } catch (err) {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -96,7 +97,10 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 	stream, err := h.svc.CreateStream(r.Context(), input)
 	if err != nil {
 		log.Printf("stream create error: %v", err)
-		http.Error(w, `{"error":"failed to create stream"}`, http.StatusInternalServerError)
+		msg, _ := json.Marshal(map[string]string{"error": fmt.Sprintf("failed to create stream: %v", err)})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(msg)
 		return
 	}
 	respondJSON(w, http.StatusCreated, stream)

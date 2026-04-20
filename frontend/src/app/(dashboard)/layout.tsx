@@ -379,17 +379,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             if (q) window.location.assign(`/galleries?q=${encodeURIComponent(q)}`);
           }}
         >
-          {/* QA #10: bumped input padding from pl-10 to pl-11 so the
-              magnifier icon never overlaps the placeholder at any
-              zoom level or font stack (some system fonts render the
-              placeholder wider than the Chromium reference metrics). */}
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <input
             type="search"
             name="global-search"
             aria-label={searchPlaceholder}
+            title=""
             placeholder={searchPlaceholder}
-            className="input-base w-full pl-11 pr-4 text-sm"
+            className="input-base w-full pl-12 pr-4 text-sm"
           />
         </form>
 
