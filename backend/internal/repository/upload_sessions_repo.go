@@ -45,6 +45,13 @@ type UploadSession struct {
 	CompletedAt            *time.Time `json:"completed_at,omitempty"`
 	ScanManifest           []byte     `json:"-"`
 	ScanManifestVerifiedAt *time.Time `json:"scan_manifest_verified_at,omitempty"`
+	// M40 / Upload Credit Meter: FK into upload_ledger_entries for the
+	// reserve entry created at CreateSession time. Nullable when the
+	// credit feature is off (NoopGate) or on enterprise unlimited_passthrough
+	// where no balance is tracked. Migration 100 adds the column; this
+	// field lets cold-path restart rebuild the reservation handle instead
+	// of relying on TTL cleanup to unwind the ledger entry.
+	CreditReservationID *uuid.UUID `json:"credit_reservation_id,omitempty"`
 }
 
 // UploadPartETag is the decoded shape of one entry in r2_part_etags.
@@ -109,11 +116,11 @@ func (r *UploadSessionsRepo) Create(ctx context.Context, s *UploadSession) error
 		`INSERT INTO upload_sessions (
 		    workspace_id, user_id, tus_upload_id, filename, content_type,
 		    total_size, upload_offset, chunk_size, r2_multipart_upload_id,
-		    r2_part_etags, expires_at, scan_manifest
-		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		    r2_part_etags, expires_at, scan_manifest, credit_reservation_id
+		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		s.WorkspaceID, s.UserID, s.TUSUploadID, s.Filename, s.ContentType,
 		s.TotalSize, s.UploadOffset, s.ChunkSize, s.R2MultipartUploadID,
-		s.R2PartETags, s.ExpiresAt, s.ScanManifest,
+		s.R2PartETags, s.ExpiresAt, s.ScanManifest, s.CreditReservationID,
 	)
 	if err != nil {
 		return fmt.Errorf("upload_sessions: create: %w", err)
@@ -130,7 +137,7 @@ func (r *UploadSessionsRepo) GetByTUSUploadID(ctx context.Context, tusUploadID s
 		`SELECT id, workspace_id, user_id, tus_upload_id, filename, content_type,
 		        total_size, upload_offset, chunk_size, r2_multipart_upload_id,
 		        r2_part_etags, expires_at, created_at, updated_at, completed_at,
-		        scan_manifest, scan_manifest_verified_at
+		        scan_manifest, scan_manifest_verified_at, credit_reservation_id
 		 FROM upload_sessions
 		 WHERE tus_upload_id = $1`,
 		tusUploadID,
@@ -139,6 +146,7 @@ func (r *UploadSessionsRepo) GetByTUSUploadID(ctx context.Context, tusUploadID s
 		&s.ContentType, &s.TotalSize, &s.UploadOffset, &s.ChunkSize,
 		&s.R2MultipartUploadID, &s.R2PartETags, &s.ExpiresAt, &s.CreatedAt,
 		&s.UpdatedAt, &s.CompletedAt, &s.ScanManifest, &s.ScanManifestVerifiedAt,
+		&s.CreditReservationID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUploadSessionNotFound
@@ -238,7 +246,7 @@ func (r *UploadSessionsRepo) ListExpired(ctx context.Context, limit int) ([]Uplo
 		`SELECT id, workspace_id, user_id, tus_upload_id, filename, content_type,
 		        total_size, upload_offset, chunk_size, r2_multipart_upload_id,
 		        r2_part_etags, expires_at, created_at, updated_at, completed_at,
-		        scan_manifest, scan_manifest_verified_at
+		        scan_manifest, scan_manifest_verified_at, credit_reservation_id
 		 FROM upload_sessions
 		 WHERE completed_at IS NULL AND expires_at < now()
 		 ORDER BY expires_at ASC
@@ -258,6 +266,7 @@ func (r *UploadSessionsRepo) ListExpired(ctx context.Context, limit int) ([]Uplo
 			&s.ContentType, &s.TotalSize, &s.UploadOffset, &s.ChunkSize,
 			&s.R2MultipartUploadID, &s.R2PartETags, &s.ExpiresAt, &s.CreatedAt,
 			&s.UpdatedAt, &s.CompletedAt, &s.ScanManifest, &s.ScanManifestVerifiedAt,
+			&s.CreditReservationID,
 		); err != nil {
 			return nil, fmt.Errorf("upload_sessions: scan: %w", err)
 		}

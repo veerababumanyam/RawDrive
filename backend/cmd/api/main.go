@@ -45,6 +45,9 @@ import (
 	"github.com/rawdrive/backend/internal/streaming/statepusher"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
 	teamPkg "github.com/rawdrive/backend/internal/team"
+	uploadcredit "github.com/rawdrive/backend/internal/upload/credit"
+	uploadgate "github.com/rawdrive/backend/internal/upload/gate"
+	uploadhandlers "github.com/rawdrive/backend/internal/upload/handlers"
 	"github.com/rawdrive/backend/internal/user"
 	"github.com/rawdrive/backend/internal/worker"
 	"github.com/rawdrive/backend/internal/workspace"
@@ -125,6 +128,36 @@ func (a *streamingCreditBalanceAdapter) BalanceForWorkspace(ctx context.Context,
 		Minutes:   b.BalanceMinutes,
 		Seconds:   b.BalanceMinutes * 60,
 		UpdatedAt: updated,
+	}, nil
+}
+
+// uploadCreditBalanceAdapter adapts uploadcredit.Service.Balance to the
+// uploadhandlers.BalanceProvider interface expected by
+// UploadBalanceHandler. M40 Upload Credit Meter sibling of
+// streamingCreditBalanceAdapter above. Returning an empty view on error
+// keeps the pill resilient — the handler then reports 0 available with
+// the low_balance flag set.
+type uploadCreditBalanceAdapter struct {
+	svc *uploadcredit.Service
+}
+
+func (a *uploadCreditBalanceAdapter) UploadBalance(ctx context.Context, workspaceID uuid.UUID) (uploadhandlers.UploadBalanceView, error) {
+	b, err := a.svc.Balance(ctx, workspaceID)
+	if err != nil {
+		return uploadhandlers.UploadBalanceView{UpdatedAt: time.Now().UTC()}, err
+	}
+	updated := time.Now().UTC()
+	if b.LastEntryAt != nil {
+		updated = *b.LastEntryAt
+	}
+	return uploadhandlers.UploadBalanceView{
+		Available:   b.Available,
+		PlanGranted: b.PlanGranted,
+		Purchased:   b.Purchased,
+		Reserved:    b.Reserved,
+		Consumed:    b.Consumed,
+		Refunded:    b.Refunded,
+		UpdatedAt:   updated,
 	}, nil
 }
 
@@ -1169,10 +1202,60 @@ func main() {
 		// var is intentionally no longer consulted — there is no local
 		// staging path anymore (F-008 hard law).
 		uploadSessionsRepo := repository.NewUploadSessionsRepo(dbPool)
+
+		// M40 / Upload Credit Meter wiring.
+		//
+		// The feature is opt-in — when UPLOAD_CREDIT_METER_ENABLED=true the
+		// chunked upload path gates CreateSession on a ledger reservation
+		// and posts consume/refund entries at finalize/cancel. Default (no
+		// env var) is a NoopGate so existing behaviour is unchanged until
+		// operators flip the switch.
+		//
+		// The upload credit service is safe to construct either way — the
+		// LiveGate only calls it when the flag is on, and the balance
+		// endpoint below feature-gates itself on
+		// streaming.upload_credit_pill_v1 to return 404 when disabled
+		// (matches the frontend hook contract, PR #32 pattern).
+		uploadCreditSvc := uploadcredit.NewService(dbPool)
+		var uploadCreditGate uploadgate.UploadCreditGate = uploadgate.NewNoopGate()
+		if strings.EqualFold(os.Getenv("UPLOAD_CREDIT_METER_ENABLED"), "true") {
+			uploadCreditGate = uploadgate.NewLiveGate(uploadCreditSvc)
+			log.Printf("M40: upload credit meter ENABLED (LiveGate wired)")
+		} else {
+			log.Printf("M40: upload credit meter disabled (NoopGate — set UPLOAD_CREDIT_METER_ENABLED=true to enable)")
+		}
+
 		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, uploadSessionsRepo).
 			WithValidation(uploadValidationSvc).
-			WithStorageAccounting(storageAccountingSvc)
+			WithStorageAccounting(storageAccountingSvc).
+			WithUploadCredit(uploadCreditGate)
 		chunkedHandler.RegisterRoutes(api)
+
+		// M40: balance endpoint for the <UploadCreditPill>. Mirrors
+		// streaming/credits/balance wiring — adapter converts Service →
+		// BalanceProvider interface so the handler package stays free of
+		// any upload/credit dependency.
+		//
+		// Feature flag streaming.upload_credit_pill_v1 is captured from
+		// env at startup (not re-read per request). Runtime toggle needs
+		// an API restart; a platform_settings lookup is the follow-up
+		// per PRD §8 Phase 4. When off the handler returns 404 so the
+		// frontend useUploadCreditBalance hook stops polling.
+		uploadBalanceEnv := os.Getenv("UPLOAD_CREDIT_PILL_V1_ENABLED")
+		uploadBalanceHandler := &uploadhandlers.UploadBalanceHandler{
+			Balance: &uploadCreditBalanceAdapter{svc: uploadCreditSvc},
+			FeatureFlag: func(name string) bool {
+				// Env wins over the implicit default. Upgrading to
+				// platform_settings lookup is a follow-up — PRD §8 Phase 4.
+				if uploadBalanceEnv != "" {
+					return strings.EqualFold(uploadBalanceEnv, "true")
+				}
+				// Default off so a fresh deploy doesn't leak the feature
+				// before stakeholders have signed off on Decisions 1-5.
+				return false
+			},
+		}
+		api.Get("/api/v1/uploads/balance", uploadBalanceHandler.GetBalance)
 
 		// M17 audit followup (S-011): register the upload-session cleanup
 		// worker so abandoned chunked uploads don't leak R2 multipart

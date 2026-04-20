@@ -2,6 +2,7 @@
 .env
 .env.cobolt
 .env.mcp
+.env.backend
 # Backup copies of env files (e.g. .env.cobolt.bak from pre-edit snapshots).
 # Glob pattern so any future *.bak env file is covered automatically
 # — these commonly contain real secrets and must never be committed.

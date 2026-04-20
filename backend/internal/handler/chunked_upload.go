@@ -25,6 +25,8 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
+	"github.com/rawdrive/backend/internal/upload/credit"
+	"github.com/rawdrive/backend/internal/upload/gate"
 )
 
 const tusVersion = "1.0.0"
@@ -116,6 +118,13 @@ type ChunkedUploadHandler struct {
 	// dashboard KPI and quota enforcement saw zero regardless of actual
 	// usage.
 	storageAccountingSvc *service.StorageAccounting
+
+	// M40 / Upload Credit Meter: optional upload credit gate. Wired via
+	// WithUploadCredit(). Defaults to a NoopGate so every call site can
+	// be branch-free — ReserveForSession, Consume, and Refund all
+	// no-op under NoopGate. Flip to LiveGate from main.go when the
+	// streaming.upload_credit_pill_v1 flag is on.
+	creditGate gate.UploadCreditGate
 }
 
 // sessionStreamState is the in-memory working set for an in-flight upload.
@@ -124,16 +133,22 @@ type ChunkedUploadHandler struct {
 // buffer the head/tail bytes (needed for the M16 Tier D format spot-check)
 // without storing the full upload on disk.
 type sessionStreamState struct {
-	mu         sync.Mutex
-	hasher     hash.Hash
-	head       []byte // first up-to-64 bytes
-	tail       []byte // last up-to-64 bytes (sliding window across chunks)
-	storageKey string
+	mu          sync.Mutex
+	hasher      hash.Hash
+	head        []byte // first up-to-64 bytes
+	tail        []byte // last up-to-64 bytes (sliding window across chunks)
+	storageKey  string
 	multipartID string
-	nextPart   int32 // 1-indexed — TUS expects sequential PATCH, R2 needs sequential part numbers
+	nextPart    int32 // 1-indexed — TUS expects sequential PATCH, R2 needs sequential part numbers
+	// M40: carries the credit reservation from CreateSession through
+	// finalizeUpload / Cancel so Consume or Refund can settle the
+	// ledger entry without re-reading DB state. Nil when the feature
+	// flag is off (NoopGate returns a disabled-feature handle that we
+	// still store here so call sites are branch-free).
+	reservation *gate.ReservationHandle
 }
 
-func newStreamState(storageKey, multipartID string) *sessionStreamState {
+func newStreamState(storageKey, multipartID string, reservation *gate.ReservationHandle) *sessionStreamState {
 	return &sessionStreamState{
 		hasher:      sha256.New(),
 		head:        make([]byte, 0, 64),
@@ -141,6 +156,7 @@ func newStreamState(storageKey, multipartID string) *sessionStreamState {
 		storageKey:  storageKey,
 		multipartID: multipartID,
 		nextPart:    1,
+		reservation: reservation,
 	}
 }
 
@@ -196,7 +212,24 @@ func NewChunkedUploadHandler(
 		store:          store,
 		sessions:       sessions,
 		maxUploadBytes: maxBytes,
+		// Default to NoopGate so WithUploadCredit is purely opt-in.
+		// Existing callers (and tests) get feature-off behaviour
+		// automatically until main.go wires in a LiveGate.
+		creditGate: gate.NewNoopGate(),
 	}
+}
+
+// WithUploadCredit wires the M40 upload credit gate. Pass a LiveGate
+// when the feature flag streaming.upload_credit_pill_v1 is on, or a
+// NoopGate (the default) to disable the meter. Returns the same
+// handler for chainable construction.
+func (h *ChunkedUploadHandler) WithUploadCredit(g gate.UploadCreditGate) *ChunkedUploadHandler {
+	if g == nil {
+		h.creditGate = gate.NewNoopGate()
+		return h
+	}
+	h.creditGate = g
+	return h
 }
 
 // WithValidation wires the M16 E47-S5 Tier D validation hook. Returns the
@@ -289,14 +322,49 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		input.ChunkSize = 5 * 1024 * 1024 // default 5MB
 	}
 
+	uploadUUID := uuid.New()
+	uploadID := uploadUUID.String()
+
+	// M40: reserve the upload credit BEFORE any other mandatory-infra
+	// guard. Insufficient balance must reach the user as a 400 without
+	// depending on sessions/storage wiring — the gate decision is a
+	// user-level product behaviour, not an infra concern. When the
+	// feature flag is off main.go wires a NoopGate, so this call is a
+	// pure pass-through (no ledger write, no balance check). On
+	// enterprise workspaces with the unlimited flag, the ledger still
+	// posts an unlimited_passthrough entry for audit.
+	//
+	// Cost is fixed at 1 credit per upload for M40 v1 (per-upload meter,
+	// see feature-prd.md §4 Decision 1). Per-derivative pricing is out
+	// of scope.
+	creditReservation, credErr := h.creditGate.ReserveForSession(r.Context(), gate.ReserveRequest{
+		WorkspaceID:     workspaceID,
+		UploadSessionID: uploadUUID,
+		Cost:            1,
+		IdempotencyKey:  fmt.Sprintf("session:%s", uploadID),
+		CreatedBy:       uuidPtr(userID),
+	})
+	if credErr != nil {
+		// InsufficientBalanceDetails: surface as 400 with the structured
+		// frontend payload so useUpload can open the recharge modal.
+		var details *credit.InsufficientBalanceDetails
+		if errors.As(credErr, &details) {
+			respondJSON(w, http.StatusBadRequest, gate.InsufficientCreditsResponse(details))
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"credit reservation failed: %s"}`, credErr.Error()), http.StatusInternalServerError)
+		return
+	}
+
 	// Sessions store is mandatory — the direct-R2 path needs durable state.
-	// Fail loudly if main.go forgot to wire the repo.
+	// Fail loudly if main.go forgot to wire the repo. If the credit gate
+	// already ran (and succeeded) but we can't persist the session, the
+	// LiveGate's reservation will eventually be cleaned up by
+	// ExpireAbandoned after the TTL.
 	if h.sessions == nil {
 		http.Error(w, `{"error":"upload sessions store not wired"}`, http.StatusInternalServerError)
 		return
 	}
-
-	uploadID := uuid.New().String()
 
 	// Build the storage key from workspaceID + the TUS upload ID so both
 	// CreateSession and finalize can derive the same R2 key without
@@ -351,6 +419,16 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		ExpiresAt:           expiresAt,
 		ScanManifest:        manifestBytes,
 	}
+
+	// M40-DB-001: persist the reservation id so cold-path restart can
+	// rebuild the credit handle instead of falling back to TTL cleanup.
+	// Only set when the feature is actually on; NoopGate returns a
+	// disabled handle with uuid.Nil which we deliberately skip so the
+	// FK points at a real ledger row or nothing at all.
+	if creditReservation != nil && creditReservation.FeatureEnabled && creditReservation.ReservationID != uuid.Nil {
+		resID := creditReservation.ReservationID
+		row.CreditReservationID = &resID
+	}
 	if err := h.sessions.Create(r.Context(), row); err != nil {
 		// Best-effort: abort the R2 multipart we just started so we don't
 		// leak storage state on a DB write failure.
@@ -360,7 +438,9 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Seed the in-memory stream state for the rolling hash + head/tail.
-	h.streamStates.Store(uploadID, newStreamState(storageKey, r2UploadID))
+	// creditReservation may be a disabled-feature handle (NoopGate) —
+	// that is safe to carry through, Consume/Refund no-op.
+	h.streamStates.Store(uploadID, newStreamState(storageKey, r2UploadID, creditReservation))
 
 	h.setTUSHeaders(w)
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/uploads/%s", uploadID))
@@ -401,8 +481,24 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 	// header BEFORE forwarding bytes to R2. Chunks are bounded by the
 	// client's ChunkSize (default 5MB); the memory cost is intentional
 	// and acceptable versus the hard law of "no local disk I/O".
+	//
+	// M40-PERF-001: cap a single PATCH body at ChunkSize + 64 KiB slack
+	// (HTTP headers, TUS metadata padding) so a rogue client cannot
+	// OOM the API pod by declaring a huge Content-Length. MaxBytesReader
+	// converts over-limit reads into a 413 via io.ReadAll's err path;
+	// we surface that as HTTP 413 specifically so clients can distinguish
+	// chunk-too-large from other IO failures.
+	const perChunkSlack = 64 * 1024
+	r.Body = http.MaxBytesReader(w, r.Body, row.ChunkSize+perChunkSlack)
 	chunk, err := io.ReadAll(r.Body)
 	if err != nil {
+		// MaxBytesReader returns *http.MaxBytesError on overflow; unwrap to
+		// keep the branch readable even if Go vendors a different sentinel.
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			http.Error(w, fmt.Sprintf(`{"error":"chunk exceeds ChunkSize + %d byte slack"}`, perChunkSlack), http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, `{"error":"failed to read chunk body"}`, http.StatusInternalServerError)
 		return
 	}
@@ -434,7 +530,20 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 			http.Error(w, `{"error":"session has no R2 multipart upload id"}`, http.StatusInternalServerError)
 			return
 		}
-		fresh := newStreamState(storageKey, mpID)
+		// Cold-path recovery: M40-DB-001 lets us reconstruct the
+		// reservation handle from upload_sessions.credit_reservation_id.
+		// If the column is NULL (feature was off at CreateSession time,
+		// or enterprise unlimited_passthrough that we intentionally skip
+		// persisting) we pass nil and let Consume/Refund no-op — the TTL
+		// sweeper unwinds anything left pending.
+		var coldReservation *gate.ReservationHandle
+		if row.CreditReservationID != nil && *row.CreditReservationID != uuid.Nil {
+			coldReservation = &gate.ReservationHandle{
+				ReservationID:  *row.CreditReservationID,
+				FeatureEnabled: true,
+			}
+		}
+		fresh := newStreamState(storageKey, mpID, coldReservation)
 		// Mark the fresh hasher as unreliable by setting it to nil. Finalize
 		// reads nil hasher = cold path re-read from R2.
 		fresh.hasher = nil
@@ -506,15 +615,40 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 			// F-003 / F-004: map M16 Tier D scan errors to 422. Any other
 			// finalize error stays 500.
 			if errors.Is(err, service.ErrScanHashMismatch) {
+				// M40: the upload was charged; a hash mismatch means the
+				// bytes never made it intact. Refund the reservation so
+				// the user isn't billed for a failed upload. This is the
+				// stream-hash-fail refund case in feature-prd.md §4.
+				_ = h.creditGate.Refund(r.Context(), state.reservation,
+					fmt.Sprintf("refund:%s:hashfail", uploadID),
+					"stream-hash-fail")
 				http.Error(w, `{"error":"SCAN_HASH_MISMATCH"}`, http.StatusUnprocessableEntity)
 				return
 			}
 			if errors.Is(err, service.ErrScanManifestInvalid) {
+				_ = h.creditGate.Refund(r.Context(), state.reservation,
+					fmt.Sprintf("refund:%s:manifest", uploadID),
+					"scan-manifest-invalid")
 				http.Error(w, `{"error":"SCAN_MANIFEST_INVALID"}`, http.StatusUnprocessableEntity)
 				return
 			}
+			// Any other finalize error refunds too — user isn't charged for
+			// infra failures (feature-prd.md §4 Decision 3).
+			_ = h.creditGate.Refund(r.Context(), state.reservation,
+				fmt.Sprintf("refund:%s:infra", uploadID),
+				"infra-failure")
 			http.Error(w, fmt.Sprintf(`{"error":"finalize failed: %s"}`, err.Error()), http.StatusInternalServerError)
 			return
+		}
+		// Success: convert the reservation into a terminal consume entry.
+		// Best-effort — a Consume failure after a successful upload must
+		// not regress the upload. ExpireAbandoned will eventually settle
+		// the ledger if Consume dropped on the floor.
+		if cerr := h.creditGate.Consume(r.Context(), state.reservation,
+			fmt.Sprintf("consume:%s", uploadID)); cerr != nil {
+			// Log-level concern: the asset exists in R2 and the DB, but
+			// the ledger entry didn't settle. Not user-visible.
+			log.Printf("m40: credit consume on finalize failed upload=%s err=%v", uploadID, cerr)
 		}
 		h.streamStates.Delete(uploadID)
 		respondJSON(w, http.StatusOK, result)
@@ -573,6 +707,21 @@ func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	if err := h.sessions.Delete(r.Context(), uploadID); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"failed to delete session: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
+	}
+
+	// M40: refund the reservation so the user isn't charged for a
+	// cancelled upload (feature-prd.md §4 Decision 3 refund policy —
+	// user-cancel is always refunded). Best-effort: even if Refund
+	// fails, the session is already deleted; ExpireAbandoned will
+	// clean up the dangling ledger entry after the TTL.
+	if stateI, ok := h.streamStates.Load(uploadID); ok {
+		if state, ok := stateI.(*sessionStreamState); ok && state != nil {
+			if rerr := h.creditGate.Refund(r.Context(), state.reservation,
+				fmt.Sprintf("refund:%s:cancel", uploadID),
+				"user-cancel"); rerr != nil {
+				log.Printf("m40: credit refund on cancel failed upload=%s err=%v", uploadID, rerr)
+			}
+		}
 	}
 	h.streamStates.Delete(uploadID)
 	w.WriteHeader(http.StatusNoContent)
@@ -690,8 +839,10 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 
 	if err := h.sessions.MarkCompleted(ctx, row.TUSUploadID); err != nil {
 		// Not fatal — log-worthy but the upload did succeed. Return the
-		// result so the client is not left retrying.
-		_ = err
+		// result so the client is not left retrying. M40-SIL-001: log so
+		// the upload-session cleanup worker can't silently misclassify the
+		// row as abandoned after a successful finalize.
+		log.Printf("m40: mark completed failed upload=%s err=%v", row.TUSUploadID, err)
 	}
 
 	return map[string]interface{}{
