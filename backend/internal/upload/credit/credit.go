@@ -326,13 +326,15 @@ func (s *Service) consumeDB(ctx context.Context, in ConsumeInput) (*LedgerEntry,
 	}
 
 	// Idempotency: return existing consume for this reservation + key.
+	// M40-CODE-004: read the existing row inside the same tx so the
+	// lookup and the decision share one visibility snapshot.
 	var existingID uuid.UUID
 	err = tx.QueryRow(ctx, `
 		SELECT id FROM upload_ledger_entries
 		 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
 	`, workspaceID, in.IdempotencyKey, string(EntryConsume)).Scan(&existingID)
 	if err == nil {
-		return s.readEntryByID(ctx, existingID)
+		return s.readEntryByID(ctx, tx, existingID)
 	}
 
 	// amount_credits on a reserve is negative; consume posts the same
@@ -413,14 +415,16 @@ func (s *Service) refundDB(ctx context.Context, in RefundInput) (*LedgerEntry, e
 		return nil, fmt.Errorf("%w: entry_type=%s", ErrAlreadySettled, entryType)
 	}
 
-	// Idempotency: same key returns the existing refund.
+	// Idempotency: same key returns the existing refund. Read the row
+	// inside tx (M40-CODE-004) so the whole idempotency-replay path
+	// observes one consistent snapshot.
 	var existingID uuid.UUID
 	err = tx.QueryRow(ctx, `
 		SELECT id FROM upload_ledger_entries
 		 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
 	`, workspaceID, in.IdempotencyKey, string(EntryRefund)).Scan(&existingID)
 	if err == nil {
-		return s.readEntryByID(ctx, existingID)
+		return s.readEntryByID(ctx, tx, existingID)
 	}
 
 	// refund posts the positive counterpart (-amountCredits on a reserve
@@ -579,11 +583,21 @@ func (s *Service) findReservationByKey(ctx context.Context, workspaceID uuid.UUI
 	return &res, nil
 }
 
-// readEntryByID loads a single ledger row by id.
-func (s *Service) readEntryByID(ctx context.Context, id uuid.UUID) (*LedgerEntry, error) {
+// rowQuerier is the narrow surface needed by readEntryByID. Both *pgxpool.Pool
+// and pgx.Tx satisfy it via structural typing. M40-CODE-004: threading the
+// querier through lets the idempotency replay path in consumeDB / refundDB
+// read the existing entry inside the same transaction that just located
+// it, instead of mixing tx-bound + pool-bound reads.
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// readEntryByID loads a single ledger row by id. Pass tx when the caller
+// is already inside a transaction; pass s.pool for standalone reads.
+func (s *Service) readEntryByID(ctx context.Context, q rowQuerier, id uuid.UUID) (*LedgerEntry, error) {
 	var e LedgerEntry
 	var entryType string
-	err := s.pool.QueryRow(ctx, `
+	err := q.QueryRow(ctx, `
 		SELECT id, workspace_id, entry_type, amount_credits,
 		       COALESCE(idempotency_key, ''),
 		       reservation_ref_id, upload_session_id,
