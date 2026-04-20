@@ -21,7 +21,11 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 // production NEXT_PUBLIC_API_URL is set to an HTTPS URL which the existing
 // `https:` token already covers, so this carve-out has zero prod impact.
 const isDev = process.env.NODE_ENV !== "production";
-const devConnectExtras = isDev ? " http://localhost:* ws://localhost:*" : "";
+// When NEXT_PUBLIC_API_URL is an HTTP URL (e.g. Docker dev with localhost:8080),
+// include it explicitly so the CSP connect-src allows it even in production builds.
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+const apiOrigin = apiUrl.startsWith("http://") ? ` ${apiUrl}` : "";
+const devConnectExtras = isDev ? " http://localhost:* ws://localhost:*" : apiOrigin;
 const devImgExtras = isDev ? " http://localhost:*" : "";
 
 const securityHeaders = [
@@ -41,13 +45,13 @@ const securityHeaders = [
       "default-src 'self'",
       // Inline scripts remain until nonce-based CSP lands; unsafe-eval is dev-only.
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:" + devImgExtras,
       // connect-src must include the API origin for same-origin fetches
       // through rewrites() plus any R2 public buckets the client talks to.
       // Dev adds localhost:* so cross-origin dev fetches to the Go API work.
       "connect-src 'self' https:" + devConnectExtras,
-      "font-src 'self' data:",
+      "font-src 'self' data: https://fonts.gstatic.com",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "base-uri 'self'",

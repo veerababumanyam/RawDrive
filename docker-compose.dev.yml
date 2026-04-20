@@ -1,0 +1,113 @@
+name: rawdrive-dev
+
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: rawdrive
+      POSTGRES_USER: rawdrive
+      POSTGRES_PASSWORD: rawdrive_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rawdrive"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    command: valkey-server --appendonly yes
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nats:
+    image: nats:2-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: -js -m 8222
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # ── One-shot migration runner ─────────────────────────────────────
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["/usr/local/bin/migrate"]
+    environment:
+      DATABASE_URL: postgresql://rawdrive:rawdrive_dev@postgres:5432/rawdrive?sslmode=disable
+      APP_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Backend API ───────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["/usr/local/bin/api"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://rawdrive:rawdrive_dev@postgres:5432/rawdrive?sslmode=disable
+      VALKEY_URL: redis://valkey:6379
+      NATS_URL: nats://nats:4222
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      APP_ENV: development
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  # ── Frontend ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the JS bundle at build time — points browser fetch calls
+        # at the backend exposed on the host's port 8080.
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    environment:
+      # Also needed at runtime so next.config.ts headers() includes it in CSP.
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  valkey_data:

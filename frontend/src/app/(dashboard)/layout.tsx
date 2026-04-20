@@ -277,7 +277,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
 
       const claims = getStoredAccessTokenClaims();
-      if (!isOnboarding && (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id)) {
+      const platformRole = claims?.platform_role;
+      const isAdminRole = platformRole === "super_admin" || platformRole === "admin";
+      if (!isOnboarding && !isAdminRole && (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id)) {
         setAuthenticated(false);
         window.location.assign("/onboarding");
         return;

@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v1";
+const VERSION = "m15-v2";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-`;
