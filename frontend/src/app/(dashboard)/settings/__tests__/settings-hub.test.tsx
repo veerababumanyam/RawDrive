@@ -37,6 +37,25 @@ describe("Settings hub (/settings)", () => {
     expect(link.getAttribute("href")).toBe("/admin/dashboard");
   });
 
+  it("shows the Upload Credits tile only for admin / super_admin roles", async () => {
+    vi.spyOn(auth, "getStoredPlatformRole").mockReturnValue("admin");
+    render(<SettingsHubPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-tile-upload-credits")).toBeDefined();
+    });
+    const link = screen.getByTestId("settings-tile-upload-credits") as HTMLAnchorElement;
+    // This contract is the answer to "admin settings not showing option
+    // to set credits for upload" — the hub MUST expose a direct path to
+    // the admin grant surface.
+    expect(link.getAttribute("href")).toBe("/admin/upload-credits");
+  });
+
+  it("hides the Upload Credits tile from non-admin roles", () => {
+    vi.spyOn(auth, "getStoredPlatformRole").mockReturnValue("photographer");
+    render(<SettingsHubPage />);
+    expect(screen.queryByTestId("settings-tile-upload-credits")).toBeNull();
+  });
+
   it("Profile tile links to /settings/profile (distinct from hub)", () => {
     vi.spyOn(auth, "getStoredPlatformRole").mockReturnValue("photographer");
     render(<SettingsHubPage />);

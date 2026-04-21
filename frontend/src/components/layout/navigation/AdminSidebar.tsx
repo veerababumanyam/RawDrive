@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  Coins,
   FileText,
   Handshake,
   Home,
@@ -28,6 +29,7 @@ const groups: NavGroup[] = [
       { href: "/admin/dealers", label: "Dealers", icon: Handshake },
       { href: "/admin/moderation", label: "Moderation", icon: Shield },
       { href: "/admin/workspaces", label: "Workspaces", icon: LayoutGrid },
+      { href: "/admin/upload-credits", label: "Upload Credits", icon: Coins },
       { href: "/admin/revenue", label: "Revenue", icon: LineChart },
       { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/admin/system", label: "System Health", icon: Server },

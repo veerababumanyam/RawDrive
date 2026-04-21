@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
+  Coins,
   CreditCard,
   HardDrive,
   LayoutGrid,
@@ -70,6 +71,14 @@ const TILES: Tile[] = [
     description: "Client-facing delivery packages.",
     icon: CreditCard,
     testId: "settings-tile-packages",
+  },
+  {
+    href: "/admin/upload-credits",
+    label: "Upload Credits",
+    description: "Grant upload credits to any workspace. Audit-logged, idempotent.",
+    icon: Coins,
+    requireRoles: ["super_admin", "admin"],
+    testId: "settings-tile-upload-credits",
   },
   {
     href: "/admin/dashboard",
