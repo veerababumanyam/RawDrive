@@ -35,7 +35,19 @@ func CORS(next http.Handler) http.Handler {
 		if allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Requested-With")
+			// Include TUS-style resumable upload headers so the chunked
+			// upload flow (PATCH /api/v1/uploads/{id} with Upload-Offset +
+			// Upload-Length and the Tus-Resumable version marker) passes
+			// the browser preflight. Without these, Chromium blocks the
+			// actual PATCH request with "Request header field upload-offset
+			// is not allowed by Access-Control-Allow-Headers in preflight
+			// response." — the exact error that surfaced for image uploads
+			// from the gallery page.
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Requested-With, Upload-Offset, Upload-Length, Tus-Resumable")
+			// Expose those same TUS headers so the frontend reader can
+			// observe the server's Upload-Offset after each PATCH (that's
+			// how resumable upload clients track progress).
+			w.Header().Set("Access-Control-Expose-Headers", "Upload-Offset, Upload-Length, Tus-Resumable")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 		}
