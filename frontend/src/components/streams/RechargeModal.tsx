@@ -49,6 +49,18 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Dismiss on Escape — complements the visible close button so the modal
+  // meets the "cancelable dialog" expectation (WCAG + HIG). Listener is
+  // only attached while the modal is open, then cleaned up.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -120,9 +132,18 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
       role="dialog"
       aria-modal="true"
       aria-label="Recharge streaming credits"
+      onClick={(e) => {
+        // Backdrop click: only close when the click originated on the
+        // overlay itself, not on the modal surface (which uses
+        // stopPropagation below).
+        if (e.target === e.currentTarget) onClose();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-surface-base/95 shadow-xl p-6 space-y-5 text-content-primary">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl rounded-2xl border border-white/10 bg-surface-base/95 shadow-xl p-6 space-y-5 text-content-primary"
+      >
         <header className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">
@@ -136,8 +157,8 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
           </div>
           <GlassIconButton
             label="Close recharge modal"
-            variant="ghost"
-            size="sm"
+            variant="glass"
+            size="md"
             onClick={onClose}
             data-testid="recharge-close"
           >
