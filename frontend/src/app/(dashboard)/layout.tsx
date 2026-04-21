@@ -25,6 +25,8 @@ import {
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import { HeaderClock } from "@/components/layout/HeaderClock";
+import { UploadCreditPill } from "@/components/streams/UploadCreditPill";
+import { CreditPill } from "@/components/streams/CreditPill";
 import {
   AdminSidebar,
   DealerSidebar,
@@ -393,6 +395,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </form>
 
         <div className="flex items-center justify-self-end gap-3">
+          {/* M41 FR-UCRT-10 follow-up: upload credits + streaming minutes
+              pills live inside the dashboard header so they don't
+              overlap the clock/theme/notifications/profile cluster. Each
+              pill self-hides when its backing balance endpoint 404s
+              (feature flag off). */}
+          <UploadCreditPill />
+          <CreditPill />
           {/* Issue #1: dashboard-wide live clock. Mounted in the
               shared header so every authenticated route surfaces the
               current time without per-page work. */}
