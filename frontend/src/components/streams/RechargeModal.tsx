@@ -155,17 +155,25 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
                 : "Pick a credit pack to keep uploads flowing."}
             </p>
           </div>
-          <GlassIconButton
-            label="Close recharge modal"
-            variant="glass"
-            size="md"
+          {/* Token-surface close button. `GlassIconButton`'s variants
+              are all tuned for dark backdrops (text-white on low-alpha
+              white fills), which renders near-invisible on the light
+              liquid-glass theme's near-white modal surface. This uses
+              the same semantic-token pattern as the dashboard header's
+              notification bell, so the button has guaranteed contrast
+              on liquid-glass / liquid-glass-dark / midnight. */}
+          <button
+            type="button"
+            aria-label="Close recharge modal"
+            title="Close recharge modal"
             onClick={onClose}
             data-testid="recharge-close"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="h-5 w-5">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
-          </GlassIconButton>
+          </button>
         </header>
 
         {/* M41 FR-UCRT-10: tab switcher between streaming minutes and upload
@@ -331,16 +339,17 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
         )}
 
         <footer className="flex items-center justify-end gap-2">
-          <GlassIconButton
-            label="Cancel recharge"
-            variant="ghost"
+          {/* Labeled text "Cancel" matches the NewUserDialog convention
+              and is readable on every theme (unlike an icon-only cancel
+              styled on dark-backdrop glass variants). */}
+          <button
+            type="button"
             onClick={onClose}
             data-testid="recharge-cancel"
+            className="rounded-md border border-border-subtle px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </GlassIconButton>
+            Cancel
+          </button>
           {surface === "streaming" && (
             <GlassIconButton
               label={submitting ? "Processing recharge" : "Confirm recharge"}
