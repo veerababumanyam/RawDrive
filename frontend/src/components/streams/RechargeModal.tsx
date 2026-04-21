@@ -258,8 +258,8 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
               data-testid="upload-order-init-unavailable"
               className="rounded-lg border border-white/10 bg-surface-muted p-3 text-xs text-content-secondary"
             >
-              Upload credit checkout is coming soon. Admin-initiated grants are available today via
-              Settings → Admin → Upload credits.
+              Upload credit checkout is coming soon. Admin-initiated grants are available today
+              from Admin → Workspaces → Grant credits.
             </div>
           </div>
         )}

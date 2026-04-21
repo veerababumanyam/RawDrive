@@ -231,6 +231,67 @@ export async function getWorkspaceDetail(token: string, id: string): Promise<Wor
   return get(token, `/workspaces/${id}`);
 }
 
+// ── Upload credit grants (M41 FR-UCRT-03) ──
+
+export interface GrantUploadCreditsRequest {
+  amount_credits: number;
+  idempotency_key: string;
+  reason: string;
+}
+
+export interface GrantUploadCreditsResponse {
+  ledger_entry_id: string;
+  workspace_id: string;
+  amount_credits: number;
+  idempotency_key: string;
+  created_at: string;
+}
+
+/**
+ * Super-admin grants upload credits to a workspace.
+ * POST /api/v1/admin/workspaces/{id}/upload-credits/grant
+ *
+ * Backend (admin_upload_credits_handler.go) returns:
+ *  - 200 with adminGrantResponse on success
+ *  - 400 {error_code:"INVALID_WORKSPACE_ID"|"INVALID_GRANT_INPUT"|"ACTOR_ID_MISSING"}
+ *  - 422 {error_code:"GRANT_CAP_EXCEEDED"} — per-grant cap is 100_000
+ *  - 403 on missing super_admin/admin role (caught by RequirePlatformRole)
+ *  - 500 {error:"grant_failed"} on service errors
+ *
+ * Parses the structured error envelope so callers can show actionable
+ * messages instead of "Admin API error: 422".
+ */
+export async function grantUploadCredits(
+  token: string,
+  workspaceId: string,
+  body: GrantUploadCreditsRequest,
+): Promise<GrantUploadCreditsResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/workspaces/${workspaceId}/upload-credits/grant`,
+    {
+      method: "POST",
+      headers: headers(token),
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.ok) {
+    return (await res.json()) as GrantUploadCreditsResponse;
+  }
+  // Try to parse the structured error envelope; fall back to status text.
+  let message = `HTTP ${res.status}`;
+  try {
+    const payload = (await res.json()) as { error_code?: string; error?: string };
+    if (payload.error_code === "GRANT_CAP_EXCEEDED") {
+      message = "Amount exceeds the per-grant cap of 100,000 credits.";
+    } else if (payload.error) {
+      message = payload.error;
+    }
+  } catch {
+    /* non-JSON body — stick with HTTP status */
+  }
+  throw new Error(message);
+}
+
 // ── Revenue ──
 
 export async function getRevenueDashboard(token: string): Promise<RevenueData> {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 import { listWorkspaces, type WorkspaceOverview } from "@/lib/api/admin";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+import { GrantUploadCreditsDialog } from "@/components/admin/GrantUploadCreditsDialog";
 
 type WorkspaceRow = WorkspaceOverview & Record<string, unknown>;
 
@@ -14,7 +15,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1e3).toFixed(1)} KB`;
 }
 
-const columns: ColumnDef<WorkspaceRow>[] = [
+// Build columns inside the component so the Actions render callback can
+// close over state setters (selected workspace + dialog visibility).
+function buildColumns(
+  onGrant: (row: WorkspaceRow) => void,
+): ColumnDef<WorkspaceRow>[] {
+  return [
   {
     key: "name",
     label: "Name",
@@ -68,7 +74,30 @@ const columns: ColumnDef<WorkspaceRow>[] = [
     className: "text-xs text-text-secondary font-label",
     render: (value) => new Date(value as string).toLocaleDateString(),
   },
-];
+  {
+    // M41 FR-UCRT-03: admin upload-credit grants. Each row exposes a
+    // "Grant credits" button that opens GrantUploadCreditsDialog scoped
+    // to the specific workspace. Idempotency is handled per-submit so
+    // this is safe under accidental double-clicks.
+    key: "_actions",
+    label: "Actions",
+    align: "right",
+    render: (_value, row) => (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onGrant(row);
+        }}
+        data-testid={`grant-upload-credits-action-${row.id}`}
+        className="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        Grant credits
+      </button>
+    ),
+  },
+  ];
+}
 
 const compareFns = {
   storage_used_bytes: (a: WorkspaceRow, b: WorkspaceRow) =>
@@ -82,6 +111,8 @@ export default function AdminWorkspacesPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [grantTarget, setGrantTarget] = useState<WorkspaceRow | null>(null);
+  const columns = buildColumns((row) => setGrantTarget(row));
 
   useEffect(() => {
     async function load() {
@@ -130,6 +161,13 @@ export default function AdminWorkspacesPage() {
         loading={loading}
         compareFns={compareFns}
         emptyStateMessage="No workspaces found."
+      />
+
+      <GrantUploadCreditsDialog
+        open={grantTarget !== null}
+        onClose={() => setGrantTarget(null)}
+        workspaceId={grantTarget?.id ?? ""}
+        workspaceName={grantTarget?.name ?? ""}
       />
     </div>
   );
