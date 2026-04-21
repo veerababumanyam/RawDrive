@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
+	uploadhandlers "github.com/rawdrive/backend/internal/upload/handlers"
 )
 
 type AdminDeps struct {
@@ -30,6 +31,12 @@ type AdminDeps struct {
 	// returns 503 when the service is unset so existing test call sites
 	// without a real upload/credit.Service still compile.
 	UploadCreditGrantSvc UploadCreditGrantService
+
+	// M41 FR-UCRT-10 follow-up: admin-facing balance reader for the
+	// `/admin/upload-credits` page so admins see existing grants before
+	// adding more. Reuses the same interface as the user-facing balance
+	// endpoint; nil-safe (handler returns 503 when unset).
+	UploadCreditBalanceReader uploadhandlers.BalanceProvider
 }
 
 func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
@@ -47,8 +54,10 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 	// M16 E50-S1 / E50-S3: upload moderation admin handler.
 	uploadModeration := NewAdminUploadModerationHandler(deps.UploadModerationSvc)
 
-	// M41 E14-S3: upload credit admin grant handler.
+	// M41 E14-S3: upload credit admin grant handler, plus balance reader
+	// so the admin UI can show existing credit balances per workspace.
 	uploadCreditGrant := NewAdminUploadCreditsHandler(deps.UploadCreditGrantSvc)
+	uploadCreditGrant.BalanceReader = deps.UploadCreditBalanceReader
 
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
@@ -114,5 +123,12 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		// only super_admin + admin can reach this handler; unauthenticated
 		// and non-admin requests are blocked by middleware before arriving.
 		r.Post("/workspaces/{id}/upload-credits/grant", uploadCreditGrant.Grant)
+
+		// M41 FR-UCRT-10 follow-up: admin balance read for the
+		// `/admin/upload-credits` page. Resolves the target workspace
+		// from the URL (the user-facing `/api/v1/uploads/balance` uses
+		// the caller's JWT workspace_id claim, which isn't the right
+		// source here).
+		r.Get("/workspaces/{id}/upload-credits/balance", uploadCreditGrant.Balance)
 	})
 }

@@ -1721,6 +1721,10 @@ func main() {
 			// endpoint above (uploadCreditSvc); the handler only needs
 			// the narrow UploadCreditGrantService interface.
 			UploadCreditGrantSvc: uploadCreditSvc,
+			// M41 FR-UCRT-10 follow-up: reuse the adapter wired above
+			// for the user-facing balance pill so `/admin/upload-credits`
+			// can show existing grants per workspace.
+			UploadCreditBalanceReader: &uploadCreditBalanceAdapter{svc: uploadCreditSvc},
 		})
 
 		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")

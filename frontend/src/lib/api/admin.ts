@@ -261,6 +261,45 @@ export interface GrantUploadCreditsResponse {
  * Parses the structured error envelope so callers can show actionable
  * messages instead of "Admin API error: 422".
  */
+export interface AdminWorkspaceUploadBalance {
+  workspace_id: string;
+  available_credits: number;
+  plan_granted: number;
+  purchased: number;
+  reserved: number;
+  consumed: number;
+  refunded: number;
+  updated_at: string;
+  low_balance: boolean;
+  low_balance_threshold: number;
+}
+
+/**
+ * Super-admin read of a workspace's upload-credit balance.
+ * GET /api/v1/admin/workspaces/{id}/upload-credits/balance
+ *
+ * Distinct from the user-facing /api/v1/uploads/balance which resolves
+ * the workspace from the caller's JWT — this endpoint takes the
+ * workspace id from the URL so admins can inspect any workspace.
+ *
+ * 500 is NOT silently coerced to a zero-balance fallback: admins must
+ * see data-reliability errors truthfully or they could grant credits
+ * on top of a workspace whose balance lookup is actually broken.
+ */
+export async function getAdminWorkspaceUploadBalance(
+  token: string,
+  workspaceId: string,
+): Promise<AdminWorkspaceUploadBalance> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/workspaces/${workspaceId}/upload-credits/balance`,
+    { headers: headers(token) },
+  );
+  if (!res.ok) {
+    throw new Error(`Balance lookup failed: HTTP ${res.status}`);
+  }
+  return (await res.json()) as AdminWorkspaceUploadBalance;
+}
+
 export async function grantUploadCredits(
   token: string,
   workspaceId: string,
