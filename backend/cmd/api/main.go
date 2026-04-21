@@ -1420,6 +1420,29 @@ func main() {
 		}
 		api.Post("/api/v1/webhooks/razorpay/uploads", razorpayWebhookHandler.Handle)
 
+		// M41 FR-UCRT-04: upload monthly grant worker. Opt-in behind the
+		// UPLOAD_CREDIT_MONTHLY_GRANT_ENABLED flag. When enabled, the
+		// worker iterates every non-enterprise active workspace once per
+		// hour and calls credit.Service.GrantMonthly with an anchor date
+		// on the first of the calendar month. The service uses a
+		// deterministic `monthly:{ws}:{YYYY-MM}` idempotency key so
+		// multiple ticks within the same month collapse onto a single
+		// ledger entry per workspace via the partial unique index on
+		// upload_ledger_entries(workspace_id, idempotency_key) — the DB
+		// guarantee, not a worker-side cache, so it survives restarts
+		// and multi-pod deploys.
+		//
+		// Nil-safe: when UPLOAD_CREDIT_METER_ENABLED is false the worker
+		// still registers but receives a nil svc (uploadCreditSvc stays
+		// live though, so this branch is rare). runOnce short-circuits.
+		if strings.EqualFold(os.Getenv("UPLOAD_CREDIT_MONTHLY_GRANT_ENABLED"), "true") {
+			monthlyGrantWorker := worker.NewUploadMonthlyGrantWorker(dbPool, uploadCreditSvc)
+			workerRegistry.Register("upload-monthly-grant", monthlyGrantWorker)
+			log.Println("M41: upload monthly grant worker ENABLED (poll=1h)")
+		} else {
+			log.Println("M41: upload monthly grant worker disabled (set UPLOAD_CREDIT_MONTHLY_GRANT_ENABLED=true to enable)")
+		}
+
 		// M17 audit followup (S-011): register the upload-session cleanup
 		// worker so abandoned chunked uploads don't leak R2 multipart
 		// state and upload_sessions rows indefinitely. Polls every 15
