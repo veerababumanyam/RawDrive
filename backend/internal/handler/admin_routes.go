@@ -25,6 +25,11 @@ type AdminDeps struct {
 	// handler returns 501 when the service is unset so existing test call
 	// sites continue to compile without modification.
 	UploadModerationSvc *service.UploadModerationService
+
+	// M41 E14-S3: upload credit admin grant handler. Nil-safe: the handler
+	// returns 503 when the service is unset so existing test call sites
+	// without a real upload/credit.Service still compile.
+	UploadCreditGrantSvc UploadCreditGrantService
 }
 
 func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
@@ -41,6 +46,9 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 
 	// M16 E50-S1 / E50-S3: upload moderation admin handler.
 	uploadModeration := NewAdminUploadModerationHandler(deps.UploadModerationSvc)
+
+	// M41 E14-S3: upload credit admin grant handler.
+	uploadCreditGrant := NewAdminUploadCreditsHandler(deps.UploadCreditGrantSvc)
 
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		r.Use(middleware.RequireAuth)
@@ -98,5 +106,13 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Get("/upload-moderation", uploadModeration.ListQueue)
 		r.Post("/upload-moderation/{assetId}/override", uploadModeration.Override)
 		r.Get("/upload-moderation/analytics", uploadModeration.Analytics)
+
+		// M41 E14-S3: admin-initiated upload credit grant. Uses
+		// credit.Service.GrantAdmin which writes both the ledger entry and
+		// the audit_log row in one tx. Per-grant cap: GrantAdminHardCap
+		// (100_000 credits). The RequirePlatformRole chain above ensures
+		// only super_admin + admin can reach this handler; unauthenticated
+		// and non-admin requests are blocked by middleware before arriving.
+		r.Post("/workspaces/{id}/upload-credits/grant", uploadCreditGrant.Grant)
 	})
 }

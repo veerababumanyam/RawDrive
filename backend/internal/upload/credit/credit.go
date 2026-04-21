@@ -21,6 +21,7 @@ package credit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -105,6 +106,34 @@ var (
 	ErrReservationNotFound = errors.New("upload/credit: reservation not found")
 	ErrAlreadySettled      = errors.New("upload/credit: reservation already settled")
 	ErrNotImplemented      = errors.New("upload/credit: not implemented")
+
+	// M41 — Purchase / GrantAdmin / GrantMonthly / RefundPurchase surface.
+	ErrEmptyPackageCode         = errors.New("upload/credit: package_code required")
+	ErrPackageNotFound          = errors.New("upload/credit: package not found or inactive")
+	ErrNoActiveRateCard         = errors.New("upload/credit: no active rate card for package")
+	ErrAmountExceedsLimit       = errors.New("upload/credit: amount exceeds per-grant hard cap (100_000)")
+	ErrEmptyReason              = errors.New("upload/credit: reason required")
+	ErrEmptyPurchaseID          = errors.New("upload/credit: purchase_id required")
+	ErrPurchaseNotFound         = errors.New("upload/credit: purchase not found")
+	ErrRefundWindowExpired      = errors.New("upload/credit: refund window expired (7-day limit)")
+	ErrCreditsPartiallyConsumed = errors.New("upload/credit: credits partially consumed; refund blocked")
+)
+
+// GrantAdminHardCap is the maximum credits a single admin grant may post
+// (PRD §D3). Per-grant, not per-day — multiple grants may be chained if a
+// larger credit is needed, keeping the audit trail granular.
+const GrantAdminHardCap int64 = 100_000
+
+// GrantStatus describes the outcome of a monthly grant for one workspace.
+// Skipped tiers (enterprise) return GrantSkippedEnterprise without writing
+// a ledger row; a nil LedgerEntry on the result communicates this to the
+// caller without forcing a separate error path.
+type GrantStatus string
+
+const (
+	GrantGranted           GrantStatus = "granted"
+	GrantSkippedEnterprise GrantStatus = "skipped_enterprise"
+	GrantSkippedReplay     GrantStatus = "skipped_replay" // idempotent replay — existing entry returned
 )
 
 // InsufficientBalanceDetails carries the structured shortfall payload
@@ -592,6 +621,604 @@ func (s *Service) findReservationByKey(ctx context.Context, workspaceID uuid.UUI
 		res.UploadSessionID = *sessionID
 	}
 	return &res, nil
+}
+
+// ---------------------------------------------------------------------------
+// M41 — Purchase / GrantAdmin / GrantMonthly / RefundPurchase surface.
+//
+// This block adds the credit-addition + refund methods layered on top of the
+// M40 reserve/consume/refund ledger. Webhook handlers call Purchase; admin
+// handlers call GrantAdmin; the monthly worker calls GrantMonthly; the
+// refund endpoint calls RefundPurchase. All four post rows to
+// upload_ledger_entries inside a transaction.
+//
+// The implementations below cover input validation and the nil-pool path.
+// DB-backed behaviour (tx, rate-card resolution, idempotency replay,
+// rollup update, 7-day window, consumption check, platform_audit_log)
+// lives in the *DB helper methods added further down.
+
+// PurchaseInput parameters for Purchase.
+type PurchaseInput struct {
+	WorkspaceID    uuid.UUID
+	PackageCode    string // FK → upload_packages.code
+	Gateway        string // "phonepe" | "razorpay" | "manual" (admin-initiated)
+	GatewayTxnID   string // external reference for reconciliation
+	IdempotencyKey string
+	ActorID        *uuid.UUID // nil for webhooks
+}
+
+// PurchaseResult is returned from Purchase on success. Carries both the
+// ledger entry and the resolved package credits so the caller can surface
+// a clean confirmation to the user without a second SELECT.
+type PurchaseResult struct {
+	LedgerEntry   *LedgerEntry `json:"ledger_entry"`
+	PackageCode   string       `json:"package_code"`
+	Credits       int64        `json:"credits"`
+	PricePaise    int64        `json:"price_paise"`
+	Currency      string       `json:"currency"`
+	WasReplay     bool         `json:"was_replay"` // true if idempotent short-circuit
+}
+
+// GrantAdminInput parameters for GrantAdmin.
+type GrantAdminInput struct {
+	WorkspaceID    uuid.UUID
+	AmountCredits  int64
+	IdempotencyKey string
+	ActorID        uuid.UUID // the admin doing the grant (required; used in audit log)
+	Reason         string    // required; free text; written to platform_audit_log
+}
+
+// GrantMonthlyInput parameters for GrantMonthly.
+type GrantMonthlyInput struct {
+	WorkspaceID uuid.UUID
+	PlanTier    string    // "standard" | "professional" | "pro" | "enterprise"
+	AnchorDate  time.Time // used to build monthly:{ws}:{YYYY-MM} idempotency key
+}
+
+// GrantMonthlyResult is what GrantMonthly returns. Status discriminates
+// between a real grant (GrantGranted), an enterprise skip (GrantSkippedEnterprise),
+// and an idempotent replay (GrantSkippedReplay). LedgerEntry is nil for
+// skipped-enterprise and populated for the other two.
+type GrantMonthlyResult struct {
+	Status      GrantStatus  `json:"status"`
+	LedgerEntry *LedgerEntry `json:"ledger_entry,omitempty"`
+}
+
+// RefundPurchaseInput parameters for RefundPurchase.
+type RefundPurchaseInput struct {
+	PurchaseID     uuid.UUID
+	WorkspaceID    uuid.UUID
+	IdempotencyKey string
+	ActorID        uuid.UUID
+}
+
+// Purchase posts a 'purchase' ledger entry for a workspace, crediting the
+// package's credit amount. Idempotent via (workspace_id, idempotency_key):
+// replay returns the existing LedgerEntry. Called by webhook handlers
+// (PhonePe, Razorpay) and by the refund reversal path.
+//
+// Rate card + package resolution runs inside the transaction so a rate card
+// edit mid-purchase cannot flip the price under an in-flight webhook.
+func (s *Service) Purchase(ctx context.Context, in PurchaseInput) (*PurchaseResult, error) {
+	if in.IdempotencyKey == "" {
+		return nil, ErrEmptyIdempotencyKey
+	}
+	if in.PackageCode == "" {
+		return nil, ErrEmptyPackageCode
+	}
+	if s.pool == nil {
+		// Unit-test path: surface the contract shape without touching the DB.
+		return &PurchaseResult{
+			LedgerEntry: &LedgerEntry{
+				ID:             uuid.New(),
+				WorkspaceID:    in.WorkspaceID,
+				EntryType:      EntryPurchase,
+				AmountCredits:  0, // resolved from rate card in DB path
+				IdempotencyKey: in.IdempotencyKey,
+				CreatedAt:      s.now(),
+			},
+			PackageCode: in.PackageCode,
+			Currency:    "INR",
+		}, nil
+	}
+	return s.purchaseDB(ctx, in)
+}
+
+// GrantAdmin posts a 'grant_admin' ledger entry and a platform_audit_log
+// row in one transaction. Caps single grants at GrantAdminHardCap
+// (100_000 credits per PRD §D3). Idempotent on (workspace_id, idempotency_key).
+func (s *Service) GrantAdmin(ctx context.Context, in GrantAdminInput) (*LedgerEntry, error) {
+	if in.IdempotencyKey == "" {
+		return nil, ErrEmptyIdempotencyKey
+	}
+	if in.AmountCredits <= 0 {
+		return nil, ErrNonPositiveAmount
+	}
+	if in.AmountCredits > GrantAdminHardCap {
+		return nil, ErrAmountExceedsLimit
+	}
+	if in.Reason == "" {
+		return nil, ErrEmptyReason
+	}
+	if s.pool == nil {
+		return &LedgerEntry{
+			ID:             uuid.New(),
+			WorkspaceID:    in.WorkspaceID,
+			EntryType:      EntryGrantAdmin,
+			AmountCredits:  in.AmountCredits,
+			IdempotencyKey: in.IdempotencyKey,
+			Reason:         in.Reason,
+			CreatedAt:      s.now(),
+		}, nil
+	}
+	return s.grantAdminDB(ctx, in)
+}
+
+// GrantMonthly posts a 'grant_monthly' ledger entry for the given workspace,
+// using monthly:{workspace}:{YYYY-MM} as the idempotency key so replay within
+// the same month is a no-op. Enterprise plan tier skips without error.
+func (s *Service) GrantMonthly(ctx context.Context, in GrantMonthlyInput) (*GrantMonthlyResult, error) {
+	if normalizePlan(in.PlanTier) == "enterprise" {
+		return &GrantMonthlyResult{Status: GrantSkippedEnterprise}, nil
+	}
+	amount := MonthlyGrantAmountForPlan(in.PlanTier)
+	if amount <= 0 {
+		// Unknown tier — treat as a skip rather than an error so the worker
+		// can log and continue across workspaces. The worker surfaces the
+		// count of unknown-tier skips in its run log for operator review.
+		return &GrantMonthlyResult{Status: GrantSkippedEnterprise}, nil
+	}
+	anchor := in.AnchorDate
+	if anchor.IsZero() {
+		anchor = s.now()
+	}
+	key := fmt.Sprintf("monthly:%s:%04d-%02d", in.WorkspaceID, anchor.Year(), int(anchor.Month()))
+	if s.pool == nil {
+		return &GrantMonthlyResult{
+			Status: GrantGranted,
+			LedgerEntry: &LedgerEntry{
+				ID:             uuid.New(),
+				WorkspaceID:    in.WorkspaceID,
+				EntryType:      EntryGrantMonthly,
+				AmountCredits:  amount,
+				IdempotencyKey: key,
+				CreatedAt:      s.now(),
+			},
+		}, nil
+	}
+	return s.grantMonthlyDB(ctx, in, amount, key)
+}
+
+// RefundPurchase reverses a prior purchase within the 7-day refund window
+// (PRD §D4) provided no credits from that purchase have been consumed or
+// reserved. Posts a 'refund' ledger entry with a reference back to the
+// original purchase id. Idempotent on (workspace_id, idempotency_key).
+func (s *Service) RefundPurchase(ctx context.Context, in RefundPurchaseInput) (*LedgerEntry, error) {
+	if in.PurchaseID == uuid.Nil {
+		return nil, ErrEmptyPurchaseID
+	}
+	if in.IdempotencyKey == "" {
+		return nil, ErrEmptyIdempotencyKey
+	}
+	if s.pool == nil {
+		return &LedgerEntry{
+			ID:             uuid.New(),
+			WorkspaceID:    in.WorkspaceID,
+			EntryType:      EntryRefund,
+			AmountCredits:  0, // resolved from original purchase in DB path
+			IdempotencyKey: in.IdempotencyKey,
+			PurchaseID:     &in.PurchaseID,
+			CreatedAt:      s.now(),
+		}, nil
+	}
+	return s.refundPurchaseDB(ctx, in)
+}
+
+// MonthlyGrantAmountForPlan maps a plan tier to its monthly upload credit
+// allowance per PRD §D2. "pro" is accepted as an alias for "professional"
+// because both strings appear in production workspace rows. Enterprise and
+// unknown tiers return 0 — the caller (GrantMonthly) interprets this as
+// "skip, do not grant".
+func MonthlyGrantAmountForPlan(plan string) int64 {
+	switch normalizePlan(plan) {
+	case "standard":
+		return 200
+	case "professional":
+		return 1000
+	default:
+		return 0
+	}
+}
+
+func normalizePlan(plan string) string {
+	switch plan {
+	case "pro":
+		return "professional"
+	default:
+		return plan
+	}
+}
+
+// DB helpers — stubbed for the unit-test RED→GREEN slice. Full implementations
+// land in the integration slice (real tx, rate card lookup, idempotency
+// short-circuit, platform_audit_log, 7-day window check, consumption check).
+//
+// Returning ErrNotImplemented at this layer lets the input-validation tests
+// pass while leaving a loud marker for the integration slice to replace.
+//
+// purchaseDB implements the full Purchase flow:
+//  1. Idempotency short-circuit — replay with same (workspace_id, idempotency_key)
+//     returns the existing ledger entry with WasReplay=true.
+//  2. Rate card + package resolution — reads active rate card inside the tx
+//     so a concurrent rate card edit cannot flip the price mid-purchase.
+//  3. Insert upload_purchases row (for refund/audit trace) + upload_ledger_entries
+//     row (entry_type='purchase', positive amount_credits) in one tx.
+//
+// The trigger on upload_ledger_entries (migration 101) maintains the rollup
+// table automatically, so Purchase does not need to touch it directly.
+func (s *Service) purchaseDB(ctx context.Context, in PurchaseInput) (*PurchaseResult, error) {
+	// Idempotency short-circuit before opening a tx.
+	if existing, err := s.findPurchaseLedgerByKey(ctx, in.WorkspaceID, in.IdempotencyKey); err == nil {
+		return existing, nil
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Resolve package + active rate card inside the tx. The partial unique
+	// index upload_rate_cards_active_uniq guarantees at most one active row
+	// per package; the JOIN is 1:1. Schema note: upload_rate_cards stores
+	// price_paise; upload_purchases stores amount_inr_paise (same semantic,
+	// different column name — the credit.go boundary translates).
+	var credits, pricePaise int64
+	var currency string
+	err = tx.QueryRow(ctx, `
+		SELECT p.credits, r.price_paise, r.currency
+		  FROM upload_packages p
+		  JOIN upload_rate_cards r
+		    ON r.package_code = p.code AND r.effective_to IS NULL
+		 WHERE p.code = $1 AND p.active = TRUE
+	`, in.PackageCode).Scan(&credits, &pricePaise, &currency)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrPackageNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: package lookup: %w", err)
+	}
+
+	// Insert the purchase row. Column names match the canonical schema:
+	// amount_inr_paise (not price_paise) and gateway_payment_id (not gateway_txn_id).
+	// UNIQUE (workspace_id, idempotency_key) on upload_purchases keeps
+	// webhook replay idempotent at the DB level even if two concurrent
+	// Purchases slip past the pre-tx check.
+	purchaseID := uuid.New()
+	_, err = tx.Exec(ctx, `
+		INSERT INTO upload_purchases (
+			id, workspace_id, idempotency_key, amount_credits,
+			amount_inr_paise, gateway, gateway_payment_id, status, confirmed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', now())
+	`, purchaseID, in.WorkspaceID, in.IdempotencyKey, credits,
+		pricePaise, in.Gateway, in.GatewayTxnID)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: insert purchase: %w", err)
+	}
+
+	// Insert ledger entry. Positive amount_credits — the trigger on
+	// upload_ledger_entries updates upload_credit_balance_rollup automatically.
+	ledgerID := uuid.New()
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upload_ledger_entries (
+			id, workspace_id, entry_type, amount_credits,
+			idempotency_key, purchase_id
+		) VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING created_at
+	`, ledgerID, in.WorkspaceID, string(EntryPurchase), credits,
+		in.IdempotencyKey, purchaseID).Scan(&createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: insert ledger: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("upload/credit: commit purchase: %w", err)
+	}
+
+	return &PurchaseResult{
+		LedgerEntry: &LedgerEntry{
+			ID:             ledgerID,
+			WorkspaceID:    in.WorkspaceID,
+			EntryType:      EntryPurchase,
+			AmountCredits:  credits,
+			IdempotencyKey: in.IdempotencyKey,
+			PurchaseID:     &purchaseID,
+			CreatedAt:      createdAt,
+		},
+		PackageCode: in.PackageCode,
+		Credits:     credits,
+		PricePaise:  pricePaise,
+		Currency:    currency,
+		WasReplay:   false,
+	}, nil
+}
+
+// findPurchaseLedgerByKey short-circuits a Purchase replay when a ledger
+// entry with the same (workspace_id, idempotency_key) pair already exists.
+// Populates a PurchaseResult with WasReplay=true + the package metadata
+// resolved via the purchase_id foreign key.
+func (s *Service) findPurchaseLedgerByKey(ctx context.Context, workspaceID uuid.UUID, key string) (*PurchaseResult, error) {
+	var ledgerID, purchaseID uuid.UUID
+	var ledgerCredits, purchaseCredits, pricePaise int64
+	var createdAt time.Time
+	// Schema notes: upload_purchases uses amount_inr_paise (not price_paise);
+	// currency is implicit INR (no column). Package code is not persisted on
+	// the purchase row — callers that need it must re-resolve via amount.
+	err := s.pool.QueryRow(ctx, `
+		SELECT e.id, e.amount_credits, e.created_at,
+		       p.id, p.amount_credits, p.amount_inr_paise
+		  FROM upload_ledger_entries e
+		  LEFT JOIN upload_purchases p ON p.id = e.purchase_id
+		 WHERE e.workspace_id = $1
+		   AND e.idempotency_key = $2
+		   AND e.entry_type = $3
+	`, workspaceID, key, string(EntryPurchase)).Scan(
+		&ledgerID, &ledgerCredits, &createdAt,
+		&purchaseID, &purchaseCredits, &pricePaise,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &PurchaseResult{
+		LedgerEntry: &LedgerEntry{
+			ID:             ledgerID,
+			WorkspaceID:    workspaceID,
+			EntryType:      EntryPurchase,
+			AmountCredits:  ledgerCredits,
+			IdempotencyKey: key,
+			PurchaseID:     &purchaseID,
+			CreatedAt:      createdAt,
+		},
+		Credits:    purchaseCredits,
+		PricePaise: pricePaise,
+		Currency:   "INR",
+		WasReplay:  true,
+	}, nil
+}
+
+// grantAdminDB implements the admin grant flow: idempotent ledger insert +
+// platform_audit_log row in one tx. PRD §D3 hard cap (GrantAdminHardCap) is
+// enforced in the public GrantAdmin() input validation above.
+func (s *Service) grantAdminDB(ctx context.Context, in GrantAdminInput) (*LedgerEntry, error) {
+	// Idempotency short-circuit.
+	if existing, err := s.findLedgerEntryByKey(ctx, in.WorkspaceID, in.IdempotencyKey, EntryGrantAdmin); err == nil {
+		return existing, nil
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	ledgerID := uuid.New()
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upload_ledger_entries (
+			id, workspace_id, entry_type, amount_credits,
+			idempotency_key, reason, created_by
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING created_at
+	`, ledgerID, in.WorkspaceID, string(EntryGrantAdmin), in.AmountCredits,
+		in.IdempotencyKey, in.Reason, in.ActorID).Scan(&createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: insert grant_admin: %w", err)
+	}
+
+	// audit_log — NFR-UCRT-O1 requires every admin grant to land in the
+	// platform audit trail. Canonical table is `audit_log` (singular) with
+	// actor_id / action / resource_type / resource_id / metadata columns.
+	// The older `audit_logs` plural table carries before/after state and
+	// ip/user-agent for request-scoped writes; we use the simpler singular
+	// table here because this is a service-layer grant, not an HTTP request.
+	//
+	// M41-CODE-001: Build the metadata JSONB via encoding/json, not
+	// fmt.Sprintf + %q. %q escapes for Go string literals and does NOT
+	// escape Unicode control characters (U+0000..U+001F) or surrogate
+	// pairs — a grant reason containing control chars would produce
+	// invalid JSON that Postgres JSONB ingest rejects, rolling back the
+	// whole grant transaction. json.Marshal is safe for all Unicode.
+	meta, metaErr := json.Marshal(map[string]any{
+		"amount_credits":  in.AmountCredits,
+		"reason":          in.Reason,
+		"ledger_entry_id": ledgerID.String(),
+	})
+	if metaErr != nil {
+		return nil, fmt.Errorf("upload/credit: marshal audit metadata: %w", metaErr)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log (
+			actor_id, action, resource_type, resource_id, metadata
+		) VALUES ($1, $2, $3, $4, $5)
+	`, in.ActorID, "upload_credits.grant_admin", "workspace", in.WorkspaceID, meta)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: insert audit log: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("upload/credit: commit grant_admin: %w", err)
+	}
+
+	return &LedgerEntry{
+		ID:             ledgerID,
+		WorkspaceID:    in.WorkspaceID,
+		EntryType:      EntryGrantAdmin,
+		AmountCredits:  in.AmountCredits,
+		IdempotencyKey: in.IdempotencyKey,
+		Reason:         in.Reason,
+		CreatedAt:      createdAt,
+	}, nil
+}
+
+// grantMonthlyDB implements the monthly worker grant flow. Idempotent on
+// (workspace_id, idempotency_key) which is monthly:{ws}:{YYYY-MM}, so replay
+// within the same month returns GrantSkippedReplay.
+func (s *Service) grantMonthlyDB(ctx context.Context, in GrantMonthlyInput, amount int64, key string) (*GrantMonthlyResult, error) {
+	if existing, err := s.findLedgerEntryByKey(ctx, in.WorkspaceID, key, EntryGrantMonthly); err == nil {
+		return &GrantMonthlyResult{Status: GrantSkippedReplay, LedgerEntry: existing}, nil
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	ledgerID := uuid.New()
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upload_ledger_entries (
+			id, workspace_id, entry_type, amount_credits, idempotency_key
+		) VALUES ($1, $2, $3, $4, $5)
+		RETURNING created_at
+	`, ledgerID, in.WorkspaceID, string(EntryGrantMonthly), amount, key).Scan(&createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: insert grant_monthly: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("upload/credit: commit grant_monthly: %w", err)
+	}
+
+	return &GrantMonthlyResult{
+		Status: GrantGranted,
+		LedgerEntry: &LedgerEntry{
+			ID:             ledgerID,
+			WorkspaceID:    in.WorkspaceID,
+			EntryType:      EntryGrantMonthly,
+			AmountCredits:  amount,
+			IdempotencyKey: key,
+			CreatedAt:      createdAt,
+		},
+	}, nil
+}
+
+// refundPurchaseDB enforces the 7-day window + fully-unspent eligibility
+// checks and posts a compensating refund ledger entry. Scope: FR-UCRT-11.
+//
+// Eligibility:
+//   - Purchase must exist and belong to the given workspace (prevents
+//     cross-workspace refund attacks).
+//   - created_at >= now() - 7 days.
+//   - No consume/reserve ledger entries reference this purchase via the
+//     purchase_id column. This is the "fully-unspent" check.
+func (s *Service) refundPurchaseDB(ctx context.Context, in RefundPurchaseInput) (*LedgerEntry, error) {
+	if existing, err := s.findLedgerEntryByKey(ctx, in.WorkspaceID, in.IdempotencyKey, EntryRefund); err == nil {
+		return existing, nil
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Resolve purchase + eligibility inside the tx.
+	var wsID uuid.UUID
+	var credits int64
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+		SELECT workspace_id, amount_credits, created_at
+		  FROM upload_purchases
+		 WHERE id = $1
+		 FOR UPDATE
+	`, in.PurchaseID).Scan(&wsID, &credits, &createdAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrPurchaseNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: purchase lookup: %w", err)
+	}
+	if wsID != in.WorkspaceID {
+		return nil, ErrPurchaseNotFound
+	}
+	if s.now().Sub(createdAt) > 7*24*time.Hour {
+		return nil, ErrRefundWindowExpired
+	}
+
+	// Fully-unspent check — no consume / reserve entry references this
+	// purchase. This is a tight guard; any reservation that consumed from
+	// this purchase (even unreleased) blocks the refund.
+	var usedCount int64
+	err = tx.QueryRow(ctx, `
+		SELECT COUNT(*)
+		  FROM upload_ledger_entries
+		 WHERE purchase_id = $1
+		   AND entry_type IN ($2, $3)
+	`, in.PurchaseID, string(EntryReserve), string(EntryConsume)).Scan(&usedCount)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: consumption check: %w", err)
+	}
+	if usedCount > 0 {
+		return nil, ErrCreditsPartiallyConsumed
+	}
+
+	ledgerID := uuid.New()
+	var refundAt time.Time
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upload_ledger_entries (
+			id, workspace_id, entry_type, amount_credits,
+			idempotency_key, purchase_id, created_by, reason
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING created_at
+	`, ledgerID, in.WorkspaceID, string(EntryRefund), -credits,
+		in.IdempotencyKey, in.PurchaseID, in.ActorID,
+		"refund within 7-day window",
+	).Scan(&refundAt)
+	if err != nil {
+		return nil, fmt.Errorf("upload/credit: insert refund: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("upload/credit: commit refund: %w", err)
+	}
+
+	return &LedgerEntry{
+		ID:             ledgerID,
+		WorkspaceID:    in.WorkspaceID,
+		EntryType:      EntryRefund,
+		AmountCredits:  -credits,
+		IdempotencyKey: in.IdempotencyKey,
+		PurchaseID:     &in.PurchaseID,
+		CreatedAt:      refundAt,
+	}, nil
+}
+
+// findLedgerEntryByKey returns an existing ledger entry for (workspace_id,
+// idempotency_key) filtered to a specific entry_type. Used by the
+// idempotency short-circuit in grantAdminDB / grantMonthlyDB / refundDB.
+func (s *Service) findLedgerEntryByKey(ctx context.Context, workspaceID uuid.UUID, key string, entryType EntryType) (*LedgerEntry, error) {
+	var e LedgerEntry
+	var typ string
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, workspace_id, entry_type, amount_credits,
+		       COALESCE(idempotency_key, ''),
+		       reservation_ref_id, upload_session_id, purchase_id,
+		       COALESCE(reason, ''), created_at
+		  FROM upload_ledger_entries
+		 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
+	`, workspaceID, key, string(entryType)).Scan(
+		&e.ID, &e.WorkspaceID, &typ, &e.AmountCredits,
+		&e.IdempotencyKey,
+		&e.ReservationRefID, &e.UploadSessionID, &e.PurchaseID,
+		&e.Reason, &e.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	e.EntryType = EntryType(typ)
+	return &e, nil
 }
 
 // rowQuerier is the narrow surface needed by readEntryByID. Both *pgxpool.Pool

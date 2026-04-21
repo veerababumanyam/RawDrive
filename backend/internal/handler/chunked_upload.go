@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
@@ -337,12 +338,25 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	// Cost is fixed at 1 credit per upload for M40 v1 (per-upload meter,
 	// see feature-prd.md §4 Decision 1). Per-derivative pricing is out
 	// of scope.
+	// M41 FR-UCRT-07/08: read the resolved plan tier from the tenant
+	// middleware chain and forward it to the gate. Enterprise workspaces
+	// short-circuit to an unlimited_passthrough ledger entry (0 credits
+	// debited) instead of hitting the balance gate; all other tiers take
+	// the normal reserve path. Missing plan tier defaults to empty string
+	// → EnterpriseUnlimited stays false → balance gate enforced. This
+	// fail-closed default is deliberate: a transient plan-tier lookup
+	// failure must never silently upgrade a standard workspace.
+	planTier := middleware.PlanTierFromContext(r.Context())
+	enterpriseUnlimited := planTier == "enterprise"
+
 	creditReservation, credErr := h.creditGate.ReserveForSession(r.Context(), gate.ReserveRequest{
-		WorkspaceID:     workspaceID,
-		UploadSessionID: uploadUUID,
-		Cost:            1,
-		IdempotencyKey:  fmt.Sprintf("session:%s", uploadID),
-		CreatedBy:       uuidPtr(userID),
+		WorkspaceID:         workspaceID,
+		UploadSessionID:     uploadUUID,
+		Cost:                1,
+		IdempotencyKey:      fmt.Sprintf("session:%s", uploadID),
+		CreatedBy:           uuidPtr(userID),
+		PlanCode:            planTier,
+		EnterpriseUnlimited: enterpriseUnlimited,
 	})
 	if credErr != nil {
 		// InsufficientBalanceDetails: surface as 400 with the structured

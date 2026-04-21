@@ -35,18 +35,33 @@ type UploadCreditService interface {
 // ReserveRequest is the input the handler passes to ReserveForSession.
 // It's a thin value type; the gate converts it into credit.ReserveInput.
 //
-// M40 v1 is fixed at 1 credit per upload (feature-prd.md §4 Decision 1) and
-// the handler has no plumbing for plan tier, so PlanCode + EnterpriseUnlimited
-// were removed from this request in 2026-04-20 (M40-CODE-001). They live on in
-// credit.ReserveInput + the `unlimited_passthrough` entry_type so a later wave
-// that adds plan-tier plumbing (JWT claim or workspace repo on the handler)
-// can restore the unlimited path without changing the DB schema.
+// M40 v1 was fixed at 1 credit per upload (feature-prd.md §4 Decision 1)
+// and the handler had no plumbing for plan tier, so PlanCode +
+// EnterpriseUnlimited were removed in 2026-04-20 (M40-CODE-001).
+//
+// M41 FR-UCRT-07/08 restores those fields. Chunked upload handler now
+// reads PlanTierFromContext (middleware.PlanTierContext, wired in main.go)
+// and sets the two new fields so enterprise workspaces short-circuit to
+// an `unlimited_passthrough` ledger entry (amount_credits=0) instead of
+// going through the balance gate. Non-enterprise tiers leave
+// EnterpriseUnlimited false and the balance gate continues to apply.
 type ReserveRequest struct {
 	WorkspaceID     uuid.UUID
 	UploadSessionID uuid.UUID
 	Cost            int64
 	IdempotencyKey  string
 	CreatedBy       *uuid.UUID
+	// PlanCode is the workspaces.plan_tier value for the tenant. The
+	// credit service treats "enterprise" specially only when
+	// EnterpriseUnlimited is also true; PlanCode itself is passed through
+	// for audit/logging.
+	PlanCode string
+	// EnterpriseUnlimited, when true, tells the credit service to post an
+	// `unlimited_passthrough` entry instead of reserving credits. Callers
+	// MUST only set this when PlanCode is "enterprise". The handler sets
+	// it based on PlanTierFromContext and nothing else; a missing plan
+	// tier defaults to false, keeping the balance gate enforced.
+	EnterpriseUnlimited bool
 }
 
 // ReservationHandle is what the handler carries from CreateSession
@@ -110,14 +125,17 @@ func NewLiveGate(svc UploadCreditService) *LiveGate {
 // verbatim so the handler can emit the 400 INSUFFICIENT_CREDITS body.
 func (g *LiveGate) ReserveForSession(ctx context.Context, req ReserveRequest) (*ReservationHandle, error) {
 	res, err := g.svc.Reserve(ctx, credit.ReserveInput{
-		WorkspaceID:     req.WorkspaceID,
-		UploadSessionID: req.UploadSessionID,
-		AmountCredits:   req.Cost,
-		IdempotencyKey:  req.IdempotencyKey,
-		CreatedBy:       req.CreatedBy,
-		// PlanCode + EnterpriseUnlimited intentionally unset — see ReserveRequest
-		// doc (M40-CODE-001). The credit service defaults to the reserve path
-		// with a balance check, which is the correct behaviour for M40 v1.
+		WorkspaceID:         req.WorkspaceID,
+		UploadSessionID:     req.UploadSessionID,
+		AmountCredits:       req.Cost,
+		IdempotencyKey:      req.IdempotencyKey,
+		CreatedBy:           req.CreatedBy,
+		// M41 FR-UCRT-08: forward plan tier + enterprise-unlimited toggle
+		// to the credit service. The service routes EnterpriseUnlimited=true
+		// to an unlimited_passthrough ledger entry (amount_credits=0) and
+		// skips the balance gate.
+		PlanCode:            req.PlanCode,
+		EnterpriseUnlimited: req.EnterpriseUnlimited,
 	})
 	if err != nil {
 		return nil, err

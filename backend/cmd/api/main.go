@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
@@ -159,6 +160,83 @@ func (a *uploadCreditBalanceAdapter) UploadBalance(ctx context.Context, workspac
 		Refunded:    b.Refunded,
 		UpdatedAt:   updated,
 	}, nil
+}
+
+// planTierPoolAdapter wraps *pgxpool.Pool so it satisfies the
+// middleware.PlanTierPool interface. Go's structural typing won't match a
+// concrete pgx.Row through a returns-interface method, so we explicitly
+// box the Row into the minimal Scan-only shape the middleware needs.
+//
+// M41 FR-UCRT-07 — the middleware queries workspaces.plan_tier once per
+// request (cheap lookup on the PK) and stashes the result on the context
+// via WithPlanTier. Downstream handlers (chunked upload, refund) read it
+// via PlanTierFromContext to decide whether enterprise-unlimited gating
+// should apply.
+type planTierPoolAdapter struct{ pool *pgxpool.Pool }
+
+type planTierRowAdapter struct{ row pgx.Row }
+
+func (r planTierRowAdapter) Scan(dest ...any) error { return r.row.Scan(dest...) }
+
+func (a *planTierPoolAdapter) QueryRow(ctx context.Context, sql string, args ...any) middleware.PlanTierRow {
+	return planTierRowAdapter{row: a.pool.QueryRow(ctx, sql, args...)}
+}
+
+// uploadPackageCatalogueAdapter reads active upload packages + current rate
+// cards from the DB for the M41 GET /api/v1/uploads/packages endpoint.
+//
+// The query joins upload_packages (active=true) with upload_rate_cards
+// (effective_to IS NULL — current active card). Exactly one active rate
+// card per package is enforced by the partial unique index in migration
+// 102, so this JOIN is 1:1 by construction and does not need DISTINCT.
+type uploadPackageCatalogueAdapter struct {
+	pool *pgxpool.Pool
+}
+
+func (a *uploadPackageCatalogueAdapter) UploadPackages(ctx context.Context) ([]uploadhandlers.UploadPackageView, error) {
+	if a.pool == nil {
+		return nil, fmt.Errorf("upload package catalogue: pool not configured")
+	}
+	// M41-DB-QRY-001: DISTINCT ON (p.code) is defensive against a
+	// hypothetical state where the partial unique index
+	// upload_rate_cards_active_uniq has been dropped or disabled in prod
+	// (migration error, manual intervention). Under normal conditions the
+	// index enforces exactly one active rate card per package, so the
+	// JOIN is 1:1 and DISTINCT ON is a no-op. In the failure mode it
+	// keeps the client-visible response coherent (one price per package)
+	// while /health and logs still flag the index drift for an operator.
+	// ORDER BY p.code is required by DISTINCT ON; final sort happens on
+	// p.credits ASC below via an outer SELECT.
+	rows, err := a.pool.Query(ctx, `
+		SELECT code, credits, display_name, price_paise, currency
+		  FROM (
+			SELECT DISTINCT ON (p.code)
+			       p.code, p.credits, p.display_name,
+			       r.price_paise, r.currency
+			  FROM upload_packages p
+			  JOIN upload_rate_cards r
+			    ON r.package_code = p.code AND r.effective_to IS NULL
+			 WHERE p.active = TRUE
+			 ORDER BY p.code, r.effective_from DESC
+		  ) latest
+		 ORDER BY credits ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []uploadhandlers.UploadPackageView
+	for rows.Next() {
+		var v uploadhandlers.UploadPackageView
+		if err := rows.Scan(&v.Code, &v.Credits, &v.DisplayName, &v.PricePaise, &v.Currency); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // streamingrechargeSettingsAdapter adapts our PlatformSettingsRepo to the
@@ -1120,6 +1198,12 @@ func main() {
 	r.Group(func(api chi.Router) {
 		api.Use(middleware.JWTAuth(jwtSvc))
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
+		// M41 FR-UCRT-07: resolve workspaces.plan_tier for the tenant and
+		// stash it on the request context. Runs after TenantContext so
+		// workspace_id is already resolved. Nil-safe: if dbPool is somehow
+		// unset, this is a no-op and downstream callers observe an empty
+		// plan tier (which they MUST treat as "not enterprise").
+		api.Use(middleware.PlanTierContext(&planTierPoolAdapter{pool: dbPool}))
 		if os.Getenv("MFA_ENFORCE_PHOTOGRAPHERS") == "1" {
 			api.Use(middleware.RequireMFA)
 		}
@@ -1256,6 +1340,85 @@ func main() {
 			},
 		}
 		api.Get("/api/v1/uploads/balance", uploadBalanceHandler.GetBalance)
+
+		// M41: package catalogue for the recharge modal. Returns all active
+		// upload packages + current rate cards sorted by credits ASC so the
+		// client can render tiers without re-ordering. No feature flag — the
+		// catalogue is read-only and adding a 404 here would just break the
+		// modal for workspaces that want to see prices before purchasing.
+		uploadPackageHandler := &uploadhandlers.UploadPackageCatalogueHandler{
+			Provider: &uploadPackageCatalogueAdapter{pool: dbPool},
+		}
+		api.Get("/api/v1/uploads/packages", uploadPackageHandler.GetPackages)
+
+		// M41 FR-UCRT-11: refund-within-window endpoint. The service layer
+		// enforces the 7-day window + fully-unspent eligibility checks in a
+		// transaction; the handler only translates HTTP ↔ service and maps
+		// error sentinels to 400/404/422 status codes. Workspace ownership
+		// is verified both via the JWT workspace_id claim AND against
+		// upload_purchases.workspace_id inside the service call — a
+		// cross-workspace refund attempt returns 404, never 403, so the
+		// existence of the target purchase is not leaked.
+		uploadRefundHandler := &uploadhandlers.UploadRefundHandler{
+			Svc: uploadCreditSvc,
+		}
+		api.Post("/api/v1/uploads/purchases/{id}/refund", uploadRefundHandler.Refund)
+
+		// M41 FR-UCRT-05: PhonePe upload webhook. The route lives INSIDE the
+		// authenticated api subrouter so every handler here shares the same
+		// CORS/rate-limit/access-log posture. The webhook bypasses tenant
+		// auth via a pre-verified X-VERIFY signature — the handler itself
+		// is the source of trust, not the JWT. The PhonePe provider is
+		// constructed lazily from env vars so a deploy without PhonePe
+		// credentials wires the handler with a nil Verifier, which returns
+		// 503 on every request (rather than 500 or silent success).
+		var phonepeWebhookHandler *uploadhandlers.PhonePeUploadWebhookHandler
+		if mID, sKey, sIdx, base := os.Getenv("PHONEPE_MERCHANT_ID"), os.Getenv("PHONEPE_SALT_KEY"), os.Getenv("PHONEPE_SALT_INDEX"), os.Getenv("PHONEPE_BASE_URL"); mID != "" && sKey != "" && sIdx != "" && base != "" {
+			if ppp, err := streamingrecharge.NewPhonePeProvider(streamingrecharge.PhonePeConfig{
+				MerchantID: mID, SaltKey: sKey, SaltIndex: sIdx, BaseURL: base,
+			}); err == nil {
+				phonepeWebhookHandler = &uploadhandlers.PhonePeUploadWebhookHandler{
+					Verifier: ppp,
+					Svc:      uploadCreditSvc,
+				}
+				log.Printf("M41: PhonePe upload webhook wired (merchant=%s)", mID)
+			} else {
+				log.Printf("M41: PhonePe provider construction failed (%v) — webhook handler disabled", err)
+			}
+		} else {
+			log.Printf("M41: PhonePe env vars not set — webhook handler disabled; POST /api/v1/webhooks/phonepe/uploads returns 503")
+		}
+		if phonepeWebhookHandler == nil {
+			phonepeWebhookHandler = &uploadhandlers.PhonePeUploadWebhookHandler{} // nil deps → 503
+		}
+		api.Post("/api/v1/webhooks/phonepe/uploads", phonepeWebhookHandler.Handle)
+
+		// M41 FR-UCRT-06: Razorpay upload webhook. Same failure-closed
+		// posture as the PhonePe sibling — missing env vars leave the
+		// handler wired with nil deps → 503 on every request, never 200.
+		var razorpayWebhookHandler *uploadhandlers.RazorpayUploadWebhookHandler
+		if kID, kSec, wSec := os.Getenv("RAZORPAY_KEY_ID"), os.Getenv("RAZORPAY_KEY_SECRET"), os.Getenv("RAZORPAY_WEBHOOK_SECRET"); kID != "" && kSec != "" && wSec != "" {
+			if rzp, err := streamingrecharge.NewRazorpayProvider(streamingrecharge.RazorpayConfig{
+				KeyID:         kID,
+				KeySecret:     kSec,
+				WebhookSecret: wSec,
+				BaseURL:       os.Getenv("RAZORPAY_BASE_URL"), // defaulted by NewRazorpayProvider if empty
+			}); err == nil {
+				razorpayWebhookHandler = &uploadhandlers.RazorpayUploadWebhookHandler{
+					Verifier: rzp,
+					Svc:      uploadCreditSvc,
+				}
+				log.Printf("M41: Razorpay upload webhook wired (key_id=%s)", kID)
+			} else {
+				log.Printf("M41: Razorpay provider construction failed (%v) — webhook handler disabled", err)
+			}
+		} else {
+			log.Printf("M41: Razorpay env vars not set — webhook handler disabled; POST /api/v1/webhooks/razorpay/uploads returns 503")
+		}
+		if razorpayWebhookHandler == nil {
+			razorpayWebhookHandler = &uploadhandlers.RazorpayUploadWebhookHandler{}
+		}
+		api.Post("/api/v1/webhooks/razorpay/uploads", razorpayWebhookHandler.Handle)
 
 		// M17 audit followup (S-011): register the upload-session cleanup
 		// worker so abandoned chunked uploads don't leak R2 multipart
@@ -1530,6 +1693,11 @@ func main() {
 			// M16 Tier D admin surfaces
 			WorkspacePolicySvc:  workspacePolicySvc,
 			UploadModerationSvc: uploadModerationSvc,
+			// M41 E14-S3: admin-initiated upload credit grant. Uses the
+			// same upload credit service wired for the meter / balance
+			// endpoint above (uploadCreditSvc); the handler only needs
+			// the narrow UploadCreditGrantService interface.
+			UploadCreditGrantSvc: uploadCreditSvc,
 		})
 
 		log.Println("M7: Admin Command Center routes registered (Users, Moderation, Workspaces, Revenue, Analytics, Export, Health, Audit)")

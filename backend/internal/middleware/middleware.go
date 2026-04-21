@@ -20,6 +20,12 @@ const (
 	jwtClaimsKey   contextKey = "jwt_claims"
 	workspaceIDKey contextKey = "workspace_id"
 	stateIDKey     contextKey = "state_id"
+	// planTierKey holds the resolved plan_tier string for the tenant.
+	// M41 FR-UCRT-07 — stashed on the context by the TenantContext chain
+	// after workspace_id resolution so downstream handlers (chunked upload,
+	// gate reservation, etc.) can read it via PlanTierFromContext without
+	// another workspaces SELECT per request.
+	planTierKey contextKey = "plan_tier"
 )
 
 func WithJWTClaims(ctx context.Context, claims map[string]interface{}) context.Context {
@@ -53,6 +59,31 @@ func WithWorkspaceID(ctx context.Context, workspaceID string) context.Context {
 
 func StateIDFromContext(ctx context.Context) string {
 	if v, ok := ctx.Value(stateIDKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// WithPlanTier stashes a plan_tier string on the context. Intended for
+// TenantContext (which reads it from the workspaces table after resolving
+// workspace_id from claims) and for tests that inject tenant context
+// directly. Accepts the same strings as the workspaces.plan_tier column:
+// "standard" | "professional" | "pro" | "enterprise" | "trial". Empty
+// strings are allowed and surface as the empty default on read — callers
+// MUST treat missing plan tier as "not enterprise" for safety (so they
+// keep enforcing the balance gate).
+func WithPlanTier(ctx context.Context, planTier string) context.Context {
+	return context.WithValue(ctx, planTierKey, planTier)
+}
+
+// PlanTierFromContext returns the plan_tier string stashed by the
+// TenantContext middleware (or by WithPlanTier in tests). Returns empty
+// string if not set. M41 FR-UCRT-07: callers such as the chunked upload
+// handler use this to decide whether to set
+// credit.ReserveInput.EnterpriseUnlimited=true before dispatching a
+// reservation, so enterprise workspaces bypass the balance gate.
+func PlanTierFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(planTierKey).(string); ok {
 		return v
 	}
 	return ""
@@ -148,6 +179,67 @@ func TenantContext(db DBContext, audit AuditLog) func(http.Handler) http.Handler
 			ctx = context.WithValue(ctx, stateIDKey, stateID)
 			ctx = context.WithValue(ctx, ctxkeys.WorkspaceID, wsID)
 
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// ──────────────────────────── Plan Tier Middleware (M41 FR-UCRT-07) ────────────────────────────
+
+// PlanTierRow is the minimal shape PlanTierContext consumes from a
+// QueryRow result. Exported so main.go's *pgxpool.Pool adapter can name
+// it as the return type of its QueryRow method — Go cannot match an
+// anonymous interface{Scan(...)} against a named interface through a
+// returns-interface method.
+type PlanTierRow interface {
+	Scan(dest ...any) error
+}
+
+// PlanTierPool is the narrow interface PlanTierContext needs. The
+// middleware cannot depend on pgxpool directly because pgx.Row's
+// concrete type is not assignable to an interface{Scan(...)} via
+// go's structural typing when passed through a returns-interface method.
+// Production wires this via a thin adapter wrapping *pgxpool.Pool in
+// main.go. Tests satisfy it directly with a fake.
+type PlanTierPool interface {
+	QueryRow(ctx context.Context, sql string, args ...any) PlanTierRow
+}
+
+// PlanTierContext reads the workspaces.plan_tier for the current tenant
+// (resolved from WorkspaceIDFromContext) and stashes it on the request
+// context via WithPlanTier. MUST be registered AFTER TenantContext in the
+// middleware chain so workspace_id is already on the context.
+//
+// Failure policy: plan_tier lookup failures (DB hiccup, missing workspace
+// row) do NOT block the request — the handler downstream proceeds with an
+// empty plan tier, which PlanTierFromContext surfaces as "". Callers MUST
+// treat empty plan tier as "not enterprise" so the default posture keeps
+// the balance gate enforced. This is deliberate: a transient DB failure
+// must never silently upgrade a standard workspace to unlimited uploads.
+//
+// If pool is nil, the middleware is a no-op. This lets routers wire the
+// middleware unconditionally — tests and degraded deployments where the
+// plan-tier table isn't ready yet simply skip the enrichment.
+func PlanTierContext(pool PlanTierPool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if pool == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			wsID := WorkspaceIDFromContext(r.Context())
+			if wsID == "" {
+				// No workspace — no plan tier to resolve. Pass through.
+				next.ServeHTTP(w, r)
+				return
+			}
+			var planTier string
+			row := pool.QueryRow(r.Context(),
+				`SELECT COALESCE(plan_tier, '') FROM workspaces WHERE id = $1`, wsID)
+			// Fail-open on scan error — log would be nice but import scope
+			// here is minimal and the audit table already records the request.
+			_ = row.Scan(&planTier)
+			ctx := WithPlanTier(r.Context(), planTier)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

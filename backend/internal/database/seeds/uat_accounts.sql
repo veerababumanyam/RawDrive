@@ -406,6 +406,30 @@ BEGIN
   RAISE NOTICE '✓ Dealers       : dealer.tg (DLTG2026), dealer.mh, dealer (@rawdrive.test)';
   RAISE NOTICE '✓ Password for all: UatPho@2026';
 
+  -- M41 FR-UCRT-09: seed 500 grant_admin upload credits for each pho_* UAT
+  -- workspace so meter-on UAT runs don't 400 INSUFFICIENT_CREDITS on first
+  -- chunked upload. Deterministic idempotency_key per workspace
+  -- (uat-seed:upload-credits:v1:{workspace-uuid}) so re-running the seed is
+  -- a no-op — the unique index on (workspace_id, idempotency_key) rejects
+  -- duplicates and the ON CONFLICT DO NOTHING below keeps it silent.
+  INSERT INTO upload_ledger_entries (
+    workspace_id, entry_type, amount_credits, idempotency_key, reason
+  )
+  SELECT ws_id, 'grant_admin', 500,
+         'uat-seed:upload-credits:v1:' || ws_id::text,
+         'UAT seed grant (M41 FR-UCRT-09)'
+    FROM (VALUES
+      (wid_pho_pro),
+      (wid_pho_starter),
+      (wid_pho_biz),
+      (wid_pho_trial),
+      (wid_pho_hold)
+    ) AS t(ws_id)
+   WHERE ws_id IS NOT NULL
+  ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING;
+
+  RAISE NOTICE '✓ Upload credits: 500 grant_admin per pho_* workspace (idempotent)';
+
 END $$;
 
 COMMIT;

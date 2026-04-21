@@ -176,3 +176,138 @@ func TestExpireAbandoned_NilPool_ReturnsZero(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
+
+// ---------------------------------------------------------------------------
+// M41 Round 2 — Purchase / GrantAdmin / GrantMonthly / RefundPurchase input
+// validation. DB-backed behaviour (tx, idempotency uniqueness, rollup update,
+// 7-day refund window) lives in credit_integration_test.go (build tag
+// `integration`).
+
+// T2-001: Purchase rejects empty idempotency key (nil-pool path).
+func TestPurchase_RejectsEmptyIdempotencyKey(t *testing.T) {
+	svc := credit.NewService(nil)
+	_, err := svc.Purchase(context.Background(), credit.PurchaseInput{
+		WorkspaceID: uuid.New(),
+		PackageCode: "starter",
+		// IdempotencyKey intentionally empty.
+	})
+	assert.ErrorIs(t, err, credit.ErrEmptyIdempotencyKey)
+}
+
+// T2-001b: Purchase rejects empty package_code — the catalogue lookup has
+// no row to resolve without it, and silently accepting an empty code would
+// mask a caller bug.
+func TestPurchase_RejectsEmptyPackageCode(t *testing.T) {
+	svc := credit.NewService(nil)
+	_, err := svc.Purchase(context.Background(), credit.PurchaseInput{
+		WorkspaceID:    uuid.New(),
+		PackageCode:    "",
+		IdempotencyKey: "phonepe:txn:abc123",
+	})
+	assert.ErrorIs(t, err, credit.ErrEmptyPackageCode)
+}
+
+// T2-005: GrantAdmin enforces the 100_000 credit hard cap per single grant
+// (PRD §D3). Exceeding the cap must be rejected before any DB write.
+func TestGrantAdmin_RejectsAmountAboveHardCap(t *testing.T) {
+	svc := credit.NewService(nil)
+	_, err := svc.GrantAdmin(context.Background(), credit.GrantAdminInput{
+		WorkspaceID:    uuid.New(),
+		AmountCredits:  100_001,
+		IdempotencyKey: "admin:grant:1",
+		ActorID:        uuid.New(),
+		Reason:         "customer support credit",
+	})
+	assert.ErrorIs(t, err, credit.ErrAmountExceedsLimit)
+}
+
+// T2-005b: GrantAdmin rejects non-positive amounts.
+func TestGrantAdmin_RejectsNonPositiveAmount(t *testing.T) {
+	svc := credit.NewService(nil)
+	for _, amt := range []int64{0, -1, -500} {
+		_, err := svc.GrantAdmin(context.Background(), credit.GrantAdminInput{
+			WorkspaceID:    uuid.New(),
+			AmountCredits:  amt,
+			IdempotencyKey: "admin:grant:1",
+			ActorID:        uuid.New(),
+			Reason:         "test",
+		})
+		assert.ErrorIs(t, err, credit.ErrNonPositiveAmount, "amount=%d must be rejected", amt)
+	}
+}
+
+// T2-005c: GrantAdmin requires a non-empty reason — platform_audit_log
+// is meaningless without one.
+func TestGrantAdmin_RejectsEmptyReason(t *testing.T) {
+	svc := credit.NewService(nil)
+	_, err := svc.GrantAdmin(context.Background(), credit.GrantAdminInput{
+		WorkspaceID:    uuid.New(),
+		AmountCredits:  500,
+		IdempotencyKey: "admin:grant:1",
+		ActorID:        uuid.New(),
+		Reason:         "",
+	})
+	assert.ErrorIs(t, err, credit.ErrEmptyReason)
+}
+
+// T2-007: GrantMonthly skips enterprise plan tier (PRD §D2 — enterprise
+// consumes via unlimited_passthrough, no monthly grant posted).
+func TestGrantMonthly_EnterprisePlanSkipped(t *testing.T) {
+	svc := credit.NewService(nil)
+	result, err := svc.GrantMonthly(context.Background(), credit.GrantMonthlyInput{
+		WorkspaceID: uuid.New(),
+		PlanTier:    "enterprise",
+		AnchorDate:  mustParseTime("2026-04-01T00:00:00Z"),
+	})
+	assert.NoError(t, err, "enterprise skip is not an error path")
+	assert.Equal(t, credit.GrantSkippedEnterprise, result.Status,
+		"enterprise result must carry the Skipped status")
+	assert.Nil(t, result.LedgerEntry, "no ledger entry for skipped enterprise grants")
+}
+
+// T2-008: GrantMonthly amount mapping per PRD §D2 — standard=200, pro=1000.
+func TestGrantMonthly_PlanTierCreditMapping(t *testing.T) {
+	cases := map[string]int64{
+		"standard":     200,
+		"professional": 1000,
+		"pro":          1000,
+	}
+	for plan, want := range cases {
+		got := credit.MonthlyGrantAmountForPlan(plan)
+		assert.Equal(t, want, got, "plan=%s", plan)
+	}
+	assert.Equal(t, int64(0), credit.MonthlyGrantAmountForPlan("enterprise"))
+	assert.Equal(t, int64(0), credit.MonthlyGrantAmountForPlan("unknown-plan"))
+}
+
+// T2-010: RefundPurchase rejects empty purchase id.
+func TestRefundPurchase_RejectsEmptyPurchaseID(t *testing.T) {
+	svc := credit.NewService(nil)
+	_, err := svc.RefundPurchase(context.Background(), credit.RefundPurchaseInput{
+		PurchaseID:     uuid.Nil,
+		WorkspaceID:    uuid.New(),
+		IdempotencyKey: "refund:purchase:1",
+		ActorID:        uuid.New(),
+	})
+	assert.ErrorIs(t, err, credit.ErrEmptyPurchaseID)
+}
+
+// T2-010b: RefundPurchase rejects empty idempotency key.
+func TestRefundPurchase_RejectsEmptyIdempotencyKey(t *testing.T) {
+	svc := credit.NewService(nil)
+	_, err := svc.RefundPurchase(context.Background(), credit.RefundPurchaseInput{
+		PurchaseID:     uuid.New(),
+		WorkspaceID:    uuid.New(),
+		IdempotencyKey: "",
+		ActorID:        uuid.New(),
+	})
+	assert.ErrorIs(t, err, credit.ErrEmptyIdempotencyKey)
+}
+
+func mustParseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
