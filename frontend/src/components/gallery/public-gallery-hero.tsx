@@ -211,7 +211,15 @@ export function PublicGalleryHero({
         )}
         {scrim && <div className="absolute inset-0" style={{ background: scrim }} />}
 
-        <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-center px-6 py-16 ${textAlignClass}`}>
+        {/* Text overlay uses `justify-end` so the title sits at the BOTTOM
+            of the hero — matching the picker thumbnails in the design
+            studio (CoverStyleMiniPreview), which render every cover style
+            with text at the bottom + horizontal align from `textAlign`.
+            Previously this used `justify-center` (vertically centered) so
+            the picker advertised "text at bottom" and the live hero
+            rendered "text in middle" — WYSIWYG violation that this fix
+            closes. */}
+        <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}>
           {(logoUrl || brandName) && (
             <div className="mb-6 flex items-center gap-3" style={{ justifyContent: designStyle.textAlign === "center" ? "center" : designStyle.textAlign === "right" ? "flex-end" : "flex-start" }}>
               {logoUrl && (
