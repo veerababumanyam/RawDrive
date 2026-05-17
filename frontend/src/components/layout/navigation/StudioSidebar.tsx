@@ -61,12 +61,13 @@ const groups: NavGroup[] = [
 
 interface StudioSidebarProps {
   userName: string;
+  avatarUrl?: string;
   planBadge?: string;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
-export function StudioSidebar({ userName, planBadge, mobileOpen, onMobileClose }: StudioSidebarProps) {
+export function StudioSidebar({ userName, avatarUrl, planBadge, mobileOpen, onMobileClose }: StudioSidebarProps) {
   return (
     <SidebarShell
       subtitle="Creative Studio"
@@ -76,6 +77,7 @@ export function StudioSidebar({ userName, planBadge, mobileOpen, onMobileClose }
       footer={
         <SidebarAvatar
           name={userName}
+          avatarUrl={avatarUrl}
           badge={planBadge || "Pro Plan"}
         />
       }

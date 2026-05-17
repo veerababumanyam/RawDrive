@@ -40,12 +40,13 @@ const groups: NavGroup[] = [
 
 interface AdminSidebarProps {
   userName: string;
+  avatarUrl?: string;
   platformRole: string;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
-export function AdminSidebar({ userName, platformRole, mobileOpen, onMobileClose }: AdminSidebarProps) {
+export function AdminSidebar({ userName, avatarUrl, platformRole, mobileOpen, onMobileClose }: AdminSidebarProps) {
   return (
     <SidebarShell
       subtitle="Admin Console"
@@ -55,6 +56,7 @@ export function AdminSidebar({ userName, platformRole, mobileOpen, onMobileClose
       footer={
         <SidebarAvatar
           name={userName}
+          avatarUrl={avatarUrl}
           badge={platformRole === "super_admin" ? "Super Admin" : "Admin"}
         />
       }

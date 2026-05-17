@@ -149,19 +149,27 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
 export function SidebarAvatar({
   name,
   badge,
+  avatarUrl,
 }: {
   name: string;
   badge: string;
+  avatarUrl?: string;
 }) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <div className="surface-panel flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-container-high">
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
-        {name
-          .split(" ")
-          .map((w) => w[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase()}
+      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
+        {initials}
+        {avatarUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        )}
       </div>
       <div className="overflow-hidden">
         <p className="truncate text-sm text-text-primary">{name}</p>

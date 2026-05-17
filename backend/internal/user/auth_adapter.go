@@ -106,6 +106,7 @@ func (a *AuthAdapter) GetProfileByID(ctx context.Context, userID string) (*auth.
 	return &auth.UserProfile{
 		ID:          u.ID,
 		Email:       u.Email,
+		Phone:       u.Phone,
 		DisplayName: u.DisplayName,
 		AvatarURL:   u.AvatarURL,
 	}, true, nil
