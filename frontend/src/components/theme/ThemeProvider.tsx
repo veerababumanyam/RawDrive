@@ -143,6 +143,12 @@ export function useTheme() {
  * Every route executes this same script at navigation time, which is
  * why all pages stay in sync.
  */
+// NOTE: this exported script string is RETAINED for reference and any
+// future SSR-string consumer, but the production runtime now loads the
+// same script via <script src="/theme-init.js" /> in src/app/layout.tsx
+// to avoid the React 19 "Encountered a script tag" warning. When the
+// constants above (STORAGE_KEY / VALID_THEMES / DARK_THEMES / META_COLORS
+// / DEFAULT_THEME) change, update frontend/public/theme-init.js too.
 export const rawDriveThemeInitScript = `
   (() => {
     try {

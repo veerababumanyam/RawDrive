@@ -33,7 +33,17 @@ function isMarketingRoute(pathname: string | null) {
     return true;
   }
 
-  return pathname.startsWith("/g/");
+  // NOTE: /g/[slug] (public client share route) is intentionally NOT a
+  // marketing route. Clients receiving a share link expect to see ONLY the
+  // photographer's gallery — exposing the platform's marketing Navbar
+  // (Solutions / Marketplaces / Company / Login dropdowns) and Footer to a
+  // wedding/event client is wrong on two axes: it leaks the multi-tenant
+  // platform branding into a single-tenant client deliverable, and the
+  // Login CTA pulls the client off the gallery. The gallery layout at
+  // app/g/[slug]/layout.tsx and the PublicGalleryHero own all the chrome
+  // the public viewer should see (studio brand strip in the hero, in-page
+  // banners, share/proofing affordances on the grid).
+  return false;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

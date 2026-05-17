@@ -26,7 +26,84 @@ import type { Asset } from "@/lib/api/assets";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress } from "@/components/icons";
+import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress, Star, Share } from "@/components/icons";
+
+// API base mirrors what dashboard-ui.ts and lib/api/galleries.ts use. The
+// public asset download endpoint lives on the Go API (port 8081 in dev)
+// while the Next site serves /g/<slug> from a different origin (3000/3001),
+// so we always need an absolute URL for the download <a href>.
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+// Client-only favorites store. The public viewer has no authenticated
+// session and the backend has no /public/galleries/{slug}/favorites
+// endpoint yet, so favorites live in localStorage scoped per gallery
+// slug. This matches every comparable client-gallery product (Pixieset,
+// ShootProof) where guest favorites are device-local until the client
+// signs up. Server-side persistence is a clean follow-up — see the RCA
+// for the carry-forward item.
+function useGalleryFavorites(slug: string) {
+  const storageKey = `rawdrive-favorites-${slug}`;
+  const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
+
+  // Hydrate from localStorage on mount. Done lazily inside useEffect
+  // because the component renders during SSR for the public route where
+  // window/localStorage is undefined. Calling setState inside an effect
+  // is what React's docs recommend for "load external store on mount"
+  // (the proper alternative is useSyncExternalStore + a store object
+  // wrapping localStorage, which is overkill for a single Set<string>
+  // scoped to one gallery slug).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR-safe hydration of external store; see comment above.
+          setFavorites(new Set(parsed.filter((v): v is string => typeof v === "string")));
+        }
+      }
+    } catch {
+      // Corrupt localStorage entry — start fresh, don't crash the lightbox.
+    }
+  }, [storageKey]);
+
+  const toggle = useCallback(
+    (assetId: string) => {
+      setFavorites((current) => {
+        const next = new Set(current);
+        if (next.has(assetId)) {
+          next.delete(assetId);
+        } else {
+          next.add(assetId);
+        }
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+          } catch {
+            // Quota / private-mode failure — UI still reflects the toggle
+            // for the rest of this session; persistence silently degrades.
+          }
+        }
+        return next;
+      });
+    },
+    [storageKey],
+  );
+
+  return { favorites, toggle };
+}
+
+// Build the canonical share URL for a single asset. Mirrors what the
+// preview-chrome Share button produces for the whole gallery; here the
+// URL carries the `?asset=<id>` deep-link param so the recipient's
+// browser auto-opens the lightbox to the same photo (handled by the
+// useEffect below). Falls back to a relative path on SSR where
+// window.location.origin is undefined.
+function buildAssetShareUrl(slug: string, assetId: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/g/${slug}?asset=${assetId}`;
+}
 
 interface Props {
   slug: string;
@@ -134,6 +211,12 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Client-side favorite store + "share link copied" feedback. The
+  // feedback flag is local to the lightbox toolbar — flips true for ~1.6s
+  // after the share button's clipboard write succeeds, then resets.
+  const { favorites, toggle: toggleFavorite } = useGalleryFavorites(slug);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const toggleFullscreen = useCallback(() => {
     if (!lightboxRef.current) return;
@@ -245,6 +328,29 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     if (!faceFilterIds) return assets;
     return assets.filter((a) => faceFilterIds.has(a.id));
   }, [assets, faceFilterIds]);
+
+  // Deep-link auto-open. Pairs with the Share button's clipboard URL
+  // (?asset=<id>). When a recipient lands on the share link, find the
+  // matching asset in the rendered set and open the lightbox there so
+  // the link actually feels like sharing the photo, not just the
+  // gallery. Runs once after assets are populated; tolerates a stale id
+  // (asset filtered out by face-filter etc.) by silently doing nothing.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (lightboxIdx !== null) return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedAsset = params.get("asset");
+    if (!requestedAsset) return;
+    const idx = visibleAssets.findIndex((a) => a.id === requestedAsset);
+    if (idx >= 0) {
+      setLightboxIdx(idx);
+      setZoom(1);
+    }
+    // intentionally one-shot: we only auto-open on first navigation. If
+    // the user closes the lightbox we don't keep re-opening it on
+    // re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleAssets]);
 
   // Helper to change photo and reset zoom in one update
   const goToPhoto = (idx: number | null) => {
@@ -594,11 +700,27 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
       {/* Client-facing lightbox */}
       {lightboxIdx !== null && visibleAssets[lightboxIdx] && (() => {
         const photo = visibleAssets[lightboxIdx];
+        // Public lightbox renders the image via plain <img src> — public
+        // share-link visitors have no JWT, so the URL MUST resolve to a
+        // path the storage layer serves without auth.
+        //
+        // Migration 104 (M41) split storage into two prefixes:
+        //   /storage/thumbnails/<id>/thumb_*_webp.webp  — PUBLIC
+        //   /storage/derivatives/<id>/display_webp.webp — AUTH-REQUIRED
+        //
+        // The previous order (display_webp first) 401'd the image for
+        // every unauthenticated viewer — the lightbox opened on a black
+        // background with just the alt-text filename visible. Prefer the
+        // largest public thumb variant (thumb_lg_webp, ~1200px) which is
+        // still high enough resolution for a desktop lightbox. Keep
+        // display_webp in the fallback chain for assets that haven't
+        // been reprocessed under the new path (legacy/transient state).
         const fullUrl = getStorageBackedUrl(
-          photo.thumbnail_urls?.display_webp ||
           photo.thumbnail_urls?.thumb_lg_webp ||
+          photo.thumbnail_urls?.thumb_md_webp ||
           photo.thumbnail_urls?.thumb_lg ||
           photo.thumbnail_urls?.lg ||
+          photo.thumbnail_urls?.display_webp ||
           Object.values(photo.thumbnail_urls || {})[0] ||
           "",
         );
@@ -623,6 +745,71 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               <div className="flex items-center gap-1.5">
                 <GlassIconButton size="sm" label="Zoom out" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
                 <GlassIconButton size="sm" label="Zoom in" onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
+                <div className="w-px h-6 bg-white/10 mx-1" />
+                {/* Client actions — favorite (localStorage), download
+                    (public asset endpoint), share (copy deep-link). Kept
+                    together as one cluster so the lightbox toolbar reads
+                    as: [view controls] | [actions] | [window controls]. */}
+                <GlassIconButton
+                  size="sm"
+                  variant={favorites.has(photo.id) ? "accent" : "glass"}
+                  active={favorites.has(photo.id)}
+                  label={favorites.has(photo.id) ? "Remove from favorites" : "Add to favorites"}
+                  onClick={() => toggleFavorite(photo.id)}
+                >
+                  <Star />
+                </GlassIconButton>
+                {downloadEnabled && (
+                  <GlassIconButton
+                    size="sm"
+                    label="Download original"
+                    onClick={() => {
+                      // The public download endpoint sets
+                      // Content-Disposition: attachment, so navigating
+                      // to it triggers a download instead of replacing
+                      // the page. window.open with _self keeps the
+                      // lightbox state intact across the brief redirect.
+                      const url = `${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`;
+                      window.open(url, "_self");
+                    }}
+                  >
+                    <Download />
+                  </GlassIconButton>
+                )}
+                <GlassIconButton
+                  size="sm"
+                  variant={shareCopied ? "success" : "glass"}
+                  label={shareCopied ? "Share link copied" : "Copy share link"}
+                  onClick={async () => {
+                    const url = buildAssetShareUrl(slug, photo.id);
+                    try {
+                      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(url);
+                      } else if (typeof document !== "undefined") {
+                        // execCommand fallback for older Safari and
+                        // non-HTTPS local-dev contexts (clipboard API
+                        // is gated on secure-origin in some browsers).
+                        const ta = document.createElement("textarea");
+                        ta.value = url;
+                        ta.setAttribute("readonly", "");
+                        ta.style.position = "fixed";
+                        ta.style.opacity = "0";
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand("copy");
+                        document.body.removeChild(ta);
+                      }
+                      setShareCopied(true);
+                      window.setTimeout(() => setShareCopied(false), 1600);
+                    } catch {
+                      // Silent: the chrome already shows a Share state.
+                      // If clipboard write fails the user can long-press
+                      // the URL bar after the lightbox closes.
+                    }
+                  }}
+                >
+                  <Share />
+                </GlassIconButton>
                 <div className="w-px h-6 bg-white/10 mx-1" />
                 <GlassIconButton size="sm" label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen}>
                   {isFullscreen ? <Compress /> : <Expand />}

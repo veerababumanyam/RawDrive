@@ -3,10 +3,7 @@ import { Inter, Manrope } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
-import {
-  ThemeProvider,
-  rawDriveThemeInitScript,
-} from "@/components/theme/ThemeProvider";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -79,15 +76,31 @@ export default function RootLayout({
         <meta name="theme-color" content="#0b1326" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/* Theme init MUST run before React hydrates so data-theme is set
+            on <html> before first paint — otherwise the page flashes the
+            default theme then snaps to the user's choice.
+            React 19 (Next 16) warns on ANY <script> element rendered as
+            JSX *with a body* (including dangerouslySetInnerHTML):
+            "Encountered a script tag while rendering React component."
+            The warning fires every page render and pollutes DevTools.
+            Fix: serve as an external static asset (public/theme-init.js)
+            via next/script with strategy="beforeInteractive". The body
+            is empty so React never has a child to warn about, Next
+            injects the tag into <head> before hydration, and
+            @next/next/no-sync-scripts is satisfied because we're going
+            through Next's script loader rather than a bare <script>.
+            Cross-route navigation still works because data-theme stays
+            on <html> and the layout never unmounts. The constants are
+            duplicated between this file (implicitly via theme-init.js)
+            and ThemeProvider.tsx — see the sync comment at the top of
+            public/theme-init.js. */}
+        <Script
+          id="rawdrive-theme-init"
+          src="/theme-init.js"
+          strategy="beforeInteractive"
+        />
       </head>
       <body className="flex min-h-full flex-col bg-surface font-sans text-text-primary">
-        {/* Theme init runs before interactive so data-theme is set before
-            React hydrates. Using next/script with beforeInteractive is the
-            Next.js 15 App Router-compliant way to inject an inline script
-            that must execute pre-hydration. */}
-        <Script id="rawdrive-theme-init" strategy="beforeInteractive">
-          {rawDriveThemeInitScript}
-        </Script>
         <ThemeProvider>
           <AppShell>{children}</AppShell>
         </ThemeProvider>

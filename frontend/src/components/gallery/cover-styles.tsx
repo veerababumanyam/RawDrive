@@ -1,4 +1,12 @@
-"use client";
+// Pure data + lookup functions. Intentionally NOT marked "use client":
+// the public gallery hero at src/components/gallery/public-gallery-hero.tsx
+// is a server component (rendered by app/g/[slug]/page.tsx) and imports
+// getCoverStyleById from this module. A "use client" directive here
+// poisons that import chain — Next 16 throws:
+//   "Attempted to call getCoverStyleById() from the server but
+//    getCoverStyleById is on the client."
+// Client consumers (design studio picker, etc.) can still import this
+// module freely; server-safe modules are valid from both sides.
 
 export interface CoverStyle {
   id: string;

@@ -54,6 +54,33 @@ describe("PublicGalleryHero", () => {
     expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute("href", "#gallery-grid");
   });
 
+  it("prefers public-prefixed thumb_lg_webp over auth-gated display_webp for the cover", () => {
+    // Regression: public share-link visitors have no JWT, so the cover
+    // <img src> must point at a path the storage layer serves without
+    // auth. Migration 104 keeps thumb_*_webp under /storage/thumbnails/
+    // (public) and display_webp under /storage/derivatives/ (auth). The
+    // hero must pick the thumb variant when both are present, otherwise
+    // public viewers see a broken-image cover.
+    const publicThumb = "/storage/thumbnails/asset-cover/thumb_lg_webp.webp";
+    const authThumb = "/storage/derivatives/asset-cover/display_webp.webp";
+    const dualVariant: PublicAsset = {
+      ...coverAsset,
+      thumbnail_urls: {
+        display_webp: authThumb,
+        thumb_lg_webp: publicThumb,
+        thumb_md_webp: "/storage/thumbnails/asset-cover/thumb_md_webp.webp",
+      },
+    };
+
+    render(
+      <PublicGalleryHero gallery={gallery} assets={[dualVariant]} branding={branding} />,
+    );
+
+    const img = screen.getByRole("img", { name: "Asha & Ravi" });
+    expect(img).toHaveAttribute("src", expect.stringContaining(publicThumb));
+    expect(img.getAttribute("src")).not.toContain(authThumb);
+  });
+
   it("falls back to RawDrive when plan branding is not customizable", () => {
     render(
       <PublicGalleryHero

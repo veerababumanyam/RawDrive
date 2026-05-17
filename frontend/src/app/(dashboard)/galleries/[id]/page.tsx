@@ -645,6 +645,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           >
             Export selections (CSV)
           </button>
+          {/* In-dashboard preview — renders the saved Design Studio
+              output through the same Hero+Grid components the public
+              /g/[slug] route uses, but keeps the dashboard top menu bar
+              visible. Works for unpublished galleries too because it
+              fetches via the owner-scoped API. Includes its own Share
+              button for copying the public URL. */}
+          <Link
+            href={`/galleries/${gallery.id}/preview`}
+            className="btn-tertiary px-4 py-2.5 text-sm"
+          >
+            Preview
+          </Link>
           {/* GAL-FR-118: view-as-client — opens the public gallery in client mode */}
           {gallery.slug && (
             <a

@@ -11,13 +11,35 @@ function absoluteApiUrl(url?: string | null) {
   return `${API_BASE}${url}`;
 }
 
+// Cover image is rendered as a plain <img src> in the hero, so the URL
+// MUST resolve to a publicly-readable storage path — there's no JWT we
+// can attach for unauthenticated share-link visitors.
+//
+// Storage layout (migration 104, M41):
+//   /storage/thumbnails/<id>/thumb_{sm,md,lg}_webp.webp  — PUBLIC, no auth
+//   /storage/derivatives/<id>/display_webp.webp          — AUTH-PROTECTED
+//
+// Picking display_webp first (as this helper used to do) caused the cover
+// to 401 for every public visitor, leaving a broken-image placeholder and
+// — because the design overlay text sits ON the cover — making the title
+// invisible against an empty background.
+//
+// Priority is now: public WebP thumbs (thumb_lg → thumb_md → thumb_sm) →
+// legacy public JPG thumbs → finally display_webp as a last resort for
+// assets that haven't been re-processed under the new path. The hero is
+// above-the-fold so thumb_lg_webp (typically ~1200px) is more than enough
+// detail. Lightbox stays on display_webp via authenticated fetch + blob.
 function pickFromThumbnails(urls: Record<string, string> | undefined | null): string {
   if (!urls) return "";
   return (
     getStorageBackedUrl(
-      urls.display_webp ||
-        urls.thumb_lg_webp ||
+      urls.thumb_lg_webp ||
+        urls.thumb_md_webp ||
+        urls.thumb_sm_webp ||
         urls.thumb_lg ||
+        urls.thumb_md ||
+        urls.thumb_sm ||
+        urls.display_webp ||
         Object.values(urls)[0] ||
         "",
     )
@@ -141,8 +163,29 @@ export function PublicGalleryHero({
           : "text-center items-center";
 
     return (
+      // Honor the cover style's declared aspectRatio so the container
+      // matches the image's natural shape. Previously the hero forced
+      // `min-h-[60vh]` and the image was rendered with `object-fit: cover`
+      // — on wide desktop viewports (e.g. 1920×648) a 16:9 cover photo
+      // was force-cropped top + bottom by ~216px each, hiding the
+      // subject area at the top of wedding shots. With aspectRatio in
+      // place the container becomes the correct height for the chosen
+      // style (16/9, 21/9, 4/3, etc.), so cover cropping shrinks to
+      // near zero on standard viewports.
+      // Bracketing:
+      //   - minHeight: 60vh keeps the hero usable on tall narrow
+      //     viewports (mobile portrait) where the aspect-ratio derived
+      //     height would be too short.
+      //   - maxHeight: 85vh stops a 4:3 / 1:1 cover style from pushing
+      //     the View Gallery CTA below the fold on shorter desktop
+      //     viewports (1440×900 etc.).
       <section
-        className="relative flex min-h-[60vh] w-full overflow-hidden"
+        className="relative flex w-full overflow-hidden"
+        style={{
+          aspectRatio: designStyle.aspectRatio,
+          minHeight: "60vh",
+          maxHeight: "85vh",
+        }}
         data-cover-style={designStyle.id}
       >
         {fontsHref && <link rel="stylesheet" href={fontsHref} />}
