@@ -482,6 +482,33 @@ export async function getFaceScanStatus(
   return res.json();
 }
 
+// Shape returned by GET /api/v1/public/galleries/{slug}/albums.
+// Includes the per-album asset count so the public chip strip can render
+// numbers like "Favorites 2" without an N+1 round trip.
+export interface PublicGalleryAlbum {
+  id: string;
+  name: string;
+  asset_count: number;
+  is_smart: boolean;
+  position: number;
+}
+
+// Fetch the album/sub-gallery list for the public viewer. Used to render
+// the filter chip strip between the hero and the asset grid. Returns an
+// empty array on any failure (404 / 5xx / network) so the public page
+// degrades gracefully to the All-Photos-only view rather than blowing up.
+export async function getPublicGalleryAlbums(slug: string): Promise<PublicGalleryAlbum[]> {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/albums`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    if (Array.isArray(body)) return body;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getPublicGalleryAssets(slug: string, albumId?: string): Promise<PublicAsset[]> {
   const path = albumId
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`

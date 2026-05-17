@@ -357,6 +357,7 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
+		r.Get("/galleries/{slug}/albums", publicHandler.ListAlbums)
 		r.Get("/galleries/{slug}/albums/{albumId}/assets", publicHandler.ListAlbumAssets)
 		r.Get("/galleries/{slug}/assets/{assetId}/download", publicHandler.PublicAssetDownload)
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)

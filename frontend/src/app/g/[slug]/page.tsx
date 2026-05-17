@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import {
   getPublicGallery,
+  getPublicGalleryAlbums,
   getPublicGalleryAssets,
   getPublicGalleryBranding,
 } from "@/lib/api/galleries";
+import { PublicGalleryAlbumChips } from "@/components/gallery/public-gallery-album-chips";
 import { listPublicBanners, listPublicProducts } from "@/lib/api/commerce";
 import { PublicGalleryEnhancements } from "@/components/gallery/public-gallery-enhancements";
 import { PublicGalleryGrid } from "@/components/gallery/public-gallery-grid";
@@ -81,11 +83,24 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
     notFound();
   }
 
-  const [products, banners, branding] = await Promise.all([
+  // Fetch products, banners, branding, and the public album list in
+  // parallel. Albums are best-effort — getPublicGalleryAlbums swallows
+  // errors and returns [] so an album-service outage doesn't blow up
+  // the whole public page; the chip strip simply hides itself.
+  const [products, banners, branding, albums] = await Promise.all([
     listPublicProducts(slug),
     listPublicBanners(slug),
     getPublicGalleryBranding(slug).catch(() => null),
+    getPublicGalleryAlbums(slug),
   ]);
+
+  // For the "All Photos" chip count we need the gallery-wide asset
+  // count, not just the currently-rendered (album-filtered) set.
+  // Re-fetch only when an album filter is active; otherwise reuse the
+  // already-loaded `assets` length to avoid a second round-trip.
+  const totalAssetCount = albumId
+    ? (await getPublicGalleryAssets(slug).catch(() => [])).length
+    : assets.length;
 
   const hasPassword = gallery.settings?.has_password === true;
   const studioBrandName = branding?.can_customize ? branding.brand_name : undefined;
@@ -112,6 +127,13 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
       />
 
       <PublicGalleryBanners slug={slug} initialBanners={banners} />
+
+      <PublicGalleryAlbumChips
+        slug={slug}
+        albums={albums}
+        totalAssetCount={totalAssetCount}
+        activeAlbumId={albumId}
+      />
 
       <div id="gallery-grid" className="mx-auto max-w-6xl px-4 pb-16">
         <PublicGalleryGrid

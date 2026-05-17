@@ -1184,15 +1184,41 @@ export default function GalleryDesignStudioPage() {
                   {config.grid.showInfo && <div className="p-2"><p className="text-[10px] text-text-tertiary">{asset?.filename || `IMG_${1000 + i}.jpg`}</p></div>}
                 </>
               );
-              const dragProps = (asset: Asset | undefined) => ({
+              // Per-tile interaction props for the right-side picker.
+              // Click → set as cover (the cheap, discoverable path).
+              // Drag → still works onto the Cover Photo zone (the legacy
+              //   path; some users prefer drag-and-drop). Both routes go
+              //   through the SET_COVER reducer so state + history undo
+              //   are consistent.
+              const tileInteractionProps = (asset: Asset | undefined) => ({
                 draggable: !!asset,
                 onDragStart: (e: React.DragEvent) => {
                   if (!asset) return;
                   e.dataTransfer.setData(COVER_DRAG_MIME, asset.id);
                   e.dataTransfer.effectAllowed = "copy";
                 },
-                title: asset ? "Drag onto the Cover Photo zone to set as cover" : undefined,
+                onClick: asset
+                  ? () => wrappedDispatch({ type: "SET_COVER", payload: { assetId: asset.id } })
+                  : undefined,
+                role: asset ? ("button" as const) : undefined,
+                tabIndex: asset ? 0 : undefined,
+                onKeyDown: asset
+                  ? (e: React.KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        wrappedDispatch({ type: "SET_COVER", payload: { assetId: asset.id } });
+                      }
+                    }
+                  : undefined,
+                title: asset ? "Click to set as cover (or drag onto the Cover Photo zone)" : undefined,
+                "aria-label": asset ? `Set ${asset.filename || "photo"} as cover` : undefined,
+                "aria-pressed": asset ? config.cover.assetId === asset.id : undefined,
               });
+              // Backwards-compat alias for the rest of this scope. Some
+              // older diffs in this file referenced `dragProps`; keep both
+              // pointing at the same object so future merge-conflicts
+              // don't reintroduce drag-only behavior.
+              const dragProps = tileInteractionProps;
 
               const tiles = Array.from({ length: tileCount }).map((_, i) => ({
                 i,
@@ -1220,7 +1246,8 @@ export default function GalleryDesignStudioPage() {
                         key={i}
                         className={cn(
                           "rounded-xl bg-surface-container border border-border-subtle overflow-hidden flex-shrink-0 snap-start",
-                          asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                          asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                         )}
                         style={{
                           width: `calc(${tileWidthPercent}% - ${config.grid.gap}px)`,
@@ -1249,7 +1276,8 @@ export default function GalleryDesignStudioPage() {
                         key={i}
                         className={cn(
                           "rounded-xl bg-surface-container border border-border-subtle overflow-hidden break-inside-avoid",
-                          asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                          asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                         )}
                         style={{
                           marginBottom: `${config.grid.gap}px`,
@@ -1285,7 +1313,8 @@ export default function GalleryDesignStudioPage() {
                           key={i}
                           className={cn(
                             "rounded-xl bg-surface-container border border-border-subtle overflow-hidden",
-                            asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                            asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                           )}
                           style={{
                             height: `${rowHeight}px`,
@@ -1320,7 +1349,8 @@ export default function GalleryDesignStudioPage() {
                       key={i}
                       className={cn(
                         "rounded-xl bg-surface-container border border-border-subtle overflow-hidden",
-                        asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                        asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                       )}
                       style={{ aspectRatio: "1/1" }}
                       {...dragProps(asset)}
