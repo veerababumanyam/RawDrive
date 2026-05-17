@@ -133,6 +133,7 @@ type LogoutRequest struct {
 type UserProfile struct {
 	ID          string
 	Email       string
+	Phone       string
 	DisplayName string
 	AvatarURL   string
 }
@@ -262,6 +263,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":            profile.ID,
 		"email":         profile.Email,
+		"phone":         profile.Phone,
 		"display_name":  profile.DisplayName,
 		"avatar_url":    profile.AvatarURL,
 		"workspace_id":  claims.WorkspaceID,
