@@ -120,3 +120,126 @@ func TestM41_102_PackagesAndRateCards_Down(t *testing.T) {
 	assert.Less(t, ratesIdx, pkgsIdx,
 		"102 down must drop rate_cards BEFORE packages (child before parent)")
 }
+
+// TestM41_103_ThumbnailURLBackfill — content-contract test for the data
+// backfill that strips the absolute production-host prefix from
+// assets.thumbnail_urls. Locks the predicate so a future widener cannot
+// accidentally clobber legitimate CDN URLs, and locks the no-op down so
+// the broken-<img> bug cannot be re-introduced via a rollback.
+func TestM41_103_ThumbnailURLBackfill(t *testing.T) {
+	dir := migrationDir(t)
+	upPath := filepath.Join(dir, "103_asset_thumbnail_urls_strip_host.up.sql")
+	downPath := filepath.Join(dir, "103_asset_thumbnail_urls_strip_host.down.sql")
+
+	upInfo, err := os.Stat(upPath)
+	require.NoError(t, err, "103 up.sql must exist at %s", upPath)
+	assert.Greater(t, upInfo.Size(), int64(0), "103 up must not be empty")
+
+	downInfo, err := os.Stat(downPath)
+	require.NoError(t, err, "103 down.sql must exist at %s", downPath)
+	assert.Greater(t, downInfo.Size(), int64(0), "103 down must not be empty")
+
+	upBytes, err := os.ReadFile(upPath)
+	require.NoError(t, err)
+	up := string(upBytes)
+	for _, substr := range []string{
+		"UPDATE assets",
+		"thumbnail_urls",
+		"regexp_replace",
+		"https://api\\.rawdrive\\.in/storage/", // literal prefix (escaped dot for regex)
+		"api.rawdrive.in/storage/",             // unescaped form lives in the WHERE LIKE
+	} {
+		assert.Contains(t, up, substr,
+			"103 up must contain %q so the targeted backfill is unambiguous", substr)
+	}
+
+	downBytes, err := os.ReadFile(downPath)
+	require.NoError(t, err)
+	down := string(downBytes)
+	// The down is intentionally a no-op. Asserting absence of UPDATE/INSERT
+	// here locks the choice — re-baking the production host would
+	// reintroduce the broken-<img> bug.
+	assert.NotContains(t, strings.ToUpper(down), "UPDATE ASSETS",
+		"103 down must be a no-op — reinstating the absolute URL prefix would re-introduce broken <img> renders")
+	assert.NotContains(t, strings.ToUpper(down), "INSERT INTO",
+		"103 down must be a no-op")
+}
+
+// TestM41_104_WebPThumbnailsToPublicPath — content-contract test for the
+// JSONB rewrite that moves WebP thumbnail keys from `derivatives/` (auth-
+// required) to `thumbnails/` (public path). Locks both the scope of the
+// rewrite (only the three thumb sizes) and the exclusion of display_webp
+// (which is full-res and intentionally stays auth-gated).
+func TestM41_104_WebPThumbnailsToPublicPath(t *testing.T) {
+	dir := migrationDir(t)
+	upPath := filepath.Join(dir, "104_webp_thumbnails_to_public_path.up.sql")
+	downPath := filepath.Join(dir, "104_webp_thumbnails_to_public_path.down.sql")
+
+	upInfo, err := os.Stat(upPath)
+	require.NoError(t, err, "104 up.sql must exist at %s", upPath)
+	assert.Greater(t, upInfo.Size(), int64(0), "104 up must not be empty")
+
+	downInfo, err := os.Stat(downPath)
+	require.NoError(t, err, "104 down.sql must exist at %s", downPath)
+	assert.Greater(t, downInfo.Size(), int64(0), "104 down must not be empty")
+
+	upBytes, err := os.ReadFile(upPath)
+	require.NoError(t, err)
+	up := string(upBytes)
+
+	// The rewrite must cover the three thumbnail-sized WebP variants and
+	// no others. Editing this list also requires updating
+	// service.isWebPThumbnailVariant (and probably the storage proxy's
+	// public-prefix guard); the test exists to catch divergence.
+	for _, substr := range []string{
+		"UPDATE assets",
+		"thumbnail_urls",
+		"regexp_replace",
+		"derivatives/",
+		"thumbnails/",
+		"thumb_(sm|md|lg)_webp",
+	} {
+		assert.Contains(t, up, substr,
+			"104 up must contain %q so the targeted WebP rewrite is unambiguous", substr)
+	}
+
+	// CRITICAL: display_webp must NOT appear in any executable SQL — it
+	// intentionally stays under derivatives/. The migration's prose
+	// comments DO mention display_webp (to document the exclusion), so we
+	// strip SQL comments before the substring check. A future migration
+	// widening this rewrite to cover display_webp would silently move a
+	// full-res asset onto the public storage path; this guard rejects
+	// that change.
+	upSQL := stripSQLComments(up)
+	assert.NotContains(t, upSQL, "display_webp",
+		"104 up SQL (comments stripped) must not rewrite display_webp keys — full-res variant intentionally stays auth-gated")
+
+	downBytes, err := os.ReadFile(downPath)
+	require.NoError(t, err)
+	down := string(downBytes)
+	// Down is the symmetric inverse so rollback composes with a worker revert.
+	for _, substr := range []string{"UPDATE assets", "thumbnails/", "derivatives/", "thumb_(sm|md|lg)_webp"} {
+		assert.Contains(t, down, substr, "104 down must mirror the up rewrite shape")
+	}
+	assert.NotContains(t, stripSQLComments(down), "display_webp",
+		"104 down SQL (comments stripped) must also leave display_webp keys alone")
+}
+
+// stripSQLComments removes `--` line comments from a SQL blob so assertions
+// can target executable SQL only. Documentation prose in comment blocks
+// often legitimately mentions identifiers the SQL itself avoids; this
+// helper lets the test distinguish "appears in a comment" from "appears
+// in a regexp_replace target". Simple line-by-line strip is sufficient
+// for our migrations — none use block comments or string literals that
+// span `--`.
+func stripSQLComments(sql string) string {
+	lines := strings.Split(sql, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if idx := strings.Index(line, "--"); idx >= 0 {
+			line = line[:idx]
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}

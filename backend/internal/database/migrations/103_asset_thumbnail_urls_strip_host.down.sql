@@ -1,0 +1,11 @@
+-- M41 / 103 down — intentionally a no-op
+--
+-- This is a data backfill, not a schema change. The original poisoned
+-- values cannot be reconstructed because we did not record which rows
+-- originally carried the absolute URL form. Re-baking
+-- "https://api.rawdrive.in/storage/" back into thumbnail_urls would
+-- re-introduce the broken-<img> bug that the up migration fixes, so the
+-- down is intentionally a no-op. Rolling back to a pre-103 schema state
+-- requires no DDL or DML; this file exists to keep the up/down pair
+-- complete and to document why no inverse exists.
+SELECT 1;

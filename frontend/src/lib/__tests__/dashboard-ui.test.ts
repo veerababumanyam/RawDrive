@@ -1,5 +1,68 @@
 import { describe, expect, it } from "vitest";
-import { getAssetPreviewUrl, getStorageBackedUrl } from "../dashboard-ui";
+import { assetIsProcessing, getAssetPreviewUrl, getStorageBackedUrl } from "../dashboard-ui";
+
+describe("assetIsProcessing — gallery skeleton predicate", () => {
+  // Locks the predicate used by gallery/[id]/page.tsx to choose
+  // between the real <img> and the "Processing…" skeleton tile while
+  // the thumbnail worker is still generating derivatives. Each case
+  // documents a state the predicate must classify correctly so a
+  // worker change to status/thumbnail_urls semantics cannot silently
+  // re-introduce the "broken <img> before thumbnails ready" bug.
+
+  it("treats a fully-ready asset as not processing", () => {
+    expect(
+      assetIsProcessing({
+        status: "ready",
+        thumbnail_urls: { thumb_md_webp: "derivatives/abc/thumb_md_webp.webp" },
+      }),
+    ).toBe(false);
+  });
+
+  it("treats a null/missing asset as processing (race during hydrate)", () => {
+    expect(assetIsProcessing(null)).toBe(true);
+    expect(assetIsProcessing(undefined)).toBe(true);
+  });
+
+  it("treats status=processing as processing even with thumbnails populated", () => {
+    expect(
+      assetIsProcessing({
+        status: "processing",
+        thumbnail_urls: { thumb_md: "thumbnails/abc/thumb_md.jpg" },
+      }),
+    ).toBe(true);
+  });
+
+  it("treats empty thumbnail_urls as processing even when status=ready", () => {
+    // Worker writes thumbnail_urls and status in two separate UPDATEs;
+    // a listing fetch can land between them. Empty-thumbs is the
+    // load-bearing signal.
+    expect(assetIsProcessing({ status: "ready", thumbnail_urls: {} })).toBe(true);
+    expect(assetIsProcessing({ status: "ready", thumbnail_urls: null })).toBe(true);
+    expect(assetIsProcessing({ status: "ready" })).toBe(true);
+  });
+
+  it("treats status=error as processing (not-displayable)", () => {
+    expect(
+      assetIsProcessing({
+        status: "error",
+        thumbnail_urls: { thumb_md_webp: "derivatives/abc/thumb_md_webp.webp" },
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores extra thumbnail variants — any populated key counts as ready", () => {
+    // Asset rows in this codebase carry 3-key (legacy JPG-only) and 7-key
+    // (post-M41 with WebPs) shapes. The skeleton predicate must accept
+    // both — we don't want to demote legacy rows back to skeleton when
+    // they're displayable, just not the new shape.
+    expect(
+      assetIsProcessing({
+        status: "ready",
+        thumbnail_urls: { thumb_md: "thumbnails/abc/thumb_md.jpg" },
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("dashboard UI asset URLs", () => {
   it("prefixes backend storage paths and appends the session token", () => {
@@ -43,5 +106,25 @@ describe("dashboard UI asset URLs", () => {
         "jwt-token",
       ),
     ).toBe("http://localhost:8080/storage/workspaces/w1/photo-small.webp?token=jwt-token");
+  });
+
+  it("prefers thumb_md_webp over thumb_sm_webp for gallery tile size", () => {
+    // The gallery grid tile renders at ~400px wide (4:3 aspect, 1/2/3-column
+    // grid). thumb_sm_webp (200px source) gets browser-upscaled and looks
+    // blurry; thumb_md_webp (600px source) scales down cleanly. Both live
+    // under the same public storage prefix so the latter has identical
+    // auth characteristics. This test locks the picker order.
+    expect(
+      getAssetPreviewUrl(
+        {
+          thumbnail_urls: {
+            thumb_sm_webp: "thumbnails/abc/thumb_sm_webp.webp",
+            thumb_md_webp: "thumbnails/abc/thumb_md_webp.webp",
+            thumb_md: "thumbnails/abc/thumb_md.jpg",
+          },
+        },
+        "jwt-token",
+      ),
+    ).toContain("thumb_md_webp.webp");
   });
 });

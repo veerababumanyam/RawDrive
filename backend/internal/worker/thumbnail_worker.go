@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,7 +40,15 @@ func NewThumbnailWorker(
 		assetRepo:    assetRepo,
 		thumbnailSvc: thumbnailSvc,
 		store:        store,
-		pollInterval: 5 * time.Second,
+		// 1s poll instead of 5s. The previous interval added 0-5s of
+		// pickup latency on every fresh upload — the dominant component
+		// of the user-visible "thumbnail render lag". Tightening to 1s
+		// keeps the worker idle 99% of the time anyway (the SELECT is on
+		// the indexed status column with status='processing'), and drops
+		// the average pickup latency from ~2.5s to ~0.5s. The event-
+		// driven NATS path is a separate follow-up (G4 in fix session
+		// 2026-05-17); polling remains the recovery floor.
+		pollInterval: 1 * time.Second,
 		stopCh:       make(chan struct{}),
 	}
 }
@@ -103,30 +110,23 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 		return fmt.Errorf("generate thumbnails: %w", err)
 	}
 
-	// Build thumbnail URL map. We deliberately return stable
-	// /storage/{key} URLs rooted at PUBLIC_API_URL rather than signed
-	// R2/MinIO URLs, so:
-	//   1. The browser only ever talks to the public api.rawdrive.in
-	//      origin — R2/MinIO host details never leak to the client.
-	//   2. Each request flows through middleware.JWTAuth, which
-	//      enforces "no public URL access" from AGENTS.md.
-	//   3. The URLs are idempotent — no signature expiry to cache or
-	//      rotate. The `/storage/*` handler re-signs (or streams) on
-	//      every request so the frontend can safely store the URL in
-	//      an asset row indefinitely.
-	// Falls back to PUBLIC_API_URL=https://api.rawdrive.in when the
-	// env var is unset so dev environments keep working. PresignURL
-	// is NOT used here any more: silencing a presign error by
-	// stashing the raw storage key in the URL field would have shown
-	// up as a broken <img src> in the UI, which is exactly the
-	// regression UAT caught on 2026-04-12.
-	publicBase := os.Getenv("PUBLIC_API_URL")
-	if publicBase == "" {
-		publicBase = "https://api.rawdrive.in"
-	}
+	// Persist bare storage keys (no host, no scheme). The frontend's
+	// `getStorageBackedUrl()` in dashboard-ui.ts takes a bare key like
+	// "thumbnails/<id>/thumb_md.jpg" and resolves it to
+	// "${NEXT_PUBLIC_API_URL}/storage/thumbnails/<id>/thumb_md.jpg?token=<jwt>"
+	// at render time — meaning the *browser* picks the host, not the
+	// worker. Storing absolute URLs here was a long-standing footgun:
+	// the previous code defaulted to PUBLIC_API_URL=https://api.rawdrive.in
+	// when the env var was unset, baking a production host into local
+	// dev databases. Every <img src> then short-circuited through
+	// `getStorageBackedUrl`'s "absolute URL — return as-is" branch and
+	// rendered as a broken cracked-image icon. Storing bare keys also
+	// keeps the row environment-agnostic: dump prod data into staging,
+	// the same row resolves to staging's host on render. The /storage/*
+	// proxy in cmd/api/main.go owns auth + R2/MinIO fan-out.
 	thumbnailURLs := make(map[string]string)
 	for sizeName, key := range result.URLs {
-		thumbnailURLs[sizeName] = fmt.Sprintf("%s/storage/%s", publicBase, key)
+		thumbnailURLs[sizeName] = key
 	}
 
 	// Update asset with thumbnails and dimensions

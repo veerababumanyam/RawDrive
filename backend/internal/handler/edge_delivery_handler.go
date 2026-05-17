@@ -37,7 +37,17 @@ func (h *EdgeDeliveryHandler) ServeDerivative(w http.ResponseWriter, r *http.Req
 	err = h.assetRepo.Pool().QueryRow(r.Context(),
 		`SELECT storage_key FROM asset_derivatives WHERE asset_id = $1 AND variant = $2`, assetID, variant).Scan(&storageKey)
 	if err != nil {
-		storageKey = fmt.Sprintf("derivatives/%s/%s.webp", assetID, variant)
+		// Fallback when asset_derivatives doesn't have the row yet (legacy
+		// assets predating the table, or a race with the worker). The path
+		// prefix must mirror service.webpStorageKey: thumb-sized WebPs live
+		// under thumbnails/<id>/ (public path), full-res display_webp + any
+		// other variants live under derivatives/<id>/.
+		switch variant {
+		case "thumb_sm_webp", "thumb_md_webp", "thumb_lg_webp":
+			storageKey = fmt.Sprintf("thumbnails/%s/%s.webp", assetID, variant)
+		default:
+			storageKey = fmt.Sprintf("derivatives/%s/%s.webp", assetID, variant)
+		}
 	}
 
 	asset, err := h.assetRepo.GetByID(r.Context(), assetID)

@@ -22,6 +22,7 @@ import {
 } from "@/lib/api/galleries";
 import { listProofingSelections, createComment, exportProofingSelectionsCsv, type ProofingSelection } from "@/lib/api/proofing";
 import {
+  assetIsProcessing,
   galleryStatusClasses,
   galleryTypeClasses,
   getAssetPreviewUrl,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { useUpload } from "@/hooks/use-upload";
+import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 import { FaceFilter } from "@/components/gallery/face-filter";
 import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
@@ -296,6 +298,53 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const token = getStoredAccessToken();
   const upload = useUpload(apiUrl, token);
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
+
+  // Assets whose thumbnails the background worker has not finished
+  // producing yet. The gallery listing endpoint returns rows the
+  // instant they are linked (the asset row exists, status is
+  // "processing", thumbnail_urls is empty/null), so without this set
+  // we'd render an immediate "Preview unavailable" tile and never
+  // refresh it until the user reloads the page. The
+  // useAssetReadySubscription hook below opens an SSE stream while
+  // this set is non-empty and refetches each asset as the worker
+  // completes it; entries are removed from the set inside that
+  // callback once the refreshed asset row carries thumbnails.
+  const pendingAssetIds = useMemo(
+    () =>
+      assets
+        .filter((entry) => assetIsProcessing(entry.asset))
+        .map((entry) => entry.asset?.id)
+        .filter((id): id is string => typeof id === "string"),
+    [assets],
+  );
+
+  const handleAssetReady = useCallback(
+    async (assetId: string) => {
+      const t = getStoredAccessToken();
+      if (!t) return;
+      try {
+        const refreshed = await getAsset(t, assetId);
+        setAssets((prev) =>
+          prev.map((entry) =>
+            entry.asset?.id === assetId ? { ...entry, asset: refreshed } : entry,
+          ),
+        );
+      } catch (err) {
+        // Worker said the asset is ready but the GET failed (transient
+        // network blip, etc.). Leave the skeleton in place — a manual
+        // page refresh, or the next upload-batch refetch, will recover.
+        console.warn("asset.ready refetch failed", assetId, err);
+      }
+    },
+    [],
+  );
+
+  useAssetReadySubscription({
+    apiBase: apiUrl,
+    token,
+    pendingAssetIds,
+    onAssetReady: handleAssetReady,
+  });
 
   // Link each newly-completed upload to this gallery then reload the asset list.
   useEffect(() => {
@@ -854,6 +903,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {visibleAssets.map((entry) => {
                   const previewUrl = getAssetPreviewUrl(entry.asset || undefined, token);
+                  // A freshly-uploaded asset lands in the listing instantly
+                  // (POST /galleries/{id}/assets → 201) but the thumbnail
+                  // worker takes up to ~10s to populate thumbnail_urls.
+                  // Show a "Processing…" skeleton during that window so we
+                  // don't render a broken/empty <img>. The
+                  // useAssetReadySubscription hook above swaps the tile to
+                  // the real preview as soon as the asset.ready SSE event
+                  // arrives — no manual refresh needed.
+                  const isProcessing = assetIsProcessing(entry.asset);
 
                   return (
                     <article
@@ -894,7 +952,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           {selectedAssetIds.has(entry.asset.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </div>
                       )}
-                      {previewUrl ? (
+                      {isProcessing ? (
+                        <div
+                          className="relative flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
+                          role="status"
+                          aria-live="polite"
+                          aria-label={
+                            entry.asset?.filename
+                              ? `Processing ${entry.asset.filename}`
+                              : "Processing photo"
+                          }
+                        >
+                          <div className="flex flex-col items-center gap-2 text-text-tertiary">
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-text-tertiary/30 border-t-text-tertiary" />
+                            <span className="text-xs">Processing photo…</span>
+                          </div>
+                        </div>
+                      ) : previewUrl ? (
                         <img
                           src={previewUrl}
                           alt={entry.asset?.filename || "Gallery asset preview"}

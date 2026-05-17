@@ -56,6 +56,37 @@ export const galleryTypeClasses: Record<string, string> = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+/**
+ * Returns true when the backend has accepted an upload but the
+ * thumbnail/derivative worker has not yet produced the variants the
+ * gallery grid needs to render. Used to swap a fully-rendered tile
+ * for a "Processing…" skeleton during the (~10s) window between
+ * `POST /galleries/{id}/assets → 201` and the worker's
+ * `asset.ready` publish.
+ *
+ * An asset is considered processing when either:
+ *   - the asset row is missing (race between link + getAsset),
+ *   - `status` is anything other than "ready" (status="processing",
+ *     "error", or the initial empty string on a freshly-inserted row),
+ *   - `thumbnail_urls` is missing or has zero keys (worker hasn't
+ *     written derivatives yet, regardless of what status says).
+ *
+ * The thumbnail_urls check is the load-bearing one — see the bug
+ * traced in the M41 fix session where the worker updated thumbnails
+ * and status in two separate UPDATEs, leaving a brief window where a
+ * listing fetch could return status="ready" with no thumbnails.
+ */
+export function assetIsProcessing(asset: {
+  status?: string;
+  thumbnail_urls?: Record<string, string> | null;
+} | null | undefined): boolean {
+  if (!asset) return true;
+  if (asset.status && asset.status !== "ready") return true;
+  const thumbs = asset.thumbnail_urls;
+  if (!thumbs || Object.keys(thumbs).length === 0) return true;
+  return false;
+}
+
 export function getStorageBackedUrl(url: string | undefined | null, token?: string | null): string {
   if (!url) return "";
 
@@ -86,6 +117,18 @@ export function getStorageBackedUrl(url: string | undefined | null, token?: stri
  * Build a preview URL for an asset, selecting the best available thumbnail.
  * Backend `/storage/*` paths must be absolute because images render from the
  * Next.js origin while storage is served by the Go API.
+ *
+ * Variant preference is WebP-first, then JPG fallback, at the size that
+ * matches the canonical render surface (gallery grid tile at ~400px wide on
+ * desktop, 1/2/3-column layout). The picker chooses `thumb_md_webp` (600px
+ * source) over `thumb_sm_webp` (200px source) because the former scales
+ * down cleanly to the tile whereas the latter is upscaled and looks blurry
+ * AND triggers an extra render pass once the higher-res variant arrives.
+ *
+ * Both `thumb_sm_webp` and `thumb_md_webp` live under the public
+ * `thumbnails/` storage prefix (see service.webpStorageKey), so neither
+ * pays the per-tile JWT validation cost — the auth tax is reserved for
+ * the full-res `display_webp` lightbox variant only.
  */
 export function getAssetPreviewUrl(
   asset?: {
@@ -97,7 +140,12 @@ export function getAssetPreviewUrl(
   if (!asset) return "";
 
   const variants = asset.thumbnail_urls ?? {};
-  const preferred = variants.thumb_sm_webp ?? variants.thumb_sm ?? variants.thumb_md ?? variants.thumb_lg;
+  const preferred =
+    variants.thumb_md_webp ??
+    variants.thumb_sm_webp ??
+    variants.thumb_md ??
+    variants.thumb_sm ??
+    variants.thumb_lg;
   const chosen = preferred ?? Object.values(variants)[0] ?? asset.download_url ?? "";
   return getStorageBackedUrl(chosen, token);
 }

@@ -388,10 +388,15 @@ export function PhotoLightbox({
           {burstExpanded && (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
               {burstSiblings.map((sib) => {
+                // Burst-sibling strip: WebP-first, JPG fallback for legacy.
+                // The 80×80 tile size matches thumb_sm_webp (200px source).
                 const rawThumb =
+                  sib.thumbnail_urls?.thumb_sm_webp ||
+                  sib.thumbnail_urls?.thumb_md_webp ||
                   sib.thumbnail_urls?.thumb_sm ||
                   sib.thumbnail_urls?.sm ||
-                  sib.thumbnail_urls?.thumb_md || "";
+                  sib.thumbnail_urls?.thumb_md ||
+                  "";
                 const thumb = authedStorageUrl(rawThumb, token);
                 return (
                   <div

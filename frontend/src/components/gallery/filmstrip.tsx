@@ -49,8 +49,12 @@ export function Filmstrip({ assets, activeId, onSelect }: Props) {
     >
       {assets.map((a) => {
         const active = a.id === activeId;
+        // Filmstrip tile is ~80px wide; thumb_sm_webp (200px source) is
+        // a clean fit. Cascade prefers WebP variants first then falls
+        // back to legacy JPG so legacy assets still render.
         const rawThumb =
           a.thumbnail_urls?.thumb_sm_webp ||
+          a.thumbnail_urls?.thumb_md_webp ||
           a.thumbnail_urls?.thumb_sm ||
           a.thumbnail_urls?.sm ||
           a.thumbnail_urls?.thumb_md ||
