@@ -22,6 +22,7 @@ import {
 } from "@/lib/api/galleries";
 import { listProofingSelections, createComment, exportProofingSelectionsCsv, type ProofingSelection } from "@/lib/api/proofing";
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
+import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import {
   assetIsProcessing,
   galleryStatusClasses,
@@ -380,7 +381,26 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     onAssetReady: handleAssetReady,
   });
 
-  // Link each newly-completed upload to this gallery then reload the asset list.
+  // The active sub-album is read by the upload-link effect to decide
+  // whether a newly-completed asset should also be added to that album.
+  // Using a ref instead of an effect-dep lets us read the *current*
+  // selected album at completion time without re-triggering the linker
+  // every time the user toggles a chip. linkedAssetIdsRef still guards
+  // against double-linking the same asset to the gallery, and the new
+  // albumLinkedAssetIdsRef tracks which (asset, album) pairs we've
+  // already pushed so the per-album add is also idempotent.
+  const activeAlbumRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeAlbumRef.current = activeAlbum;
+  }, [activeAlbum]);
+  const albumLinkedAssetIdsRef = useRef<Set<string>>(new Set());
+
+  // Link each newly-completed upload to this gallery, then attach it to
+  // the active sub-album (if any), then reload the asset + album views.
+  // The "active sub-album" semantic is: photos land wherever the user is
+  // currently looking. If they kicked off the upload from inside the
+  // Favorites chip, the resulting assets show up in Favorites without
+  // needing a separate drag-into-album step.
   useEffect(() => {
     const t = getStoredAccessToken();
     if (!t || !id) return;
@@ -390,15 +410,43 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     if (toLink.length === 0) return;
 
     (async () => {
+      // Capture the active album once per batch run rather than on each
+      // iteration so all assets from one upload batch land together
+      // even if the user clicks a different chip mid-flight.
+      const targetAlbumId = activeAlbumRef.current;
+      const newlyAddedAssetIds: string[] = [];
+
       for (const item of toLink) {
         if (!item.assetId) continue;
         try {
           await addAssetToGallery(t, id, item.assetId, 0);
           linkedAssetIdsRef.current.add(item.assetId);
+          newlyAddedAssetIds.push(item.assetId);
         } catch (err) {
           console.warn("Failed to link asset to gallery:", err);
         }
       }
+
+      // Push the just-linked assets into the active sub-album. Skipped
+      // when activeAlbum is null ("All Photos" view) — those uploads
+      // are gallery-scope-only by design. The pair-key dedup means a
+      // re-fire of this effect won't double-attach.
+      if (targetAlbumId && newlyAddedAssetIds.length > 0) {
+        const fresh = newlyAddedAssetIds.filter((assetId) => {
+          const key = `${targetAlbumId}:${assetId}`;
+          if (albumLinkedAssetIdsRef.current.has(key)) return false;
+          albumLinkedAssetIdsRef.current.add(key);
+          return true;
+        });
+        if (fresh.length > 0) {
+          try {
+            await addAlbumAssets(t, targetAlbumId, fresh);
+          } catch (err) {
+            console.warn("Failed to add uploads to sub-album:", err);
+          }
+        }
+      }
+
       // Reload assets list after linking
       try {
         const galleryAssets = await listGalleryAssets(t, id);
@@ -416,8 +464,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       } catch (err) {
         console.warn("Failed to reload assets after upload:", err);
       }
+
+      // Refresh album memberships so the sub-gallery chip count
+      // increments immediately. Without this the chip stays at its
+      // pre-upload count until the next manual refresh.
+      if (targetAlbumId) {
+        await refreshAlbums();
+      }
     })();
-  }, [upload.items, id]);
+  }, [upload.items, id, refreshAlbums]);
 
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -840,13 +895,21 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 <div className="flex items-center gap-2">
                   {gallery.slug && (
-                    <button
-                      type="button"
-                      onClick={() => copyShareUrl()}
-                      className="btn-tertiary px-3 py-1.5 text-xs"
-                    >
-                      Copy gallery link
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => copyShareUrl()}
+                        className="btn-tertiary px-3 py-1.5 text-xs"
+                      >
+                        Copy gallery link
+                      </button>
+                      <ShareQrPopover
+                        url={gallery.is_published ? buildShareUrl() : ""}
+                        disabled={!gallery.is_published}
+                        label="Show QR code for gallery link"
+                        filename={`${gallery.slug}-gallery-qr`}
+                      />
+                    </>
                   )}
                   <button
                     type="button"
@@ -932,6 +995,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   >
                     Share
                   </button>
+                  <ShareQrPopover
+                    url={gallery.is_published ? buildShareUrl() : ""}
+                    disabled={!gallery.is_published}
+                    label="Show QR code for All Photos share link"
+                    filename={`${gallery.slug || "gallery"}-all-photos-qr`}
+                  />
                 </div>
                 {albums.map((album) => {
                   const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
@@ -1004,6 +1073,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       >
                         Share
                       </button>
+                      <ShareQrPopover
+                        url={gallery.is_published ? buildShareUrl(album.id) : ""}
+                        disabled={!gallery.is_published}
+                        label={`Show QR code for ${album.name} share link`}
+                        filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
+                      />
                     </div>
                   );
                 })}

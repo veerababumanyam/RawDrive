@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PreviewChrome } from "../preview-chrome";
 import type { Gallery } from "@/lib/api/galleries";
 
@@ -9,6 +9,14 @@ vi.mock("next/link", () => ({
       {children}
     </a>
   ),
+}));
+
+// The `qrcode` library writes to a real canvas 2D context which jsdom
+// stubs to return `null` (the upstream warning is benign but noisy).
+// We resolve immediately so the popover renders deterministically and
+// keep an unmodified canvas element in the DOM for assertions.
+vi.mock("qrcode", () => ({
+  default: { toCanvas: vi.fn().mockResolvedValue(undefined) },
 }));
 
 function buildGallery(overrides: Partial<Gallery> = {}): Gallery {
@@ -100,6 +108,53 @@ describe("PreviewChrome", () => {
     expect(
       screen.getByText("Publish to generate a public URL"),
     ).toBeInTheDocument();
+  });
+
+  it("offers a QR popover beside the copy button and renders a QR canvas on demand", async () => {
+    render(
+      <PreviewChrome
+        gallery={buildGallery()}
+        publicUrl="https://app.rawdrive.test/g/wedding-2026"
+      />,
+    );
+
+    // Toggle button is present beside the Copy share link button and
+    // wired to the share URL via aria-label.
+    const qrToggle = screen.getByTestId("share-qr-toggle");
+    expect(qrToggle).toHaveAttribute("aria-label", "Show QR for share link");
+    expect(qrToggle).toBeEnabled();
+
+    // No popover before click.
+    expect(screen.queryByTestId("share-qr-popover")).toBeNull();
+
+    fireEvent.click(qrToggle);
+
+    const popover = await screen.findByTestId("share-qr-popover");
+    const canvas = within(popover).getByTestId("share-qr-canvas");
+    expect(canvas).toHaveAttribute(
+      "aria-label",
+      "QR code for https://app.rawdrive.test/g/wedding-2026",
+    );
+    // The full URL is rendered inside the popover so the photographer
+    // can sanity-check what was encoded before downloading.
+    expect(
+      within(popover).getByText("https://app.rawdrive.test/g/wedding-2026"),
+    ).toBeInTheDocument();
+    // Download CTA is wired and enabled once the QR has rendered.
+    expect(
+      within(popover).getByTestId("share-qr-download"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables the QR toggle when no public URL is available", () => {
+    render(
+      <PreviewChrome
+        gallery={buildGallery({ is_published: false })}
+        publicUrl=""
+      />,
+    );
+
+    expect(screen.getByTestId("share-qr-toggle")).toBeDisabled();
   });
 
   it("falls back to error feedback when clipboard write throws", async () => {

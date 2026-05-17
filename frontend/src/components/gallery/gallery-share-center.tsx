@@ -8,6 +8,7 @@ import {
   type Gallery,
   type GalleryShareLink,
 } from "@/lib/api/galleries";
+import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 
 interface GalleryShareCenterProps {
   gallery: Gallery;
@@ -130,10 +131,16 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
       <div className="rounded-2xl border border-border-default bg-surface-sunken p-4">
         <p className="text-xs text-text-tertiary">Public URL</p>
         <p className="mt-1 break-all text-sm text-text-primary">{publicUrl || "Publish to generate a public URL"}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={copyPublicUrl} className="btn-tertiary px-3 py-2 text-xs">
             Copy public URL
           </button>
+          <ShareQrPopover
+            url={gallery.is_published ? publicUrl : ""}
+            disabled={!gallery.is_published}
+            label="Show QR code for public URL"
+            filename={`${gallery.slug || "gallery"}-public-qr`}
+          />
           <a href={`/g/${gallery.slug}?mode=client`} target="_blank" rel="noopener noreferrer" className="btn-tertiary px-3 py-2 text-xs">
             Client preview
           </a>

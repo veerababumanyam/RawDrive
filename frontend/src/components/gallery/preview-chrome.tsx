@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { ArrowLeft, Check, Copy, Eye } from "lucide-react";
 import type { Gallery } from "@/lib/api/galleries";
 import { cn } from "@/lib/utils";
+import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 
 // Owner-facing chrome bar that sits above the rendered preview. Pinned
 // just below the dashboard header so the photographer can copy the
@@ -117,6 +118,11 @@ export function PreviewChrome({ gallery, publicUrl }: Props) {
               </>
             )}
           </button>
+          <ShareQrPopover
+            url={publicUrl}
+            label="Show QR for share link"
+            filename={`${gallery.slug || "gallery"}-qr`}
+          />
         </div>
       </div>
       {error && (
