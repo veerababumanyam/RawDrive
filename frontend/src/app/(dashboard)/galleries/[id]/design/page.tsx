@@ -413,6 +413,9 @@ export default function GalleryDesignStudioPage() {
   // state) keeps the operation tolerant of accidental re-renders mid-drag.
   const COVER_DRAG_MIME = "application/x-rawdrive-asset-id";
   const [isCoverDragOver, setIsCoverDragOver] = useState(false);
+  // Tracks whether the user is actively dragging the focal-point handle
+  // so we can render the cross-hair guide lines for live alignment feedback.
+  const [isFocalDragging, setIsFocalDragging] = useState(false);
   const { getSavedDraft, discard } = useDraftPersistence(galleryId, config);
 
   // Fetch gallery assets for preview
@@ -693,10 +696,98 @@ export default function GalleryDesignStudioPage() {
                 if (!coverAsset) return null;
                 const url = getAssetPreviewUrl(coverAsset, getStoredAccessToken());
                 return url ? (
+                  // Cover preview image — IS the drag handle.
+                  // Previous design exposed a tiny focal-point dot that
+                  // photographers had to hunt for and drag in isolation.
+                  // The natural mental model is "grab the photo and slide
+                  // it around inside the frame" — like panning a map.
+                  // Implementation: render the cover with object-position
+                  // bound to `focalPoint`, then on pointer-down/move we
+                  // convert screen pixel deltas into focal-percent deltas.
+                  // Direction is inverted (matches scroll/pan gestures):
+                  //   - Drag image RIGHT in screen space  → reveal more
+                  //     of the LEFT side of the photo → focalX DECREASES.
+                  //   - Drag image DOWN                   → reveal more
+                  //     of the TOP of the photo          → focalY DECREASES.
+                  // Touch + pen + mouse all flow through Pointer Events
+                  // with one handler. The img has tabIndex/role=slider so
+                  // keyboard users get the same affordance via Arrow keys.
+                  // onDragStart is preventDefaulted to suppress the browser's
+                  // native image-drag (the save-image behavior).
+                  // HTML5 DnD drop for asset-tile drops still bubbles to
+                  // the parent container — those use different event
+                  // families (dragover/drop, not pointermove/up).
                   <img
                     src={url}
                     alt={coverAsset.filename || "Cover preview"}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    draggable={false}
+                    role="slider"
+                    aria-label="Drag to reposition cover image"
+                    aria-valuetext={`Showing ${config.cover.focalPoint.x}% from left, ${config.cover.focalPoint.y}% from top of source image`}
+                    aria-valuenow={config.cover.focalPoint.x}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    tabIndex={0}
+                    data-testid="cover-pan-image"
+                    title="Drag to reposition the cover image (or focus and use Arrow keys for fine adjustment)"
+                    className={cn(
+                      "absolute inset-0 h-full w-full select-none object-cover outline-none transition-shadow",
+                      isFocalDragging ? "cursor-grabbing" : "cursor-grab",
+                      "focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-inset",
+                    )}
+                    style={{
+                      objectPosition: `${config.cover.focalPoint.x}% ${config.cover.focalPoint.y}%`,
+                    }}
+                    onDragStart={(e) => e.preventDefault()}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      const img = e.currentTarget;
+                      const rect = img.getBoundingClientRect();
+                      img.setPointerCapture(e.pointerId);
+                      setIsFocalDragging(true);
+                      const startClientX = e.clientX;
+                      const startClientY = e.clientY;
+                      const startFocalX = config.cover.focalPoint.x;
+                      const startFocalY = config.cover.focalPoint.y;
+                      const onMove = (ev: PointerEvent) => {
+                        const dx = ev.clientX - startClientX;
+                        const dy = ev.clientY - startClientY;
+                        // Subtract because the focal-point coordinate
+                        // describes which part of the SOURCE image is
+                        // pinned to the frame, so dragging the image
+                        // right reveals the left of the source = focal
+                        // moves left = X decreases.
+                        const nextX = Math.max(0, Math.min(100, startFocalX - (dx / rect.width) * 100));
+                        const nextY = Math.max(0, Math.min(100, startFocalY - (dy / rect.height) * 100));
+                        wrappedDispatch({
+                          type: "SET_COVER",
+                          payload: { focalPoint: { x: Math.round(nextX), y: Math.round(nextY) } },
+                        });
+                      };
+                      const onUp = () => {
+                        setIsFocalDragging(false);
+                        window.removeEventListener("pointermove", onMove);
+                        window.removeEventListener("pointerup", onUp);
+                      };
+                      window.addEventListener("pointermove", onMove);
+                      window.addEventListener("pointerup", onUp);
+                    }}
+                    onKeyDown={(e) => {
+                      const step = e.shiftKey ? 1 : 5;
+                      let dx = 0;
+                      let dy = 0;
+                      if (e.key === "ArrowLeft") dx = -step;
+                      else if (e.key === "ArrowRight") dx = step;
+                      else if (e.key === "ArrowUp") dy = -step;
+                      else if (e.key === "ArrowDown") dy = step;
+                      else return;
+                      e.preventDefault();
+                      const next = {
+                        x: Math.max(0, Math.min(100, config.cover.focalPoint.x + dx)),
+                        y: Math.max(0, Math.min(100, config.cover.focalPoint.y + dy)),
+                      };
+                      wrappedDispatch({ type: "SET_COVER", payload: { focalPoint: next } });
+                    }}
                   />
                 ) : null;
               })() : (
@@ -705,23 +796,34 @@ export default function GalleryDesignStudioPage() {
                   <p className="text-xs mt-1">or select from gallery</p>
                 </div>
               )}
-              <div
-                className="absolute w-6 h-6 border-2 border-accent-primary rounded-full cursor-move bg-surface/30 backdrop-blur-sm"
-                style={{ left: `${config.cover.focalPoint.x}%`, top: `${config.cover.focalPoint.y}%`, transform: "translate(-50%, -50%)" }}
-                onMouseDown={(e) => {
-                  const rect = (e.target as HTMLElement).parentElement!.getBoundingClientRect();
-                  const onMove = (ev: MouseEvent) => {
-                    const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
-                    const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
-                    wrappedDispatch({ type: "SET_COVER", payload: { focalPoint: { x: Math.round(x), y: Math.round(y) } } });
-                  };
-                  const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-                  window.addEventListener("mousemove", onMove);
-                  window.addEventListener("mouseup", onUp);
-                }}
-              />
+              {/* Pan-hint pill — surfaces the drag affordance the first
+                  time the user sees a cover loaded. Hidden while actively
+                  dragging so it doesn't fight with the user's gesture. */}
+              {config.cover.assetId && !isFocalDragging && (
+                <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+                  Drag to reposition
+                </div>
+              )}
             </div>
-            <p className="text-xs text-text-tertiary mt-1">Focal: {config.cover.focalPoint.x}%, {config.cover.focalPoint.y}%</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-xs text-text-tertiary">
+                Position: {config.cover.focalPoint.x}%, {config.cover.focalPoint.y}%
+                {config.cover.assetId && (
+                  <span className="ml-2 text-text-quaternary">— drag image or use Arrow keys</span>
+                )}
+              </p>
+              {config.cover.assetId && (
+                config.cover.focalPoint.x !== 50 || config.cover.focalPoint.y !== 50
+              ) && (
+                <button
+                  type="button"
+                  onClick={() => wrappedDispatch({ type: "SET_COVER", payload: { focalPoint: { x: 50, y: 50 } } })}
+                  className="text-xs text-accent-primary hover:underline"
+                >
+                  Reset to center
+                </button>
+              )}
+            </div>
 
             {/* Title / Subtitle inputs — feed both the main Cover Preview
                 and every CoverStyleMiniPreview so the user sees their own
@@ -1024,7 +1126,21 @@ export default function GalleryDesignStudioPage() {
             {(() => {
               const style = COVER_STYLES.find((s) => s.id === config.cover.styleId);
               const aspectRatio = style?.aspectRatio || "21/9";
-              const objectPosition = style?.objectPosition || "center center";
+              // Focal point drives the crop position so the device preview
+              // stays in sync with the left-side cover edit pan. Without
+              // this, the right-side preview pinned itself to the cover
+              // style's default object-position ("center top",
+              // "center center", etc.) and ignored every pan gesture the
+              // photographer made on the left — the panels rendered
+              // different crops of the same image. Falls back to the style
+              // default only when no focal point has been set (in practice
+              // the reducer always seeds focalPoint to {x:50,y:50}, so
+              // this fallback exists for forward-compat with older saved
+              // designs that pre-date the focal field).
+              const focal = config.cover.focalPoint;
+              const objectPosition = focal
+                ? `${focal.x}% ${focal.y}%`
+                : style?.objectPosition || "center center";
               const textAlign = style?.textAlign || "center";
               const coverAsset =
                 (config.cover.assetId && previewAssets.find((a) => a.id === config.cover.assetId)) ||
@@ -1034,11 +1150,16 @@ export default function GalleryDesignStudioPage() {
               // fallback chain (serif/sans-serif heuristic from the font
               // name) so a font that's still mid-network-fetch falls back
               // to a sensible system face rather than Times New Roman.
-              const isSerif = /Playfair|Cormorant|Lora|Garamond|EB Garamond|Merriweather/i.test(
-                config.typography.headingFont,
-              );
-              const headingStack = `'${config.typography.headingFont}', ${isSerif ? "Georgia, serif" : "Inter, system-ui, sans-serif"}`;
-              const bodyStack = `'${config.typography.bodyFont}', Inter, system-ui, sans-serif`;
+              // Font stacks deliberately mirror PublicGalleryHero's
+              // (`'<heading>', serif` / `'<body>', sans-serif`) so the
+              // preview falls back to the exact same family the public
+              // viewer uses while the Google font is still in flight. The
+              // previous serif-detection heuristic produced a different
+              // fallback chain (Inter when the font name didn't match the
+              // regex), which made the studio render with different
+              // typography than the published hero on first paint.
+              const headingStack = `'${config.typography.headingFont}', serif`;
+              const bodyStack = `'${config.typography.bodyFont}', sans-serif`;
               // Light/Dark/Auto variant now drives a readability scrim
               // over the cover photo. Previously the variant was set on
               // click but consumed nowhere — pure dead state — which is
@@ -1078,31 +1199,32 @@ export default function GalleryDesignStudioPage() {
                       style={{ background: variantScrim }}
                     />
                   )}
-                  {/* Title + subtitle overlay. Positioning uses the style's
-                      textAlign so Editorial Left puts copy on the left,
-                      etc. The container uses flex-end so text sits in the
-                      lower band of the cover — the conventional location
-                      for hero-style gallery titles. */}
+                  {/* Title + subtitle overlay. Mirrors the public hero
+                      exactly so the photographer sees what guests will
+                      see — bottom-anchored (justify-end) to match the
+                      cover-style picker thumbnails, constrained to
+                      max-w-3xl with mx-auto, px-6 py-16 padding,
+                      font-semibold + tracking-tight title, no drop-shadow,
+                      text-inverse fallback color, max-w-2xl subtitle at
+                      85% opacity. Both the picker mini-preview and the
+                      public hero now use bottom-anchored layout so the
+                      style the photographer picks renders identically
+                      across all three surfaces (picker → studio preview
+                      → guest hero). */}
                   <div
                     className={cn(
-                      "relative z-10 w-full h-full flex flex-col justify-end p-6 sm:p-10",
+                      "relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16",
                       textAlign === "left" && "items-start text-left",
                       textAlign === "right" && "items-end text-right",
                       textAlign === "center" && "items-center text-center",
                     )}
                   >
                     {config.cover.title && (
-                      // Accent color from the (renamed) "Accent Color"
-                      // section paints the title; subtitle stays in white
-                      // for hierarchy so the heading reads as the brand
-                      // emphasis rather than competing with body copy.
-                      // Falls back to white when no accent has been
-                      // selected yet (default empty string).
                       <h1
-                        className="font-bold leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] max-w-[80%]"
+                        className="font-semibold tracking-tight text-text-inverse"
                         style={{
                           fontFamily: headingStack,
-                          color: config.theme.accentColor || "#ffffff",
+                          color: config.theme.accentColor || undefined,
                           fontSize: `${clampedTitleSize}px`,
                         }}
                       >
@@ -1111,7 +1233,7 @@ export default function GalleryDesignStudioPage() {
                     )}
                     {config.cover.subtitle && (
                       <p
-                        className="text-white/90 mt-2 drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)] max-w-[70%]"
+                        className="mt-3 max-w-2xl text-text-inverse/85"
                         style={{
                           fontFamily: bodyStack,
                           fontSize: `${clampedSubtitleSize}px`,
@@ -1184,15 +1306,41 @@ export default function GalleryDesignStudioPage() {
                   {config.grid.showInfo && <div className="p-2"><p className="text-[10px] text-text-tertiary">{asset?.filename || `IMG_${1000 + i}.jpg`}</p></div>}
                 </>
               );
-              const dragProps = (asset: Asset | undefined) => ({
+              // Per-tile interaction props for the right-side picker.
+              // Click → set as cover (the cheap, discoverable path).
+              // Drag → still works onto the Cover Photo zone (the legacy
+              //   path; some users prefer drag-and-drop). Both routes go
+              //   through the SET_COVER reducer so state + history undo
+              //   are consistent.
+              const tileInteractionProps = (asset: Asset | undefined) => ({
                 draggable: !!asset,
                 onDragStart: (e: React.DragEvent) => {
                   if (!asset) return;
                   e.dataTransfer.setData(COVER_DRAG_MIME, asset.id);
                   e.dataTransfer.effectAllowed = "copy";
                 },
-                title: asset ? "Drag onto the Cover Photo zone to set as cover" : undefined,
+                onClick: asset
+                  ? () => wrappedDispatch({ type: "SET_COVER", payload: { assetId: asset.id } })
+                  : undefined,
+                role: asset ? ("button" as const) : undefined,
+                tabIndex: asset ? 0 : undefined,
+                onKeyDown: asset
+                  ? (e: React.KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        wrappedDispatch({ type: "SET_COVER", payload: { assetId: asset.id } });
+                      }
+                    }
+                  : undefined,
+                title: asset ? "Click to set as cover (or drag onto the Cover Photo zone)" : undefined,
+                "aria-label": asset ? `Set ${asset.filename || "photo"} as cover` : undefined,
+                "aria-pressed": asset ? config.cover.assetId === asset.id : undefined,
               });
+              // Backwards-compat alias for the rest of this scope. Some
+              // older diffs in this file referenced `dragProps`; keep both
+              // pointing at the same object so future merge-conflicts
+              // don't reintroduce drag-only behavior.
+              const dragProps = tileInteractionProps;
 
               const tiles = Array.from({ length: tileCount }).map((_, i) => ({
                 i,
@@ -1220,7 +1368,8 @@ export default function GalleryDesignStudioPage() {
                         key={i}
                         className={cn(
                           "rounded-xl bg-surface-container border border-border-subtle overflow-hidden flex-shrink-0 snap-start",
-                          asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                          asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                         )}
                         style={{
                           width: `calc(${tileWidthPercent}% - ${config.grid.gap}px)`,
@@ -1249,7 +1398,8 @@ export default function GalleryDesignStudioPage() {
                         key={i}
                         className={cn(
                           "rounded-xl bg-surface-container border border-border-subtle overflow-hidden break-inside-avoid",
-                          asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                          asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                         )}
                         style={{
                           marginBottom: `${config.grid.gap}px`,
@@ -1285,7 +1435,8 @@ export default function GalleryDesignStudioPage() {
                           key={i}
                           className={cn(
                             "rounded-xl bg-surface-container border border-border-subtle overflow-hidden",
-                            asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                            asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                           )}
                           style={{
                             height: `${rowHeight}px`,
@@ -1320,7 +1471,8 @@ export default function GalleryDesignStudioPage() {
                       key={i}
                       className={cn(
                         "rounded-xl bg-surface-container border border-border-subtle overflow-hidden",
-                        asset && "cursor-grab active:cursor-grabbing transition-transform active:scale-95",
+                        asset && "cursor-pointer hover:opacity-90 transition-all active:scale-95",
+                          asset && config.cover.assetId === asset.id && "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface",
                       )}
                       style={{ aspectRatio: "1/1" }}
                       {...dragProps(asset)}

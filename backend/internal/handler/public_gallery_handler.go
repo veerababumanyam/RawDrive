@@ -190,6 +190,73 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 	respondJSON(w, http.StatusOK, result)
 }
 
+// publicAlbumResponse is the shape returned by GET .../albums for the
+// public viewer. Excludes owner-only fields like description,
+// cover_asset_id, parent_id, and the raw smart_filter JSON — guests only
+// need enough to render a filter chip (id, name, count, isSmart hint).
+type publicAlbumResponse struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	AssetCount int    `json:"asset_count"`
+	IsSmart    bool   `json:"is_smart"`
+	Position   int    `json:"position"`
+}
+
+// ListAlbums handles GET /api/v1/public/galleries/{slug}/albums.
+//
+// Returns the gallery's albums + utility smart albums with asset counts so
+// the public viewer can render a chip strip beneath the cover image (All
+// Photos, sub-galleries, Favorites, Videos, RAW). Counts are resolved
+// through albumSvc.ListAssets which already dispatches smart-album
+// resolution (M41/105 favorites + content_type filters), so the same
+// numbers shown to the photographer in the dashboard appear here.
+//
+// Empty albums are included (Videos 0, RAW 0) — the chip's count badge
+// is part of the affordance even when zero. The owner-only manual albums
+// with zero photos are also included since photographers may publish
+// galleries with planned-but-unfilled sub-galleries.
+func (h *PublicGalleryHandler) ListAlbums(w http.ResponseWriter, r *http.Request) {
+	if h.albumSvc == nil {
+		http.Error(w, `{"error":"album service unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	slug := chi.URLParam(r, "slug")
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+
+	albums, err := h.albumSvc.ListByGallery(r.Context(), gallery.ID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	result := make([]publicAlbumResponse, 0, len(albums))
+	for _, a := range albums {
+		// Count via ListAssets so smart-album resolution (favorites,
+		// content_type) is honored. ListAssets is cheap for smart
+		// albums on small galleries; if this becomes hot for large
+		// galleries we can add a dedicated COUNT(*) path later.
+		assets, err := h.albumSvc.ListAssets(r.Context(), a.ID)
+		count := 0
+		if err == nil {
+			count = len(assets)
+		}
+		result = append(result, publicAlbumResponse{
+			ID:         a.ID.String(),
+			Name:       a.Name,
+			AssetCount: count,
+			IsSmart:    len(a.SmartFilter) > 0,
+			Position:   a.Position,
+		})
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
 // ListAlbumAssets handles GET /api/v1/public/galleries/{slug}/albums/{albumId}/assets.
 func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Request) {
 	if h.albumSvc == nil {

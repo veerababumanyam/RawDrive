@@ -127,7 +127,15 @@ export function PublicGalleryHero({
   designCoverThumbnails,
 }: PublicGalleryHeroProps) {
   const canUseStudioBrand = Boolean(branding?.can_customize && branding.public_branding_enabled !== false);
-  const brandName = canUseStudioBrand ? branding?.brand_name || "RawDrive" : "RawDrive";
+  // Brand chip only renders when the studio HAS configured branding for
+  // the public viewer. Prior to this fix, the fallback was the literal
+  // string "RawDrive" which forced the platform's own wordmark onto every
+  // guest gallery whose studio hadn't customized branding — the app was
+  // self-promoting on top of client photos. Empty string means "no chip".
+  // Three downstream render sites already guard on `(logoUrl || brandName)`
+  // so dropping the fallback removes the chip entirely when nothing is
+  // configured.
+  const brandName = canUseStudioBrand ? (branding?.brand_name?.trim() || "") : "";
   const logoUrl = canUseStudioBrand ? absoluteApiUrl(branding?.logo_url) : "";
   const studioAccent = canUseStudioBrand ? branding?.accent_color || "" : "";
 
@@ -203,19 +211,29 @@ export function PublicGalleryHero({
         )}
         {scrim && <div className="absolute inset-0" style={{ background: scrim }} />}
 
-        <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-center px-6 py-16 ${textAlignClass}`}>
+        {/* Text overlay uses `justify-end` so the title sits at the BOTTOM
+            of the hero — matching the picker thumbnails in the design
+            studio (CoverStyleMiniPreview), which render every cover style
+            with text at the bottom + horizontal align from `textAlign`.
+            Previously this used `justify-center` (vertically centered) so
+            the picker advertised "text at bottom" and the live hero
+            rendered "text in middle" — WYSIWYG violation that this fix
+            closes. */}
+        <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}>
           {(logoUrl || brandName) && (
             <div className="mb-6 flex items-center gap-3" style={{ justifyContent: designStyle.textAlign === "center" ? "center" : designStyle.textAlign === "right" ? "flex-end" : "flex-start" }}>
               {logoUrl && (
                 <img
                   src={logoUrl}
-                  alt={`${brandName} logo`}
+                  alt={brandName ? `${brandName} logo` : "Studio logo"}
                   className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
                 />
               )}
-              <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">
-                {brandName}
-              </span>
+              {brandName && (
+                <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">
+                  {brandName}
+                </span>
+              )}
             </div>
           )}
           <h1
@@ -239,9 +257,6 @@ export function PublicGalleryHero({
               {subtitle}
             </p>
           )}
-          <p className="mt-3 text-sm text-text-inverse/70">
-            {assets.length} {assets.length === 1 ? "photo" : "photos"}
-          </p>
           <div className="mt-8" style={{ alignSelf: designStyle.textAlign === "center" ? "center" : designStyle.textAlign === "right" ? "flex-end" : "flex-start" }}>
             <a
               href="#gallery-grid"
@@ -266,17 +281,18 @@ export function PublicGalleryHero({
   if (!hasCoverTemplate) {
     return (
       <header className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {logoUrl && <img src={logoUrl} alt={`${brandName} logo`} className="h-10 w-10 rounded-full object-contain" />}
-          <span className="text-xs uppercase tracking-[0.18em] text-text-tertiary">{brandName}</span>
-        </div>
+        {(logoUrl || brandName) && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            {logoUrl && <img src={logoUrl} alt={brandName ? `${brandName} logo` : "Studio logo"} className="h-10 w-10 rounded-full object-contain" />}
+            {brandName && (
+              <span className="text-xs uppercase tracking-[0.18em] text-text-tertiary">{brandName}</span>
+            )}
+          </div>
+        )}
         <h1 className="text-3xl font-semibold text-text-primary">{gallery.title}</h1>
         {gallery.description && (
           <p className="mt-2 max-w-2xl text-text-secondary">{gallery.description}</p>
         )}
-        <p className="mt-1 text-sm text-text-tertiary">
-          {assets.length} {assets.length === 1 ? "photo" : "photos"}
-        </p>
       </header>
     );
   }
@@ -291,19 +307,20 @@ export function PublicGalleryHero({
       />
       <div className="absolute inset-0 bg-surface-overlay/80" />
       <div className="relative z-10 max-w-2xl px-6 py-12 text-center">
-        <div className="mb-6 flex items-center justify-center gap-3">
-          {logoUrl && <img src={logoUrl} alt={`${brandName} logo`} className="h-12 w-12 rounded-full bg-surface-raised object-contain p-2" />}
-          <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">{brandName}</span>
-        </div>
+        {(logoUrl || brandName) && (
+          <div className="mb-6 flex items-center justify-center gap-3">
+            {logoUrl && <img src={logoUrl} alt={brandName ? `${brandName} logo` : "Studio logo"} className="h-12 w-12 rounded-full bg-surface-raised object-contain p-2" />}
+            {brandName && (
+              <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">{brandName}</span>
+            )}
+          </div>
+        )}
         <h1 className="text-4xl font-bold tracking-tight text-text-inverse md:text-5xl">
           {gallery.title}
         </h1>
         {gallery.description && (
           <p className="mt-4 text-lg text-text-inverse/80">{gallery.description}</p>
         )}
-        <p className="mt-2 text-sm text-text-inverse/70">
-          {assets.length} {assets.length === 1 ? "photo" : "photos"}
-        </p>
         <a
           href="#gallery-grid"
           className="mt-8 inline-block rounded-full border border-border-subtle bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"

@@ -81,7 +81,12 @@ describe("PublicGalleryHero", () => {
     expect(img.getAttribute("src")).not.toContain(authThumb);
   });
 
-  it("falls back to RawDrive when plan branding is not customizable", () => {
+  it("does not stamp a default platform brand on the cover when the studio has not customized branding", () => {
+    // Regression: prior code rendered the literal string "RawDrive" as a
+    // wordmark chip on every guest gallery whose studio didn't pay for
+    // custom branding — the platform was auto-watermarking client photos
+    // with its own brand. Now the chip is omitted entirely when the
+    // studio hasn't configured a brand name or logo.
     render(
       <PublicGalleryHero
         gallery={{ ...gallery, cover_template: "none" }}
@@ -90,7 +95,8 @@ describe("PublicGalleryHero", () => {
       />,
     );
 
-    expect(screen.getByText("RawDrive")).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "Kaveri Stories logo" })).not.toBeInTheDocument();
+    expect(screen.queryByText("RawDrive")).not.toBeInTheDocument();
+    expect(screen.queryByText("Kaveri Stories")).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /logo$/i })).not.toBeInTheDocument();
   });
 });
