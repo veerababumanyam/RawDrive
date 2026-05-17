@@ -45,6 +45,7 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 		r.Put("/{id}/approve", dealerHandler.Approve)
 		r.Put("/{id}/reject", dealerHandler.Reject)
 		r.Put("/{id}/suspend", dealerHandler.Suspend)
+		r.Put("/{id}/enable", dealerHandler.Enable)
 		// M39 E7-S2: admin soft-delete of dealer.
 		r.Delete("/{id}", dealerHandler.Delete)
 	})

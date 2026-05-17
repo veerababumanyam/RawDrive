@@ -114,6 +114,17 @@ func (s *DealerService) SuspendDealer(ctx context.Context, dealerID, adminID uui
 	return s.repo.UpdateStatus(ctx, dealerID, "suspended", &adminID, &reason)
 }
 
+func (s *DealerService) EnableDealer(ctx context.Context, dealerID, adminID uuid.UUID) error {
+	dealer, err := s.repo.GetByID(ctx, dealerID)
+	if err != nil {
+		return ErrDealerNotFound
+	}
+	if dealer.Status != "suspended" {
+		return errors.New("dealer is not suspended")
+	}
+	return s.repo.UpdateStatus(ctx, dealerID, "approved", &adminID, nil)
+}
+
 func (s *DealerService) GetDealerDashboard(ctx context.Context, userID uuid.UUID) (*repository.Dealer, error) {
 	dealer, err := s.repo.GetByUserID(ctx, userID)
 	if err != nil {

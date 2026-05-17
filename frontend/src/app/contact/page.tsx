@@ -23,8 +23,8 @@ const contactCards = [
   {
     icon: Phone,
     title: "Talk to Us",
-    copy: "+91 98765 43210",
-    href: "tel:+919876543210",
+    copy: "+91 90100 11299",
+    href: "tel:+919010011299",
   },
   {
     icon: MapPin,

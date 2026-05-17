@@ -2,8 +2,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { listDealers, approveDealer, rejectDealer, suspendDealer, type Dealer } from "@/lib/api/dealer";
+import { listDealers, approveDealer, rejectDealer, suspendDealer, enableDealer, type Dealer } from "@/lib/api/dealer";
 import { getStoredAccessToken } from "@/lib/auth";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { Trash, CheckCircle, XCircle } from "@/components/icons";
+import DealerDeleteConfirmDialog from "@/components/admin/DealerDeleteConfirmDialog";
 
 // Public GET /api/v1/states returns a sorted list of Indian states, already
 // used by RegisterForm. We fetch it once and build an id→name map so the
@@ -25,6 +28,7 @@ export default function DealerAdminReview() {
   const [commissionRate, setCommissionRate] = useState(15);
   const [rejectReason, setRejectReason] = useState("");
   const [stateNames, setStateNames] = useState<Record<number, string>>({});
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -72,8 +76,7 @@ export default function DealerAdminReview() {
   };
 
   // QA #49: inline suspend action for approved dealers. Uses window.prompt
-  // for the reason (the backend requires a non-empty reason). A dialog would
-  // be preferable — tracked as UX polish in a follow-up.
+  // for the reason (the backend requires a non-empty reason).
   const handleSuspend = async (id: string) => {
     const reason = window.prompt("Suspension reason:")?.trim();
     if (!reason) return;
@@ -83,6 +86,16 @@ export default function DealerAdminReview() {
       setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "suspended" as const } : d)));
     } catch (err) {
       console.error("Suspend failed:", err);
+    }
+  };
+
+  const handleEnable = async (id: string) => {
+    try {
+      const token = getStoredAccessToken();
+      await enableDealer(token, id);
+      setDealers((prev) => prev.map((d) => (d.id === id ? { ...d, status: "approved" as const } : d)));
+    } catch (err) {
+      console.error("Enable failed:", err);
     }
   };
 
@@ -136,17 +149,43 @@ export default function DealerAdminReview() {
             </div>
           )}
 
-          {/* QA #49: suspend lives on the approved row so admins can freeze
-              commissions without deleting history. Suspended dealers
-              require a manual unsuspend via the backend API. */}
+          {/* Approved: show Disable toggle */}
           {dealer.status === "approved" && (
-            <div className="flex gap-3">
-              <button
+            <div className="flex items-center gap-2">
+              <GlassIconButton
+                variant="danger"
+                label="Disable dealer"
                 onClick={() => handleSuspend(dealer.id)}
-                className="bg-feedback-warning/20 text-feedback-warning px-4 py-2 rounded-full min-h-[44px] text-sm font-medium hover:bg-feedback-warning/30 transition-colors"
               >
-                Suspend dealer
-              </button>
+                <XCircle />
+              </GlassIconButton>
+              <span className="text-sm text-text-tertiary">Disable</span>
+            </div>
+          )}
+
+          {/* Suspended: show Enable toggle + Delete action */}
+          {dealer.status === "suspended" && (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <GlassIconButton
+                  variant="success"
+                  label="Enable dealer"
+                  onClick={() => handleEnable(dealer.id)}
+                >
+                  <CheckCircle />
+                </GlassIconButton>
+                <span className="text-sm text-text-tertiary">Enable</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <GlassIconButton
+                  variant="danger"
+                  label="Delete dealer"
+                  onClick={() => setDeleteTarget({ id: dealer.id, name: dealer.business_name })}
+                >
+                  <Trash />
+                </GlassIconButton>
+                <span className="text-sm text-text-tertiary">Delete</span>
+              </div>
             </div>
           )}
 
@@ -203,6 +242,19 @@ export default function DealerAdminReview() {
         <div className="glass-card p-8 text-center text-text-secondary">
           No dealer applications found.
         </div>
+      )}
+
+      {deleteTarget && (
+        <DealerDeleteConfirmDialog
+          open={!!deleteTarget}
+          dealerId={deleteTarget.id}
+          dealerName={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            setDealers((prev) => prev.filter((d) => d.id !== deleteTarget!.id));
+            setDeleteTarget(null);
+          }}
+        />
       )}
     </div>
   );

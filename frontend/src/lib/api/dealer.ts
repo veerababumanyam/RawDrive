@@ -107,6 +107,15 @@ export async function suspendDealer(token: string, id: string, reason: string): 
   if (!res.ok) throw new Error("Failed to suspend dealer");
 }
 
+export async function enableDealer(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${id}/enable`, {
+    method: "PUT",
+    headers: headers(token),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error("Failed to enable dealer");
+}
+
 export async function getDealerDashboard(token: string): Promise<Dealer> {
   const res = await fetch(`${API_BASE}/api/v1/dealers/dashboard`, { headers: headers(token) });
   if (!res.ok) throw new Error("Failed to fetch dealer dashboard");

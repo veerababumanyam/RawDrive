@@ -196,6 +196,29 @@ func (h *DealerHandler) Suspend(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (h *DealerHandler) Enable(w http.ResponseWriter, r *http.Request) {
+	adminID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	dealerID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid dealer id"}`, http.StatusBadRequest)
+		return
+	}
+	if err := h.svc.EnableDealer(r.Context(), dealerID, adminID); err != nil {
+		switch err {
+		case service.ErrDealerNotFound:
+			http.Error(w, `{"error":"dealer not found"}`, http.StatusNotFound)
+		default:
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (h *DealerHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
