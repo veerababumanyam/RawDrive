@@ -48,7 +48,7 @@ export function Navbar() {
     <header
       className={cn(
         "sticky top-0 z-[var(--z-sticky)]",
-        isHeroOverlay ? "landing-navbar-overlay" : "glass-surface",
+        isHeroOverlay ? "landing-navbar-overlay" : "bg-surface border-b border-border",
       )}
       style={{ height: "var(--navbar-height)" }}
       data-variant={isHeroOverlay ? "hero-overlay" : "default"}

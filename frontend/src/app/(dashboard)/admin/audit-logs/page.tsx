@@ -87,7 +87,7 @@ function DetailPanel({
         aria-label="Audit log detail"
         className="fixed right-0 top-0 z-50 h-full w-full max-w-lg overflow-y-auto surface-panel shadow-2xl border-l border-white/[0.06] animate-in slide-in-from-right duration-200"
       >
-        <div className="sticky top-0 z-10 glass-surface flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+        <div className="sticky top-0 z-10 bg-surface border-b border-border flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
           <h3 className="font-headline text-lg font-bold text-on-surface">Audit Log Detail</h3>
           <button
             type="button"

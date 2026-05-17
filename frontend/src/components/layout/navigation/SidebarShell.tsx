@@ -67,7 +67,7 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
       )}
       <aside
         className={cn(
-          "glass-surface fixed left-0 top-0 z-50 h-screen w-[var(--sidebar-width-expanded)] flex-col px-4 py-8 transition-transform duration-300 ease-out",
+          "bg-surface border-b border-border fixed left-0 top-0 z-50 h-screen w-[var(--sidebar-width-expanded)] flex-col px-4 py-8 transition-transform duration-300 ease-out",
           // Desktop: always visible
           "lg:flex lg:translate-x-0",
           // Mobile: slide in/out
