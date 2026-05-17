@@ -28,6 +28,33 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Synthesizes a minimal valid Response so event.respondWith() never gets
+// undefined. Earlier revisions had three branches that ended with
+//     .catch(() => caches.match(event.request))
+// — when the network fetch rejects AND there's no cached entry, caches
+// .match() resolves to `undefined`, then event.respondWith(undefined)
+// throws "Failed to convert value to 'Response'" in the browser console.
+// This is the SW error users reported when interacting with the design
+// studio: a parallel GET (font, thumbnail, manifest) would fail offline
+// or against a stopped dev server, the SW would crash with that error,
+// and the failure surfaced as an Uncaught (in promise) TypeError that
+// looked like it was breaking unrelated UI actions.
+function offlineFallback(request) {
+  return new Response(
+    JSON.stringify({ error: "offline", url: request.url }),
+    {
+      status: 503,
+      statusText: "Service Unavailable",
+      headers: { "Content-Type": "application/json", "X-RawDrive-SW": "offline" },
+    },
+  );
+}
+
+async function cacheOrOffline(request) {
+  const cached = await caches.match(request);
+  return cached || offlineFallback(request);
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
@@ -41,17 +68,18 @@ self.addEventListener("fetch", (event) => {
     url.pathname.includes("/thumbnails/")
   ) {
     event.respondWith(
-      caches.match(event.request).then(
-        (cached) =>
-          cached ||
-          fetch(event.request).then((response) => {
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request)
+          .then((response) => {
             if (response.ok) {
               const clone = response.clone();
               caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
             }
             return response;
           })
-      )
+          .catch(() => offlineFallback(event.request));
+      }),
     );
     return;
   }
@@ -67,13 +95,13 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => cacheOrOffline(event.request)),
     );
     return;
   }
 
   // Everything else: network-first
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request).catch(() => cacheOrOffline(event.request)),
   );
 });

@@ -11,6 +11,7 @@ import { PublicGalleryProducts } from "@/components/gallery/public-gallery-produ
 import { PublicGalleryBanners } from "@/components/gallery/public-gallery-banners";
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
+import { readPublicDesignConfig, readPublicCoverThumbnails } from "@/lib/gallery-design-config";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -90,9 +91,25 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   const studioBrandName = branding?.can_customize ? branding.brand_name : undefined;
   const studioLogoUrl = branding?.can_customize ? branding.logo_url : undefined;
 
+  // Design config saved by the Gallery Design Studio. The public viewer
+  // needs this so the share link renders with the cover image, cover
+  // style, typography, accent color, and grid layout the photographer
+  // configured. Cover thumbnails are resolved server-side (see
+  // backend/internal/handler/public_gallery_handler.go::GetBySlug) so the
+  // saved cover image renders even when an album filter (?album=X) would
+  // otherwise hide it from the asset list.
+  const designConfig = readPublicDesignConfig(gallery.settings);
+  const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
+
   const galleryContent = (
     <div className="min-h-screen bg-surface">
-      <PublicGalleryHero gallery={gallery} assets={assets} branding={branding} />
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={assets}
+        branding={branding}
+        design={designConfig}
+        designCoverThumbnails={designCoverThumbnails}
+      />
 
       <PublicGalleryBanners slug={slug} initialBanners={banners} />
 
@@ -103,6 +120,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
           galleryType={gallery.gallery_type}
           maxSelections={gallery.max_selections || 0}
           downloadEnabled={gallery.download_enabled !== false}
+          design={designConfig}
         />
       </div>
 

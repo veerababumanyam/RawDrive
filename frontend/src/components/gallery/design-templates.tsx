@@ -36,7 +36,7 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/galleries/templates`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE}/api/v1/design-templates`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setTemplates(data.data || []);
@@ -51,7 +51,7 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
   const handleSave = async () => {
     if (!saveName.trim() || !currentConfig) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/galleries/templates`, {
+      const res = await fetch(`${API_BASE}/api/v1/design-templates`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({ name: saveName, config: currentConfig }),
@@ -71,7 +71,7 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`${API_BASE}/api/v1/galleries/templates/${id}`, {
+      await fetch(`${API_BASE}/api/v1/design-templates/${id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       });
@@ -83,30 +83,66 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-text-primary">Templates</h3>
+        {/* "Save Current" was previously a `text-xs hover:underline` link
+            that blended into the panel chrome — users reported it as
+            invisible. Now rendered as a proper compact secondary button
+            (accent border + accent text) so it reads as an actionable
+            control. Toggles to an outlined Cancel state when the inline
+            form is open. */}
         <button
           onClick={() => setShowSave(!showSave)}
-          className="text-xs text-accent-primary hover:underline"
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors min-h-[32px] ${
+            showSave
+              ? "border-border-default text-text-secondary hover:bg-surface-container-low"
+              : "border-accent-primary text-accent-primary hover:bg-accent-subtle"
+          }`}
+          aria-pressed={showSave}
         >
-          {showSave ? "Cancel" : "Save Current"}
+          {showSave ? "Cancel" : "+ Save Current"}
         </button>
       </div>
 
       {showSave && (
-        <div className="flex gap-2">
+        // `input-base:focus-visible` applies a 4px accent-tinted box-shadow
+        // halo around the input. With gap-2 (8px) and an accent-filled Save
+        // button next to it, the halo extended into the gap and visually
+        // merged with the button — users reported the button "becomes not
+        // clearly visible" once the input received focus. Two changes lift
+        // the button back out:
+        //   1. gap-3 (12px) > 4px halo, so the halo can't reach the button.
+        //   2. The button gets an explicit white ring with offset
+        //      (ring-2 ring-offset-2 ring-offset-surface-elevated) plus a
+        //      shadow-md drop shadow — a "frosted moat" that always reads
+        //      as a foreground element, regardless of what the adjacent
+        //      input is doing.
+        <div className="flex gap-3 items-start">
           <input
             type="text"
             value={saveName}
             onChange={(e) => setSaveName(e.target.value)}
-            placeholder="Template name..."
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && saveName.trim()) {
+                e.preventDefault();
+                handleSave();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setShowSave(false);
+                setSaveName("");
+              }
+            }}
+            autoFocus
+            placeholder="Template name…"
+            maxLength={60}
             className="input-base flex-1 text-sm min-h-[44px]"
             aria-label="Template name"
           />
           <button
             onClick={handleSave}
             disabled={!saveName.trim()}
-            className="px-3 py-2 text-sm rounded-xl bg-accent-default text-text-inverse disabled:opacity-50"
+            className="relative shrink-0 px-5 py-2 text-sm font-semibold rounded-xl bg-accent text-text-inverse hover:bg-accent-hover disabled:bg-surface-container-high disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors min-h-[44px] whitespace-nowrap shadow-md ring-1 ring-accent-primary/40 hover:ring-accent-primary/70"
           >
             Save
           </button>

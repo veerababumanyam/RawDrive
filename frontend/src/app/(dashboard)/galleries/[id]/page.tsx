@@ -63,6 +63,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // event that FaceFilter dispatches after fetching cluster assets.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
+  // Tracks the in-flight publish/unpublish request so the toggle button
+  // can disable itself + show a "Saving…" state. Prevents double-submit
+  // when the user clicks during the round-trip.
+  const [publishing, setPublishing] = useState(false);
   // E71-S1: Album state
   const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<Record<string, string[]>>({});
@@ -571,6 +575,46 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <span className={gallery.is_published ? "status-badge status-badge--success" : "status-badge status-badge--neutral"}>
               {gallery.is_published ? "Published" : "Unpublished"}
             </span>
+            {/* Inline Publish / Unpublish toggle. Previously the only
+                publish affordance was the read-only status badge plus a
+                Publish Checklist that listed blockers without ever
+                offering the action — users had no way to flip the
+                is_published flag from this screen. Now the button sits
+                next to the status badge, calls the same updateGallery
+                endpoint used for title/description edits, and re-renders
+                with the new flag on success. The Share button next to
+                "All Photos" already enforces is_published before copying
+                a link, so this is the missing primary action that
+                unblocks the share flow. */}
+            <button
+              type="button"
+              disabled={publishing}
+              onClick={async () => {
+                const t = getStoredAccessToken();
+                if (!t) return;
+                setPublishing(true);
+                try {
+                  const updated = await updateGallery(t, id, { is_published: !gallery.is_published });
+                  setGallery(updated);
+                  setShareMessage(updated.is_published ? "Gallery published — client links are now live." : "Gallery unpublished.");
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to change publish state");
+                } finally {
+                  setPublishing(false);
+                }
+              }}
+              className={cn(
+                "px-3 py-1 text-xs font-semibold rounded-lg transition-colors min-h-[28px]",
+                publishing
+                  ? "bg-surface-container-high text-text-tertiary cursor-wait"
+                  : gallery.is_published
+                  ? "border border-border-default text-text-secondary hover:bg-surface-container-low hover:text-text-primary"
+                  : "bg-accent text-text-inverse hover:bg-accent-hover",
+              )}
+              title={gallery.is_published ? "Unpublish — client links will stop working" : "Publish — clients will be able to view this gallery"}
+            >
+              {publishing ? "Saving…" : gallery.is_published ? "Unpublish" : "Publish"}
+            </button>
           </div>
         </div>
 
@@ -789,13 +833,42 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               )}
 
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveAlbum(null)}
-                  className={cn("shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", !activeAlbum ? "bg-accent-primary/10 text-accent-primary" : "text-text-tertiary hover:text-text-primary")}
+                {/* "All Photos" chip wrapped in the same container shape
+                    as album chips so its accompanying Share button reads
+                    as a peer affordance, not a stray icon. Share here
+                    calls copyShareUrl() with NO albumId — that's the
+                    canonical gallery-wide share URL, the same one
+                    rendered by the larger Share area below. Surfacing it
+                    inline saves a scroll for photographers who just want
+                    to copy the gallery link while reviewing photos. */}
+                <div
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 rounded-lg border px-1 py-1 transition-colors",
+                    !activeAlbum
+                      ? "border-accent-primary bg-accent-subtle"
+                      : "border-border-default bg-surface-container hover:border-accent-primary/60",
+                  )}
                 >
-                  All Photos
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAlbum(null)}
+                    className={cn(
+                      "px-2 py-1 text-xs font-medium transition-colors",
+                      !activeAlbum ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
+                    )}
+                  >
+                    All Photos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyShareUrl()}
+                    className="rounded-md px-2 py-1 text-xs text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
+                    title="Copy gallery share link"
+                    aria-label="Copy gallery share link"
+                  >
+                    Share
+                  </button>
+                </div>
                 {albums.map((album) => {
                   const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
                   // QA #18: per-album drop target. When a user drags selected
@@ -805,10 +878,27 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   // page. Native file drops are intentionally ignored here —
                   // new uploads go through the page-level dropzone; the album
                   // chip is only a sub-gallery-membership target.
+                  // Album chip outline was `border-border-subtle` (~15%
+                  // outline-variant) on top of the parent surface-panel —
+                  // a barely-perceptible boundary. With album names like
+                  // "Favorites", "Videos", "Raw" users couldn't see the
+                  // chip edges and the row read as floating text. Now
+                  // uses `border-border-default` for a visible boundary
+                  // and `bg-surface-container` for chip depth. When an
+                  // album is active, the chip switches to an accent
+                  // border + accent-subtle fill so the selection state
+                  // pops without depending on the inner button text
+                  // colour alone.
+                  const isActive = activeAlbum === album.id;
                   return (
                     <div
                       key={album.id}
-                      className="flex shrink-0 items-center gap-1 rounded-lg border border-border-subtle px-1 py-1 transition-colors"
+                      className={cn(
+                        "flex shrink-0 items-center gap-1 rounded-lg border px-1 py-1 transition-colors",
+                        isActive
+                          ? "border-accent-primary bg-accent-subtle"
+                          : "border-border-default bg-surface-container hover:border-accent-primary/60",
+                      )}
                       onDragOver={(e) => {
                         const hasInternal = e.dataTransfer.types.includes("application/x-rawdrive-asset-ids");
                         if (hasInternal) {
@@ -839,7 +929,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       <button
                         type="button"
                         onClick={() => setActiveAlbum(album.id)}
-                        className={cn("px-2 py-1 text-xs font-medium transition-colors", activeAlbum === album.id ? "text-accent-primary" : "text-text-secondary hover:text-text-primary")}
+                        className={cn("px-2 py-1 text-xs font-medium transition-colors", isActive ? "text-accent-primary" : "text-text-secondary hover:text-text-primary")}
                       >
                         {album.name} <span className="text-text-tertiary">{assetCount}</span>
                       </button>

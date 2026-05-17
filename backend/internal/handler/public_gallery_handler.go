@@ -99,7 +99,46 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	}
 	gallery.Settings["max_selections"] = gallery.MaxSelections
 
+	// Resolve the design-studio cover asset and attach its thumbnail URLs.
+	// The public viewer needs these to render the saved cover even when the
+	// share link is scoped to an album (?album=X) that doesn't contain the
+	// cover asset itself — without this, ListAssets would return only the
+	// album's assets and the hero would either fall back to assets[0] or
+	// render no cover at all. The design's `cover.assetId` takes precedence
+	// over the legacy `gallery.cover_asset_id`; both are tried before
+	// giving up. Best-effort: any failure leaves cover_thumbnails unset and
+	// the frontend falls back to its existing legacy behavior.
+	if h.assetSvc != nil {
+		if coverID := resolveDesignCoverAssetID(gallery.Settings, gallery.CoverAssetID); coverID != nil {
+			if coverAsset, err := h.assetSvc.GetByID(r.Context(), *coverID); err == nil && coverAsset != nil && len(coverAsset.ThumbnailURLs) > 0 {
+				gallery.Settings["cover_thumbnails"] = coverAsset.ThumbnailURLs
+				gallery.Settings["cover_asset_resolved_id"] = coverAsset.ID.String()
+			}
+		}
+	}
+
 	respondJSON(w, http.StatusOK, gallery)
+}
+
+// resolveDesignCoverAssetID returns the asset ID the public viewer should use
+// for the cover thumbnail. Checks design_config.cover.assetId first, then
+// falls back to the gallery's legacy CoverAssetID. Returns nil only when
+// neither source has a usable UUID.
+func resolveDesignCoverAssetID(settings map[string]interface{}, fallback *uuid.UUID) *uuid.UUID {
+	if settings != nil {
+		if raw, ok := settings["design_config"]; ok {
+			if m, ok := raw.(map[string]interface{}); ok {
+				if cover, ok := m["cover"].(map[string]interface{}); ok {
+					if idStr, ok := cover["assetId"].(string); ok && idStr != "" {
+						if parsed, err := uuid.Parse(idStr); err == nil {
+							return &parsed
+						}
+					}
+				}
+			}
+		}
+	}
+	return fallback
 }
 
 // publicAssetResponse is the enriched asset returned to public gallery viewers.

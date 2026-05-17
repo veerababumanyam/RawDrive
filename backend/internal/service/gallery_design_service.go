@@ -21,17 +21,32 @@ type GalleryDesignConfig struct {
 }
 
 // ThemeConfig holds theme selection.
+//
+// JSON tags are camelCase to match the payload the frontend reducer
+// dispatches (see frontend/src/app/(dashboard)/galleries/[id]/design/page.tsx —
+// `DesignConfig.theme.accentColor`). Before 2026-05-17 the tags were
+// snake_case and the entire PUT payload silently round-tripped to an empty
+// struct, which is why saved designs never showed up on the public viewer.
 type ThemeConfig struct {
 	ID          string `json:"id"`          // theme identifier
 	Variant     string `json:"variant"`     // "light", "dark", "auto"
-	AccentColor string `json:"accent_color"` // hex or token reference
+	AccentColor string `json:"accentColor"` // hex or token reference
 }
 
 // CoverConfig holds cover photo settings.
+//
+// Title/Subtitle were added 2026-05-17 to round-trip the heading text the
+// design studio lets photographers author. Without these fields the typed
+// decode of the PUT payload dropped the strings, so the public viewer would
+// render the gallery title fallback even when the studio showed a custom
+// heading. Tagged with camelCase JSON keys to match what the frontend
+// reducer dispatches (see frontend/src/app/(dashboard)/galleries/[id]/design/page.tsx).
 type CoverConfig struct {
-	AssetID    *uuid.UUID  `json:"asset_id,omitempty"`
-	StyleID    string      `json:"style_id"`    // cover layout style (1 of 30)
-	FocalPoint FocalPoint  `json:"focal_point"`
+	AssetID    *uuid.UUID `json:"assetId,omitempty"`
+	StyleID    string     `json:"styleId"`    // cover layout style (1 of 30)
+	FocalPoint FocalPoint `json:"focalPoint"`
+	Title      string     `json:"title,omitempty"`
+	Subtitle   string     `json:"subtitle,omitempty"`
 }
 
 // FocalPoint represents the cover crop focal point (0-100 range).
@@ -41,10 +56,17 @@ type FocalPoint struct {
 }
 
 // TypographyConfig holds font pairing.
+//
+// TitleSize/SubtitleSize were added 2026-05-17 when the studio replaced the
+// discrete font-size enum with sliders (16–96px title, 10–40px subtitle).
+// Stored as concrete pixels so the public viewer can apply them via inline
+// style without translating an enum.
 type TypographyConfig struct {
-	PairingID   string `json:"pairing_id"`
-	HeadingFont string `json:"heading_font"`
-	BodyFont    string `json:"body_font"`
+	PairingID    string `json:"pairingId"`
+	HeadingFont  string `json:"headingFont"`
+	BodyFont     string `json:"bodyFont"`
+	TitleSize    int    `json:"titleSize,omitempty"`
+	SubtitleSize int    `json:"subtitleSize,omitempty"`
 }
 
 // GridConfig holds gallery grid layout settings.
@@ -52,7 +74,7 @@ type GridConfig struct {
 	Layout   string `json:"layout"`   // "masonry", "grid", "justified", "carousel"
 	Columns  int    `json:"columns"`  // 1-6
 	Gap      int    `json:"gap"`      // px
-	ShowInfo bool   `json:"show_info"` // show photo metadata below thumbnails
+	ShowInfo bool   `json:"showInfo"` // show photo metadata below thumbnails
 }
 
 // TemplateRef references a saved design template.

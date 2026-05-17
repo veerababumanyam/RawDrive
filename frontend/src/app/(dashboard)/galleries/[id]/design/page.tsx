@@ -3,7 +3,6 @@
 import { useState, useReducer, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { COVER_STYLES, COVER_CATEGORIES, type CoverStyle } from "@/components/gallery/cover-styles";
-import { DesignTemplates } from "@/components/gallery/design-templates";
 import { AIDesignSuggest } from "@/components/gallery/ai-design-suggest";
 import { useDesignHistory } from "@/hooks/use-design-history";
 import { useDesignLatency, LATENCY_BUDGET_MS } from "@/hooks/use-design-latency";
@@ -31,7 +30,18 @@ interface DesignConfig {
     title: string;
     subtitle: string;
   };
-  typography: { pairingId: string; headingFont: string; bodyFont: string };
+  // Added 2026-05-17, refactored same day — title/subtitle font sizes
+  // are stored as concrete pixel numbers (not a discrete enum) so the
+  // UI can expose a slider for granular tuning. Rendered as inline
+  // `fontSize: <n>px` on the cover preview <h1>/<p>. Bounds enforced
+  // by the slider (16–96 for title, 10–40 for subtitle).
+  typography: {
+    pairingId: string;
+    headingFont: string;
+    bodyFont: string;
+    titleSize: number;
+    subtitleSize: number;
+  };
   grid: { layout: "masonry" | "grid" | "justified" | "carousel"; columns: number; gap: number; showInfo: boolean };
   version: number;
 }
@@ -54,7 +64,7 @@ const defaultConfig: DesignConfig = {
     title: "Your Gallery Title",
     subtitle: "A short subtitle for your gallery",
   },
-  typography: { pairingId: "elegant", headingFont: "Playfair Display", bodyFont: "Inter" },
+  typography: { pairingId: "elegant", headingFont: "Playfair Display", bodyFont: "Inter", titleSize: 48, subtitleSize: 16 },
   grid: { layout: "masonry", columns: 3, gap: 8, showInfo: false },
   version: 1,
 };
@@ -101,6 +111,15 @@ const FONT_PAIRINGS = [
   { id: "soft", heading: "Lora", body: "Source Sans Pro", label: "Soft & Warm" },
   { id: "modern", heading: "DM Sans", body: "DM Mono", label: "Modern Technical" },
 ];
+
+// Title / subtitle font size bounds. Title 16–96px covers the typical
+// hero range (small "tagline" feel at 16, oversized editorial at 96);
+// subtitle 10–40px sticks below the title's lower bound so the visual
+// hierarchy is preserved even at slider extremes.
+const TITLE_SIZE_MIN = 16;
+const TITLE_SIZE_MAX = 96;
+const SUBTITLE_SIZE_MIN = 10;
+const SUBTITLE_SIZE_MAX = 40;
 
 const GRID_LAYOUTS = [
   { id: "masonry", label: "Masonry" },
@@ -189,11 +208,13 @@ function CoverStyleMiniPreview({
   sampleUrl,
   titleText,
   headingFont,
+  accentColor,
 }: {
   style: CoverStyle;
   sampleUrl?: string;
   titleText?: string;
   headingFont?: string;
+  accentColor?: string;
 }) {
   // Truncate the user's actual title so it fits the tiny preview box.
   // Two-word slice mirrors how mini-cover thumbnails work in Adobe Express
@@ -256,8 +277,11 @@ function CoverStyleMiniPreview({
             )}
           >
             <span
-              className="text-white text-[8px] font-bold leading-none tracking-[0.02em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] truncate max-w-full"
-              style={fontStack ? { fontFamily: fontStack } : undefined}
+              className="text-[8px] font-bold leading-none tracking-[0.02em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] truncate max-w-full"
+              style={{
+                ...(fontStack ? { fontFamily: fontStack } : null),
+                color: accentColor || "#ffffff",
+              }}
             >
               {previewTitle}
             </span>
@@ -378,18 +402,11 @@ export default function GalleryDesignStudioPage() {
   const [publishStatus, setPublishStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
   const [resetConfirm, setResetConfirm] = useState<string | null>(null);
-  // Save-as-template state. The Templates section already had a "Save
-  // Current" affordance, but it was buried inside a collapsed accordion
-  // — users reasonably said "there is no option to save it for later
-  // use." Surfacing these controls in the top bar makes saving a reusable
-  // template a single click from anywhere on the page. The user clarified
-  // that in their vocabulary "theme" == "template" (the Themes section
-  // is for the platform-level visual theme — liquid-glass / midnight /
-  // etc — and Templates are saved design configurations), so this UI uses
-  // "Template" exclusively to match the Templates section below.
-  const [showTemplateNameInput, setShowTemplateNameInput] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [templateSaveStatus, setTemplateSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  // Template feature removed 2026-05-17 per user request — the design
+  // studio no longer surfaces "Save as Template" / Templates list. The
+  // backend /api/v1/design-templates endpoints and the standalone
+  // DesignTemplates component remain in the repo in case the feature
+  // returns or is reused elsewhere, but neither is wired here anymore.
   // Drag-and-drop state for the Cover Photo zone. The right-side preview
   // grid is the drag source; the cover drop zone here is the only target.
   // Carrying the asset id through dataTransfer (rather than React-level
@@ -519,41 +536,8 @@ export default function GalleryDesignStudioPage() {
     }
   };
 
-  // POSTs the current design to the same template registry the
-  // `DesignTemplates` component reads from. Reuses the backend endpoint
-  // /api/v1/galleries/templates so saved templates appear in BOTH this
-  // gallery's Templates section AND any other gallery's Templates section
-  // for the same user — i.e. truly "save for later use" across galleries.
-  const handleSaveAsTemplate = async () => {
-    const name = templateName.trim();
-    if (!name) return;
-    setTemplateSaveStatus("saving");
-    try {
-      const token = getStoredAccessToken();
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const res = await fetch(`${apiBase}/api/v1/galleries/templates`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ name, config }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setTemplateSaveStatus("success");
-      setTemplateName("");
-      setShowTemplateNameInput(false);
-      // Open the Templates section so the user immediately sees their new
-      // saved template in the list (DesignTemplates refetches on mount,
-      // but it's already mounted; opening the section is enough visual
-      // confirmation alongside the success state).
-      setActiveSection("templates");
-      setTimeout(() => setTemplateSaveStatus("idle"), 2500);
-    } catch {
-      setTemplateSaveStatus("error");
-      setTimeout(() => setTemplateSaveStatus("idle"), 3000);
-    }
-  };
+  // handleSaveAsTemplate removed 2026-05-17 — template feature pulled
+  // from the design studio per user request.
 
   const handleSectionReset = (section: string) => {
     if (resetConfirm === section) {
@@ -582,7 +566,7 @@ export default function GalleryDesignStudioPage() {
             <h2 className="text-lg font-semibold">Restore Draft?</h2>
             <p className="text-sm text-text-secondary">An unsaved draft was found for this gallery. Would you like to restore it or start fresh?</p>
             <div className="flex gap-2">
-              <button onClick={() => { dispatch({ type: "LOAD", payload: pendingDraft }); setShowRestoreDialog(false); }} className="flex-1 py-2 text-sm rounded-xl bg-accent-default text-text-inverse">Restore Draft</button>
+              <button onClick={() => { dispatch({ type: "LOAD", payload: pendingDraft }); setShowRestoreDialog(false); }} className="flex-1 py-2 text-sm rounded-xl bg-accent text-text-inverse">Restore Draft</button>
               <button onClick={() => { discard(); setShowRestoreDialog(false); }} className="flex-1 py-2 text-sm rounded-xl border border-border-default text-text-secondary">Discard</button>
             </div>
           </div>
@@ -627,81 +611,6 @@ export default function GalleryDesignStudioPage() {
           <button onClick={() => { history.redo(); dispatch({ type: "LOAD", payload: history.state }); }} disabled={!history.canRedo} className="hidden sm:inline-flex px-2 py-1.5 text-xs rounded-lg border border-border-subtle disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">↪</button>
           <button onClick={() => { wrappedDispatch({ type: "RESET" }); discard(); }} className="px-4 py-2 text-sm rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-container-low transition-colors min-h-[44px]">Discard All</button>
 
-          {/* Save as Template — opens an inline name input. When submitted,
-              POSTs to /api/v1/galleries/templates so the design becomes a
-              reusable template available in the Templates section of any
-              gallery the user owns. */}
-          {showTemplateNameInput ? (
-            // Earlier revision used a compact inline row (text-xs Save, no
-            // input focus ring, transparent input bg) which read as either
-            // disabled-looking or invisible against the header chrome —
-            // users said "not able to save" because the Save button blended
-            // into the surrounding surface. This rebuild gives the input a
-            // proper bordered, focus-ringed appearance, makes the Save
-            // button the same visual class as the primary "Save Design"
-            // button (just slightly smaller), and bumps font sizes so
-            // labels are legible.
-            <div className="flex items-center gap-2 bg-surface-elevated border border-border-default rounded-xl px-2 py-1 shadow-sm min-h-[44px]">
-              <input
-                type="text"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSaveAsTemplate();
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    setShowTemplateNameInput(false);
-                    setTemplateName("");
-                  }
-                }}
-                autoFocus
-                placeholder="Template name…"
-                maxLength={60}
-                className="px-3 py-2 text-sm rounded-lg bg-surface-container border border-border-subtle focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/30 focus:outline-none w-48 transition-colors"
-                aria-label="Template name"
-              />
-              <button
-                onClick={handleSaveAsTemplate}
-                disabled={!templateName.trim() || templateSaveStatus === "saving"}
-                className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent-default text-text-inverse hover:bg-accent-hover disabled:bg-surface-container-high disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors min-h-[36px] whitespace-nowrap"
-              >
-                {templateSaveStatus === "saving" ? "Saving…" : "Save"}
-              </button>
-              <button
-                onClick={() => {
-                  setShowTemplateNameInput(false);
-                  setTemplateName("");
-                }}
-                className="px-3 py-2 text-sm rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-container transition-colors min-h-[36px]"
-                aria-label="Cancel save as template"
-                title="Cancel (Esc)"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowTemplateNameInput(true)}
-              className={`px-4 py-2 text-sm rounded-xl border border-border-default transition-all min-h-[44px] ${
-                templateSaveStatus === "success"
-                  ? "bg-feedback-success/15 text-feedback-success border-feedback-success/40"
-                  : templateSaveStatus === "error"
-                  ? "bg-feedback-error/15 text-feedback-error border-feedback-error/40"
-                  : "text-text-secondary hover:text-text-primary hover:bg-surface-container-low"
-              }`}
-              title="Save current design as a reusable template"
-            >
-              {templateSaveStatus === "success"
-                ? "Template saved ✓"
-                : templateSaveStatus === "error"
-                ? "Save failed — retry"
-                : "Save as Template"}
-            </button>
-          )}
-
           {/* Save — persists the design to this gallery via the
               /galleries/:id/design endpoint. Previously labelled "Publish"
               which read as "make public" rather than "save my edits"; the
@@ -714,7 +623,7 @@ export default function GalleryDesignStudioPage() {
                 ? "bg-feedback-success text-text-inverse"
                 : publishStatus === "error"
                 ? "bg-feedback-error text-text-inverse"
-                : "bg-accent-default text-text-inverse hover:bg-accent-hover"
+                : "bg-accent text-text-inverse hover:bg-accent-hover"
             }`}
             title="Save the design changes to this gallery"
           >
@@ -883,6 +792,7 @@ export default function GalleryDesignStudioPage() {
                           sampleUrl={sampleUrl}
                           titleText={config.cover.title}
                           headingFont={config.typography.headingFont}
+                          accentColor={config.theme.accentColor}
                         />
                       </button>
                     ))}
@@ -892,10 +802,15 @@ export default function GalleryDesignStudioPage() {
             })()}
           </Section>
 
-          {/* Theme */}
+          {/* Accent Color — section was labelled "Theme" but the underlying
+              control is purely an accent-color picker (each option = named
+              palette + swatch). The platform-level theme (liquid-glass /
+              midnight / etc) lives elsewhere on the user profile. The id
+              stays "theme" for backwards compat with persisted designs;
+              only the user-facing label is changed. */}
           <Section
             id="theme"
-            title="Theme"
+            title="Accent Color"
             isOpen={activeSection === "theme"}
             isResetConfirming={resetConfirm === "theme"}
             onToggle={handleSectionToggle}
@@ -970,6 +885,60 @@ export default function GalleryDesignStudioPage() {
                 );
               })}
             </div>
+
+            {/* Title & subtitle font-size sliders. Earlier revision used a
+                discrete S/M/L/XL button group, but the four steps couldn't
+                hit the exact px size users wanted for a given hero image
+                (e.g. 56px reads better than the 48 → 64 jump). Sliders
+                give 1px precision within bounded ranges and the live value
+                displays beside each label so users can read off what
+                they've selected. Bounds match TITLE_SIZE_MIN/MAX and
+                SUBTITLE_SIZE_MIN/MAX module constants so the validation
+                stays in one place. */}
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <div className="flex items-baseline justify-between text-xs mb-1.5">
+                  <span className="text-text-secondary">Title size</span>
+                  <span className="text-text-tertiary font-mono">{config.typography.titleSize}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={TITLE_SIZE_MIN}
+                  max={TITLE_SIZE_MAX}
+                  step={1}
+                  value={config.typography.titleSize}
+                  onChange={(e) =>
+                    wrappedDispatch({
+                      type: "SET_TYPOGRAPHY",
+                      payload: { titleSize: Number(e.target.value) },
+                    })
+                  }
+                  className="w-full accent-[var(--accent-primary)]"
+                  aria-label="Cover title font size in pixels"
+                />
+              </label>
+              <label className="block">
+                <div className="flex items-baseline justify-between text-xs mb-1.5">
+                  <span className="text-text-secondary">Subtitle size</span>
+                  <span className="text-text-tertiary font-mono">{config.typography.subtitleSize}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={SUBTITLE_SIZE_MIN}
+                  max={SUBTITLE_SIZE_MAX}
+                  step={1}
+                  value={config.typography.subtitleSize}
+                  onChange={(e) =>
+                    wrappedDispatch({
+                      type: "SET_TYPOGRAPHY",
+                      payload: { subtitleSize: Number(e.target.value) },
+                    })
+                  }
+                  className="w-full accent-[var(--accent-primary)]"
+                  aria-label="Cover subtitle font size in pixels"
+                />
+              </label>
+            </div>
           </Section>
 
           {/* Grid Layout */}
@@ -1014,18 +983,6 @@ export default function GalleryDesignStudioPage() {
                 <input type="checkbox" checked={config.grid.showInfo} onChange={(e) => wrappedDispatch({ type: "SET_GRID", payload: { showInfo: e.target.checked } })} className="accent-[var(--accent-primary)]" />
               </label>
             </div>
-          </Section>
-
-          {/* Templates */}
-          <Section
-            id="templates"
-            title="Templates"
-            isOpen={activeSection === "templates"}
-            isResetConfirming={resetConfirm === "templates"}
-            onToggle={handleSectionToggle}
-            onReset={handleSectionReset}
-          >
-            <DesignTemplates onApply={(tplConfig) => wrappedDispatch({ type: "LOAD", payload: tplConfig as unknown as DesignConfig })} currentConfig={config as unknown as Record<string, unknown>} />
           </Section>
 
           {/* AI Suggestions */}
@@ -1082,6 +1039,23 @@ export default function GalleryDesignStudioPage() {
               );
               const headingStack = `'${config.typography.headingFont}', ${isSerif ? "Georgia, serif" : "Inter, system-ui, sans-serif"}`;
               const bodyStack = `'${config.typography.bodyFont}', Inter, system-ui, sans-serif`;
+              // Light/Dark/Auto variant now drives a readability scrim
+              // over the cover photo. Previously the variant was set on
+              // click but consumed nowhere — pure dead state — which is
+              // why users said "Light Dark Auto not working". Light = no
+              // scrim (keeps the photo bright); Dark = 35% black wash so
+              // light/accent-coloured headings stay readable on bright
+              // photography; Auto = 15% mid scrim, a neutral default.
+              const variantScrim =
+                config.theme.variant === "dark"
+                  ? "rgba(0,0,0,0.35)"
+                  : config.theme.variant === "auto"
+                  ? "rgba(0,0,0,0.15)"
+                  : null;
+              // Clamp + fallback so a corrupt persisted value can't blow up
+              // the layout with a 5000px heading.
+              const clampedTitleSize = Math.max(TITLE_SIZE_MIN, Math.min(TITLE_SIZE_MAX, Number(config.typography.titleSize) || 48));
+              const clampedSubtitleSize = Math.max(SUBTITLE_SIZE_MIN, Math.min(SUBTITLE_SIZE_MAX, Number(config.typography.subtitleSize) || 16));
               return (
                 <div
                   className="rounded-2xl bg-surface-container border border-border-subtle mb-8 flex relative overflow-hidden transition-all duration-300"
@@ -1098,6 +1072,12 @@ export default function GalleryDesignStudioPage() {
                   {style?.overlay && (
                     <div className="absolute inset-0 pointer-events-none" style={{ background: style.overlay }} />
                   )}
+                  {variantScrim && (
+                    <div
+                      className="absolute inset-0 pointer-events-none transition-colors duration-300"
+                      style={{ background: variantScrim }}
+                    />
+                  )}
                   {/* Title + subtitle overlay. Positioning uses the style's
                       textAlign so Editorial Left puts copy on the left,
                       etc. The container uses flex-end so text sits in the
@@ -1112,17 +1092,30 @@ export default function GalleryDesignStudioPage() {
                     )}
                   >
                     {config.cover.title && (
+                      // Accent color from the (renamed) "Accent Color"
+                      // section paints the title; subtitle stays in white
+                      // for hierarchy so the heading reads as the brand
+                      // emphasis rather than competing with body copy.
+                      // Falls back to white when no accent has been
+                      // selected yet (default empty string).
                       <h1
-                        className="text-white text-3xl sm:text-5xl font-bold leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] max-w-[80%]"
-                        style={{ fontFamily: headingStack }}
+                        className="font-bold leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] max-w-[80%]"
+                        style={{
+                          fontFamily: headingStack,
+                          color: config.theme.accentColor || "#ffffff",
+                          fontSize: `${clampedTitleSize}px`,
+                        }}
                       >
                         {config.cover.title}
                       </h1>
                     )}
                     {config.cover.subtitle && (
                       <p
-                        className="text-white/90 text-sm sm:text-base mt-2 drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)] max-w-[70%]"
-                        style={{ fontFamily: bodyStack }}
+                        className="text-white/90 mt-2 drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)] max-w-[70%]"
+                        style={{
+                          fontFamily: bodyStack,
+                          fontSize: `${clampedSubtitleSize}px`,
+                        }}
                       >
                         {config.cover.subtitle}
                       </p>

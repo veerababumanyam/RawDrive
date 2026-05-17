@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import { MapView } from "./map-view";
 import type { Asset } from "@/lib/api/assets";
+import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress } from "@/components/icons";
@@ -33,11 +34,96 @@ interface Props {
   galleryType?: string;
   maxSelections?: number;
   downloadEnabled?: boolean;
+  // Optional design config from the Gallery Design Studio. Drives the
+  // grid layout (masonry vs uniform grid vs justified vs carousel), the
+  // column count, the gap between thumbnails, and whether to show the
+  // asset filename beneath each photo. When absent the grid falls back
+  // to the hard-coded `columns-1 sm:columns-2 lg:columns-3 gap-4` masonry
+  // that shipped before the design studio was wired through to the
+  // public viewer.
+  design?: PublicDesignConfig | null;
+}
+
+// Bound the studio's columns value into the responsive scale the public
+// grid actually supports. The studio allows 1–6 columns. On the public
+// viewer we cap at 6 (CSS columns supports it natively) and floor at 1.
+function clampColumns(n: number | undefined): number {
+  if (!n || !Number.isFinite(n)) return 3;
+  return Math.max(1, Math.min(6, Math.floor(n)));
+}
+
+// Bound the studio's gap value to a reasonable px range. The studio
+// emits gap as a literal pixel number; we render with inline style so
+// any value the studio writes survives the round-trip.
+function clampGap(n: number | undefined): number {
+  if (!n || !Number.isFinite(n)) return 16;
+  return Math.max(0, Math.min(64, Math.floor(n)));
+}
+
+type GridConfig = NonNullable<PublicDesignConfig["grid"]>;
+
+function designGridContainerClass(grid: GridConfig | undefined): string {
+  if (!grid || !grid.layout) {
+    return "columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4";
+  }
+  if (grid.layout === "carousel") {
+    return "flex overflow-x-auto snap-x snap-mandatory pb-2";
+  }
+  if (grid.layout === "grid") {
+    return "grid";
+  }
+  // masonry & justified → CSS columns
+  return "";
+}
+
+function designGridContainerStyle(grid: GridConfig | undefined): React.CSSProperties | undefined {
+  if (!grid || !grid.layout) return undefined;
+  const columns = clampColumns(grid.columns);
+  const gap = clampGap(grid.gap);
+  if (grid.layout === "carousel") {
+    return { gap: `${gap}px` };
+  }
+  if (grid.layout === "grid") {
+    return {
+      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      gap: `${gap}px`,
+    };
+  }
+  return {
+    columnCount: columns,
+    columnGap: `${gap}px`,
+  };
+}
+
+function designGridItemClass(grid: GridConfig | undefined): string {
+  if (!grid || !grid.layout) {
+    return "break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken cursor-pointer transition-all hover:shadow-lg relative group";
+  }
+  if (grid.layout === "carousel") {
+    return "shrink-0 w-72 sm:w-96 snap-start rounded-xl overflow-hidden bg-surface-sunken cursor-pointer transition-all hover:shadow-lg relative group";
+  }
+  if (grid.layout === "grid") {
+    return "rounded-xl overflow-hidden bg-surface-sunken cursor-pointer transition-all hover:shadow-lg relative group aspect-[4/3]";
+  }
+  return "break-inside-avoid mb-[var(--design-row-gap,16px)] rounded-xl overflow-hidden bg-surface-sunken cursor-pointer transition-all hover:shadow-lg relative group";
+}
+
+function designGridItemStyle(grid: GridConfig | undefined): React.CSSProperties | undefined {
+  if (!grid || !grid.layout) return undefined;
+  // For CSS columns layouts, the vertical gap between items in the same
+  // column is `margin-bottom` on each child (CSS columns ignores
+  // row-gap). Pipe the studio's gap value through a CSS variable the
+  // item class can pick up.
+  if (grid.layout === "masonry" || grid.layout === "justified") {
+    const gap = clampGap(grid.gap);
+    return { ["--design-row-gap" as never]: `${gap}px`, marginBottom: `${gap}px` };
+  }
+  return undefined;
 }
 
 type ViewMode = "grid" | "map";
 
-export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true }: Props) {
+export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -274,7 +360,21 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           />
         </div>
       ) : (
-        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4" aria-label={`Grid view for gallery ${slug}`}>
+        <div
+          // Container layout driven by the design config when present.
+          // - masonry / justified: CSS columns flow — the studio's "justified"
+          //   row-mode lands here as a close-enough vertical-flow approximation
+          //   (real justified row layout would need an aspect-ratio packer;
+          //   keeping it CSS-only avoids the JS measurement cost on the
+          //   public viewer hot path).
+          // - grid: CSS grid with uniform-aspect tiles.
+          // - carousel: horizontal scroll filmstrip.
+          // Falls back to the original masonry styling when no design is
+          // present so existing shared links don't visually shift.
+          className={designGridContainerClass(design?.grid)}
+          style={designGridContainerStyle(design?.grid)}
+          aria-label={`Grid view for gallery ${slug}`}
+        >
           {visibleAssets.map((asset) => {
             // Prefer the mandatory WebP derivatives for public display,
             // but keep legacy JPEG keys as fallbacks for older rows.
@@ -294,11 +394,12 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               <div
                 key={asset.id}
                 id={`asset-${asset.id}`}
-                className={`break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken cursor-pointer transition-all hover:shadow-lg relative group ${
+                className={`${designGridItemClass(design?.grid)} ${
                   isProofing && selectedIds.has(asset.id)
                     ? "ring-3 ring-accent-primary shadow-lg"
                     : ""
                 }`}
+                style={designGridItemStyle(design?.grid)}
                 role="button"
                 tabIndex={0}
                 onClick={() => {
@@ -358,7 +459,11 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     height={asset.height || undefined}
                     loading="lazy"
                     decoding="async"
-                    className="w-full h-auto object-cover"
+                    className={
+                      design?.grid?.layout === "grid"
+                        ? "absolute inset-0 h-full w-full object-cover"
+                        : "w-full h-auto object-cover"
+                    }
                   />
                 ) : (
                   <div
@@ -368,6 +473,15 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                   >
                     <span className="text-xs text-text-tertiary">Processing...</span>
                   </div>
+                )}
+                {/* Studio-opt-in filename caption. Renders only when the
+                    design config explicitly sets showInfo=true so existing
+                    galleries that never enabled this don't suddenly show
+                    "_DSC0042.NEF" plastered under every tile. */}
+                {design?.grid?.showInfo && asset.filename && (
+                  <p className="px-2 py-1 text-[11px] text-text-tertiary truncate">
+                    {asset.filename}
+                  </p>
                 )}
               </div>
             );

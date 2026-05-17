@@ -106,7 +106,7 @@ export function AIDesignSuggest({ galleryId, onApply }: AIDesignSuggestProps) {
             <p className="text-xs text-text-secondary italic">{s.reasoning}</p>
             <button
               onClick={() => onApply({ theme: s.theme, coverStyle: s.coverStyle, fontPairing: s.fontPairing })}
-              className="w-full text-xs py-1.5 rounded-xl bg-accent-default text-text-inverse hover:bg-accent-hover"
+              className="w-full text-xs py-1.5 rounded-xl bg-accent text-text-inverse hover:bg-accent-hover"
             >
               Apply This Design
             </button>
