@@ -110,6 +110,33 @@
   --z-modal: 40;
   --z-popover: 50;
   --z-toast: 60;
+
+  /* Runtime sidebar width — flips between expanded/collapsed via
+     [data-sidebar-collapsed="true"] on <html>. The dashboard layout
+     and SidebarShell both bind to this single variable so toggling
+     the collapse state animates the rail and the content offset in
+     lockstep. */
+  --sidebar-width: var(--sidebar-width-expanded);
+}
+
+[data-sidebar-collapsed="true"] {
+  --sidebar-width: var(--sidebar-width-collapsed);
+}
+
+/* Hide text content inside the sidebar when collapsed. The class is
+   applied to nav-item labels, brand title/subtitle, and the avatar
+   name/role so the rail collapses to a 64px icon column. */
+[data-sidebar-collapsed="true"] .sidebar-collapse-hide {
+  display: none !important;
+}
+
+/* Center nav-item icons inside their pill when collapsed, since the
+   label span is hidden and gap-3 would otherwise leave the icon at
+   the left edge. */
+[data-sidebar-collapsed="true"] .sidebar-nav-link {
+  justify-content: center;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 /* --- Theme: Liquid Glass Dark --- */
