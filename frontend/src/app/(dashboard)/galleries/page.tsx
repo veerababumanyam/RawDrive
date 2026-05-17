@@ -170,7 +170,7 @@ export default function GalleriesPage() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="py-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 bg-surface-sunken rounded" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -184,7 +184,7 @@ export default function GalleriesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6 py-8">
       {error && (
         <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
           {error}

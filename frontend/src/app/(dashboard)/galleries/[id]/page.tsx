@@ -498,11 +498,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="py-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-64 rounded bg-surface-sunken" />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-            <div className="h-[420px] rounded-2xl bg-surface-sunken" />
+          <div className="grid gap-4">
             <div className="h-[420px] rounded-2xl bg-surface-sunken" />
           </div>
         </div>
@@ -522,7 +521,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+    <div className="space-y-6 py-8">
       <GalleryWorkspaceNav galleryId={gallery.id} />
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
