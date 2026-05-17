@@ -10,22 +10,27 @@ import (
 
 // M6Dependencies holds all dependencies needed for M6 route registration.
 //
-// AuditLogSvc is optional (nil-safe). When provided, admin mutations such as
-// DELETE /api/v1/admin/dealers/{id} (M39 E7-S2) emit audit rows.
+// AuditLogSvc and CredentialsSender are optional (nil-safe). When provided,
+// admin mutations emit audit rows and dealer approval sends credentials email.
 type M6Dependencies struct {
 	DB              *pgxpool.Pool
 	DealerRepo      *repository.DealerRepo
+	AdminUserRepo   *repository.AdminUserRepo  // for dealer user account creation
 	CouponRepo      *repository.CouponRepo
 	MarginRepo      *repository.MarginRepo
 	PayoutRepo      *repository.PayoutRepo
 	KycDocumentRepo *repository.KycDocumentRepo
 	DealerAnalytics *service.DealerAnalyticsService
 	AuditLogSvc     *service.AuditLogService
+	CredentialsSender service.DealerCredentialsSender // optional email sender
+	FrontendURL       string
 }
 
 // RegisterM6Routes registers all M6 (Revenue & Dealership Engine) routes.
 func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
-	dealerSvc := service.NewDealerService(deps.DealerRepo)
+	dealerSvc := service.NewDealerService(deps.DealerRepo).
+		WithAdminUserRepo(deps.AdminUserRepo).
+		WithCredentialsSender(deps.CredentialsSender, deps.FrontendURL)
 	marginSvc := service.NewMarginService(deps.MarginRepo, deps.DealerRepo)
 	couponValidationSvc := service.NewCouponValidationService(deps.CouponRepo)
 

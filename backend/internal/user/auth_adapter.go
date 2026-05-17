@@ -94,7 +94,7 @@ func (a *AuthAdapter) IsEmailVerified(ctx context.Context, email string) (bool, 
 
 // GetProfileByID returns (profile, exists, error). ErrNotFound translates
 // to (nil, false, nil) so GET /auth/me can render a clean 404 without
-// logging. Added 2026-04-12 to back the dashboard's current-user call.
+// logging.
 func (a *AuthAdapter) GetProfileByID(ctx context.Context, userID string) (*auth.UserProfile, bool, error) {
 	u, err := a.svc.GetByID(ctx, userID)
 	if err != nil {
@@ -104,10 +104,17 @@ func (a *AuthAdapter) GetProfileByID(ctx context.Context, userID string) (*auth.
 		return nil, false, err
 	}
 	return &auth.UserProfile{
-		ID:          u.ID,
-		Email:       u.Email,
-		Phone:       u.Phone,
-		DisplayName: u.DisplayName,
-		AvatarURL:   u.AvatarURL,
+		ID:                 u.ID,
+		Email:              u.Email,
+		Phone:              u.Phone,
+		DisplayName:        u.DisplayName,
+		AvatarURL:          u.AvatarURL,
+		MustChangePassword: u.MustChangePassword,
 	}, true, nil
+}
+
+// ChangePassword verifies the current password and replaces it with the new
+// one. Clears must_change_password on success.
+func (a *AuthAdapter) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	return a.svc.ChangePassword(ctx, userID, currentPassword, newPassword)
 }

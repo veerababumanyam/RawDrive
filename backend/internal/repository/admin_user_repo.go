@@ -31,11 +31,12 @@ type AdminUserFilter struct {
 // M39 E5-S1 (FR-F01): AdminUserCreate is the admin user-create payload
 // shape for AdminUserRepo.CreateUser.
 type AdminUserCreate struct {
-	Email         string
-	FullName      string
-	Role          string
-	PasswordHash  *string // nil for invite-only path
-	EmailVerified bool
+	Email              string
+	FullName           string
+	Role               string
+	PasswordHash       *string // nil for invite-only path
+	EmailVerified      bool
+	MustChangePassword bool // set true for admin-created dealer accounts
 }
 
 // ErrDuplicateEmail is surfaced when INSERT INTO users collides with the
@@ -275,9 +276,9 @@ func (r *AdminUserRepo) CreateUser(ctx context.Context, in AdminUserCreate) (*Ad
 	// INSERT via COALESCE on optional columns so the schema's DEFAULTs apply.
 	// display_name is the persistence name for full_name (see migration 002).
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO users (id, email, display_name, platform_role, password_hash, email_verified, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'active', now(), now())`,
-		id, in.Email, in.FullName, in.Role, in.PasswordHash, in.EmailVerified,
+		INSERT INTO users (id, email, display_name, platform_role, password_hash, email_verified, must_change_password, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', now(), now())`,
+		id, in.Email, in.FullName, in.Role, in.PasswordHash, in.EmailVerified, in.MustChangePassword,
 	)
 	if err != nil {
 		msg := err.Error()
@@ -387,6 +388,35 @@ func (r *AdminUserRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, s
 	}
 
 	return tag.RowsAffected(), nil
+}
+
+// SetDealerCredentials sets a dealer user's password, marks the account
+// email_verified, and flags must_change_password=true so the first-login
+// redirect kicks in. Called by DealerService.ApproveDealer after a
+// generated password is hashed.
+func (r *AdminUserRepo) SetDealerCredentials(ctx context.Context, userID uuid.UUID, hashedPassword string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE users SET password_hash = $1, email_verified = true, must_change_password = true, updated_at = NOW() WHERE id = $2`,
+		hashedPassword, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("set dealer credentials: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetEmailByID returns the email address for a user. Used during dealer
+// approval to find the address to deliver credentials to.
+func (r *AdminUserRepo) GetEmailByID(ctx context.Context, userID uuid.UUID) (string, error) {
+	var email string
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(email,'') FROM users WHERE id = $1`, userID).Scan(&email)
+	if err != nil {
+		return "", fmt.Errorf("get user email by id: %w", err)
+	}
+	return email, nil
 }
 
 func (r *AdminUserRepo) GetActivityTimeline(ctx context.Context, userID uuid.UUID, limit int) ([]AuditLogEntry, error) {

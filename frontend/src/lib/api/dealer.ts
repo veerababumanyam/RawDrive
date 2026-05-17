@@ -36,6 +36,7 @@ export interface CreateDealerRequest {
   gstin?: string;
   bank_account: BankAccount;
   agreement_accepted: boolean;
+  dealer_email?: string; // admin-only: creates a user account for the dealer
 }
 
 export interface CouponValidationResponse {

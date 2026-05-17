@@ -39,7 +39,7 @@ func (h *DealerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
-	dealer, err := h.svc.RegisterDealer(r.Context(), userID, req)
+	dealer, err := h.svc.AdminCreateDealer(r.Context(), userID, req)
 	if err != nil {
 		switch err {
 		case service.ErrDealerAlreadyExists:

@@ -13,6 +13,7 @@ export interface CurrentUser {
   role: string;
   platform_role: string;
   state_id: string;
+  must_change_password?: boolean;
 }
 
 /**
@@ -73,6 +74,32 @@ export async function resetPassword(email: string, otp: string, newPassword: str
   });
   if (res.status === 204) return;
   let msg = `Reset failed: ${res.status}`;
+  try {
+    const b = await res.json();
+    if (b?.error) msg = String(b.error);
+  } catch {}
+  throw new Error(msg);
+}
+
+/**
+ * Change the authenticated user's password. Requires the current password
+ * for verification. Clears the must_change_password flag on success.
+ */
+export async function changePassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (res.ok) return;
+  let msg = `Password change failed: ${res.status}`;
   try {
     const b = await res.json();
     if (b?.error) msg = String(b.error);

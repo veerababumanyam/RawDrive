@@ -60,9 +60,9 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
 	u := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer')
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer'), COALESCE(must_change_password, false)
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole)
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole, &u.MustChangePassword)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -75,9 +75,9 @@ func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
 func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
 	u := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer')
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer'), COALESCE(must_change_password, false)
 		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole)
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole, &u.MustChangePassword)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -102,6 +102,20 @@ func (r *PgRepo) MarkEmailVerified(ctx context.Context, id string) error {
 	cmdTag, err := r.pool.Exec(ctx, `UPDATE users SET email_verified = true, updated_at = now() WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("user repo mark email verified: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PgRepo) UpdatePasswordByID(ctx context.Context, id, hashedPassword string, mustChange bool) error {
+	cmdTag, err := r.pool.Exec(ctx,
+		`UPDATE users SET password_hash = $1, must_change_password = $2, updated_at = now() WHERE id = $3`,
+		hashedPassword, mustChange, id,
+	)
+	if err != nil {
+		return fmt.Errorf("user repo update password by id: %w", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return ErrNotFound

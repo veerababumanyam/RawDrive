@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ShieldCheck, KeyRound, Copy, CheckCircle2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ShieldCheck, KeyRound, Copy, CheckCircle2, Lock } from "lucide-react";
 import { getStoredAccessToken } from "@/lib/auth";
+import { changePassword } from "@/lib/api/auth";
 
 // F-007 (M17 wave 3): MFA enrollment UI.
 //
@@ -50,6 +52,41 @@ function authedFetch(path: string, init?: RequestInit) {
 }
 
 export default function SecuritySettingsPage() {
+  const searchParams = useSearchParams();
+  const changeRequired = searchParams.get("change_required") === "1";
+
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const [pwDone, setPwDone] = useState(false);
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError("");
+    if (pwNew !== pwConfirm) {
+      setPwError("New passwords do not match.");
+      return;
+    }
+    setPwBusy(true);
+    try {
+      const token = getStoredAccessToken();
+      await changePassword(token ?? "", pwCurrent, pwNew);
+      setPwDone(true);
+      setPwCurrent("");
+      setPwNew("");
+      setPwConfirm("");
+      if (changeRequired) {
+        window.location.assign("/dealer");
+      }
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Password change failed.");
+    } finally {
+      setPwBusy(false);
+    }
+  }
+
   const [step, setStep] = useState<WizardStep>("status");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -176,6 +213,90 @@ export default function SecuritySettingsPage() {
           </div>
         </div>
       </header>
+
+      {/* Change Password section — always visible, shown prominently when forced */}
+      <section className="glass-card p-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-text-secondary">
+            <Lock className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="font-headline text-xl font-bold text-text-primary">Change Password</h2>
+            {changeRequired && (
+              <p className="mt-0.5 text-sm text-feedback-warning font-medium">
+                You must set a new password before continuing.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {pwDone ? (
+          <div role="alert" className="rounded-2xl border border-feedback-success/20 bg-feedback-success/10 px-4 py-3 text-sm text-feedback-success">
+            Password updated successfully.
+          </div>
+        ) : (
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            {pwError && (
+              <div role="alert" className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
+                {pwError}
+              </div>
+            )}
+            <div>
+              <label htmlFor="pw-current" className="block text-sm font-medium text-text-secondary mb-1">
+                Current Password *
+              </label>
+              <input
+                id="pw-current"
+                type="password"
+                value={pwCurrent}
+                onChange={(e) => setPwCurrent(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="input-base w-full"
+                placeholder="Your current password"
+              />
+            </div>
+            <div>
+              <label htmlFor="pw-new" className="block text-sm font-medium text-text-secondary mb-1">
+                New Password *
+              </label>
+              <input
+                id="pw-new"
+                type="password"
+                value={pwNew}
+                onChange={(e) => setPwNew(e.target.value)}
+                required
+                minLength={12}
+                autoComplete="new-password"
+                className="input-base w-full"
+                placeholder="Min 12 chars, upper + lower + digit + special"
+              />
+            </div>
+            <div>
+              <label htmlFor="pw-confirm" className="block text-sm font-medium text-text-secondary mb-1">
+                Confirm New Password *
+              </label>
+              <input
+                id="pw-confirm"
+                type="password"
+                value={pwConfirm}
+                onChange={(e) => setPwConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+                className="input-base w-full"
+                placeholder="Repeat new password"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={pwBusy}
+              className="btn-primary px-6 py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {pwBusy ? "Updating…" : "Update Password"}
+            </button>
+          </form>
+        )}
+      </section>
 
       {error ? (
         <div

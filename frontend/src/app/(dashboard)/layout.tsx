@@ -309,6 +309,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         if (res.ok && active) {
           const me = await res.json();
           setUserInfo({ display_name: me.display_name, email: me.email, avatar_url: me.avatar_url || undefined });
+          // Dealer first-login: force password change before proceeding
+          if (me.must_change_password && !pathname.startsWith("/settings/security")) {
+            window.location.assign("/settings/security?change_required=1");
+            return;
+          }
         }
       } catch { /* keep empty userInfo — sidebar falls back safely */ }
     }

@@ -1633,20 +1633,30 @@ func main() {
 
 		// M39 E7-S2: audit log service is needed before M6 routes register so
 		// the dealer handler can emit admin.dealer.delete rows. The M7 block
-		// below reuses the same instance.
+		// below reuses the same instance. adminUserRepo is also hoisted here
+		// so dealer creation can provision user accounts.
 		auditLogRepo := repository.NewAuditLogRepo(dbPool)
 		auditLogSvc := service.NewAuditLogService(auditLogRepo)
+		m6AdminUserRepo := repository.NewAdminUserRepo(dbPool)
 
-		handler.RegisterM6Routes(api, handler.M6Dependencies{
+		m6Deps := handler.M6Dependencies{
 			DB:              dbPool,
 			DealerRepo:      dealerRepo,
+			AdminUserRepo:   m6AdminUserRepo,
 			CouponRepo:      couponRepo,
 			MarginRepo:      marginRepo,
 			PayoutRepo:      payoutRepo,
 			KycDocumentRepo: kycDocumentRepo,
 			DealerAnalytics: dealerAnalyticsSvc,
 			AuditLogSvc:     auditLogSvc,
-		})
+			FrontendURL:     os.Getenv("FRONTEND_URL"),
+		}
+		// Avoid typed-nil interface bug: only set CredentialsSender when the
+		// concrete pointer is non-nil, so DealerService.credsSender != nil works.
+		if notificationEmailSender != nil {
+			m6Deps.CredentialsSender = notificationEmailSender
+		}
+		handler.RegisterM6Routes(api, m6Deps)
 
 		log.Println("M6: Revenue & Dealership Engine routes registered (Dealers, Coupons, Margins, Payouts, KYC, Analytics)")
 

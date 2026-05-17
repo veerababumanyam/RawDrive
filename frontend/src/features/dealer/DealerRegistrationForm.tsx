@@ -52,6 +52,7 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [businessName, setBusinessName] = useState("");
+  const [dealerEmail, setDealerEmail] = useState("");
   const [stateId, setStateId] = useState<number>(0);
   const [territoryType, setTerritoryType] = useState<"primary" | "secondary" | "ambassador">("primary");
   const [panNumber, setPanNumber] = useState("");
@@ -100,6 +101,7 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
       // in the frontend for form ergonomics).
       const req = {
         business_name: businessName,
+        dealer_email: dealerEmail || undefined,
         state_id: stateId,
         territory_type: territoryType,
         pan_number: panNumber,
@@ -137,6 +139,19 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
             className="input-base w-full"
             placeholder="Your business name"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Dealer Email *</label>
+          <input
+            type="email"
+            value={dealerEmail}
+            onChange={(e) => setDealerEmail(e.target.value)}
+            required
+            className="input-base w-full"
+            placeholder="dealer@example.com"
+          />
+          <p className="text-xs text-text-tertiary mt-1">Login credentials will be sent to this address on approval.</p>
         </div>
 
         <div>

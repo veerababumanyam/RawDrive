@@ -128,14 +128,14 @@ type LogoutRequest struct {
 // UserService abstracts user creation and lookup for the auth handler.
 // UserProfile is the minimal view of a user exposed by GET /auth/me.
 // Kept small and display-oriented so we do not leak password hashes or
-// verification state to the client. Extended in future if the dashboard
-// needs more fields (avatar URL, phone, preferences).
+// verification state to the client.
 type UserProfile struct {
-	ID          string
-	Email       string
-	Phone       string
-	DisplayName string
-	AvatarURL   string
+	ID                 string
+	Email              string
+	Phone              string
+	DisplayName        string
+	AvatarURL          string
+	MustChangePassword bool // true for admin-created dealer accounts until first password change
 }
 
 type UserService interface {
@@ -145,16 +145,14 @@ type UserService interface {
 	MarkEmailVerified(ctx context.Context, userID string) error
 	// GetProfileByID returns the display fields for a user. Returns
 	// (nil, false, nil) when no user with that id exists so handlers can
-	// translate that into a 404 without an error log. Added 2026-04-12 to
-	// back the GET /api/v1/auth/me endpoint that the dashboard uses to
-	// greet the logged-in user.
+	// translate that into a 404 without an error log.
 	GetProfileByID(ctx context.Context, userID string) (*UserProfile, bool, error)
 	// IsEmailVerified reports whether the account exists and has completed
-	// activation. Returns (verified, exists, error). Used by ResendOTP to
-	// decide whether to mint a new activation code without leaking the
-	// existence of an account (the handler returns the same 200 envelope
-	// regardless of the answer). Added with /auth/resend-otp.
+	// activation. Returns (verified, exists, error).
 	IsEmailVerified(ctx context.Context, email string) (verified, exists bool, err error)
+	// ChangePassword verifies the current password and replaces it with the
+	// new one. Clears must_change_password on success.
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 }
 
 // WorkspaceLookup resolves a user's primary workspace, state, workspace role, and platform role.
@@ -224,7 +222,49 @@ func (h *Handler) Routes() chi.Router {
 	// the dashboard to greet the actual user instead of a hardcoded
 	// placeholder name. Added 2026-04-12 in response to UAT findings.
 	r.Get("/me", h.Me)
+	r.Post("/change-password", h.ChangePassword)
 	return r
+}
+
+// ChangePassword verifies the caller's current password and replaces it with
+// the new one. Clears must_change_password so the first-login redirect does
+// not loop. Requires a valid Bearer token (no MFA bypass path).
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthenticated"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := h.jwt.ParseAccessToken(r.Context(), tokenStr)
+	if err != nil || claims == nil || claims.Sub == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthenticated"})
+		return
+	}
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "current_password and new_password are required"})
+		return
+	}
+	if err := h.users.ChangePassword(r.Context(), claims.Sub, req.CurrentPassword, req.NewPassword); err != nil {
+		switch err.Error() {
+		case "wrong current password":
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "current password is incorrect"})
+		case "password does not meet complexity requirements":
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to change password"})
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // Me returns the display profile for the user identified by the access
@@ -261,15 +301,16 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	// Pass selected claims through to the client so the frontend has a
 	// single network call to populate its user-state store.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":            profile.ID,
-		"email":         profile.Email,
-		"phone":         profile.Phone,
-		"display_name":  profile.DisplayName,
-		"avatar_url":    profile.AvatarURL,
-		"workspace_id":  claims.WorkspaceID,
-		"role":          claims.Role,
-		"platform_role": claims.PlatformRole,
-		"state_id":      claims.StateID,
+		"id":                   profile.ID,
+		"email":                profile.Email,
+		"phone":                profile.Phone,
+		"display_name":         profile.DisplayName,
+		"avatar_url":           profile.AvatarURL,
+		"workspace_id":         claims.WorkspaceID,
+		"role":                 claims.Role,
+		"platform_role":        claims.PlatformRole,
+		"state_id":             claims.StateID,
+		"must_change_password": profile.MustChangePassword,
 	})
 }
 
