@@ -9,7 +9,6 @@ import {
   addAssetToGallery,
   createGalleryAlbum,
   getGallery,
-  getGalleryWorkspaceSummary,
   listAlbumAssets,
   listGalleryAlbums,
   listGalleryAssets,
@@ -18,7 +17,6 @@ import {
   type Gallery,
   type GalleryAlbum,
   type GalleryAsset,
-  type GalleryWorkspaceSummary,
 } from "@/lib/api/galleries";
 import { listProofingSelections, createComment, exportProofingSelectionsCsv, type ProofingSelection } from "@/lib/api/proofing";
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
@@ -37,8 +35,6 @@ import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 import { FaceFilter } from "@/components/gallery/face-filter";
 import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
-import { GalleryShareCenter } from "@/components/gallery/gallery-share-center";
-import { GalleryPublishChecklist } from "@/components/gallery/gallery-publish-checklist";
 import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
 import { SalesContinuityPanel } from "@/components/gallery/sales-continuity-panel";
 
@@ -49,7 +45,6 @@ type GalleryAssetRecord = GalleryAsset & {
 export default function GalleryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
-  const [workspaceSummary, setWorkspaceSummary] = useState<GalleryWorkspaceSummary | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
   // M41/105: aggregated guest favorites for this gallery. Null while
@@ -127,11 +122,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setError("");
 
       try {
-        const [galleryData, galleryAssets, gallerySelections, summary, favSummary] = await Promise.all([
+        const [galleryData, galleryAssets, gallerySelections, favSummary] = await Promise.all([
           getGallery(token, id),
           listGalleryAssets(token, id),
           listProofingSelections(token, id).catch((err) => { console.warn("Failed to load proofing selections:", err?.message); return []; }),
-          getGalleryWorkspaceSummary(token, id).catch(() => null),
           // Favorites endpoint 404s if the table is empty for the
           // gallery (no, actually the backend returns zeros) — but
           // an outage shouldn't break the dashboard. Default to null
@@ -158,7 +152,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         }
 
         setGallery(galleryData);
-        setWorkspaceSummary(summary);
         setAssets(hydratedAssets);
         setSelections(gallerySelections ?? []);
         setFavoritesSummary(favSummary);
@@ -166,7 +159,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load gallery.");
           setGallery(null);
-          setWorkspaceSummary(null);
           setAssets([]);
           setSelections([]);
           setFavoritesSummary(null);
@@ -759,7 +751,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+      <div>
         <section className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="surface-panel p-4">
@@ -1247,234 +1239,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </section>
 
-        <aside className="space-y-4">
-          <GalleryPublishChecklist gallery={gallery} assets={assets} />
-          {authToken && <GalleryShareCenter gallery={gallery} token={authToken} />}
-
-          <div className="surface-panel space-y-4 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Linked CRM</p>
-                <h2 className="mt-1 text-lg font-semibold text-text-primary">Client workspace</h2>
-              </div>
-              <span className="status-badge status-badge--accent">
-                {workspaceSummary?.lifecycle_state || gallery.status || "draft"}
-              </span>
-            </div>
-
-            {workspaceSummary?.primary_contact ? (
-              <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                <p className="font-medium text-text-primary">{workspaceSummary.primary_contact.name}</p>
-                {workspaceSummary.primary_contact.email && (
-                  <p className="mt-1 text-sm text-text-secondary">{workspaceSummary.primary_contact.email}</p>
-                )}
-                {workspaceSummary.primary_contact.phone && (
-                  <p className="text-sm text-text-secondary">{workspaceSummary.primary_contact.phone}</p>
-                )}
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <Link href={`/crm/contacts/${workspaceSummary.primary_contact.id}`} className="btn-tertiary px-3 py-2 text-center">
-                    Client profile
-                  </Link>
-                  <Link href={`/billing?create=true&client=${workspaceSummary.primary_contact.id}`} className="btn-tertiary px-3 py-2 text-center">
-                    Invoice
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                <p className="text-sm text-text-secondary">
-                  No client is linked yet. Link one from the gallery list or settings so proofing, invoices, and delivery history roll up into CRM.
-                </p>
-                <Link href={`/galleries?create=true`} className="mt-3 inline-flex text-xs text-accent-primary hover:underline">
-                  Create a client-linked gallery
-                </Link>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 text-xs text-text-secondary">
-              <span>Project {gallery.project_id ? "linked" : "not linked"}</span>
-              <span>Event {gallery.event_id ? "linked" : "not linked"}</span>
-              <span>Deal {gallery.deal_id ? "linked" : "not linked"}</span>
-              <span>Invoice {gallery.invoice_id ? "linked" : "not linked"}</span>
-            </div>
-          </div>
-
-          {token && (
-            <DeliveryContinuityPanel
-              galleryId={gallery.id}
-              token={token}
-              selectedCount={(selectionCounts.selected || 0) + (selectionCounts.approved || 0)}
-              totalCount={assets.length}
-            />
-          )}
-
-          <SalesContinuityPanel
-            invoiceId={gallery.invoice_id}
-            dealId={gallery.deal_id}
-            projectId={gallery.project_id}
-            cartCount={0}
-          />
-
-          <div className="surface-panel space-y-4 p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Proofing status</h2>
-              {proofingFilter && (
-                <button
-                  onClick={() => setProofingFilter(null)}
-                  className="text-xs text-accent-primary hover:underline"
-                >
-                  Clear filter
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setProofingFilter((f) => f === "selected" ? null : "selected")}
-                className={cn(
-                  "status-badge status-badge--accent cursor-pointer transition-all",
-                  proofingFilter === "selected" ? "ring-2 ring-accent-primary" : "hover:ring-1 hover:ring-accent-primary/40",
-                )}
-                title="Click to filter assets by selection status"
-              >
-                Selected {selectionCounts.selected || 0}
-              </button>
-              <button
-                onClick={() => setProofingFilter((f) => f === "approved" ? null : "approved")}
-                className={cn(
-                  "status-badge status-badge--success cursor-pointer transition-all",
-                  proofingFilter === "approved" ? "ring-2 ring-accent-primary" : "hover:ring-1 hover:ring-accent-primary/40",
-                )}
-                title="Click to filter assets by approval status"
-              >
-                Approved {selectionCounts.approved || 0}
-              </button>
-              <button
-                onClick={() => setProofingFilter((f) => f === "rejected" ? null : "rejected")}
-                className={cn(
-                  "status-badge status-badge--danger cursor-pointer transition-all",
-                  proofingFilter === "rejected" ? "ring-2 ring-accent-primary" : "hover:ring-1 hover:ring-accent-primary/40",
-                )}
-                title="Click to filter assets by rejection status"
-              >
-                Rejected {selectionCounts.rejected || 0}
-              </button>
-            </div>
-          </div>
-
-          <div className="surface-panel space-y-4 p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Recent selections</h2>
-              <span className="text-xs text-text-tertiary">{selections.length}</span>
-            </div>
-
-            {selections.length === 0 ? (
-              <p className="text-sm text-text-secondary">No proofing selections have been submitted yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {selections.slice(0, 6).map((selection) => (
-                  <div key={selection.id} className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-text-primary">{selection.client_name}</p>
-                        <p className="text-xs text-text-secondary">{selection.client_email}</p>
-                      </div>
-                      <span
-                        className={cn(
-                          proofingStatusClasses[selection.status] || "status-badge status-badge--neutral",
-                        )}
-                      >
-                        {selection.status}
-                      </span>
-                    </div>
-                    {selection.note && (
-                      <p className="mt-3 text-sm leading-relaxed text-text-secondary">{selection.note}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* M19: Cover template selector */}
-          <div className="surface-panel space-y-4 p-5">
-            <h2 className="text-lg font-semibold text-text-primary">Cover page</h2>
-            <p className="text-xs text-text-secondary">
-              Choose a cover template for the public gallery landing page.
-            </p>
-            <select
-              value={gallery.cover_template || "none"}
-              onChange={async (e) => {
-                const t = getStoredAccessToken();
-                if (!t || !gallery) return;
-                try {
-                  await updateGalleryCover(t, gallery.id, { template: e.target.value });
-                  setGallery({ ...gallery, cover_template: e.target.value });
-                } catch (err) {
-                  console.error("Failed to update cover template:", err);
-                }
-              }}
-              className="input-base w-full"
-            >
-              <option value="none">None (no cover page)</option>
-              <option value="full_bleed">Full Bleed</option>
-              <option value="split_screen">Split Screen</option>
-              <option value="minimal_white">Minimal White</option>
-              <option value="classic_film">Classic Film Border</option>
-              <option value="festive">Festive</option>
-            </select>
-            {gallery.cover_template && gallery.cover_template !== "none" && gallery.slug && (
-              <a
-                href={`/g/${gallery.slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent-primary hover:underline"
-              >
-                Preview cover page
-              </a>
-            )}
-          </div>
-
-          {/* M21: AI Panel — face scan & AI studio link */}
-          {authToken && <GalleryAIPanel galleryId={id} token={authToken} />}
-
-          {/* M19: Client selections summary (grouped by client) */}
-          {selections.length > 0 && (() => {
-            const grouped = selections.reduce<Record<string, { name: string; email: string; count: number; latest: string; notes: string[] }>>((acc, s) => {
-              const key = s.client_email || "anonymous";
-              if (!acc[key]) acc[key] = { name: s.client_name, email: s.client_email, count: 0, latest: s.created_at, notes: [] };
-              acc[key].count++;
-              if (s.created_at > acc[key].latest) acc[key].latest = s.created_at;
-              if (s.note) acc[key].notes.push(s.note);
-              return acc;
-            }, {});
-            return (
-              <div className="surface-panel space-y-4 p-5">
-                <h2 className="text-lg font-semibold text-text-primary">Client submissions</h2>
-                <div className="space-y-3">
-                  {Object.entries(grouped).map(([email, data]) => (
-                    <div key={email} className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-text-primary">{data.name || "Anonymous"}</p>
-                          <p className="text-xs text-text-secondary">{data.email}</p>
-                        </div>
-                        <span className="status-badge status-badge--accent">{data.count} photos</span>
-                      </div>
-                      <p className="mt-1 text-xs text-text-tertiary">
-                        Submitted {new Date(data.latest).toLocaleDateString("en-IN")}
-                      </p>
-                      {data.notes.length > 0 && (
-                        <p className="mt-2 text-xs text-text-secondary italic">
-                          &ldquo;{data.notes[0]}&rdquo;
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-        </aside>
       </div>
 
       {/* Photo lightbox */}
