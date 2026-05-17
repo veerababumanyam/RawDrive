@@ -93,26 +93,27 @@ function getSearchPlaceholder(role: string) {
 
 function RoleSidebar({ role, userInfo, mobileOpen, onMobileClose }: {
   role: string;
-  userInfo: { display_name?: string; email?: string };
+  userInfo: { display_name?: string; email?: string; avatar_url?: string };
   mobileOpen: boolean;
   onMobileClose: () => void;
 }) {
   const name = userInfo.display_name || userInfo.email || "User";
+  const avatarUrl = userInfo.avatar_url;
 
   switch (role) {
     case "super_admin":
     case "admin":
-      return <AdminSidebar userName={name} platformRole={role} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
+      return <AdminSidebar userName={name} avatarUrl={avatarUrl} platformRole={role} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "dealer":
-      return <DealerSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
+      return <DealerSidebar userName={name} avatarUrl={avatarUrl} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "client":
-      return <ClientSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
+      return <ClientSidebar userName={name} avatarUrl={avatarUrl} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
     case "photographer":
     case "team_member":
     case "assistant":
     case "studio_manager":
     default:
-      return <StudioSidebar userName={name} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
+      return <StudioSidebar userName={name} avatarUrl={avatarUrl} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
   }
 }
 
@@ -122,7 +123,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 /*  User menu dropdown — profile, settings, logout                    */
 /* ------------------------------------------------------------------ */
 
-function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email?: string }; role: string }) {
+function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email?: string; avatar_url?: string }; role: string }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -177,9 +178,13 @@ function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email
         aria-expanded={open}
         aria-haspopup="true"
         aria-label="User menu"
-        className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary transition-colors hover:bg-surface-container-highest hover:text-accent focus:ring-2 focus:ring-secondary/50 focus:outline-none"
+        className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary transition-colors hover:bg-surface-container-highest hover:text-accent focus:ring-2 focus:ring-secondary/50 focus:outline-none"
       >
         {initials}
+        {userInfo.avatar_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={userInfo.avatar_url} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        )}
       </button>
 
       {open && (
@@ -190,8 +195,12 @@ function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email
           {/* User info header */}
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-sm font-bold text-text-primary">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-sm font-bold text-text-primary">
                 {initials}
+                {userInfo.avatar_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={userInfo.avatar_url} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                )}
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-text-primary">{displayName}</p>
@@ -259,7 +268,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // propagates on the next page load. localStorage was intentionally
   // not used because clearLegacyStoredTokens() actively wipes the
   // "user" key, which silently reset the avatar back to "U".
-  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string }>({});
+  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string; avatar_url?: string }>({});
 
   useEffect(() => {
     let active = true;
@@ -299,7 +308,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         });
         if (res.ok && active) {
           const me = await res.json();
-          setUserInfo({ display_name: me.display_name, email: me.email });
+          setUserInfo({ display_name: me.display_name, email: me.email, avatar_url: me.avatar_url || undefined });
         }
       } catch { /* keep empty userInfo — sidebar falls back safely */ }
     }
