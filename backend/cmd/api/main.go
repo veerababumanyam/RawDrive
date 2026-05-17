@@ -881,9 +881,11 @@ func main() {
 	r.With(credLimiter).Post("/auth/register", authHandler.Register)
 	r.With(credLimiter).Post("/auth/login", authHandler.Login)
 	r.With(credLimiter).Post("/auth/verify-otp", authHandler.VerifyOTP)
+	r.With(credLimiter).Post("/auth/resend-otp", authHandler.ResendOTP)
 	r.With(credLimiter).Post("/api/v1/auth/register", authHandler.Register)
 	r.With(credLimiter).Post("/api/v1/auth/login", authHandler.Login)
 	r.With(credLimiter).Post("/api/v1/auth/verify-otp", authHandler.VerifyOTP)
+	r.With(credLimiter).Post("/api/v1/auth/resend-otp", authHandler.ResendOTP)
 
 	// M39 E6-S1 (FR-F02): password reset endpoints in the public group.
 	// Rate limiting happens at two layers: credLimiter (per IP) wraps each

@@ -51,6 +51,15 @@ func (s *testUserService) MarkEmailVerified(_ context.Context, userID string) er
 	return nil
 }
 
+// IsEmailVerified is the integration-test counterpart of the auth adapter's
+// IsEmailVerified. The integration tests don't currently exercise the
+// resend-otp path, so this stub just reports "exists, unverified" for any
+// email the test has seen via Create, and "no such account" otherwise.
+func (s *testUserService) IsEmailVerified(_ context.Context, email string) (bool, bool, error) {
+	_, ok := s.users[email]
+	return false, ok, nil
+}
+
 func (s *testUserService) GetProfileByID(_ context.Context, userID string) (*auth.UserProfile, bool, error) {
 	for email, id := range s.users {
 		if id == userID {

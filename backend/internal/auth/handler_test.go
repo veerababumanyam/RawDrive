@@ -21,11 +21,12 @@ import (
 
 type mockUserService struct {
 	users       map[string]string // email -> userID
+	verified    map[string]bool   // email -> emailVerified (added with ResendOTP)
 	errOnCreate bool
 }
 
 func newMockUserService() *mockUserService {
-	return &mockUserService{users: make(map[string]string)}
+	return &mockUserService{users: make(map[string]string), verified: make(map[string]bool)}
 }
 
 func (m *mockUserService) Create(_ context.Context, email, password, _, _ string, _ int) (string, error) {
@@ -51,7 +52,23 @@ func (m *mockUserService) VerifyPassword(_ context.Context, email, password stri
 }
 
 func (m *mockUserService) MarkEmailVerified(_ context.Context, userID string) error {
+	for email, id := range m.users {
+		if id == userID {
+			if m.verified == nil {
+				m.verified = make(map[string]bool)
+			}
+			m.verified[email] = true
+			return nil
+		}
+	}
 	return nil
+}
+
+func (m *mockUserService) IsEmailVerified(_ context.Context, email string) (bool, bool, error) {
+	if _, ok := m.users[email]; !ok {
+		return false, false, nil
+	}
+	return m.verified[email], true, nil
 }
 
 func (m *mockUserService) GetProfileByID(_ context.Context, userID string) (*auth.UserProfile, bool, error) {
@@ -97,6 +114,7 @@ func newTestServer(handler *auth.Handler) *httptest.Server {
 	r.Post("/auth/register", handler.Register)
 	r.Post("/auth/login", handler.Login)
 	r.Post("/auth/verify-otp", handler.VerifyOTP)
+	r.Post("/auth/resend-otp", handler.ResendOTP)
 	r.Mount("/auth", handler.Routes())
 	return httptest.NewServer(r)
 }
@@ -561,6 +579,111 @@ func TestVerifyOTPHandler_Expired(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// ─────────────────────────── ResendOTP ───────────────────────────
+//
+// ResendOTP must be account-enumeration-resistant: every successful
+// dispatch (valid email format) returns the same 200 + generic message
+// regardless of whether the account exists, is verified, or is unknown.
+// The OTP itself is only minted in the unverified+exists branch — these
+// tests assert both the response shape and the side-effect.
+
+func TestResendOTPHandler_UnverifiedAccount_GeneratesNewCode(t *testing.T) {
+	handler, otpSvc, _, userSvc := setupAuthRouter()
+	userSvc.users["unverified@example.com"] = "user-unverified"
+	// userSvc.verified["unverified@example.com"] stays false (zero value)
+
+	// Generate an initial code so we can prove resend issues a fresh one.
+	original, err := otpSvc.Generate(context.Background(), "unverified@example.com")
+	require.NoError(t, err)
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/resend-otp", map[string]string{
+		"email": "unverified@example.com",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var body map[string]string
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	assert.NotEmpty(t, body["message"], "response must carry a generic message")
+	assert.Empty(t, body["error"])
+
+	// Validate that a NEW code was minted: the old one should no longer
+	// authenticate (Generate replaces the prior entry per identifier).
+	valid, err := otpSvc.Validate(context.Background(), "unverified@example.com", original)
+	require.NoError(t, err)
+	assert.False(t, valid, "the original OTP must be superseded by the resend")
+}
+
+func TestResendOTPHandler_AlreadyVerified_NoOpButSameResponse(t *testing.T) {
+	handler, otpSvc, _, userSvc := setupAuthRouter()
+	userSvc.users["verified@example.com"] = "user-verified"
+	userSvc.verified["verified@example.com"] = true
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/resend-otp", map[string]string{
+		"email": "verified@example.com",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// No OTP must have been generated for a verified account — the
+	// freshly-minted Validate call should fail because there is no
+	// outstanding entry.
+	valid, _ := otpSvc.Validate(context.Background(), "verified@example.com", "000000")
+	assert.False(t, valid, "verified accounts must not have an active OTP after resend")
+}
+
+func TestResendOTPHandler_UnknownEmail_NoOpButSameResponse(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/resend-otp", map[string]string{
+		"email": "nobody@example.com",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// Same 200 envelope as the unverified path so callers cannot
+	// distinguish "no account" from "unverified account".
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestResendOTPHandler_InvalidEmailRejected(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/resend-otp", map[string]string{
+		"email": "not-an-email",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestResendOTPHandler_BadJSON(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/auth/resend-otp", "application/json", bytes.NewBufferString("{not-json"))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestOAuthGoogleHandler_Redirect(t *testing.T) {

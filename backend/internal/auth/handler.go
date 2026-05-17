@@ -90,6 +90,21 @@ type VerifyOTPRequest struct {
 	Code  string `json:"code"`
 }
 
+// ResendOTPRequest carries the email whose activation code should be
+// reissued. The handler intentionally returns the same response envelope
+// for "account exists & unverified", "account exists & already verified",
+// and "no such account" so callers cannot enumerate accounts.
+type ResendOTPRequest struct {
+	Email string `json:"email"`
+}
+
+// ResendOTPResponse is the single-shape body returned by ResendOTP.
+// Generic message — no info about account state — so callers cannot
+// distinguish unverified / verified / unknown emails from the response.
+type ResendOTPResponse struct {
+	Message string `json:"message"`
+}
+
 type VerifyOTPResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token,omitempty"`
@@ -133,6 +148,12 @@ type UserService interface {
 	// back the GET /api/v1/auth/me endpoint that the dashboard uses to
 	// greet the logged-in user.
 	GetProfileByID(ctx context.Context, userID string) (*UserProfile, bool, error)
+	// IsEmailVerified reports whether the account exists and has completed
+	// activation. Returns (verified, exists, error). Used by ResendOTP to
+	// decide whether to mint a new activation code without leaking the
+	// existence of an account (the handler returns the same 200 envelope
+	// regardless of the answer). Added with /auth/resend-otp.
+	IsEmailVerified(ctx context.Context, email string) (verified, exists bool, err error)
 }
 
 // WorkspaceLookup resolves a user's primary workspace, state, workspace role, and platform role.
@@ -517,6 +538,64 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, VerifyOTPResponse{
 		AccessToken: accessToken,
 	})
+}
+
+// resendOTPGenericMessage is the single user-visible response from
+// ResendOTP. The wording is intentionally indeterminate about whether
+// an account exists or its verification state so callers cannot use
+// this endpoint to enumerate accounts. The OTP delivery (if any) is a
+// side effect; the response shape is the same in every code path.
+const resendOTPGenericMessage = "If an unverified account exists for this email, a new activation code has been sent."
+
+// ResendOTP reissues an activation OTP for an unverified account. The
+// activation OTP is normally sent once at registration time; this
+// endpoint exists so a user who missed / lost the original email can
+// recover without re-registering (which would 409 on the duplicate
+// email anyway). Companion to /auth/verify-otp from /activate.
+//
+// Account enumeration resistance: the response body is identical for
+// "unverified account → OTP generated", "verified account → no-op",
+// and "no such account → no-op". Callers cannot infer the state of an
+// email from this response. Rate limiting is provided by the same
+// per-IP credLimiter that protects /auth/login and /auth/register
+// (wired in cmd/api/main.go), plus OTPService.Generate's own
+// per-identifier rate-limit window.
+func (h *Handler) ResendOTP(w http.ResponseWriter, r *http.Request) {
+	var req ResendOTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if !isValidEmail(req.Email) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
+		return
+	}
+
+	// Look up verification state. We do NOT branch the response on the
+	// outcome — every code path below ends in the same 200 envelope.
+	// Errors from the user store are logged but not surfaced; the
+	// caller is treated as "no account" so we never leak DB problems.
+	verified, exists, err := h.users.IsEmailVerified(r.Context(), req.Email)
+	if err != nil {
+		log.Printf("auth.ResendOTP: user lookup failed email=%s: %v", req.Email, err)
+		writeJSON(w, http.StatusOK, ResendOTPResponse{Message: resendOTPGenericMessage})
+		return
+	}
+
+	// Side-effect: only mint a new OTP for an unverified, existing
+	// account. The OTPService.Generate call has its own per-identifier
+	// rate limiter; if that returns rate-limit-exceeded we still answer
+	// the caller with the same generic 200 (the original OTP is still
+	// valid for its lifetime and another can be requested after the
+	// window resets).
+	if exists && !verified {
+		if _, otpErr := h.otp.Generate(r.Context(), req.Email); otpErr != nil {
+			log.Printf("auth.ResendOTP: otp generate failed email=%s: %v", req.Email, otpErr)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, ResendOTPResponse{Message: resendOTPGenericMessage})
 }
 
 func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {

@@ -78,6 +78,20 @@ func (a *AuthAdapter) MarkEmailVerified(ctx context.Context, userID string) erro
 	return a.svc.MarkEmailVerified(ctx, userID)
 }
 
+// IsEmailVerified reports (verified, exists, error). ErrNotFound is
+// translated to (false, false, nil) so the auth handler can run the
+// account-enumeration-resistant code path without branching on errors.
+func (a *AuthAdapter) IsEmailVerified(ctx context.Context, email string) (bool, bool, error) {
+	u, err := a.svc.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+	return u.EmailVerified, true, nil
+}
+
 // GetProfileByID returns (profile, exists, error). ErrNotFound translates
 // to (nil, false, nil) so GET /auth/me can render a clean 404 without
 // logging. Added 2026-04-12 to back the dashboard's current-user call.
