@@ -1038,11 +1038,20 @@ func main() {
 	shareLinkRepo := repository.NewShareLinkRepo(dbPool)
 	galleryShareLogRepo := repository.NewGalleryShareLogRepo(dbPool)
 	proofingRepo := repository.NewProofingRepo(dbPool)
+	// M41/105: anonymous guest favorites for the public viewer.
+	galleryFavoritesRepo := repository.NewGalleryFavoritesRepo(dbPool)
 
 	// M11 Services (initialized early — used by M2 services)
 	storageAccountingSvc := service.NewStorageAccounting(dbPool)
 	albumRepo := repository.NewAlbumRepo(dbPool)
-	albumSvc := service.NewAlbumService(albumRepo)
+	// AlbumService is wired with the asset + favorites repos so the
+	// "Favorites" utility smart album (M41/105) resolves real guest
+	// hearts on the public viewer, and so the owner dashboard
+	// /api/v1/albums/{id}/assets endpoint dispatches smart-album
+	// filters instead of returning the empty manual join table.
+	albumSvc := service.NewAlbumService(albumRepo).
+		WithAssetRepo(assetRepo).
+		WithFavoritesRepo(galleryFavoritesRepo)
 
 	// M2 Services
 	exifSvc := service.NewExifService()
@@ -1085,6 +1094,7 @@ func main() {
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo).
 		WithNotifications(repository.NewNotificationRepo(dbPool)) // GAL-FR-134
+	galleryFavoritesSvc := service.NewGalleryFavoritesService(galleryFavoritesRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService(dbPool)
 
 	// M13 Services: Gallery Access, Proofing Sessions, Comments, Album Approval
@@ -1228,8 +1238,9 @@ func main() {
 			GalleryShareSender:   galleryShareSender,
 			GalleryShareLogRepo:  galleryShareLogRepo,
 			PublicBaseURL:        os.Getenv("FRONTEND_URL"),
-			ProofingService:      proofingSvc,
-			StorageConfigService: storageConfigSvc,
+			ProofingService:         proofingSvc,
+			GalleryFavoritesService: galleryFavoritesSvc,
+			StorageConfigService:    storageConfigSvc,
 			// M11
 			AlbumService:         albumSvc,
 			StorageAccountingSvc: storageAccountingSvc,

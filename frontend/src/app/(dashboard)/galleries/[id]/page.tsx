@@ -21,6 +21,7 @@ import {
   type GalleryWorkspaceSummary,
 } from "@/lib/api/galleries";
 import { listProofingSelections, createComment, exportProofingSelectionsCsv, type ProofingSelection } from "@/lib/api/proofing";
+import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import {
   assetIsProcessing,
   galleryStatusClasses,
@@ -50,6 +51,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [workspaceSummary, setWorkspaceSummary] = useState<GalleryWorkspaceSummary | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
+  // M41/105: aggregated guest favorites for this gallery. Null while
+  // loading; an empty summary object once the request lands (even with
+  // zero favorites). The dashboard tile reads total_favorites and
+  // unique_assets_count to render "12 hearts across 4 photos" style.
+  const [favoritesSummary, setFavoritesSummary] = useState<GalleryFavoritesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -120,11 +126,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setError("");
 
       try {
-        const [galleryData, galleryAssets, gallerySelections, summary] = await Promise.all([
+        const [galleryData, galleryAssets, gallerySelections, summary, favSummary] = await Promise.all([
           getGallery(token, id),
           listGalleryAssets(token, id),
           listProofingSelections(token, id).catch((err) => { console.warn("Failed to load proofing selections:", err?.message); return []; }),
           getGalleryWorkspaceSummary(token, id).catch(() => null),
+          // Favorites endpoint 404s if the table is empty for the
+          // gallery (no, actually the backend returns zeros) — but
+          // an outage shouldn't break the dashboard. Default to null
+          // so the tile renders "—" instead of crashing the page.
+          getGalleryFavoritesSummary(token, id).catch((err) => {
+            console.warn("Failed to load favorites summary:", err?.message);
+            return null;
+          }),
         ]);
 
         const hydratedAssets = await Promise.all(
@@ -146,6 +160,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         setWorkspaceSummary(summary);
         setAssets(hydratedAssets);
         setSelections(gallerySelections ?? []);
+        setFavoritesSummary(favSummary);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load gallery.");
@@ -153,6 +168,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           setWorkspaceSummary(null);
           setAssets([]);
           setSelections([]);
+          setFavoritesSummary(null);
         }
       } finally {
         if (!cancelled) {
@@ -281,6 +297,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
     return ids;
   }, [proofingFilter, selections]);
+
+  // Per-asset favorite count map. Built once from the summary's by_asset
+  // breakdown so each tile in the grid below can render a small heart
+  // badge with the guest-heart count for that photo. Empty map until the
+  // summary lands or when no favorites exist — the lookup is a Map.get
+  // which returns undefined and the badge renders conditionally on `> 0`.
+  const favoritesCountByAsset = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!favoritesSummary) return map;
+    for (const row of favoritesSummary.by_asset) {
+      map.set(row.asset_id, row.count);
+    }
+    return map;
+  }, [favoritesSummary]);
 
   const visibleAssets = useMemo(() => {
     let result = assets;
@@ -676,7 +706,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <section className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="surface-panel p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Assets</p>
               <p className="mt-3 text-2xl font-semibold text-text-primary">{assets.length}</p>
@@ -684,6 +714,28 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <div className="surface-panel p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Selections</p>
               <p className="mt-3 text-2xl font-semibold text-text-primary">{selections.length}</p>
+            </div>
+            {/* M41/105: Favorites tile. Distinct from Selections — these
+                are anonymous guest "hearts" from the public lightbox Star
+                button. Two numbers because they tell different stories:
+                unique_assets_count is "how many photos got loved" (the
+                photographer's editing signal), total_favorites is "how
+                many heart clicks" (the engagement signal). When the
+                request failed we show "—" rather than zero so the
+                photographer doesn't mistake an outage for "no one liked
+                anything yet". */}
+            <div className="surface-panel p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Favorites</p>
+              <p className="mt-3 text-2xl font-semibold text-text-primary">
+                {favoritesSummary === null
+                  ? "—"
+                  : favoritesSummary.unique_assets_count}
+              </p>
+              {favoritesSummary !== null && favoritesSummary.total_favorites > 0 && (
+                <p className="mt-1 text-xs text-text-tertiary">
+                  {favoritesSummary.total_favorites} hearts · {favoritesSummary.unique_sessions} guest{favoritesSummary.unique_sessions === 1 ? "" : "s"}
+                </p>
+              )}
             </div>
             <div className="surface-panel p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Selection limit</p>
@@ -1014,6 +1066,17 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   // the real preview as soon as the asset.ready SSE event
                   // arrives — no manual refresh needed.
                   const isProcessing = assetIsProcessing(entry.asset);
+                  // M41/105 heart-count badge. We render a small pill on
+                  // the top-right of every thumbnail whose asset has at
+                  // least one guest heart, so the photographer can see at
+                  // a glance which photos clients are responding to —
+                  // without opening each one. The badge uses the danger
+                  // accent token (red-ish in liquid-glass, gold-tinged in
+                  // midnight) which already passes WCAG contrast against
+                  // surface-panel in every theme.
+                  const favoriteCount = entry.asset
+                    ? favoritesCountByAsset.get(entry.asset.id) ?? 0
+                    : 0;
 
                   return (
                     <article
@@ -1052,6 +1115,17 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       {bulkMode && entry.asset && (
                         <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedAssetIds.has(entry.asset.id) ? "bg-accent-primary border-accent-primary" : "border-white/60 bg-black/20"}`}>
                           {selectedAssetIds.has(entry.asset.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                      )}
+                      {favoriteCount > 0 && (
+                        <div
+                          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm"
+                          aria-label={`${favoriteCount} guest favorite${favoriteCount === 1 ? "" : "s"}`}
+                        >
+                          <svg className="h-3.5 w-3.5 text-accent-danger" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 21s-7-4.5-9.5-9C.5 8.5 2 4 6 4c2 0 3.5 1 4 2 .5-1 2-2 4-2 4 0 5.5 4.5 3.5 8-2.5 4.5-9.5 9-9.5 9z" />
+                          </svg>
+                          {favoriteCount}
                         </div>
                       )}
                       {isProcessing ? (

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
@@ -19,9 +20,11 @@ type FaceClusterResolver interface {
 
 // AlbumService handles album business logic.
 type AlbumService struct {
-	albumRepo    *repository.AlbumRepo
-	galleryRepo  *repository.GalleryRepo // optional — needed by face smart-album resolver to look up workspace_id
-	faceResolver FaceClusterResolver     // optional — when set, smart albums with face_cluster_label resolve to real assets
+	albumRepo     *repository.AlbumRepo
+	galleryRepo   *repository.GalleryRepo // optional — needed by face smart-album resolver to look up workspace_id
+	faceResolver  FaceClusterResolver     // optional — when set, smart albums with face_cluster_label resolve to real assets
+	assetRepo     *repository.AssetRepo   // optional — needed by ListAssets to dispatch smart-album resolution
+	favoritesRepo *repository.GalleryFavoritesRepo // optional — when set, "Favorites" smart album resolves real guest hearts
 }
 
 // NewAlbumService creates a new AlbumService.
@@ -36,6 +39,27 @@ func NewAlbumService(ar *repository.AlbumRepo) *AlbumService {
 func (s *AlbumService) WithFaceResolver(galleryRepo *repository.GalleryRepo, resolver FaceClusterResolver) *AlbumService {
 	s.galleryRepo = galleryRepo
 	s.faceResolver = resolver
+	return s
+}
+
+// WithAssetRepo wires the asset repo so ListAssets can dispatch smart-album
+// resolution without the handler having to know which albums are smart.
+// Optional — when nil, ListAssets falls back to the manual join-table read
+// (which is the historical behavior). Returns the receiver for fluent
+// chaining.
+func (s *AlbumService) WithAssetRepo(assetRepo *repository.AssetRepo) *AlbumService {
+	s.assetRepo = assetRepo
+	return s
+}
+
+// WithFavoritesRepo wires the gallery favorites repo so the "Favorites"
+// utility smart album can resolve to the asset IDs that guests have
+// hearted on the public viewer (see migration 105). Optional — when nil,
+// the "Favorites" album returns an empty list (matching the legacy
+// behavior before server-side favorites shipped). Returns the receiver
+// for fluent chaining.
+func (s *AlbumService) WithFavoritesRepo(favoritesRepo *repository.GalleryFavoritesRepo) *AlbumService {
+	s.favoritesRepo = favoritesRepo
 	return s
 }
 
@@ -86,8 +110,54 @@ func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID uuid.UUID,
 	return s.albumRepo.AddAsset(ctx, albumID, assetID, position)
 }
 
-// ListAssets returns all assets linked to an album.
+// ListAssets returns the asset rows that belong to an album.
+//
+// For manual albums this is the historical join-table read (album_assets
+// rows). For smart albums (any album with a non-empty smart_filter) it
+// dispatches to GetSmartAlbumAssets and synthesizes []AlbumAsset rows so
+// the existing wire format keeps working unchanged from the handler's
+// perspective — the frontend has no idea whether the album is manual or
+// smart, and shouldn't need to.
+//
+// Smart-album dispatch only fires when WithAssetRepo has been wired; this
+// keeps existing tests that construct a bare AlbumService working. When
+// assetRepo is nil the smart album returns an empty slice with a clear
+// noop-comment in code rather than crashing.
 func (s *AlbumService) ListAssets(ctx context.Context, albumID uuid.UUID) ([]repository.AlbumAsset, error) {
+	album, err := s.albumRepo.GetByID(ctx, albumID)
+	if err != nil {
+		return nil, fmt.Errorf("album service list assets: lookup album: %w", err)
+	}
+	if album == nil {
+		return nil, fmt.Errorf("album not found")
+	}
+
+	// Smart album path: resolve via the filter and rewrap as AlbumAsset
+	// so the API shape is identical to the manual join.
+	if len(album.SmartFilter) > 0 {
+		if s.assetRepo == nil {
+			// No asset repo wired — degrade gracefully to "no matches"
+			// rather than 500. The album still exists, the filter is
+			// known, but we can't resolve assets without the repo.
+			return []repository.AlbumAsset{}, nil
+		}
+		assets, err := s.GetSmartAlbumAssets(ctx, albumID, s.assetRepo)
+		if err != nil {
+			return nil, fmt.Errorf("album service list assets: smart resolve: %w", err)
+		}
+		now := time.Now().UTC()
+		out := make([]repository.AlbumAsset, 0, len(assets))
+		for i, a := range assets {
+			out = append(out, repository.AlbumAsset{
+				AlbumID:  albumID,
+				AssetID:  a.ID,
+				Position: i,
+				AddedAt:  now,
+			})
+		}
+		return out, nil
+	}
+
 	return s.albumRepo.ListAssets(ctx, albumID)
 }
 
@@ -128,6 +198,7 @@ func (s *AlbumService) Delete(ctx context.Context, id uuid.UUID) error {
 // Supported smart_filter keys:
 //   - content_type, status, search   — basic asset filters (existing)
 //   - face_cluster_label             — M3 E8-S3, requires WithFaceResolver
+//   - is_favorite                    — M41/105, requires WithFavoritesRepo
 //
 // When the album carries a face_cluster_label and the resolver is wired,
 // we look up the workspace via the gallery, ask the resolver for the
@@ -135,6 +206,11 @@ func (s *AlbumService) Delete(ctx context.Context, id uuid.UUID) error {
 // If the resolver isn't wired we log and return an empty slice — the
 // album exists in the DB and will start returning assets the moment
 // WithFaceResolver is called.
+//
+// is_favorite dispatches to the gallery_favorites repo to fetch the asset
+// IDs that any guest session has hearted on the public viewer. Same
+// degradation rule as the face resolver: if the favorites repo isn't
+// wired, return an empty slice rather than failing.
 func (s *AlbumService) GetSmartAlbumAssets(ctx context.Context, albumID uuid.UUID, assetRepo *repository.AssetRepo) ([]repository.Asset, error) {
 	album, err := s.albumRepo.GetByID(ctx, albumID)
 	if err != nil || album == nil {
@@ -142,6 +218,37 @@ func (s *AlbumService) GetSmartAlbumAssets(ctx context.Context, albumID uuid.UUI
 	}
 	if len(album.SmartFilter) == 0 {
 		return nil, nil // Not a smart album
+	}
+
+	// is_favorite branch (M41/105). Evaluated FIRST because it's an
+	// independent asset-id source — not a column filter — and combining
+	// it with content_type/status would require an intersection. None of
+	// the seeded utility albums combine these flags so we treat
+	// is_favorite as an early-return resolver.
+	if fav, ok := album.SmartFilter["is_favorite"].(bool); ok && fav {
+		if s.favoritesRepo == nil {
+			// Repo not wired — return empty rather than 500. The album
+			// will start populating the moment WithFavoritesRepo is
+			// called on the service.
+			return []repository.Asset{}, nil
+		}
+		favIDs, err := s.favoritesRepo.ListAssetIDsByGallery(ctx, album.GalleryID)
+		if err != nil {
+			return nil, fmt.Errorf("smart album: list favorites: %w", err)
+		}
+		matched := make([]repository.Asset, 0, len(favIDs))
+		for _, aid := range favIDs {
+			a, err := assetRepo.GetByID(ctx, aid)
+			if err != nil || a == nil {
+				// Asset deleted, soft-deleted, or transient lookup
+				// error — skip so the album doesn't 500. The favorite
+				// row remains in the DB; if the asset is restored the
+				// album resumes including it.
+				continue
+			}
+			matched = append(matched, *a)
+		}
+		return matched, nil
 	}
 
 	// Build asset filter from smart_filter JSON

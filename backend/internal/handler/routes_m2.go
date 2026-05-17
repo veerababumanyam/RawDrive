@@ -152,6 +152,17 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		// GAL-FR-130: CSV export of proofing selections
 		r.Get("/{id}/proofing/export.csv", proofingHandler.ExportCSV)
 
+		// M41/105: Owner-facing guest favorites aggregation. The public
+		// counterpart endpoints are mounted in RegisterPublicGalleryRoutes
+		// below. Conditional mount mirrors the pattern used by other M11+
+		// nullable services — if the favorites service wasn't wired in
+		// main.go (e.g. test harness without DB), this entire block stays
+		// dormant rather than crashing on a nil method receiver.
+		if deps.GalleryFavoritesService != nil {
+			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService)
+			r.Get("/{id}/favorites", favHandler.Summarize)
+		}
+
 		// M13: Gallery Access Control
 		if deps.GalleryAccessSvc != nil {
 			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc)
@@ -351,6 +362,19 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
 
+		// M41/105: Anonymous guest favorites — Star button in the public
+		// lightbox writes here. Toggleable (POST adds, DELETE removes)
+		// and keyed on an opaque guest_session_id from localStorage so
+		// favorites survive page refreshes without forcing email capture.
+		// See migration 105 for the schema rationale separating these
+		// from proofing_selections.
+		if deps.GalleryFavoritesService != nil {
+			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService)
+			r.Post("/galleries/{slug}/favorites/{assetId}", favHandler.Add)
+			r.Delete("/galleries/{slug}/favorites/{assetId}", favHandler.Remove)
+			r.Get("/galleries/{slug}/favorites", favHandler.ListForSession)
+		}
+
 		// GAL-FR-115: Plan-aware white-label branding for public gallery
 		r.Get("/galleries/{slug}/branding", publicHandler.GetBranding)
 		r.Get("/galleries/{slug}/branding/logo", publicHandler.GetBrandingLogo)
@@ -440,7 +464,13 @@ type M2Dependencies struct {
 	GalleryShareLogRepo  *repository.GalleryShareLogRepo
 	PublicBaseURL        string
 	ProofingService      *service.ProofingService
-	StorageConfigService *service.StorageConfigService
+	// M41/105: anonymous guest favorites for the public viewer. Nil-safe —
+	// the favorites routes (3 public + 1 owner) are conditionally mounted
+	// inside RegisterM2Routes / RegisterPublicGalleryRoutes so the rest of
+	// the gallery surface keeps working when the service isn't wired (e.g.
+	// in-memory test harnesses without a DB pool).
+	GalleryFavoritesService *service.GalleryFavoritesService
+	StorageConfigService    *service.StorageConfigService
 	// M11 dependencies (nil-safe — routes register only when non-nil)
 	AlbumService         *service.AlbumService
 	StorageAccountingSvc *service.StorageAccounting

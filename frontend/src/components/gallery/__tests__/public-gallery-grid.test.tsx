@@ -3,6 +3,24 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { PublicGalleryGrid } from "../public-gallery-grid";
 import type { PublicAsset } from "@/lib/api/galleries";
 
+// Module-level mock of the favorites API. Each test can vi.mocked() the
+// individual exports to assert behavior; default implementations are
+// no-op resolved promises so the hook's fire-and-forget calls never
+// reject the test runner.
+vi.mock("@/lib/api/favorites", () => ({
+  addPublicFavorite: vi.fn().mockResolvedValue(undefined),
+  removePublicFavorite: vi.fn().mockResolvedValue(undefined),
+  listPublicFavoriteAssetIds: vi.fn().mockResolvedValue([]),
+  getGalleryFavoritesSummary: vi.fn().mockResolvedValue(null),
+}));
+
+// Pull the mocked functions back into the test scope. vi.mocked() gives
+// us typed access to the spies for assertions.
+const favoritesApi = await import("@/lib/api/favorites");
+const mockedAdd = vi.mocked(favoritesApi.addPublicFavorite);
+const mockedRemove = vi.mocked(favoritesApi.removePublicFavorite);
+const mockedList = vi.mocked(favoritesApi.listPublicFavoriteAssetIds);
+
 const widePhoto = "/tests/photos/Wedding (42).jpg";
 
 function galleryAsset(overrides: Partial<PublicAsset> = {}): PublicAsset {
@@ -73,6 +91,11 @@ describe("PublicGalleryGrid", () => {
         value: { origin: "https://app.rawdrive.test", search: "" },
         writable: true,
       });
+      // Reset spy state between tests so call-count assertions are
+      // scoped to the test that wrote them.
+      mockedAdd.mockClear().mockResolvedValue(undefined);
+      mockedRemove.mockClear().mockResolvedValue(undefined);
+      mockedList.mockClear().mockResolvedValue([]);
     });
 
     afterEach(() => {
@@ -176,6 +199,88 @@ describe("PublicGalleryGrid", () => {
       // lightbox to the matching asset.
       expect(
         screen.getByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i }),
+      ).toBeInTheDocument();
+    });
+
+    // ─────── M41/105 server-side favorites sync ───────
+
+    it("calls the public favorites API on mount to hydrate Star state from the server", async () => {
+      // Server returns one favorite for this guest session. The Star
+      // button on that asset should render in the favorited state
+      // after hydration, without any user interaction.
+      mockedList.mockResolvedValueOnce(["asset-wide"]);
+
+      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      const dialog = openLightbox();
+
+      await waitFor(() => {
+        expect(mockedList).toHaveBeenCalledWith(
+          "wedding-gallery",
+          expect.any(String),
+        );
+      });
+
+      // Server said this asset is already favorited → label should
+      // show the "remove from favorites" state, not "add to".
+      expect(
+        await within(dialog).findByRole("button", { name: /remove from favorites/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("POSTs to addPublicFavorite when the Star button toggles on", async () => {
+      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      const dialog = openLightbox();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: /add to favorites/i }));
+
+      await waitFor(() => {
+        expect(mockedAdd).toHaveBeenCalledWith(
+          "wedding-gallery",
+          "asset-wide",
+          expect.any(String),
+        );
+      });
+      // DELETE was NOT called for this toggle-on action.
+      expect(mockedRemove).not.toHaveBeenCalled();
+    });
+
+    it("DELETEs via removePublicFavorite when the Star button toggles off", async () => {
+      // Start with the asset already favorited (server hydration).
+      mockedList.mockResolvedValueOnce(["asset-wide"]);
+
+      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      const dialog = openLightbox();
+
+      // Wait for hydration to flip the label.
+      const offButton = await within(dialog).findByRole(
+        "button",
+        { name: /remove from favorites/i },
+      );
+      fireEvent.click(offButton);
+
+      await waitFor(() => {
+        expect(mockedRemove).toHaveBeenCalledWith(
+          "wedding-gallery",
+          "asset-wide",
+          expect.any(String),
+        );
+      });
+    });
+
+    it("retains optimistic state when the server sync fails", async () => {
+      // Network failure on POST. Hook should NOT roll back — user
+      // intent stays expressed; next page mount re-syncs.
+      mockedAdd.mockRejectedValueOnce(new Error("network"));
+
+      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      const dialog = openLightbox();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: /add to favorites/i }));
+
+      // Optimistic flip happened immediately and stays put even after
+      // the rejected promise settles.
+      expect(
+        await within(dialog).findByRole("button", { name: /remove from favorites/i }),
       ).toBeInTheDocument();
     });
   });

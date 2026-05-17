@@ -27,6 +27,11 @@ import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress, Star, Share } from "@/components/icons";
+import {
+  addPublicFavorite,
+  listPublicFavoriteAssetIds,
+  removePublicFavorite,
+} from "@/lib/api/favorites";
 
 // API base mirrors what dashboard-ui.ts and lib/api/galleries.ts use. The
 // public asset download endpoint lives on the Go API (port 8081 in dev)
@@ -34,61 +39,135 @@ import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Downloa
 // so we always need an absolute URL for the download <a href>.
 const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-// Client-only favorites store. The public viewer has no authenticated
-// session and the backend has no /public/galleries/{slug}/favorites
-// endpoint yet, so favorites live in localStorage scoped per gallery
-// slug. This matches every comparable client-gallery product (Pixieset,
-// ShootProof) where guest favorites are device-local until the client
-// signs up. Server-side persistence is a clean follow-up — see the RCA
-// for the carry-forward item.
+// Stable per-browser guest session id. One UUID per browser, shared across
+// every gallery this browser visits. Used as the partition key for the
+// gallery_favorites table so the photographer's "favorited by N guests"
+// count is meaningful: clicking through to two share links from the same
+// device counts as one session, the same client on phone + laptop counts
+// as two.
+const GUEST_SESSION_STORAGE_KEY = "rawdrive-guest-session-id";
+
+function getOrCreateGuestSessionId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const existing = window.localStorage.getItem(GUEST_SESSION_STORAGE_KEY);
+    if (existing) return existing;
+    // crypto.randomUUID is in Safari 15.4+, Chrome 92+, Firefox 95+.
+    // The Math.random fallback is for the (rare) older browser case and
+    // for jsdom test environments where crypto.randomUUID is undefined.
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `g-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    window.localStorage.setItem(GUEST_SESSION_STORAGE_KEY, id);
+    return id;
+  } catch {
+    // Private mode / quota — return a per-tab ephemeral id. Favorites
+    // persist server-side but the session resets on page reload.
+    return `eph-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+// Server-backed favorites with a localStorage fallback. Behavior:
+//
+//   1. Mount: generate/load the guest session id, then call the server
+//      to hydrate the favorites Set. If the server is reachable, that
+//      result wins (truth lives on the server). If the fetch fails, we
+//      fall back to localStorage so the Star buttons still render in the
+//      correct state offline / behind a firewall.
+//   2. Toggle: optimistic — Set updates immediately. POST or DELETE
+//      fires in the background. On 2xx, also write localStorage so a
+//      subsequent offline load still paints the right state. On error,
+//      we don't roll back the optimistic toggle (the user's intent
+//      shouldn't snap back); the next mount will re-sync from server.
+//
+// localStorage key is gallery-scoped so a guest visiting two galleries
+// on one device sees the right favorites per gallery.
 function useGalleryFavorites(slug: string) {
   const storageKey = `rawdrive-favorites-${slug}`;
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
 
-  // Hydrate from localStorage on mount. Done lazily inside useEffect
-  // because the component renders during SSR for the public route where
-  // window/localStorage is undefined. Calling setState inside an effect
-  // is what React's docs recommend for "load external store on mount"
-  // (the proper alternative is useSyncExternalStore + a store object
-  // wrapping localStorage, which is overkill for a single Set<string>
-  // scoped to one gallery slug).
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let cancelled = false;
+
+    const sessionId = getOrCreateGuestSessionId();
+    if (!sessionId) return;
+
+    // Optimistic local read so the UI shows *something* immediately
+    // while the server fetch is in flight.
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR-safe hydration of external store; see comment above.
-          setFavorites(new Set(parsed.filter((v): v is string => typeof v === "string")));
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR-safe hydration of external store from localStorage.
+          setFavorites(
+            new Set(parsed.filter((v): v is string => typeof v === "string")),
+          );
         }
       }
     } catch {
-      // Corrupt localStorage entry — start fresh, don't crash the lightbox.
+      // Corrupt localStorage — skip the local seed; the server fetch
+      // below will populate fresh.
     }
-  }, [storageKey]);
+
+    // Authoritative read from the server. Replaces local seed when
+    // it lands. Failures are silent — localStorage state stays as-is.
+    void listPublicFavoriteAssetIds(slug, sessionId)
+      .then((ids) => {
+        if (cancelled) return;
+        const next = new Set(ids);
+        setFavorites(next);
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+        } catch { /* quota — no-op */ }
+      })
+      .catch(() => {
+        // Server unreachable / gallery unpublished — fall through with
+        // whatever localStorage gave us.
+      });
+
+    return () => { cancelled = true; };
+  }, [slug, storageKey]);
 
   const toggle = useCallback(
     (assetId: string) => {
-      setFavorites((current) => {
-        const next = new Set(current);
-        if (next.has(assetId)) {
-          next.delete(assetId);
-        } else {
-          next.add(assetId);
-        }
-        if (typeof window !== "undefined") {
-          try {
-            window.localStorage.setItem(storageKey, JSON.stringify([...next]));
-          } catch {
-            // Quota / private-mode failure — UI still reflects the toggle
-            // for the rest of this session; persistence silently degrades.
-          }
-        }
-        return next;
-      });
+      const sessionId = getOrCreateGuestSessionId();
+      // Read the current state at the call site rather than smuggling
+      // it out of a setFavorites callback via a mutable closure var.
+      // The setFavorites updater may be invoked asynchronously (or
+      // double-invoked under React strict mode) which made the
+      // previous closure-mutation pattern unreliable in tests.
+      const wasFavorited = favorites.has(assetId);
+      const nextFavorites = new Set(favorites);
+      if (wasFavorited) {
+        nextFavorites.delete(assetId);
+      } else {
+        nextFavorites.add(assetId);
+      }
+      setFavorites(nextFavorites);
+
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            storageKey,
+            JSON.stringify([...nextFavorites]),
+          );
+        } catch { /* quota — no-op */ }
+      }
+
+      if (!sessionId) return;
+
+      // Fire-and-forget server sync. Optimistic UI already updated.
+      // Failure is silent so a brief network blip doesn't snap the
+      // Star back to its previous state — next mount re-syncs.
+      const op = wasFavorited
+        ? removePublicFavorite(slug, assetId, sessionId)
+        : addPublicFavorite(slug, assetId, sessionId);
+      void op.catch(() => { /* sync failed; local state retained */ });
     },
-    [storageKey],
+    [favorites, slug, storageKey],
   );
 
   return { favorites, toggle };
