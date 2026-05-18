@@ -86,8 +86,21 @@ func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID u
 		return nil
 	}
 
-	// Read image from storage (shared between both backends).
-	reader, err := s.store.Get(ctx, assetID.String())
+	// Read image from storage. We MUST use the asset's storage_key, not
+	// its UUID — the storage layout is
+	// <workspace_id>/<some-uuid>/original.<ext> and using the asset id
+	// directly returns NoSuchKey 404 every time. This was a pre-existing
+	// bug in the Gemini fallback path that never triggered because the
+	// Gemini detection was never activated; surfaced once the face-svc
+	// path went live in PR-2a.
+	var storageKey string
+	if err := s.faceRepo.pool.QueryRow(ctx,
+		`SELECT storage_key FROM assets WHERE id = $1 AND deleted_at IS NULL`,
+		assetID,
+	).Scan(&storageKey); err != nil {
+		return fmt.Errorf("face service: lookup storage_key: %w", err)
+	}
+	reader, err := s.store.Get(ctx, storageKey)
 	if err != nil {
 		return fmt.Errorf("face service: get asset: %w", err)
 	}
