@@ -18,13 +18,11 @@ import {
   type GalleryAlbum,
   type GalleryAsset,
 } from "@/lib/api/galleries";
-import { listProofingSelections, createComment, exportProofingSelectionsCsv, type ProofingSelection } from "@/lib/api/proofing";
+import { listProofingSelections, createComment, type ProofingSelection } from "@/lib/api/proofing";
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import {
   assetIsProcessing,
-  galleryStatusClasses,
-  galleryTypeClasses,
   getAssetPreviewUrl,
   proofingStatusClasses,
 } from "@/lib/dashboard-ui";
@@ -526,9 +524,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
-          <Link href="/galleries" className="btn-tertiary px-0 py-0 text-sm">
-            Back to galleries
-          </Link>
           <div>
             {editingTitle ? (
               <input
@@ -634,20 +629,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                galleryTypeClasses[gallery.gallery_type] || "status-badge status-badge--neutral",
-              )}
-            >
-              {gallery.gallery_type}
-            </span>
-            <span
-              className={cn(
-                galleryStatusClasses[gallery.status] || "status-badge status-badge--neutral",
-              )}
-            >
-              {gallery.status}
-            </span>
             <span className={gallery.is_published ? "status-badge status-badge--success" : "status-badge status-badge--neutral"}>
               {gallery.is_published ? "Published" : "Unpublished"}
             </span>
@@ -695,32 +676,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div id="share" className="flex flex-wrap gap-3">
-          <Link href={`/galleries/${gallery.id}/proofing`} className="btn-primary px-4 py-2.5 text-sm">
-            Review proofing
-          </Link>
-          {/* GAL-FR-130: CSV export of selections — must fetch with auth
-              header since the endpoint is JWT-protected. A bare <a href>
-              would navigate without the Authorization header and get 401. */}
-          <button
-            className="btn-tertiary px-4 py-2.5 text-sm"
-            onClick={async () => {
-              const t = getStoredAccessToken();
-              if (!t) return;
-              try {
-                const blob = await exportProofingSelectionsCsv(t, gallery.id);
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${gallery.title || "selections"}-proofing.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to export CSV");
-              }
-            }}
-          >
-            Export selections (CSV)
-          </button>
           {/* In-dashboard preview — renders the saved Design Studio
               output through the same Hero+Grid components the public
               /g/[slug] route uses, but keeps the dashboard top menu bar
@@ -752,44 +707,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       <div>
         <section className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="surface-panel p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Assets</p>
-              <p className="mt-3 text-2xl font-semibold text-text-primary">{assets.length}</p>
-            </div>
-            <div className="surface-panel p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Selections</p>
-              <p className="mt-3 text-2xl font-semibold text-text-primary">{selections.length}</p>
-            </div>
-            {/* M41/105: Favorites tile. Distinct from Selections — these
-                are anonymous guest "hearts" from the public lightbox Star
-                button. Two numbers because they tell different stories:
-                unique_assets_count is "how many photos got loved" (the
-                photographer's editing signal), total_favorites is "how
-                many heart clicks" (the engagement signal). When the
-                request failed we show "—" rather than zero so the
-                photographer doesn't mistake an outage for "no one liked
-                anything yet". */}
-            <div className="surface-panel p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Favorites</p>
-              <p className="mt-3 text-2xl font-semibold text-text-primary">
-                {favoritesSummary === null
-                  ? "—"
-                  : favoritesSummary.unique_assets_count}
-              </p>
-              {favoritesSummary !== null && favoritesSummary.total_favorites > 0 && (
-                <p className="mt-1 text-xs text-text-tertiary">
-                  {favoritesSummary.total_favorites} hearts · {favoritesSummary.unique_sessions} guest{favoritesSummary.unique_sessions === 1 ? "" : "s"}
-                </p>
-              )}
-            </div>
-            <div className="surface-panel p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Selection limit</p>
-              <p className="mt-3 text-2xl font-semibold text-text-primary">
-                {gallery.max_selections > 0 ? gallery.max_selections : "Open"}
-              </p>
-            </div>
-          </div>
 
           {/* Upload progress (shown when uploading) */}
           {upload.items.length > 0 && (
@@ -950,48 +867,116 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
 
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {/* "All Photos" chip wrapped in the same container shape
-                    as album chips so its accompanying Share button reads
-                    as a peer affordance, not a stray icon. Share here
-                    calls copyShareUrl() with NO albumId — that's the
-                    canonical gallery-wide share URL, the same one
-                    rendered by the larger Share area below. Surfacing it
-                    inline saves a scroll for photographers who just want
-                    to copy the gallery link while reviewing photos. */}
+              {/* Mobile (<sm): collapse the chip strip into a single
+                  dropdown + Share/QR action buttons. Wrapping five chips
+                  onto separate lines wastes vertical space on phones; a
+                  native <select> uses the system picker (much better UX
+                  than custom dropdowns on mobile) and the Share/QR
+                  buttons operate on whichever option is currently
+                  selected. Hidden on sm+ where the full chip strip
+                  below has room to breathe. */}
+              <div className="flex items-center gap-2 sm:hidden">
+                <select
+                  value={activeAlbum ?? ""}
+                  onChange={(e) => setActiveAlbum(e.target.value || null)}
+                  className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-sm font-semibold text-text-primary transition-colors focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/30"
+                  aria-label="Select gallery view"
+                >
+                  <option value="">All Photos ({assets.length})</option>
+                  {albums.map((album) => (
+                    <option key={album.id} value={album.id}>
+                      {album.name} ({albumAssetIdsByAlbum[album.id]?.length ?? 0})
+                    </option>
+                  ))}
+                </select>
+                {(() => {
+                  // Derive the share metadata for whichever option the
+                  // dropdown currently has selected. activeAlbum === null
+                  // means "All Photos" — copyShareUrl/buildShareUrl with
+                  // no argument is the gallery-wide canonical share URL.
+                  const selectedAlbum = activeAlbum ? albums.find((a) => a.id === activeAlbum) : null;
+                  const selectedLabel = selectedAlbum ? selectedAlbum.name : "All Photos";
+                  const selectedSlug = selectedAlbum
+                    ? selectedAlbum.name.toLowerCase().replace(/\s+/g, "-")
+                    : "all-photos";
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => copyShareUrl(selectedAlbum?.id)}
+                        className="shrink-0 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                        title={`Copy ${selectedLabel} share link`}
+                        aria-label={`Copy ${selectedLabel} share link`}
+                      >
+                        Share
+                      </button>
+                      <div className="shrink-0 flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high">
+                        <ShareQrPopover
+                          url={gallery.is_published ? buildShareUrl(selectedAlbum?.id) : ""}
+                          disabled={!gallery.is_published}
+                          label={`Show QR code for ${selectedLabel} share link`}
+                          filename={`${gallery.slug || "gallery"}-${selectedSlug}-qr`}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Desktop (sm+): two-segment chip strip. Each chip is split
+                  into a name+count-badge "select" segment and a "Share /
+                  QR" action segment, separated by a subtle inner divider
+                  so the secondary actions read as a related-but-distinct
+                  cluster instead of crowding the chip label. Layout uses
+                  flex-wrap so chips reflow onto multiple lines on narrow
+                  viewports. Long album names truncate at ~14rem to keep
+                  chip widths bounded. */}
+              <div className="hidden flex-wrap items-center gap-2 sm:flex">
                 <div
                   className={cn(
-                    "flex shrink-0 items-center gap-1 rounded-lg border px-1 py-1 transition-colors",
+                    "group flex shrink-0 items-stretch overflow-hidden rounded-xl border transition-all",
                     !activeAlbum
-                      ? "border-accent-primary bg-accent-subtle"
-                      : "border-border-default bg-surface-container hover:border-accent-primary/60",
+                      ? "border-accent-primary bg-accent-subtle shadow-sm"
+                      : "border-border-default bg-surface-container hover:border-accent-primary/60 hover:bg-surface-container-high",
                   )}
                 >
                   <button
                     type="button"
                     onClick={() => setActiveAlbum(null)}
                     className={cn(
-                      "px-2 py-1 text-xs font-medium transition-colors",
+                      "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
                       !activeAlbum ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
                     )}
                   >
-                    All Photos
+                    <span>All Photos</span>
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                        !activeAlbum
+                          ? "bg-accent-primary/15 text-accent-primary"
+                          : "bg-surface-sunken text-text-tertiary",
+                      )}
+                    >
+                      {assets.length}
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => copyShareUrl()}
-                    className="rounded-md px-2 py-1 text-xs text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
-                    title="Copy gallery share link"
-                    aria-label="Copy gallery share link"
-                  >
-                    Share
-                  </button>
-                  <ShareQrPopover
-                    url={gallery.is_published ? buildShareUrl() : ""}
-                    disabled={!gallery.is_published}
-                    label="Show QR code for All Photos share link"
-                    filename={`${gallery.slug || "gallery"}-all-photos-qr`}
-                  />
+                  <div className="flex items-center border-l border-border-subtle">
+                    <button
+                      type="button"
+                      onClick={() => copyShareUrl()}
+                      className="px-2 py-1.5 text-[11px] font-medium text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
+                      title="Copy gallery share link"
+                      aria-label="Copy gallery share link"
+                    >
+                      Share
+                    </button>
+                    <ShareQrPopover
+                      url={gallery.is_published ? buildShareUrl() : ""}
+                      disabled={!gallery.is_published}
+                      label="Show QR code for All Photos share link"
+                      filename={`${gallery.slug || "gallery"}-all-photos-qr`}
+                    />
+                  </div>
                 </div>
                 {albums.map((album) => {
                   const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
@@ -1018,10 +1003,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     <div
                       key={album.id}
                       className={cn(
-                        "flex shrink-0 items-center gap-1 rounded-lg border px-1 py-1 transition-colors",
+                        "group flex shrink-0 items-stretch overflow-hidden rounded-xl border transition-all",
                         isActive
-                          ? "border-accent-primary bg-accent-subtle"
-                          : "border-border-default bg-surface-container hover:border-accent-primary/60",
+                          ? "border-accent-primary bg-accent-subtle shadow-sm"
+                          : "border-border-default bg-surface-container hover:border-accent-primary/60 hover:bg-surface-container-high",
                       )}
                       onDragOver={(e) => {
                         const hasInternal = e.dataTransfer.types.includes("application/x-rawdrive-asset-ids");
@@ -1053,23 +1038,41 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       <button
                         type="button"
                         onClick={() => setActiveAlbum(album.id)}
-                        className={cn("px-2 py-1 text-xs font-medium transition-colors", isActive ? "text-accent-primary" : "text-text-secondary hover:text-text-primary")}
+                        className={cn(
+                          "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
+                          isActive ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
+                        )}
+                        title={album.name}
                       >
-                        {album.name} <span className="text-text-tertiary">{assetCount}</span>
+                        <span className="truncate">{album.name}</span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                            isActive
+                              ? "bg-accent-primary/15 text-accent-primary"
+                              : "bg-surface-sunken text-text-tertiary",
+                          )}
+                        >
+                          {assetCount}
+                        </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => copyShareUrl(album.id)}
-                        className="rounded-md px-2 py-1 text-xs text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
-                      >
-                        Share
-                      </button>
-                      <ShareQrPopover
-                        url={gallery.is_published ? buildShareUrl(album.id) : ""}
-                        disabled={!gallery.is_published}
-                        label={`Show QR code for ${album.name} share link`}
-                        filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
-                      />
+                      <div className="flex items-center border-l border-border-subtle">
+                        <button
+                          type="button"
+                          onClick={() => copyShareUrl(album.id)}
+                          className="px-2 py-1.5 text-[11px] font-medium text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
+                          title={`Copy ${album.name} share link`}
+                          aria-label={`Copy ${album.name} share link`}
+                        >
+                          Share
+                        </button>
+                        <ShareQrPopover
+                          url={gallery.is_published ? buildShareUrl(album.id) : ""}
+                          disabled={!gallery.is_published}
+                          label={`Show QR code for ${album.name} share link`}
+                          filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
+                        />
+                      </div>
                     </div>
                   );
                 })}

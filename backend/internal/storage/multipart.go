@@ -13,14 +13,14 @@ import (
 
 // F-013 (M17 wave 5): multipart upload support on the storage layer.
 //
-// The TUS upload flow needs direct-to-R2 multipart streaming so
+// The TUS upload flow needs direct-to-B2 multipart streaming so
 // chunked_upload.go can stop staging bytes on local disk (which is an
 // F-008 hard-law violation). This file adds the four multipart
 // primitives (create, upload part, complete, abort) behind a
 // capability interface so callers that need multipart can type-assert
 // a Provider into it.
 //
-// Only S3Driver (which owns an R2 / S3 client) implements
+// Only S3Driver (which owns a B2 / S3 / MinIO client) implements
 // MultipartCapable. LocalDriver does NOT — and never will, because
 // local storage is disabled per F-008. Callers that reach for
 // multipart on a non-multipart Provider get ErrMultipartNotSupported.
@@ -33,7 +33,7 @@ var ErrMultipartNotSupported = errors.New("storage: multipart not supported on t
 
 // MultipartCapable is the capability interface for providers that
 // support S3 multipart uploads. Clients that need TUS-style streaming
-// type-assert a Provider into this interface — the existing R2/S3
+// type-assert a Provider into this interface — the existing S3/B2
 // driver implements it; the local driver does not.
 type MultipartCapable interface {
 	CreateMultipartUpload(ctx context.Context, key string, contentType string) (uploadID string, err error)

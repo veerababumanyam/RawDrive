@@ -14,6 +14,7 @@
 import { useEffect, useRef } from "react";
 import type { Asset } from "@/lib/api/assets";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 
 interface Props {
   assets: Asset[];
@@ -21,10 +22,16 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
+// Thin wrapper retained for call-site readability. Delegates to
+// getStorageBackedUrl which handles bare keys (e.g. `thumbnails/<id>/
+// thumb_sm_webp.webp`), `/storage/...` paths, and absolute URLs.
+// Previous implementation only added a token when the URL ALREADY
+// contained "/storage/" — bare keys from thumbnail_urls were passed
+// straight to <img src> and resolved as relative URLs against the
+// gallery page (404 on the Next.js host instead of /storage/ on the
+// Go API).
 function appendTokenIfStorage(url: string, token: string | null): string {
-  if (!url || !token || !url.includes("/storage/") || url.includes("token=")) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}token=${encodeURIComponent(token)}`;
+  return getStorageBackedUrl(url, token);
 }
 
 export function Filmstrip({ assets, activeId, onSelect }: Props) {

@@ -445,8 +445,16 @@ export default function GalleriesPage() {
                       </div>
                     )}
 
-                    {/* Hover overlay with quick actions */}
-                    <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                    {/* Hover overlay with quick actions. Hidden on touch
+                        devices (mobile/tablet without hover) because the
+                        sticky-hover behavior on touch causes the first tap
+                        to reveal the overlay and the second tap to land
+                        on the Design button instead of opening the
+                        gallery. Mobile users tap the card itself, which
+                        is wrapped in <Link> -> /galleries/{id}. The
+                        overlay shows only on devices with true hover
+                        (desktop with mouse / trackpad). */}
+                    <div className="absolute inset-0 hidden items-center justify-center gap-3 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:hover)]:flex">
                       <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/galleries/${g.id}`); }}
                         className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"

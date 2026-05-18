@@ -406,7 +406,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	}
 	r2UploadID, err := mpc.CreateMultipartUpload(r.Context(), storageKey, input.ContentType)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to create R2 multipart upload: %s"}`, err.Error()), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error":"failed to create multipart upload: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 

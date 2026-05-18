@@ -19,7 +19,7 @@
   "customAgentsCount": 0,
   "agentTeamsCount": 0,
   "pipeline": {
-    "currentStage": "complete",
+    "currentStage": "paused",
     "infra_verified": true,
     "infra_started": true,
     "infra_healthy": true,
@@ -101,7 +101,13 @@
       }
     },
     "dispatchDepth": 0,
-    "autonomousStopBlock": 0
+    "autonomousStopBlock": 0,
+    "autonomous": true,
+    "mode": "autonomous",
+    "currentMilestone": "M41",
+    "fixStage": "complete",
+    "pausedReason": "User restarted dev stack mid-build (M41 round 3 / step 03-tdd-green). Resume: /cobolt-build M41 --resume --autonomous",
+    "pausedAt": "2026-05-17T04:52:41Z"
   },
   "prQueue": {
     "watchedRepos": [],
@@ -121,7 +127,7 @@
     "tddMode": "sequential",
     "useWorktrees": true,
     "generateSkills": true,
-    "autonomous": false,
+    "autonomous": true,
     "hasUI": true
   },
   "designMCP": {
@@ -148,7 +154,7 @@
     "perfBudgetExceeded": 0,
     "productionReadyScore": {}
   },
-  "lastUpdated": "2026-04-17T13:08:04.697Z",
+  "lastUpdated": "2026-05-17T04:52:41.828Z",
   "resolvedRoot": "/Users/madhuthota/merupuai/rawdrive/RawDrive",
   "initCheckpoints": {
     "detect-configure": {
@@ -228,54 +234,59 @@
   "build": {
     "version": "2.1.0",
     "autoMode": true,
-    "milestoneLoop": {
-      "autoMode": true,
-      "autonomous": true,
-      "current": "M35",
-      "remaining": [],
-      "completed": [
-        "M31",
-        "M32",
-        "M33",
-        "M34",
-        "M35"
-      ],
-      "totalMilestones": 2
-    },
-    "currentStep": "complete",
-    "startedAt": "2026-04-14T00:26:02Z",
+    "autonomous": true,
+    "currentMilestone": "M41",
+    "featureMode": true,
+    "currentStep": "03-tdd-green",
     "stepsCompleted": [
       "00-preflight",
       "01-milestone-setup",
       "01a-story-specs",
       "01b-spec-validation",
-      "02-tdd-red",
-      "03-tdd-green",
-      "03a-code-gap-analysis",
-      "03b-integration-smoke",
-      "04-tdd-refactor",
-      "04a-deep-verification",
-      "05-review",
-      "06-fix",
-      "07-validate",
-      "08-milestone-complete"
+      "02-tdd-red"
     ],
-    "currentRound": 5,
-    "currentRoundPhase": "red",
-    "currentRoundName": "finalize",
+    "startedAt": "2026-04-21T00:04:29.568Z",
+    "milestoneLoop": {
+      "autoMode": true,
+      "autonomous": true,
+      "current": "M41",
+      "remaining": [],
+      "featureMode": true,
+      "completed": [
+        "M40"
+      ]
+    },
+    "currentRound": 3,
+    "totalRounds": 5,
     "roundsCompleted": [
       "round-01-foundation",
-      "round-02-core",
-      "round-03-api",
-      "round-04-frontend"
+      "round-02-core-logic-input",
+      "round-03-api-slice-1",
+      "round-03-api-slice-2-wiring",
+      "round-02-db-slice",
+      "round-03-api-slice-3-admin",
+      "round-05-slice-uat-seed"
     ],
-    "status": "complete"
+    "reviewFixLoop": {
+      "iteration": 0,
+      "maxIterations": 5,
+      "escalated": false
+    },
+    "retryCount": 0,
+    "escalationCount": 0,
+    "artifactsProduced": 0,
+    "phantomRates": {},
+    "parallelMode": false,
+    "tddPhase": "green"
   },
   "planning": {
     "auto": 1,
     "enhance": 1,
-    "scope": "enterprise",
-    "rigorous": 0
+    "scope": "standard",
+    "rigorous": 0,
+    "resume": 0,
+    "autonomous": true,
+    "mode": "feature"
   },
   "planningArtifacts": {
     "agentGrounding": {
@@ -854,16 +865,16 @@
       "timestamp": "2026-04-15T11:30:20.073Z"
     },
     "planning-artifacts": {
-      "passed": false,
+      "passed": true,
       "gate_name": "planning-artifacts",
       "registered": 63,
-      "requiredPresent": 59,
-      "requiredMissing": 1,
-      "timestamp": "2026-04-15T11:30:20.073Z"
+      "requiredPresent": 63,
+      "requiredMissing": 0,
+      "timestamp": "2026-04-17T14:37:47.937Z"
     }
   },
-  "currentMilestone": "M35",
-  "stage": "completed",
+  "currentMilestone": "M41",
+  "stage": "build",
   "_integrity": {
     "sha256": "6ce0f62c5c28aecb93ab4748265e8394484b6573bd7fbd6aa669b8a697e81042",
     "verifiedAt": "2026-04-15T10:23:50.671Z"
@@ -878,10 +889,29 @@
   "mode": "rigorous",
   "productionTrack": {
     "autoImpliesRigorous": true,
-    "updatedAt": "2026-04-15T11:16:42.766Z"
+    "updatedAt": "2026-04-20T23:34:50.519Z"
   },
   "infra": {
     "status": "verified",
     "target": "dev"
+  },
+  "fix": {
+    "mode": "pipeline",
+    "iteration": 1,
+    "maxIterations": 5,
+    "checkpoint": "rca-complete",
+    "completedAt": "2026-04-21T01:26:04Z",
+    "chainedTo": "halted-by-user-continue-on-branch",
+    "haltReason": "no-progress-loop-after-audit-fail"
+  },
+  "audit": {
+    "lastRun": "2026-04-21T00:42:16Z",
+    "milestone": "M41",
+    "mode": "milestone",
+    "score": 0,
+    "grade": "F",
+    "verdict": "FAIL",
+    "stubCount": 49,
+    "criticalStubCount": 0
   }
 }

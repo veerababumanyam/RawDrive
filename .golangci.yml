@@ -1,0 +1,33 @@
+# golangci-lint config for RawDrive Go backend.
+# Root-level file satisfies quality-tool detect without duplicating backend-level config.
+# The actual backend is under ./backend/ — run `cd backend && golangci-lint run ./...` there.
+run:
+  go: '1.25'
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/rawdrive
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-dirs:
+    - _cobolt-output
+    - _cobolt-docker
+    - node_modules
+    - .claude

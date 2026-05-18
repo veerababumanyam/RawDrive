@@ -6,7 +6,7 @@ import (
 )
 
 // Provider is the storage abstraction interface. All storage backends
-// (local filesystem, S3, Cloudflare R2) implement this interface.
+// (local filesystem, S3, Backblaze B2) implement this interface.
 type Provider interface {
 	Put(ctx context.Context, key string, body io.Reader, size int64, contentType string) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)

@@ -12,7 +12,7 @@ Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.51
 - **Backend:** Go (`backend/cmd`, `backend/internal`) — Chi router, JWT, pgvector
 - **Frontend:** Next.js 15 + TS 5 + Tailwind v4 + pnpm (`frontend/`)
 - **Data plane:** Postgres 16 + pgvector, Valkey 8, NATS JetStream, Mailpit (dev SMTP)
-- **Storage:** Cloudflare R2 (default, standard/pro tiers); BYOS is enterprise-only
+- **Storage:** Backblaze B2 (S3-compatible API) is the managed default for ALL tiers; enterprise tenants can override via BYOS (S3/MinIO/B2)
 - **E2E:** Playwright runs **inside the `playwright` docker service**, not Windows host
 
 ## Layout
@@ -53,9 +53,13 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   Do not add OTP paths to login flows.
 - **Upload UX:** Upload lives **inside a gallery / sub-gallery**. There is no standalone
   `/upload` route in the sidebar — do not add one.
-- **Storage:** Cloudflare R2 is the sole storage backend for standard/pro tiers.
-  BYOS (bring-your-own-storage) is enterprise-only. No local disk storage, no
-  hardcoded credentials — service creds live in admin settings CRUD.
+- **Storage:** Backblaze B2 (via the S3-compatible API) is the managed
+  storage backend for ALL tiers. BYOS (bring-your-own-storage) is
+  enterprise-only and lets tenants override the managed B2 backend with
+  their own AWS S3, MinIO, or B2 credentials. No local disk storage, no
+  hardcoded credentials — service creds live in `.env.cobolt` (gitignored)
+  for the managed backend and in `platform_settings` / `workspace_storage_configs`
+  for BYOS overrides.
 - **Derivatives:** All uploads must produce **WebP** derivatives. Storage auth is
   required; download offers format choice.
 - **JWT claims:** Handlers must call `middleware.JWTClaimsFromContext(ctx)`. Never
@@ -74,9 +78,9 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
 The bullets above are the TLDR. The sections below are the authoritative reference.
 
 ### No Local Storage (ABSOLUTE)
-- The application **MUST NEVER** store files on the local filesystem. Cloudflare R2 is the ONLY storage driver.
+- The application **MUST NEVER** store files on the local filesystem. The `s3` driver (against Backblaze B2 by default) is the only allowed production driver.
 - `STORAGE_DRIVER=local` causes a **FATAL exit**. No fallback, no dev mode, no exceptions.
-- All file storage goes to R2 via the S3-compatible API.
+- The managed backend is Backblaze B2 via its S3-compatible API. Enterprise tenants may override with AWS S3, MinIO, or their own B2 bucket through BYOS — all routed through the same `s3` driver case in `backend/internal/storage/factory.go`.
 - All file serving requires JWT authentication — no public URL access.
 
 ### No Hardcoded Credentials (ABSOLUTE)
@@ -84,7 +88,8 @@ The bullets above are the TLDR. The sections below are the authoritative referen
 - Config lookup order: (1) `platform_settings` database table → (2) environment variables → (3) fail with a clear error and disable the feature.
 - No "dev default" secrets. If an env var is missing, log a warning and disable that feature — do not substitute a placeholder.
 - `.env.cobolt` holds all local env vars. It is **gitignored**. Never commit it, never reference its values in source code.
-- Required R2 env vars: `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_REGION`, `R2_PUBLIC_URL`, `R2_ACCOUNT_ID`.
+- Required B2 storage env vars (managed backend): `B2_BUCKET_NAME`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_ENDPOINT`, `B2_REGION`. `B2_KEY_ID` maps to the S3 `AccessKeyID`; `B2_APPLICATION_KEY` maps to `SecretAccessKey`. The Backblaze console's `B2_BUCKET_ID` is kept in `.env.cobolt` as a comment for reference only — the S3 API uses the bucket name.
+- `R2_ACCOUNT_ID` is **only** for Cloudflare Stream (video) — `backend/internal/service/stream_service.go` still reads it as a fallback for `CF_STREAM_ACCOUNT_ID`. It is unrelated to object storage and predates the B2 migration.
 
 ### WebP Derivatives (MANDATORY)
 - Every uploaded image **MUST** produce WebP derivatives for in-app display.
@@ -129,9 +134,9 @@ There are **two separate one-time-code primitives** in this codebase and they ar
 - Test users are seeded via `backend/seeds/` — use these in integration tests rather than fabricating new roles.
 
 ### Storage Plans
-- **R2 is the sole managed storage backend for standard and professional plans.** It is the default, not a BYOS choice.
-- **BYOS is enterprise-only.** The BYOS wizard must not be shown to standard/pro users.
-- Storage settings page: standard/pro users see R2 usage (read-only) + "Upgrade to Enterprise" for BYOS. Enterprise users see the BYOS wizard to connect S3/MinIO/B2. R2 does NOT appear in the BYOS wizard.
+- **Backblaze B2 (S3-compatible) is the managed storage backend for ALL tiers.** Credentials are driven from `.env.cobolt` (managed by ops); standard, pro, and enterprise tenants all read/write to the managed B2 bucket by default.
+- **BYOS is enterprise-only.** The BYOS wizard must not be shown to standard/pro users. It lets an enterprise tenant override the managed B2 backend with their own AWS S3, MinIO, or B2 credentials (stored in `workspace_storage_configs`).
+- Storage settings page: standard/pro users see managed-B2 usage (read-only) + "Upgrade to Enterprise" for BYOS. Enterprise users see usage + the BYOS wizard. The managed-B2 backend is **not** offered as a BYOS provider option (it's the default, not an override).
 - Dashboard storage widget reads from `workspace_storage` table — never mocked data.
 
 ### Upload UX

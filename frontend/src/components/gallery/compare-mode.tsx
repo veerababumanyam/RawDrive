@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 
 interface Props {
   left: Asset;
@@ -30,6 +31,12 @@ interface Props {
 }
 
 function largeUrl(a: Asset, token: string | null): string {
+  // Pick the largest viewable variant. `thumbnail_urls` values are bare
+  // storage keys (e.g. `derivatives/<id>/display_webp.webp`); they need
+  // the `/storage/` prefix + API_BASE host + JWT token. The previous
+  // implementation only added a token to URLs that already contained
+  // `/storage/`, so bare keys went straight to <img src> and resolved
+  // as relative URLs on the Next.js host (404).
   const raw =
     a.thumbnail_urls?.display_webp ||
     a.thumbnail_urls?.thumb_lg_webp ||
@@ -39,9 +46,7 @@ function largeUrl(a: Asset, token: string | null): string {
     a.download_url ||
     Object.values(a.thumbnail_urls || {})[0] ||
     "";
-  if (!raw || !token || !raw.includes("/storage/") || raw.includes("token=")) return raw;
-  const sep = raw.includes("?") ? "&" : "?";
-  return `${raw}${sep}token=${encodeURIComponent(token)}`;
+  return getStorageBackedUrl(raw, token);
 }
 
 export function CompareMode({ left, right, onExit }: Props) {

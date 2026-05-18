@@ -16,14 +16,22 @@ interface CoverState {
   focalPoint: { x: number; y: number };
   aspectRatio: AspectRatio;
   template: CoverTemplate;
-  zoom: number;
 }
 
+// Pan gesture state — kept in a ref so the move/up handlers read the
+// drag origin without re-binding on every focal-point update.
+interface PanOrigin {
+  startX: number;
+  startY: number;
+  startFocalX: number;
+  startFocalY: number;
+}
 
 export default function CoverPhotoPage() {
   const params = useParams();
   const galleryId = params.id as string;
   const containerRef = useRef<HTMLDivElement>(null);
+  const panOriginRef = useRef<PanOrigin | null>(null);
 
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [realAssets, setRealAssets] = useState<Asset[]>([]);
@@ -32,8 +40,8 @@ export default function CoverPhotoPage() {
     focalPoint: { x: 50, y: 50 },
     aspectRatio: "16:9",
     template: "full_bleed",
-    zoom: 1,
   });
+  const [isPanning, setIsPanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -92,12 +100,46 @@ export default function CoverPhotoPage() {
     "1:1": "1/1",
   };
 
-  const handleFocalPointDrag = useCallback((e: React.MouseEvent) => {
+  // Pan gesture: drag the image inside the frame, the focal point follows
+  // in the inverse direction so the visible window appears to pan with the
+  // user's finger/cursor. Pointer Events unify mouse, touch, and pen input
+  // in one handler set (no separate touchmove listeners needed). The
+  // pointer is captured on down so the gesture continues even if the
+  // cursor exits the container — releases on up/cancel.
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
+    panOriginRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startFocalX: state.focalPoint.x,
+      startFocalY: state.focalPoint.y,
+    };
+    setIsPanning(true);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore — some pen drivers throw */ }
+    e.preventDefault();
+  }, [state.focalPoint.x, state.focalPoint.y]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!panOriginRef.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    setState((s) => ({ ...s, focalPoint: { x: Math.round(x), y: Math.round(y) } }));
+    const dx = e.clientX - panOriginRef.current.startX;
+    const dy = e.clientY - panOriginRef.current.startY;
+    // Inverted: dragging right pans the focal-point left, so the image
+    // visibly moves with the cursor.
+    const newFocalX = Math.max(0, Math.min(100, panOriginRef.current.startFocalX - (dx / rect.width) * 100));
+    const newFocalY = Math.max(0, Math.min(100, panOriginRef.current.startFocalY - (dy / rect.height) * 100));
+    setState((s) => ({ ...s, focalPoint: { x: Math.round(newFocalX), y: Math.round(newFocalY) } }));
+  }, []);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!panOriginRef.current) return;
+    panOriginRef.current = null;
+    setIsPanning(false);
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch { /* ignore */ }
   }, []);
 
   const handleSave = async () => {
@@ -132,170 +174,139 @@ export default function CoverPhotoPage() {
 
   return (
     <div className="min-h-screen bg-surface text-on-surface">
-      {/* Header */}
-      <header className="px-8 py-4 border-b border-white/5 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold font-headline">Cover Photo</h1>
-          <p className="text-xs text-on-surface-variant">{gallery?.title || "Loading…"}</p>
+      {/* Workspace nav sits ABOVE the page header so the section dropdown
+          is the very first thing visible on mobile (matches /galleries/[id]
+          and the AI/Settings sub-pages). */}
+      <div className="px-4 pt-3 sm:px-6 sm:pt-4 lg:px-8">
+        <GalleryWorkspaceNav galleryId={galleryId} />
+      </div>
+
+      {/* Header — stacks title/actions on mobile so neither truncates;
+          flips back to a single row at sm+ where there's room for both
+          sides. Padding scales from px-4 (mobile) to px-8 (desktop) so
+          the band aligns with the rest of the dashboard's gutter rhythm. */}
+      <header className="mt-3 flex flex-col gap-3 border-b border-white/5 px-4 py-3 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 lg:px-8">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold font-headline sm:text-xl">Cover Photo</h1>
+          <p className="truncate text-xs text-on-surface-variant">{gallery?.title || "Loading…"}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setState((s) => ({ ...s, focalPoint: { x: 50, y: 50 }, zoom: 1 }))}
-            className="px-4 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5 transition-colors">Reset</button>
-          <button onClick={handleSave} disabled={saving || !state.assetId}
-            className="px-6 py-2 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary disabled:opacity-50">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setState((s) => ({ ...s, focalPoint: { x: 50, y: 50 } }))}
+            className="min-h-[40px] flex-1 rounded-xl border border-white/10 px-4 py-2 text-sm transition-colors hover:bg-white/5 sm:flex-none"
+          >
+            Reset
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !state.assetId}
+            className="min-h-[40px] flex-1 rounded-xl bg-gradient-to-r from-primary to-primary-container px-5 py-2 text-sm font-medium text-on-primary transition-opacity disabled:opacity-50 sm:flex-none sm:px-6"
+          >
             {saving ? "Saving..." : "Save Cover"}
           </button>
         </div>
       </header>
 
-      <div className="px-8 pt-4">
-        <GalleryWorkspaceNav galleryId={galleryId} />
-      </div>
-
-      <div className="flex h-[calc(100vh-136px)]">
-        {/* Left: Crop Editor */}
-        <div className="w-[55%] p-8 flex flex-col">
-          {/* Aspect ratio selector */}
-          <div className="flex gap-2 mb-4">
-            {(["16:9", "4:3", "1:1"] as AspectRatio[]).map((ar) => (
-              <button key={ar} onClick={() => setState((s) => ({ ...s, aspectRatio: ar }))}
-                className={`px-4 py-1.5 text-xs rounded-lg transition-all ${state.aspectRatio === ar ? "bg-primary/20 text-primary ring-1 ring-primary/30" : "bg-surface-container text-on-surface-variant hover:bg-white/5"}`}>
-                {ar}
-              </button>
-            ))}
-            <span className="ml-auto text-xs text-on-surface-variant">
-              Focal: {state.focalPoint.x}%, {state.focalPoint.y}%
-            </span>
-          </div>
-
-          <label className="mb-4 flex flex-col gap-1 text-xs text-on-surface-variant">
-            Cover template
-            <select
-              value={state.template}
-              onChange={(e) => setState((s) => ({ ...s, template: e.target.value as CoverTemplate }))}
-              className="input-base"
-            >
-              <option value="none">No cover page</option>
-              <option value="full_bleed">Full bleed</option>
-              <option value="split_screen">Split screen</option>
-              <option value="minimal_white">Minimal white</option>
-              <option value="classic_film">Classic film</option>
-              <option value="festive">Festive</option>
-            </select>
-          </label>
-
-          {/* Cover image with focal point */}
+      {/* Single-column layout: cover editor on top, asset thumbnail grid
+          below. The page now flows naturally — no fixed viewport height,
+          no side-by-side split. This gives the cover image (the page's
+          primary subject) the full content width and pushes the picker
+          down to a secondary visual rank. Cover Preview / Public Preview
+          / Version History sections were removed — those are either
+          available on the Design Studio (cover style preview) or the
+          gallery detail page (open client preview), and version history
+          had no backing API. */}
+      <div className="flex flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-8">
+        {/* Cover image with focal point — full-width and tall so it
+            dominates the page. Click anywhere on the image to drop the
+            focal-point crosshair. */}
+        <section className="space-y-3">
           <div
             ref={containerRef}
-            onClick={handleFocalPointDrag}
-            className="relative flex-1 rounded-2xl bg-surface-container border border-white/10 overflow-hidden cursor-crosshair flex items-center justify-center"
-            style={{ aspectRatio: aspectRatioMap[state.aspectRatio], maxHeight: "500px" }}
+            onPointerDown={selectedPreviewUrl ? handlePointerDown : undefined}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className={`relative w-full select-none rounded-2xl bg-surface-container border border-white/10 overflow-hidden flex items-center justify-center ${selectedPreviewUrl ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
+            style={{ aspectRatio: aspectRatioMap[state.aspectRatio], maxHeight: "min(70vh, 720px)", touchAction: "none" }}
+            role={selectedPreviewUrl ? "slider" : undefined}
+            aria-label={selectedPreviewUrl ? `Cover image position — drag to adjust (${state.focalPoint.x}%, ${state.focalPoint.y}%)` : undefined}
+            aria-valuemin={selectedPreviewUrl ? 0 : undefined}
+            aria-valuemax={selectedPreviewUrl ? 100 : undefined}
+            aria-valuenow={selectedPreviewUrl ? state.focalPoint.x : undefined}
           >
             {selectedPreviewUrl ? (
               <img
                 src={selectedPreviewUrl}
                 alt={selectedAsset?.filename || "Cover preview"}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-200"
-                style={{ transform: `scale(${state.zoom})`, objectPosition: `${state.focalPoint.x}% ${state.focalPoint.y}%` }}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ objectPosition: `${state.focalPoint.x}% ${state.focalPoint.y}%` }}
                 draggable={false}
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-surface-container to-surface-container-high" />
             )}
             <p className="relative text-sm text-on-surface-variant z-10">
-              {!selectedPreviewUrl && (state.assetId ? "Loading preview…" : "Click an asset to select")}
+              {!selectedPreviewUrl && (state.assetId ? "Loading preview…" : "Select an asset below to choose a cover")}
             </p>
 
-            {/* Focal point crosshair */}
-            <div
-              className="absolute w-8 h-8 z-20"
-              style={{ left: `${state.focalPoint.x}%`, top: `${state.focalPoint.y}%`, transform: "translate(-50%, -50%)" }}
-            >
-              <div className="absolute inset-0 border-2 border-primary rounded-full animate-pulse" />
-              <div className="absolute top-1/2 left-0 right-0 h-px bg-primary/50" />
-              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-primary/50" />
-            </div>
+            {/* Pan-hint pill — fades out while the user is actively
+                dragging so it doesn't clutter the gesture. */}
+            {selectedPreviewUrl && !isPanning && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur-sm">
+                Drag to reposition
+              </div>
+            )}
           </div>
 
-          {/* Zoom slider */}
-          <div className="flex items-center gap-3 mt-4">
-            <span className="text-xs text-on-surface-variant">Zoom</span>
-            <input type="range" min={0.5} max={3} step={0.1} value={state.zoom}
-              onChange={(e) => setState((s) => ({ ...s, zoom: Number(e.target.value) }))}
-              className="flex-1 accent-primary" />
-            <span className="text-xs text-on-surface-variant w-8">{state.zoom.toFixed(1)}x</span>
-          </div>
-        </div>
-
-        {/* Right: Selection & Preview */}
-        <aside className="w-[45%] border-l border-white/5 overflow-y-auto p-6 space-y-8">
-          {/* Select Cover */}
-          <section>
-            <h3 className="text-sm font-semibold mb-3">Select Cover</h3>
-            {saveMessage && <p className="mb-3 text-xs text-success">{saveMessage}</p>}
-            {saveError && <p className="mb-3 text-xs text-danger">{saveError}</p>}
-            <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-              {realAssets.map((a) => {
-                const thumbUrl = getAssetPreviewUrl(a, token);
-                return (
-                  <button key={a.id} onClick={() => setState((s) => ({ ...s, assetId: a.id }))}
-                    className={`aspect-square rounded-lg overflow-hidden transition-all ${state.assetId === a.id ? "ring-2 ring-primary" : "ring-1 ring-white/10 hover:ring-white/20"}`}>
-                    {thumbUrl ? (
-                      <img src={thumbUrl} alt={a.filename} className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full bg-surface-container-high" />
-                    )}
-                  </button>
-                );
-              })}
+          {/* Inline save status — replaces the messages that used to live
+              inside the right-side aside's "Select Cover" header. Stays
+              near the Save Cover action so the feedback is colocated
+              with the trigger. */}
+          {(saveMessage || saveError) && (
+            <div className="text-xs" role="status" aria-live="polite">
+              {saveMessage && <p className="text-success">{saveMessage}</p>}
+              {saveError && <p className="text-danger">{saveError}</p>}
             </div>
-            <p className="mt-3 text-xs text-on-surface-variant">
-              Cover photos are selected from uploaded gallery photos.
-            </p>
-          </section>
-
-          {/* Cover Previews */}
-          <section>
-            <h3 className="text-sm font-semibold mb-3">Cover Preview</h3>
-            <div className="space-y-3">
-              {[
-                { label: "Gallery List", ratio: "4/3", h: "h-20" },
-                { label: "Share Link", ratio: "16/9", h: "h-24" },
-                { label: "Full Header", ratio: "21/9", h: "h-16" },
-              ].map((p) => (
-                <div key={p.label}>
-                  <p className="text-[10px] text-on-surface-variant mb-1">{p.label}</p>
-                  <div className={`${p.h} rounded-xl bg-surface-container border border-white/5 overflow-hidden`}
-                    style={{ aspectRatio: p.ratio }}>
-                    {selectedPreviewUrl ? (
-                      <img src={selectedPreviewUrl} alt={`${p.label} preview`} className="w-full h-full object-cover"
-                        style={{ objectPosition: `${state.focalPoint.x}% ${state.focalPoint.y}%` }} />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-high" />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {gallery?.slug && (
-            <section>
-              <h3 className="text-sm font-semibold mb-3">Public Preview</h3>
-              <a href={`/g/${gallery.slug}?mode=client`} target="_blank" rel="noopener noreferrer" className="btn-tertiary inline-flex px-4 py-2 text-sm">
-                Open client preview
-              </a>
-            </section>
           )}
+        </section>
 
-          {/* Version History — populated when API returns cover history */}
-          <section>
-            <h3 className="text-sm font-semibold mb-3">Version History</h3>
+        {/* Asset thumbnail grid — full-width, denser column count on
+            larger viewports since we now have the whole main area to
+            work with. Thumbs are square; tap-targets scale with viewport. */}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Select cover photo</h3>
             <p className="text-xs text-on-surface-variant">
-              {gallery?.cover_asset_id ? "Current cover set" : "No cover versions saved yet. Select and save a cover to start tracking history."}
+              {realAssets.length} {realAssets.length === 1 ? "photo" : "photos"}
             </p>
-          </section>
-        </aside>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-8">
+            {realAssets.map((a) => {
+              const thumbUrl = getAssetPreviewUrl(a, token);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setState((s) => ({ ...s, assetId: a.id }))}
+                  className={`aspect-square overflow-hidden rounded-lg transition-all ${state.assetId === a.id ? "ring-2 ring-primary" : "ring-1 ring-white/10 hover:ring-white/20"}`}
+                  aria-label={`Select ${a.filename} as cover`}
+                  aria-pressed={state.assetId === a.id}
+                >
+                  {thumbUrl ? (
+                    <img src={thumbUrl} alt={a.filename} className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="h-full w-full bg-surface-container-high" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {realAssets.length === 0 && (
+            <p className="mt-3 text-xs text-on-surface-variant">
+              Upload photos to the gallery to choose a cover.
+            </p>
+          )}
+        </section>
       </div>
     </div>
   );

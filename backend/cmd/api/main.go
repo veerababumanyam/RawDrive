@@ -1008,28 +1008,30 @@ func main() {
 
 	// ──────────────────────── M2: Asset Management & Gallery ────────────────────────
 
-	// ──────────────────────── Storage Provider (Cloudflare R2 — MANDATORY) ────────────────
-	// Local storage is NOT supported. R2 credentials MUST be in environment variables.
+	// ──────────────────────── Storage Provider (Backblaze B2 — MANDATORY) ────────────────
+	// Local storage is NOT supported. B2 credentials MUST be in environment variables.
 	// Never hardcode credentials. Never fall back to local filesystem.
+	// B2 exposes an S3-compatible API; the storage factory routes B2 through its "s3" case.
+	// Note: B2_KEY_ID maps to S3 AccessKeyID; B2_APPLICATION_KEY maps to S3 SecretAccessKey.
 	storageCfg := storage.Config{
 		Driver:    os.Getenv("STORAGE_DRIVER"),
-		Bucket:    envOrFatal("R2_BUCKET_NAME", "R2_BUCKET"), // try R2_BUCKET_NAME first, fallback to R2_BUCKET
-		Region:    envOr("auto", "R2_REGION"),
-		Endpoint:  os.Getenv("R2_ENDPOINT"),
-		AccessKey: envOrFatal("R2_ACCESS_KEY_ID", "R2_ACCESS_KEY"), // try R2_ACCESS_KEY_ID first, fallback to R2_ACCESS_KEY
-		SecretKey: envOrFatal("R2_SECRET_ACCESS_KEY", "R2_SECRET_KEY"),
+		Bucket:    envOrFatal("B2_BUCKET_NAME", "B2_BUCKET"),
+		Region:    envOr("us-east-005", "B2_REGION"),
+		Endpoint:  os.Getenv("B2_ENDPOINT"),
+		AccessKey: envOrFatal("B2_KEY_ID", "B2_ACCESS_KEY_ID"),
+		SecretKey: envOrFatal("B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"),
 	}
 	if storageCfg.Driver == "" {
-		storageCfg.Driver = "s3" // R2 uses S3-compatible API
+		storageCfg.Driver = "s3" // B2 uses S3-compatible API
 	}
 	if storageCfg.Driver == "local" {
-		log.Fatal("FATAL: STORAGE_DRIVER=local is not allowed. Use Cloudflare R2 (s3). Set R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT in environment.")
+		log.Fatal("FATAL: STORAGE_DRIVER=local is not allowed. Use Backblaze B2 (s3). Set B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT in environment.")
 	}
 	storageProvider, err := storage.NewProvider(storageCfg)
 	if err != nil {
-		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT are set.", err)
+		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT are set.", err)
 	}
-	log.Printf("Storage: Cloudflare R2 initialized (bucket: %s, endpoint: %s)", storageCfg.Bucket, storageCfg.Endpoint)
+	log.Printf("Storage: Backblaze B2 initialized (bucket: %s, endpoint: %s)", storageCfg.Bucket, storageCfg.Endpoint)
 
 	// M2 Repositories
 	assetRepo := repository.NewAssetRepo(dbPool)

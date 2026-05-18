@@ -1,5 +1,208 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-package-json-heal.cjs\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-env-bootstrap.cjs\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-check-update.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-pr-watcher.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-session-recovery.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-state-recovery-session.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-mcp-coverage-session-warn.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-dispatch-clock-skew.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-precedence-session-start.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-bypass-session-audit.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-protocol-version-check.js\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-pre-dispatch.js\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-post-dispatch.js\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-autonomous-guard.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-plan-stage-register-on-stop.js\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-precompact-preservation.js\""
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-postcompact-preservation.js\""
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"/Users/madhuthota/merupuai/rawdrive/RawDrive/.claude/hooks/cobolt-statusline.js\""
+  },
+  "enabledPlugins": {
+    "playwright@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "github@claude-plugins-official": true
+  },
   "projectId": "cobolt-rawdrive-f651e4",
   "projectType": "greenfield",
-  "managedBy": "cobolt-init"
+  "managedBy": "cobolt-init",
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "--prefer-offline",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "StitchMCP": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "node",
+        "-e",
+        "const{spawnSync}=require(\"child_process\");const k=process.env.STITCH_API_KEY||\"\";if(!k){process.stderr.write(\"STITCH_API_KEY missing in .env.cobolt\\n\");process.exit(1)}const r=spawnSync(\"npx\",[\"-y\",\"--prefer-offline\",\"mcp-remote\",\"https://stitch.googleapis.com/mcp\",\"--header\",\"X-Goog-Api-Key: \"+k],{stdio:\"inherit\",shell:process.platform===\"win32\"});process.exit(r.status||0);"
+      ]
+    },
+    "Figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "--prefer-offline",
+        "@thirdstrandstudio/mcp-figma"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "--prefer-offline",
+        "@modelcontextprotocol/server-github"
+      ]
+    },
+    "linear": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "--prefer-offline",
+        "mcp-remote",
+        "https://mcp.linear.app/mcp"
+      ]
+    },
+    "atlassian": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "env-cmd",
+        "-f",
+        ".env.cobolt",
+        "npx",
+        "-y",
+        "--prefer-offline",
+        "mcp-remote",
+        "https://mcp.atlassian.com/v1/mcp"
+      ]
+    }
+  }
 }

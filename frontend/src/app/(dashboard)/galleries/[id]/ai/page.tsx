@@ -31,11 +31,13 @@ export default function GalleryAIPage({ params }: { params: Promise<{ id: string
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+      {/* Workspace nav first so the section dropdown is the topmost
+          element on mobile (matches the cover and settings sub-pages). */}
+      <GalleryWorkspaceNav galleryId={id} />
+
       <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
         Back to gallery
       </Link>
-
-      <GalleryWorkspaceNav galleryId={id} />
 
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Gallery AI</p>

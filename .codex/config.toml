@@ -5,3 +5,640 @@ url = "https://mcp.context7.com/mcp"
 
 [mcp_servers.context7.env_http_headers]
 CONTEXT7_API_KEY = "CONTEXT7_API_KEY"
+
+# COBOLT START
+# CoBolt v0.68.0 - 2026-05-18T03:23:12.081Z
+
+[agents."CLAUDE"]
+sandbox = "read-only"
+
+[agents."access-auditor-agent"]
+sandbox = "read-only"
+
+[agents."accessibility-reviewer"]
+sandbox = "read-only"
+
+[agents."ai-security-reviewer"]
+sandbox = "read-only"
+
+[agents."analyst"]
+sandbox = "read-only"
+
+[agents."anchor-compactor"]
+sandbox = "read-only"
+
+[agents."api-contract-reviewer"]
+sandbox = "read-only"
+
+[agents."api-doc-agent"]
+sandbox = "read-only"
+
+[agents."api-endpoint-builder"]
+sandbox = "read-only"
+
+[agents."arch-icon-resolver"]
+sandbox = "read-only"
+
+[agents."architect"]
+sandbox = "read-only"
+
+[agents."architect-fix-agent"]
+sandbox = "read-only"
+
+[agents."architecture-analyst"]
+sandbox = "read-only"
+
+[agents."architecture-diagram-curator"]
+sandbox = "read-only"
+
+[agents."architecture-reviewer"]
+sandbox = "read-only"
+
+[agents."audit-verifier"]
+sandbox = "read-only"
+
+[agents."backend-dev"]
+sandbox = "read-only"
+
+[agents."backend-fix"]
+sandbox = "read-only"
+
+[agents."binary-analyst-agent"]
+sandbox = "read-only"
+
+[agents."bounded-context-architect"]
+sandbox = "read-only"
+
+[agents."brownfield-critic"]
+sandbox = "read-only"
+
+[agents."brownfield-lead"]
+sandbox = "read-only"
+
+[agents."build-agent"]
+sandbox = "read-only"
+
+[agents."build-lead"]
+sandbox = "read-only"
+
+[agents."build-team-reference"]
+sandbox = "read-only"
+
+[agents."calculation-extractor-agent"]
+sandbox = "read-only"
+
+[agents."chaos-engineer"]
+sandbox = "read-only"
+
+[agents."cloud-provisioner"]
+sandbox = "read-only"
+
+[agents."cobolt-agent-analyst"]
+sandbox = "read-only"
+
+[agents."cobolt-agent-dev"]
+sandbox = "read-only"
+
+[agents."cobolt-agent-pm"]
+sandbox = "read-only"
+
+[agents."cobolt-agent-qa"]
+sandbox = "read-only"
+
+[agents."cobolt-agent-sm"]
+sandbox = "read-only"
+
+[agents."cobolt-agent-tech-writer"]
+sandbox = "read-only"
+
+[agents."cobolt-arch-reviewer-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-audit-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-authz-reviewer"]
+sandbox = "read-only"
+
+[agents."cobolt-backend-fix"]
+sandbox = "read-only"
+
+[agents."cobolt-brownfield-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-build-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-build-audit-lead"]
+sandbox = "read-only"
+
+[agents."cobolt-build-lead"]
+sandbox = "read-only"
+
+[agents."cobolt-build-live-run-driver"]
+sandbox = "read-only"
+
+[agents."cobolt-build-live-run-triage"]
+sandbox = "read-only"
+
+[agents."cobolt-code-reviewer"]
+sandbox = "read-only"
+
+[agents."cobolt-compliance-fix"]
+sandbox = "read-only"
+
+[agents."cobolt-db-fix"]
+sandbox = "read-only"
+
+[agents."cobolt-debt-reviewer-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-deploy-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-dream-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-fix-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-fix-lead"]
+sandbox = "read-only"
+
+[agents."cobolt-fleet-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-frontend-fix"]
+sandbox = "read-only"
+
+[agents."cobolt-health-check-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-hotfix-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-inflight-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-init-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-perf-reviewer-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-plan-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-quality-reviewer-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-refactor-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-review-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-review-lead"]
+sandbox = "read-only"
+
+[agents."cobolt-security-reviewer-agent"]
+sandbox = "read-only"
+
+[agents."cobolt-test-team-lead"]
+sandbox = "read-only"
+
+[agents."code-archaeologist-agent"]
+sandbox = "read-only"
+
+[agents."code-reviewer"]
+sandbox = "read-only"
+
+[agents."code-scanner"]
+sandbox = "read-only"
+
+[agents."code-simplifier"]
+sandbox = "read-only"
+
+[agents."cognitive-squad"]
+sandbox = "read-only"
+
+[agents."compliance-architect"]
+sandbox = "read-only"
+
+[agents."compliance-evidence-agent"]
+sandbox = "read-only"
+
+[agents."compliance-fix"]
+sandbox = "read-only"
+
+[agents."compliance-reviewer"]
+sandbox = "read-only"
+
+[agents."config-archaeologist-agent"]
+sandbox = "read-only"
+
+[agents."config-reviewer"]
+sandbox = "read-only"
+
+[agents."contract-renegotiator"]
+sandbox = "read-only"
+
+[agents."coordinator-agent"]
+sandbox = "read-only"
+
+[agents."cost-tracker"]
+sandbox = "read-only"
+
+[agents."critique-lead"]
+sandbox = "read-only"
+
+[agents."cross-milestone-analyst"]
+sandbox = "read-only"
+
+[agents."data-migration-planner-agent"]
+sandbox = "read-only"
+
+[agents."data-store-discovery-agent"]
+sandbox = "read-only"
+
+[agents."database-reviewer"]
+sandbox = "read-only"
+
+[agents."db-access-auditor"]
+sandbox = "read-only"
+
+[agents."db-archaeologist-agent"]
+sandbox = "read-only"
+
+[agents."db-audit-lead"]
+sandbox = "read-only"
+
+[agents."db-encryption-reviewer"]
+sandbox = "read-only"
+
+[agents."db-fix"]
+sandbox = "read-only"
+
+[agents."db-migration-writer"]
+sandbox = "read-only"
+
+[agents."db-performance-auditor"]
+sandbox = "read-only"
+
+[agents."db-query-safety-reviewer"]
+sandbox = "read-only"
+
+[agents."db-test-agent"]
+sandbox = "read-only"
+
+[agents."decision-table-builder-agent"]
+sandbox = "read-only"
+
+[agents."delivery-planner"]
+sandbox = "read-only"
+
+[agents."deploy-agent"]
+sandbox = "read-only"
+
+[agents."deploy-critic"]
+sandbox = "read-only"
+
+[agents."design-orchestrator"]
+sandbox = "read-only"
+
+[agents."design-token-linter"]
+sandbox = "read-only"
+
+[agents."devops-agent"]
+sandbox = "read-only"
+
+[agents."docker-builder"]
+sandbox = "read-only"
+
+[agents."dream-agent"]
+sandbox = "read-only"
+
+[agents."elixir-component-builder"]
+sandbox = "read-only"
+
+[agents."emergency-branch-manager"]
+sandbox = "read-only"
+
+[agents."engineering-standards-validator"]
+sandbox = "read-only"
+
+[agents."enhancement-advisor"]
+sandbox = "read-only"
+
+[agents."feature-completeness-reviewer"]
+sandbox = "read-only"
+
+[agents."feature-triage-agent"]
+sandbox = "read-only"
+
+[agents."fix-agent"]
+sandbox = "read-only"
+
+[agents."fix-critic"]
+sandbox = "read-only"
+
+[agents."fix-lead"]
+sandbox = "read-only"
+
+[agents."fleet-orchestrator"]
+sandbox = "read-only"
+
+[agents."format-classifier"]
+sandbox = "read-only"
+
+[agents."frontend-dev"]
+sandbox = "read-only"
+
+[agents."frontend-fix"]
+sandbox = "read-only"
+
+[agents."gap-analyst"]
+sandbox = "read-only"
+
+[agents."graphql-builder"]
+sandbox = "read-only"
+
+[agents."harness-proposer"]
+sandbox = "read-only"
+
+[agents."health-check-agent"]
+sandbox = "read-only"
+
+[agents."health-monitor"]
+sandbox = "read-only"
+
+[agents."hotfix-agent"]
+sandbox = "read-only"
+
+[agents."i18n-reviewer"]
+sandbox = "read-only"
+
+[agents."illusion-detector"]
+sandbox = "read-only"
+
+[agents."impact-assessor"]
+sandbox = "read-only"
+
+[agents."implicit-req-extractor"]
+sandbox = "read-only"
+
+[agents."infra-advisor"]
+sandbox = "read-only"
+
+[agents."infra-agent"]
+sandbox = "read-only"
+
+[agents."infra-discovery-agent"]
+sandbox = "read-only"
+
+[agents."infra-health-monitor"]
+sandbox = "read-only"
+
+[agents."integration-discovery-agent"]
+sandbox = "read-only"
+
+[agents."integration-reviewer"]
+sandbox = "read-only"
+
+[agents."integration-test-agent"]
+sandbox = "read-only"
+
+[agents."k8s-provisioner"]
+sandbox = "read-only"
+
+[agents."legacy-doc-generator-agent"]
+sandbox = "read-only"
+
+[agents."legacy-intake-agent"]
+sandbox = "read-only"
+
+[agents."liveview-builder"]
+sandbox = "read-only"
+
+[agents."localization-specialist"]
+sandbox = "read-only"
+
+[agents."migration-strategist-agent"]
+sandbox = "read-only"
+
+[agents."milestone-architect"]
+sandbox = "read-only"
+
+[agents."milestone-transition-advisor"]
+sandbox = "read-only"
+
+[agents."milestone-validation-agent"]
+sandbox = "read-only"
+
+[agents."modernization-agent"]
+sandbox = "read-only"
+
+[agents."nfr-orchestrator"]
+sandbox = "read-only"
+
+[agents."ops-readiness-reviewer"]
+sandbox = "read-only"
+
+[agents."parity-test-designer-agent"]
+sandbox = "read-only"
+
+[agents."pentest-agent"]
+sandbox = "read-only"
+
+[agents."pentest-lead"]
+sandbox = "read-only"
+
+[agents."performance-benchmarker"]
+sandbox = "workspace-write"
+
+[agents."performance-reviewer"]
+sandbox = "read-only"
+
+[agents."plan-agent"]
+sandbox = "read-only"
+
+[agents."plan-critic"]
+sandbox = "read-only"
+
+[agents."planning-lead"]
+sandbox = "read-only"
+
+[agents."planning-team-reference"]
+sandbox = "read-only"
+
+[agents."policy-enforcer"]
+sandbox = "read-only"
+
+[agents."pr-lead"]
+sandbox = "read-only"
+
+[agents."pr-threat-scanner"]
+sandbox = "read-only"
+
+[agents."prd-redteam-agent"]
+sandbox = "read-only"
+
+[agents."protocol-analyst-agent"]
+sandbox = "read-only"
+
+[agents."publish-docs-curator"]
+sandbox = "read-only"
+
+[agents."publish-docs-validator"]
+sandbox = "read-only"
+
+[agents."ralph-loop"]
+sandbox = "read-only"
+
+[agents."recovery-advisor"]
+sandbox = "read-only"
+
+[agents."refactor-agent"]
+sandbox = "read-only"
+
+[agents."release-lead"]
+sandbox = "read-only"
+
+[agents."research-agent"]
+sandbox = "read-only"
+
+[agents."resolve-lead"]
+sandbox = "read-only"
+
+[agents."reverse-eng-lead"]
+sandbox = "read-only"
+
+[agents."review-agent"]
+sandbox = "read-only"
+
+[agents."review-lead"]
+sandbox = "read-only"
+
+[agents."rtm-analyst"]
+sandbox = "read-only"
+
+[agents."rule-extractor-agent"]
+sandbox = "read-only"
+
+[agents."rule-validator-agent"]
+sandbox = "read-only"
+
+[agents."sast-dast-runner"]
+sandbox = "read-only"
+
+[agents."schema-contract-reviewer"]
+sandbox = "read-only"
+
+[agents."scope-note-classifier"]
+sandbox = "read-only"
+
+[agents."security-architect"]
+sandbox = "read-only"
+
+[agents."security-authz-deep-reviewer"]
+sandbox = "read-only"
+
+[agents."security-exploit-verifier"]
+sandbox = "read-only"
+
+[agents."security-reviewer"]
+sandbox = "read-only"
+
+[agents."seo-content-architect"]
+sandbox = "read-only"
+
+[agents."session-memory-agent"]
+sandbox = "read-only"
+
+[agents."silent-failure-reviewer"]
+sandbox = "read-only"
+
+[agents."skills-generator"]
+sandbox = "read-only"
+
+[agents."spec-architect"]
+sandbox = "read-only"
+
+[agents."spec-critic"]
+sandbox = "read-only"
+
+[agents."sprint-manager"]
+sandbox = "read-only"
+
+[agents."state-machine-recoverer-agent"]
+sandbox = "read-only"
+
+[agents."status-monitor"]
+sandbox = "read-only"
+
+[agents."step-09b-3d-scroll-orchestrator"]
+sandbox = "read-only"
+
+[agents."step-12b-analytics-injector"]
+sandbox = "read-only"
+
+[agents."supply-chain-auditor"]
+sandbox = "read-only"
+
+[agents."tech-stack-detector-agent"]
+sandbox = "read-only"
+
+[agents."technical-debt-reporter"]
+sandbox = "read-only"
+
+[agents."technical-debt-reviewer"]
+sandbox = "read-only"
+
+[agents."test-architect"]
+sandbox = "read-only"
+
+[agents."test-quality-reviewer"]
+sandbox = "read-only"
+
+[agents."test-team-lead"]
+sandbox = "read-only"
+
+[agents."test-writer"]
+sandbox = "read-only"
+
+[agents."trd-architect"]
+sandbox = "read-only"
+
+[agents."uat-agent"]
+sandbox = "read-only"
+
+[agents."uat-critic"]
+sandbox = "read-only"
+
+[agents."uat-escalation-lead"]
+sandbox = "read-only"
+
+[agents."ui-archaeologist-agent"]
+sandbox = "read-only"
+
+[agents."ui-component-builder"]
+sandbox = "read-only"
+
+[agents."ui-design-reviewer"]
+sandbox = "read-only"
+
+[agents."ux-designer"]
+sandbox = "read-only"
+
+[agents."ux-reviewer"]
+sandbox = "read-only"
+
+[agents."validation-cataloger-agent"]
+sandbox = "read-only"
+
+[agents."validation-critic"]
+sandbox = "read-only"
+
+[agents."vm-provisioner"]
+sandbox = "read-only"
+# COBOLT END

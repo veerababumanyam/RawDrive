@@ -12,11 +12,12 @@ import (
 
 // Tests for F-008 (audit 2026-04-10) + CLAUDE.md hardcode law #1:
 // The production factory must refuse to construct a local-disk storage
-// provider. RawDrive is R2-only in production; the local driver exists only
-// for unit tests which call NewLocalDriver directly. Going through
-// NewProvider with Driver="local" — which is what STORAGE_DRIVER=local does
-// at startup — is explicitly forbidden and must fail fast with a clear
-// hardcode-law reference so operators know why.
+// provider. RawDrive uses Backblaze B2 (S3-compatible) as the managed
+// production backend; the local driver exists only for unit tests which
+// call NewLocalDriver directly. Going through NewProvider with
+// Driver="local" — which is what STORAGE_DRIVER=local does at startup —
+// is explicitly forbidden and must fail fast with a clear hardcode-law
+// reference so operators know why.
 
 func TestNewProvider_LocalDriverRejected_HardcodeLaw1(t *testing.T) {
 	_, err := storage.NewProvider(storage.Config{
@@ -38,14 +39,15 @@ func TestNewProvider_LocalDriverRejected_HardcodeLaw1(t *testing.T) {
 }
 
 func TestNewProvider_S3DriverStillAccepted(t *testing.T) {
-	// F-008 must NOT break the S3/R2 path — that's the only supported path.
+	// F-008 must NOT break the S3/B2 path — that's the only supported path.
+	// (B2 exposes an S3-compatible API and is the managed production backend.)
 	// This uses NewProvider end-to-end but passes an obviously fake creds set.
 	// A real construction of the S3 client may fail later (network/creds),
 	// but the factory must at minimum accept the Config shape.
 	_, err := storage.NewProvider(storage.Config{
 		Driver:    "s3",
 		Bucket:    "fake-bucket-f008-test",
-		Region:    "us-east-1",
+		Region:    "us-east-005",
 		AccessKey: "fake-access-key",
 		SecretKey: "fake-secret-key",
 	})
