@@ -55,7 +55,7 @@ import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav"
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "typography" | "grid";
+type TabId = "cover" | "text" | "grid";
 
 interface FocalPoint { x: number; y: number }
 interface TextPos { x: number; y: number }
@@ -445,7 +445,6 @@ export default function CoverDesignPage() {
           >
             <option value="cover">Cover</option>
             <option value="text">Text</option>
-            <option value="typography">Typography</option>
             <option value="grid">Grid</option>
           </select>
           {gallery?.slug && (
@@ -612,9 +611,6 @@ export default function CoverDesignPage() {
                 setActiveText={setActiveText}
               />
             )}
-            {tab === "typography" && (
-              <PanelTypography config={config} setConfig={setConfig} />
-            )}
             {tab === "grid" && (
               <PanelGrid
                 config={config}
@@ -705,6 +701,14 @@ function PanelText({
   activeText: "title" | "subtitle";
   setActiveText: (t: "title" | "subtitle") => void;
 }) {
+  const activePairing = FONT_PAIRINGS.find((p) => p.id === config.typography.pairingId);
+  // 2026-05-18: Typography panel absorbed into Text. Font pairing and size
+  // sliders are all about the title/subtitle the user just typed — keeping
+  // them in a separate tab forced a context switch every time someone
+  // wanted to make the title bigger. Single Text panel now: each element
+  // (Title, Subtitle) has its own group with input + size + color, then a
+  // shared "Style" group at the bottom for the pairing/alignment/shadow
+  // knobs that apply to both.
   // Treat the active-text state as a hint to the preview overlay rather
   // than as a panel-mode switch: both inputs are visible at once, focusing
   // an input updates the active-text marker so the preview highlights
@@ -713,13 +717,22 @@ function PanelText({
   // gives the panel a single-stream column that reads like a Notion-style
   // form rather than a tabbed control.
   return (
-    <div className="space-y-5">
-      {/* Title row — label on left, position chip on right, input below */}
-      <div className="space-y-1.5">
+    <div className="space-y-6">
+      {/* ───────── TITLE GROUP ─────────
+          Everything about the title in one block: text input, size
+          slider, color. Section heading + position chip up top. Active
+          ring on inputs syncs to the preview overlay's selection. */}
+      <section
+        className={`space-y-3 rounded-xl border p-3 transition-colors ${
+          activeText === "title"
+            ? "border-primary/40 bg-primary/[0.03]"
+            : "border-white/10"
+        }`}
+      >
         <div className="flex items-baseline justify-between">
-          <label htmlFor="cover-title-input" className="text-xs font-medium text-on-surface-variant">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
             Title
-          </label>
+          </h3>
           <span
             className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
               activeText === "title" ? "bg-primary/15 text-primary" : "text-on-surface-variant/70"
@@ -729,26 +742,71 @@ function PanelText({
             {config.cover.titlePosition.x}, {config.cover.titlePosition.y}
           </span>
         </div>
+
         <input
           id="cover-title-input"
           value={config.cover.title}
           onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, title: e.target.value } }))}
           onFocus={() => setActiveText("title")}
           placeholder="Your gallery title"
-          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm transition-colors focus:outline-none ${
-            activeText === "title"
-              ? "border-primary"
-              : "border-white/10 hover:border-white/20 focus:border-primary"
-          }`}
+          className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
         />
-      </div>
 
-      {/* Subtitle row — same shape as title */}
-      <div className="space-y-1.5">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="cover-title-size" className="text-[11px] text-on-surface-variant">Size</label>
+              <span className="text-[11px] tabular-nums">{config.typography.titleSize}px</span>
+            </div>
+            <input
+              id="cover-title-size"
+              type="range"
+              min={TITLE_SIZE_MIN}
+              max={TITLE_SIZE_MAX}
+              step={1}
+              value={config.typography.titleSize}
+              onChange={(e) =>
+                setConfig((c) => ({ ...c, typography: { ...c.typography, titleSize: Number(e.target.value) } }))
+              }
+              onFocus={() => setActiveText("title")}
+              className="w-full accent-primary"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cover-title-color" className="text-[11px] text-on-surface-variant">Color</label>
+            <input
+              id="cover-title-color"
+              type="color"
+              value={config.cover.titleColor || "#ffffff"}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, titleColor: e.target.value, textColor: e.target.value },
+                }))
+              }
+              onFocus={() => setActiveText("title")}
+              className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-surface p-0"
+              aria-label="Title color picker"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ───────── SUBTITLE GROUP ─────────
+          Identical structure to the title group so the panel reads as
+          two parallel cards. Slight visual differentiation comes only
+          from the active-ring (which the focus on either input drives). */}
+      <section
+        className={`space-y-3 rounded-xl border p-3 transition-colors ${
+          activeText === "subtitle"
+            ? "border-primary/40 bg-primary/[0.03]"
+            : "border-white/10"
+        }`}
+      >
         <div className="flex items-baseline justify-between">
-          <label htmlFor="cover-subtitle-input" className="text-xs font-medium text-on-surface-variant">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
             Subtitle
-          </label>
+          </h3>
           <span
             className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
               activeText === "subtitle" ? "bg-primary/15 text-primary" : "text-on-surface-variant/70"
@@ -758,30 +816,100 @@ function PanelText({
             {config.cover.subtitlePosition.x}, {config.cover.subtitlePosition.y}
           </span>
         </div>
+
         <input
           id="cover-subtitle-input"
           value={config.cover.subtitle}
           onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, subtitle: e.target.value } }))}
           onFocus={() => setActiveText("subtitle")}
           placeholder="Optional subtitle"
-          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm transition-colors focus:outline-none ${
-            activeText === "subtitle"
-              ? "border-primary"
-              : "border-white/10 hover:border-white/20 focus:border-primary"
-          }`}
+          className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
         />
-      </div>
 
-      <p className="text-[11px] text-on-surface-variant/80">
-        Drag the title or subtitle on the preview to reposition.
-      </p>
+        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="cover-subtitle-size" className="text-[11px] text-on-surface-variant">Size</label>
+              <span className="text-[11px] tabular-nums">{config.typography.subtitleSize}px</span>
+            </div>
+            <input
+              id="cover-subtitle-size"
+              type="range"
+              min={SUBTITLE_SIZE_MIN}
+              max={SUBTITLE_SIZE_MAX}
+              step={1}
+              value={config.typography.subtitleSize}
+              onChange={(e) =>
+                setConfig((c) => ({ ...c, typography: { ...c.typography, subtitleSize: Number(e.target.value) } }))
+              }
+              onFocus={() => setActiveText("subtitle")}
+              className="w-full accent-primary"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cover-subtitle-color" className="text-[11px] text-on-surface-variant">Color</label>
+            <input
+              id="cover-subtitle-color"
+              type="color"
+              value={config.cover.subtitleColor || "#ffffff"}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, subtitleColor: e.target.value },
+                }))
+              }
+              onFocus={() => setActiveText("subtitle")}
+              className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-surface p-0"
+              aria-label="Subtitle color picker"
+            />
+          </div>
+        </div>
+      </section>
 
-      {/* Style row — alignment + color + shadow, all on one line on wider
-          viewports and stacked on narrow. Compact icons keep the visual
-          weight low so the inputs above stay the dominant element. */}
-      <div className="space-y-3 border-t border-white/10 pt-4">
+      {/* ───────── SHARED STYLE ─────────
+          Controls that apply to BOTH title and subtitle: the font pair
+          (heading font for title, body font for subtitle), the text
+          alignment for the dragged overlay, and the readability shadow
+          toggle. Visually subordinate to the two element groups above
+          via heading weight + no card border. */}
+      <section className="space-y-4 border-t border-white/10 pt-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+          Style
+        </h3>
+
+        <div className="space-y-1.5">
+          <label htmlFor="cover-font-pairing" className="text-[11px] text-on-surface-variant">
+            Font pairing
+          </label>
+          <select
+            id="cover-font-pairing"
+            value={config.typography.pairingId}
+            onChange={(e) => {
+              const p = FONT_PAIRINGS.find((x) => x.id === e.target.value);
+              if (!p) return;
+              setConfig((c) => ({
+                ...c,
+                typography: {
+                  ...c.typography,
+                  pairingId: p.id,
+                  headingFont: p.heading,
+                  bodyFont: p.body,
+                },
+              }));
+            }}
+            className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            style={activePairing ? { fontFamily: `'${activePairing.heading}', serif` } : undefined}
+          >
+            {FONT_PAIRINGS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label} — {p.heading} / {p.body}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-medium text-on-surface-variant">Align</span>
+          <span className="text-[11px] text-on-surface-variant">Alignment</span>
           <div className="flex gap-0.5 rounded-md border border-white/10 p-0.5">
             {(["left", "center", "right"] as TextAlign[]).map((a) => (
               <button
@@ -799,78 +927,8 @@ function PanelText({
           </div>
         </div>
 
-        {/* Per-element color pickers — replaced the single shared
-            "Color" row 2026-05-18. Some galleries want a contrasty
-            title (e.g. accent yellow) with a softer subtitle (white);
-            one shared color forced both. We also keep textColor in
-            sync with titleColor so older render paths or future code
-            that reads `textColor` still gets a sensible value. */}
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="cover-title-color" className="text-xs font-medium text-on-surface-variant">
-            Title color
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              id="cover-title-color"
-              type="color"
-              value={config.cover.titleColor || "#ffffff"}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  cover: { ...c.cover, titleColor: e.target.value, textColor: e.target.value },
-                }))
-              }
-              className="h-7 w-7 cursor-pointer rounded border border-white/10 bg-surface p-0"
-              aria-label="Title color picker"
-            />
-            <input
-              value={config.cover.titleColor || ""}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  cover: { ...c.cover, titleColor: e.target.value, textColor: e.target.value },
-                }))
-              }
-              className="w-24 rounded-md border border-white/10 bg-surface px-2 py-1 font-mono text-[11px] tabular-nums focus:border-primary focus:outline-none"
-              aria-label="Title color hex value"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="cover-subtitle-color" className="text-xs font-medium text-on-surface-variant">
-            Subtitle color
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              id="cover-subtitle-color"
-              type="color"
-              value={config.cover.subtitleColor || "#ffffff"}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  cover: { ...c.cover, subtitleColor: e.target.value },
-                }))
-              }
-              className="h-7 w-7 cursor-pointer rounded border border-white/10 bg-surface p-0"
-              aria-label="Subtitle color picker"
-            />
-            <input
-              value={config.cover.subtitleColor || ""}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  cover: { ...c.cover, subtitleColor: e.target.value },
-                }))
-              }
-              className="w-24 rounded-md border border-white/10 bg-surface px-2 py-1 font-mono text-[11px] tabular-nums focus:border-primary focus:outline-none"
-              aria-label="Subtitle color hex value"
-            />
-          </div>
-        </div>
-
-        <label className="flex items-center justify-between gap-3 text-xs text-on-surface-variant">
-          <span className="font-medium">Readability shadow</span>
+        <label className="flex cursor-pointer items-center justify-between gap-3">
+          <span className="text-[11px] text-on-surface-variant">Readability shadow</span>
           <input
             type="checkbox"
             checked={config.cover.textShadow}
@@ -878,95 +936,11 @@ function PanelText({
             className="h-4 w-4 cursor-pointer accent-primary"
           />
         </label>
-      </div>
-    </div>
-  );
-}
+      </section>
 
-function PanelTypography({
-  config,
-  setConfig,
-}: {
-  config: DesignConfig;
-  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
-}) {
-  // Replaced the 2x3 block grid with a single <select> 2026-05-18 — the
-  // pairing tiles burned 240px of vertical real estate and forced a tap
-  // dance to compare options. A dropdown is denser, keyboard-friendly,
-  // and pairs naturally with the size sliders below. Option labels show
-  // both the pairing nickname and its actual fonts so the picker stays
-  // self-documenting at a glance.
-  const activePairing = FONT_PAIRINGS.find((p) => p.id === config.typography.pairingId);
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <label htmlFor="cover-font-pairing" className="text-xs font-medium text-on-surface-variant">
-          Font pairing
-        </label>
-        <select
-          id="cover-font-pairing"
-          value={config.typography.pairingId}
-          onChange={(e) => {
-            const p = FONT_PAIRINGS.find((x) => x.id === e.target.value);
-            if (!p) return;
-            setConfig((c) => ({
-              ...c,
-              typography: {
-                ...c.typography,
-                pairingId: p.id,
-                headingFont: p.heading,
-                bodyFont: p.body,
-              },
-            }));
-          }}
-          className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          style={activePairing ? { fontFamily: `'${activePairing.heading}', serif` } : undefined}
-        >
-          {FONT_PAIRINGS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label} — {p.heading} / {p.body}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2 border-t border-white/10 pt-4">
-        <div className="flex items-center justify-between">
-          <label htmlFor="cover-title-size" className="text-xs font-medium text-on-surface-variant">Title size</label>
-          <span className="text-xs">{config.typography.titleSize}px</span>
-        </div>
-        <input
-          id="cover-title-size"
-          type="range"
-          min={TITLE_SIZE_MIN}
-          max={TITLE_SIZE_MAX}
-          step={1}
-          value={config.typography.titleSize}
-          onChange={(e) =>
-            setConfig((c) => ({ ...c, typography: { ...c.typography, titleSize: Number(e.target.value) } }))
-          }
-          className="w-full accent-primary"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label htmlFor="cover-subtitle-size" className="text-xs font-medium text-on-surface-variant">Subtitle size</label>
-          <span className="text-xs">{config.typography.subtitleSize}px</span>
-        </div>
-        <input
-          id="cover-subtitle-size"
-          type="range"
-          min={SUBTITLE_SIZE_MIN}
-          max={SUBTITLE_SIZE_MAX}
-          step={1}
-          value={config.typography.subtitleSize}
-          onChange={(e) =>
-            setConfig((c) => ({ ...c, typography: { ...c.typography, subtitleSize: Number(e.target.value) } }))
-          }
-          className="w-full accent-primary"
-        />
-      </div>
+      <p className="text-[11px] text-on-surface-variant/80">
+        Drag the title or subtitle on the preview to reposition.
+      </p>
     </div>
   );
 }
