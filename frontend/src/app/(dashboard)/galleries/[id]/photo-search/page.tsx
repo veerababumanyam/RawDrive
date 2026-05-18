@@ -302,6 +302,14 @@ export default function PhotoSearchPage({
       setSearchResult(result);
 
       if (!result.found) {
+        // Terminal state — drop the camera before flipping stage. We
+        // previously only stopped on result-found, which left the
+        // stream + tracks live (and the OS camera light on) whenever
+        // the capture detected no face or matched no cluster in the
+        // gallery. The safety-net effect below also catches this, but
+        // calling it explicitly here means the user sees the light
+        // go out in the same animation frame the result panel mounts.
+        stopCamera();
         setStage(result.faces_detected === 0 ? "result-no-face" : "result-no-match");
         return;
       }
@@ -316,18 +324,26 @@ export default function PhotoSearchPage({
         .filter((r): r is PromiseFulfilledResult<Asset> => r.status === "fulfilled")
         .map((r) => r.value);
       setMatchedAssets(ok);
-      setStage("result-found");
-
-      // Camera is no longer needed once we have a result. The user
-      // can hit "Try another face" to re-acquire it. Keeping it on
-      // here would surprise users ("why is my camera light still on
-      // while I'm looking at photos?").
       stopCamera();
+      setStage("result-found");
     } catch (err) {
       setErrorDetail(err instanceof Error ? err.message : "Search failed");
       setStage("preview"); // back to live preview so user can retry
     }
   }, [id, stopCamera, token]);
+
+  // Safety-net: stop the camera whenever stage lands on a terminal
+  // result state, regardless of how we got there. handleCapture also
+  // calls stopCamera() inline so the light goes out instantly, but
+  // routing this through an effect means any future code path that
+  // sets stage to a result-* value (e.g. an error handler we add
+  // later, a deep-link to a cached result) keeps the same behavior
+  // without needing to remember to call stopCamera at every site.
+  useEffect(() => {
+    if (stage === "result-found" || stage === "result-no-face" || stage === "result-no-match") {
+      stopCamera();
+    }
+  }, [stage, stopCamera]);
 
   const handleRetry = useCallback(() => {
     setSearchResult(null);
