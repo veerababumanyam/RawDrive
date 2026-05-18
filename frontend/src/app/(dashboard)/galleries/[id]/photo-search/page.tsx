@@ -44,6 +44,75 @@ type Stage =
   | "result-no-match" // face detected but no cluster match in gallery
   | "camera-error"; // permission denied or device unavailable
 
+// Why a discriminated union for camera errors instead of a single
+// "permission denied" string: the four failure modes have completely
+// different remediation steps and lumping them together produces the
+// dev-vs-prod "still not working" loop seen on 2026-05-18 — a user on
+// http://192.168.x.x got the same "Camera access requires HTTPS or
+// localhost" message that someone who'd blocked the prompt in Chrome
+// got, even though their actual problem was the dev URL not being a
+// secure context.
+type CameraErrorKind =
+  | "insecure-context" // not localhost AND not HTTPS — browser refuses outright
+  | "no-api" // very old browser, or sandboxed iframe with no permissions
+  | "permission-denied" // user blocked the prompt or system-level deny
+  | "no-device" // no camera plugged in
+  | "in-use" // another app holds the camera
+  | "unknown";
+
+interface CameraError {
+  kind: CameraErrorKind;
+  rawName?: string;
+  rawMessage: string;
+}
+
+// Classify a getUserMedia rejection so the UI can show concrete
+// remediation. The DOMException.name field is the source of truth —
+// .message varies between browsers (Chrome says "Permission denied",
+// Safari says "The request is not allowed by the user agent or the
+// platform in the current context.", same underlying NotAllowedError).
+function classifyCameraError(err: unknown): CameraError {
+  if (err instanceof DOMException) {
+    switch (err.name) {
+      case "NotAllowedError":
+      case "SecurityError":
+        return { kind: "permission-denied", rawName: err.name, rawMessage: err.message };
+      case "NotFoundError":
+      case "OverconstrainedError":
+        return { kind: "no-device", rawName: err.name, rawMessage: err.message };
+      case "NotReadableError":
+      case "AbortError":
+        return { kind: "in-use", rawName: err.name, rawMessage: err.message };
+      default:
+        return { kind: "unknown", rawName: err.name, rawMessage: err.message };
+    }
+  }
+  if (err instanceof Error) {
+    return { kind: "unknown", rawMessage: err.message };
+  }
+  return { kind: "unknown", rawMessage: String(err) };
+}
+
+// Browsers gate getUserMedia on `isSecureContext`. The only origins
+// that are secure without HTTPS are `localhost`, `127.0.0.1`, and
+// `[::1]` (loopback addresses). A LAN IP like 192.168.x.x served over
+// plain HTTP is NOT a secure context and getUserMedia will fail —
+// detect this up-front so the error message is actionable instead of
+// blaming the user's permissions.
+function detectInsecureDevOrigin(): { insecure: boolean; hostname: string; protocol: string } {
+  if (typeof window === "undefined") {
+    return { insecure: false, hostname: "", protocol: "" };
+  }
+  const { protocol, hostname } = window.location;
+  if (window.isSecureContext) return { insecure: false, hostname, protocol };
+  const isLoopback =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1";
+  return { insecure: !isLoopback, hostname, protocol };
+}
+
 export default function PhotoSearchPage({
   params,
 }: {
@@ -59,6 +128,7 @@ export default function PhotoSearchPage({
 
   const [stage, setStage] = useState<Stage>("idle");
   const [errorDetail, setErrorDetail] = useState<string>("");
+  const [cameraError, setCameraError] = useState<CameraError | null>(null);
   const [searchResult, setSearchResult] = useState<FaceSearchResponse | null>(null);
   const [matchedAssets, setMatchedAssets] = useState<Asset[]>([]);
 
@@ -75,14 +145,35 @@ export default function PhotoSearchPage({
 
   const startCamera = useCallback(async () => {
     setErrorDetail("");
+    setCameraError(null);
     setSearchResult(null);
     setMatchedAssets([]);
+
+    // Up-front secure-context check. If the page is on a LAN IP over
+    // HTTP, `navigator.mediaDevices` is undefined in modern Chrome —
+    // we'd otherwise fall through to the "Camera API not available"
+    // branch, which is technically true but misses the actionable
+    // cause (the dev URL itself).
+    const ctx = detectInsecureDevOrigin();
+    if (ctx.insecure) {
+      setCameraError({
+        kind: "insecure-context",
+        rawMessage: `Page is on ${ctx.protocol}//${ctx.hostname} — not a secure context.`,
+      });
+      setStage("camera-error");
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError({
+        kind: "no-api",
+        rawMessage: "navigator.mediaDevices.getUserMedia is unavailable in this browser.",
+      });
+      setStage("camera-error");
+      return;
+    }
+
     try {
-      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-        // Older browsers + insecure-context (HTTP) hit this branch.
-        // getUserMedia requires HTTPS or localhost.
-        throw new Error("Camera API not available. Use Chrome/Edge/Safari over HTTPS or localhost.");
-      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
@@ -94,7 +185,7 @@ export default function PhotoSearchPage({
       }
       setStage("preview");
     } catch (err) {
-      setErrorDetail(err instanceof Error ? err.message : String(err));
+      setCameraError(classifyCameraError(err));
       setStage("camera-error");
     }
   }, []);
@@ -225,22 +316,10 @@ export default function PhotoSearchPage({
         )}
 
         {stage === "camera-error" && (
-          <div className="space-y-3 text-center py-6">
-            <p className="text-sm font-semibold text-feedback-error">Camera unavailable</p>
-            <p className="text-xs text-text-secondary">{errorDetail || "Permission denied."}</p>
-            <p className="text-xs text-text-tertiary">
-              Check that the site has camera permission in your browser settings,
-              then try again. Camera access requires HTTPS or localhost.
-            </p>
-            <button
-              type="button"
-              onClick={() => void startCamera()}
-              className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden />
-              Try again
-            </button>
-          </div>
+          <CameraErrorPanel
+            error={cameraError}
+            onRetry={() => void startCamera()}
+          />
         )}
 
         {(stage === "preview" || stage === "searching") && (
@@ -414,6 +493,196 @@ export default function PhotoSearchPage({
           )}
         </section>
       )}
+    </div>
+  );
+}
+
+// CameraErrorPanel — actionable, error-kind-aware recovery UI.
+//
+// Each kind maps to a distinct recovery path:
+//   - insecure-context: dev URL is on a non-loopback host over HTTP.
+//     The fix is to use http://localhost:3000 (not http://192.168.x.x:3000).
+//     This is the most common dev-time confusion — Chrome silently
+//     denies getUserMedia without an obvious prompt.
+//   - no-api: ancient browser or sandboxed iframe. Asks the user to
+//     switch browser.
+//   - permission-denied: the user blocked the site, OR the OS denied
+//     the browser's camera access. We surface BOTH causes because
+//     users typically don't think to check the OS-level setting.
+//   - no-device: no camera plugged in / available. Recovery is
+//     hardware-side.
+//   - in-use: Zoom, Teams, FaceTime, OBS etc. is holding the camera.
+//     Close the other app and retry.
+//   - unknown: render the raw DOMException so we don't lie about
+//     knowing what went wrong; the user can paste it into a support
+//     chat if needed.
+function CameraErrorPanel({
+  error,
+  onRetry,
+}: {
+  error: CameraError | null;
+  onRetry: () => void;
+}) {
+  const kind = error?.kind ?? "unknown";
+
+  let title = "Camera unavailable";
+  let lead: React.ReactNode = null;
+  let steps: React.ReactNode = null;
+  let retryLabel = "Try again";
+
+  if (kind === "insecure-context") {
+    title = "Dev URL isn't a secure context";
+    lead = (
+      <p className="text-sm text-text-secondary">
+        Browsers only allow camera access on HTTPS or on{" "}
+        <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">
+          localhost
+        </code>
+        /
+        <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">
+          127.0.0.1
+        </code>
+        . This page is on{" "}
+        <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">
+          {error?.rawMessage.replace(/^Page is on /, "").replace(/ —.*$/, "") ||
+            (typeof window !== "undefined" ? window.location.host : "")}
+        </code>
+        , which Chrome and Safari treat as insecure even on the LAN.
+      </p>
+    );
+    steps = (
+      <ol className="space-y-2 text-left text-sm text-text-secondary list-decimal pl-6">
+        <li>
+          Open the dashboard via{" "}
+          <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">
+            http://localhost:3000
+          </code>{" "}
+          instead of the LAN IP.
+        </li>
+        <li>
+          If you really need the LAN IP (testing from a phone), run the
+          dev server over HTTPS — Chrome accepts a self-signed cert if
+          you bypass the warning.
+        </li>
+      </ol>
+    );
+    retryLabel = "I switched to localhost — retry";
+  } else if (kind === "no-api") {
+    title = "Camera API not supported";
+    lead = (
+      <p className="text-sm text-text-secondary">
+        This browser doesn&apos;t expose{" "}
+        <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">
+          navigator.mediaDevices.getUserMedia
+        </code>
+        . Try the latest Chrome, Edge, Safari, or Firefox.
+      </p>
+    );
+    steps = (
+      <p className="text-xs text-text-tertiary">
+        If you&apos;re inside an embedded iframe, the parent page may be
+        blocking camera permissions via Permissions-Policy.
+      </p>
+    );
+  } else if (kind === "permission-denied") {
+    title = "Camera access blocked";
+    lead = (
+      <p className="text-sm text-text-secondary">
+        The browser refused camera access. Either this site is blocked
+        in your browser settings, or your operating system isn&apos;t
+        letting the browser see the camera at all.
+      </p>
+    );
+    steps = (
+      <div className="space-y-3 text-left text-sm text-text-secondary">
+        <div>
+          <p className="font-semibold text-text-primary">In the browser</p>
+          <ul className="list-disc pl-5 space-y-1 mt-1 text-xs">
+            <li>
+              <strong>Chrome / Edge</strong>: click the lock icon (or the
+              video-camera icon) in the address bar, set <em>Camera</em>{" "}
+              to <em>Allow</em>, then refresh.
+            </li>
+            <li>
+              <strong>Safari</strong>: Safari → Settings → Websites →
+              Camera → set this site to <em>Allow</em>, then refresh.
+            </li>
+            <li>
+              <strong>Firefox</strong>: click the camera icon in the
+              address bar, clear the &ldquo;Blocked Temporarily&rdquo;
+              entry, then refresh.
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-semibold text-text-primary">At the OS level</p>
+          <ul className="list-disc pl-5 space-y-1 mt-1 text-xs">
+            <li>
+              <strong>macOS</strong>: System Settings → Privacy &amp;
+              Security → Camera → enable your browser, then quit and
+              reopen the browser.
+            </li>
+            <li>
+              <strong>Windows</strong>: Settings → Privacy &amp; Security
+              → Camera → enable &ldquo;Let apps access your camera&rdquo;
+              and the browser&apos;s entry below it.
+            </li>
+          </ul>
+        </div>
+      </div>
+    );
+  } else if (kind === "no-device") {
+    title = "No camera found";
+    lead = (
+      <p className="text-sm text-text-secondary">
+        The browser didn&apos;t find a usable camera device. Plug one in
+        (or enable the built-in one) and try again.
+      </p>
+    );
+  } else if (kind === "in-use") {
+    title = "Camera is busy";
+    lead = (
+      <p className="text-sm text-text-secondary">
+        Another application appears to be using the camera (Zoom,
+        Teams, FaceTime, OBS, another browser tab). Close it and try
+        again.
+      </p>
+    );
+  } else {
+    title = "Camera unavailable";
+    lead = (
+      <p className="text-sm text-text-secondary">
+        {error?.rawMessage || "Permission denied."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4 py-6 max-w-2xl mx-auto">
+      <div className="text-center space-y-2">
+        <p className="text-sm font-semibold text-feedback-error">{title}</p>
+        {lead}
+      </div>
+      {steps && (
+        <div className="rounded-xl border border-border-subtle bg-surface-container-low p-4">
+          {steps}
+        </div>
+      )}
+      {error?.rawName && (
+        <p className="text-center text-[11px] text-text-tertiary font-mono">
+          {error.rawName}: {error.rawMessage}
+        </p>
+      )}
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden />
+          {retryLabel}
+        </button>
+      </div>
     </div>
   );
 }
