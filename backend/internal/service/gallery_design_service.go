@@ -40,13 +40,29 @@ type ThemeConfig struct {
 // decode of the PUT payload dropped the strings, so the public viewer would
 // render the gallery title fallback even when the studio showed a custom
 // heading. Tagged with camelCase JSON keys to match what the frontend
-// reducer dispatches (see frontend/src/app/(dashboard)/galleries/[id]/design/page.tsx).
+// reducer dispatches (see frontend/src/app/(dashboard)/galleries/[id]/cover/page.tsx).
+//
+// 2026-05-18: Added free-text overlay fields (TitlePosition, SubtitlePosition,
+// TextAlign, TextColor, TextShadow, AspectRatio) for the merged Cover &
+// Design page. Without these, the Go JSON decoder silently dropped them on
+// PUT, so dragged title/subtitle positions appeared to "reset" every time
+// the user navigated back to the page — payload was sent, then stripped on
+// server-side decode, then re-hydration found nothing to apply. Pointer
+// types (*FocalPoint, *string, *bool) so missing fields stay omitted in
+// JSON instead of being persisted as zero values that would override
+// frontend defaults on legacy galleries.
 type CoverConfig struct {
-	AssetID    *uuid.UUID `json:"assetId,omitempty"`
-	StyleID    string     `json:"styleId"`    // cover layout style (1 of 30)
-	FocalPoint FocalPoint `json:"focalPoint"`
-	Title      string     `json:"title,omitempty"`
-	Subtitle   string     `json:"subtitle,omitempty"`
+	AssetID          *uuid.UUID  `json:"assetId,omitempty"`
+	StyleID          string      `json:"styleId"` // cover layout style (1 of 30)
+	FocalPoint       FocalPoint  `json:"focalPoint"`
+	Title            string      `json:"title,omitempty"`
+	Subtitle         string      `json:"subtitle,omitempty"`
+	TitlePosition    *FocalPoint `json:"titlePosition,omitempty"`    // drag-positioned title (0..100 percent)
+	SubtitlePosition *FocalPoint `json:"subtitlePosition,omitempty"` // drag-positioned subtitle
+	TextAlign        *string     `json:"textAlign,omitempty"`        // "left" | "center" | "right" for overlay text
+	TextColor        *string     `json:"textColor,omitempty"`        // hex for overlay text color
+	TextShadow       *bool       `json:"textShadow,omitempty"`       // toggles a readability shadow
+	AspectRatio      *string     `json:"aspectRatio,omitempty"`      // overrides styleId's aspectRatio (e.g. "16/9")
 }
 
 // FocalPoint represents the cover crop focal point (0-100 range).
