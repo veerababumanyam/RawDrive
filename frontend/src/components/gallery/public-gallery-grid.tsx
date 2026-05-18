@@ -620,20 +620,52 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     <CheckCircle className="w-5 h-5 text-accent-primary-contrast" />
                   </div>
                 )}
-                {/* M19: Download button (visible on hover when downloads enabled) */}
-                {downloadEnabled && !isProofing && (
-                  <div className="absolute top-2 right-2 z-10 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                    <GlassIconButton
-                      size="sm"
-                      label="Download"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-                        window.open(`${apiBase}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`, "_blank");
-                      }}
+                {/* Per-tile actions — Favorite + Download.
+                    Favorite stays persistently visible when the tile IS
+                    favorited (so the user can see at a glance which
+                    items they've starred without hovering); hover-reveal
+                    when not favorited. Download follows the legacy hover
+                    pattern. Both buttons are independent of each other
+                    so favoriting works even when downloads are disabled.
+                    Proofing mode hides both — proofing uses tile-click
+                    for selection and the action chrome would clash. */}
+                {!isProofing && (
+                  <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                    <div
+                      className={
+                        favorites.has(asset.id)
+                          ? "opacity-100"
+                          : "opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                      }
                     >
-                      <Download />
-                    </GlassIconButton>
+                      <GlassIconButton
+                        size="sm"
+                        variant={favorites.has(asset.id) ? "accent" : "glass"}
+                        active={favorites.has(asset.id)}
+                        label={favorites.has(asset.id) ? "Remove from favorites" : "Add to favorites"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(asset.id);
+                        }}
+                      >
+                        <Star />
+                      </GlassIconButton>
+                    </div>
+                    {downloadEnabled && (
+                      <div className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                        <GlassIconButton
+                          size="sm"
+                          label="Download"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                            window.open(`${apiBase}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`, "_blank");
+                          }}
+                        >
+                          <Download />
+                        </GlassIconButton>
+                      </div>
+                    )}
                   </div>
                 )}
                 {thumbUrl ? (

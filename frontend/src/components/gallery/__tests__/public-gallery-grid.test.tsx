@@ -67,6 +67,36 @@ describe("PublicGalleryGrid", () => {
     expect(downloadButton.parentElement).toHaveClass("opacity-100", "sm:opacity-0", "sm:group-hover:opacity-100");
   });
 
+  it("renders a per-tile favorite toggle alongside the download button", async () => {
+    // localStorage clean so the favorites hook starts empty — otherwise a
+    // prior test's leak could pre-favorite this asset and the assertions
+    // about the "Add to favorites" label would flip.
+    try { localStorage.removeItem("rawdrive-favorites-wedding-gallery"); } catch { /* noop */ }
+    Object.defineProperty(window, "location", {
+      value: { origin: "https://app.rawdrive.test", search: "" },
+      writable: true,
+    });
+
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+
+    // Two action buttons on the tile: Favorite (default state) and Download.
+    const favoriteButton = screen.getByRole("button", { name: "Add to favorites" });
+    const downloadButton = screen.getByRole("button", { name: "Download" });
+    expect(favoriteButton).toBeInTheDocument();
+    expect(downloadButton).toBeInTheDocument();
+
+    // Clicking the star flips it to the "Remove from favorites" affordance
+    // and fires the public favorites API. Click is wrapped in stopPropagation
+    // so the tile-click lightbox handler must NOT have fired — no dialog open.
+    fireEvent.click(favoriteButton);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove from favorites" }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("lets fullscreen lightbox images fill the viewport while preserving aspect ratio", () => {
     render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
 
