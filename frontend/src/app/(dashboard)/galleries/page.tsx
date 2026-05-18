@@ -224,8 +224,22 @@ export default function GalleriesPage() {
           {error}
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div>
+      {/* Header — stacks vertically on mobile, side-by-side on sm+.
+          Before 2026-05-18 this was a single horizontal row that
+          crammed title + search + "+ New Gallery" + grid/list toggles
+          into a ~390px mobile viewport, which made the New Gallery
+          button wrap to two lines ("+ New" / "Gallery") and the
+          grid/list toggles spill off the right edge. New layout:
+            - Mobile: title row, then a full-width action row where
+              search flexes to fill remaining space after the button
+              and toggles claim their natural width.
+            - sm+: title block left, actions block right (legacy
+              layout, unchanged).
+          whitespace-nowrap on the "+ New Gallery" button is what
+          actually fixes the wrapping symptom — without it any width
+          shortfall splits the label. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-text-primary">Galleries</h1>
           <p className="text-sm text-text-secondary mt-1">
             {filteredGalleries.length === galleries.length
@@ -233,20 +247,22 @@ export default function GalleriesPage() {
               : `${filteredGalleries.length} of ${galleries.length} galleries`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <input
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search galleries…"
-            className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary min-h-[44px] w-48 lg:w-64"
+            className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary min-h-[44px] flex-1 min-w-0 sm:flex-none sm:w-48 lg:w-64"
             aria-label="Search galleries"
           />
           <button
             onClick={() => setShowCreate(true)}
-            className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+            className="shrink-0 whitespace-nowrap rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] inline-flex items-center justify-center gap-1"
+            aria-label="Create new gallery"
           >
-            + New Gallery
+            <span aria-hidden="true">+</span>
+            <span className="sm:inline">New Gallery</span>
           </button>
           <GlassIconButton
             onClick={() => setViewMode("grid")}
