@@ -656,98 +656,130 @@ function PanelText({
   activeText: "title" | "subtitle";
   setActiveText: (t: "title" | "subtitle") => void;
 }) {
+  // Treat the active-text state as a hint to the preview overlay rather
+  // than as a panel-mode switch: both inputs are visible at once, focusing
+  // an input updates the active-text marker so the preview highlights
+  // the corresponding overlay. This collapses the previous chunky Title/
+  // Subtitle toggle into a behavioral side-effect of cursor focus, and
+  // gives the panel a single-stream column that reads like a Notion-style
+  // form rather than a tabbed control.
   return (
-    <div className="space-y-4">
-      <div className="flex gap-1 rounded-lg border border-white/10 bg-surface p-1">
-        <button
-          onClick={() => setActiveText("title")}
-          className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
-            activeText === "title" ? "bg-primary/15 text-primary" : "text-on-surface-variant"
+    <div className="space-y-5">
+      {/* Title row — label on left, position chip on right, input below */}
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between">
+          <label htmlFor="cover-title-input" className="text-xs font-medium text-on-surface-variant">
+            Title
+          </label>
+          <span
+            className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
+              activeText === "title" ? "bg-primary/15 text-primary" : "text-on-surface-variant/70"
+            }`}
+            aria-label={`Title position ${config.cover.titlePosition.x}% horizontal, ${config.cover.titlePosition.y}% vertical`}
+          >
+            {config.cover.titlePosition.x}, {config.cover.titlePosition.y}
+          </span>
+        </div>
+        <input
+          id="cover-title-input"
+          value={config.cover.title}
+          onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, title: e.target.value } }))}
+          onFocus={() => setActiveText("title")}
+          placeholder="Your gallery title"
+          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm transition-colors focus:outline-none ${
+            activeText === "title"
+              ? "border-primary"
+              : "border-white/10 hover:border-white/20 focus:border-primary"
           }`}
-        >
-          Title
-        </button>
-        <button
-          onClick={() => setActiveText("subtitle")}
-          className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
-            activeText === "subtitle" ? "bg-primary/15 text-primary" : "text-on-surface-variant"
-          }`}
-        >
-          Subtitle
-        </button>
+        />
       </div>
 
-      {activeText === "title" ? (
-        <div className="space-y-2">
-          <label htmlFor="cover-title-input" className="text-xs font-medium text-on-surface-variant">Title text</label>
-          <input
-            id="cover-title-input"
-            value={config.cover.title}
-            onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, title: e.target.value } }))}
-            placeholder="Your gallery title"
-            className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          />
-          <p className="text-[11px] text-on-surface-variant">
-            Position: {config.cover.titlePosition.x}%, {config.cover.titlePosition.y}% — drag on the preview to reposition.
-          </p>
+      {/* Subtitle row — same shape as title */}
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between">
+          <label htmlFor="cover-subtitle-input" className="text-xs font-medium text-on-surface-variant">
+            Subtitle
+          </label>
+          <span
+            className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
+              activeText === "subtitle" ? "bg-primary/15 text-primary" : "text-on-surface-variant/70"
+            }`}
+            aria-label={`Subtitle position ${config.cover.subtitlePosition.x}% horizontal, ${config.cover.subtitlePosition.y}% vertical`}
+          >
+            {config.cover.subtitlePosition.x}, {config.cover.subtitlePosition.y}
+          </span>
         </div>
-      ) : (
-        <div className="space-y-2">
-          <label htmlFor="cover-subtitle-input" className="text-xs font-medium text-on-surface-variant">Subtitle text</label>
-          <textarea
-            id="cover-subtitle-input"
-            value={config.cover.subtitle}
-            onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, subtitle: e.target.value } }))}
-            placeholder="A short subtitle (optional)"
-            rows={2}
-            className="w-full resize-none rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          />
-          <p className="text-[11px] text-on-surface-variant">
-            Position: {config.cover.subtitlePosition.x}%, {config.cover.subtitlePosition.y}% — drag on the preview to reposition.
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-2 border-t border-white/10 pt-4">
-        <label className="text-xs font-medium text-on-surface-variant">Alignment</label>
-        <div className="flex gap-1 rounded-lg border border-white/10 p-1">
-          {(["left", "center", "right"] as TextAlign[]).map((a) => (
-            <button
-              key={a}
-              onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, textAlign: a } }))}
-              className={`flex-1 rounded-md py-1.5 text-xs font-medium capitalize transition-colors ${
-                config.cover.textAlign === a ? "bg-primary/15 text-primary" : "text-on-surface-variant"
-              }`}
-            >
-              {a}
-            </button>
-          ))}
-        </div>
+        <input
+          id="cover-subtitle-input"
+          value={config.cover.subtitle}
+          onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, subtitle: e.target.value } }))}
+          onFocus={() => setActiveText("subtitle")}
+          placeholder="Optional subtitle"
+          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm transition-colors focus:outline-none ${
+            activeText === "subtitle"
+              ? "border-primary"
+              : "border-white/10 hover:border-white/20 focus:border-primary"
+          }`}
+        />
       </div>
 
-      <div className="space-y-2 border-t border-white/10 pt-4">
-        <label htmlFor="cover-text-color" className="text-xs font-medium text-on-surface-variant">Text color</label>
-        <div className="flex items-center gap-2">
-          <input
-            id="cover-text-color"
-            type="color"
-            value={config.cover.textColor}
-            onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textColor: e.target.value } }))}
-            className="h-10 w-14 cursor-pointer rounded-lg border border-white/10 bg-surface"
-          />
-          <input
-            value={config.cover.textColor}
-            onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textColor: e.target.value } }))}
-            className="flex-1 rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          />
+      <p className="text-[11px] text-on-surface-variant/80">
+        Drag the title or subtitle on the preview to reposition.
+      </p>
+
+      {/* Style row — alignment + color + shadow, all on one line on wider
+          viewports and stacked on narrow. Compact icons keep the visual
+          weight low so the inputs above stay the dominant element. */}
+      <div className="space-y-3 border-t border-white/10 pt-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-on-surface-variant">Align</span>
+          <div className="flex gap-0.5 rounded-md border border-white/10 p-0.5">
+            {(["left", "center", "right"] as TextAlign[]).map((a) => (
+              <button
+                key={a}
+                onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, textAlign: a } }))}
+                className={`h-7 w-9 rounded text-[11px] font-medium capitalize transition-colors ${
+                  config.cover.textAlign === a ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-white/5"
+                }`}
+                aria-pressed={config.cover.textAlign === a}
+                aria-label={`Align ${a}`}
+              >
+                {a === "left" ? "L" : a === "center" ? "C" : "R"}
+              </button>
+            ))}
+          </div>
         </div>
-        <label className="flex items-center gap-2 pt-2 text-xs text-on-surface-variant">
+
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="cover-text-color" className="text-xs font-medium text-on-surface-variant">
+            Color
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="cover-text-color"
+              type="color"
+              value={config.cover.textColor}
+              onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textColor: e.target.value } }))}
+              className="h-7 w-7 cursor-pointer rounded border border-white/10 bg-surface p-0"
+              aria-label="Text color picker"
+            />
+            <input
+              value={config.cover.textColor}
+              onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textColor: e.target.value } }))}
+              className="w-24 rounded-md border border-white/10 bg-surface px-2 py-1 font-mono text-[11px] tabular-nums focus:border-primary focus:outline-none"
+              aria-label="Text color hex value"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center justify-between gap-3 text-xs text-on-surface-variant">
+          <span className="font-medium">Readability shadow</span>
           <input
             type="checkbox"
             checked={config.cover.textShadow}
             onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textShadow: e.target.checked } }))}
+            className="h-4 w-4 cursor-pointer accent-primary"
           />
-          Add readability shadow
         </label>
       </div>
     </div>
