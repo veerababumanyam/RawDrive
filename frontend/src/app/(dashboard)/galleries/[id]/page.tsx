@@ -326,6 +326,54 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const upload = useUpload(apiUrl, token);
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
 
+  // Upload completion toast — fires when the active upload count
+  // (uploading + pending + screening) transitions from >0 to 0 and at
+  // least one item ended in `complete`. The previous UI kept the
+  // progress panel mounted forever showing "Uploading 0 files" once
+  // every item had finished; that was both confusing and visually
+  // dead weight. Now the panel hides when activeCount===0 and the
+  // user gets a single right-side toast with the success count.
+  const activeUploadCount = upload.items.filter(
+    (i) => i.status === "uploading" || i.status === "pending" || i.status === "screening",
+  ).length;
+  const completedUploadCount = upload.items.filter((i) => i.status === "complete").length;
+  const failedUploadCount = upload.items.filter((i) => i.status === "error").length;
+  const prevActiveUploadCountRef = useRef(0);
+  const [uploadToast, setUploadToast] = useState<{
+    visible: boolean;
+    completed: number;
+    failed: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const wasActive = prevActiveUploadCountRef.current > 0;
+    const isIdle = activeUploadCount === 0;
+    if (wasActive && isIdle && (completedUploadCount > 0 || failedUploadCount > 0)) {
+      setUploadToast({
+        visible: true,
+        completed: completedUploadCount,
+        failed: failedUploadCount,
+      });
+    }
+    prevActiveUploadCountRef.current = activeUploadCount;
+  }, [activeUploadCount, completedUploadCount, failedUploadCount]);
+
+  // Auto-dismiss the toast after ~5s (mount → 4.5s visible → 0.5s
+  // slide-out → unmount). Two-stage so the CSS transform animation
+  // actually plays before the element is removed.
+  useEffect(() => {
+    if (!uploadToast?.visible) return;
+    const slideOut = window.setTimeout(
+      () => setUploadToast((t) => (t ? { ...t, visible: false } : null)),
+      4500,
+    );
+    const unmount = window.setTimeout(() => setUploadToast(null), 5000);
+    return () => {
+      window.clearTimeout(slideOut);
+      window.clearTimeout(unmount);
+    };
+  }, [uploadToast?.visible]);
+
   // Assets whose thumbnails the background worker has not finished
   // producing yet. The gallery listing endpoint returns rows the
   // instant they are linked (the asset row exists, status is
@@ -732,12 +780,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       <div>
         <section className="space-y-4">
 
-          {/* Upload progress (shown when uploading) */}
-          {upload.items.length > 0 && (
+          {/* Upload progress — only mounted while uploads are in
+              flight. The "all done" terminal state is surfaced via the
+              right-side toast (see uploadToast) instead of leaving the
+              panel mounted showing "Uploading 0 files" with 100% bars,
+              which was the old behavior. */}
+          {activeUploadCount > 0 && (
             <div className="surface-panel space-y-3 p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-text-primary">
-                  Uploading {upload.items.filter(i => i.status === "uploading" || i.status === "pending" || i.status === "screening").length} files
+                  Uploading {activeUploadCount} {activeUploadCount === 1 ? "file" : "files"}
                 </h2>
                 <div className="flex gap-2">
                   {upload.isPaused ? (
@@ -1321,6 +1373,91 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             if (idx >= 0) setLightboxIndex(idx);
           }}
         />
+      )}
+
+      {/* Upload-complete toast — replaces the old "Uploading 0 files /
+          100% complete" panel that lingered after every file was done.
+          Slides in from the right, auto-dismisses after ~5s, dismissable
+          on click. Two pieces of state on uploadToast:
+            - visible:false keeps the element mounted so the slide-out
+              transform animation can play before the 500ms unmount
+              timer removes it from the tree
+          Accessible: role=status (polite live region) so screen readers
+          announce completion without stealing focus. */}
+      {uploadToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={cn(
+            "fixed top-6 right-6 z-50 min-w-[280px] max-w-sm",
+            "rounded-xl border border-border-default bg-surface-raised/95 backdrop-blur-md",
+            "shadow-xl shadow-black/20 px-4 py-3",
+            "transition-all duration-500 ease-out",
+            uploadToast.visible
+              ? "translate-x-0 opacity-100"
+              : "translate-x-[120%] opacity-0",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={cn(
+                "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                uploadToast.failed === 0
+                  ? "bg-feedback-success/15 text-feedback-success"
+                  : uploadToast.completed === 0
+                    ? "bg-feedback-error/15 text-feedback-error"
+                    : "bg-feedback-warning/15 text-feedback-warning",
+              )}
+              aria-hidden
+            >
+              {uploadToast.failed === 0 ? (
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              ) : (
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+              )}
+            </div>
+            <div className="flex-1 space-y-0.5">
+              <p className="text-sm font-semibold text-text-primary">
+                {uploadToast.failed === 0
+                  ? `${uploadToast.completed} ${uploadToast.completed === 1 ? "photo" : "photos"} uploaded`
+                  : uploadToast.completed === 0
+                    ? `${uploadToast.failed} ${uploadToast.failed === 1 ? "upload" : "uploads"} failed`
+                    : `${uploadToast.completed} uploaded · ${uploadToast.failed} failed`}
+              </p>
+              <p className="text-xs text-text-secondary">
+                {uploadToast.failed === 0
+                  ? "They'll appear in the gallery as soon as processing finishes."
+                  : "Open the upload list to retry the failed items."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUploadToast((t) => (t ? { ...t, visible: false } : null))}
+              className="-mr-1 -mt-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-sunken hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+              aria-label="Dismiss"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
