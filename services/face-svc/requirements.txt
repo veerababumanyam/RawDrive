@@ -1,0 +1,12 @@
+# Face recognition sidecar — pinned for reproducible builds.
+# Bump deliberately and verify the integration test (backend/internal/face/client_test.go).
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+onnxruntime==1.20.1
+# insightface bundles buffalo_l (~280 MB) on first run, cached in $INSIGHTFACE_HOME.
+# 0.7.3 is the latest stable; bumping requires re-testing model load.
+insightface==0.7.3

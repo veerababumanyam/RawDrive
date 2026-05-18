@@ -45,6 +45,31 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # ── Face recognition sidecar (Python + insightface) ───────────────
+  # Internal-only; exposed on host port 8085 for the integration test
+  # (backend/internal/face/client_test.go) and ad-hoc curl smoke checks,
+  # but the backend service reaches it via the compose network at
+  # http://face-svc:8000. See services/face-svc/README.md.
+  face-svc:
+    build:
+      context: ./services/face-svc
+      dockerfile: Dockerfile
+    environment:
+      FACE_SVC_LOG_LEVEL: INFO
+      FACE_SVC_MIN_DET_SCORE: "0.5"
+    ports:
+      - "8085:8000"
+    volumes:
+      # Persist the ~280 MB buffalo_l model download across container restarts.
+      - face_svc_models:/home/facesvc/.insightface
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz | grep -q '\"ready\":true'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # Cold start: model download on first run can take >60s on slow links.
+      start_period: 180s
+
   # ── One-shot migration runner ─────────────────────────────────────
   migrate:
     build:
@@ -73,6 +98,10 @@ services:
       NATS_URL: nats://nats:4222
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      # Internal face-svc URL inside the compose network. The Go client
+      # (backend/internal/face/client.go) reads this env var. Health gate
+      # in face-svc means depends_on:condition:service_healthy below.
+      FACE_SVC_URL: http://face-svc:8000
       APP_ENV: development
     ports:
       - "8080:8080"
@@ -111,3 +140,4 @@ services:
 volumes:
   postgres_data:
   valkey_data:
+  face_svc_models:
