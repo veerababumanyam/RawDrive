@@ -603,14 +603,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 href={`/galleries/${gallery.id}/cover`}
                 className="text-xs text-accent-primary hover:underline"
               >
-                Cover photo
-              </Link>
-              <span className="text-text-tertiary">·</span>
-              <Link
-                href={`/galleries/${gallery.id}/design`}
-                className="text-xs text-accent-primary hover:underline"
-              >
-                Design & theme
+                Cover & Design
               </Link>
               <span className="text-text-tertiary">·</span>
               <Link

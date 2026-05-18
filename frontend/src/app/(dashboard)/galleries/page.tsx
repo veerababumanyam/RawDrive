@@ -462,7 +462,7 @@ export default function GalleriesPage() {
                         Open
                       </button>
                       <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/galleries/${g.id}/design`); }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/galleries/${g.id}/cover`); }}
                         className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
                       >
                         Design
