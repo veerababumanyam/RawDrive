@@ -60,7 +60,9 @@ type CoverConfig struct {
 	TitlePosition    *FocalPoint `json:"titlePosition,omitempty"`    // drag-positioned title (0..100 percent)
 	SubtitlePosition *FocalPoint `json:"subtitlePosition,omitempty"` // drag-positioned subtitle
 	TextAlign        *string     `json:"textAlign,omitempty"`        // "left" | "center" | "right" for overlay text
-	TextColor        *string     `json:"textColor,omitempty"`        // hex for overlay text color
+	TextColor        *string     `json:"textColor,omitempty"`        // hex for legacy shared overlay text color
+	TitleColor       *string     `json:"titleColor,omitempty"`       // hex for title overlay (split from textColor 2026-05-18)
+	SubtitleColor    *string     `json:"subtitleColor,omitempty"`    // hex for subtitle overlay (split from textColor 2026-05-18)
 	TextShadow       *bool       `json:"textShadow,omitempty"`       // toggles a readability shadow
 	AspectRatio      *string     `json:"aspectRatio,omitempty"`      // overrides styleId's aspectRatio (e.g. "16/9")
 }

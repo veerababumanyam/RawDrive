@@ -55,7 +55,7 @@ import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav"
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "typography" | "grid" | "theme";
+type TabId = "cover" | "text" | "typography" | "grid";
 
 interface FocalPoint { x: number; y: number }
 interface TextPos { x: number; y: number }
@@ -71,7 +71,14 @@ interface DesignConfig {
     titlePosition: TextPos;
     subtitlePosition: TextPos;
     textAlign: TextAlign;
+    // Per-element colors. 2026-05-18: split from a single `textColor` so
+    // users can pick a different hex for title vs subtitle. `textColor`
+    // stays in the saved shape as a legacy fallback — configFromGallery
+    // migrates it into both fields on first read when the new fields
+    // aren't present.
     textColor: string;
+    titleColor: string;
+    subtitleColor: string;
     textShadow: boolean;
     aspectRatio: string;
   };
@@ -90,18 +97,6 @@ interface DesignConfig {
   };
   version: number;
 }
-
-const THEMES: { id: string; name: string; accent: string }[] = [
-  { id: "liquid-glass", name: "Liquid Glass", accent: "#6366f1" },
-  { id: "heritage", name: "Heritage", accent: "#92400e" },
-  { id: "noir", name: "Noir", accent: "#171717" },
-  { id: "botanical", name: "Botanical", accent: "#166534" },
-  { id: "sunset", name: "Sunset", accent: "#c2410c" },
-  { id: "arctic", name: "Arctic", accent: "#0e7490" },
-  { id: "lavender", name: "Lavender", accent: "#7e22ce" },
-  { id: "champagne", name: "Champagne", accent: "#a16207" },
-  { id: "slate", name: "Slate", accent: "#475569" },
-];
 
 const FONT_PAIRINGS = [
   { id: "elegant", heading: "Playfair Display", body: "Inter", label: "Elegant" },
@@ -145,6 +140,8 @@ const DEFAULT_CONFIG: DesignConfig = {
     subtitlePosition: { x: 50, y: 82 },
     textAlign: "center",
     textColor: "#ffffff",
+    titleColor: "#ffffff",
+    subtitleColor: "#ffffff",
     textShadow: true,
     aspectRatio: "16/9",
   },
@@ -212,6 +209,24 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   // schema still accepts all four — this clamp is editor-only.
   if (merged.grid.layout !== "grid" && merged.grid.layout !== "justified") {
     merged.grid.layout = "grid";
+  }
+
+  // 2026-05-18: per-element title/subtitle colors split from the legacy
+  // single `textColor`. The merged.cover.titleColor/subtitleColor fields
+  // were set from Object.assign(cover) above if the saved JSON contained
+  // them. For older galleries that only have textColor saved, the
+  // Object.assign step doesn't write anything to titleColor/subtitleColor
+  // (DEFAULT_CONFIG defaults them to "#ffffff"), so we backfill them from
+  // the legacy textColor here. The first user save will then persist all
+  // three keys side-by-side.
+  const savedCover = (raw && typeof raw === "object"
+    ? (raw.cover as { titleColor?: string; subtitleColor?: string } | undefined)
+    : undefined) ?? {};
+  if (!savedCover.titleColor && merged.cover.textColor) {
+    merged.cover.titleColor = merged.cover.textColor;
+  }
+  if (!savedCover.subtitleColor && merged.cover.textColor) {
+    merged.cover.subtitleColor = merged.cover.textColor;
   }
 
   return merged;
@@ -432,7 +447,6 @@ export default function CoverDesignPage() {
             <option value="text">Text</option>
             <option value="typography">Typography</option>
             <option value="grid">Grid</option>
-            <option value="theme">Theme</option>
           </select>
           {gallery?.slug && (
             <Link
@@ -522,7 +536,7 @@ export default function CoverDesignPage() {
                   transform: "translate(-50%, -50%)",
                   fontFamily: `'${config.typography.headingFont}', serif`,
                   fontSize: `${config.typography.titleSize}px`,
-                  color: config.cover.textColor,
+                  color: config.cover.titleColor || config.cover.textColor,
                   textShadow: textShadowStyle,
                   textAlign: config.cover.textAlign,
                   cursor: "grab",
@@ -551,7 +565,7 @@ export default function CoverDesignPage() {
                   transform: "translate(-50%, -50%)",
                   fontFamily: `'${config.typography.bodyFont}', sans-serif`,
                   fontSize: `${config.typography.subtitleSize}px`,
-                  color: config.cover.textColor,
+                  color: config.cover.subtitleColor || config.cover.textColor,
                   textShadow: textShadowStyle,
                   textAlign: config.cover.textAlign,
                   cursor: "grab",
@@ -608,9 +622,6 @@ export default function CoverDesignPage() {
                 assets={assets}
                 token={token}
               />
-            )}
-            {tab === "theme" && (
-              <PanelTheme config={config} setConfig={setConfig} />
             )}
           </div>
         </section>
@@ -788,24 +799,72 @@ function PanelText({
           </div>
         </div>
 
+        {/* Per-element color pickers — replaced the single shared
+            "Color" row 2026-05-18. Some galleries want a contrasty
+            title (e.g. accent yellow) with a softer subtitle (white);
+            one shared color forced both. We also keep textColor in
+            sync with titleColor so older render paths or future code
+            that reads `textColor` still gets a sensible value. */}
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor="cover-text-color" className="text-xs font-medium text-on-surface-variant">
-            Color
+          <label htmlFor="cover-title-color" className="text-xs font-medium text-on-surface-variant">
+            Title color
           </label>
           <div className="flex items-center gap-2">
             <input
-              id="cover-text-color"
+              id="cover-title-color"
               type="color"
-              value={config.cover.textColor}
-              onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textColor: e.target.value } }))}
+              value={config.cover.titleColor || "#ffffff"}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, titleColor: e.target.value, textColor: e.target.value },
+                }))
+              }
               className="h-7 w-7 cursor-pointer rounded border border-white/10 bg-surface p-0"
-              aria-label="Text color picker"
+              aria-label="Title color picker"
             />
             <input
-              value={config.cover.textColor}
-              onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textColor: e.target.value } }))}
+              value={config.cover.titleColor || ""}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, titleColor: e.target.value, textColor: e.target.value },
+                }))
+              }
               className="w-24 rounded-md border border-white/10 bg-surface px-2 py-1 font-mono text-[11px] tabular-nums focus:border-primary focus:outline-none"
-              aria-label="Text color hex value"
+              aria-label="Title color hex value"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="cover-subtitle-color" className="text-xs font-medium text-on-surface-variant">
+            Subtitle color
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="cover-subtitle-color"
+              type="color"
+              value={config.cover.subtitleColor || "#ffffff"}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, subtitleColor: e.target.value },
+                }))
+              }
+              className="h-7 w-7 cursor-pointer rounded border border-white/10 bg-surface p-0"
+              aria-label="Subtitle color picker"
+            />
+            <input
+              value={config.cover.subtitleColor || ""}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, subtitleColor: e.target.value },
+                }))
+              }
+              className="w-24 rounded-md border border-white/10 bg-surface px-2 py-1 font-mono text-[11px] tabular-nums focus:border-primary focus:outline-none"
+              aria-label="Subtitle color hex value"
             />
           </div>
         </div>
@@ -831,41 +890,44 @@ function PanelTypography({
   config: DesignConfig;
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
 }) {
+  // Replaced the 2x3 block grid with a single <select> 2026-05-18 — the
+  // pairing tiles burned 240px of vertical real estate and forced a tap
+  // dance to compare options. A dropdown is denser, keyboard-friendly,
+  // and pairs naturally with the size sliders below. Option labels show
+  // both the pairing nickname and its actual fonts so the picker stays
+  // self-documenting at a glance.
+  const activePairing = FONT_PAIRINGS.find((p) => p.id === config.typography.pairingId);
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold">Font pairing</h3>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {FONT_PAIRINGS.map((p) => {
-          const active = config.typography.pairingId === p.id;
-          return (
-            <button
-              key={p.id}
-              onClick={() =>
-                setConfig((c) => ({
-                  ...c,
-                  typography: {
-                    ...c.typography,
-                    pairingId: p.id,
-                    headingFont: p.heading,
-                    bodyFont: p.body,
-                  },
-                }))
-              }
-              className={`rounded-lg border p-2 text-left transition-colors ${
-                active ? "border-primary bg-primary/10" : "border-white/10 hover:bg-white/5"
-              }`}
-            >
-              <div className="text-sm font-semibold" style={{ fontFamily: `'${p.heading}', serif` }}>
-                {p.label}
-              </div>
-              <div className="mt-0.5 text-[10px] text-on-surface-variant">
-                {p.heading} / {p.body}
-              </div>
-            </button>
-          );
-        })}
+      <div className="space-y-2">
+        <label htmlFor="cover-font-pairing" className="text-xs font-medium text-on-surface-variant">
+          Font pairing
+        </label>
+        <select
+          id="cover-font-pairing"
+          value={config.typography.pairingId}
+          onChange={(e) => {
+            const p = FONT_PAIRINGS.find((x) => x.id === e.target.value);
+            if (!p) return;
+            setConfig((c) => ({
+              ...c,
+              typography: {
+                ...c.typography,
+                pairingId: p.id,
+                headingFont: p.heading,
+                bodyFont: p.body,
+              },
+            }));
+          }}
+          className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          style={activePairing ? { fontFamily: `'${activePairing.heading}', serif` } : undefined}
+        >
+          {FONT_PAIRINGS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label} — {p.heading} / {p.body}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-2 border-t border-white/10 pt-4">
@@ -1125,76 +1187,10 @@ function GridLivePreview({
   );
 }
 
-function PanelTheme({
-  config,
-  setConfig,
-}: {
-  config: DesignConfig;
-  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
-}) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold">Theme</h3>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        {THEMES.map((t) => {
-          const active = config.theme.id === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() =>
-                setConfig((c) => ({ ...c, theme: { ...c.theme, id: t.id, accentColor: t.accent } }))
-              }
-              className={`rounded-lg border p-2 text-center text-[11px] transition-colors ${
-                active ? "border-primary bg-primary/10 text-primary" : "border-white/10 hover:bg-white/5"
-              }`}
-            >
-              <span
-                className="mx-auto mb-1 block h-5 w-5 rounded-full border border-white/20"
-                style={{ background: t.accent }}
-              />
-              {t.name}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="space-y-2 border-t border-white/10 pt-4">
-        <label className="text-xs font-medium text-on-surface-variant">Scrim variant</label>
-        <div className="flex gap-1 rounded-lg border border-white/10 p-1">
-          {(["light", "dark", "auto"] as ThemeVariant[]).map((v) => (
-            <button
-              key={v}
-              onClick={() => setConfig((c) => ({ ...c, theme: { ...c.theme, variant: v } }))}
-              className={`flex-1 rounded-md py-1.5 text-xs font-medium capitalize transition-colors ${
-                config.theme.variant === v ? "bg-primary/15 text-primary" : "text-on-surface-variant"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2 border-t border-white/10 pt-4">
-        <label htmlFor="cover-accent" className="text-xs font-medium text-on-surface-variant">Accent override</label>
-        <div className="flex items-center gap-2">
-          <input
-            id="cover-accent"
-            type="color"
-            value={config.theme.accentColor || "#6366f1"}
-            onChange={(e) => setConfig((c) => ({ ...c, theme: { ...c.theme, accentColor: e.target.value } }))}
-            className="h-10 w-14 cursor-pointer rounded-lg border border-white/10 bg-surface"
-          />
-          <input
-            value={config.theme.accentColor}
-            onChange={(e) => setConfig((c) => ({ ...c, theme: { ...c.theme, accentColor: e.target.value } }))}
-            placeholder="#6366f1"
-            className="flex-1 rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
+// PanelTheme was removed 2026-05-18 — the theme tab (theme preset picker
+// + scrim variant + accent color override) was confusing users because
+// the accent color silently flowed into the cover hero's title color,
+// duplicating the Text-tab color picker. Title/subtitle colors are now
+// owned exclusively by PanelText (titleColor + subtitleColor). config.theme
+// stays in state for backward-compat with legacy saved designs, but no
+// UI surface edits it from this page.

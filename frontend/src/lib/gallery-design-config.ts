@@ -48,6 +48,8 @@ export interface PublicDesignConfig {
     // toggles a CSS text-shadow that makes light copy legible over busy
     // photos without requiring a full scrim layer.
     textColor?: string;
+    titleColor?: string;
+    subtitleColor?: string;
     textShadow?: boolean;
     // Aspect-ratio override for the cover frame. When set, replaces the
     // styleId's declared aspectRatio so users can crop a 21/9 panoramic
@@ -136,6 +138,8 @@ export function readPublicDesignConfig(
               ? coverTextAlign
               : undefined,
           textColor: asString(coverRaw.textColor),
+          titleColor: asString(coverRaw.titleColor),
+          subtitleColor: asString(coverRaw.subtitleColor),
           textShadow: asBool(coverRaw.textShadow),
           aspectRatio: asString(coverRaw.aspectRatio),
         }

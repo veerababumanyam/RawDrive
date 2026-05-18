@@ -179,7 +179,14 @@ export function PublicGalleryHero({
     const titlePos = design.cover?.titlePosition;
     const subtitlePos = design.cover?.subtitlePosition;
     const useDragLayout = Boolean(titlePos || subtitlePos);
+    // 2026-05-18: title/subtitle colors split into separate fields. The
+    // editor picker writes both `titleColor` and `subtitleColor`; the
+    // legacy `textColor` stays in the payload as a fallback so older
+    // galleries that saved only the shared color still render with a
+    // sensible value on both elements.
     const textColor = design.cover?.textColor || undefined;
+    const titleColor = design.cover?.titleColor || textColor;
+    const subtitleColor = design.cover?.subtitleColor || textColor;
     const textShadow = design.cover?.textShadow
       ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
       : undefined;
@@ -247,7 +254,7 @@ export function PublicGalleryHero({
                   transform: "translate(-50%, -50%)",
                   fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
                   fontSize: titleSize ? `${titleSize}px` : undefined,
-                  color: textColor || accent || "#ffffff",
+                  color: titleColor || accent || "#ffffff",
                   textShadow,
                   textAlign: effectiveAlign,
                   whiteSpace: "pre",
@@ -265,7 +272,7 @@ export function PublicGalleryHero({
                   transform: "translate(-50%, -50%)",
                   fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
-                  color: textColor || "#ffffff",
+                  color: subtitleColor || "#ffffff",
                   textShadow,
                   textAlign: effectiveAlign,
                   whiteSpace: "pre",
@@ -329,7 +336,7 @@ export function PublicGalleryHero({
               style={{
                 fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
                 fontSize: titleSize ? `${titleSize}px` : undefined,
-                color: textColor || accent || undefined,
+                color: titleColor || accent || undefined,
                 textShadow,
               }}
             >
@@ -341,7 +348,7 @@ export function PublicGalleryHero({
                 style={{
                   fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
-                  color: textColor || undefined,
+                  color: subtitleColor || undefined,
                   textShadow,
                 }}
               >
