@@ -27,6 +27,7 @@ import (
 	backendcrypto "github.com/rawdrive/backend/internal/crypto"
 	"github.com/rawdrive/backend/internal/email"
 	"github.com/rawdrive/backend/internal/events"
+	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/featureflag"
 	"github.com/rawdrive/backend/internal/handler"
 	"github.com/rawdrive/backend/internal/middleware"
@@ -1550,6 +1551,24 @@ func main() {
 
 		// AI services
 		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+
+		// Face recognition: prefer the face-svc Python sidecar (insightface,
+		// 512-d embeddings) over the legacy Gemini path. The sidecar is
+		// reached on the compose network via FACE_SVC_URL (typically
+		// http://face-svc:8000). If unset we leave faceSvc on the Gemini
+		// path — but migration 110 widened the embedding column to
+		// vector(512), so the Gemini fallback fails-fast on insert. The
+		// canonical wiring path is to set FACE_SVC_URL in production.
+		if faceSvcURL := os.Getenv("FACE_SVC_URL"); faceSvcURL != "" {
+			faceClient, err := face.NewClient(face.Config{BaseURL: faceSvcURL})
+			if err != nil {
+				log.Fatalf("face-svc client init: %v", err)
+			}
+			faceSvc = faceSvc.WithFaceClient(faceClient)
+			log.Printf("face: detection backend set to face-svc (%s)", faceSvcURL)
+		} else {
+			log.Printf("face: FACE_SVC_URL not set; falling back to (now-incompatible) Gemini path")
+		}
 
 		// M21: wire face scan deps into gallery handler now that faceSvc is available.
 		galleryHandler.WithAIDeps(faceSvc, assetSvc, aiJobRepo)
