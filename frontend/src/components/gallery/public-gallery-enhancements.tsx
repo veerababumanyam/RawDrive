@@ -21,7 +21,9 @@
  */
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Camera } from "lucide-react";
 import {
   getPublicGalleryBranding,
   type GalleryBranding,
@@ -32,6 +34,15 @@ interface Props {
   slug: string;
   /** Face ID is only offered when the gallery has faceid_enabled=true. */
   faceIdEnabled?: boolean;
+  /**
+   * Photo Search button visibility. Maps to galleries.face_detection_enabled
+   * (migration 046, default true). Guests only see the floating "Find me
+   * with my camera" entry when the studio hasn't opted the gallery out of
+   * face detection. Workspace-level disable (workspaces.face_recognition_enabled)
+   * is enforced server-side — if it's off, the Photo Search page itself
+   * shows a friendlier "feature not enabled" panel.
+   */
+  faceDetectionEnabled?: boolean;
 }
 
 // GAL-FR-102 (RegistrationPrompt) removed 2026-05-18: the "Keep these
@@ -42,6 +53,7 @@ interface Props {
 export function PublicGalleryEnhancements({
   slug,
   faceIdEnabled = false,
+  faceDetectionEnabled = true,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -125,6 +137,27 @@ export function PublicGalleryEnhancements({
         <div className="fixed bottom-2 right-2 z-20 text-[10px] text-text-tertiary/60">
           Powered by {branding.brand_name}
         </div>
+      )}
+
+      {/* Photo Search FAB — discoverability for the new /photo-search
+          page on the gallery's landing screen. Guests arrive via a
+          share link and previously had to navigate to /people to find
+          the entry; the floating button surfaces it at first sight.
+          Bottom-left corner so the existing bottom-right "Powered by"
+          chip + scroll-to-top affordances stay clear. Only renders
+          when the studio has face detection enabled on the gallery —
+          if the workspace gate is closed, the Photo Search page
+          itself handles that with a friendly fallback panel. */}
+      {faceDetectionEnabled && (
+        <Link
+          href={`/g/${slug}/photo-search`}
+          aria-label="Find your photos with your camera"
+          className="fixed bottom-4 left-4 z-30 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-text-inverse shadow-lg shadow-black/20 backdrop-blur-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 sm:bottom-6 sm:left-6"
+        >
+          <Camera className="h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">Find me with my camera</span>
+          <span className="sm:hidden">Find me</span>
+        </Link>
       )}
 
       {/* GAL-FR-107/108/109: FaceID entry modal */}
