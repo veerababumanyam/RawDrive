@@ -14,11 +14,22 @@
 
 FROM python:3.11-slim AS runtime
 
-# System deps for opencv-python-headless + onnxruntime CPU.
-# libgomp1: OpenMP runtime that onnxruntime threads against.
-# libglib2.0-0, libsm6, libxext6, libxrender1: minimal X libs opencv-headless still pulls.
-# libjpeg62-turbo, libpng16-16, libwebp7: image format decoders.
-# curl: healthcheck.
+# System deps split into two groups:
+#
+# Runtime libs (kept in final image):
+#   libgomp1               — OpenMP runtime that onnxruntime threads against.
+#   libglib2.0-0, libsm6,  — minimal X libs opencv-headless still pulls.
+#     libxext6, libxrender1
+#   libjpeg62-turbo,       — image format decoders.
+#     libpng16-16, libwebp7
+#   curl                   — healthcheck.
+#
+# Build deps (used during pip install, removed at the end):
+#   build-essential, python3-dev — insightface 0.7.3 has no prebuilt wheel
+#     for linux/arm64 (Apple Silicon dev) and falls back to a Cython source
+#     build that needs gcc+g++. Wheels exist for linux/amd64 prod hosts but
+#     installing the toolchain in dev parity is cheaper than two Dockerfiles.
+#     Both removed after pip install to shed ~300 MB from the final image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
         libglib2.0-0 \
@@ -29,6 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpng16-16 \
         libwebp7 \
         curl \
+        build-essential \
+        python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root user — face-svc handles biometric data, principle of least privilege.
@@ -38,8 +51,15 @@ WORKDIR /app
 
 # Cache the wheel install layer separately from app source so code edits
 # don't bust the heavy insightface/onnxruntime install (~600 MB layer).
+# numpy+cython pre-installed because insightface's source build imports
+# both at setup-time.
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir numpy==1.26.4 cython \
+    && pip install --no-cache-dir -r /app/requirements.txt \
+    && apt-get purge -y build-essential python3-dev \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY app.py /app/app.py
 
