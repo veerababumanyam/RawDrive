@@ -2,12 +2,26 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // ---- Types ----
 
+// SampleBoundingBox mirrors the backend ai.BoundingBox shape (pixels of
+// the original image — sourced from face_clusters.bounding_box JSONB).
+// PR-3 people tab uses this to crop the cluster cover thumbnail to just
+// the face area; if absent, fall back to the full thumbnail.
+export interface SampleBoundingBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface ClusterSummary {
   cluster_label: string;
   cluster_name: string;
   face_count: number;
   asset_count: number;
   sample_asset_id: string;
+  // PR-3: backend ai.ClusterSummary returns this — exposed here so the
+  // People tab can crop the sample asset to the face region.
+  sample_bounding_box?: SampleBoundingBox;
 }
 
 export interface AIJob {

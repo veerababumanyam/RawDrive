@@ -29,6 +29,11 @@ const sections: Section[] = [
   { label: "Overview", path: "" },
   { label: "Cover & Design", path: "/cover" },
   { label: "AI", path: "/ai" },
+  // PR-3: face-recognition People tab. Sits between AI (which has admin /
+  // cluster ops via face-filter) and Settings. The dedicated People page
+  // gives a person-first view: tile per identified individual, click
+  // through to that person's photos.
+  { label: "People", path: "/people" },
   { label: "Settings", path: "/settings" },
 ];
 
