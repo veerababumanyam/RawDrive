@@ -264,6 +264,98 @@ func (s *FaceService) FilterByClusterInGallery(ctx context.Context, galleryID, c
 	return s.faceRepo.ListClusterAssetIDsInGallery(ctx, galleryID, clusterLabel)
 }
 
+// FaceSearchResult is the outcome of SearchByFace — a "find me in this
+// gallery" lookup keyed by an ad-hoc image (typically a webcam capture).
+//
+//   - Found=false + FacesDetected=0   → the input image has no face
+//   - Found=false + FacesDetected>0   → face(s) detected but none match
+//     an existing cluster in the workspace above the similarity floor
+//   - Found=true                       → ClusterLabel/Name identify the
+//     matched person; AssetIDs are the photos in this gallery that
+//     contain that cluster
+type FaceSearchResult struct {
+	Found         bool
+	ClusterLabel  *uuid.UUID
+	ClusterName   string
+	Similarity    float64
+	AssetIDs      []uuid.UUID
+	FacesDetected int
+}
+
+// SearchByFace runs face-svc detection on an ad-hoc image (the camera
+// capture from the dashboard "Photo Search" view), picks the
+// highest-confidence face, finds the nearest existing cluster in the
+// workspace via pgvector cosine, then returns the cluster's photos
+// scoped to the supplied gallery.
+//
+// Why two-stage (workspace match → gallery scope): clustering identity
+// is workspace-wide so we benefit from every previously-clustered photo
+// of this person. Then we gallery-scope the result set so the search
+// page stays inside the gallery the user is currently looking at —
+// matching the People-tab click-through behavior fixed in d184f9d.
+//
+// Similarity floor (0.50) is set slightly more permissively than the
+// clustering threshold (0.55, face_service.ClusterFaces) because the
+// search input is a webcam frame: lower resolution, often off-angle
+// or under poor lighting compared to the studio's uploaded photos.
+// False positives are absorbed by the gallery scope (a stranger's face
+// won't be in this gallery anyway), so leniency favors recall.
+func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID uuid.UUID, imageData []byte) (*FaceSearchResult, error) {
+	if s.faceClient == nil {
+		return nil, fmt.Errorf("face service: face-svc not configured (FACE_SVC_URL unset)")
+	}
+
+	enabled, err := s.isFaceRecognitionEnabled(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("face service: workspace gate check: %w", err)
+	}
+	if !enabled {
+		return nil, fmt.Errorf("face service: face recognition disabled for this workspace")
+	}
+
+	resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, "search.jpg")
+	if err != nil {
+		return nil, fmt.Errorf("face service: detect search face: %w", err)
+	}
+	if len(resp.Faces) == 0 {
+		return &FaceSearchResult{Found: false, FacesDetected: 0}, nil
+	}
+
+	// Pick the most confident detection. Camera captures may include
+	// background bystanders at much lower det_score — taking the max
+	// favors the foreground subject.
+	best := resp.Faces[0]
+	for i := range resp.Faces[1:] {
+		f := resp.Faces[i+1]
+		if f.DetScore > best.DetScore {
+			best = f
+		}
+	}
+
+	similar, err := s.faceRepo.FindSimilarFaces(ctx, best.Embedding, workspaceID, 0.50, 1)
+	if err != nil {
+		return nil, fmt.Errorf("face service: find similar: %w", err)
+	}
+	if len(similar) == 0 || similar[0].ClusterLabel == nil {
+		return &FaceSearchResult{Found: false, FacesDetected: len(resp.Faces)}, nil
+	}
+
+	matchedLabel := *similar[0].ClusterLabel
+	assetIDs, err := s.faceRepo.ListClusterAssetIDsInGallery(ctx, galleryID, matchedLabel)
+	if err != nil {
+		return nil, fmt.Errorf("face service: list cluster assets in gallery: %w", err)
+	}
+
+	return &FaceSearchResult{
+		Found:         true,
+		ClusterLabel:  &matchedLabel,
+		ClusterName:   similar[0].ClusterName,
+		Similarity:    similar[0].Confidence,
+		AssetIDs:      assetIDs,
+		FacesDetected: len(resp.Faces),
+	}, nil
+}
+
 // GetClusters returns cluster summaries for a workspace/gallery.
 func (s *FaceService) GetClusters(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]*ClusterSummary, error) {
 	return s.faceRepo.ListClusters(ctx, workspaceID, galleryID)

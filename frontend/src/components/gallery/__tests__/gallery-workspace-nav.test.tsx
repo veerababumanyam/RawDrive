@@ -27,6 +27,8 @@ describe("GalleryWorkspaceNav", () => {
       "AI",
       // PR-3: People tab for face-recognition view of the gallery.
       "People",
+      // Webcam-driven "find me in this gallery" search.
+      "Photo Search",
       "Settings",
     ]) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
@@ -40,6 +42,10 @@ describe("GalleryWorkspaceNav", () => {
     expect(within(nav).getByRole("link", { name: "Cover & Design" })).toHaveAttribute("href", "/galleries/gallery-1/cover");
     expect(within(nav).getByRole("link", { name: "AI" })).toHaveAttribute("href", "/galleries/gallery-1/ai");
     expect(within(nav).getByRole("link", { name: "People" })).toHaveAttribute("href", "/galleries/gallery-1/people");
+    expect(within(nav).getByRole("link", { name: "Photo Search" })).toHaveAttribute(
+      "href",
+      "/galleries/gallery-1/photo-search",
+    );
     expect(within(nav).queryByRole("link", { name: "Gallery" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Photos" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Albums" })).toBeNull();

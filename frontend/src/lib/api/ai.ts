@@ -180,6 +180,51 @@ export async function getClusterAssets(
   return res.json();
 }
 
+// ---- Photo Search (webcam-driven find-this-person) ----
+//
+// The "Photo Search" page captures a single frame from the user's
+// webcam, posts it to the backend, and the backend runs face-svc on
+// the frame, matches the strongest face against existing clusters in
+// the workspace, then returns the cluster's photos scoped to the
+// current gallery. UX wants three distinguishable outcomes:
+//
+//   - `found: false, faces_detected: 0`  → "We didn't see a face"
+//   - `found: false, faces_detected: >0` → "Saw a face, no match here"
+//   - `found: true`                       → render cluster name + grid
+//
+// asset_ids is always a string array (never null) so the UI can map
+// over it without a null guard.
+export interface FaceSearchResponse {
+  found: boolean;
+  faces_detected: number;
+  cluster_label?: string;
+  cluster_name?: string;
+  similarity?: number;
+  asset_ids: string[];
+  count: number;
+}
+
+export async function searchFaceInGallery(
+  _token: string,
+  galleryId: string,
+  imageBlob: Blob,
+): Promise<FaceSearchResponse> {
+  const form = new FormData();
+  // Backend expects field name "image" (see handler.FaceSearch).
+  // Filename is just a breadcrumb in face-svc logs.
+  form.append("image", imageBlob, "search.jpg");
+  // No explicit Content-Type — the browser sets the multipart boundary.
+  const res = await authFetch(
+    `/api/v1/ai/face-search?gallery_id=${encodeURIComponent(galleryId)}`,
+    { method: "POST", body: form },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Face search failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ---- Public Face Recognition (PR-3b) ----
 //
 // Read-only People view on /g/{slug}. Gated server-side on both the

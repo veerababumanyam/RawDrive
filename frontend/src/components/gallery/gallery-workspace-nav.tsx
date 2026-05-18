@@ -34,6 +34,13 @@ const sections: Section[] = [
   // gives a person-first view: tile per identified individual, click
   // through to that person's photos.
   { label: "People", path: "/people" },
+  // Photo Search — webcam-driven "find me in this gallery." Sits next
+  // to People because it's the action verb form of the same noun:
+  // People = the gallery's identified individuals; Photo Search = pull
+  // out the photos containing the person currently in front of the
+  // camera. Browser asks for camera permission on the page itself, so
+  // we don't surface that here.
+  { label: "Photo Search", path: "/photo-search" },
   { label: "Settings", path: "/settings" },
 ];
 

@@ -21,6 +21,10 @@ func RegisterM3Routes(r chi.Router, deps M3Dependencies) {
 		// M3 E8-S3: face filter + smart album from cluster
 		r.Get("/clusters/{id}/assets", h.GetClusterAssets)
 		r.Post("/clusters/{id}/create-album", h.CreateClusterSmartAlbum)
+		// "Photo Search" — webcam-driven find-this-person inside a gallery.
+		// Multipart upload of a single image; returns matched cluster +
+		// gallery-scoped asset list. See handler.FaceSearch.
+		r.Post("/face-search", h.FaceSearch)
 		r.Post("/search", h.SemanticSearch)
 		r.Post("/tags", h.TriggerTags)
 		r.Get("/tags/{assetId}", h.GetTags)

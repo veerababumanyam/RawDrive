@@ -219,6 +219,82 @@ func (h *Handler) GetClusterAssets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// FaceSearch handles POST /api/v1/ai/face-search?gallery_id={uuid}.
+// Multipart body: field "image" with a JPEG/PNG (typically a webcam
+// frame from the dashboard "Photo Search" view). Runs face-svc on the
+// image, picks the strongest face, matches it against existing
+// clusters in the workspace, and returns the matched cluster's photos
+// scoped to this gallery.
+//
+// Body size cap is 10 MB — webcam captures are sub-MB; anything larger
+// is either a deliberate full-res upload (use the regular ingest path)
+// or abuse. face-svc enforces its own 20 MB cap on top of this.
+func (h *Handler) FaceSearch(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	galleryIDStr := r.URL.Query().Get("gallery_id")
+	if galleryIDStr == "" {
+		respondError(w, http.StatusBadRequest, "gallery_id query param required")
+		return
+	}
+	galleryID, err := uuid.Parse(galleryIDStr)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid gallery_id")
+		return
+	}
+
+	const maxUpload = 10 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		respondError(w, http.StatusBadRequest, "could not parse upload: "+err.Error())
+		return
+	}
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "image file required (form field 'image')")
+		return
+	}
+	defer file.Close()
+
+	imageData, err := readAll(file)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "could not read image: "+err.Error())
+		return
+	}
+	if len(imageData) == 0 {
+		respondError(w, http.StatusBadRequest, "image is empty")
+		return
+	}
+
+	result, err := h.faceSvc.SearchByFace(r.Context(), wsID, galleryID, imageData)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp := map[string]any{
+		"found":          result.Found,
+		"faces_detected": result.FacesDetected,
+		"asset_ids":      []string{},
+		"count":          0,
+	}
+	if result.Found && result.ClusterLabel != nil {
+		ids := make([]string, len(result.AssetIDs))
+		for i, id := range result.AssetIDs {
+			ids[i] = id.String()
+		}
+		resp["cluster_label"] = result.ClusterLabel.String()
+		resp["cluster_name"] = result.ClusterName
+		resp["similarity"] = result.Similarity
+		resp["asset_ids"] = ids
+		resp["count"] = len(ids)
+	}
+	respondJSON(w, http.StatusOK, resp)
+}
+
 // CreateClusterSmartAlbum handles POST /api/v1/ai/clusters/{id}/create-album
 // (M3 E8-S3 smart album from face). Creates a gallery-scoped smart album
 // whose smart_filter resolves to all assets containing the given face
