@@ -621,36 +621,46 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                   </div>
                 )}
                 {/* Per-tile actions — Favorite + Download.
-                    Favorite stays persistently visible when the tile IS
-                    favorited (so the user can see at a glance which
-                    items they've starred without hovering); hover-reveal
-                    when not favorited. Download follows the legacy hover
-                    pattern. Both buttons are independent of each other
-                    so favoriting works even when downloads are disabled.
+                    2026-05-18 visibility revision: favorite button is
+                    now ALWAYS visible in both states (was previously
+                    hover-reveal when unfavorited), with high-contrast
+                    fills so it reads against bright wedding photos:
+                      - Unfavorited: dark scrim backdrop + white outline
+                        star + ring-white halo. Universal "tap to like"
+                        affordance.
+                      - Favorited: amber bg-feedback-warning fill +
+                        white filled star. Instantly recognizable.
+                    Previously the button used GlassIconButton's `glass`
+                    variant (bg-white/[0.12]) which disappeared on
+                    light/busy photos.
+                    Download keeps the legacy hover-reveal pattern —
+                    less critical to the public-viewer experience and
+                    over-chroming the tiles hurts gallery aesthetics.
                     Proofing mode hides both — proofing uses tile-click
                     for selection and the action chrome would clash. */}
                 {!isProofing && (
                   <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
-                    <div
+                    <button
+                      type="button"
+                      aria-label={favorites.has(asset.id) ? "Remove from favorites" : "Add to favorites"}
+                      aria-pressed={favorites.has(asset.id)}
+                      title={favorites.has(asset.id) ? "Remove from favorites" : "Add to favorites"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(asset.id);
+                      }}
                       className={
                         favorites.has(asset.id)
-                          ? "opacity-100"
-                          : "opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                          ? "inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-warning text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-warning/60"
+                          : "inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow-elevation-1 ring-2 ring-white/30 backdrop-blur-md transition-all hover:bg-black/70 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
                       }
                     >
-                      <GlassIconButton
-                        size="sm"
-                        variant={favorites.has(asset.id) ? "accent" : "glass"}
-                        active={favorites.has(asset.id)}
-                        label={favorites.has(asset.id) ? "Remove from favorites" : "Add to favorites"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(asset.id);
-                        }}
-                      >
-                        <Star />
-                      </GlassIconButton>
-                    </div>
+                      {/* fill-current makes the star "lit up" when
+                          favorited — matches the universal "active
+                          star" affordance. Unfavorited keeps it as
+                          an outline (no fill). */}
+                      <Star className={favorites.has(asset.id) ? "h-4 w-4 fill-current" : "h-4 w-4"} />
+                    </button>
                     {downloadEnabled && (
                       <div className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <GlassIconButton
