@@ -29,17 +29,13 @@ const sections: Section[] = [
   { label: "Overview", path: "" },
   { label: "Cover & Design", path: "/cover" },
   { label: "AI", path: "/ai" },
-  // PR-3: face-recognition People tab. Sits between AI (which has admin /
-  // cluster ops via face-filter) and Settings. The dedicated People page
-  // gives a person-first view: tile per identified individual, click
-  // through to that person's photos.
-  { label: "People", path: "/people" },
-  // Photo Search — webcam-driven "find me in this gallery." Sits next
-  // to People because it's the action verb form of the same noun:
-  // People = the gallery's identified individuals; Photo Search = pull
-  // out the photos containing the person currently in front of the
-  // camera. Browser asks for camera permission on the page itself, so
-  // we don't surface that here.
+  // People tab removed 2026-05-18 — the dedicated person-first view
+  // ("Unnamed person N photos" tiles) didn't earn its real-estate
+  // alongside the cluster-vote Photo Search. Photo Search subsumes
+  // the use case (point camera → see the person's photos), so we
+  // surface only that here. Public-side guest galleries keep both
+  // People and Photo Search because guests can't aim a camera at the
+  // gallery owner's identified-people list directly.
   { label: "Photo Search", path: "/photo-search" },
   { label: "Settings", path: "/settings" },
 ];

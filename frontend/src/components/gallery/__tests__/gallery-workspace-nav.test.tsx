@@ -25,9 +25,9 @@ describe("GalleryWorkspaceNav", () => {
       "Overview",
       "Cover & Design",
       "AI",
-      // PR-3: People tab for face-recognition view of the gallery.
-      "People",
-      // Webcam-driven "find me in this gallery" search.
+      // Webcam-driven "find me in this gallery" search. The standalone
+      // People tab was removed 2026-05-18 in favor of Photo Search,
+      // which subsumes the use case for the dashboard surface.
       "Photo Search",
       "Settings",
     ]) {
@@ -41,7 +41,7 @@ describe("GalleryWorkspaceNav", () => {
     expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/galleries/gallery-1");
     expect(within(nav).getByRole("link", { name: "Cover & Design" })).toHaveAttribute("href", "/galleries/gallery-1/cover");
     expect(within(nav).getByRole("link", { name: "AI" })).toHaveAttribute("href", "/galleries/gallery-1/ai");
-    expect(within(nav).getByRole("link", { name: "People" })).toHaveAttribute("href", "/galleries/gallery-1/people");
+    expect(within(nav).queryByRole("link", { name: "People" })).toBeNull();
     expect(within(nav).getByRole("link", { name: "Photo Search" })).toHaveAttribute(
       "href",
       "/galleries/gallery-1/photo-search",

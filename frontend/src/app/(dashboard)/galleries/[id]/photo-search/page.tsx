@@ -26,7 +26,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+// useRouter import removed 2026-05-18 — the only consumer was the
+// "Open in People view" button (deep-link to the now-deleted People
+// page). Photo Search renders the matched cluster's photos inline so
+// no client-side navigation is needed from this page.
 import { use } from "react";
 import { Camera, RefreshCw, Search, ChevronLeft } from "lucide-react";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
@@ -119,7 +122,6 @@ export default function PhotoSearchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
   const [token] = useState(() => getStoredAccessToken());
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -339,8 +341,13 @@ export default function PhotoSearchPage({
   // sets stage to a result-* value (e.g. an error handler we add
   // later, a deep-link to a cached result) keeps the same behavior
   // without needing to remember to call stopCamera at every site.
+  // stopCamera() inside the effect body calls setVideoReady — that's
+  // intentional (see the public-side photo-search/page.tsx for the
+  // longer comment); the effect is idempotent so the setState inside
+  // is safe. The disable below is line-scoped to that single call.
   useEffect(() => {
     if (stage === "result-found" || stage === "result-no-face" || stage === "result-no-match") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       stopCamera();
     }
   }, [stage, stopCamera]);
@@ -524,6 +531,11 @@ export default function PhotoSearchPage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* "Open in People view" button removed 2026-05-18 — the
+                  dashboard People page is gone (Photo Search subsumes
+                  it). The matched cluster's photos already render
+                  inline below this header, so the deep link wasn't
+                  earning its space anyway. */}
               <button
                 type="button"
                 onClick={handleRetry}
@@ -532,17 +544,6 @@ export default function PhotoSearchPage({
                 <RefreshCw className="h-4 w-4" aria-hidden />
                 Search another face
               </button>
-              {searchResult.cluster_label && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    router.push(`/galleries/${id}/people/${searchResult.cluster_label}`)
-                  }
-                  className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-                >
-                  Open in People view
-                </button>
-              )}
             </div>
           </div>
 
