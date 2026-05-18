@@ -302,6 +302,16 @@ export default function CoverDesignPage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
+  // Track the last-saved snapshot of the config so we can show a "dirty"
+  // dot on the Save button when current state differs (and clear it
+  // immediately on successful save). 2026-05-18: replaces silent
+  // "Saving…" text-only feedback that users were missing entirely.
+  const [savedSnapshot, setSavedSnapshot] = useState<string>("");
+  // `justSaved` runs a brief green check-icon state on the button right
+  // after a successful save. Auto-clears after 1800ms so the button
+  // returns to its idle look but the user has had a clear "yes that
+  // worked" moment.
+  const [justSaved, setJustSaved] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   // Mount: fetch gallery + assets, hydrate config from gallery.settings.
@@ -422,15 +432,48 @@ export default function CoverDesignPage() {
     setSaving(true);
     setSaveError("");
     setSaveMessage("");
+    setJustSaved(false);
     try {
       await updateGalleryDesign(token, galleryId, config as unknown as Record<string, unknown>);
-      setSaveMessage("Saved.");
+      // Capture the snapshot of what we just sent so the dirty-dot logic
+      // recognises this state as "clean". Use JSON.stringify of the same
+      // serialisation we sent over the wire so the comparison is exact.
+      setSavedSnapshot(JSON.stringify(config));
+      setSaveMessage("Cover & Design saved.");
+      setJustSaved(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save design.");
     } finally {
       setSaving(false);
     }
   };
+
+  // After a successful save, the green "Saved" pulse lives for 1800ms.
+  // Long enough to register, short enough that the next click attempt
+  // gets the regular idle Save button back. The toast text below the
+  // header (`saveMessage`) auto-clears 3.5s after the same save so the
+  // page returns to a clean state without manual dismissal.
+  useEffect(() => {
+    if (!justSaved) return;
+    const t1 = window.setTimeout(() => setJustSaved(false), 1800);
+    const t2 = window.setTimeout(() => setSaveMessage(""), 3500);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [justSaved]);
+
+  // Whenever the loaded config first hydrates from the gallery, capture
+  // it as the initial saved snapshot. Then the dirty dot only lights up
+  // when the user *actually* changes something — not on first mount when
+  // the just-fetched state structurally differs from DEFAULT_CONFIG.
+  useEffect(() => {
+    if (!loaded) return;
+    setSavedSnapshot((prev) => (prev ? prev : JSON.stringify(config)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  const isDirty = savedSnapshot !== "" && savedSnapshot !== JSON.stringify(config);
 
   // ───────────── Derived preview state ─────────────
 
@@ -495,20 +538,118 @@ export default function CoverDesignPage() {
               Preview
             </Link>
           )}
+          {/* Save button — three visual states that give the user
+              concrete feedback at every step of the save cycle:
+                1. Idle (clean)   — neutral primary gradient, "Save"
+                2. Idle (dirty)   — same gradient + a small amber dot in
+                                    the upper-right corner of the button
+                                    marking "unsaved changes"
+                3. Saving         — spinner + "Saving…" + disabled
+                4. Just saved     — green tint + check icon + "Saved" for
+                                    1800ms before falling back to idle
+              The previous version only swapped text from "Save" → "Saving…"
+              for one render tick — users genuinely couldn't tell whether
+              the click registered. */}
           <button
             onClick={handleSave}
             disabled={saving || !config.cover.assetId}
-            className="min-h-[40px] flex-1 rounded-xl bg-gradient-to-r from-primary to-primary-container px-5 py-2 text-sm font-medium text-on-primary transition-opacity disabled:opacity-50 sm:flex-none sm:px-6"
+            aria-live="polite"
+            aria-label={
+              saving
+                ? "Saving cover and design"
+                : justSaved
+                  ? "Cover and design saved"
+                  : isDirty
+                    ? "Save cover and design (unsaved changes)"
+                    : "Save cover and design"
+            }
+            className={`relative min-h-[40px] flex-1 overflow-hidden rounded-xl px-5 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed sm:flex-none sm:px-6 ${
+              justSaved
+                ? "bg-success/85 text-on-primary shadow-lg shadow-success/30 scale-[1.02]"
+                : saving
+                  ? "bg-gradient-to-r from-primary to-primary-container text-on-primary opacity-90"
+                  : "bg-gradient-to-r from-primary to-primary-container text-on-primary hover:shadow-md hover:shadow-primary/20 active:scale-[0.98] disabled:opacity-50"
+            }`}
           >
-            {saving ? "Saving…" : "Save"}
+            <span className="flex items-center justify-center gap-2">
+              {saving && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  aria-hidden
+                >
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              )}
+              {justSaved && (
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M3 8.5 6.5 12 13 4" />
+                </svg>
+              )}
+              <span>{saving ? "Saving…" : justSaved ? "Saved" : "Save"}</span>
+            </span>
+            {/* Unsaved-changes dot in the button corner. Only visible in
+                the idle-dirty state — not during save or right after. */}
+            {isDirty && !saving && !justSaved && (
+              <span
+                className="absolute right-2 top-2 h-2 w-2 rounded-full bg-warning shadow-sm shadow-warning/40"
+                aria-hidden
+              />
+            )}
           </button>
         </div>
       </header>
 
       {(saveMessage || saveError) && (
         <div className="px-4 pt-3 sm:px-6 lg:px-8" role="status" aria-live="polite">
-          {saveMessage && <p className="text-xs text-success">{saveMessage}</p>}
-          {saveError && <p className="text-xs text-danger">{saveError}</p>}
+          {saveMessage && (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M3 8.5 6.5 12 13 4" />
+              </svg>
+              {saveMessage}
+            </div>
+          )}
+          {saveError && (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger">
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <circle cx="8" cy="8" r="6" />
+                <path d="M8 5v4M8 11.5v.01" />
+              </svg>
+              {saveError}
+            </div>
+          )}
         </div>
       )}
 
