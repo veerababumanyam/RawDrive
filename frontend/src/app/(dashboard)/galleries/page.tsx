@@ -8,7 +8,7 @@ import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { galleryStatusClasses, galleryTypeClasses, getAssetPreviewUrl } from "@/lib/dashboard-ui";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Grid, ListBullet, Trash } from "@/components/icons";
 
@@ -40,9 +40,17 @@ export default function GalleriesPage() {
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
       if (filterType && g.gallery_type !== filterType) return false;
+      // 2026-05-18: Filter values are now publish-state buckets rather
+      // than raw lifecycle statuses, to match the single-badge display.
+      //   - "published"   → is_published flag is true
+      //   - "unpublished" → not published AND not archived
+      //   - "archived"    → status === "archived"
+      // The card badge sets filterStatus to one of these three values.
       if (filterStatus) {
+        const isArchived = g.status === "archived";
         if (filterStatus === "published" && !g.is_published) return false;
-        if (filterStatus !== "published" && g.status !== filterStatus) return false;
+        if (filterStatus === "unpublished" && (g.is_published || isArchived)) return false;
+        if (filterStatus === "archived" && !isArchived) return false;
       }
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
@@ -279,7 +287,10 @@ export default function GalleriesPage() {
               onClick={() => setFilterStatus(null)}
               className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
             >
-              {filterStatus}
+              {/* Display proper-cased label to match the per-card badge.
+                  filterStatus values are publish-state buckets
+                  (published / unpublished / archived) since 2026-05-18. */}
+              {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -471,34 +482,25 @@ export default function GalleriesPage() {
                       </div>
                     )}
 
-                    {/* Corner Delete affordance. Replaces the older
-                        full-cover scrim that hosted Open / Design /
-                        Duplicate / Delete buttons (2026-05-18). The full
-                        scrim swallowed cover-image clicks, so we removed
-                        it: now the bare cover is the click target for
-                        "open gallery" (the whole card is wrapped in
-                        <Link>), and Delete sits in the top-right corner
-                        with a hover-reveal on devices that support hover.
-                        Open/Design/Duplicate were redundant — Open
-                        duplicates the card-click, Design is one click
-                        away in the gallery sidebar, and Duplicate is a
-                        rarely-used action that didn't justify perpetual
-                        visual chrome on every card.
+                    {/* Corner Delete affordance — always visible. Replaces
+                        the older full-cover scrim that hosted Open /
+                        Design / Duplicate / Delete buttons (2026-05-18,
+                        commit 86093a7).
 
-                        When armed, the corner swaps to an inline confirm
-                        bar (Cancel + Confirm) instead of firing
-                        window.confirm — keeps the action in-context. */}
+                        2026-05-18 follow-up: button was previously
+                        hover-reveal + translucent glass-danger styling
+                        ("variant=danger" → bg-feedback-error/[0.15]),
+                        which disappeared on touch and was hard to spot
+                        against busy wedding cover photos. Now: always
+                        visible, solid bg-feedback-error fill, white
+                        icon, surface-raised ring for separation from
+                        the photo, shadow-elevation-1 for lift. Reads
+                        as "destructive" from across the screen.
+
+                        When armed, the corner swaps to an inline
+                        confirm bar instead of firing window.confirm. */}
                     <div
-                      className={cn(
-                        "absolute top-2 right-2 z-10 transition-opacity",
-                        // Persistent visibility while the confirm bar is
-                        // open so the user can actually click Cancel /
-                        // Confirm; otherwise hover-reveal on desktop and
-                        // hidden on touch (avoids sticky-hover footgun).
-                        confirmDeleteId === g.id
-                          ? "opacity-100"
-                          : "opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100",
-                      )}
+                      className="absolute top-2 right-2 z-10"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     >
                       {confirmDeleteId === g.id ? (
@@ -521,20 +523,21 @@ export default function GalleriesPage() {
                             type="button"
                             autoFocus
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
-                            className="rounded-full bg-feedback-error/[0.25] px-2.5 py-1 text-[11px] font-semibold text-feedback-error hover:bg-feedback-error/[0.40] transition-colors"
+                            className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
                           >
                             Confirm
                           </button>
                         </div>
                       ) : (
-                        <GlassIconButton
-                          size="sm"
-                          variant="danger"
-                          label="Delete gallery"
+                        <button
+                          type="button"
+                          aria-label="Delete gallery"
+                          title="Delete gallery"
                           onClick={(e) => armDelete(e, g.id)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-error text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:bg-feedback-error/90 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-error/50"
                         >
-                          <Trash />
-                        </GlassIconButton>
+                          <Trash className="h-4 w-4" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -557,52 +560,49 @@ export default function GalleriesPage() {
 
                 <div className={viewMode === "grid" ? "p-4 space-y-3" : "flex-1 min-w-0 py-4"}>
                   <h3 className="font-medium text-text-primary truncate">{g.title}</h3>
+                  {/* 2026-05-18: Single derived publish-state badge per
+                      card. Previously the card stacked three chips —
+                      `gallery_type` (proofing/delivery), lifecycle
+                      `status` (almost always "draft"), and conditionally
+                      "Published" — which added noise without
+                      decision-value: the gallery-type is metadata, and
+                      "draft" was the implicit state for every
+                      not-yet-published gallery. The single badge below
+                      reads as Published (green) / Archived (neutral) /
+                      Unpublished (neutral) and stays click-filterable so
+                      the active-filter chip strip still works. */}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {/* Clickable type tag — filters the list */}
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setFilterType((prev) => prev === g.gallery_type ? null : g.gallery_type);
-                      }}
-                      className={cn(
-                        galleryTypeClasses[g.gallery_type] || "status-badge status-badge--neutral",
-                        "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
-                      )}
-                      title={`Filter by type: ${g.gallery_type}`}
-                    >
-                      {g.gallery_type}
-                    </button>
-                    {/* Clickable status tag — skip if published (the Published badge below covers it) */}
-                    {!(g.is_published && g.status === "published") && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setFilterStatus((prev) => prev === g.status ? null : g.status);
-                        }}
-                        className={cn(
-                          galleryStatusClasses[g.status] || "status-badge status-badge--neutral",
-                          "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
-                        )}
-                        title={`Filter by status: ${g.status}`}
-                      >
-                        {g.status}
-                      </button>
-                    )}
-                    {g.is_published && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setFilterStatus((prev) => prev === "published" ? null : "published");
-                        }}
-                        className="status-badge status-badge--success cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all"
-                        title="Filter: published galleries"
-                      >
-                        Published
-                      </button>
-                    )}
+                    {(() => {
+                      const publishState: "published" | "archived" | "unpublished" = g.is_published
+                        ? "published"
+                        : g.status === "archived"
+                          ? "archived"
+                          : "unpublished";
+                      const label =
+                        publishState === "published" ? "Published"
+                        : publishState === "archived" ? "Archived"
+                        : "Unpublished";
+                      const badgeClass =
+                        publishState === "published"
+                          ? "status-badge status-badge--success"
+                          : "status-badge status-badge--neutral";
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setFilterStatus((prev) => prev === publishState ? null : publishState);
+                          }}
+                          className={cn(
+                            badgeClass,
+                            "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
+                          )}
+                          title={`Filter: ${label.toLowerCase()} galleries`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -634,21 +634,21 @@ export default function GalleriesPage() {
                           type="button"
                           autoFocus
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
-                          className="rounded-full bg-feedback-error/[0.25] px-2.5 py-1 text-[11px] font-semibold text-feedback-error hover:bg-feedback-error/[0.40] transition-colors"
+                          className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
                         >
                           Confirm
                         </button>
                       </div>
                     ) : (
-                      <GlassIconButton
+                      <button
+                        type="button"
+                        aria-label="Delete gallery"
+                        title="Delete gallery"
                         onClick={(e) => armDelete(e, g.id)}
-                        className="ml-2"
-                        size="sm"
-                        variant="danger"
-                        label="Delete gallery"
+                        className="ml-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-error text-white shadow-elevation-1 transition-all hover:bg-feedback-error/90 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-error/50"
                       >
-                        <Trash />
-                      </GlassIconButton>
+                        <Trash className="h-4 w-4" />
+                      </button>
                     )
                   )}
                 </div>
