@@ -382,6 +382,79 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [uploadToast?.visible]);
 
+  // Duplicate-filename block. The user reported uploading two files
+  // with the same name created two asset rows for the same logical
+  // photo — fixing it at the asset table is a migration job, so the
+  // cheaper + better-UX fix is to refuse the duplicates at the upload
+  // entry points (drop + file picker) before any chunk is ever sent.
+  // Comparison is case-insensitive because filesystem behavior varies
+  // (macOS HFS+ is case-insensitive by default; Windows is too) and
+  // the studio almost never wants two photos that differ only in
+  // upper/lower-case.
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    visible: boolean;
+    duplicatesInGallery: string[];
+    duplicatesInBatch: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!duplicateWarning?.visible) return;
+    const slideOut = window.setTimeout(
+      () => setDuplicateWarning((t) => (t ? { ...t, visible: false } : null)),
+      6500,
+    );
+    const unmount = window.setTimeout(() => setDuplicateWarning(null), 7000);
+    return () => {
+      window.clearTimeout(slideOut);
+      window.clearTimeout(unmount);
+    };
+  }, [duplicateWarning?.visible]);
+
+  // Filter incoming files into accepted (will upload) and rejected
+  // (skipped as duplicates). Two reject buckets:
+  //   - duplicatesInGallery: filename already exists on this gallery
+  //     via the assets[] list we hydrate on mount
+  //   - duplicatesInBatch: filename appears more than once in this
+  //     drop/picker batch, OR matches a file currently in the upload
+  //     queue (upload.items)
+  // The accepted bucket excludes both. If anything was rejected, we
+  // surface a slide-in warning with up to a handful of names + a
+  // "+N more" tail so the toast doesn't grow unbounded.
+  const dedupeIncomingFiles = useCallback(
+    (incoming: File[]) => {
+      const existingFilenames = new Set<string>();
+      for (const entry of assets) {
+        const fn = entry.asset?.filename;
+        if (fn) existingFilenames.add(fn.toLowerCase());
+      }
+      const queuedFilenames = new Set<string>();
+      for (const item of upload.items) {
+        const status = item.status;
+        if (status !== "complete" && status !== "error") {
+          queuedFilenames.add(item.file.name.toLowerCase());
+        }
+      }
+
+      const accepted: File[] = [];
+      const duplicatesInGallery: string[] = [];
+      const duplicatesInBatch: string[] = [];
+      const seenInThisBatch = new Set<string>();
+      for (const file of incoming) {
+        const key = file.name.toLowerCase();
+        if (existingFilenames.has(key)) {
+          duplicatesInGallery.push(file.name);
+        } else if (queuedFilenames.has(key) || seenInThisBatch.has(key)) {
+          duplicatesInBatch.push(file.name);
+        } else {
+          accepted.push(file);
+          seenInThisBatch.add(key);
+        }
+      }
+      return { accepted, duplicatesInGallery, duplicatesInBatch };
+    },
+    [assets, upload.items],
+  );
+
   // Assets whose thumbnails the background worker has not finished
   // producing yet. The gallery listing endpoint returns rows the
   // instant they are linked (the asset row exists, status is
@@ -555,14 +628,37 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(f =>
-      f.type.startsWith("image/") || /\.(cr2|nef|arw|dng|raf|cr3|tiff?)$/i.test(f.name)
-    );
-    if (files.length > 0) upload.addFiles(files);
-  }, [upload]);
+  // submitFiles runs the dedupe gate then enqueues. Both the drop and
+  // the file-picker handlers route through here so the duplicate
+  // policy fires consistently from either entry point.
+  const submitFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+      const { accepted, duplicatesInGallery, duplicatesInBatch } =
+        dedupeIncomingFiles(files);
+      if (duplicatesInGallery.length > 0 || duplicatesInBatch.length > 0) {
+        setDuplicateWarning({
+          visible: true,
+          duplicatesInGallery,
+          duplicatesInBatch,
+        });
+      }
+      if (accepted.length > 0) upload.addFiles(accepted);
+    },
+    [dedupeIncomingFiles, upload],
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const files = Array.from(e.dataTransfer.files).filter((f) =>
+        f.type.startsWith("image/") || /\.(cr2|nef|arw|dng|raf|cr3|tiff?)$/i.test(f.name),
+      );
+      submitFiles(files);
+    },
+    [submitFiles],
+  );
 
   const handleFileSelect = useCallback(() => {
     const input = document.createElement("input");
@@ -570,10 +666,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     input.multiple = true;
     input.accept = "image/*,.cr2,.nef,.arw,.dng,.raf,.cr3,.tif,.tiff";
     input.onchange = () => {
-      if (input.files) upload.addFiles(Array.from(input.files));
+      if (input.files) submitFiles(Array.from(input.files));
     };
     input.click();
-  }, [upload]);
+  }, [submitFiles]);
 
   const selectionCounts = useMemo(() => {
     if (!selections) return {};
@@ -1471,6 +1567,98 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       )}
+
+      {/* Duplicate-filename warning toast — fires from submitFiles
+          when the dedupe gate skips one or more files. Same slide-in
+          chrome as uploadToast (top-right, glass surface, dismiss-
+          on-click) but separately stacked below if both happen to be
+          visible (top-24 instead of top-6). Auto-dismisses after ~7s
+          because users need a beat to read the listed filenames. */}
+      {duplicateWarning && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={cn(
+            "fixed right-6 z-50 min-w-[300px] max-w-md",
+            "rounded-xl border border-border-default bg-surface-raised/95 backdrop-blur-md",
+            "shadow-xl shadow-black/20 px-4 py-3",
+            "transition-all duration-500 ease-out",
+            // If the upload-complete toast is currently visible, stack
+            // beneath it. Otherwise occupy the same top-6 anchor.
+            uploadToast?.visible ? "top-24" : "top-6",
+            duplicateWarning.visible
+              ? "translate-x-0 opacity-100"
+              : "translate-x-[120%] opacity-0",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-feedback-warning/15 text-feedback-warning"
+              aria-hidden
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-semibold text-text-primary">
+                {(() => {
+                  const total =
+                    duplicateWarning.duplicatesInGallery.length +
+                    duplicateWarning.duplicatesInBatch.length;
+                  return `Skipped ${total} duplicate ${total === 1 ? "file" : "files"}`;
+                })()}
+              </p>
+              {duplicateWarning.duplicatesInGallery.length > 0 && (
+                <p className="text-xs text-text-secondary">
+                  <span className="font-medium text-text-primary">
+                    Already in this gallery:
+                  </span>{" "}
+                  {formatDuplicateNames(duplicateWarning.duplicatesInGallery)}
+                </p>
+              )}
+              {duplicateWarning.duplicatesInBatch.length > 0 && (
+                <p className="text-xs text-text-secondary">
+                  <span className="font-medium text-text-primary">
+                    Duplicate in this selection:
+                  </span>{" "}
+                  {formatDuplicateNames(duplicateWarning.duplicatesInBatch)}
+                </p>
+              )}
+              <p className="text-[11px] text-text-tertiary pt-0.5">
+                Rename the files locally and try again if you meant to upload them.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setDuplicateWarning((t) => (t ? { ...t, visible: false } : null))
+              }
+              className="-mr-1 -mt-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-sunken hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+              aria-label="Dismiss"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// formatDuplicateNames — show up to 3 filenames then "+N more" so the
+// toast stays readable even if the user dragged in 47 dupes.
+function formatDuplicateNames(names: string[]): string {
+  const cap = 3;
+  if (names.length <= cap) return names.join(", ");
+  const head = names.slice(0, cap).join(", ");
+  return `${head}, +${names.length - cap} more`;
 }
