@@ -371,6 +371,37 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     onAssetReady: handleAssetReady,
   });
 
+  // Polling fallback for asset.ready transitions.
+  //
+  // The SSE subscription above is the primary path, but real-world
+  // traffic in this dev environment showed it sometimes doesn't
+  // connect at all — backend log audited 2026-05-18 confirmed the
+  // thumbnail worker emits "thumbnail worker: processed <id>"
+  // immediately but ZERO incoming GET /api/v1/events/stream requests
+  // are ever made, so tiles stayed as "Processing photo..." until the
+  // user manually refreshed. Suspect causes include:
+  //   - accessTokenCache empty at the moment the SSE hook's effect
+  //     runs (cookie-refresh path populates the cache asynchronously
+  //     after first 401 instead of synchronously on mount)
+  //   - StrictMode double-mount closing the connection before it
+  //     finishes establishing
+  //   - EventSource transient failures the hook silently swallows
+  // Rather than chase the exact SSE root cause, a 4-second poll over
+  // the pendingAssetIds set is a robust belt-and-suspenders fallback:
+  // if SSE works, the tile flips immediately; if it doesn't, the poll
+  // catches it within 4 seconds — still vastly better than "never
+  // until the user refreshes". The interval clears the moment
+  // pendingAssetIds is empty so steady-state cost is zero.
+  useEffect(() => {
+    if (pendingAssetIds.length === 0) return;
+    const interval = window.setInterval(() => {
+      for (const assetId of pendingAssetIds) {
+        void handleAssetReady(assetId);
+      }
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [pendingAssetIds, handleAssetReady]);
+
   // The active sub-album is read by the upload-link effect to decide
   // whether a newly-completed asset should also be added to that album.
   // Using a ref instead of an effect-dep lets us read the *current*
