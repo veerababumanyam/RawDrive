@@ -576,6 +576,24 @@ export default function GalleriesPage() {
 
                 <div className={viewMode === "grid" ? "p-4 space-y-3" : "flex-1 min-w-0 py-4"}>
                   <h3 className="font-medium text-text-primary truncate">{g.title}</h3>
+                  {/* Gallery description, rendered between title and
+                      status badge. Two-line clamp keeps the card height
+                      bounded — long descriptions (paragraph-length
+                      shoot notes) would otherwise push the publish-
+                      state chip and date below the visible footprint.
+                      Hidden when blank rather than rendering a "Click
+                      to add a description…" placeholder here: the
+                      detail page is the right surface for the
+                      add-description affordance; the card is a
+                      read-only summary. */}
+                  {g.description && g.description.trim() && (
+                    <p
+                      className="mt-1 text-sm text-text-secondary line-clamp-2"
+                      title={g.description}
+                    >
+                      {g.description}
+                    </p>
+                  )}
                   {/* 2026-05-18: Single derived publish-state badge per
                       card. Previously the card stacked three chips —
                       `gallery_type` (proofing/delivery), lifecycle
