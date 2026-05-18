@@ -26,20 +26,21 @@ import {
   getPublicGalleryBranding,
   type GalleryBranding,
 } from "@/lib/api/galleries";
-import { RegistrationPrompt } from "./registration-prompt";
 import { FaceIDGate } from "./faceid-gate";
 
 interface Props {
   slug: string;
-  /** When false, the registration prompt is suppressed (e.g., in view-as-client mode). */
-  enableRegistrationPrompt?: boolean;
   /** Face ID is only offered when the gallery has faceid_enabled=true. */
   faceIdEnabled?: boolean;
 }
 
+// GAL-FR-102 (RegistrationPrompt) removed 2026-05-18: the "Keep these
+// memories — Create a free account…" modal interrupted the first-time
+// guest experience and didn't earn its place. The component file is
+// retained at ./registration-prompt.tsx in case we want a less
+// intrusive variant later; nothing currently imports it.
 export function PublicGalleryEnhancements({
   slug,
-  enableRegistrationPrompt = true,
   faceIdEnabled = false,
 }: Props) {
   const router = useRouter();
@@ -124,11 +125,6 @@ export function PublicGalleryEnhancements({
         <div className="fixed bottom-2 right-2 z-20 text-[10px] text-text-tertiary/60">
           Powered by {branding.brand_name}
         </div>
-      )}
-
-      {/* GAL-FR-102: delayed, dismissable registration prompt */}
-      {enableRegistrationPrompt && (
-        <RegistrationPrompt dismissKey={slug} />
       )}
 
       {/* GAL-FR-107/108/109: FaceID entry modal */}
