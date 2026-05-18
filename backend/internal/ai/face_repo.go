@@ -135,6 +135,15 @@ func (r *FaceRepo) UpdateClusterAssignment(ctx context.Context, faceID, clusterL
 
 // ListClusters returns cluster summaries for a workspace, optionally filtered by gallery.
 func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]*ClusterSummary, error) {
+	// 2026-05-18: gallery scope resolves through gallery_assets (the source
+	// of truth for asset → gallery membership), not through the denormalized
+	// face_clusters.gallery_id column. The denormalized column is unreliable —
+	// it's populated only when the detection job is enqueued with a gallery
+	// hint, but the ThumbnailWorker auto-enqueue path (PR-2b) doesn't know
+	// which gallery an asset belongs to and passes nil, leaving the column
+	// NULL. With gallery_assets as the source of truth a single asset shared
+	// across multiple galleries also surfaces the same person in each
+	// gallery's People tab, which is the correct behavior.
 	query := `SELECT fc.cluster_label,
 		 MAX(fc.cluster_name) AS cluster_name,
 		 COUNT(*) AS face_count,
@@ -142,15 +151,15 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 		 (SELECT fc2.asset_id FROM face_clusters fc2
 		  WHERE fc2.cluster_label = fc.cluster_label AND fc2.workspace_id = $1
 		  ORDER BY fc2.confidence DESC LIMIT 1) AS sample_asset_id
-		 FROM face_clusters fc
-		 WHERE fc.workspace_id = $1
-		   AND fc.cluster_label IS NOT NULL`
+		 FROM face_clusters fc`
 
 	args := []any{workspaceID}
 	if galleryID != nil {
-		query += ` AND fc.gallery_id = $2`
+		query += ` INNER JOIN gallery_assets ga ON ga.asset_id = fc.asset_id AND ga.gallery_id = $2`
 		args = append(args, *galleryID)
 	}
+	query += ` WHERE fc.workspace_id = $1
+		   AND fc.cluster_label IS NOT NULL`
 	query += ` GROUP BY fc.cluster_label ORDER BY face_count DESC`
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -207,11 +216,16 @@ func (r *FaceRepo) ListClusterAssetIDs(ctx context.Context, workspaceID, cluster
 // cross-gallery leakage is a real concern when one person (e.g. a
 // vendor photographer) attends multiple weddings the studio hosts.
 func (r *FaceRepo) ListClusterAssetIDsInGallery(ctx context.Context, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	// JOIN through gallery_assets — same reason as ListClusters above:
+	// face_clusters.gallery_id is denormalized and frequently NULL when
+	// the asset was detected via the auto-enqueue path. gallery_assets
+	// is the source of truth.
 	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT asset_id
-		 FROM face_clusters
-		 WHERE gallery_id = $1 AND cluster_label = $2
-		 ORDER BY asset_id`,
+		`SELECT DISTINCT fc.asset_id
+		 FROM face_clusters fc
+		 INNER JOIN gallery_assets ga ON ga.asset_id = fc.asset_id
+		 WHERE ga.gallery_id = $1 AND fc.cluster_label = $2
+		 ORDER BY fc.asset_id`,
 		galleryID, clusterLabel)
 	if err != nil {
 		return nil, fmt.Errorf("face repo: list cluster assets in gallery: %w", err)
