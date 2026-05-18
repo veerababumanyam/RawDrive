@@ -106,20 +106,38 @@ export function parseVideoUrl(input: string): ParsedVideoUrl | null {
 }
 
 // Provider-specific embed URL — what we set as iframe src.
-// Both providers support a sandboxed embed URL that respects the
-// publisher's privacy / cookies settings. We pass minimal query
-// params; advanced features (autoplay, loop, captions) can be added
-// later via the iframe consumer.
+//
+// 2026-05-18 follow-up: switched YouTube embed host from
+// youtube-nocookie.com to www.youtube.com. The nocookie host is
+// stricter about which videos allow embedding — several real-world
+// videos that play fine via youtube.com/embed render an empty
+// iframe (zero-byte body) on the nocookie host. www.youtube.com is
+// the official embed surface and is what YouTube's own "Share →
+// Embed" dialog ships. The privacy trade-off is YouTube can set a
+// few first-party cookies for the player; for a photographer's
+// curated gallery this is the expected behavior.
 export function embedUrlFor(video: Pick<EmbeddedVideo, "provider" | "video_id">): string {
   if (video.provider === "youtube") {
-    // youtube-nocookie reduces privacy/GDPR cookie surface vs
-    // youtube.com/embed. Same playback, same iframe API surface.
-    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.video_id)}?rel=0`;
+    return `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}?rel=0`;
   }
   // Vimeo — title/byline/portrait hidden to keep the embed
   // visually clean inside the gallery grid; the user can click
   // through to vimeo.com for the full chrome if they want it.
   return `https://player.vimeo.com/video/${encodeURIComponent(video.video_id)}?title=0&byline=0&portrait=0`;
+}
+
+// Public watch URL — the page the video lives on at its host. Used
+// for the "Open on YouTube" / "Open on Vimeo" fallback link beside
+// every embed tile. Cross-origin iframe failure (uploader disabled
+// embedding, region restriction, third-party cookie block, browser
+// extension interference) is hard to detect programmatically, so the
+// pragmatic UX is to ALWAYS surface a click-through so the user can
+// reach the video regardless of whether the embed actually played.
+export function watchUrlFor(video: Pick<EmbeddedVideo, "provider" | "video_id">): string {
+  if (video.provider === "youtube") {
+    return `https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}`;
+  }
+  return `https://vimeo.com/${encodeURIComponent(video.video_id)}`;
 }
 
 // Thumbnail URL — used as the "video card preview" before the iframe

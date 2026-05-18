@@ -4,6 +4,7 @@ import {
   parseVideoUrl,
   readEmbeddedVideos,
   thumbnailUrlFor,
+  watchUrlFor,
 } from "../embedded-videos";
 
 describe("parseVideoUrl", () => {
@@ -78,15 +79,32 @@ describe("parseVideoUrl", () => {
 });
 
 describe("embedUrlFor", () => {
-  it("returns the youtube-nocookie embed URL for youtube", () => {
+  it("returns the youtube.com embed URL for youtube", () => {
+    // 2026-05-18: switched from youtube-nocookie.com → www.youtube.com.
+    // nocookie host returns zero-byte response for some real videos that
+    // play fine via the official embed surface — see commit notes.
     expect(embedUrlFor({ provider: "youtube", video_id: "dQw4w9WgXcQ" })).toBe(
-      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0",
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0",
     );
   });
 
   it("returns a chrome-stripped player URL for vimeo", () => {
     expect(embedUrlFor({ provider: "vimeo", video_id: "123456789" })).toBe(
       "https://player.vimeo.com/video/123456789?title=0&byline=0&portrait=0",
+    );
+  });
+});
+
+describe("watchUrlFor", () => {
+  it("returns the youtube.com/watch URL for youtube", () => {
+    expect(watchUrlFor({ provider: "youtube", video_id: "dQw4w9WgXcQ" })).toBe(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    );
+  });
+
+  it("returns the vimeo.com URL for vimeo", () => {
+    expect(watchUrlFor({ provider: "vimeo", video_id: "123456789" })).toBe(
+      "https://vimeo.com/123456789",
     );
   });
 });

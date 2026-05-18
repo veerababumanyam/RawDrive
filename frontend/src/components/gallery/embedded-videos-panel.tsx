@@ -17,6 +17,7 @@ import {
   embedUrlFor,
   parseVideoUrl,
   updateEmbeddedVideos,
+  watchUrlFor,
   type EmbeddedVideo,
 } from "@/lib/embedded-videos";
 import { Trash } from "@/components/icons";
@@ -261,9 +262,34 @@ export function EmbeddedVideosPanel({
                   <p className="truncate text-sm font-medium text-text-primary">
                     {v.title || (v.provider === "youtube" ? "YouTube video" : "Vimeo video")}
                   </p>
-                  <p className="text-xs text-text-tertiary">
-                    {v.provider === "youtube" ? "YouTube" : "Vimeo"} · {v.video_id}
-                  </p>
+                  {/* Always-present click-through link. Cross-origin
+                      iframe failure (uploader-disabled embedding, region
+                      restriction, third-party-cookie block, browser
+                      extension interference) cannot be reliably detected
+                      from a parent page, so the only robust UX is to
+                      give the user a direct path to the host site
+                      regardless of whether the embed actually played.
+                      target=_blank + rel="noopener noreferrer" so the
+                      gallery tab stays put and the provider can't
+                      window.opener us. */}
+                  <a
+                    href={watchUrlFor(v)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-accent-primary hover:underline"
+                  >
+                    Open on {v.provider === "youtube" ? "YouTube" : "Vimeo"}
+                    <svg
+                      className="h-3 w-3"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      aria-hidden
+                    >
+                      <path d="M14 5l7 7-7 7M21 12H3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </a>
                 </div>
                 {!readOnly && (
                   <button
