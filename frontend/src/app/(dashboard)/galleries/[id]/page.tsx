@@ -628,20 +628,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 {gallery.description || "Click to add a description…"}
               </p>
             )}
-            {/* Settings quick links */}
+            {/* Settings quick links. Analytics link removed 2026-05-18:
+                the underlying /galleries/[id]/analytics page was deleted
+                in 64d9356 (R2→B2 storage migration cleanup) which left
+                this <Link> pointing at a route that 404s. If gallery-
+                level analytics is reintroduced later, restore the link
+                here and re-add the · separator. */}
             <div className="mt-3 flex items-center gap-3">
               <Link
                 href={`/galleries/${gallery.id}/cover`}
                 className="text-xs text-accent-primary hover:underline"
               >
                 Cover & Design
-              </Link>
-              <span className="text-text-tertiary">·</span>
-              <Link
-                href={`/galleries/${gallery.id}/analytics`}
-                className="text-xs text-accent-primary hover:underline"
-              >
-                Analytics
               </Link>
               <span className="text-text-tertiary">·</span>
               <Link
