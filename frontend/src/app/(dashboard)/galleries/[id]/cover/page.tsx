@@ -36,7 +36,7 @@
  *   layout the design studio used.
  */
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, useDeferredValue } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -900,6 +900,15 @@ function PanelGrid({
   assets: Asset[];
   token: string | null;
 }) {
+  // useDeferredValue lets the slider thumb + value label update in the
+  // urgent render lane while the heavy GridLivePreview (12 image tiles
+  // + CSS-columns masonry layout) re-renders in a deferred lane. Without
+  // this, dragging the Columns/Gap slider felt unresponsive because every
+  // tick (~60Hz) was kicking off a full preview re-layout that held up
+  // the next pointer event — sliders appeared frozen even though their
+  // state was updating. The deferred grid stays one frame behind during
+  // rapid drag and snaps to the final value on idle.
+  const deferredGrid = useDeferredValue(config.grid);
   return (
     <div className="space-y-4">
       <div>
@@ -977,18 +986,18 @@ function PanelGrid({
             {config.grid.layout} · {config.grid.columns} col · {config.grid.gap}px gap
           </span>
         </div>
-        <GridLivePreview config={config} assets={assets} token={token} />
+        <GridLivePreview grid={deferredGrid} assets={assets} token={token} />
       </div>
     </div>
   );
 }
 
 function GridLivePreview({
-  config,
+  grid,
   assets,
   token,
 }: {
-  config: DesignConfig;
+  grid: DesignConfig["grid"];
   assets: Asset[];
   token: string | null;
 }) {
@@ -998,11 +1007,11 @@ function GridLivePreview({
   // layout choice before uploading.
   const sample = assets.slice(0, 12);
   const empty = sample.length === 0;
-  const placeholderCount = empty ? Math.max(6, config.grid.columns * 2) : 0;
-  const gap = config.grid.gap;
-  const cols = config.grid.columns;
+  const placeholderCount = empty ? Math.max(6, grid.columns * 2) : 0;
+  const gap = grid.gap;
+  const cols = grid.columns;
 
-  if (config.grid.layout === "carousel") {
+  if (grid.layout === "carousel") {
     return (
       <div
         className="overflow-x-auto rounded-lg border border-white/10 bg-surface/40 p-3"
@@ -1029,7 +1038,7 @@ function GridLivePreview({
     );
   }
 
-  if (config.grid.layout === "masonry") {
+  if (grid.layout === "masonry") {
     // CSS columns + break-inside-avoid is the same technique
     // public-gallery-grid uses for masonry. Heights vary so the asymmetry
     // is visible at preview scale.
@@ -1059,7 +1068,7 @@ function GridLivePreview({
     );
   }
 
-  if (config.grid.layout === "justified") {
+  if (grid.layout === "justified") {
     // Justified: flex rows with varying-width tiles, all the same height.
     // public-gallery-grid uses flex-row + flex-grow tiles.
     const widthWeights = [1.5, 1, 2, 1, 1.7, 1.2, 1, 1.8, 1.3, 1.4, 1, 1.6];
