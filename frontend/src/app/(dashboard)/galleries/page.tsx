@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { listGalleries, createGallery, deleteGallery, duplicateGalleryAuth, type Gallery } from "@/lib/api/galleries";
+import { useSearchParams } from "next/navigation";
+import { listGalleries, createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -13,7 +13,6 @@ import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Grid, ListBullet, Trash } from "@/components/icons";
 
 export default function GalleriesPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +32,10 @@ export default function GalleriesPage() {
   const [filterType, setFilterType] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // ID of the gallery currently armed for delete. The single-string shape
+  // means arming Delete on a different card auto-disarms the previous one,
+  // so the inline confirm bar never appears on two cards simultaneously.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
@@ -51,19 +54,42 @@ export default function GalleriesPage() {
     });
   }, [galleries, filterType, filterStatus, searchQuery]);
 
-  const handleDelete = async (e: React.MouseEvent, galleryId: string) => {
+  // Arms the inline confirm bar for the given gallery card. The actual
+  // delete happens in confirmDelete() — splitting these two keeps the
+  // browser confirm() dialog out of the flow (UX rule 2026-05-18) and
+  // gives the user a visible "Cancel" path right where the click landed.
+  const armDelete = (e: React.MouseEvent, galleryId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Delete this gallery? This action cannot be undone.")) return;
+    setConfirmDeleteId(galleryId);
+  };
+
+  const confirmDelete = async (galleryId: string) => {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token) {
+      setConfirmDeleteId(null);
+      return;
+    }
     try {
       await deleteGallery(token, galleryId);
+      setConfirmDeleteId(null);
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete gallery");
+      setConfirmDeleteId(null);
     }
   };
+
+  // Escape dismisses the armed delete confirmation. Mounted only while a
+  // card is armed so the listener doesn't run on every keystroke at idle.
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setConfirmDeleteId(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [confirmDeleteId]);
 
   const refresh = () => {
     authFetch("/api/v1/galleries")
@@ -445,48 +471,71 @@ export default function GalleriesPage() {
                       </div>
                     )}
 
-                    {/* Hover overlay with quick actions. Hidden on touch
-                        devices (mobile/tablet without hover) because the
-                        sticky-hover behavior on touch causes the first tap
-                        to reveal the overlay and the second tap to land
-                        on the Design button instead of opening the
-                        gallery. Mobile users tap the card itself, which
-                        is wrapped in <Link> -> /galleries/{id}. The
-                        overlay shows only on devices with true hover
-                        (desktop with mouse / trackpad). */}
-                    <div className="absolute inset-0 hidden items-center justify-center gap-3 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:hover)]:flex">
-                      <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/galleries/${g.id}`); }}
-                        className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
-                      >
-                        Open
-                      </button>
-                      <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/galleries/${g.id}/cover`); }}
-                        className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
-                      >
-                        Design
-                      </button>
-                      <button
-                        onClick={async (e) => {
-                          e.preventDefault(); e.stopPropagation();
-                          try {
-                            await duplicateGalleryAuth(g.id, `${g.title} (Copy)`);
-                            refresh();
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : "Failed to duplicate gallery");
-                          }
-                        }}
-                        className="rounded-full bg-white/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 min-h-[36px]"
-                      >
-                        Duplicate
-                      </button>
-                      <button
-                        onClick={(e) => handleDelete(e, g.id)}
-                        className="rounded-full bg-red-500/30 backdrop-blur-sm border border-red-400/30 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500/50 min-h-[36px]"
-                      >
-                        Delete
-                      </button>
+                    {/* Corner Delete affordance. Replaces the older
+                        full-cover scrim that hosted Open / Design /
+                        Duplicate / Delete buttons (2026-05-18). The full
+                        scrim swallowed cover-image clicks, so we removed
+                        it: now the bare cover is the click target for
+                        "open gallery" (the whole card is wrapped in
+                        <Link>), and Delete sits in the top-right corner
+                        with a hover-reveal on devices that support hover.
+                        Open/Design/Duplicate were redundant — Open
+                        duplicates the card-click, Design is one click
+                        away in the gallery sidebar, and Duplicate is a
+                        rarely-used action that didn't justify perpetual
+                        visual chrome on every card.
+
+                        When armed, the corner swaps to an inline confirm
+                        bar (Cancel + Confirm) instead of firing
+                        window.confirm — keeps the action in-context. */}
+                    <div
+                      className={cn(
+                        "absolute top-2 right-2 z-10 transition-opacity",
+                        // Persistent visibility while the confirm bar is
+                        // open so the user can actually click Cancel /
+                        // Confirm; otherwise hover-reveal on desktop and
+                        // hidden on touch (avoids sticky-hover footgun).
+                        confirmDeleteId === g.id
+                          ? "opacity-100"
+                          : "opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100",
+                      )}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    >
+                      {confirmDeleteId === g.id ? (
+                        <div
+                          role="alertdialog"
+                          aria-label="Confirm gallery deletion"
+                          className="flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
+                        >
+                          <span className="px-1.5 text-[11px] font-medium text-text-primary">
+                            Delete?
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }}
+                            className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            autoFocus
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
+                            className="rounded-full bg-feedback-error/[0.25] px-2.5 py-1 text-[11px] font-semibold text-feedback-error hover:bg-feedback-error/[0.40] transition-colors"
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      ) : (
+                        <GlassIconButton
+                          size="sm"
+                          variant="danger"
+                          label="Delete gallery"
+                          onClick={(e) => armDelete(e, g.id)}
+                        >
+                          <Trash />
+                        </GlassIconButton>
+                      )}
                     </div>
                   </div>
                 )}
@@ -566,15 +615,41 @@ export default function GalleriesPage() {
                     {new Date(g.created_at).toLocaleDateString("en-IN")}
                   </span>
                   {viewMode === "list" && (
-                    <GlassIconButton
-                      onClick={(e) => handleDelete(e, g.id)}
-                      className="ml-2"
-                      size="sm"
-                      variant="danger"
-                      label="Delete gallery"
-                    >
-                      <Trash />
-                    </GlassIconButton>
+                    confirmDeleteId === g.id ? (
+                      <div
+                        role="alertdialog"
+                        aria-label="Confirm gallery deletion"
+                        className="ml-2 flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      >
+                        <span className="px-1.5 text-[11px] font-medium text-text-primary">Delete?</span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }}
+                          className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          autoFocus
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
+                          className="rounded-full bg-feedback-error/[0.25] px-2.5 py-1 text-[11px] font-semibold text-feedback-error hover:bg-feedback-error/[0.40] transition-colors"
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    ) : (
+                      <GlassIconButton
+                        onClick={(e) => armDelete(e, g.id)}
+                        className="ml-2"
+                        size="sm"
+                        variant="danger"
+                        label="Delete gallery"
+                      >
+                        <Trash />
+                      </GlassIconButton>
+                    )
                   )}
                 </div>
               </Link>
