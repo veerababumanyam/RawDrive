@@ -1,7 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { ServiceWorkerRegister } from "./sw-register";
+
+// Service worker registration is handled globally by AppShell
+// (frontend/src/components/layout/AppShell.tsx) which mounts
+// <ServiceWorkerRegister /> from @/components/pwa/sw-register in the root
+// layout — that already runs on every route, including /g/[slug]. We
+// previously also registered here, which installed a different SW
+// (/sw.js) at the same scope as the global one (/service-worker.js) and
+// created a register-order race where guest pages could end up with the
+// less-capable shim instead of the M15 SW. Removed 2026-05-18.
 
 export const viewport: Viewport = {
+  // Brand-accent override of the root #0b1326 navy specifically for the
+  // public guest-gallery PWA chrome (Android address bar, iOS status
+  // bar). Studio owners share these galleries with clients, so the
+  // installed/standalone surface should read as a brand experience, not
+  // the dashboard.
   themeColor: "#3B82F6",
   width: "device-width",
   initialScale: 1,
@@ -26,10 +39,5 @@ export default function GalleryLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <ServiceWorkerRegister />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }
