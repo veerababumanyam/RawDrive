@@ -164,11 +164,14 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         <ToggleRow
           label="Face detection"
           description="Automatically detect and cluster faces in uploaded photos for internal use."
-          checked={(gallery.settings as Record<string, unknown>)?.face_detection_enabled === true}
+          // 2026-05-18: face_detection_enabled is a top-level column on
+          // galleries (mig 046, default true). The previous version of
+          // this toggle nested the value under `settings` JSONB — the
+          // PUT handler ignored that key entirely so the toggle silently
+          // no-op'd. Now reads/writes the top-level field.
+          checked={gallery.face_detection_enabled ?? true}
           disabled={saving}
-          onChange={(v) =>
-            handleToggle("settings", { ...((gallery.settings as Record<string, unknown>) || {}), face_detection_enabled: v } as unknown as boolean)
-          }
+          onChange={(v) => handleToggle("face_detection_enabled", v)}
         />
       </section>
 

@@ -45,6 +45,16 @@ type Gallery struct {
 	DownloadEnabled  bool                   `json:"download_enabled"`
 	SortPreference   string                 `json:"sort_preference"`
 	WhatsappTemplate string                 `json:"whatsapp_template"`
+	// Face recognition toggles. Migrations 041 + 046 added the columns
+	// long ago but the Go struct never exposed them — so the gallery
+	// Settings UI's "FaceID entry" + "Face detection" toggles wrote to
+	// the PUT endpoint and silently no-op'd (handler ignored the keys,
+	// repo Update SQL didn't include them, GetByID didn't read them).
+	// Wired through end-to-end here, 2026-05-18.
+	//   faceid_enabled         M13 — clients can use a selfie to find their photos. DEFAULT false.
+	//   face_detection_enabled M3 E8-S1 — face cluster pipeline opt-out. DEFAULT true.
+	FaceIDEnabled        bool `json:"faceid_enabled"`
+	FaceDetectionEnabled bool `json:"face_detection_enabled"`
 	// CoverThumbnails is populated by List() via a LEFT JOIN on assets.
 	// Not a database column — only present in list responses.
 	CoverThumbnails map[string]string `json:"cover_thumbnails,omitempty"`
@@ -199,13 +209,15 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		 title, slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
-		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template
+		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
+		 faceid_enabled, face_detection_enabled
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -225,13 +237,15 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		 title, slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
-		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template
+		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
+		 faceid_enabled, face_detection_enabled
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -257,6 +271,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
 		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
 		g.download_enabled, g.sort_preference, g.whatsapp_template,
+		g.faceid_enabled, g.face_detection_enabled,
 		cover_asset.thumbnail_urls
 		FROM galleries g
 		LEFT JOIN LATERAL (
@@ -311,6 +326,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 			&g.IsPublished, &g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt,
 			&g.UpdatedAt, &g.DeletedAt, &g.PublishedAt, &g.ArchivedAt,
 			&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+			&g.FaceIDEnabled, &g.FaceDetectionEnabled,
 			&coverThumbs,
 		); err != nil {
 			return nil, fmt.Errorf("gallery repo list scan: %w", err)
@@ -335,13 +351,14 @@ func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 		 gallery_type=$11, settings=$12, password_hash=$13, watermark_config=$14,
 		 is_published=$15, max_selections=$16, status=$17, updated_at=$18, published_at=$19, archived_at=$20,
 		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24,
-		 sort_preference=$25, whatsapp_template=$26
-		 WHERE id=$27 AND deleted_at IS NULL`,
+		 sort_preference=$25, whatsapp_template=$26,
+		 faceid_enabled=$27, face_detection_enabled=$28
+		 WHERE id=$29 AND deleted_at IS NULL`,
 		g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, g.Settings,
 		g.PasswordHash, g.WatermarkConfig, g.IsPublished, g.MaxSelections, g.Status,
 		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
-		g.SortPreference, g.WhatsappTemplate, g.ID,
+		g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled, g.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("gallery repo update: %w", err)

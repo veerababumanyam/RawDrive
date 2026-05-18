@@ -337,6 +337,24 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 2026-05-18: same bug class as watermark_config below — the gallery
+	// Settings UI's "FaceID entry" + "Face detection" toggles wrote here
+	// for years and silently no-op'd because the handler ignored both
+	// keys. Now decoded directly. Both columns are top-level booleans
+	// (migrations 041 + 046) — DO NOT nest under settings JSONB even
+	// though the original frontend code did.
+	if value, ok := raw["faceid_enabled"]; ok {
+		if err := json.Unmarshal(value, &gallery.FaceIDEnabled); err != nil {
+			http.Error(w, `{"error":"invalid faceid_enabled"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if value, ok := raw["face_detection_enabled"]; ok {
+		if err := json.Unmarshal(value, &gallery.FaceDetectionEnabled); err != nil {
+			http.Error(w, `{"error":"invalid face_detection_enabled"}`, http.StatusBadRequest)
+			return
+		}
+	}
 	// 2026-05-18: watermark_config passthrough. The gallery settings UI
 	// (frontend/src/app/(dashboard)/galleries/[id]/settings/page.tsx)
 	// has had the toggle + text + opacity + position controls wired

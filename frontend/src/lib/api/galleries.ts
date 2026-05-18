@@ -29,7 +29,15 @@ export interface Gallery {
     position?: "center" | "tiled" | "bottom-right" | "bottom-left";
     opacity?: number; // 0.0–1.0
   };
+  // Face-recognition toggles — both top-level columns on galleries.
+  // faceid_enabled (mig 041): clients can use a selfie to find their photos.
+  //   Default false.
+  // face_detection_enabled (mig 046): face cluster pipeline opt-out at the
+  //   gallery level. Default true. Note: an earlier version of the settings
+  //   page wrote this nested under `settings` — that path silently no-op'd
+  //   because the backend never decoded it. Read/write the top-level field.
   faceid_enabled?: boolean;
+  face_detection_enabled?: boolean;
   settings?: Record<string, unknown>;
   // Populated by list endpoint via LEFT JOIN on assets — used for card thumbnails
   cover_thumbnails?: Record<string, string>;
