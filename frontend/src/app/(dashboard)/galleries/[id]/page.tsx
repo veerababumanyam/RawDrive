@@ -32,7 +32,13 @@ import { cn } from "@/lib/utils";
 import { useUpload } from "@/hooks/use-upload";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
-import { FaceFilter } from "@/components/gallery/face-filter";
+// FaceFilter import removed 2026-05-18 — the chip strip was unmounted
+// from the gallery page because it rendered as a row of "Unknown"
+// pills. The window-event listener below (rawdrive:face-filter +
+// rawdrive:face-filter-clear) is intentionally retained because
+// public-gallery-enhancements still dispatches those events via the
+// FaceID gate (GAL-FR-107/108). If the dashboard ever needs the chip
+// strip back, re-add the import + the JSX render block.
 import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
@@ -64,7 +70,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // set are rendered in the grid. Populated by the rawdrive:face-filter
   // event that FaceFilter dispatches after fetching cluster assets.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
-  const [authToken, setAuthToken] = useState<string>("");
+  // (Removed authToken state 2026-05-18 — only the FaceFilter chip strip
+  // consumed it, and that surface was unmounted from this page. Other
+  // gallery features read the access token via getStoredAccessToken()
+  // on demand. Restore if a future surface needs a reactive token.)
   // Tracks the in-flight publish/unpublish request so the toggle button
   // can disable itself + show a "Saving…" state. Prevents double-submit
   // when the user clicks during the round-trip.
@@ -113,7 +122,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setLoading(false);
       return;
     }
-    setAuthToken(token);
 
     let cancelled = false;
 
@@ -1160,12 +1168,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            {/* FaceFilter surfaces only when we have an auth token and at
-                least one asset — before uploads there's nothing to
-                cluster, and without a token the API calls would 401. */}
-            {authToken && assets.length > 0 && (
-              <FaceFilter token={authToken} galleryId={id} />
-            )}
+            {/* "Filter by face" chip strip removed 2026-05-18 — it
+                rendered as a row of "Unknown" pills because most
+                clusters haven't been named, which read as broken UX.
+                The same identity surface is available cleaner via
+                the People tab (per-person tile + click-through to
+                photos) and the Photo Search webcam flow. Both
+                handle the un-named-cluster case better. The
+                FaceFilter component file is retained — nothing
+                else imports it but it's trivially re-wirable if a
+                future iteration wants the chip strip back. */}
 
             {/* Embedded videos (YouTube / Vimeo).
                 Added 2026-05-18 — sits between sub-galleries/face filter
