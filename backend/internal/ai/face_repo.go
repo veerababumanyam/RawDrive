@@ -144,13 +144,26 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 	// NULL. With gallery_assets as the source of truth a single asset shared
 	// across multiple galleries also surfaces the same person in each
 	// gallery's People tab, which is the correct behavior.
+	// Two parallel correlated subqueries pull the sample asset id AND its
+	// bounding box from the SAME row (the highest-confidence face for the
+	// cluster). The `, fc2.id ASC` secondary sort ties the two subqueries
+	// to the same row even when multiple faces share the top confidence —
+	// without it the asset/bbox could come from different rows and the
+	// cropped cover would highlight the wrong face on the cover image.
+	// SampleBBox was previously never selected, so the front-end's
+	// computeCropStyle always saw {x:0,y:0,w:0,h:0} and fell back to
+	// object-position:center — the People-tab cover thumbnails rendered
+	// the whole photo instead of the face.
 	query := `SELECT fc.cluster_label,
 		 MAX(fc.cluster_name) AS cluster_name,
 		 COUNT(*) AS face_count,
 		 COUNT(DISTINCT fc.asset_id) AS asset_count,
 		 (SELECT fc2.asset_id FROM face_clusters fc2
 		  WHERE fc2.cluster_label = fc.cluster_label AND fc2.workspace_id = $1
-		  ORDER BY fc2.confidence DESC LIMIT 1) AS sample_asset_id
+		  ORDER BY fc2.confidence DESC, fc2.id ASC LIMIT 1) AS sample_asset_id,
+		 (SELECT fc2.bounding_box FROM face_clusters fc2
+		  WHERE fc2.cluster_label = fc.cluster_label AND fc2.workspace_id = $1
+		  ORDER BY fc2.confidence DESC, fc2.id ASC LIMIT 1) AS sample_bounding_box
 		 FROM face_clusters fc`
 
 	args := []any{workspaceID}
@@ -171,8 +184,17 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 	var clusters []*ClusterSummary
 	for rows.Next() {
 		var cs ClusterSummary
-		if err := rows.Scan(&cs.ClusterLabel, &cs.ClusterName, &cs.FaceCount, &cs.AssetCount, &cs.SampleAssetID); err != nil {
+		var bboxBytes []byte
+		if err := rows.Scan(&cs.ClusterLabel, &cs.ClusterName, &cs.FaceCount, &cs.AssetCount, &cs.SampleAssetID, &bboxBytes); err != nil {
 			return nil, fmt.Errorf("face repo: scan cluster: %w", err)
+		}
+		// JSONB stored as BoundingBox struct by StoreFaces (json.Marshal of
+		// the struct). Decode back into the struct field; ignore decode
+		// errors — a malformed row shouldn't blank out the whole list,
+		// just leaves SampleBBox at zero and the UI fall back to centered
+		// crop, which is the same behavior as before this column was added.
+		if len(bboxBytes) > 0 {
+			_ = json.Unmarshal(bboxBytes, &cs.SampleBBox)
 		}
 		clusters = append(clusters, &cs)
 	}

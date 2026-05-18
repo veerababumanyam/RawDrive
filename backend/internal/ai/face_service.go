@@ -214,7 +214,18 @@ func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, wo
 			continue
 		}
 
-		similar, err := s.faceRepo.FindSimilarFaces(ctx, face.Embedding, workspaceID, 0.85, 1)
+		// 2026-05-18: lowered from 0.85 → 0.55. The 0.85 threshold was tuned
+		// for Gemini's 128-d embeddings where same-person similarity is
+		// tighter; with insightface ArcFace r100 (512-d L2-normalized) the
+		// same-person cosine similarity range is typically 0.4-0.7 across
+		// different poses/lighting and 0.85 only matches near-identical
+		// frames. Result was every photo of the same person getting its
+		// own cluster_label — visible in the People tab as duplicate
+		// "Unnamed person" tiles for the same face. 0.55 is the standard
+		// recognition operating point for buffalo_l in production setups;
+		// raise toward 0.6 if false-positive merges become a problem,
+		// lower toward 0.5 if same-person clusters still split.
+		similar, err := s.faceRepo.FindSimilarFaces(ctx, face.Embedding, workspaceID, 0.55, 1)
 		if err != nil {
 			log.Printf("face service: find similar failed for face %s: %v", face.ID, err)
 			continue
