@@ -173,15 +173,65 @@ function useGalleryFavorites(slug: string) {
   return { favorites, toggle };
 }
 
-// Build the canonical share URL for a single asset. Mirrors what the
-// preview-chrome Share button produces for the whole gallery; here the
-// URL carries the `?asset=<id>` deep-link param so the recipient's
-// browser auto-opens the lightbox to the same photo (handled by the
-// useEffect below). Falls back to a relative path on SSR where
-// window.location.origin is undefined.
+// Build the canonical share URL for a single asset.
+//
+// 2026-05-18: switched from `/g/{slug}?asset=<id>` (which opened the full
+// gallery and deep-linked the lightbox) to the dedicated single-photo
+// route `/g/{slug}/photo/{assetId}`. The new route renders ONLY the shared
+// photo — no grid, no chips, no products — matching the user-facing rule
+// that a share-link recipient should not see the rest of the gallery.
+//
+// The `?asset=<id>` deep-link auto-open behaviour in the public viewer
+// (see useEffect further down) is preserved for legacy share URLs already
+// floating around in email/WhatsApp, but new Share button clicks emit the
+// single-photo URL.
+//
+// Falls back to a relative path on SSR where window.location.origin is
+// undefined.
 function buildAssetShareUrl(slug: string, assetId: string): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/g/${slug}?asset=${assetId}`;
+  return `${origin}/g/${slug}/photo/${assetId}`;
+}
+
+// Web Share API + clipboard fallback. Returns the verdict so the caller
+// can flip a "Link copied" success state. `copy-fallback` means we used
+// clipboard; `shared` means the native sheet completed; `cancelled` means
+// the user dismissed the sheet (suppress the copied state in that case so
+// they don't see a confusing toast); `error` means everything failed.
+async function shareOrCopy(url: string, title: string): Promise<"shared" | "copy-fallback" | "cancelled" | "error"> {
+  if (typeof navigator !== "undefined" && "share" in navigator) {
+    try {
+      await (navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }).share({ title, url });
+      return "shared";
+    } catch (err) {
+      // AbortError = user cancelled. Treat as "cancelled" so the caller
+      // doesn't show a copy-success toast they didn't ask for.
+      if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
+      // Other Web Share failures (permission denied, no targets) fall
+      // through to the clipboard path below.
+    }
+  }
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return "copy-fallback";
+    }
+    if (typeof document !== "undefined") {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      return "copy-fallback";
+    }
+  } catch {
+    /* fall through to error */
+  }
+  return "error";
 }
 
 interface Props {
@@ -386,6 +436,11 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   // after the share button's clipboard write succeeds, then resets.
   const { favorites, toggle: toggleFavorite } = useGalleryFavorites(slug);
   const [shareCopied, setShareCopied] = useState(false);
+  // Per-tile share-copied feedback. Keyed by asset id so only the tile the
+  // user just clicked flashes a success state — not every Share button on
+  // the grid. Cleared on a per-id timer so two quick clicks on different
+  // tiles each animate independently.
+  const [tileShareCopiedId, setTileShareCopiedId] = useState<string | null>(null);
 
   const toggleFullscreen = useCallback(() => {
     if (!lightboxRef.current) return;
@@ -751,6 +806,44 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                           an outline (no fill). */}
                       <Star className={favorites.has(asset.id) ? "h-4 w-4 fill-current" : "h-4 w-4"} />
                     </button>
+                    {/* Per-tile Share button — always visible like Star
+                        because the recipient-facing share is one of the
+                        primary actions a client wants to take on a tile
+                        (the lightbox toolbar Share is one extra click
+                        away). Posts the single-photo URL via Web Share
+                        API on mobile or clipboard fallback on desktop;
+                        URL points to /g/{slug}/photo/{assetId} so the
+                        recipient sees only the shared image, not the
+                        rest of the gallery. */}
+                    <button
+                      type="button"
+                      aria-label={tileShareCopiedId === asset.id ? "Link copied" : "Share photo"}
+                      title={tileShareCopiedId === asset.id ? "Link copied" : "Share this photo"}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const url = buildAssetShareUrl(slug, asset.id);
+                        const result = await shareOrCopy(url, asset.filename);
+                        if (result === "copy-fallback" || result === "shared") {
+                          // Show "Link copied" feedback only on
+                          // clipboard fallback — the Web Share success
+                          // path already gave the user the native sheet
+                          // experience, so a redundant toast feels noisy.
+                          if (result === "copy-fallback") {
+                            setTileShareCopiedId(asset.id);
+                            window.setTimeout(() => {
+                              setTileShareCopiedId((current) => (current === asset.id ? null : current));
+                            }, 1600);
+                          }
+                        }
+                      }}
+                      className={
+                        tileShareCopiedId === asset.id
+                          ? "inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-success text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-success/60"
+                          : "inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow-elevation-1 ring-2 ring-white/30 backdrop-blur-md transition-all hover:bg-black/70 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
+                      }
+                    >
+                      <Share className="h-4 w-4" />
+                    </button>
                     {downloadEnabled && (
                       <div className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <GlassIconButton
@@ -1006,32 +1099,18 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 <GlassIconButton
                   size="sm"
                   variant={shareCopied ? "success" : "glass"}
-                  label={shareCopied ? "Share link copied" : "Copy share link"}
+                  label={shareCopied ? "Share link copied" : "Share photo"}
                   onClick={async () => {
+                    // 2026-05-18: use the shared shareOrCopy helper so the
+                    // lightbox Share matches the per-tile Share (Web Share
+                    // API on mobile, clipboard on desktop, suppressed
+                    // toast on user-cancel). URL points to the new
+                    // single-photo route — see buildAssetShareUrl notes.
                     const url = buildAssetShareUrl(slug, photo.id);
-                    try {
-                      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-                        await navigator.clipboard.writeText(url);
-                      } else if (typeof document !== "undefined") {
-                        // execCommand fallback for older Safari and
-                        // non-HTTPS local-dev contexts (clipboard API
-                        // is gated on secure-origin in some browsers).
-                        const ta = document.createElement("textarea");
-                        ta.value = url;
-                        ta.setAttribute("readonly", "");
-                        ta.style.position = "fixed";
-                        ta.style.opacity = "0";
-                        document.body.appendChild(ta);
-                        ta.select();
-                        document.execCommand("copy");
-                        document.body.removeChild(ta);
-                      }
+                    const result = await shareOrCopy(url, photo.filename);
+                    if (result === "copy-fallback") {
                       setShareCopied(true);
                       window.setTimeout(() => setShareCopied(false), 1600);
-                    } catch {
-                      // Silent: the chrome already shows a Share state.
-                      // If clipboard write fails the user can long-press
-                      // the URL bar after the lightbox closes.
                     }
                   }}
                 >
