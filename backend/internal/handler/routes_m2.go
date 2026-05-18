@@ -252,6 +252,13 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/api/v1/workspaces/current/profile", profileHandler.GetProfile)
 		r.Put("/api/v1/workspaces/current/profile", profileHandler.UpdateProfile)
 
+		// PR-3c: workspace-level face-recognition opt-in. Backs the
+		// Settings → Face Recognition toggle. Same "current" literal +
+		// JWT workspace id pattern as /profile above.
+		faceRecHandler := &WorkspaceFaceRecognitionHandler{DB: deps.Pool}
+		r.Get("/api/v1/workspaces/current/face-recognition", faceRecHandler.Get)
+		r.Patch("/api/v1/workspaces/current/face-recognition", faceRecHandler.Patch)
+
 		subHandler := &SubscriptionHandler{DB: deps.Pool}
 		r.Get("/api/v1/workspace/subscription", subHandler.Get)
 

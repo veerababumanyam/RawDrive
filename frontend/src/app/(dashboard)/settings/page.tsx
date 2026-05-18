@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   BriefcaseBusiness,
   Coins,
@@ -10,6 +10,7 @@ import {
   HardDrive,
   LayoutGrid,
   ShieldCheck,
+  Users,
   UserRound,
 } from "lucide-react";
 import { getStoredPlatformRole } from "@/lib/auth";
@@ -80,6 +81,16 @@ const TILES: Tile[] = [
     icon: CreditCard,
     testId: "settings-tile-packages",
   },
+  // PR-3c: workspace-level face-recognition toggle. Sits between
+  // user-facing settings and admin tiles so it's discoverable to
+  // photographers (who own the consent decision) without being buried.
+  {
+    href: "/settings/face-recognition",
+    label: "Face Recognition",
+    description: "Enable face detection and people grouping for this workspace.",
+    icon: Users,
+    testId: "settings-tile-face-recognition",
+  },
   {
     href: "/admin/upload-credits",
     label: "Upload Credits",
@@ -99,14 +110,15 @@ const TILES: Tile[] = [
 ];
 
 export default function SettingsHubPage() {
-  const [role, setRole] = useState<string>("photographer");
-
   // Role is read from JWT claims — resolved client-side to keep the
   // hub a pure Client Component. Non-admins never see the Admin Console
-  // tile because the filter happens before render.
-  useEffect(() => {
-    setRole(getStoredPlatformRole());
-  }, []);
+  // tile because the filter happens before render. Computed via useState
+  // lazy initializer so we avoid React 19's `react-hooks/set-state-in-effect`
+  // lint and don't render a fake "photographer" default for one frame.
+  const [role] = useState<string>(() => {
+    if (typeof window === "undefined") return "photographer";
+    return getStoredPlatformRole();
+  });
 
   const visibleTiles = TILES.filter(
     (tile) => !tile.requireRoles || tile.requireRoles.includes(role),
