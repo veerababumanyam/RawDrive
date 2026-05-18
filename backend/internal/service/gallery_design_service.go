@@ -150,7 +150,11 @@ func (s *GalleryDesignService) GetDesignConfig(ctx context.Context, galleryID uu
 	return &config, nil
 }
 
-// UpdateDesignConfig persists a design configuration for a gallery.
+// UpdateDesignConfig persists a typed design configuration. Kept for
+// backward-compat with any internal callers that already constructed a
+// GalleryDesignConfig — new code should prefer UpdateDesignConfigRaw to
+// avoid the schema-drift footgun where new frontend fields silently
+// vanish through the typed decode.
 func (s *GalleryDesignService) UpdateDesignConfig(ctx context.Context, galleryID uuid.UUID, config GalleryDesignConfig) error {
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil || gallery == nil {
@@ -163,6 +167,32 @@ func (s *GalleryDesignService) UpdateDesignConfig(ctx context.Context, galleryID
 		gallery.Settings = map[string]interface{}{}
 	}
 	gallery.Settings["design_config"] = config
+
+	return s.galleryRepo.Update(ctx, gallery)
+}
+
+// UpdateDesignConfigRaw persists a design configuration directly from the
+// raw JSON payload as a generic map. This is the preferred path from the
+// HTTP handler 2026-05-18 onward — preserves every field the frontend
+// sends, including ones the typed struct doesn't know about yet.
+// Increments `version` in-place so callers don't have to.
+func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galleryID uuid.UUID, raw map[string]interface{}) error {
+	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil || gallery == nil {
+		return fmt.Errorf("design: gallery not found")
+	}
+
+	// Increment version. The frontend sends a `version: number` field;
+	// we treat it as a write-conflict marker and bump it. Coerce any
+	// numeric representation (float64 from json default decode) back to
+	// an int-shaped float64 so the JSON output keeps the integer look.
+	prev, _ := raw["version"].(float64)
+	raw["version"] = prev + 1
+
+	if gallery.Settings == nil {
+		gallery.Settings = map[string]interface{}{}
+	}
+	gallery.Settings["design_config"] = raw
 
 	return s.galleryRepo.Update(ctx, gallery)
 }
