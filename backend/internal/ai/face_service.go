@@ -294,12 +294,34 @@ type FaceSearchResult struct {
 // page stays inside the gallery the user is currently looking at —
 // matching the People-tab click-through behavior fixed in d184f9d.
 //
-// Similarity floor (0.50) is set slightly more permissively than the
-// clustering threshold (0.55, face_service.ClusterFaces) because the
-// search input is a webcam frame: lower resolution, often off-angle
-// or under poor lighting compared to the studio's uploaded photos.
-// False positives are absorbed by the gallery scope (a stranger's face
-// won't be in this gallery anyway), so leniency favors recall.
+// Decision algorithm (2026-05-18 v2):
+//
+//	The original implementation took top-1 nearest neighbour at
+//	threshold 0.50. That misses everyone whose webcam shot doesn't
+//	closely resemble any single studio photo in the workspace —
+//	exactly the "camera angle, lighting, resolution all differ from
+//	the wedding photo" failure the user reported. The fix has three
+//	parts:
+//
+//	1. Lower the retrieval floor to 0.30 — well below where false
+//	   positives kick in (different people typically sit < 0.25 with
+//	   ArcFace r100 L2-normalized embeddings), but high enough that
+//	   noise faces don't flood the candidate pool. Webcam captures
+//	   of the same person against studio photos commonly land in the
+//	   0.35-0.55 band.
+//	2. Pull top-K=20 candidates instead of 1, so a single ambiguous
+//	   nearest neighbour can't drive the decision.
+//	3. Vote by cluster_label. The winning cluster is the one with the
+//	   highest aggregate score (sum of similarities across all faces
+//	   returned for that cluster). A person who appears in many gallery
+//	   photos will accumulate score from each of them; a stranger's
+//	   one-off similar face won't.
+//
+//	Match acceptance floor: the winning cluster's BEST individual
+//	similarity must be ≥ 0.40, OR its aggregate score (sum) must be
+//	≥ 0.80. This is the "is anyone here?" gate — without it a noisy
+//	candidate at 0.31 could win simply by being the only one above
+//	0.30.
 func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID uuid.UUID, imageData []byte) (*FaceSearchResult, error) {
 	if s.faceClient == nil {
 		return nil, fmt.Errorf("face service: face-svc not configured (FACE_SVC_URL unset)")
@@ -332,15 +354,99 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 		}
 	}
 
-	similar, err := s.faceRepo.FindSimilarFaces(ctx, best.Embedding, workspaceID, 0.50, 1)
+	const (
+		retrievalThreshold = 0.30
+		retrievalLimit     = 20
+		minBestSimilarity  = 0.40
+		minAggregateScore  = 0.80
+	)
+
+	matches, err := s.faceRepo.FindSimilarFacesScored(ctx, best.Embedding, workspaceID, retrievalThreshold, retrievalLimit)
 	if err != nil {
 		return nil, fmt.Errorf("face service: find similar: %w", err)
 	}
-	if len(similar) == 0 || similar[0].ClusterLabel == nil {
+	if len(matches) == 0 {
+		log.Printf("face search: workspace=%s ws_face_count=0 candidates above %.2f; faces_detected=%d",
+			workspaceID, retrievalThreshold, len(resp.Faces))
 		return &FaceSearchResult{Found: false, FacesDetected: len(resp.Faces)}, nil
 	}
 
-	matchedLabel := *similar[0].ClusterLabel
+	// Cluster vote. Group candidates by cluster_label, track best
+	// per-cluster similarity and aggregate score. Aggregate (sum)
+	// rewards clusters with multiple close matches; best individual
+	// captures the "any single strong hit is convincing on its own"
+	// case (e.g., the gallery has one studio portrait of the person).
+	type clusterAgg struct {
+		label     uuid.UUID
+		name      string
+		bestSim   float64
+		aggregate float64
+		hits      int
+	}
+	aggByLabel := make(map[uuid.UUID]*clusterAgg, 8)
+	for _, m := range matches {
+		if m.Face.ClusterLabel == nil {
+			continue
+		}
+		k := *m.Face.ClusterLabel
+		a, ok := aggByLabel[k]
+		if !ok {
+			a = &clusterAgg{label: k, name: m.Face.ClusterName}
+			aggByLabel[k] = a
+		}
+		// Keep first non-empty name encountered; cluster_name should
+		// be uniform across rows but a freshly renamed cluster might
+		// briefly disagree if the search races a rename.
+		if a.name == "" && m.Face.ClusterName != "" {
+			a.name = m.Face.ClusterName
+		}
+		if m.Similarity > a.bestSim {
+			a.bestSim = m.Similarity
+		}
+		a.aggregate += m.Similarity
+		a.hits++
+	}
+
+	var winner *clusterAgg
+	for _, a := range aggByLabel {
+		if winner == nil || a.aggregate > winner.aggregate {
+			winner = a
+		}
+	}
+
+	log.Printf("face search: workspace=%s gallery=%s candidates=%d clusters=%d winner=%v winner_best=%.3f winner_agg=%.3f winner_hits=%d",
+		workspaceID, galleryID, len(matches), len(aggByLabel),
+		func() string {
+			if winner != nil {
+				return winner.label.String()
+			}
+			return "nil"
+		}(),
+		func() float64 {
+			if winner != nil {
+				return winner.bestSim
+			}
+			return 0
+		}(),
+		func() float64 {
+			if winner != nil {
+				return winner.aggregate
+			}
+			return 0
+		}(),
+		func() int {
+			if winner != nil {
+				return winner.hits
+			}
+			return 0
+		}(),
+	)
+
+	if winner == nil || (winner.bestSim < minBestSimilarity && winner.aggregate < minAggregateScore) {
+		return &FaceSearchResult{Found: false, FacesDetected: len(resp.Faces)}, nil
+	}
+
+	matchedLabel := winner.label
 	assetIDs, err := s.faceRepo.ListClusterAssetIDsInGallery(ctx, galleryID, matchedLabel)
 	if err != nil {
 		return nil, fmt.Errorf("face service: list cluster assets in gallery: %w", err)
@@ -349,8 +455,8 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 	return &FaceSearchResult{
 		Found:         true,
 		ClusterLabel:  &matchedLabel,
-		ClusterName:   similar[0].ClusterName,
-		Similarity:    similar[0].Confidence,
+		ClusterName:   winner.name,
+		Similarity:    winner.bestSim,
 		AssetIDs:      assetIDs,
 		FacesDetected: len(resp.Faces),
 	}, nil

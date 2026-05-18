@@ -99,6 +99,62 @@ func (r *FaceRepo) FindSimilarFaces(ctx context.Context, embedding []float32, wo
 	return scanFaces(rows)
 }
 
+// FaceMatch is a FaceCluster row paired with the cosine similarity
+// between the query embedding and the face's embedding. Similarity =
+// 1 - cosine_distance, so values are in [-1, 1] with 1 = identical.
+// Used by SearchByFace (Photo Search) where the cluster decision
+// depends on similarity scores across multiple candidates, not on
+// any one row in isolation.
+type FaceMatch struct {
+	Face       *FaceCluster
+	Similarity float64
+}
+
+// FindSimilarFacesScored is the same as FindSimilarFaces but also
+// returns the cosine similarity for each row. Use this when you need
+// to rank or vote across the result set (Photo Search), not just
+// take the top-1 row. Same workspace + cluster_label filter so
+// every returned face has a non-nil ClusterLabel.
+func (r *FaceRepo) FindSimilarFacesScored(ctx context.Context, embedding []float32, workspaceID uuid.UUID, threshold float64, limit int) ([]FaceMatch, error) {
+	maxDistance := 1.0 - threshold
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, workspace_id, asset_id, gallery_id, face_index, bounding_box,
+		 cluster_label, cluster_name, confidence, source, created_at, updated_at,
+		 (embedding <=> $2) AS cos_distance
+		 FROM face_clusters
+		 WHERE workspace_id = $1
+		   AND cluster_label IS NOT NULL
+		   AND (embedding <=> $2) <= $3
+		 ORDER BY embedding <=> $2 ASC
+		 LIMIT $4`,
+		workspaceID, pgvector.NewVector(embedding), maxDistance, limit)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: find similar scored: %w", err)
+	}
+	defer rows.Close()
+
+	matches := make([]FaceMatch, 0, limit)
+	for rows.Next() {
+		var fc FaceCluster
+		var bboxJSON []byte
+		var distance float64
+		if err := rows.Scan(
+			&fc.ID, &fc.WorkspaceID, &fc.AssetID, &fc.GalleryID, &fc.FaceIndex,
+			&bboxJSON, &fc.ClusterLabel, &fc.ClusterName, &fc.Confidence,
+			&fc.Source, &fc.CreatedAt, &fc.UpdatedAt, &distance,
+		); err != nil {
+			return nil, fmt.Errorf("face repo: scan scored: %w", err)
+		}
+		_ = json.Unmarshal(bboxJSON, &fc.BoundingBox)
+		matches = append(matches, FaceMatch{
+			Face:       &fc,
+			Similarity: 1.0 - distance,
+		})
+	}
+	return matches, rows.Err()
+}
+
 // FindSimilarFacesInGallery matches an embedding against faces scoped to a single gallery.
 // Used by FaceID gallery entry (GAL-FR-107/108): a client uploads a selfie embedding,
 // we return matching asset IDs that appear only inside this gallery.
