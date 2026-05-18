@@ -171,9 +171,17 @@ func (h *Handler) SplitCluster(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetClusterAssets handles GET /api/v1/ai/clusters/{id}/assets (M3 E8-S3).
-// Returns distinct asset IDs in a face cluster, scoped to the caller's
-// workspace. Frontend FaceFilter component calls this to render a
-// filtered gallery view.
+// Returns distinct asset IDs in a face cluster. When the optional
+// `gallery_id` query param is supplied the result is filtered to that
+// gallery — used by the dashboard People-tab person view so clicking a
+// face shows photos from the current gallery, not every gallery in the
+// workspace that happens to contain the same person (a common case: the
+// bride appears across an engagement gallery + the wedding gallery + a
+// reception gallery, and the user has only opened one of them).
+//
+// Without a gallery_id, the response remains workspace-scoped — that
+// preserves the original FaceID-filter semantics for the smart-album
+// flow which intentionally operates across the workspace.
 func (h *Handler) GetClusterAssets(w http.ResponseWriter, r *http.Request) {
 	wsID := getWorkspaceID(r)
 	if wsID == uuid.Nil {
@@ -186,7 +194,17 @@ func (h *Handler) GetClusterAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assetIDs, err := h.faceSvc.FilterByCluster(r.Context(), wsID, clusterID)
+	var assetIDs []uuid.UUID
+	if g := r.URL.Query().Get("gallery_id"); g != "" {
+		galleryID, perr := uuid.Parse(g)
+		if perr != nil {
+			respondError(w, http.StatusBadRequest, "invalid gallery_id")
+			return
+		}
+		assetIDs, err = h.faceSvc.FilterByClusterInGallery(r.Context(), galleryID, clusterID)
+	} else {
+		assetIDs, err = h.faceSvc.FilterByCluster(r.Context(), wsID, clusterID)
+	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return

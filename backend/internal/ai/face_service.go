@@ -254,6 +254,16 @@ func (s *FaceService) FilterByCluster(ctx context.Context, workspaceID, clusterL
 	return s.faceRepo.ListClusterAssetIDs(ctx, workspaceID, clusterLabel)
 }
 
+// FilterByClusterInGallery is the gallery-scoped variant — see
+// face_repo.ListClusterAssetIDsInGallery for the join-through-
+// gallery_assets rationale. Used by the dashboard People-tab person
+// view so a click on a face stays inside the current gallery rather
+// than enumerating every gallery in the workspace that contains the
+// same person.
+func (s *FaceService) FilterByClusterInGallery(ctx context.Context, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	return s.faceRepo.ListClusterAssetIDsInGallery(ctx, galleryID, clusterLabel)
+}
+
 // GetClusters returns cluster summaries for a workspace/gallery.
 func (s *FaceService) GetClusters(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]*ClusterSummary, error) {
 	return s.faceRepo.ListClusters(ctx, workspaceID, galleryID)

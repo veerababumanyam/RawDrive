@@ -164,8 +164,18 @@ export interface ClusterAssetsResponse {
 export async function getClusterAssets(
   _token: string,
   clusterId: string,
+  // Optional gallery scope. When provided, the backend joins through
+  // gallery_assets so the response lists ONLY the photos in this
+  // gallery that contain the person — the dashboard People-tab tile
+  // click passes the current gallery here so the user doesn't land on
+  // a grid of photos from other galleries they might not even have
+  // open. Omit to get the workspace-wide list (smart-album behavior).
+  galleryId?: string,
 ): Promise<ClusterAssetsResponse> {
-  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/assets`);
+  const url = galleryId
+    ? `/api/v1/ai/clusters/${clusterId}/assets?gallery_id=${encodeURIComponent(galleryId)}`
+    : `/api/v1/ai/clusters/${clusterId}/assets`;
+  const res = await authFetch(url);
   if (!res.ok) throw new Error(`Get cluster assets failed: ${res.status}`);
   return res.json();
 }

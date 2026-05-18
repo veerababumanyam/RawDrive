@@ -51,7 +51,13 @@ export default function PersonPhotosPage({
         // (b) cluster asset IDs → then asset thumbnails
         const [clustersList, assetsResp] = await Promise.all([
           getFaceClusters(token, id),
-          getClusterAssets(token, personId),
+          // Pass the gallery id so the backend joins through
+          // gallery_assets and returns only photos in THIS gallery
+          // that contain the person — not every gallery in the
+          // workspace. Same person can appear across an engagement +
+          // wedding + reception set; clicking a face on one gallery
+          // page should stay inside that gallery.
+          getClusterAssets(token, personId, id),
         ]);
 
         const matched = clustersList.find((c) => c.cluster_label === personId) ?? null;
