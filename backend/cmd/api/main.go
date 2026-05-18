@@ -1245,6 +1245,12 @@ func main() {
 	// so anonymous visitors can discover the marketplace from the
 	// public landing page. Mounted BEFORE the authed group so the JWT
 	// middleware never sees them.
+
+	// PR-2b face hook: faceSvc is constructed inside the bare scope block
+	// below, but the thumbnail worker (declared after the block closes)
+	// needs to call it. Declare the adapter at function scope so both
+	// sides see it; nil until assigned in the AI wiring section.
+	var faceEnqueueAdapter worker.FaceEnqueuerFunc
 	{
 		marketplaceFreelancerRepo := repository.NewFreelancerRepo(dbPool)
 		marketplaceGearRepo := repository.NewGearRepo(dbPool)
@@ -1568,6 +1574,15 @@ func main() {
 			log.Printf("face: detection backend set to face-svc (%s)", faceSvcURL)
 		} else {
 			log.Printf("face: FACE_SVC_URL not set; falling back to (now-incompatible) Gemini path")
+		}
+
+		// Bind the function-scope adapter (declared above the bare scope
+		// block) to this iteration's faceSvc. The thumbnail worker reads
+		// it after the block closes — see PR-2b face hook comment near
+		// the worker construction site.
+		faceEnqueueAdapter = func(ctx context.Context, workspaceID uuid.UUID, assetIDs []uuid.UUID, galleryID *uuid.UUID) error {
+			_, err := faceSvc.EnqueueDetection(ctx, workspaceID, assetIDs, galleryID)
+			return err
 		}
 
 		// M21: wire face scan deps into gallery handler now that faceSvc is available.
@@ -2222,7 +2237,18 @@ func main() {
 	log.Println("Storage: streaming proxy with JWT auth on /storage/*")
 
 	// ──────────────────────── Background Workers (start after all routes) ────────────────
-	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).WithPublisher(eventBroker)
+	// PR-2b face hook: when the thumbnail worker finishes derivatives for an
+	// image asset it enqueues a face_detection AIJob. The job is then picked
+	// up by faceWorker (already running) which calls into faceSvc. The
+	// adapter is assigned inside the bare-scope AI wiring block above; if
+	// the env path didn't initialize faceSvc (rare in dev, impossible in
+	// prod once FACE_SVC_URL is required) the field stays nil and the
+	// worker skips the enqueue silently.
+	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).
+		WithPublisher(eventBroker)
+	if faceEnqueueAdapter != nil {
+		thumbWorker = thumbWorker.WithFaceEnqueuer(faceEnqueueAdapter)
+	}
 	workerRegistry.Register("thumbnail", thumbWorker)
 	purgeWorker := worker.NewAssetPurgeWorker(dbPool, storageProvider)
 	workerRegistry.Register("asset-purge", purgeWorker)

@@ -12,12 +12,32 @@ import (
 	"github.com/rawdrive/backend/internal/storage"
 )
 
+// FaceEnqueuer is the narrow surface the ThumbnailWorker needs from the
+// FaceService to schedule per-asset detection after derivatives complete.
+// Defined as an interface so the worker package stays independent of the
+// ai package (avoids a worker→ai import dependency that would complicate
+// the test graph).
+type FaceEnqueuer interface {
+	EnqueueDetection(ctx context.Context, workspaceID uuid.UUID, assetIDs []uuid.UUID, galleryID *uuid.UUID) error
+}
+
+// FaceEnqueuerFunc is the http.HandlerFunc-style adapter that lets a bare
+// closure satisfy FaceEnqueuer. Used in main.go to bridge FaceService's
+// (*AIJob, error) signature down to the error-only contract the worker needs.
+type FaceEnqueuerFunc func(ctx context.Context, workspaceID uuid.UUID, assetIDs []uuid.UUID, galleryID *uuid.UUID) error
+
+// EnqueueDetection satisfies FaceEnqueuer.
+func (f FaceEnqueuerFunc) EnqueueDetection(ctx context.Context, workspaceID uuid.UUID, assetIDs []uuid.UUID, galleryID *uuid.UUID) error {
+	return f(ctx, workspaceID, assetIDs, galleryID)
+}
+
 // ThumbnailWorker processes assets that need thumbnails generated.
 type ThumbnailWorker struct {
 	assetRepo    *repository.AssetRepo
 	thumbnailSvc *service.ThumbnailService
 	store        storage.Provider
-	publisher    Publisher // optional — emits asset.ready events when set
+	publisher    Publisher    // optional — emits asset.ready events when set
+	faceEnqueuer FaceEnqueuer // optional — enqueues face_detection AIJob after ready
 	pollInterval time.Duration
 	stopCh       chan struct{}
 }
@@ -27,6 +47,16 @@ type ThumbnailWorker struct {
 // not emit events but otherwise operates identically.
 func (w *ThumbnailWorker) WithPublisher(p Publisher) *ThumbnailWorker {
 	w.publisher = p
+	return w
+}
+
+// WithFaceEnqueuer wires the face-detection enqueue hook. When set, every
+// image asset that finishes thumbnail generation also queues a face_detection
+// AIJob (consumed by ai.FaceWorker). Workspace + gallery opt-out gates run
+// downstream in FaceService.DetectAndStore; failure here is logged but
+// non-fatal — the asset is still marked ready.
+func (w *ThumbnailWorker) WithFaceEnqueuer(e FaceEnqueuer) *ThumbnailWorker {
+	w.faceEnqueuer = e
 	return w
 }
 
@@ -150,9 +180,30 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	// subscribers that would otherwise need their own polling logic.
 	PublishAssetReady(ctx, w.publisher, asset.ID, asset.WorkspaceID)
 
+	// Face detection enqueue (PR-2b). Fires only when the workspace has wired
+	// face-svc and the asset is an image. We pass nil galleryID because the
+	// thumbnail worker doesn't know which gallery (if any) the asset belongs
+	// to — the asset→gallery join is set by separate handlers. FaceService
+	// applies the workspace face_recognition_enabled gate when the job runs,
+	// so enqueueing even for opted-out workspaces is a cheap no-op rather
+	// than a bug. Failure is logged but doesn't fail the thumbnail job — the
+	// asset is already marked ready and the user-visible upload flow is done.
+	if w.faceEnqueuer != nil && isImageContentType(asset.ContentType) {
+		if err := w.faceEnqueuer.EnqueueDetection(ctx, asset.WorkspaceID, []uuid.UUID{asset.ID}, nil); err != nil {
+			log.Printf("thumbnail worker: face enqueue for %s failed (non-fatal): %v", asset.ID, err)
+		}
+	}
+
 	log.Printf("thumbnail worker: processed %s (%dx%d, %d thumbnails)",
 		asset.ID, result.Width, result.Height, len(result.URLs))
 	return nil
+}
+
+// isImageContentType is a narrow helper so we don't add face-detection jobs
+// for video/PDF/other non-image assets that arrive through the same pipeline.
+// Match prefix "image/" — same predicate the search_worker uses for auto-tag.
+func isImageContentType(ct string) bool {
+	return len(ct) >= 6 && ct[:6] == "image/"
 }
 
 func (w *ThumbnailWorker) updateDimensions(ctx context.Context, id uuid.UUID, width, height int) {
