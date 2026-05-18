@@ -34,9 +34,21 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   {
+    // Permissions-Policy — F-010 baseline locks every powerful feature to
+    // the empty allowlist `()` so neither this document nor any embedded
+    // third-party iframe can use them. `camera` is the one exception: the
+    // dashboard "Photo Search" page (/galleries/[id]/photo-search) calls
+    // navigator.mediaDevices.getUserMedia({ video: true }) to capture a
+    // face for cluster matching. With `camera=()` Chrome blocks that at
+    // the document level BEFORE the permission prompt fires — surfacing
+    // as "Permissions policy violation: camera is not allowed in this
+    // document" in the console and a "Permission denied" DOMException at
+    // the API. `(self)` keeps the OWASP A05 intent (deny third-party
+    // iframes) while allowing the page's own origin to request the
+    // camera. Microphone stays denied since no feature needs it.
     key: "Permissions-Policy",
     value:
-      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), " +
+      "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), " +
       "magnetometer=(), gyroscope=(), accelerometer=(), fullscreen=(self)",
   },
   {
