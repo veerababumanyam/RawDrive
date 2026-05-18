@@ -5,6 +5,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/email"
+	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -385,6 +386,12 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		}
 		publicHandler = publicHandler.WithM13Deps(deps.Pool, fr)
 	}
+	// Anonymous Photo Search needs the face-svc client to detect + embed
+	// the captured frame server-side. Nil-safe — without this the
+	// endpoint returns 503.
+	if deps.FaceClient != nil {
+		publicHandler = publicHandler.WithFaceClient(deps.FaceClient)
+	}
 	proofingHandler := NewProofingHandler(deps.ProofingService).WithGalleryService(deps.GalleryService)
 
 	r.Route("/api/v1/public", func(r chi.Router) {
@@ -403,6 +410,10 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		// public_gallery_handler.go for the gate logic.
 		r.Get("/galleries/{slug}/people", publicHandler.ListPeople)
 		r.Get("/galleries/{slug}/people/{personId}/photos", publicHandler.ListPersonPhotos)
+		// Anonymous Photo Search — webcam capture → gallery-scoped face
+		// match. Same gates as the People tab. See
+		// public_gallery_handler.PhotoSearch.
+		r.Post("/galleries/{slug}/photo-search", publicHandler.PhotoSearch)
 
 		// M41/105: Anonymous guest favorites — Star button in the public
 		// lightbox writes here. Toggleable (POST adds, DELETE removes)
@@ -498,8 +509,11 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 // M2Dependencies holds all service dependencies for M2 and M11 handlers.
 type M2Dependencies struct {
 	// M13 deferred-FR deps (optional — nil-safe)
-	Pool     *pgxpool.Pool // subscription tier lookup (GAL-FR-115)
-	FaceRepo *ai.FaceRepo  // gallery-scoped face match (GAL-FR-107/108)
+	Pool        *pgxpool.Pool // subscription tier lookup (GAL-FR-115)
+	FaceRepo    *ai.FaceRepo  // gallery-scoped face match (GAL-FR-107/108)
+	FaceClient  *face.Client  // optional face-svc client — when wired
+	// enables the anonymous Photo Search endpoint on the public side.
+	// Nil-safe: when unwired the handler returns 503.
 
 	AssetService         *service.AssetService
 	UploadService        *service.UploadService

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/ai"
+	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -27,8 +28,12 @@ type PublicGalleryHandler struct {
 	// M13 deferred-FR closure deps (optional — nil-safe handlers degrade
 	// gracefully so existing tests that construct PublicGalleryHandler
 	// without these continue to compile).
-	pool     *pgxpool.Pool // subscription tier lookup for GAL-FR-115
-	faceRepo *ai.FaceRepo  // gallery-scoped face match for GAL-FR-107/108
+	pool        *pgxpool.Pool // subscription tier lookup for GAL-FR-115
+	faceRepo    *ai.FaceRepo  // gallery-scoped face match for GAL-FR-107/108
+	faceClient  *face.Client  // optional face-svc client for server-side
+	// detect+embed on the public Photo Search endpoint. Nil when
+	// FACE_SVC_URL is unset — the endpoint returns 503 in that case
+	// rather than throwing the request away silently.
 
 	// 2026-05-18: watermark baking for the public download path. Optional —
 	// when nil, PublicAssetDownload streams the raw original. When set and
@@ -60,6 +65,15 @@ func (h *PublicGalleryHandler) WithM13Deps(pool *pgxpool.Pool, faceRepo *ai.Face
 // WithAlbumService wires album lookups for public sub-gallery links.
 func (h *PublicGalleryHandler) WithAlbumService(albumSvc *service.AlbumService) *PublicGalleryHandler {
 	h.albumSvc = albumSvc
+	return h
+}
+
+// WithFaceClient enables the public Photo Search endpoint. Nil-safe:
+// the endpoint returns 503 if invoked without a client wired (e.g.
+// FACE_SVC_URL not set in the deployment). Setter mirrors the
+// FaceService.WithFaceClient pattern used by the dashboard side.
+func (h *PublicGalleryHandler) WithFaceClient(c *face.Client) *PublicGalleryHandler {
+	h.faceClient = c
 	return h
 }
 
@@ -797,6 +811,198 @@ func (h *PublicGalleryHandler) ListPersonPhotos(w http.ResponseWriter, r *http.R
 	respondJSON(w, http.StatusOK, map[string]any{
 		"asset_ids": stringIDs,
 		"count":     len(stringIDs),
+	})
+}
+
+// PhotoSearch handles POST /api/v1/public/galleries/{slug}/photo-search.
+// Guest-side counterpart to the dashboard Photo Search — the visitor
+// captures a face on their device camera and POSTs the JPEG; we run
+// face-svc to detect+embed, vote across candidates GALLERY-SCOPED, and
+// return the matched cluster's photos.
+//
+// Critical security difference from the dashboard endpoint: this is
+// anonymous, so candidate retrieval is restricted to faces whose asset
+// is in THIS gallery (FindSimilarFacesInGalleryScored). A workspace-
+// wide search would let a guest enumerate other galleries' identities
+// just by visiting one shared link — that is exactly what
+// FindSimilarFacesInGallery and ListClusterAssetIDsInGallery exist to
+// prevent.
+//
+// Gates: both workspaces.face_recognition_enabled (DPDP/GDPR opt-in)
+// and galleries.face_detection_enabled (per-gallery opt-out) must
+// pass, mirroring the public People tab. We deliberately reuse the
+// People-tab gate function — Photo Search is just the action-verb
+// form of the same surface.
+//
+// Body cap 10 MB. face-svc enforces its own 20 MB cap on top.
+func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
+		return
+	}
+
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if h.faceRepo == nil || h.faceClient == nil {
+		http.Error(w, `{"error":"photo search not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	enabled, err := h.isFaceRecognitionEnabledForGallery(r.Context(), gallery.ID, gallery.WorkspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"face recognition status check failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if !enabled {
+		http.Error(w, `{"error":"photo search disabled for this gallery"}`, http.StatusForbidden)
+		return
+	}
+
+	const maxUpload = 10 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		http.Error(w, `{"error":"could not parse upload"}`, http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, `{"error":"image file required (form field 'image')"}`, http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	imageData, err := io.ReadAll(file)
+	if err != nil || len(imageData) == 0 {
+		http.Error(w, `{"error":"empty or unreadable image"}`, http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.faceClient.DetectAndEmbed(r.Context(), imageData, "public-search.jpg")
+	if err != nil {
+		http.Error(w, `{"error":"face detection failed"}`, http.StatusBadGateway)
+		return
+	}
+	if len(resp.Faces) == 0 {
+		respondJSON(w, http.StatusOK, map[string]any{
+			"found":          false,
+			"faces_detected": 0,
+			"asset_ids":      []string{},
+			"count":          0,
+		})
+		return
+	}
+
+	// Highest-confidence face wins (foreground subject vs background bystanders).
+	best := resp.Faces[0]
+	for i := range resp.Faces[1:] {
+		f := resp.Faces[i+1]
+		if f.DetScore > best.DetScore {
+			best = f
+		}
+	}
+
+	// Match dashboard knobs — see face_service.SearchByFace comment block
+	// for the derivation. The retrieval pool is intentionally generous
+	// because webcam captures vs studio photos sit in the 0.35-0.55 band
+	// of cosine similarity, and the cluster-vote step absorbs any spurious
+	// neighbours.
+	const (
+		retrievalThreshold = 0.30
+		retrievalLimit     = 20
+		minBestSimilarity  = 0.40
+		minAggregateScore  = 0.80
+	)
+
+	matches, err := h.faceRepo.FindSimilarFacesInGalleryScored(r.Context(), best.Embedding, gallery.ID, retrievalThreshold, retrievalLimit)
+	if err != nil {
+		http.Error(w, `{"error":"face match failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if len(matches) == 0 {
+		respondJSON(w, http.StatusOK, map[string]any{
+			"found":          false,
+			"faces_detected": len(resp.Faces),
+			"asset_ids":      []string{},
+			"count":          0,
+		})
+		return
+	}
+
+	// Cluster vote — identical algorithm to the dashboard side. Group by
+	// cluster_label, track each cluster's best individual similarity and
+	// aggregate sum, pick the cluster with the highest aggregate. See
+	// face_service.SearchByFace for the rationale.
+	type clusterAgg struct {
+		label     uuid.UUID
+		name      string
+		bestSim   float64
+		aggregate float64
+		hits      int
+	}
+	aggByLabel := make(map[uuid.UUID]*clusterAgg, 8)
+	for _, m := range matches {
+		if m.Face.ClusterLabel == nil {
+			continue
+		}
+		k := *m.Face.ClusterLabel
+		a, ok := aggByLabel[k]
+		if !ok {
+			a = &clusterAgg{label: k, name: m.Face.ClusterName}
+			aggByLabel[k] = a
+		}
+		if a.name == "" && m.Face.ClusterName != "" {
+			a.name = m.Face.ClusterName
+		}
+		if m.Similarity > a.bestSim {
+			a.bestSim = m.Similarity
+		}
+		a.aggregate += m.Similarity
+		a.hits++
+	}
+
+	var winner *clusterAgg
+	for _, a := range aggByLabel {
+		if winner == nil || a.aggregate > winner.aggregate {
+			winner = a
+		}
+	}
+
+	if winner == nil || (winner.bestSim < minBestSimilarity && winner.aggregate < minAggregateScore) {
+		respondJSON(w, http.StatusOK, map[string]any{
+			"found":          false,
+			"faces_detected": len(resp.Faces),
+			"asset_ids":      []string{},
+			"count":          0,
+		})
+		return
+	}
+
+	// Gallery-scoped asset list. Uses the same helper the public People
+	// tab uses for click-through — guarantees the visitor only sees
+	// photos from THIS shared gallery, never any other workspace gallery.
+	assetIDs, err := h.faceRepo.ListClusterAssetIDsInGallery(r.Context(), gallery.ID, winner.label)
+	if err != nil {
+		http.Error(w, `{"error":"could not load matched photos"}`, http.StatusInternalServerError)
+		return
+	}
+	stringIDs := make([]string, 0, len(assetIDs))
+	for _, id := range assetIDs {
+		stringIDs = append(stringIDs, id.String())
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"found":          true,
+		"faces_detected": len(resp.Faces),
+		"cluster_label":  winner.label.String(),
+		"cluster_name":   winner.name,
+		"similarity":     winner.bestSim,
+		"asset_ids":      stringIDs,
+		"count":          len(stringIDs),
 	})
 }
 

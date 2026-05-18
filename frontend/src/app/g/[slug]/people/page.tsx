@@ -47,12 +47,22 @@ export default function PublicPeoplePage({
         Back to gallery
       </Link>
 
-      <header className="space-y-2">
+      <header className="space-y-3">
         <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">People</p>
         <h1 className="text-2xl font-semibold text-text-primary">People in this gallery</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
           Photos grouped by the people who appear in them. Tap a person to see every photo they&apos;re in.
         </p>
+        {/* Photo Search entry — appears alongside the People list so
+            guests don't have to know the URL. The page itself handles
+            the "feature not enabled for this gallery" case gracefully
+            if the studio has face recognition turned off. */}
+        <Link
+          href={`/g/${slug}/photo-search`}
+          className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+        >
+          Find me with my camera
+        </Link>
       </header>
 
       {error && (

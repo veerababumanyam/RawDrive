@@ -1288,6 +1288,19 @@ func main() {
 		api.Get("/api/v1/photo-trail", photoTrailHandler.List)
 
 		// M2 + M11 Protected routes
+		// Face-svc client — constructed early so it can be wired into both
+		// m2Deps (for the public Photo Search endpoint) and the FaceService
+		// further below. Nil when FACE_SVC_URL is unset; downstream code
+		// is nil-safe and returns 503 / falls back to the legacy path.
+		var earlyFaceClient *face.Client
+		if faceSvcURL := os.Getenv("FACE_SVC_URL"); faceSvcURL != "" {
+			fc, err := face.NewClient(face.Config{BaseURL: faceSvcURL})
+			if err != nil {
+				log.Fatalf("face-svc client init: %v", err)
+			}
+			earlyFaceClient = fc
+		}
+
 		m2Deps := handler.M2Dependencies{
 			AssetService:         assetSvc,
 			UploadService:        uploadSvc,
@@ -1332,8 +1345,9 @@ func main() {
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
 			// ai.NewFaceRepo is stateless — constructing it twice (here and in
 			// the AI init block below) is safe and keeps this block self-contained.
-			Pool:     dbPool,
-			FaceRepo: ai.NewFaceRepo(dbPool),
+			Pool:        dbPool,
+			FaceRepo:    ai.NewFaceRepo(dbPool),
+			FaceClient:  earlyFaceClient, // nil when FACE_SVC_URL unset → endpoint returns 503
 			// Subscription upgrade payments via Razorpay. Nil when env vars absent.
 			SubscriptionUpgradeHandler: handler.NewSubscriptionUpgradeHandlerFromEnv(dbPool),
 			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
@@ -1565,13 +1579,13 @@ func main() {
 		// path — but migration 110 widened the embedding column to
 		// vector(512), so the Gemini fallback fails-fast on insert. The
 		// canonical wiring path is to set FACE_SVC_URL in production.
-		if faceSvcURL := os.Getenv("FACE_SVC_URL"); faceSvcURL != "" {
-			faceClient, err := face.NewClient(face.Config{BaseURL: faceSvcURL})
-			if err != nil {
-				log.Fatalf("face-svc client init: %v", err)
-			}
-			faceSvc = faceSvc.WithFaceClient(faceClient)
-			log.Printf("face: detection backend set to face-svc (%s)", faceSvcURL)
+		if earlyFaceClient != nil {
+			// Reuse the client built above for m2Deps so we don't open
+			// two HTTP clients to the same sidecar. Same instance is
+			// safe for concurrent use (face.Client wraps a stdlib
+			// http.Client which is goroutine-safe).
+			faceSvc = faceSvc.WithFaceClient(earlyFaceClient)
+			log.Printf("face: detection backend set to face-svc (%s)", os.Getenv("FACE_SVC_URL"))
 		} else {
 			log.Printf("face: FACE_SVC_URL not set; falling back to (now-incompatible) Gemini path")
 		}

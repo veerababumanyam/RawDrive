@@ -178,6 +178,59 @@ func (r *FaceRepo) FindSimilarFacesInGallery(ctx context.Context, embedding []fl
 	return scanFaces(rows)
 }
 
+// FindSimilarFacesInGalleryScored is the gallery-scoped variant of
+// FindSimilarFacesScored. Same return shape (FaceMatch with cosine
+// similarity), restricted to faces whose asset is in the supplied
+// gallery via gallery_assets, with a non-NULL cluster_label.
+//
+// Why JOIN through gallery_assets instead of filtering on
+// face_clusters.gallery_id: that column is denormalized and frequently
+// NULL when the asset was detected via the thumbnail-worker auto-
+// enqueue path (it passes nil for the gallery hint). The People-tab
+// queries use the same JOIN for the same reason — see
+// face_repo.ListClusterAssetIDsInGallery.
+//
+// Only clustered faces participate (cluster_label IS NOT NULL) — the
+// Photo Search caller needs cluster identity to vote across candidates,
+// so unclustered noise faces would be useless even if they matched.
+func (r *FaceRepo) FindSimilarFacesInGalleryScored(ctx context.Context, embedding []float32, galleryID uuid.UUID, threshold float64, limit int) ([]FaceMatch, error) {
+	maxDistance := 1.0 - threshold
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT fc.id, fc.workspace_id, fc.asset_id, fc.gallery_id, fc.face_index, fc.bounding_box,
+		 fc.cluster_label, fc.cluster_name, fc.confidence, fc.source, fc.created_at, fc.updated_at,
+		 (fc.embedding <=> $2) AS cos_distance
+		 FROM face_clusters fc
+		 INNER JOIN gallery_assets ga ON ga.asset_id = fc.asset_id
+		 WHERE ga.gallery_id = $1
+		   AND fc.cluster_label IS NOT NULL
+		   AND (fc.embedding <=> $2) <= $3
+		 ORDER BY fc.embedding <=> $2 ASC
+		 LIMIT $4`,
+		galleryID, pgvector.NewVector(embedding), maxDistance, limit)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: find similar in gallery scored: %w", err)
+	}
+	defer rows.Close()
+
+	matches := make([]FaceMatch, 0, limit)
+	for rows.Next() {
+		var fc FaceCluster
+		var bboxJSON []byte
+		var distance float64
+		if err := rows.Scan(
+			&fc.ID, &fc.WorkspaceID, &fc.AssetID, &fc.GalleryID, &fc.FaceIndex,
+			&bboxJSON, &fc.ClusterLabel, &fc.ClusterName, &fc.Confidence,
+			&fc.Source, &fc.CreatedAt, &fc.UpdatedAt, &distance,
+		); err != nil {
+			return nil, fmt.Errorf("face repo: scan gallery scored: %w", err)
+		}
+		_ = json.Unmarshal(bboxJSON, &fc.BoundingBox)
+		matches = append(matches, FaceMatch{Face: &fc, Similarity: 1.0 - distance})
+	}
+	return matches, rows.Err()
+}
+
 // UpdateClusterAssignment sets cluster_label and cluster_name for a face.
 func (r *FaceRepo) UpdateClusterAssignment(ctx context.Context, faceID, clusterLabel uuid.UUID, clusterName string) error {
 	_, err := r.pool.Exec(ctx,

@@ -266,6 +266,53 @@ export async function listPublicPersonPhotos(
   return res.json();
 }
 
+// Public Photo Search — webcam-driven "find me in this gallery" for
+// anonymous guest viewers. Same response shape as the dashboard
+// searchFaceInGallery so the result UI can be near-identical.
+//
+// Same three outcomes:
+//   - found:false, faces_detected:0    → "no face in capture"
+//   - found:false, faces_detected:>0   → "face detected, no match here"
+//   - found:true                        → cluster_label + asset_ids
+//
+// 503 from the backend means the deployment has no face-svc client
+// wired (FACE_SVC_URL unset); the page surfaces that as "feature
+// not available."
+export interface PublicFaceSearchResponse {
+  found: boolean;
+  faces_detected: number;
+  cluster_label?: string;
+  cluster_name?: string;
+  similarity?: number;
+  asset_ids: string[];
+  count: number;
+}
+
+export async function searchPublicFaceInGallery(
+  slug: string,
+  imageBlob: Blob,
+): Promise<PublicFaceSearchResponse> {
+  const form = new FormData();
+  // Field name must match the backend handler — see
+  // public_gallery_handler.PhotoSearch.
+  form.append("image", imageBlob, "search.jpg");
+  const res = await fetch(
+    `${API_BASE}/api/v1/public/galleries/${slug}/photo-search`,
+    {
+      method: "POST",
+      // Public endpoint — no auth, no cookies. Mirrors the rest of the
+      // /api/v1/public surface (listPublicPeople, listPublicPersonPhotos).
+      credentials: "omit",
+      body: form,
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Photo search failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ---- Semantic Search ----
 
 export async function searchAssets(token: string, query: string, galleryId?: string, limit?: number): Promise<{ results: SearchResult[]; total: number }> {
