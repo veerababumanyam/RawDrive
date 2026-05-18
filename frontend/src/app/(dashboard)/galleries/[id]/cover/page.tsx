@@ -425,21 +425,27 @@ export default function CoverDesignPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-4 p-4 pb-32 sm:gap-6 sm:p-6 sm:pb-24 lg:p-8 lg:pb-12 lg:flex-row lg:items-start">
+      {/* Single-column layout — preview spans the full content width up to
+          a comfortable reading max, then the editor sits directly below.
+          No side panel, no sticky pane: the cover image is the page's
+          subject and gets the entire content rectangle. mx-auto + max-w
+          keeps the cover from stretching absurdly wide on 4K monitors
+          where a 16:9 frame would become a runway. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 pb-8 sm:gap-7 sm:p-6 lg:gap-8 lg:p-8">
         {/* ───────── LIVE PREVIEW ───────── */}
-        <section className="lg:flex-1 lg:sticky lg:top-4">
+        <section>
           <div
             ref={stageRef}
             onPointerDown={previewUrl ? onStagePointerDown : undefined}
             onPointerMove={onStagePointerMove}
             onPointerUp={onStagePointerUp}
             onPointerCancel={onStagePointerUp}
-            className={`relative w-full select-none overflow-hidden rounded-2xl border border-white/10 bg-surface-container ${
+            className={`relative w-full select-none overflow-hidden rounded-2xl border border-white/10 bg-surface-container shadow-2xl shadow-black/20 ${
               previewUrl ? (dragKind ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
             }`}
             style={{
               aspectRatio: config.cover.aspectRatio,
-              maxHeight: "min(70vh, 720px)",
+              maxHeight: "min(78vh, 820px)",
               touchAction: "none",
             }}
             aria-label="Cover preview — drag photo to pan, drag title/subtitle to position"
@@ -544,24 +550,31 @@ export default function CoverDesignPage() {
           </div>
         </section>
 
-        {/* ───────── PANEL ───────── */}
-        <section className="lg:w-[360px] lg:flex-shrink-0">
-          {/* Desktop: tabs visible at top of side panel; Mobile: bottom tab bar (rendered separately below) */}
-          <div className="hidden lg:flex mb-3 gap-1 rounded-xl border border-white/10 bg-surface-container p-1">
-            {(["cover", "text", "typography", "grid", "theme"] as TabId[]).map((id) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                className={`flex-1 rounded-lg px-2 py-2 text-xs font-medium capitalize transition-colors ${
-                  tab === id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-white/5"
-                }`}
-              >
-                {id}
-              </button>
-            ))}
+        {/* ───────── EDITOR PANEL ───────── */}
+        <section>
+          {/* Tab strip sits directly under the preview. Single strip for
+              all viewports — the previous mobile bottom-fixed bar is
+              gone now that the editor lives in-flow rather than to the
+              side. Scrolls horizontally on narrow widths so 5 tabs
+              never crowd. */}
+          <div className="mb-4 -mx-1 overflow-x-auto px-1">
+            <div className="flex min-w-max gap-1 rounded-xl border border-white/10 bg-surface-container p-1 sm:min-w-0">
+              {(["cover", "text", "typography", "grid", "theme"] as TabId[]).map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setTab(id)}
+                  className={`flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors sm:px-5 ${
+                    tab === id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-white/5"
+                  }`}
+                  aria-pressed={tab === id}
+                >
+                  {id}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-surface-container p-4 sm:p-5">
+          <div className="rounded-2xl border border-white/10 bg-surface-container p-4 sm:p-6">
             {tab === "cover" && (
               <PanelCover
                 assets={assets}
@@ -590,27 +603,6 @@ export default function CoverDesignPage() {
           </div>
         </section>
       </div>
-
-      {/* Mobile bottom tab bar — fixed, safe-area-aware. Hidden at lg. */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-surface-container/95 backdrop-blur-md lg:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <div className="flex">
-          {(["cover", "text", "typography", "grid", "theme"] as TabId[]).map((id) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`flex-1 px-2 py-3 text-[11px] font-medium capitalize ${
-                tab === id ? "text-primary" : "text-on-surface-variant"
-              }`}
-              aria-pressed={tab === id}
-            >
-              {id}
-            </button>
-          ))}
-        </div>
-      </nav>
     </div>
   );
 }
@@ -634,9 +626,9 @@ function PanelCover({
         <h3 className="text-sm font-semibold">Cover style</h3>
         <p className="text-xs text-on-surface-variant">Affects overlay anchoring &amp; default crop.</p>
       </div>
-      <div className="max-h-[180px] overflow-y-auto pr-1">
-        <div className="grid grid-cols-3 gap-2">
-          {COVER_STYLES.slice(0, 12).map((s) => (
+      <div className="max-h-[220px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {COVER_STYLES.map((s) => (
             <button
               key={s.id}
               onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, styleId: s.id } }))}
@@ -659,7 +651,7 @@ function PanelCover({
             {assets.length} {assets.length === 1 ? "photo" : "photos"}
           </span>
         </div>
-        <div className="grid max-h-[260px] grid-cols-4 gap-2 overflow-y-auto pr-1 sm:grid-cols-5">
+        <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto pr-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
           {assets.map((a) => {
             const url = getAssetPreviewUrl(a, token);
             const active = config.cover.assetId === a.id;
