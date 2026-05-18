@@ -413,6 +413,27 @@ export default function CoverDesignPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Section selector — replaces the horizontal tab strip that
+              used to sit under the preview. A dropdown is denser (one
+              element instead of five) and pairs naturally with the
+              Preview/Save buttons. Native <select> for predictable
+              keyboard nav + iOS picker UX; styled to match the dark
+              theme rather than rebuilt as a custom popover. */}
+          <label htmlFor="cover-tab-select" className="sr-only">
+            Editor section
+          </label>
+          <select
+            id="cover-tab-select"
+            value={tab}
+            onChange={(e) => setTab(e.target.value as TabId)}
+            className="min-h-[40px] flex-1 cursor-pointer rounded-xl border border-white/10 bg-surface px-3 py-2 pr-8 text-sm capitalize focus:border-primary focus:outline-none sm:flex-none"
+          >
+            <option value="cover">Cover</option>
+            <option value="text">Text</option>
+            <option value="typography">Typography</option>
+            <option value="grid">Grid</option>
+            <option value="theme">Theme</option>
+          </select>
           {gallery?.slug && (
             <Link
               href={`/g/${gallery.slug}`}
@@ -557,28 +578,9 @@ export default function CoverDesignPage() {
 
         {/* ───────── EDITOR PANEL ───────── */}
         <section>
-          {/* Tab strip sits directly under the preview. Single strip for
-              all viewports — the previous mobile bottom-fixed bar is
-              gone now that the editor lives in-flow rather than to the
-              side. Scrolls horizontally on narrow widths so 5 tabs
-              never crowd. */}
-          <div className="mb-4 -mx-1 overflow-x-auto px-1">
-            <div className="flex min-w-max gap-1 rounded-xl border border-white/10 bg-surface-container p-1 sm:min-w-0">
-              {(["cover", "text", "typography", "grid", "theme"] as TabId[]).map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  className={`flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors sm:px-5 ${
-                    tab === id ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-white/5"
-                  }`}
-                  aria-pressed={tab === id}
-                >
-                  {id}
-                </button>
-              ))}
-            </div>
-          </div>
-
+          {/* Section picker moved into the page header as a dropdown
+              next to Preview/Save. The panel body renders the active
+              section's controls without a tab bar above it. */}
           <div className="rounded-2xl border border-white/10 bg-surface-container p-4 sm:p-6">
             {tab === "cover" && (
               <PanelCover
