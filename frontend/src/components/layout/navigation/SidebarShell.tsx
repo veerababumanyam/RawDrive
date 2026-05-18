@@ -149,10 +149,12 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
 export function SidebarAvatar({
   name,
   badge,
+  badgeHref,
   avatarUrl,
 }: {
   name: string;
   badge: string;
+  badgeHref?: string;
   avatarUrl?: string;
 }) {
   const initials = name
@@ -161,6 +163,17 @@ export function SidebarAvatar({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const badgeEl = badgeHref ? (
+    <Link
+      href={badgeHref}
+      className="text-[10px] text-text-tertiary underline-offset-2 hover:text-accent hover:underline transition-colors"
+    >
+      {badge}
+    </Link>
+  ) : (
+    <p className="text-[10px] text-text-tertiary">{badge}</p>
+  );
 
   return (
     <div className="surface-panel flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-container-high">
@@ -173,7 +186,7 @@ export function SidebarAvatar({
       </div>
       <div className="overflow-hidden">
         <p className="truncate text-sm text-text-primary">{name}</p>
-        <p className="text-[10px] text-text-tertiary">{badge}</p>
+        {badgeEl}
       </div>
     </div>
   );

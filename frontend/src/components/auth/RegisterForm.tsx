@@ -3,25 +3,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronDown, Eye, EyeOff, Sparkles } from "lucide-react";
+import { Check, Eye, EyeOff, Sparkles } from "lucide-react";
 import { getGoogleOAuthStartUrl } from "@/lib/auth";
 import { pricingPlans } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-// Matches the public shape returned by GET /api/v1/states — keep this in
-// lockstep with backend/internal/handler/states.go State struct.
-type IndianState = {
-  id: number;
-  name: string;
-  code: string;
-  is_union_territory: boolean;
-};
-
 // Self-serve plan IDs the user can pick at signup. Must match the backend
-// whitelist in backend/internal/auth/handler.go (selfServePlans). Enterprise
-// is intentionally omitted here: it routes to /contact instead of signup.
-const selfServePlanIds = ["free", "starter", "professional", "business"] as const;
+// whitelist in backend/internal/auth/handler.go (selfServePlans).
+const selfServePlanIds = ["free", "starter", "professional", "business", "enterprise"] as const;
 type SelfServePlanId = (typeof selfServePlanIds)[number];
 
 function isSelfServePlan(value: string): value is SelfServePlanId {
@@ -38,19 +28,24 @@ const planHighlights: Record<SelfServePlanId, readonly string[]> = {
     "90-day full-access trial",
   ],
   starter: [
-    "50GB storage, 10 galleries",
+    "30GB storage, 10 galleries",
     "Client proofing & basic CRM",
     "Priority email support",
   ],
   professional: [
-    "250GB storage, 50 galleries",
+    "300GB storage, 50 galleries",
     "AI culling & full CRM + bookings",
     "Live streaming + marketplace listing",
   ],
   business: [
-    "2TB storage, 200 galleries",
+    "3TB storage, 200 galleries",
     "Unlimited AI culling",
     "API access + dedicated manager",
+  ],
+  enterprise: [
+    "6TB storage, unlimited galleries",
+    "White-label + custom integrations",
+    "SLA guarantee + 24/7 support",
   ],
 };
 
@@ -60,6 +55,7 @@ const planTagline: Record<SelfServePlanId, string> = {
   starter: "For solo photographers finding their rhythm",
   professional: "The sweet spot for growing studios",
   business: "For teams running back-to-back weddings",
+  enterprise: "Full-scale studio with white-label control",
 };
 
 export function RegisterForm() {
@@ -68,7 +64,7 @@ export function RegisterForm() {
 
   const initialPlan: SelfServePlanId = useMemo(() => {
     const raw = searchParams.get("plan")?.toLowerCase() ?? "";
-    return isSelfServePlan(raw) ? raw : "free";
+    return isSelfServePlan(raw) ? raw : "starter";
   }, [searchParams]);
 
   const [plan, setPlan] = useState<SelfServePlanId>(initialPlan);
@@ -76,17 +72,11 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [stateID, setStateID] = useState<number | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // States list fetched from /api/v1/states — sorted alphabetically server-side.
-  const [states, setStates] = useState<IndianState[]>([]);
-  const [statesLoading, setStatesLoading] = useState(true);
-  const [statesError, setStatesError] = useState<string>("");
 
   // Keep local plan state in sync if the user navigates from /pricing?plan=X to
   // /register?plan=Y without a full reload (Next.js soft nav).
@@ -94,49 +84,11 @@ export function RegisterForm() {
     setPlan(initialPlan);
   }, [initialPlan]);
 
-  // Load the full Indian states + union territories list once on mount.
-  // The endpoint returns pre-sorted data and is heavily cached (1h browser,
-  // 24h CDN) so this is effectively one round-trip per session.
-  useEffect(() => {
-    let cancelled = false;
-    setStatesLoading(true);
-    fetch(`${API_BASE}/api/v1/states`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((body: { states?: IndianState[] }) => {
-        if (cancelled) return;
-        setStates(Array.isArray(body.states) ? body.states : []);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStatesError("Could not load state list. Please refresh and try again.");
-      })
-      .finally(() => {
-        if (!cancelled) setStatesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // The Google OAuth start URL needs to include the current state_id +
-  // plan, so it has to recompute whenever either changes. Memoizing on
-  // those values keeps the button's onClick handler cheap without
-  // leaking state across renders.
   const googleStartUrl = useMemo(
-    () =>
-      getGoogleOAuthStartUrl(API_BASE, {
-        intent: "signup",
-        stateID,
-        plan,
-      }),
-    [stateID, plan],
+    () => getGoogleOAuthStartUrl(API_BASE, { intent: "signup", plan }),
+    [plan],
   );
 
-  // Self-serve plan cards, in display order. Enterprise is rendered as a
-  // separate sales-gated link underneath this list.
   const selectablePlans = useMemo(
     () => pricingPlans.filter((p) => isSelfServePlan(p.id)),
     [],
@@ -145,12 +97,7 @@ export function RegisterForm() {
   async function handleRegister(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
-    if (!email.trim() || !fullName.trim() || !termsAccepted) {
-      return;
-    }
-
-    if (stateID == null) {
-      setError("Please select your state before continuing.");
+    if (!email.trim() || !fullName.trim() || !phone.trim() || !termsAccepted) {
       return;
     }
 
@@ -171,7 +118,6 @@ export function RegisterForm() {
           password,
           full_name: fullName.trim(),
           phone: phone.trim(),
-          state_id: stateID,
           plan,
         }),
       });
@@ -182,16 +128,10 @@ export function RegisterForm() {
         return;
       }
 
-      // Carry the accepted plan + state (echoed back by the server) into the
-      // activate + onboarding flow via query param. Onboarding reads state_id
-      // to skip the "Choose your state" step entirely.
       const acceptedPlan: string = typeof payload.plan === "string" ? payload.plan : plan;
-      const acceptedStateID: number =
-        typeof payload.state_id === "number" ? payload.state_id : stateID;
       router.push(
         `/activate?email=${encodeURIComponent(email.trim())}` +
-          `&plan=${encodeURIComponent(acceptedPlan)}` +
-          `&state_id=${acceptedStateID}`,
+          `&plan=${encodeURIComponent(acceptedPlan)}`,
       );
     } catch {
       setError("Network error. Please confirm the API server is running.");
@@ -201,19 +141,9 @@ export function RegisterForm() {
   }
 
   function handleGoogleStart() {
-    // Belt-and-braces: the button is disabled without a state, but a keyboard
-    // user could still trigger onClick in some edge cases. Bail early.
-    if (stateID == null) {
-      setError("Please select your state before continuing with Google.");
-      return;
-    }
     setGoogleLoading(true);
-    // Preserve plan + state across the OAuth round-trip by parking them in
-    // sessionStorage. The OAuth callback lands in /onboarding which reads
-    // these to prefill (and skip) the state + plan steps.
     try {
       window.sessionStorage.setItem("rawdrive_pending_plan", plan);
-      window.sessionStorage.setItem("rawdrive_pending_state_id", String(stateID));
     } catch {
       // SessionStorage can fail in private mode — ignore, intent is non-critical.
     }
@@ -231,7 +161,7 @@ export function RegisterForm() {
       {/* ── Plan selection ─────────────────────────────────────────── */}
       <fieldset className="space-y-3">
         <legend className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary">
-          Choose your plan
+          Plans
         </legend>
 
         {/* Segmented pill control — iOS-style, one thumb slides between 4 tabs */}
@@ -334,23 +264,14 @@ export function RegisterForm() {
           );
         })()}
 
-        <p className="ml-1 text-[11px] text-text-tertiary">
-          Need more?{" "}
-          <Link href="/contact" className="font-semibold text-accent hover:underline">
-            Talk to sales about Enterprise
-          </Link>
-        </p>
       </fieldset>
-
-      
 
       {/* ── Google OAuth (primary, above email form) ───────────────── */}
       <button
         type="button"
         onClick={handleGoogleStart}
-        disabled={googleLoading || stateID == null}
-        aria-disabled={googleLoading || stateID == null}
-        title={stateID == null ? "Select your state first" : undefined}
+        disabled={googleLoading}
+        aria-disabled={googleLoading}
         className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-border bg-surface-container-low font-semibold text-text-primary transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -382,70 +303,7 @@ export function RegisterForm() {
           or sign up with email
         </span>
       </div>
-        {/* ── State / Union Territory (required, gates BOTH signup paths) ── */}
-      <div className="space-y-1.5">
-        <label
-          htmlFor="register-state"
-          className="ml-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
-        >
-          State / Union Territory
-          <span className="text-feedback-error" aria-hidden="true">
-            *
-          </span>
-        </label>
-        <div className="relative">
-          <select
-            id="register-state"
-            required
-            value={stateID ?? ""}
-            onChange={(event) => {
-              const v = event.target.value;
-              setStateID(v ? Number(v) : null);
-            }}
-            disabled={statesLoading || !!statesError}
-            aria-invalid={stateID == null}
-            className="input-base w-full appearance-none pr-12 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <option value="" disabled>
-              {statesLoading
-                ? "Loading states…"
-                : statesError
-                  ? "Unable to load states"
-                  : "Select your state or UT"}
-            </option>
-            {states.filter((s) => !s.is_union_territory).length > 0 && (
-              <optgroup label="States">
-                {states
-                  .filter((s) => !s.is_union_territory)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-            {states.filter((s) => s.is_union_territory).length > 0 && (
-              <optgroup label="Union Territories">
-                {states
-                  .filter((s) => s.is_union_territory)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary" />
-        </div>
-        {statesError ? (
-          <p className="ml-1 text-[11px] text-feedback-error">{statesError}</p>
-        ) : (
-          <p className="ml-1 text-[11px] text-text-tertiary">
-            Required — we use this for GST invoicing and regional compliance.
-          </p>
-        )}
-      </div>
+
       {/* ── Email / password form fields ───────────────────────────── */}
       <div className="space-y-1.5">
         <label
@@ -490,13 +348,15 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-phone"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
+          className="ml-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
         >
           Phone number
+          <span className="text-feedback-error" aria-hidden="true">*</span>
         </label>
         <input
           id="register-phone"
           type="tel"
+          required
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           placeholder="98765 43210"
@@ -556,8 +416,7 @@ export function RegisterForm() {
 
       <button
         type="submit"
-        disabled={loading || !email.trim() || !fullName.trim() || !termsAccepted || stateID == null}
-        title={stateID == null ? "Select your state first" : undefined}
+        disabled={loading || !email.trim() || !fullName.trim() || !phone.trim() || !termsAccepted}
         className="btn-primary h-14 w-full font-headline disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? "Creating Account..." : "Create Account"}

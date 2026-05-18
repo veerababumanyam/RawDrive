@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -29,39 +29,27 @@ type RegisterRequest struct {
 	Password string `json:"password"`
 	FullName string `json:"full_name"`
 	Phone    string `json:"phone"`
-	// StateID is the REQUIRED id of the chosen Indian state or union
-	// territory from the `states` table. Must be > 0; the handler rejects
-	// the request otherwise. Actual persistence to users.state_id still
-	// happens during onboarding (POST /onboarding/state) — at register
-	// time we only validate presence so the signup form can enforce the
-	// "pick a state" requirement consistently with the OAuth path.
-	StateID int `json:"state_id"`
 	// Plan is the user's self-serve plan intent captured at signup.
-	// It is validated via normalizePlan; "enterprise" is sales-gated and
-	// must be rejected at this boundary. Carried through the onboarding
-	// flow to seed workspaces.plan_tier at workspace creation time.
+	// Validated via normalizePlan; unknown values fall back to "free".
+	// Carried through onboarding to seed workspaces.plan_tier at creation.
 	Plan string `json:"plan,omitempty"`
 }
 
 // selfServePlans is the whitelist of plan IDs that may be self-registered.
-// Must stay in lockstep with frontend/src/lib/tokens.ts pricingPlans, minus
-// "enterprise" which requires sales contact via /contact.
+// Must stay in lockstep with frontend/src/lib/tokens.ts pricingPlans.
 var selfServePlans = map[string]struct{}{
 	"free":         {},
 	"starter":      {},
 	"professional": {},
 	"business":     {},
+	"enterprise":   {},
 }
 
 // normalizePlan coerces a user-supplied plan id into a canonical self-serve
 // value. Unknown / empty values fall back to "free" so a typo'd query param
-// never blocks signup. "enterprise" is explicitly rejected by returning ok=false;
-// callers surface a 400 with a message directing the user to sales.
+// never blocks signup.
 func normalizePlan(p string) (plan string, ok bool) {
 	p = strings.ToLower(strings.TrimSpace(p))
-	if p == "enterprise" {
-		return "", false
-	}
 	if _, allowed := selfServePlans[p]; allowed {
 		return p, true
 	}
@@ -80,9 +68,6 @@ type RegisterResponse struct {
 	// The frontend uses this to confirm what the user was enrolled under
 	// (e.g., after an unknown plan was coerced to "free").
 	Plan string `json:"plan,omitempty"`
-	// StateID echoes the state id the user picked so onboarding can
-	// preselect it without an extra request.
-	StateID int `json:"state_id,omitempty"`
 }
 
 type VerifyOTPRequest struct {
@@ -139,7 +124,7 @@ type UserProfile struct {
 }
 
 type UserService interface {
-	Create(ctx context.Context, email, password, displayName, phone string, stateID int) (string, error)
+	Create(ctx context.Context, email, password, displayName, phone string) (string, error)
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
 	VerifyPassword(ctx context.Context, email, password string) (string, bool, bool, error)
 	MarkEmailVerified(ctx context.Context, userID string) error
@@ -162,6 +147,12 @@ type WorkspaceLookup interface {
 	GetUserWorkspace(ctx context.Context, userID string) (string, string, string, string, error)
 }
 
+// PlanTierLookup retrieves the subscription plan for a workspace.
+// Returns ("free", nil, nil, nil) when no active subscription row exists.
+type PlanTierLookup interface {
+	GetWorkspacePlanTier(ctx context.Context, workspaceID string) (tier string, startedAt, expiresAt *time.Time, err error)
+}
+
 // ──────────────────────────── Handler ────────────────────────────
 
 type Handler struct {
@@ -170,6 +161,7 @@ type Handler struct {
 	oauth      *OAuthService
 	users      UserService
 	workspaces WorkspaceLookup
+	planTier   PlanTierLookup
 	// F-007 (M17 wave 2): MFA enrollment store for login step-up.
 	// When nil, Login falls back to the pre-M17 password-only flow.
 	mfaEnrollments MFAEnrollmentStore
@@ -191,6 +183,12 @@ func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserS
 // WithWorkspaceLookup attaches a workspace resolver to the handler.
 func (h *Handler) WithWorkspaceLookup(wl WorkspaceLookup) *Handler {
 	h.workspaces = wl
+	return h
+}
+
+// WithPlanTierLookup attaches a plan/subscription resolver used by Me().
+func (h *Handler) WithPlanTierLookup(ptl PlanTierLookup) *Handler {
+	h.planTier = ptl
 	return h
 }
 
@@ -298,19 +296,32 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
 		return
 	}
+	// Fetch subscription plan tier when the workspace is known.
+	var planTier string
+	var subStartedAt, subExpiresAt *time.Time
+	if h.planTier != nil && claims.WorkspaceID != "" {
+		tier, sa, ea, _ := h.planTier.GetWorkspacePlanTier(r.Context(), claims.WorkspaceID)
+		planTier = tier
+		subStartedAt = sa
+		subExpiresAt = ea
+	}
+
 	// Pass selected claims through to the client so the frontend has a
 	// single network call to populate its user-state store.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":                   profile.ID,
-		"email":                profile.Email,
-		"phone":                profile.Phone,
-		"display_name":         profile.DisplayName,
-		"avatar_url":           profile.AvatarURL,
-		"workspace_id":         claims.WorkspaceID,
-		"role":                 claims.Role,
-		"platform_role":        claims.PlatformRole,
-		"state_id":             claims.StateID,
-		"must_change_password": profile.MustChangePassword,
+		"id":                        profile.ID,
+		"email":                     profile.Email,
+		"phone":                     profile.Phone,
+		"display_name":              profile.DisplayName,
+		"avatar_url":                profile.AvatarURL,
+		"workspace_id":              claims.WorkspaceID,
+		"role":                      claims.Role,
+		"platform_role":             claims.PlatformRole,
+		"state_id":                  claims.StateID,
+		"must_change_password":      profile.MustChangePassword,
+		"plan_tier":                 planTier,
+		"subscription_started_at":   subStartedAt,
+		"subscription_expires_at":   subExpiresAt,
 	})
 }
 
@@ -331,27 +342,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// State selection is mandatory at register time. We do not look up
-	// the id in the states table here — that would couple the auth
-	// package to the states repo. Onboarding does the FK write against
-	// users.state_id and will reject a bogus id there; at this layer we
-	// only enforce "a non-zero id was supplied" so the signup UI cannot
-	// bypass the dropdown and submit empty.
-	if req.StateID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state selection is required"})
+	if strings.TrimSpace(req.Phone) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "phone number is required"})
 		return
 	}
 
-	// Validate / canonicalize the self-serve plan intent. Enterprise is
-	// sales-gated and must be rejected here; anything else falls back to
-	// "free" via normalizePlan so a stray query-param typo never blocks signup.
-	canonicalPlan, ok := normalizePlan(req.Plan)
-	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "enterprise plan requires sales contact — please use /contact",
-		})
-		return
-	}
+	// Validate / canonicalize the self-serve plan intent. Unknown values fall
+	// back to "free" so a stray query-param typo never blocks signup.
+	canonicalPlan, _ := normalizePlan(req.Plan)
 
 	// Check if user already exists
 	_, exists, err := h.users.FindByEmail(r.Context(), req.Email)
@@ -364,10 +362,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user with password + mandatory state selection. StateID is
-	// validated > 0 above; persisting it in the same INSERT closes the
-	// gap where onboarding was the sole writer of users.state_id.
-	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone, req.StateID)
+	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone)
 	if err != nil {
 		// Phone is unique in the users table (users_phone_key). A second
 		// registration with an already-taken phone used to surface as an
@@ -400,7 +395,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Message: "User registered successfully. Check your email for the OTP.",
 		UserID:  userID,
 		Plan:    canonicalPlan,
-		StateID: req.StateID,
 	})
 }
 
@@ -645,32 +639,6 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	if h.oauth == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "OAuth not configured"})
 		return
-	}
-
-	// State selection is mandatory at signup — including for Google
-	// registration. The frontend must pass `intent=signup` plus the chosen
-	// `state_id` query param when starting OAuth from /register. Login
-	// (existing user) does NOT pass intent=signup, because state is already
-	// set on their user row and the OAuth callback will find them by email.
-	//
-	// We validate presence server-side rather than threading the id into
-	// the OAuth state map: actual persistence still lives in
-	// /onboarding/state, which runs after the OAuth return and picks up
-	// the stashed value from client-side sessionStorage. The purpose of
-	// THIS check is solely to prevent a curl or tampered form from
-	// starting a Google signup without a state selection — matching the
-	// same 400 behavior as /auth/register.
-	if strings.EqualFold(r.URL.Query().Get("intent"), "signup") {
-		rawStateID := strings.TrimSpace(r.URL.Query().Get("state_id"))
-		if rawStateID == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state selection is required"})
-			return
-		}
-		stateID, convErr := strconv.Atoi(rawStateID)
-		if convErr != nil || stateID <= 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state selection is required"})
-			return
-		}
 	}
 
 	returnTo := sanitizeFrontendOrigin(r.URL.Query().Get("redirect_to"))

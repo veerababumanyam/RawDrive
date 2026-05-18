@@ -6,6 +6,7 @@ import {
   BriefcaseBusiness,
   Coins,
   CreditCard,
+  Crown,
   HardDrive,
   LayoutGrid,
   ShieldCheck,
@@ -64,6 +65,13 @@ const TILES: Tile[] = [
     description: "Usage, quotas, and BYOS (enterprise).",
     icon: HardDrive,
     testId: "settings-tile-storage",
+  },
+  {
+    href: "/settings/subscription",
+    label: "Subscription",
+    description: "Current plan, billing cycle, and upgrade options.",
+    icon: Crown,
+    testId: "settings-tile-subscription",
   },
   {
     href: "/settings/packages",

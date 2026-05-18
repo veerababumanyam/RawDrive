@@ -74,6 +74,16 @@ func (m *mockUserRepo) MarkEmailVerified(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *mockUserRepo) UpdatePasswordByID(_ context.Context, id, hashedPassword string, mustChange bool) error {
+	u, ok := m.users[id]
+	if !ok {
+		return user.ErrNotFound
+	}
+	u.PasswordHash = &hashedPassword
+	u.MustChangePassword = mustChange
+	return nil
+}
+
 func newTestUserService() user.Service {
 	return user.NewService(newMockUserRepo())
 }

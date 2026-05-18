@@ -12,27 +12,23 @@ var (
 	ErrInvalidGSTIN        = errors.New("invalid GSTIN")
 	ErrStepRequired        = errors.New("previous step required")
 	ErrWorkspaceCreateFail = errors.New("workspace creation failed")
-	ErrEnterprisePlan      = errors.New("enterprise plan requires sales contact")
 )
 
 // validSelfServePlans is the whitelist of plan tiers a user may select
-// during self-serve onboarding. Enterprise is excluded because it
-// requires a sales-assisted flow.
+// during self-serve onboarding.
 var validSelfServePlans = map[string]bool{
 	"free":         true,
 	"starter":      true,
 	"professional": true,
 	"business":     true,
+	"enterprise":   true,
 }
 
 // normalizePlanTier validates and normalises the plan tier string.
-// Empty → "free"; "enterprise" → ErrEnterprisePlan; unknown → "free".
+// Empty → "free"; unknown → "free".
 func normalizePlanTier(plan string) (string, error) {
 	if plan == "" {
 		return "free", nil
-	}
-	if plan == "enterprise" {
-		return "", ErrEnterprisePlan
 	}
 	if validSelfServePlans[plan] {
 		return plan, nil

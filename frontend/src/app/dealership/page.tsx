@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Banknote, BadgeCheck, MapPinned, Sparkles } from "lucide-react";
+import DealerApplicationButton from "@/components/DealerApplicationButton";
 
 export const metadata: Metadata = {
   title: "Partner Dealership Program | RawDrive",
@@ -79,9 +80,7 @@ export default function DealershipPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link href="/register" className="btn-primary px-6 py-3 text-sm font-semibold">
-              Start partner application
-            </Link>
+            <DealerApplicationButton />
             <Link
               href="/contact"
               className="btn-tertiary border border-border px-6 py-3 text-sm font-semibold"

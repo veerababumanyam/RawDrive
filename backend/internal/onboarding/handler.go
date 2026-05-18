@@ -109,20 +109,26 @@ func (h *Handler) SetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Paid plans are not applied directly at workspace creation — the user
+	// must complete payment via the upgrade flow before gaining paid-tier
+	// access. We record the intended plan, create the workspace as "free",
+	// and return intended_plan so the client can redirect to the payment flow.
+	intendedPlan := req.Plan
+	workspacePlan := req.Plan
+	if workspacePlan != "free" && workspacePlan != "" {
+		workspacePlan = "free"
+	}
+
 	err := h.svc.SetProfile(r.Context(), userID, ProfileInput{
 		BusinessName: req.BusinessName,
 		GSTIN:        req.GSTIN,
 		DisplayName:  req.DisplayName,
 		Phone:        req.Phone,
-		PlanTier:     req.Plan,
+		PlanTier:     workspacePlan,
 	})
 	if err != nil {
 		if errors.Is(err, ErrInvalidGSTIN) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid GSTIN"})
-			return
-		}
-		if errors.Is(err, ErrEnterprisePlan) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "enterprise plan requires sales contact"})
 			return
 		}
 		if errors.Is(err, ErrStepRequired) {
@@ -144,7 +150,11 @@ func (h *Handler) SetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "profile updated"})
+	resp := map[string]string{"message": "profile updated"}
+	if intendedPlan != "" && intendedPlan != "free" {
+		resp["intended_plan"] = intendedPlan
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {

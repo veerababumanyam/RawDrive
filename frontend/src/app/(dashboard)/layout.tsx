@@ -25,8 +25,6 @@ import {
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import { HeaderClock } from "@/components/layout/HeaderClock";
-import { UploadCreditPill } from "@/components/streams/UploadCreditPill";
-import { CreditPill } from "@/components/streams/CreditPill";
 import {
   AdminSidebar,
   DealerSidebar,
@@ -93,12 +91,16 @@ function getSearchPlaceholder(role: string) {
 
 function RoleSidebar({ role, userInfo, mobileOpen, onMobileClose }: {
   role: string;
-  userInfo: { display_name?: string; email?: string; avatar_url?: string };
+  userInfo: { display_name?: string; email?: string; avatar_url?: string; plan_tier?: string };
   mobileOpen: boolean;
   onMobileClose: () => void;
 }) {
   const name = userInfo.display_name || userInfo.email || "User";
   const avatarUrl = userInfo.avatar_url;
+
+  const tierLabel = userInfo.plan_tier
+    ? userInfo.plan_tier.charAt(0).toUpperCase() + userInfo.plan_tier.slice(1) + " Plan"
+    : undefined;
 
   switch (role) {
     case "super_admin":
@@ -113,7 +115,7 @@ function RoleSidebar({ role, userInfo, mobileOpen, onMobileClose }: {
     case "assistant":
     case "studio_manager":
     default:
-      return <StudioSidebar userName={name} avatarUrl={avatarUrl} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
+      return <StudioSidebar userName={name} avatarUrl={avatarUrl} planBadge={tierLabel} mobileOpen={mobileOpen} onMobileClose={onMobileClose} />;
   }
 }
 
@@ -268,7 +270,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // propagates on the next page load. localStorage was intentionally
   // not used because clearLegacyStoredTokens() actively wipes the
   // "user" key, which silently reset the avatar back to "U".
-  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string; avatar_url?: string }>({});
+  const [userInfo, setUserInfo] = useState<{ display_name?: string; email?: string; avatar_url?: string; plan_tier?: string }>({});
 
   useEffect(() => {
     let active = true;
@@ -308,7 +310,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         });
         if (res.ok && active) {
           const me = await res.json();
-          setUserInfo({ display_name: me.display_name, email: me.email, avatar_url: me.avatar_url || undefined });
+          setUserInfo({ display_name: me.display_name, email: me.email, avatar_url: me.avatar_url || undefined, plan_tier: me.plan_tier || undefined });
           // Dealer first-login: force password change before proceeding
           if (me.must_change_password && !pathname.startsWith("/settings/security")) {
             window.location.assign("/settings/security?change_required=1");
@@ -409,13 +411,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </form>
 
         <div className="flex items-center justify-self-end gap-3">
-          {/* M41 FR-UCRT-10 follow-up: upload credits + streaming minutes
-              pills live inside the dashboard header so they don't
-              overlap the clock/theme/notifications/profile cluster. Each
-              pill self-hides when its backing balance endpoint 404s
-              (feature flag off). */}
-          <UploadCreditPill />
-          <CreditPill />
           {/* Issue #1: dashboard-wide live clock. Mounted in the
               shared header so every authenticated route surfaces the
               current time without per-page work. */}

@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -67,4 +68,27 @@ func (l *AuthLookup) GetUserWorkspace(ctx context.Context, userID string) (strin
 		return "", "", "", platformRole, nil
 	}
 	return "", "", "", "", fmt.Errorf("workspace lookup owner: %w", err)
+}
+
+// GetWorkspacePlanTier returns the plan tier for the workspace plus the
+// active subscription's started_at and expires_at (both may be nil when
+// no subscription row exists). Falls back to "free" when the workspace
+// row has no plan_tier set.
+func (l *AuthLookup) GetWorkspacePlanTier(ctx context.Context, workspaceID string) (tier string, startedAt, expiresAt *time.Time, err error) {
+	err = l.pool.QueryRow(ctx,
+		`SELECT COALESCE(w.plan_tier, 'free'), s.started_at, s.expires_at
+		 FROM workspaces w
+		 LEFT JOIN subscriptions s ON s.workspace_id = w.id AND s.status = 'active'
+		 WHERE w.id = $1
+		 ORDER BY s.started_at DESC NULLS LAST
+		 LIMIT 1`,
+		workspaceID,
+	).Scan(&tier, &startedAt, &expiresAt)
+	if err == pgx.ErrNoRows {
+		return "free", nil, nil, nil
+	}
+	if err != nil {
+		return "free", nil, nil, fmt.Errorf("plan tier lookup: %w", err)
+	}
+	return tier, startedAt, expiresAt, nil
 }

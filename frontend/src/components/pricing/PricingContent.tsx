@@ -144,7 +144,7 @@ export function PricingContent() {
                   {formatPrice(price)}
                 </p>
                 <p className="text-sm text-text-tertiary">
-                  {plan.id === "enterprise" ? "Contact us" : period}
+                  {period}
                 </p>
                 <ul className="mt-6 flex-1 space-y-3">
                   {plan.features.map((f) => (
@@ -163,7 +163,7 @@ export function PricingContent() {
                   }`}
                   style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
                 >
-                  {plan.id === "enterprise" ? "Contact Sales" : "Get Started"}
+                  Get Started
                 </Link>
               </div>
             );

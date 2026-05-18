@@ -72,6 +72,10 @@ func (s *stubUserService) MarkEmailVerified(_ context.Context, _ string) error {
 	return nil
 }
 
+func (s *stubUserService) ChangePassword(_ context.Context, _, _, _ string) error {
+	return nil
+}
+
 func TestUpdateProfile_Success(t *testing.T) {
 	svc := newStubUserService()
 	svc.users["user-123"] = &user.User{

@@ -245,6 +245,11 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		profileHandler := &WorkspaceProfileHandler{DB: deps.Pool}
 		r.Get("/api/v1/workspaces/current/profile", profileHandler.GetProfile)
 		r.Put("/api/v1/workspaces/current/profile", profileHandler.UpdateProfile)
+
+		subHandler := &SubscriptionHandler{DB: deps.Pool}
+		r.Get("/api/v1/workspace/subscription", subHandler.Get)
+
+		r.Post("/api/v1/workspace/subscription/upgrade", deps.SubscriptionUpgradeHandler.Upgrade)
 	}
 
 	// M14: Download routes
@@ -449,6 +454,9 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 			r.Post("/consent/withdraw", consentHandler.WithdrawConsent)
 		}
 	})
+
+	// Subscription upgrade payment webhook (no auth; Razorpay signature-verified).
+	r.Post("/api/v1/webhooks/razorpay/subscription", deps.SubscriptionUpgradeHandler.Webhook)
 }
 
 // M2Dependencies holds all service dependencies for M2 and M11 handlers.
@@ -496,6 +504,9 @@ type M2Dependencies struct {
 	CartService         *service.CartService
 	FulfillmentBridge   *service.ProofingFulfillmentBridge
 	BannerService       *service.BannerService
+	// Subscription upgrade payment (nil when RAZORPAY_* env vars are absent)
+	SubscriptionUpgradeHandler *SubscriptionUpgradeHandler
+
 	// M15 dependencies (nil-safe)
 	ConsentSvc *service.ConsentService
 	// M16 dependencies (nil-safe)

@@ -553,7 +553,48 @@ func (s *pgPasswordStore) IsLocked(ctx context.Context, email string) (bool, err
 	return false, nil
 }
 
+// loadEnvFiles reads KEY=VALUE pairs from the given file paths and injects
+// them into the process environment. Only sets vars that are not already
+// present, so a real environment variable always takes precedence over the
+// file (matches the documented config resolution order: env → file → fail).
+// Missing files are silently skipped. Values may be single- or double-quoted.
+func loadEnvFiles(paths ...string) {
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			k, v, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			k = strings.TrimSpace(k)
+			v = strings.TrimSpace(v)
+			if len(v) >= 2 && ((v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'')) {
+				v = v[1 : len(v)-1]
+			}
+			if os.Getenv(k) == "" {
+				os.Setenv(k, v) //nolint:errcheck
+			}
+		}
+	}
+}
+
 func main() {
+	// Load env vars from .env.cobolt / .env before anything reads os.Getenv.
+	// Process environment always wins; files only fill gaps.
+	loadEnvFiles(
+		".env.cobolt",
+		"../.env.cobolt",
+		".env",
+		"../.env",
+	)
+
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -717,7 +758,9 @@ func main() {
 		log.Println("Google OAuth disabled: missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URL")
 	}
 
-	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).WithWorkspaceLookup(wsLookup)
+	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).
+		WithWorkspaceLookup(wsLookup).
+		WithPlanTierLookup(wsLookup)
 
 	// ──────────────────────── F-007 (M17 wave 2): MFA setup ────────────────────
 	//
@@ -1276,6 +1319,8 @@ func main() {
 			// the AI init block below) is safe and keeps this block self-contained.
 			Pool:     dbPool,
 			FaceRepo: ai.NewFaceRepo(dbPool),
+			// Subscription upgrade payments via Razorpay. Nil when env vars absent.
+			SubscriptionUpgradeHandler: handler.NewSubscriptionUpgradeHandlerFromEnv(dbPool),
 			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
 			// JobRepo is stateless (same pattern as FaceRepo).
 			FaceSvc: nil,
@@ -2057,6 +2102,15 @@ func main() {
 	r.Post("/api/v1/public/leads/{workspaceId}", publicLeadHandler.Submit)
 
 	log.Println("Public lead form endpoint registered")
+
+	// Dealer partnership applications (public — no auth required)
+	var dealerAppEmailSender *email.DealerApplicationSender
+	if smtpCfg != nil {
+		dealerAppEmailSender = email.NewDynamicDealerApplicationSender(smtpReader)
+	}
+	dealerAppHandler := handler.NewDealerApplicationHandler(dealerAppEmailSender)
+	r.Post("/api/v1/public/dealer-applications", dealerAppHandler.Submit)
+	log.Println("Public dealer application endpoint registered")
 
 	// ──────────────────────── Authenticated Storage Proxy ────────────────
 	// Streams storage file bytes through the backend with JWT auth so

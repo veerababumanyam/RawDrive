@@ -78,7 +78,8 @@ export function StudioSidebar({ userName, avatarUrl, planBadge, mobileOpen, onMo
         <SidebarAvatar
           name={userName}
           avatarUrl={avatarUrl}
-          badge={planBadge || "Pro Plan"}
+          badge={planBadge || "Free Plan"}
+          badgeHref="/settings/subscription"
         />
       }
     />

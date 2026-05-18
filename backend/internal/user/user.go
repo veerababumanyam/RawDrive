@@ -43,10 +43,6 @@ type CreateUserInput struct {
 	Phone       string
 	Password    string
 	DisplayName string
-	// StateID threads the mandatory state selection from the register
-	// handler through to the SQL INSERT. 0 means "not provided" (the
-	// register handler already rejects <= 0 before calling Create).
-	StateID int
 }
 
 type UpdateUserInput struct {
@@ -95,11 +91,6 @@ func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, err
 		Email:       input.Email,
 		Phone:       input.Phone,
 		DisplayName: input.DisplayName,
-	}
-
-	if input.StateID > 0 {
-		sid := input.StateID
-		u.StateID = &sid
 	}
 
 	if input.Password != "" {
