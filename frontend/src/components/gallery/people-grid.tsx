@@ -194,27 +194,55 @@ function PersonTile({
   );
 }
 
-// computeCropStyle uses the face bounding box (image-pixel coords) +
-// the asset's known dimensions to position the cover thumbnail so the
-// face sits centered in the square tile. We use object-position rather
-// than clip-path so the image still fills the tile (no transparent
-// gaps) and the crop scales with the tile size.
+// computeCropStyle zooms the cover thumbnail in on the face area so the
+// People-tab tile shows JUST the person's face, not the whole photo with
+// a slightly-shifted focal point.
 //
-// If bbox or asset dimensions are missing we fall back to object-position:
-// center, which is the same default as a plain <img> with object-cover.
+// Math:
+//   - The <img> is `object-fit: cover` filling a square tile of size T.
+//   - cover-fit scales the image by s_cover = T / min(W, H) so the image
+//     covers the tile.
+//   - The face in fitted-tile coords is then max(bw, bh) * s_cover wide.
+//   - We want the face area to fill ~70% of the tile (some headroom so
+//     hair / chin aren't cut off). The additional CSS `transform: scale(Z)`
+//     gets us there:
+//        Z = 0.7 * T / (max(bw, bh) * s_cover)
+//          = 0.7 * min(W, H) / max(bw, bh)
+//   - transform-origin is set to the SAME point as object-position so
+//     when the image is scaled it stays centered on the face. Without
+//     matching origins, scale() would zoom from the tile's geometric
+//     center and the face would slide out of frame.
+//   - Z is capped to [1, 4]. The ceiling prevents pixelation when the
+//     thumbnail source is 600px and the face is tiny (4× zoom of a
+//     150px-wide face in a 2400px-wide source = ~37px in the tile —
+//     barely usable; anything beyond that just blurs).
+//
+// Fallback: if asset dimensions or bbox are missing, return a centered
+// object-position with no zoom — same as a plain <img object-cover>.
 function computeCropStyle(
   asset: Asset | undefined,
   bbox: SampleBoundingBox | undefined,
 ): React.CSSProperties {
-  if (!asset?.width || !asset?.height || !bbox) {
+  if (!asset?.width || !asset?.height || !bbox || (bbox.w === 0 && bbox.h === 0)) {
     return { objectPosition: "center" };
   }
-  // Center of the face in image-relative coordinates [0..1].
-  const cx = (bbox.x + bbox.w / 2) / asset.width;
-  const cy = (bbox.y + bbox.h / 2) / asset.height;
-  // object-position takes percentages 0–100; clamp so an off-center
-  // face near the image edge doesn't get pushed all the way out.
-  const px = Math.max(0, Math.min(100, cx * 100));
-  const py = Math.max(0, Math.min(100, cy * 100));
-  return { objectPosition: `${px}% ${py}%` };
+  // Face center in image-relative coords [0..1] → percentages.
+  const cxPct = ((bbox.x + bbox.w / 2) / asset.width) * 100;
+  const cyPct = ((bbox.y + bbox.h / 2) / asset.height) * 100;
+  // Clamp so off-center faces near the edge stay visible.
+  const px = Math.max(0, Math.min(100, cxPct));
+  const py = Math.max(0, Math.min(100, cyPct));
+
+  // Zoom factor — see comment block above for the derivation.
+  const minImgDim = Math.min(asset.width, asset.height);
+  const maxBboxDim = Math.max(bbox.w, bbox.h);
+  const FACE_FILL = 0.7; // target: face occupies ~70% of tile
+  const rawZoom = (FACE_FILL * minImgDim) / Math.max(1, maxBboxDim);
+  const zoom = Math.max(1, Math.min(4, rawZoom));
+
+  return {
+    objectPosition: `${px}% ${py}%`,
+    transform: `scale(${zoom.toFixed(2)})`,
+    transformOrigin: `${px}% ${py}%`,
+  };
 }
