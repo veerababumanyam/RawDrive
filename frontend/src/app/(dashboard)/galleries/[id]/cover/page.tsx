@@ -117,12 +117,21 @@ const TITLE_SIZE_MAX = 96;
 const SUBTITLE_SIZE_MIN = 10;
 const SUBTITLE_SIZE_MAX = 40;
 
+// Editor-offered grid layouts. The schema's `layout` field still
+// accepts masonry/carousel (the public viewer can render them) — they
+// just aren't exposed as new editor choices anymore. Legacy galleries
+// with masonry/carousel saved continue to render correctly on the
+// public viewer; the editor migrates them to "grid" on first load via
+// configFromGallery so the picker has a valid selection.
 const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
-  { id: "masonry", label: "Masonry" },
   { id: "grid", label: "Grid" },
   { id: "justified", label: "Justified" },
-  { id: "carousel", label: "Carousel" },
 ];
+
+// Auto-default gap (px) when the gap slider was removed 2026-05-18.
+// 8px is a tight-but-readable default that mirrors what the public
+// viewer renders with grid.gap=8 — typical wedding gallery spacing.
+const DEFAULT_GRID_GAP = 8;
 
 const DEFAULT_CONFIG: DesignConfig = {
   theme: { id: "liquid-glass", variant: "dark", accentColor: "" },
@@ -146,7 +155,7 @@ const DEFAULT_CONFIG: DesignConfig = {
     titleSize: 48,
     subtitleSize: 18,
   },
-  grid: { layout: "masonry", columns: 3, gap: 8, showInfo: false },
+  grid: { layout: "grid", columns: 3, gap: DEFAULT_GRID_GAP, showInfo: false },
   version: 2,
 };
 
@@ -194,6 +203,15 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   // a coverAssetId — otherwise the studio's choice is the source of truth.
   if (gallery.cover_asset_id && !merged.cover.assetId) {
     merged.cover.assetId = gallery.cover_asset_id;
+  }
+
+  // Editor only offers "grid" / "justified" as of 2026-05-18. Legacy
+  // galleries with masonry/carousel saved would land on the picker with
+  // nothing selected, which is confusing. Migrate them to "grid" on read
+  // so the editor always shows a valid current choice. The public viewer
+  // schema still accepts all four — this clamp is editor-only.
+  if (merged.grid.layout !== "grid" && merged.grid.layout !== "justified") {
+    merged.grid.layout = "grid";
   }
 
   return merged;
@@ -948,23 +966,6 @@ function PanelGrid({
         />
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label htmlFor="cover-grid-gap" className="text-xs font-medium text-on-surface-variant">Gap</label>
-          <span className="text-xs">{config.grid.gap}px</span>
-        </div>
-        <input
-          id="cover-grid-gap"
-          type="range"
-          min={0}
-          max={32}
-          step={2}
-          value={config.grid.gap}
-          onChange={(e) => setConfig((c) => ({ ...c, grid: { ...c.grid, gap: Number(e.target.value) } }))}
-          className="w-full accent-primary"
-        />
-      </div>
-
       <label className="flex items-center gap-2 border-t border-white/10 pt-4 text-xs text-on-surface-variant">
         <input
           type="checkbox"
@@ -977,13 +978,14 @@ function PanelGrid({
       {/* Live grid preview — renders the user's actual gallery assets in
           the chosen layout so they see exactly how the published page
           will arrange photos. Mirrors the rules in public-gallery-grid:
-          masonry uses CSS columns, grid uses N square cells, justified
-          uses varied-width flex rows, carousel uses a horizontal strip. */}
+          grid uses N square cells, justified uses varied-width flex rows.
+          (Masonry/carousel branches retained inside GridLivePreview for
+          legacy galleries that have those saved.) */}
       <div className="space-y-2 border-t border-white/10 pt-4">
         <div className="flex items-baseline justify-between">
           <h3 className="text-sm font-semibold">Preview</h3>
           <span className="text-[10px] text-on-surface-variant/70">
-            {config.grid.layout} · {config.grid.columns} col · {config.grid.gap}px gap
+            {config.grid.layout} · {config.grid.columns} col
           </span>
         </div>
         <GridLivePreview grid={deferredGrid} assets={assets} token={token} />
