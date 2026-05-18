@@ -366,10 +366,15 @@ export default function CoverDesignPage() {
     config.theme.variant === "dark" ? "rgba(0,0,0,0.35)"
     : config.theme.variant === "auto" ? "rgba(0,0,0,0.15)"
     : null;
-  const dragAlignAnchor =
-    config.cover.textAlign === "center" ? "-50%"
-    : config.cover.textAlign === "right" ? "-100%"
-    : "0%";
+  // Drag anchor is always the CENTER of the text bounding box, regardless
+  // of textAlign. Earlier behavior used textAlign to pick the anchor edge
+  // (left = left edge, right = right edge), which made dragging feel
+  // disconnected — the user's pointer grabbed the text but a different
+  // edge tracked their finger. Center anchoring matches how Canva / Figma
+  // / Keynote handle freely-positioned text: the object is grabbed at its
+  // visual middle. textAlign still controls multi-line alignment inside
+  // the box; it just no longer affects WHERE the box sits relative to the
+  // saved position.
   const textShadowStyle = config.cover.textShadow
     ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
     : undefined;
@@ -457,17 +462,25 @@ export default function CoverDesignPage() {
               <div className="pointer-events-none absolute inset-0" style={{ background: variantScrim }} />
             )}
 
-            {/* Title overlay — draggable */}
+            {/* Title overlay — draggable. whitespace: pre prevents the
+                browser from soft-wrapping single-line titles when they get
+                close to the canvas edge during a drag. Earlier behavior
+                used whitespace-pre-wrap + maxWidth:80%, so "Ram Wedding"
+                would split mid-drag into "Ram" / "Wedding" the moment the
+                container's available width fell below the text's natural
+                width — felt like the title was fighting back against the
+                user. Multi-line titles work by typing an explicit newline,
+                which `pre` preserves. */}
             {config.cover.title && (
               <h2
                 data-handle="title"
-                className={`absolute touch-none whitespace-pre-wrap font-semibold tracking-tight transition-shadow ${
+                className={`absolute touch-none font-semibold tracking-tight transition-shadow ${
                   activeText === "title" && tab === "text" ? "ring-2 ring-primary ring-offset-2 ring-offset-black/30" : ""
                 }`}
                 style={{
                   left: `${config.cover.titlePosition.x}%`,
                   top: `${config.cover.titlePosition.y}%`,
-                  transform: `translate(${dragAlignAnchor}, -50%)`,
+                  transform: "translate(-50%, -50%)",
                   fontFamily: `'${config.typography.headingFont}', serif`,
                   fontSize: `${config.typography.titleSize}px`,
                   color: config.cover.textColor,
@@ -476,9 +489,9 @@ export default function CoverDesignPage() {
                   cursor: "grab",
                   padding: "4px 8px",
                   borderRadius: "4px",
-                  maxWidth: "80%",
                   lineHeight: 1.1,
                   userSelect: "none",
+                  whiteSpace: "pre",
                 }}
                 onClick={() => { setActiveText("title"); setTab("text"); }}
               >
@@ -486,17 +499,17 @@ export default function CoverDesignPage() {
               </h2>
             )}
 
-            {/* Subtitle overlay — draggable */}
+            {/* Subtitle overlay — draggable. Same wrap rules as title. */}
             {config.cover.subtitle && (
               <p
                 data-handle="subtitle"
-                className={`absolute touch-none whitespace-pre-wrap transition-shadow ${
+                className={`absolute touch-none transition-shadow ${
                   activeText === "subtitle" && tab === "text" ? "ring-2 ring-primary ring-offset-2 ring-offset-black/30" : ""
                 }`}
                 style={{
                   left: `${config.cover.subtitlePosition.x}%`,
                   top: `${config.cover.subtitlePosition.y}%`,
-                  transform: `translate(${dragAlignAnchor}, -50%)`,
+                  transform: "translate(-50%, -50%)",
                   fontFamily: `'${config.typography.bodyFont}', sans-serif`,
                   fontSize: `${config.typography.subtitleSize}px`,
                   color: config.cover.textColor,
@@ -505,9 +518,9 @@ export default function CoverDesignPage() {
                   cursor: "grab",
                   padding: "4px 8px",
                   borderRadius: "4px",
-                  maxWidth: "80%",
                   lineHeight: 1.3,
                   userSelect: "none",
+                  whiteSpace: "pre",
                 }}
                 onClick={() => { setActiveText("subtitle"); setTab("text"); }}
               >

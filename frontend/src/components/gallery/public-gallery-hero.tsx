@@ -183,16 +183,13 @@ export function PublicGalleryHero({
     const textShadow = design.cover?.textShadow
       ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
       : undefined;
-    // Convert textAlign to the CSS translate that anchors the overlay at
-    // the drop point: left = anchor on left edge, right = anchor on right,
-    // center = anchor on midpoint. Same convention the Cover & Design
-    // editor uses so the drag preview matches the published hero.
-    const dragAlignAnchor =
-      effectiveAlign === "center"
-        ? "-50%"
-        : effectiveAlign === "right"
-          ? "-100%"
-          : "0%";
+    // Title and subtitle are anchored at their CENTER regardless of
+    // textAlign — matches the Cover & Design editor's drag behavior
+    // (Canva/Figma-style: object grabbed at visual middle). textAlign
+    // only controls multi-line internal alignment, not anchor edge.
+    // Prior to 2026-05-18 the anchor varied by textAlign which made
+    // drags feel disconnected and let titles wrap as they hit the
+    // canvas edge.
 
     return (
       // Honor the cover style's declared aspectRatio so the container
@@ -243,17 +240,17 @@ export function PublicGalleryHero({
           <div className="absolute inset-0 z-10">
             {titlePos && (
               <h1
-                className="absolute whitespace-pre-wrap font-semibold tracking-tight"
+                className="absolute font-semibold tracking-tight"
                 style={{
                   left: `${titlePos.x}%`,
                   top: `${titlePos.y}%`,
-                  transform: `translate(${dragAlignAnchor}, -50%)`,
+                  transform: "translate(-50%, -50%)",
                   fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
                   fontSize: titleSize ? `${titleSize}px` : undefined,
                   color: textColor || accent || "#ffffff",
                   textShadow,
-                  maxWidth: "80%",
                   textAlign: effectiveAlign,
+                  whiteSpace: "pre",
                 }}
               >
                 {title}
@@ -261,17 +258,17 @@ export function PublicGalleryHero({
             )}
             {subtitle && subtitlePos && (
               <p
-                className="absolute whitespace-pre-wrap"
+                className="absolute"
                 style={{
                   left: `${subtitlePos.x}%`,
                   top: `${subtitlePos.y}%`,
-                  transform: `translate(${dragAlignAnchor}, -50%)`,
+                  transform: "translate(-50%, -50%)",
                   fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
                   color: textColor || "#ffffff",
                   textShadow,
-                  maxWidth: "80%",
                   textAlign: effectiveAlign,
+                  whiteSpace: "pre",
                 }}
               >
                 {subtitle}
