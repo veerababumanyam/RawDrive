@@ -98,14 +98,39 @@ interface DesignConfig {
   version: number;
 }
 
-const FONT_PAIRINGS = [
-  { id: "elegant", heading: "Playfair Display", body: "Inter", label: "Elegant" },
-  { id: "editorial", heading: "Cormorant Garamond", body: "Lato", label: "Editorial" },
-  { id: "minimal", heading: "Manrope", body: "Inter", label: "Minimal" },
-  { id: "bold", heading: "Montserrat", body: "Open Sans", label: "Bold" },
-  { id: "soft", heading: "Lora", body: "Source Sans Pro", label: "Soft" },
-  { id: "modern", heading: "DM Sans", body: "DM Mono", label: "Modern" },
-] as const;
+// Flat, deduped font catalog. Used by the per-element font selectors
+// inside PanelText so title and subtitle each pick independently — the
+// older "Font pairing" concept was removed 2026-05-18. Order groups
+// serif headlines first, sans-serif next, mono last so the dropdown
+// reads top-down by visual weight.
+const FONT_OPTIONS: { name: string; classification: "serif" | "sans" | "mono" }[] = [
+  { name: "Playfair Display", classification: "serif" },
+  { name: "Cormorant Garamond", classification: "serif" },
+  { name: "Lora", classification: "serif" },
+  { name: "Manrope", classification: "sans" },
+  { name: "Montserrat", classification: "sans" },
+  { name: "DM Sans", classification: "sans" },
+  { name: "Inter", classification: "sans" },
+  { name: "Lato", classification: "sans" },
+  { name: "Open Sans", classification: "sans" },
+  { name: "Source Sans Pro", classification: "sans" },
+  { name: "DM Mono", classification: "mono" },
+];
+
+// Build the font-family CSS string for an option, using a sensible
+// fallback class based on the font's classification. Serif heads
+// fall back to Georgia, sans bodies to system-ui, mono to ui-monospace.
+function fontFamilyFor(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const def = FONT_OPTIONS.find((f) => f.name === name);
+  const fallback =
+    def?.classification === "serif"
+      ? "Georgia, serif"
+      : def?.classification === "mono"
+        ? "ui-monospace, Menlo, monospace"
+        : "Inter, system-ui, sans-serif";
+  return `'${name}', ${fallback}`;
+}
 
 const TITLE_SIZE_MIN = 16;
 const TITLE_SIZE_MAX = 96;
@@ -701,14 +726,13 @@ function PanelText({
   activeText: "title" | "subtitle";
   setActiveText: (t: "title" | "subtitle") => void;
 }) {
-  const activePairing = FONT_PAIRINGS.find((p) => p.id === config.typography.pairingId);
-  // 2026-05-18: Typography panel absorbed into Text. Font pairing and size
-  // sliders are all about the title/subtitle the user just typed — keeping
-  // them in a separate tab forced a context switch every time someone
-  // wanted to make the title bigger. Single Text panel now: each element
-  // (Title, Subtitle) has its own group with input + size + color, then a
-  // shared "Style" group at the bottom for the pairing/alignment/shadow
-  // knobs that apply to both.
+  // 2026-05-18 (v2): Typography panel absorbed into Text. Each element
+  // (Title, Subtitle) is its own card: text input → font dropdown →
+  // size slider + color swatch. The shared style block earlier this
+  // session held a "Font pairing" select, an Alignment row, and a
+  // readability-shadow toggle — pairing is gone (fonts now live in
+  // each card), alignment is gone (drag-positioned overlays don't
+  // need it), only the shadow toggle remains, inlined at the bottom.
   // Treat the active-text state as a hint to the preview overlay rather
   // than as a panel-mode switch: both inputs are visible at once, focusing
   // an input updates the active-text marker so the preview highlights
@@ -751,6 +775,30 @@ function PanelText({
           placeholder="Your gallery title"
           className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
         />
+
+        {/* Per-element font picker — replaces the shared "Font pairing"
+            dropdown that used to live in a separate Style section. Each
+            element now owns its font choice; the option text is styled
+            in the font itself so the picker self-documents. */}
+        <div className="space-y-1.5">
+          <label htmlFor="cover-title-font" className="text-[11px] text-on-surface-variant">Font</label>
+          <select
+            id="cover-title-font"
+            value={config.typography.headingFont}
+            onChange={(e) =>
+              setConfig((c) => ({ ...c, typography: { ...c.typography, headingFont: e.target.value } }))
+            }
+            onFocus={() => setActiveText("title")}
+            className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            style={{ fontFamily: fontFamilyFor(config.typography.headingFont) }}
+          >
+            {FONT_OPTIONS.map((f) => (
+              <option key={f.name} value={f.name} style={{ fontFamily: fontFamilyFor(f.name) }}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div className="space-y-1.5">
@@ -826,6 +874,26 @@ function PanelText({
           className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
         />
 
+        <div className="space-y-1.5">
+          <label htmlFor="cover-subtitle-font" className="text-[11px] text-on-surface-variant">Font</label>
+          <select
+            id="cover-subtitle-font"
+            value={config.typography.bodyFont}
+            onChange={(e) =>
+              setConfig((c) => ({ ...c, typography: { ...c.typography, bodyFont: e.target.value } }))
+            }
+            onFocus={() => setActiveText("subtitle")}
+            className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            style={{ fontFamily: fontFamilyFor(config.typography.bodyFont) }}
+          >
+            {FONT_OPTIONS.map((f) => (
+              <option key={f.name} value={f.name} style={{ fontFamily: fontFamilyFor(f.name) }}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -866,77 +934,25 @@ function PanelText({
         </div>
       </section>
 
-      {/* ───────── SHARED STYLE ─────────
-          Controls that apply to BOTH title and subtitle: the font pair
-          (heading font for title, body font for subtitle), the text
-          alignment for the dragged overlay, and the readability shadow
-          toggle. Visually subordinate to the two element groups above
-          via heading weight + no card border. */}
-      <section className="space-y-4 border-t border-white/10 pt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-          Style
-        </h3>
-
-        <div className="space-y-1.5">
-          <label htmlFor="cover-font-pairing" className="text-[11px] text-on-surface-variant">
-            Font pairing
-          </label>
-          <select
-            id="cover-font-pairing"
-            value={config.typography.pairingId}
-            onChange={(e) => {
-              const p = FONT_PAIRINGS.find((x) => x.id === e.target.value);
-              if (!p) return;
-              setConfig((c) => ({
-                ...c,
-                typography: {
-                  ...c.typography,
-                  pairingId: p.id,
-                  headingFont: p.heading,
-                  bodyFont: p.body,
-                },
-              }));
-            }}
-            className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            style={activePairing ? { fontFamily: `'${activePairing.heading}', serif` } : undefined}
-          >
-            {FONT_PAIRINGS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label} — {p.heading} / {p.body}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] text-on-surface-variant">Alignment</span>
-          <div className="flex gap-0.5 rounded-md border border-white/10 p-0.5">
-            {(["left", "center", "right"] as TextAlign[]).map((a) => (
-              <button
-                key={a}
-                onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, textAlign: a } }))}
-                className={`h-7 w-9 rounded text-[11px] font-medium capitalize transition-colors ${
-                  config.cover.textAlign === a ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-white/5"
-                }`}
-                aria-pressed={config.cover.textAlign === a}
-                aria-label={`Align ${a}`}
-              >
-                {a === "left" ? "L" : a === "center" ? "C" : "R"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label className="flex cursor-pointer items-center justify-between gap-3">
-          <span className="text-[11px] text-on-surface-variant">Readability shadow</span>
-          <input
-            type="checkbox"
-            checked={config.cover.textShadow}
-            onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textShadow: e.target.checked } }))}
-            className="h-4 w-4 cursor-pointer accent-primary"
-          />
-        </label>
-      </section>
+      {/* 2026-05-18: shared Style section collapsed.
+          - Font pairing dropdown removed — fonts are now per-element
+            inside each card (title.headingFont, subtitle.bodyFont).
+          - Alignment row removed — with drag-positioned overlays, single-
+            line title/subtitle don't show internal alignment, and the
+            override no longer earns its real estate. textAlign stays in
+            saved state defaulted to "center" so the public viewer's
+            anchor math keeps working.
+          - Only the readability-shadow toggle remained shared, so it
+            lives inline at the bottom of the panel as a compact row. */}
+      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <span className="text-[11px] font-medium text-on-surface-variant">Readability shadow</span>
+        <input
+          type="checkbox"
+          checked={config.cover.textShadow}
+          onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textShadow: e.target.checked } }))}
+          className="h-4 w-4 cursor-pointer accent-primary"
+        />
+      </label>
 
       <p className="text-[11px] text-on-surface-variant/80">
         Drag the title or subtitle on the preview to reposition.
