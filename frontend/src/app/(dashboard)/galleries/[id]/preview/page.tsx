@@ -284,6 +284,7 @@ export default function GalleryPreviewPage({
           maxSelections={gallery.max_selections || 0}
           downloadEnabled={gallery.download_enabled !== false}
           design={designConfig}
+          watermark={gallery.watermark_config as Record<string, unknown> | null}
         />
       </div>
     </div>

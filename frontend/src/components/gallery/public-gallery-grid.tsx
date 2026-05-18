@@ -198,6 +198,15 @@ interface Props {
   // that shipped before the design studio was wired through to the
   // public viewer.
   design?: PublicDesignConfig | null;
+  // 2026-05-18: Watermark config from gallery.watermark_config (set on
+  // /galleries/[id]/settings). When enabled, an absolutely-positioned
+  // CSS overlay renders over every grid tile (and the lightbox <img>).
+  // Shape we read: { enabled?: boolean, text?: string, opacity?: number
+  // (10..90), position?: "center"|"bottom-right"|"bottom-left"|"diagonal" }.
+  // We accept the loose Record<string, unknown> from the gallery row
+  // rather than a typed interface so settings-side schema additions
+  // (font, color, use_logo) flow through without a Props change.
+  watermark?: Record<string, unknown> | null;
 }
 
 // Bound the studio's columns value into the responsive scale the public
@@ -279,7 +288,88 @@ function designGridItemStyle(grid: GridConfig | undefined): React.CSSProperties 
 
 type ViewMode = "grid" | "map";
 
-export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null }: Props) {
+// Watermark overlay primitive — shared by every grid tile (and could be
+// reused in the lightbox / preview chrome in a follow-up). Renders the
+// configured text as an absolutely-positioned white-with-shadow label
+// at one of four positions:
+//   - center           — centered, large, used as a "PROOF" deterrent
+//   - bottom-right     — small corner mark (default)
+//   - bottom-left      — same, opposite corner
+//   - diagonal         — rotated 45° tile across the whole frame for
+//                        max deterrence against right-click + crop
+// pointer-events:none so the tile's click handler (lightbox open,
+// proofing select) keeps working through the overlay. select-none +
+// user-select:none prevent the watermark text from being selected
+// and copied separately from the image.
+function WatermarkOverlay({
+  text,
+  opacity,
+  position,
+}: {
+  text: string;
+  opacity: number;
+  position: string;
+}) {
+  const shared = "pointer-events-none absolute select-none font-semibold tracking-widest uppercase text-white";
+  // text-shadow on both axes survives both bright and dark photos
+  // without needing a backdrop scrim — keeps the photo visible.
+  const style: React.CSSProperties = {
+    opacity,
+    textShadow: "0 1px 4px rgba(0,0,0,0.6), 0 -1px 4px rgba(0,0,0,0.4)",
+  };
+
+  if (position === "center") {
+    return (
+      <div
+        aria-hidden
+        style={style}
+        className={`${shared} inset-0 flex items-center justify-center text-2xl sm:text-3xl md:text-4xl`}
+      >
+        {text}
+      </div>
+    );
+  }
+  if (position === "diagonal") {
+    // -45° rotation. Wide letter-spacing + repeated text once would
+    // approach a tiled effect; keeping it as one rotated line is the
+    // safe middle ground (no overflow on very wide tiles).
+    return (
+      <div
+        aria-hidden
+        style={{ ...style, transform: "translate(-50%, -50%) rotate(-30deg)", left: "50%", top: "50%" }}
+        className={`${shared} text-2xl sm:text-3xl whitespace-nowrap`}
+      >
+        {text}
+      </div>
+    );
+  }
+  // bottom-left / bottom-right (default). Padded inward from the
+  // edge so the text doesn't bleed against the tile's rounded corner.
+  const corner = position === "bottom-left" ? "bottom-3 left-3" : "bottom-3 right-3";
+  return (
+    <div aria-hidden style={style} className={`${shared} ${corner} text-xs sm:text-sm`}>
+      {text}
+    </div>
+  );
+}
+
+export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null, watermark = null }: Props) {
+  // Memoize the resolved watermark display state. Returns null when
+  // disabled / misconfigured so the render path can short-circuit to
+  // a plain <img>. Keeping the derivation in one place means the
+  // grid and lightbox both read the same canonical values.
+  const watermarkOverlay = (() => {
+    if (!watermark || watermark.enabled !== true) return null;
+    const rawText = typeof watermark.text === "string" ? watermark.text.trim() : "";
+    if (rawText.length === 0) return null;
+    const rawOpacity = typeof watermark.opacity === "number" ? watermark.opacity : 40;
+    // Settings UI stores opacity as 10..90 (integer percent); clamp +
+    // convert to a CSS 0..1 number. Caps at 0.9 because a fully-
+    // opaque overlay defeats the point of seeing the photo.
+    const opacity = Math.max(0.1, Math.min(0.9, rawOpacity / 100));
+    const position = typeof watermark.position === "string" ? watermark.position : "bottom-right";
+    return { text: rawText, opacity, position };
+  })();
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -679,19 +769,35 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                   </div>
                 )}
                 {thumbUrl ? (
-                  <img
-                    src={thumbUrl}
-                    alt={asset.filename}
-                    width={asset.width || undefined}
-                    height={asset.height || undefined}
-                    loading="lazy"
-                    decoding="async"
-                    className={
-                      design?.grid?.layout === "grid"
-                        ? "absolute inset-0 h-full w-full object-cover"
-                        : "w-full h-auto object-cover"
-                    }
-                  />
+                  <>
+                    <img
+                      src={thumbUrl}
+                      alt={asset.filename}
+                      width={asset.width || undefined}
+                      height={asset.height || undefined}
+                      loading="lazy"
+                      decoding="async"
+                      className={
+                        design?.grid?.layout === "grid"
+                          ? "absolute inset-0 h-full w-full object-cover"
+                          : "w-full h-auto object-cover"
+                      }
+                    />
+                    {/* Watermark overlay — purely client-side render
+                        of gallery.watermark_config.text on top of every
+                        tile when enabled. pointer-events:none keeps
+                        tile click handlers (lightbox, proofing-select)
+                        working. The text-shadow doubles the readability
+                        on both bright and dark photos without needing
+                        a full backdrop. */}
+                    {watermarkOverlay && (
+                      <WatermarkOverlay
+                        text={watermarkOverlay.text}
+                        opacity={watermarkOverlay.opacity}
+                        position={watermarkOverlay.position}
+                      />
+                    )}
+                  </>
                 ) : (
                   <div
                     className="w-full aspect-[4/3] bg-surface-sunken flex items-center justify-center"

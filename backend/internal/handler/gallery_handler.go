@@ -337,6 +337,21 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 2026-05-18: watermark_config passthrough. The gallery settings UI
+	// (frontend/src/app/(dashboard)/galleries/[id]/settings/page.tsx)
+	// has had the toggle + text + opacity + position controls wired
+	// since M19, but this handler's accepted-fields list never included
+	// watermark_config — every toggle silently vanished server-side and
+	// the UI reverted on the subsequent setGallery() with the unchanged
+	// row. Now decoded directly into the generic map field so the
+	// frontend can extend the schema (e.g. use_logo, font_family) without
+	// any further Go change.
+	if value, ok := raw["watermark_config"]; ok {
+		if err := json.Unmarshal(value, &gallery.WatermarkConfig); err != nil {
+			http.Error(w, `{"error":"invalid watermark_config"}`, http.StatusBadRequest)
+			return
+		}
+	}
 	for _, field := range []string{"primary_contact_id", "contact_id", "project_id", "event_id", "deal_id", "invoice_id"} {
 		present, value, err := parseOptionalUUIDRaw(raw, field)
 		if err != nil {
