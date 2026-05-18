@@ -17,14 +17,16 @@ type Section =
   | { label: string; absoluteHref: string };
 
 const sections: Section[] = [
-  // Overview — empty path points to the current gallery's detail page
-  // (/galleries/{id}). Sits first so it's the default option when the
-  // user opens the mobile dropdown on the gallery's main page.
-  { label: "Overview", path: "" },
-  // Galleries — absolute href, navigates back to the gallery list. Second
-  // so the user can always return to "all my galleries" with one tap
-  // regardless of which sub-page they're on.
+  // Galleries — absolute href back to the list. Sits first 2026-05-18
+  // so the dropdown reads top-down by scope: "all my galleries" → "this
+  // gallery's overview" → "this gallery's sub-pages". One tap to escape
+  // to the list regardless of which sub-page the user is on.
   { label: "Galleries", absoluteHref: "/galleries" },
+  // Overview — empty path points to the current gallery's detail page
+  // (/galleries/{id}). Active-match for this option fires when pathname
+  // === base (handled in isActive), so the dropdown auto-selects Overview
+  // when the user is on the gallery's main page.
+  { label: "Overview", path: "" },
   { label: "Cover & Design", path: "/cover" },
   { label: "AI", path: "/ai" },
   { label: "Settings", path: "/settings" },

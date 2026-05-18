@@ -21,8 +21,8 @@ describe("GalleryWorkspaceNav", () => {
 
     const nav = screen.getByRole("navigation", { name: "Gallery workspace" });
     for (const label of [
-      "Overview",
       "Galleries",
+      "Overview",
       "Cover & Design",
       "AI",
       "Settings",
@@ -30,11 +30,11 @@ describe("GalleryWorkspaceNav", () => {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
     }
 
+    // Galleries leads back to the list (first, top-down by scope).
     // Overview points to the current gallery's detail page so users can
-    // jump back to the main view from any sub-page; Galleries is the
-    // escape hatch out to the gallery list.
-    expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/galleries/gallery-1");
+    // jump back to the main view from any sub-page.
     expect(within(nav).getByRole("link", { name: "Galleries" })).toHaveAttribute("href", "/galleries");
+    expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/galleries/gallery-1");
     expect(within(nav).getByRole("link", { name: "Cover & Design" })).toHaveAttribute("href", "/galleries/gallery-1/cover");
     expect(within(nav).getByRole("link", { name: "AI" })).toHaveAttribute("href", "/galleries/gallery-1/ai");
     expect(within(nav).queryByRole("link", { name: "Gallery" })).toBeNull();
