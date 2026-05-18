@@ -1,3 +1,5 @@
+import { authFetch } from "@/lib/api/authFetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // ---- Types ----
@@ -104,21 +106,25 @@ export interface AIConfig {
 
 // ---- Face Detection & Clustering ----
 
-export async function triggerFaceDetect(token: string, assetIds: string[], galleryId?: string): Promise<{ job_id: string; status: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/face-detect`, {
+// All cluster endpoints go through authFetch — same reason every other
+// authenticated dashboard fetcher does: the in-memory token cache is
+// empty on a fresh tab load until refreshAuthSession runs against the
+// httpOnly refresh cookie. authFetch handles that race + auto-retries
+// on 401. The `_token` parameter is kept for backward-compatible call
+// sites; the actual token comes from authFetch via getStoredAccessToken.
+export async function triggerFaceDetect(_token: string, assetIds: string[], galleryId?: string): Promise<{ job_id: string; status: string }> {
+  const res = await authFetch(`/api/v1/ai/face-detect`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ asset_ids: assetIds, gallery_id: galleryId }),
   });
   if (!res.ok) throw new Error(`Face detect failed: ${res.status}`);
   return res.json();
 }
 
-export async function getFaceClusters(token: string, galleryId?: string): Promise<ClusterSummary[]> {
+export async function getFaceClusters(_token: string, galleryId?: string): Promise<ClusterSummary[]> {
   const params = galleryId ? `?gallery_id=${galleryId}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/ai/clusters${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`/api/v1/ai/clusters${params}`);
   if (!res.ok) throw new Error(`List clusters failed: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -126,19 +132,19 @@ export async function getFaceClusters(token: string, galleryId?: string): Promis
   return [];
 }
 
-export async function renameCluster(token: string, clusterId: string, name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/clusters/${clusterId}`, {
+export async function renameCluster(_token: string, clusterId: string, name: string): Promise<void> {
+  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error(`Rename cluster failed: ${res.status}`);
 }
 
-export async function mergeClusters(token: string, sourceId: string, targetId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/clusters/merge`, {
+export async function mergeClusters(_token: string, sourceId: string, targetId: string): Promise<void> {
+  const res = await authFetch(`/api/v1/ai/clusters/merge`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source_cluster_id: sourceId, target_cluster_id: targetId }),
   });
   if (!res.ok) throw new Error(`Merge clusters failed: ${res.status}`);
@@ -156,12 +162,10 @@ export interface ClusterAssetsResponse {
 }
 
 export async function getClusterAssets(
-  token: string,
+  _token: string,
   clusterId: string,
 ): Promise<ClusterAssetsResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/clusters/${clusterId}/assets`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/assets`);
   if (!res.ok) throw new Error(`Get cluster assets failed: ${res.status}`);
   return res.json();
 }
