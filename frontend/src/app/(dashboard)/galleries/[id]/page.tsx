@@ -21,6 +21,8 @@ import {
 import { listProofingSelections, createComment, type ProofingSelection } from "@/lib/api/proofing";
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
+import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
+import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
   assetIsProcessing,
   getAssetPreviewUrl,
@@ -1111,6 +1113,29 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 cluster, and without a token the API calls would 401. */}
             {authToken && assets.length > 0 && (
               <FaceFilter token={authToken} galleryId={id} />
+            )}
+
+            {/* Embedded videos (YouTube / Vimeo).
+                Added 2026-05-18 — sits between sub-galleries/face filter
+                and the photo dropzone so photographers see and manage
+                the gallery's video links inline with the rest of the
+                content surface. Same component renders read-only on the
+                public viewer; the persistence shape is identical.
+                onChange syncs the parent's gallery state so other reads
+                of gallery.settings.embedded_videos within this page
+                stay consistent without a network refetch. */}
+            {gallery && (
+              <EmbeddedVideosPanel
+                galleryId={id}
+                initialVideos={readEmbeddedVideos(gallery.settings as Record<string, unknown>)}
+                onChange={(next: EmbeddedVideo[]) => {
+                  setGallery((prev) =>
+                    prev
+                      ? { ...prev, settings: { ...(prev.settings ?? {}), embedded_videos: next } }
+                      : prev,
+                  );
+                }}
+              />
             )}
 
             {/* Drop zone — always visible, acts as upload target */}

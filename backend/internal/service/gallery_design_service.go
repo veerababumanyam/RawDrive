@@ -196,3 +196,32 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 
 	return s.galleryRepo.Update(ctx, gallery)
 }
+
+// UpdateEmbeddedVideos persists the embedded-video array for a gallery.
+// Added 2026-05-18 for the YouTube/Vimeo embed feature. Stored under
+// `gallery.settings.embedded_videos` as a JSON array so the frontend
+// (dashboard editor + public viewer) can read it through the existing
+// gallery settings field without a new column or migration.
+//
+// Each video item is a generic map (NOT a typed struct) for the same
+// reason UpdateDesignConfigRaw uses one — schema evolution is
+// frontend-driven; adding a new field like `caption` later should not
+// require a Go change.
+func (s *GalleryDesignService) UpdateEmbeddedVideos(ctx context.Context, galleryID uuid.UUID, videos []map[string]interface{}) error {
+	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil || gallery == nil {
+		return fmt.Errorf("videos: gallery not found")
+	}
+
+	if gallery.Settings == nil {
+		gallery.Settings = map[string]interface{}{}
+	}
+	// nil-safe — an empty array clears all videos. Don't store nil
+	// (Postgres jsonb_set on a nil interface field gets weird).
+	if videos == nil {
+		videos = []map[string]interface{}{}
+	}
+	gallery.Settings["embedded_videos"] = videos
+
+	return s.galleryRepo.Update(ctx, gallery)
+}

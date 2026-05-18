@@ -119,6 +119,12 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 			designHandler := NewGalleryDesignHandler(deps.GalleryDesignSvc)
 			r.Get("/{id}/design", designHandler.GetDesign)
 			r.Put("/{id}/design", designHandler.UpdateDesign)
+			// 2026-05-18 — YouTube/Vimeo embed feature. Lives under the
+			// design handler because it's another gallery-settings
+			// passthrough using the same raw-map pattern, not because
+			// videos are conceptually part of "design". The route is
+			// kept distinct so the surfaces don't entangle.
+			r.Put("/{id}/embedded-videos", designHandler.UpdateEmbeddedVideos)
 		}
 		if deps.GalleryRepo != nil {
 			coverHandler := NewGalleryCoverHandler(deps.GalleryRepo)

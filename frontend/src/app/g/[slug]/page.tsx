@@ -14,6 +14,8 @@ import { PublicGalleryBanners } from "@/components/gallery/public-gallery-banner
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
 import { readPublicDesignConfig, readPublicCoverThumbnails } from "@/lib/gallery-design-config";
+import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
+import { readEmbeddedVideos } from "@/lib/embedded-videos";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -115,6 +117,12 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // otherwise hide it from the asset list.
   const designConfig = readPublicDesignConfig(gallery.settings);
   const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
+  // 2026-05-18: embedded YouTube/Vimeo videos. Same shape the dashboard
+  // editor writes — see frontend/src/lib/embedded-videos.ts. Empty list
+  // makes the panel render nothing (read-only short-circuits).
+  const embeddedVideos = readEmbeddedVideos(
+    gallery.settings as Record<string, unknown> | undefined,
+  );
 
   const galleryContent = (
     <div className="min-h-screen bg-surface">
@@ -135,7 +143,17 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
         activeAlbumId={albumId}
       />
 
-      <div id="gallery-grid" className="mx-auto max-w-6xl px-4 pb-16">
+      <div id="gallery-grid" className="mx-auto max-w-6xl space-y-6 px-4 pb-16">
+        {/* Embedded YouTube/Vimeo videos in read-only mode. Shows the
+            same iframe grid the photographer sees in the dashboard
+            editor; the panel auto-hides when the gallery has none. */}
+        {embeddedVideos.length > 0 && (
+          <EmbeddedVideosPanel
+            galleryId={gallery.id}
+            initialVideos={embeddedVideos}
+            readOnly
+          />
+        )}
         <PublicGalleryGrid
           slug={slug}
           assets={assets}

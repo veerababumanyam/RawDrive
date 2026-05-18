@@ -89,3 +89,53 @@ func (h *GalleryDesignHandler) UpdateDesign(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"data": map[string]string{"status": "saved"}})
 }
+
+// UpdateEmbeddedVideos handles PUT /api/v1/galleries/{id}/embedded-videos.
+//
+// 2026-05-18: New endpoint for the YouTube/Vimeo embed feature. Stores
+// an array of {id, provider, video_id, title?, added_at} objects on
+// gallery.settings.embedded_videos. Reuses the raw-map-passthrough
+// pattern from UpdateDesign — the frontend owns the schema, the
+// backend stores whatever it receives, and the public viewer reads
+// the same shape via the generic gallery GET.
+//
+// Body shape:
+//
+//	{ "videos": [{ "id": "uuid", "provider": "youtube"|"vimeo",
+//	               "video_id": "...", "title": "...", "added_at": "..." }] }
+//
+// Anything else inside each item is preserved verbatim.
+func (h *GalleryDesignHandler) UpdateEmbeddedVideos(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		Videos []map[string]interface{} `json:"videos"`
+	}
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.designSvc.UpdateEmbeddedVideos(r.Context(), id, payload.Videos); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": map[string]interface{}{
+			"status": "saved",
+			"count":  len(payload.Videos),
+		},
+	})
+}
