@@ -353,6 +353,20 @@ export default function CoverDesignPage() {
     ensureFontsLoaded(href);
   }, [loaded, config.typography.headingFont, config.typography.bodyFont]);
 
+  // Preload the full FONT_OPTIONS catalog once so the custom font-picker
+  // dropdown can show each option styled in its own font. Without this,
+  // the dropdown list would fall back to the browser default font for
+  // every option until the user picks one. One Google Fonts <link> is
+  // cheaper than 11 individual ones — request all families up front.
+  useEffect(() => {
+    if (!loaded) return;
+    const allFamilies = FONT_OPTIONS.map((f) => f.name);
+    const param = allFamilies
+      .map((f) => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
+      .join("&");
+    ensureFontsLoaded(`https://fonts.googleapis.com/css2?${param}&display=swap`);
+  }, [loaded]);
+
   const token = useMemo(() => getStoredAccessToken(), []);
   const selectedAsset = assets.find((a) => a.id === config.cover.assetId);
   const previewUrl = selectedAsset ? getAssetPreviewUrl(selectedAsset, token) : "";
@@ -651,6 +665,188 @@ export default function CoverDesignPage() {
   );
 }
 
+// ───────────── Shared controls ─────────────
+
+/**
+ * FontPicker — custom dropdown with per-option font preview.
+ *
+ * Native <select> options don't honor `font-family` styling reliably
+ * across browsers (Webkit/Chromium render every option in the OS UI
+ * font regardless of the CSS), so the user can't tell which option
+ * is which serif/sans/mono without picking it first. This component
+ * is a button + absolutely-positioned popover panel, where each
+ * option's button is styled in the font itself — Figma/Canva pattern.
+ *
+ * Keyboard:
+ *   - Click trigger or Space/Enter opens the panel
+ *   - Arrow Up/Down moves focus within the open panel
+ *   - Enter on an option commits + closes
+ *   - Escape closes without committing
+ *
+ * Click-outside closes the panel without commit.
+ */
+function FontPicker({
+  id,
+  value,
+  onChange,
+  onOpenChange,
+  ariaLabel,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  onOpenChange?: (open: boolean) => void;
+  ariaLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Notify parent when the popover opens so they can hoist active-text
+  // state (e.g. PanelText uses this to keep the preview overlay's
+  // selection ring in sync with whichever font input the user is in).
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
+
+  // Click-outside to close. Use mousedown so the close happens before
+  // any other click handler fires inside the panel.
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  // Escape closes; ArrowDown/ArrowUp scrolls focused option within the
+  // panel. Lives on container so global keyboard nav still works when
+  // the user re-clicks the trigger.
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!open) {
+        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+          e.preventDefault();
+          setOpen(true);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!listRef.current) return;
+        const buttons = Array.from(
+          listRef.current.querySelectorAll<HTMLButtonElement>("[data-font-option]"),
+        );
+        const currentIdx = buttons.findIndex(
+          (b) => b === document.activeElement,
+        );
+        const nextIdx =
+          e.key === "ArrowDown"
+            ? Math.min(buttons.length - 1, currentIdx + 1)
+            : Math.max(0, currentIdx === -1 ? 0 : currentIdx - 1);
+        buttons[nextIdx]?.focus();
+      }
+    },
+    [open],
+  );
+
+  // Scroll the selected option into view when the popover opens — makes
+  // the dropdown feel native (jumps to current value rather than top).
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const selected = listRef.current.querySelector<HTMLButtonElement>(
+      `[data-font-option="${CSS.escape(value)}"]`,
+    );
+    selected?.scrollIntoView({ block: "nearest" });
+    selected?.focus();
+  }, [open, value]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative"
+      onKeyDown={handleKeyDown}
+    >
+      <button
+        id={id}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel || `Select font, current: ${value}`}
+        className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
+      >
+        <span
+          className="truncate text-left"
+          style={{ fontFamily: fontFamilyFor(value) }}
+        >
+          {value}
+        </span>
+        <svg
+          aria-hidden
+          viewBox="0 0 12 8"
+          className={`ml-2 h-2 w-3 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M1 1.5 6 6.5 11 1.5" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-label={ariaLabel || "Font options"}
+          className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-white/10 bg-surface-container py-1 shadow-2xl shadow-black/40"
+        >
+          {FONT_OPTIONS.map((f) => {
+            const selected = f.name === value;
+            return (
+              <button
+                key={f.name}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                data-font-option={f.name}
+                onClick={() => {
+                  onChange(f.name);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5 focus:bg-white/5 focus:outline-none ${
+                  selected ? "bg-primary/10 text-primary" : "text-on-surface"
+                }`}
+                style={{ fontFamily: fontFamilyFor(f.name) }}
+              >
+                <span className="truncate">{f.name}</span>
+                <span
+                  className="shrink-0 text-base text-on-surface-variant"
+                  style={{ fontFamily: fontFamilyFor(f.name) }}
+                  aria-hidden
+                >
+                  Aa
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ───────────────────────── Panels ─────────────────────────
 
 function PanelCover({
@@ -776,28 +972,23 @@ function PanelText({
           className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
         />
 
-        {/* Per-element font picker — replaces the shared "Font pairing"
-            dropdown that used to live in a separate Style section. Each
-            element now owns its font choice; the option text is styled
-            in the font itself so the picker self-documents. */}
+        {/* Per-element font picker — custom popover dropdown so each
+            option renders styled in its own font (native <select>
+            doesn't honor per-option font-family in Chromium/Webkit).
+            See FontPicker for keyboard nav + click-outside behavior. */}
         <div className="space-y-1.5">
           <label htmlFor="cover-title-font" className="text-[11px] text-on-surface-variant">Font</label>
-          <select
+          <FontPicker
             id="cover-title-font"
             value={config.typography.headingFont}
-            onChange={(e) =>
-              setConfig((c) => ({ ...c, typography: { ...c.typography, headingFont: e.target.value } }))
+            onChange={(next) =>
+              setConfig((c) => ({ ...c, typography: { ...c.typography, headingFont: next } }))
             }
-            onFocus={() => setActiveText("title")}
-            className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            style={{ fontFamily: fontFamilyFor(config.typography.headingFont) }}
-          >
-            {FONT_OPTIONS.map((f) => (
-              <option key={f.name} value={f.name} style={{ fontFamily: fontFamilyFor(f.name) }}>
-                {f.name}
-              </option>
-            ))}
-          </select>
+            onOpenChange={(opened) => {
+              if (opened) setActiveText("title");
+            }}
+            ariaLabel="Title font"
+          />
         </div>
 
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
@@ -876,22 +1067,17 @@ function PanelText({
 
         <div className="space-y-1.5">
           <label htmlFor="cover-subtitle-font" className="text-[11px] text-on-surface-variant">Font</label>
-          <select
+          <FontPicker
             id="cover-subtitle-font"
             value={config.typography.bodyFont}
-            onChange={(e) =>
-              setConfig((c) => ({ ...c, typography: { ...c.typography, bodyFont: e.target.value } }))
+            onChange={(next) =>
+              setConfig((c) => ({ ...c, typography: { ...c.typography, bodyFont: next } }))
             }
-            onFocus={() => setActiveText("subtitle")}
-            className="w-full cursor-pointer rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            style={{ fontFamily: fontFamilyFor(config.typography.bodyFont) }}
-          >
-            {FONT_OPTIONS.map((f) => (
-              <option key={f.name} value={f.name} style={{ fontFamily: fontFamilyFor(f.name) }}>
-                {f.name}
-              </option>
-            ))}
-          </select>
+            onOpenChange={(opened) => {
+              if (opened) setActiveText("subtitle");
+            }}
+            ariaLabel="Subtitle font"
+          />
         </div>
 
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
