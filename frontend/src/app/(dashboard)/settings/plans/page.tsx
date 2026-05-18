@@ -47,6 +47,61 @@ declare global {
   }
 }
 
+// 2026-05-18 — payment provider picker. Razorpay (default) opens an
+// in-app modal; PhonePe redirects to a PhonePe-hosted page. Selection
+// persists in localStorage and is read by handleUpgrade() at click time.
+function PaymentProviderToggle() {
+  const [provider, setProvider] = useState<"razorpay" | "phonepe">(() => {
+    if (typeof window === "undefined") return "razorpay";
+    const v = window.localStorage.getItem("rawdrive-payment-provider");
+    return v === "phonepe" ? "phonepe" : "razorpay";
+  });
+  const select = (next: "razorpay" | "phonepe") => {
+    setProvider(next);
+    try {
+      window.localStorage.setItem("rawdrive-payment-provider", next);
+    } catch { /* private mode — non-critical */ }
+  };
+  return (
+    <div className="surface-panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-sm font-semibold text-text-primary">Payment Method</h2>
+        <p className="text-xs text-text-secondary">
+          Choose how you want to pay. You can change this any time before clicking Upgrade.
+        </p>
+      </div>
+      <div role="radiogroup" aria-label="Payment provider" className="flex gap-2">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={provider === "razorpay"}
+          onClick={() => select("razorpay")}
+          className={
+            provider === "razorpay"
+              ? "min-h-[44px] rounded-xl border border-accent-primary bg-accent-primary/10 px-4 py-2 text-sm font-semibold text-accent-primary"
+              : "min-h-[44px] rounded-xl border border-border-default bg-surface-sunken px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-container-low"
+          }
+        >
+          Razorpay
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={provider === "phonepe"}
+          onClick={() => select("phonepe")}
+          className={
+            provider === "phonepe"
+              ? "min-h-[44px] rounded-xl border border-accent-primary bg-accent-primary/10 px-4 py-2 text-sm font-semibold text-accent-primary"
+              : "min-h-[44px] rounded-xl border border-border-default bg-surface-sunken px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-container-low"
+          }
+        >
+          PhonePe
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PlansPage() {
   const searchParams = useSearchParams();
   const upgradeTo = searchParams.get("upgrade_to") ?? "";
@@ -58,7 +113,13 @@ export default function PlansPage() {
   const rzpScriptLoaded = useRef(false);
   const autoUpgradeTriggered = useRef(false);
 
-  // Load Razorpay checkout script once.
+  // Load Razorpay checkout script once. 2026-05-18: added onerror handler
+  // so CSP blocks / network failures surface as a real error in the
+  // console (and a notice to the user when Upgrade is clicked) instead
+  // of silently letting the 8s polling loop fire "Razorpay script
+  // timeout" — which is misleading because the script never started
+  // loading at all in that case. See next.config.ts CSP for the allowed
+  // origins (script-src + frame-src must include checkout.razorpay.com).
   useEffect(() => {
     if (rzpScriptLoaded.current || document.getElementById("razorpay-checkout-js")) {
       rzpScriptLoaded.current = true;
@@ -69,6 +130,17 @@ export default function PlansPage() {
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
     script.onload = () => { rzpScriptLoaded.current = true; };
+    script.onerror = () => {
+      // Most common cause is CSP blocking checkout.razorpay.com.
+      // Surface the failure so the click handler can fail fast instead
+      // of waiting 8s for window.Razorpay that will never appear.
+      console.error(
+        "[Razorpay] checkout.js failed to load — check CSP script-src + frame-src, ad blockers, or network. URL:",
+        script.src,
+      );
+      // Remove the dead script tag so the next mount can retry.
+      script.remove();
+    };
     document.head.appendChild(script);
   }, []);
 
@@ -94,25 +166,65 @@ export default function PlansPage() {
       const token = getStoredAccessToken();
       if (!token) throw new Error("Not authenticated");
 
-      // Create Razorpay order on backend.
+      // 2026-05-18: read the active gateway choice from localStorage so the
+      // radio toggle in the UI sticks across reloads. Default "razorpay"
+      // matches the pre-PhonePe behaviour.
+      const provider =
+        (typeof window !== "undefined" &&
+          (window.localStorage.getItem("rawdrive-payment-provider") || "razorpay")) ||
+        "razorpay";
+
+      // Create the order on the backend. Same endpoint, branches on
+      // response.provider for downstream UX (modal vs redirect).
       const res = await fetch(`${API_BASE}/api/v1/workspace/subscription/upgrade`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ to_tier: tier }),
+        body: JSON.stringify({ to_tier: tier, provider }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `HTTP ${res.status}`);
       }
       const order = (await res.json()) as {
-        razorpay_order_id: string;
+        provider: "razorpay" | "phonepe";
+        upgrade_order_id: string;
         amount_paise: number;
         currency: string;
-        razorpay_key_id: string;
+        // Razorpay fields:
+        razorpay_order_id?: string;
+        razorpay_key_id?: string;
+        // PhonePe fields:
+        redirect_url?: string;
+        phonepe_order_id?: string;
       };
+
+      // PhonePe — redirect-based flow. PhonePe's hosted page handles the
+      // payment then redirects to our callback page (set in the server's
+      // redirectUrl). No modal, no script wait.
+      if (order.provider === "phonepe") {
+        if (!order.redirect_url) {
+          throw new Error("PhonePe order missing redirect URL");
+        }
+        // Stash plan name for the callback page to display a friendly
+        // success notice without an extra round-trip.
+        try {
+          window.sessionStorage.setItem(
+            "rawdrive-pending-plan-name",
+            name,
+          );
+        } catch { /* private mode — non-critical */ }
+        window.location.assign(order.redirect_url);
+        return;
+      }
+
+      // Below this line: legacy Razorpay path (unchanged semantics from
+      // the pre-PhonePe build — modal-based SDK flow).
+      if (!order.razorpay_order_id || !order.razorpay_key_id) {
+        throw new Error("Razorpay order missing required fields");
+      }
 
       // Wait for Razorpay script to load.
       if (!window.Razorpay) {
@@ -132,13 +244,69 @@ export default function PlansPage() {
         order_id: order.razorpay_order_id,
         name: "RawDrive",
         description: `Upgrade to ${name}`,
-        handler: () => {
-          setNotice({
-            type: "success",
-            text: `Payment successful! Your plan is being upgraded to ${name}. This may take a moment to reflect.`,
-          });
-          setCurrentTier(tier);
-          setUpgradingTier(null);
+        // 2026-05-18: handler now POSTs the payment_id/order_id/signature
+        // triple to /verify so the server can HMAC-confirm the payment and
+        // apply the plan upgrade synchronously. Before this fix, the
+        // handler only updated local React state and waited for the
+        // Razorpay webhook to fire — which never happens in localhost dev
+        // because Razorpay servers can't reach :8081. Result was: payment
+        // captured at Razorpay, but workspaces.plan_tier stayed unchanged
+        // until a manual page reload (and even then, only if production
+        // tunnel/webhook was wired). The server endpoint shares
+        // applyPayment() with the webhook so duplicate calls are
+        // idempotent — a webhook arriving later is a safe no-op.
+        handler: async (response) => {
+          try {
+            const verifyRes = await fetch(`${API_BASE}/api/v1/workspace/subscription/verify`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            if (!verifyRes.ok) {
+              const err = (await verifyRes.json().catch(() => ({}))) as { error?: string };
+              throw new Error(err.error ?? `Verification failed (HTTP ${verifyRes.status})`);
+            }
+            const verified = (await verifyRes.json()) as { status: string; plan_tier: string };
+            // Trust the server's returned tier rather than optimistically
+            // assuming the requested tier — if the row had drifted
+            // (somehow re-tiered between order create and pay) we should
+            // show what's actually true now.
+            setCurrentTier(verified.plan_tier || tier);
+            setNotice({
+              type: "success",
+              text: `Payment successful! Your plan has been upgraded to ${name}.`,
+            });
+            // 2026-05-18: notify the dashboard shell so the sidebar
+            // profile chip ("Starter Plan" / "Professional Plan" /
+            // etc.) refetches /auth/me and updates without a reload.
+            // Listener is in app/(dashboard)/layout.tsx. Detail
+            // is informational — the layout re-fetches anyway, so
+            // listeners can ignore the payload safely.
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("rawdrive:plan-changed", {
+                  detail: { plan_tier: verified.plan_tier || tier },
+                }),
+              );
+            }
+          } catch (err) {
+            // Payment succeeded at Razorpay but verification call failed.
+            // The webhook will still settle the plan when/if it fires, so
+            // we show a "pending" notice rather than a hard error.
+            setNotice({
+              type: "error",
+              text: `Payment captured but plan upgrade could not be confirmed: ${err instanceof Error ? err.message : "unknown error"}. Refresh in a minute or contact support if it doesn't update.`,
+            });
+          } finally {
+            setUpgradingTier(null);
+          }
         },
         theme: { color: "var(--accent-default, #2d3435)" },
         modal: {
@@ -195,6 +363,14 @@ export default function PlansPage() {
           Your workspace is ready. Complete payment below to activate your <strong>{UPGRADE_PLANS.find((p) => p.tier === upgradeTo)?.name ?? upgradeTo}</strong> plan.
         </div>
       )}
+
+      {/* 2026-05-18: payment-provider toggle. Selection persists in
+          localStorage so users don't have to re-pick on every page
+          load. Razorpay opens an in-app modal; PhonePe redirects to
+          the PhonePe-hosted page. Default is Razorpay for backward
+          compatibility with existing share/upgrade links. */}
+      <PaymentProviderToggle />
+
 
       {notice && (
         <div

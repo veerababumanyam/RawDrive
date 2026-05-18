@@ -131,7 +131,14 @@ export default function OnboardingPage() {
     script.async = true;
     script.onload = () => { rzpScriptLoaded.current = true; };
     script.onerror = () => {
-      // Remove failed script so the next attempt can re-add it.
+      // 2026-05-18: surface the failure in the console so the cause is
+      // visible instead of the misleading 8s polling timeout. Most
+      // common cause is CSP blocking checkout.razorpay.com — see
+      // next.config.ts script-src + frame-src.
+      console.error(
+        "[Razorpay] checkout.js failed to load on /onboarding — check CSP, ad blockers, or network. URL:",
+        script.src,
+      );
       script.remove();
     };
     document.head.appendChild(script);
@@ -285,7 +292,43 @@ export default function OnboardingPage() {
         description: `${planName} plan subscription`,
         prefill: { name: displayName.trim() },
         theme: { color: "var(--accent-default, #2d3435)" },
-        handler: () => {
+        // 2026-05-18: post the verification triple to the server so the
+        // plan upgrade is settled synchronously. Without this, payment
+        // succeeds at Razorpay but workspaces.plan_tier never updates
+        // (the webhook can't reach localhost in dev; and even in prod
+        // the user shouldn't have to wait for the webhook round-trip
+        // before seeing the new plan). See plans/page.tsx for the same
+        // pattern + applyPayment idempotency notes.
+        handler: async (response) => {
+          try {
+            const verifyRes = await fetch(`${API_BASE}/api/v1/workspace/subscription/verify`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+              },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            if (!verifyRes.ok) {
+              // Payment captured but verify failed — webhook will reconcile;
+              // still advance to the complete step so the user isn't blocked
+              // on the onboarding screen.
+              console.error("[Onboarding] subscription verify failed", await verifyRes.text());
+            } else {
+              // 2026-05-18: tell the dashboard shell to refresh the
+              // sidebar plan badge so the user lands on the dashboard
+              // with the new tier already showing — no reload required.
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("rawdrive:plan-changed"));
+              }
+            }
+          } catch (err) {
+            console.error("[Onboarding] subscription verify threw", err);
+          }
           setStep("complete");
         },
         modal: {

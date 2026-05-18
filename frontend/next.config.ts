@@ -44,14 +44,25 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       // Inline scripts remain until nonce-based CSP lands; unsafe-eval is dev-only.
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+      // checkout.razorpay.com — Razorpay Checkout SDK (loaded by /settings/plans
+      // and /onboarding to open the payment modal). Without it the script tag
+      // gets blocked by CSP and the polling loop in those pages throws
+      // "Razorpay script timeout" after 8s. Added 2026-05-18.
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:" + devImgExtras,
       // connect-src must include the API origin for same-origin fetches
       // through rewrites() plus any R2 public buckets the client talks to.
       // Dev adds localhost:* so cross-origin dev fetches to the Go API work.
+      // Razorpay Checkout makes XHRs to api.razorpay.com and lumberjack
+      // (analytics) — the existing `https:` token already covers them.
       "connect-src 'self' https:" + devConnectExtras,
       "font-src 'self' data: https://fonts.gstatic.com",
+      // Razorpay Checkout opens its payment UI in iframes pointing to
+      // api.razorpay.com / checkout.razorpay.com. Without an explicit
+      // frame-src the directive falls back to default-src 'self' and the
+      // iframe gets blocked, causing the modal to render blank.
+      "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "base-uri 'self'",

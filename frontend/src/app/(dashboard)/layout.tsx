@@ -326,6 +326,42 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     };
   }, [isOnboarding]);
 
+  // 2026-05-18: refetch /auth/me when the plans page dispatches
+  // `rawdrive:plan-changed` after a successful Razorpay payment
+  // verification. Without this, the user has to reload to see the
+  // sidebar profile chip update from "Starter Plan" to the new tier
+  // — even though the plans page itself updates immediately. We
+  // could narrow the refetch to just the plan_tier field, but the
+  // /auth/me round-trip is small (single row, indexed lookup) and
+  // refetching the whole profile keeps display_name/avatar in sync
+  // with anything else a payment flow might have changed.
+  useEffect(() => {
+    let active = true;
+    function onPlanChanged() {
+      const token = getStoredAccessToken();
+      if (!token) return;
+      fetch(`${API_BASE}/api/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((me) => {
+          if (!active || !me) return;
+          setUserInfo({
+            display_name: me.display_name,
+            email: me.email,
+            avatar_url: me.avatar_url || undefined,
+            plan_tier: me.plan_tier || undefined,
+          });
+        })
+        .catch(() => { /* keep current userInfo */ });
+    }
+    window.addEventListener("rawdrive:plan-changed", onPlanChanged);
+    return () => {
+      active = false;
+      window.removeEventListener("rawdrive:plan-changed", onPlanChanged);
+    };
+  }, []);
+
   if (authenticated === null) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-surface text-text-primary">

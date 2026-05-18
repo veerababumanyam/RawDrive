@@ -387,6 +387,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// Generate OTP for activation
 	_, err = h.otp.Generate(r.Context(), req.Email)
 	if err != nil {
+		// 2026-05-18: log the underlying cause so the actual reason
+		// (SMTP delivery failure, rate limit, etc.) is visible in the
+		// server log instead of vanishing behind the generic message
+		// shown to the client.
+		log.Printf("auth.Register: OTP generation failed email=%s: %v", req.Email, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate activation OTP"})
 		return
 	}

@@ -578,7 +578,13 @@ func loadEnvFiles(paths ...string) {
 			if len(v) >= 2 && ((v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'')) {
 				v = v[1 : len(v)-1]
 			}
-			if os.Getenv(k) == "" {
+			// 2026-05-18: use LookupEnv (not Getenv) so explicitly-empty
+			// values from the shell-sourced .env.backend can override
+			// production values in .env. Previously Getenv("")=="" meant
+			// "not set", so `SMTP_USERNAME=` in .env.backend was silently
+			// replaced by a production value in .env, which broke local
+			// Mailpit which doesn't support AUTH.
+			if _, set := os.LookupEnv(k); !set {
 				os.Setenv(k, v) //nolint:errcheck
 			}
 		}

@@ -256,6 +256,14 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/api/v1/workspace/subscription", subHandler.Get)
 
 		r.Post("/api/v1/workspace/subscription/upgrade", deps.SubscriptionUpgradeHandler.Upgrade)
+		// 2026-05-18: interactive payment verification — the Razorpay
+		// Checkout `handler` callback POSTs the payment_id/order_id/
+		// signature triple here, the server HMAC-verifies it, applies
+		// the plan upgrade (idempotently sharing applyPayment with the
+		// webhook), and returns the new plan_tier so the UI updates
+		// immediately. Required for localhost dev where Razorpay servers
+		// can't reach the webhook URL.
+		r.Post("/api/v1/workspace/subscription/verify", deps.SubscriptionUpgradeHandler.Verify)
 	}
 
 	// M14: Download routes
