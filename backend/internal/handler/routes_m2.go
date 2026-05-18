@@ -389,6 +389,14 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
 
+		// PR-3b: public People tab (face recognition). Gated on
+		// workspaces.face_recognition_enabled AND
+		// galleries.face_detection_enabled — both must be true for
+		// these endpoints to return non-empty results. See
+		// public_gallery_handler.go for the gate logic.
+		r.Get("/galleries/{slug}/people", publicHandler.ListPeople)
+		r.Get("/galleries/{slug}/people/{personId}/photos", publicHandler.ListPersonPhotos)
+
 		// M41/105: Anonymous guest favorites — Star button in the public
 		// lightbox writes here. Toggleable (POST adds, DELETE removes)
 		// and keyed on an opaque guest_session_id from localStorage so

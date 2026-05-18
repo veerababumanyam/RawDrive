@@ -166,6 +166,47 @@ export async function getClusterAssets(
   return res.json();
 }
 
+// ---- Public Face Recognition (PR-3b) ----
+//
+// Read-only People view on /g/{slug}. Gated server-side on both the
+// workspace face_recognition_enabled flag and the per-gallery
+// face_detection_enabled flag — if either is off, the endpoints return
+// an empty list so the public viewer can simply hide the tab.
+
+export interface PublicPersonSummary {
+  id: string;
+  name: string;
+  face_count: number;
+  asset_count: number;
+  cover_asset_id: string;
+}
+
+export interface PublicPersonPhotos {
+  asset_ids: string[];
+  count: number;
+}
+
+export async function listPublicPeople(slug: string): Promise<PublicPersonSummary[]> {
+  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/people`, {
+    credentials: "omit",
+  });
+  if (!res.ok) throw new Error(`List public people failed: ${res.status}`);
+  const body = (await res.json()) as PublicPersonSummary[];
+  return Array.isArray(body) ? body : [];
+}
+
+export async function listPublicPersonPhotos(
+  slug: string,
+  personId: string,
+): Promise<PublicPersonPhotos> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/public/galleries/${slug}/people/${personId}/photos`,
+    { credentials: "omit" },
+  );
+  if (!res.ok) throw new Error(`List public person photos failed: ${res.status}`);
+  return res.json();
+}
+
 // ---- Semantic Search ----
 
 export async function searchAssets(token: string, query: string, galleryId?: string, limit?: number): Promise<{ results: SearchResult[]; total: number }> {

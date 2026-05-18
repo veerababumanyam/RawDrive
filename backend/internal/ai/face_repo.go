@@ -199,6 +199,36 @@ func (r *FaceRepo) ListClusterAssetIDs(ctx context.Context, workspaceID, cluster
 	return ids, rows.Err()
 }
 
+// ListClusterAssetIDsInGallery is the gallery-scoped variant of
+// ListClusterAssetIDs. It returns DISTINCT asset_ids for the cluster
+// label, filtered to a single gallery. Used by the public People tab
+// (PR-3b) to ensure a guest viewer of one gallery cannot enumerate the
+// same person's photos across OTHER galleries in the workspace —
+// cross-gallery leakage is a real concern when one person (e.g. a
+// vendor photographer) attends multiple weddings the studio hosts.
+func (r *FaceRepo) ListClusterAssetIDsInGallery(ctx context.Context, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT asset_id
+		 FROM face_clusters
+		 WHERE gallery_id = $1 AND cluster_label = $2
+		 ORDER BY asset_id`,
+		galleryID, clusterLabel)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: list cluster assets in gallery: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("face repo: scan gallery cluster asset: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // DeleteFacesByAsset removes all face rows for an asset.
 func (r *FaceRepo) DeleteFacesByAsset(ctx context.Context, assetID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM face_clusters WHERE asset_id = $1`, assetID)

@@ -657,6 +657,150 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// PR-3b: Public People tab — read-only face cluster + photos lookup by slug
+// ──────────────────────────────────────────────────────────────────────────────
+
+// publicPersonResponse is the public-safe projection of an ai.ClusterSummary.
+// We deliberately drop the workspace-owner-only sample_bounding_box for now —
+// guest viewers see the same fields the studio People grid uses, except the
+// face-crop math will fall back to object-position:center.
+type publicPersonResponse struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	FaceCount  int    `json:"face_count"`
+	AssetCount int    `json:"asset_count"`
+	CoverAsset string `json:"cover_asset_id"`
+}
+
+// isFaceRecognitionEnabledForGallery checks both gates that must pass before
+// guests can see face data:
+//
+//  1. workspaces.face_recognition_enabled (migration 110) — workspace-level
+//     opt-in for biometric data processing under Indian DPDP / EU GDPR.
+//  2. galleries.face_detection_enabled (migration 046) — per-gallery
+//     opt-out, defaults true.
+//
+// Returns false when either gate is closed. Errors propagate as false +
+// non-nil error so the caller can fail-closed.
+func (h *PublicGalleryHandler) isFaceRecognitionEnabledForGallery(ctx context.Context, galleryID, workspaceID uuid.UUID) (bool, error) {
+	if h.pool == nil {
+		// Public handler started without WithM13Deps wiring — fail closed.
+		return false, fmt.Errorf("face recognition deps not wired")
+	}
+	var wsEnabled, galEnabled bool
+	err := h.pool.QueryRow(ctx, `
+		SELECT
+		  (SELECT face_recognition_enabled FROM workspaces WHERE id = $1),
+		  (SELECT face_detection_enabled   FROM galleries  WHERE id = $2)
+	`, workspaceID, galleryID).Scan(&wsEnabled, &galEnabled)
+	if err != nil {
+		return false, err
+	}
+	return wsEnabled && galEnabled, nil
+}
+
+// ListPeople handles GET /api/v1/public/galleries/{slug}/people. Read-only
+// listing of face clusters for a published gallery, gated on the workspace
+// + per-gallery opt-in flags. Guests cannot rename / merge / split — those
+// stay on the authed studio /api/v1/ai/clusters endpoints.
+func (h *PublicGalleryHandler) ListPeople(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
+		return
+	}
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	if h.faceRepo == nil {
+		// Treat unwired faceRepo as "feature unavailable" rather than 500
+		// so the public viewer can degrade gracefully.
+		respondJSON(w, http.StatusOK, []publicPersonResponse{})
+		return
+	}
+	enabled, err := h.isFaceRecognitionEnabledForGallery(r.Context(), gallery.ID, gallery.WorkspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"face recognition status check failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if !enabled {
+		// Same "feature off" projection as the unwired-handler case. The
+		// public viewer's UI hides the People tab when this returns empty.
+		respondJSON(w, http.StatusOK, []publicPersonResponse{})
+		return
+	}
+	gid := gallery.ID
+	clusters, err := h.faceRepo.ListClusters(r.Context(), gallery.WorkspaceID, &gid)
+	if err != nil {
+		http.Error(w, `{"error":"failed to list people"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]publicPersonResponse, 0, len(clusters))
+	for _, c := range clusters {
+		out = append(out, publicPersonResponse{
+			ID:         c.ClusterLabel.String(),
+			Name:       c.ClusterName,
+			FaceCount:  c.FaceCount,
+			AssetCount: c.AssetCount,
+			CoverAsset: c.SampleAssetID.String(),
+		})
+	}
+	respondJSON(w, http.StatusOK, out)
+}
+
+// ListPersonPhotos handles GET /api/v1/public/galleries/{slug}/people/{personId}/photos.
+// Returns the asset IDs in the gallery that contain the given person. Uses
+// the gallery-scoped ListClusterAssetIDsInGallery (not the workspace-scoped
+// helper) so a guest viewer of gallery A cannot enumerate the same person's
+// photos in gallery B of the same workspace.
+func (h *PublicGalleryHandler) ListPersonPhotos(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
+		return
+	}
+	personIDStr := chi.URLParam(r, "personId")
+	personID, err := uuid.Parse(personIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid personId"}`, http.StatusBadRequest)
+		return
+	}
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery == nil || !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	if h.faceRepo == nil {
+		respondJSON(w, http.StatusOK, map[string]any{"asset_ids": []string{}, "count": 0})
+		return
+	}
+	enabled, err := h.isFaceRecognitionEnabledForGallery(r.Context(), gallery.ID, gallery.WorkspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"face recognition status check failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if !enabled {
+		respondJSON(w, http.StatusOK, map[string]any{"asset_ids": []string{}, "count": 0})
+		return
+	}
+	ids, err := h.faceRepo.ListClusterAssetIDsInGallery(r.Context(), gallery.ID, personID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to list person photos"}`, http.StatusInternalServerError)
+		return
+	}
+	stringIDs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		stringIDs = append(stringIDs, id.String())
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"asset_ids": stringIDs,
+		"count":     len(stringIDs),
+	})
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // M21: Public Asset Download
 // ──────────────────────────────────────────────────────────────────────────────
 
