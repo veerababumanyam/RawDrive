@@ -155,8 +155,13 @@ function PersonTile({
       aria-label={`${displayName}, ${cluster.asset_count} ${cluster.asset_count === 1 ? "photo" : "photos"}`}
       role="listitem"
     >
+      {/* Circular avatar — Apple Photos / Google Photos pattern. The
+          circular crop disambiguates which face the cluster represents
+          when the source photo contains multiple adjacent faces (couple
+          shots, group shots): the visible disc shows ONE face and
+          everything outside is masked out by the circular boundary. */}
       <div
-        className="relative aspect-square overflow-hidden rounded-2xl border border-border-subtle bg-surface-container-high transition-transform group-hover:scale-[1.02] group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2"
+        className="relative aspect-square overflow-hidden rounded-full border border-border-subtle bg-surface-container-high transition-transform group-hover:scale-[1.02] group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2"
       >
         {previewUrl ? (
           // Using <img> rather than next/image because storage paths
@@ -176,8 +181,13 @@ function PersonTile({
           </div>
         )}
 
-        {/* Photo-count chip */}
-        <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
+        {/* Photo-count chip — repositioned for circle bounds. The
+            previous "right-2 top-2" anchor sat at the rounded-2xl
+            corner; on a circle the corner is invisible, so the chip
+            would float in dead space outside the disc. Anchored at
+            ~15% inset along the diagonal (sin(45°)·0.85) so it sits
+            on the top-right edge of the circle. */}
+        <span className="absolute right-[6%] top-[6%] rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
           {cluster.asset_count}
         </span>
       </div>
@@ -234,11 +244,17 @@ function computeCropStyle(
   const py = Math.max(0, Math.min(100, cyPct));
 
   // Zoom factor — see comment block above for the derivation.
+  // FACE_FILL bumped 0.7 → 0.9 and zoom ceiling bumped 4 → 6 together
+  // with the circular-mask change. Tighter zoom inside a circular tile
+  // makes the cluster's specific face unambiguous even on couple shots
+  // where two faces are physically adjacent in the source image. The
+  // 6× ceiling stays below the thumb_md_webp (600px) Nyquist limit for
+  // typical 100-150px bbox widths — visible upscaling but recognizable.
   const minImgDim = Math.min(asset.width, asset.height);
   const maxBboxDim = Math.max(bbox.w, bbox.h);
-  const FACE_FILL = 0.7; // target: face occupies ~70% of tile
+  const FACE_FILL = 0.9; // target: face occupies ~90% of tile
   const rawZoom = (FACE_FILL * minImgDim) / Math.max(1, maxBboxDim);
-  const zoom = Math.max(1, Math.min(4, rawZoom));
+  const zoom = Math.max(1, Math.min(6, rawZoom));
 
   return {
     objectPosition: `${px}% ${py}%`,
