@@ -163,12 +163,40 @@ export function PublicGalleryHero({
     const headingFont = design.typography?.headingFont;
     const bodyFont = design.typography?.bodyFont;
     const fontsHref = googleFontsHref(headingFont, bodyFont);
+    // Cover & Design page can override the styleId's textAlign with a
+    // free-positioned overlay. When the override is set, the dragged
+    // text uses it; otherwise we honor the style's declared alignment.
+    const effectiveAlign = design.cover?.textAlign || designStyle.textAlign;
     const textAlignClass =
-      designStyle.textAlign === "left"
+      effectiveAlign === "left"
         ? "text-left items-start"
-        : designStyle.textAlign === "right"
+        : effectiveAlign === "right"
           ? "text-right items-end"
           : "text-center items-center";
+    // Aspect-ratio override from the Cover & Design page lets the user
+    // crop a 21/9 panoramic style to 4/3 without picking a new style.
+    const effectiveAspectRatio = design.cover?.aspectRatio || designStyle.aspectRatio;
+    const titlePos = design.cover?.titlePosition;
+    const subtitlePos = design.cover?.subtitlePosition;
+    const useDragLayout = Boolean(titlePos || subtitlePos);
+    // 2026-05-18: title/subtitle colors split into separate fields. The
+    // editor picker writes both `titleColor` and `subtitleColor`; the
+    // legacy `textColor` stays in the payload as a fallback so older
+    // galleries that saved only the shared color still render with a
+    // sensible value on both elements.
+    const textColor = design.cover?.textColor || undefined;
+    const titleColor = design.cover?.titleColor || textColor;
+    const subtitleColor = design.cover?.subtitleColor || textColor;
+    const textShadow = design.cover?.textShadow
+      ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
+      : undefined;
+    // Title and subtitle are anchored at their CENTER regardless of
+    // textAlign — matches the Cover & Design editor's drag behavior
+    // (Canva/Figma-style: object grabbed at visual middle). textAlign
+    // only controls multi-line internal alignment, not anchor edge.
+    // Prior to 2026-05-18 the anchor varied by textAlign which made
+    // drags feel disconnected and let titles wrap as they hit the
+    // canvas edge.
 
     return (
       // Honor the cover style's declared aspectRatio so the container
@@ -190,7 +218,7 @@ export function PublicGalleryHero({
       <section
         className="relative flex w-full overflow-hidden"
         style={{
-          aspectRatio: designStyle.aspectRatio,
+          aspectRatio: effectiveAspectRatio,
           minHeight: "60vh",
           maxHeight: "85vh",
         }}
@@ -211,62 +239,133 @@ export function PublicGalleryHero({
         )}
         {scrim && <div className="absolute inset-0" style={{ background: scrim }} />}
 
-        {/* Text overlay uses `justify-end` so the title sits at the BOTTOM
-            of the hero — matching the picker thumbnails in the design
-            studio (CoverStyleMiniPreview), which render every cover style
-            with text at the bottom + horizontal align from `textAlign`.
-            Previously this used `justify-center` (vertically centered) so
-            the picker advertised "text at bottom" and the live hero
-            rendered "text in middle" — WYSIWYG violation that this fix
-            closes. */}
-        <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}>
-          {(logoUrl || brandName) && (
-            <div className="mb-6 flex items-center gap-3" style={{ justifyContent: designStyle.textAlign === "center" ? "center" : designStyle.textAlign === "right" ? "flex-end" : "flex-start" }}>
-              {logoUrl && (
-                <img
-                  src={logoUrl}
-                  alt={brandName ? `${brandName} logo` : "Studio logo"}
-                  className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
-                />
-              )}
-              {brandName && (
-                <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">
-                  {brandName}
-                </span>
-              )}
-            </div>
-          )}
-          <h1
-            className="font-semibold tracking-tight text-text-inverse"
-            style={{
-              fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
-              fontSize: titleSize ? `${titleSize}px` : undefined,
-              color: accent || undefined,
-            }}
-          >
-            {title}
-          </h1>
-          {subtitle && (
-            <p
-              className="mt-3 max-w-2xl text-text-inverse/85"
-              style={{
-                fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
-                fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
-              }}
-            >
-              {subtitle}
-            </p>
-          )}
-          <div className="mt-8" style={{ alignSelf: designStyle.textAlign === "center" ? "center" : designStyle.textAlign === "right" ? "flex-end" : "flex-start" }}>
+        {useDragLayout ? (
+          // Drag-positioned overlay — title and subtitle are absolutely
+          // positioned at the percentages chosen in the Cover & Design
+          // editor. This is the WYSIWYG path: the editor's preview uses
+          // the exact same coordinate scheme.
+          <div className="absolute inset-0 z-10">
+            {titlePos && (
+              <h1
+                className="absolute font-semibold tracking-tight"
+                style={{
+                  left: `${titlePos.x}%`,
+                  top: `${titlePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                  fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
+                  fontSize: titleSize ? `${titleSize}px` : undefined,
+                  color: titleColor || accent || "#ffffff",
+                  textShadow,
+                  textAlign: effectiveAlign,
+                  whiteSpace: "pre",
+                }}
+              >
+                {title}
+              </h1>
+            )}
+            {subtitle && subtitlePos && (
+              <p
+                className="absolute"
+                style={{
+                  left: `${subtitlePos.x}%`,
+                  top: `${subtitlePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                  fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
+                  fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
+                  color: subtitleColor || "#ffffff",
+                  textShadow,
+                  textAlign: effectiveAlign,
+                  whiteSpace: "pre",
+                }}
+              >
+                {subtitle}
+              </p>
+            )}
+            {(logoUrl || brandName) && (
+              <div
+                className="absolute top-6 left-6 flex items-center gap-3"
+                style={{
+                  color: textColor || "#ffffff",
+                  textShadow,
+                }}
+              >
+                {logoUrl && (
+                  <img
+                    src={logoUrl}
+                    alt={brandName ? `${brandName} logo` : "Studio logo"}
+                    className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
+                  />
+                )}
+                {brandName && (
+                  <span className="text-xs uppercase tracking-[0.18em]">
+                    {brandName}
+                  </span>
+                )}
+              </div>
+            )}
             <a
               href="#gallery-grid"
-              className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+              className="absolute bottom-6 right-6 inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
               style={accent ? { borderColor: accent } : undefined}
             >
               View Gallery
             </a>
           </div>
-        </div>
+        ) : (
+          // Legacy bottom-anchored layout — used when no drag positions
+          // have been saved. Matches the design-studio's published behavior.
+          <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}>
+            {(logoUrl || brandName) && (
+              <div className="mb-6 flex items-center gap-3" style={{ justifyContent: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}>
+                {logoUrl && (
+                  <img
+                    src={logoUrl}
+                    alt={brandName ? `${brandName} logo` : "Studio logo"}
+                    className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
+                  />
+                )}
+                {brandName && (
+                  <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">
+                    {brandName}
+                  </span>
+                )}
+              </div>
+            )}
+            <h1
+              className="font-semibold tracking-tight text-text-inverse"
+              style={{
+                fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
+                fontSize: titleSize ? `${titleSize}px` : undefined,
+                color: titleColor || accent || undefined,
+                textShadow,
+              }}
+            >
+              {title}
+            </h1>
+            {subtitle && (
+              <p
+                className="mt-3 max-w-2xl text-text-inverse/85"
+                style={{
+                  fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
+                  fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
+                  color: subtitleColor || undefined,
+                  textShadow,
+                }}
+              >
+                {subtitle}
+              </p>
+            )}
+            <div className="mt-8" style={{ alignSelf: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}>
+              <a
+                href="#gallery-grid"
+                className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+                style={accent ? { borderColor: accent } : undefined}
+              >
+                View Gallery
+              </a>
+            </div>
+          </div>
+        )}
       </section>
     );
   }

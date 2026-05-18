@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
 import type { Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   ChevronLeft, ChevronRight, XMark, Download, Expand, Compress,
@@ -64,19 +65,24 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Append ?token=... to a /storage/* URL so the JWT-authed streaming
- * proxy will accept a bare <img src> / <video src>. Non-/storage
- * URLs (legacy presigned S3 URLs, data URIs, relative blob refs)
- * pass through untouched. Idempotent — does not double-append if a
- * token query param already exists.
+ * Build an absolute storage-proxy URL from any input the lightbox sees:
+ * bare object keys (`derivatives/<id>/display_webp.webp`), `/storage/...`
+ * paths, absolute http(s) URLs, data/blob URIs. Delegates to
+ * `getStorageBackedUrl` so every consumer goes through the same path
+ * constructor — bare keys get the `/storage/` prefix + API_BASE host
+ * + JWT token; non-storage URLs pass through unchanged. Idempotent
+ * with respect to a token query already on the URL.
+ *
+ * Bug history (2026-05-18): the previous implementation only added
+ * the token to URLs that ALREADY contained `/storage/`, so bare keys
+ * from `asset.thumbnail_urls.display_webp` (= `derivatives/...`) were
+ * passed straight into `<img src>` and resolved as relative URLs
+ * against the current page, yielding `localhost:3001/galleries/
+ * derivatives/...` 404s instead of `localhost:8081/storage/
+ * derivatives/...`.
  */
 function authedStorageUrl(url: string | undefined | null, token: string | null): string {
-  if (!url) return "";
-  if (!token) return url;
-  if (!url.includes("/storage/")) return url;
-  if (url.includes("token=")) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}token=${encodeURIComponent(token)}`;
+  return getStorageBackedUrl(url, token);
 }
 
 function isVideo(a: Asset): boolean {
@@ -239,8 +245,13 @@ export function PhotoLightbox({
 
       {/* ─── Top Toolbar ─── */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
-        <div className="flex items-center gap-3 text-white text-sm">
-          <span className="font-medium truncate max-w-[200px] sm:max-w-[400px]">{asset.filename}</span>
+        <div className="flex min-w-0 items-center gap-3 text-white text-sm">
+          {/* Tighter filename clamp on mobile so the Close button on the
+              right stays inside the viewport. The default 200px ate
+              ~half the iPhone width and pushed the trailing buttons
+              (Fullscreen, divider, Close) off-screen — users had no
+              visible exit. */}
+          <span className="font-medium truncate max-w-[120px] sm:max-w-[400px]">{asset.filename}</span>
           {asset.width && asset.height && <span className="hidden sm:inline text-white/40 text-xs">{asset.width} x {asset.height}</span>}
           {zoom !== 1 && <span className="text-white/40 text-xs">{Math.round(zoom * 100)}%</span>}
           {asset.burst_is_top_pick && (
@@ -249,10 +260,12 @@ export function PhotoLightbox({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <GlassIconButton size="sm" label="Zoom out (-)" onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
-          <GlassIconButton size="sm" label="Zoom in (+)" onClick={() => setZoom(z => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
-          <div className="w-px h-6 bg-white/10 mx-1" />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Zoom buttons hidden on mobile — touch devices have native
+              pinch-to-zoom and the buttons crowded out the Close exit. */}
+          <GlassIconButton size="sm" label="Zoom out (-)" className="hidden sm:inline-flex" onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
+          <GlassIconButton size="sm" label="Zoom in (+)" className="hidden sm:inline-flex" onClick={() => setZoom(z => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
+          <div className="hidden sm:block w-px h-6 bg-white/10 mx-1" />
           {asset.face_boxes && asset.face_boxes.length > 0 && (
             <GlassIconButton
               size="sm"
@@ -298,8 +311,11 @@ export function PhotoLightbox({
               </div>
             )}
           </div>
-          <GlassIconButton size="sm" label={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"} onClick={toggleFullscreen}>{isFullscreen ? <Compress /> : <Expand />}</GlassIconButton>
-          <div className="w-px h-6 bg-white/10 mx-1" />
+          {/* Fullscreen toggle hidden on mobile — phone browsers already
+              render the image at viewport size and the button was crowding
+              out the Close (X) exit. */}
+          <GlassIconButton size="sm" label={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"} className="hidden sm:inline-flex" onClick={toggleFullscreen}>{isFullscreen ? <Compress /> : <Expand />}</GlassIconButton>
+          <div className="hidden sm:block w-px h-6 bg-white/10 mx-1" />
           <GlassIconButton size="sm" variant="ghost" label="Close (Esc)" onClick={onClose}><XMark /></GlassIconButton>
         </div>
       </div>
@@ -457,8 +473,11 @@ export function PhotoLightbox({
           </div>
         )}
 
-        {/* Keyboard hints */}
-        <div className="mb-2 flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide flex-wrap">
+        {/* Keyboard hints — desktop only. The hint row was visible on
+            mobile and confused users (it shows keyboard shortcuts that
+            do nothing on touch devices) while taking footer space that
+            the filmstrip needs. */}
+        <div className="mb-2 hidden items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide flex-wrap sm:flex">
           <span>← → Navigate</span><span>F Fullscreen</span><span>I Info</span><span>C Comments</span>
           {asset.face_boxes && asset.face_boxes.length > 0 && <span>B Faces</span>}
           <span>+/- Zoom</span><span>Esc Close</span>

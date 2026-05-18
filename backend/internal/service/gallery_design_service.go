@@ -40,13 +40,31 @@ type ThemeConfig struct {
 // decode of the PUT payload dropped the strings, so the public viewer would
 // render the gallery title fallback even when the studio showed a custom
 // heading. Tagged with camelCase JSON keys to match what the frontend
-// reducer dispatches (see frontend/src/app/(dashboard)/galleries/[id]/design/page.tsx).
+// reducer dispatches (see frontend/src/app/(dashboard)/galleries/[id]/cover/page.tsx).
+//
+// 2026-05-18: Added free-text overlay fields (TitlePosition, SubtitlePosition,
+// TextAlign, TextColor, TextShadow, AspectRatio) for the merged Cover &
+// Design page. Without these, the Go JSON decoder silently dropped them on
+// PUT, so dragged title/subtitle positions appeared to "reset" every time
+// the user navigated back to the page — payload was sent, then stripped on
+// server-side decode, then re-hydration found nothing to apply. Pointer
+// types (*FocalPoint, *string, *bool) so missing fields stay omitted in
+// JSON instead of being persisted as zero values that would override
+// frontend defaults on legacy galleries.
 type CoverConfig struct {
-	AssetID    *uuid.UUID `json:"assetId,omitempty"`
-	StyleID    string     `json:"styleId"`    // cover layout style (1 of 30)
-	FocalPoint FocalPoint `json:"focalPoint"`
-	Title      string     `json:"title,omitempty"`
-	Subtitle   string     `json:"subtitle,omitempty"`
+	AssetID          *uuid.UUID  `json:"assetId,omitempty"`
+	StyleID          string      `json:"styleId"` // cover layout style (1 of 30)
+	FocalPoint       FocalPoint  `json:"focalPoint"`
+	Title            string      `json:"title,omitempty"`
+	Subtitle         string      `json:"subtitle,omitempty"`
+	TitlePosition    *FocalPoint `json:"titlePosition,omitempty"`    // drag-positioned title (0..100 percent)
+	SubtitlePosition *FocalPoint `json:"subtitlePosition,omitempty"` // drag-positioned subtitle
+	TextAlign        *string     `json:"textAlign,omitempty"`        // "left" | "center" | "right" for overlay text
+	TextColor        *string     `json:"textColor,omitempty"`        // hex for legacy shared overlay text color
+	TitleColor       *string     `json:"titleColor,omitempty"`       // hex for title overlay (split from textColor 2026-05-18)
+	SubtitleColor    *string     `json:"subtitleColor,omitempty"`    // hex for subtitle overlay (split from textColor 2026-05-18)
+	TextShadow       *bool       `json:"textShadow,omitempty"`       // toggles a readability shadow
+	AspectRatio      *string     `json:"aspectRatio,omitempty"`      // overrides styleId's aspectRatio (e.g. "16/9")
 }
 
 // FocalPoint represents the cover crop focal point (0-100 range).
@@ -132,7 +150,11 @@ func (s *GalleryDesignService) GetDesignConfig(ctx context.Context, galleryID uu
 	return &config, nil
 }
 
-// UpdateDesignConfig persists a design configuration for a gallery.
+// UpdateDesignConfig persists a typed design configuration. Kept for
+// backward-compat with any internal callers that already constructed a
+// GalleryDesignConfig — new code should prefer UpdateDesignConfigRaw to
+// avoid the schema-drift footgun where new frontend fields silently
+// vanish through the typed decode.
 func (s *GalleryDesignService) UpdateDesignConfig(ctx context.Context, galleryID uuid.UUID, config GalleryDesignConfig) error {
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil || gallery == nil {
@@ -145,6 +167,32 @@ func (s *GalleryDesignService) UpdateDesignConfig(ctx context.Context, galleryID
 		gallery.Settings = map[string]interface{}{}
 	}
 	gallery.Settings["design_config"] = config
+
+	return s.galleryRepo.Update(ctx, gallery)
+}
+
+// UpdateDesignConfigRaw persists a design configuration directly from the
+// raw JSON payload as a generic map. This is the preferred path from the
+// HTTP handler 2026-05-18 onward — preserves every field the frontend
+// sends, including ones the typed struct doesn't know about yet.
+// Increments `version` in-place so callers don't have to.
+func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galleryID uuid.UUID, raw map[string]interface{}) error {
+	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil || gallery == nil {
+		return fmt.Errorf("design: gallery not found")
+	}
+
+	// Increment version. The frontend sends a `version: number` field;
+	// we treat it as a write-conflict marker and bump it. Coerce any
+	// numeric representation (float64 from json default decode) back to
+	// an int-shaped float64 so the JSON output keeps the integer look.
+	prev, _ := raw["version"].(float64)
+	raw["version"] = prev + 1
+
+	if gallery.Settings == nil {
+		gallery.Settings = map[string]interface{}{}
+	}
+	gallery.Settings["design_config"] = raw
 
 	return s.galleryRepo.Update(ctx, gallery)
 }

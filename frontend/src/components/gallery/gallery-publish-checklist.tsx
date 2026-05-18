@@ -44,7 +44,7 @@ export function GalleryPublishChecklist({ gallery, assets }: GalleryPublishCheck
       key: "design",
       label: "Design and theme reviewed",
       ok: Boolean(gallery.cover_template && gallery.cover_template !== "none"),
-      actionHref: `/galleries/${gallery.id}/design`,
+      actionHref: `/galleries/${gallery.id}/cover`,
     },
     {
       key: "access",

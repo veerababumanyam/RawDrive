@@ -356,7 +356,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <RoleSidebar role={role} userInfo={userInfo} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
 
       {/* Header bar — offset from sidebar on desktop */}
-      <header className="bg-surface border-b border-border fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 lg:w-[calc(100%-var(--sidebar-width-expanded))] lg:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)] lg:px-8">
+      <header className="bg-surface border-b border-border fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 transition-[width] duration-200 ease-out lg:w-[calc(100%-var(--sidebar-width))] lg:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)] lg:px-6">
         {/* Mobile hamburger — opens sidebar drawer on < lg screens */}
         <button
           type="button"
@@ -428,7 +428,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main content — offset by sidebar on desktop */}
-      <main className="min-h-screen px-4 pb-12 pt-24 lg:ml-[var(--sidebar-width-expanded)] lg:px-8">{children}</main>
+      <main className="min-h-screen px-4 pb-12 pt-24 transition-[margin-left] duration-200 ease-out lg:ml-[var(--sidebar-width)] lg:px-6">{children}</main>
     </div>
   );
 }

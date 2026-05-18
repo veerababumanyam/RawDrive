@@ -11,7 +11,7 @@ type Config struct {
 	LocalDir  string // base directory for local driver
 	Bucket    string // S3 bucket name
 	Region    string // AWS region
-	Endpoint  string // custom endpoint (e.g. Cloudflare R2)
+	Endpoint  string // custom S3-compatible endpoint (e.g. Backblaze B2)
 	AccessKey string // AWS access key ID
 	SecretKey string // AWS secret access key
 }

@@ -1,6 +1,13 @@
 # Known Issues from Production Bootstrap (2026-04-11)
 
-## 🚨 P0 — R2 backup credentials are DEAD
+> **SUPERSEDED 2026-05-18:** RawDrive switched its managed storage backend from
+> Cloudflare R2 to Backblaze B2. The R2 credential-rotation issue documented
+> below is obsolete — R2 is no longer used for storage or backups. The bootstrap
+> Phase B tasks involving R2 (rclone setup, nightly backups to R2) need to be
+> re-run against the new B2 bucket. Historical context preserved below for the
+> April 2026 bootstrap record only.
+
+## 🚨 P0 — R2 backup credentials are DEAD [HISTORICAL — no longer applicable]
 
 **Symptom:** `rclone lsf r2:rawdrive` returns `401 Unauthorized`. boto3 `list_objects_v2` returns the same.
 

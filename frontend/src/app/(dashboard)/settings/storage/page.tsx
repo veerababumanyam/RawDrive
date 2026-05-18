@@ -5,7 +5,7 @@ import { getStoredAccessToken, getStoredWorkspaceId } from "@/lib/auth";
 
 // ──────────────────────── Types ────────────────────────
 
-type Provider = "r2" | "s3" | "minio" | "b2";
+type Provider = "s3" | "minio" | "b2";
 type WizardStep = 1 | 2 | 3;
 type PlanTier = "free" | "starter" | "professional" | "enterprise" | "standard";
 
@@ -19,9 +19,9 @@ interface StorageConfig {
 }
 
 const BYOS_PROVIDERS: { id: Provider; name: string; desc: string }[] = [
+  { id: "b2", name: "Backblaze B2", desc: "Same provider as the managed default — affordable, S3-compatible" },
   { id: "s3", name: "AWS S3", desc: "Industry standard object storage" },
   { id: "minio", name: "MinIO", desc: "Self-hosted S3-compatible" },
-  { id: "b2", name: "Backblaze B2", desc: "Affordable cloud storage" },
 ];
 
 // ──────────────────────── Page ────────────────────────
@@ -95,7 +95,7 @@ export default function StorageSettingsPage() {
 
   const [step, setStep] = useState<WizardStep>(1);
   const [config, setConfig] = useState<StorageConfig>({
-    provider: "s3", bucketName: "", region: "", endpoint: "", accessKey: "", secretKey: "",
+    provider: "b2", bucketName: "", region: "", endpoint: "", accessKey: "", secretKey: "",
   });
   const [testResult, setTestResult] = useState<"idle" | "testing" | "success" | "error">("idle");
 
@@ -140,8 +140,8 @@ export default function StorageSettingsPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm text-on-surface-variant">Storage Provider</p>
-              <p className="text-lg font-semibold">Cloudflare R2</p>
-              <p className="text-xs text-on-surface-variant mt-0.5">Managed by RawDrive — zero egress, global CDN</p>
+              <p className="text-lg font-semibold">Backblaze B2</p>
+              <p className="text-xs text-on-surface-variant mt-0.5">Managed by RawDrive — S3-compatible object storage</p>
             </div>
             <span className={`text-xs px-3 py-1 rounded-full ${warningLevel === "critical" ? "bg-feedback-error/10 text-feedback-error" : warningLevel === "warning" ? "bg-feedback-warning/10 text-feedback-warning" : "bg-primary/10 text-primary"}`}>
               {warningLevel === "critical" ? "Storage Critical" : warningLevel === "warning" ? "Storage Warning" : "Active"}
@@ -173,7 +173,7 @@ export default function StorageSettingsPage() {
             </div>
             <p className="text-xs text-on-surface-variant mb-4">
               Connect your own AWS S3, MinIO, or Backblaze B2 bucket for full control over your storage infrastructure.
-              All standard and professional plans use Cloudflare R2 managed by RawDrive.
+              All tiers use the RawDrive-managed Backblaze B2 bucket by default; BYOS lets you override it with your own credentials.
             </p>
             <button className="px-5 py-2 text-xs font-medium rounded-xl border border-primary/30 text-primary hover:bg-primary/5 transition-colors">
               Upgrade to Enterprise
@@ -184,7 +184,7 @@ export default function StorageSettingsPage() {
           <>
             <h2 className="text-lg font-semibold mb-4">Bring Your Own Storage</h2>
             <p className="text-xs text-on-surface-variant mb-6">
-              Enterprise plan — connect your own storage bucket. Cloudflare R2 remains the default; BYOS is an additional option.
+              Enterprise plan — connect your own storage bucket. The RawDrive-managed Backblaze B2 bucket remains the default; BYOS is an additional override.
             </p>
 
             {/* Stepper */}
@@ -198,7 +198,7 @@ export default function StorageSettingsPage() {
               ))}
             </div>
 
-            {/* Step 1: Choose BYOS Provider (R2 is NOT an option — it's the default) */}
+            {/* Step 1: Choose BYOS Provider (managed B2 is the default and is NOT a wizard option — these are overrides only) */}
             {step === 1 && (
               <div className="space-y-3 mb-8">
                 {BYOS_PROVIDERS.map((p) => (
@@ -263,7 +263,7 @@ export default function StorageSettingsPage() {
                   <div className="flex justify-between"><span className="text-on-surface-variant">Region</span><span>{config.region || "—"}</span></div>
                 </div>
                 <p className="text-xs text-on-surface-variant mt-4 p-3 rounded-xl bg-surface-container border border-white/5">
-                  Existing assets on Cloudflare R2 will be migrated in the background. This may take several hours for large galleries.
+                  New uploads will land in your configured bucket. Existing assets on the managed B2 backend remain accessible; reach out to support if you need them migrated.
                 </p>
                 <div className="flex justify-between mt-6">
                   <button onClick={() => setStep(2)} className="px-5 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5">Back</button>

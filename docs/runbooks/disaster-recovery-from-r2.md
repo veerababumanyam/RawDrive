@@ -1,8 +1,17 @@
 # Disaster Recovery from R2 Backup
 
-**When to use:** Both `.46` primary AND `.44` replica are gone. You need to restore from the nightly R2 backup to a fresh VPS.
+> **SUPERSEDED 2026-05-18:** RawDrive switched its managed storage and backup
+> destination from Cloudflare R2 to Backblaze B2. This document remains for
+> historical reference of the April 2026 bootstrap procedure.
+> **Follow-up needed (not yet written):** `disaster-recovery-from-b2.md` —
+> the same procedure adapted for the B2 endpoint
+> (`https://s3.us-east-005.backblazeb2.com`), the new `B2_KEY_ID` /
+> `B2_APPLICATION_KEY` credentials, and the production bucket name.
+> Until that doc lands, treat the steps below as the operational template,
+> swapping every R2 reference for the B2 equivalent. The BOOTSTRAP-KNOWN-ISSUES
+> R2-creds-DEAD warning is also obsolete — R2 is no longer in the data path.
 
-**⚠️ BLOCKED on BOOTSTRAP-KNOWN-ISSUES.md P0:** the R2 credentials shipped in `HostingerServerDetails.md` were revoked before bootstrap execution. Until those creds are rotated, there are NO backups in R2. If you hit this scenario before the rotation, you have no restore source — read BOOTSTRAP-KNOWN-ISSUES.md first.
+**When to use:** Both `.46` primary AND `.44` replica are gone. You need to restore from the nightly backup (now on B2) to a fresh VPS.
 
 **RTO:** 30–60 minutes.
 **RPO:** ≤24 hours (age of last nightly dump).

@@ -15,7 +15,7 @@
 | Per-row DEK | Encrypts individual secret values | AES-256-GCM | Stored wrapped (by KEK) in `dek_wrapped` column | Re-wrapped on KEK rotation |
 | JWT signing key | Signs access + refresh tokens | HMAC-SHA256 | Environment variable | Annual or on compromise |
 | GPG backup key | Encrypts nightly pg_dump backups | AES-256 (symmetric, SHA512 S2K, 65M iterations) | `deploy/scripts/backup-db.sh` passphrase in env | Annual |
-| R2 credentials | S3-compatible API auth | HMAC (AWS Sig v4) | Environment variables (R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) | Annual or on compromise |
+| B2 storage credentials | S3-compatible API auth (Backblaze B2, managed backend) | HMAC (AWS Sig v4) | Environment variables (B2_KEY_ID, B2_APPLICATION_KEY) in `.env.cobolt` | Annual or on compromise |
 
 ## 2. KEK Rotation Procedure
 
@@ -53,7 +53,7 @@ See `backend/internal/crypto/envelope.go` for implementation.
 
 If the KEK is believed compromised:
 1. Follow steps 1-4 above immediately
-2. Also rotate all R2 credentials (re-wrapped secrets may have been read)
+2. Also rotate all B2 storage credentials (re-wrapped secrets may have been read)
 3. File an incident report per `docs/runbooks/incident-response.md`
 
 ## 3. JWT Key Rotation

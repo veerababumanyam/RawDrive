@@ -18,7 +18,7 @@
 - **Backend:** Go — Chi router, JWT, pgvector. Modules in `backend/go.mod`.
 - **Frontend:** Next.js 15 + TypeScript 5 + Tailwind v4, pnpm. See `frontend/package.json` and `frontend/AGENTS.md` (mandatory before touching `frontend/`).
 - **Data plane:** Postgres 16 + pgvector, Valkey 8, NATS JetStream, Mailpit.
-- **Storage:** Cloudflare R2 only (standard/pro). BYOS = enterprise-only.
+- **Storage:** Backblaze B2 (S3-compatible) is the managed default for ALL tiers. Enterprise can override via BYOS (S3/MinIO/B2).
 - **E2E:** Playwright in the `playwright` Docker service, not the Windows host.
 - **Package managers:** npm at root (orchestration only), pnpm inside `frontend/`, `go mod` inside `backend/`.
 
@@ -45,7 +45,7 @@ docker-compose.yml  postgres + valkey + nats + mailpit + playwright
 These are **load-bearing**. Violations have caused real production bugs. `AGENTS.md` holds the authoritative long-form version; the items below are the hard floor.
 
 ### Architectural Invariants
-- **Storage:** R2 is the ONLY file storage driver. `STORAGE_DRIVER=local` must FATAL exit. No local disk, ever.
+- **Storage:** Backblaze B2 (via the `s3` driver, S3-compatible API) is the managed file storage backend for ALL tiers. `STORAGE_DRIVER=local` must FATAL exit. No local disk, ever. Enterprise tenants may override the managed B2 backend via the BYOS wizard with S3/MinIO/B2 credentials of their own.
 - **Credentials:** Never hardcode secrets. Resolution order is `platform_settings` DB table → env var → disable feature with warning. `.env.cobolt` is gitignored.
 - **WebP derivatives:** Every image upload MUST generate `thumb_sm_webp`, `thumb_md_webp`, `thumb_lg_webp`, `display_webp` via `cwebp`. Originals preserved for download only.
 - **JWT context:** Handlers MUST call `middleware.JWTClaimsFromContext(r.Context())`. Never define a local context-key type — Go matches `(type, value)` and a local type silently fails, returning 401 on every route.
@@ -73,14 +73,14 @@ These are **load-bearing**. Violations have caused real production bugs. `AGENTS
 - Adding OTP to login, or accepting either OTP or TOTP interchangeably.
 - Adding `/upload` to sidebar nav.
 - Introducing `<button>` with inline SVG for an icon action.
-- Hardcoding API keys, R2 creds, or SMTP creds anywhere in Go or TS.
+- Hardcoding API keys, B2 creds, or SMTP creds anywhere in Go or TS.
 - Defining a private `contextKey` type in a handler package for JWT claims.
 - Editing `frontend/src/index.css` tokens directly instead of `design-tokens.json`.
 - Using Tailwind `neutral-*`/`gray-*`/arbitrary `[...]` values.
 - Creating E2E tests that log in through the UI (use `storageState` or `addInitScript`).
 - Placing `STORAGE_DRIVER=local` fallback paths anywhere.
 - Mocking the dashboard storage widget — it reads from `workspace_storage`.
-- Showing the BYOS wizard to standard/pro users. R2 does NOT appear in the BYOS wizard.
+- Showing the BYOS wizard to standard/pro users. The managed-B2 row is read-only for all tiers; the BYOS wizard is enterprise-only and offers AWS S3, MinIO, and Backblaze B2 as override providers.
 - Working in sibling `RawDrive*` directories — the active project is **RawDriveCobolt** only.
 
 ---

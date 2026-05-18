@@ -34,20 +34,20 @@ func newAWSS3Client(cfg Config) (S3Client, error) {
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		if cfg.Endpoint != "" {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
-			o.UsePathStyle = true // Required for R2 and MinIO
+			o.UsePathStyle = true // Required for B2 and MinIO
 		}
 		// AWS SDK Go v2 v1.36+ flipped the default request-checksum
 		// calculation mode to WhenSupported, which means PutObject on
 		// an unseekable stream over plain HTTP fails with
 		// "unseekable stream is not supported without TLS and trailing
-		// checksum". Production R2 is always HTTPS and seekable from
+		// checksum". Production B2 is always HTTPS and seekable from
 		// our callers, so the default works — but the thumbnail worker
 		// pipes cwebp output as an io.Reader into PutObject over the
 		// MinIO test endpoint (HTTP), which blew up during UAT on
 		// 2026-04-12. Setting WhenRequired narrows the behavior to
 		// operations that mandate a checksum header (none of which we
 		// use), which restores PutObject's pre-SDK-v1.36 semantics for
-		// both R2 and MinIO.
+		// both B2 and MinIO.
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})

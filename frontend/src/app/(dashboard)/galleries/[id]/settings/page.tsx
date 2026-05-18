@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getGallery, updateGallerySettings, type Gallery } from "@/lib/api/galleries";
+import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 export default function GallerySettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -83,7 +84,8 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+        <GalleryWorkspaceNav galleryId={id} />
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-surface-sunken" />
           <div className="h-64 rounded-2xl bg-surface-sunken" />
@@ -94,17 +96,23 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
   if (!gallery) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-sm text-text-secondary">{error || "Gallery not found."}</p>
-        <Link href="/galleries" className="btn-tertiary mt-4 px-3 py-2 text-sm">
-          Back to galleries
-        </Link>
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-16">
+        <GalleryWorkspaceNav galleryId={id} />
+        <div className="text-center">
+          <p className="text-sm text-text-secondary">{error || "Gallery not found."}</p>
+          <Link href="/galleries" className="btn-tertiary mt-4 px-3 py-2 text-sm">
+            Back to galleries
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
+      {/* Workspace nav first so the section dropdown is the topmost
+          element on mobile (matches the cover and AI sub-pages). */}
+      <GalleryWorkspaceNav galleryId={id} />
       <div className="space-y-2">
         <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
           Back to gallery

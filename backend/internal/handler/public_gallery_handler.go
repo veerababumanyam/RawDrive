@@ -477,8 +477,8 @@ func (h *PublicGalleryHandler) lookupWorkspaceBranding(ctx context.Context, work
 }
 
 // GetBrandingLogo streams the workspace logo through the application after
-// resolving the public gallery slug and plan gate. It never exposes the R2
-// storage key or public bucket URL to the browser.
+// resolving the public gallery slug and plan gate. It never exposes the
+// object-store storage key or public bucket URL to the browser.
 func (h *PublicGalleryHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -648,8 +648,9 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 // ──────────────────────────────────────────────────────────────────────────────
 
 // PublicAssetDownload handles GET /api/v1/public/galleries/{slug}/assets/{assetId}/download.
-// Streams the original file from R2 storage for published galleries that have
-// downloads enabled. No JWT required — this is a public endpoint.
+// Streams the original file from the object store (Backblaze B2 by default)
+// for published galleries that have downloads enabled. No JWT required —
+// this is a public endpoint.
 func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -710,7 +711,7 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Stream file from R2 storage
+	// Stream file from object storage
 	reader, err := h.assetSvc.GetStorageReader(r.Context(), asset.StorageKey)
 	if err != nil {
 		http.Error(w, `{"error":"file retrieval failed"}`, http.StatusInternalServerError)

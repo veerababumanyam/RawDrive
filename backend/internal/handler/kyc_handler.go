@@ -10,8 +10,9 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 )
 
-// KycHandler exposes dealer KYC document endpoints. Files are uploaded to R2
-// directly by the frontend; this handler only tracks metadata + review state.
+// KycHandler exposes dealer KYC document endpoints. Files are uploaded to
+// the configured S3-compatible object store (Backblaze B2 by default) by
+// the frontend; this handler only tracks metadata + review state.
 type KycHandler struct {
 	repo       *repository.KycDocumentRepo
 	dealerRepo *repository.DealerRepo

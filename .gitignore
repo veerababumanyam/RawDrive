@@ -3,10 +3,13 @@
 .env.cobolt
 .env.mcp
 .env.backend
-# Backup copies of env files (e.g. .env.cobolt.bak from pre-edit snapshots).
-# Glob pattern so any future *.bak env file is covered automatically
-# — these commonly contain real secrets and must never be committed.
+# Backup copies of env files (e.g. .env.cobolt.bak from pre-edit snapshots,
+# or .env.bak.20260517-152221 from cobolt-managed rotations).
+# These commonly contain real secrets and must never be committed.
+# Two glob patterns to cover both `.env<...>.bak` and `.env.bak.<timestamp>`.
 .env*.bak
+.env*.bak.*
+.env.bak*
 
 # Editor / IDE state — per-user config, not project state.
 # Committing these conflicts across devs who use different layouts.
@@ -14,6 +17,13 @@
 .vscode/
 .idea/
 .claude/
+# Codex IDE per-user state — mirror the .claude/ exclusion so cobolt-sync
+# install artifacts (.codex/agents/, .codex/cobolt/, .codex/skills/,
+# .codex/.cobolt-backups/) stay out of the repo. .codex/config.toml is
+# already tracked from before this entry; gitignore does not un-track.
+.codex/
+# Cobolt-managed pre-edit backups (local-only).
+.cobolt-backups/
 
 _cobolt-output/
 .worktrees/

@@ -33,6 +33,28 @@ export interface PublicDesignConfig {
     focalPoint?: { x: number; y: number };
     title?: string;
     subtitle?: string;
+    // Free-positioned text overlay — written by the Cover & Design page's
+    // drag editor. When set, the public hero renders the title/subtitle at
+    // these (x, y) percentage coordinates of the cover frame rather than
+    // the styleId's fixed justify-end-with-textAlign position. Either or
+    // both can be set; missing values fall back to the legacy positioning.
+    titlePosition?: { x: number; y: number };
+    subtitlePosition?: { x: number; y: number };
+    // Text alignment for the dragged overlay — `start`/`end` use the drop
+    // point as the anchor edge so the text grows toward the opposite edge;
+    // `center` anchors the midpoint at the drop point.
+    textAlign?: "left" | "center" | "right";
+    // Overlay readability controls. textColor is a hex string; textShadow
+    // toggles a CSS text-shadow that makes light copy legible over busy
+    // photos without requiring a full scrim layer.
+    textColor?: string;
+    titleColor?: string;
+    subtitleColor?: string;
+    textShadow?: boolean;
+    // Aspect-ratio override for the cover frame. When set, replaces the
+    // styleId's declared aspectRatio so users can crop a 21/9 panoramic
+    // to 4/3 without picking a whole new style. Format: "W/H" string.
+    aspectRatio?: string;
   };
   typography?: {
     pairingId?: string;
@@ -79,8 +101,11 @@ export function readPublicDesignConfig(
   const typoRaw = asObject(root.typography);
   const gridRaw = asObject(root.grid);
   const focal = asObject(coverRaw?.focalPoint);
+  const titlePos = asObject(coverRaw?.titlePosition);
+  const subtitlePos = asObject(coverRaw?.subtitlePosition);
   const variant = asString(themeRaw?.variant);
   const layout = asString(gridRaw?.layout);
+  const coverTextAlign = asString(coverRaw?.textAlign);
 
   return {
     theme: themeRaw
@@ -102,6 +127,21 @@ export function readPublicDesignConfig(
             : undefined,
           title: asString(coverRaw.title),
           subtitle: asString(coverRaw.subtitle),
+          titlePosition: titlePos
+            ? { x: asNumber(titlePos.x) ?? 50, y: asNumber(titlePos.y) ?? 50 }
+            : undefined,
+          subtitlePosition: subtitlePos
+            ? { x: asNumber(subtitlePos.x) ?? 50, y: asNumber(subtitlePos.y) ?? 60 }
+            : undefined,
+          textAlign:
+            coverTextAlign === "left" || coverTextAlign === "center" || coverTextAlign === "right"
+              ? coverTextAlign
+              : undefined,
+          textColor: asString(coverRaw.textColor),
+          titleColor: asString(coverRaw.titleColor),
+          subtitleColor: asString(coverRaw.subtitleColor),
+          textShadow: asBool(coverRaw.textShadow),
+          aspectRatio: asString(coverRaw.aspectRatio),
         }
       : undefined,
     typography: typoRaw
