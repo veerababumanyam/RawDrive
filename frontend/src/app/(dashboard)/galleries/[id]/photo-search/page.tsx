@@ -129,6 +129,12 @@ export default function PhotoSearchPage({
   const [stage, setStage] = useState<Stage>("idle");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [cameraError, setCameraError] = useState<CameraError | null>(null);
+  // videoReady — flipped on the <video>'s `loadedmetadata` event. Until
+  // it fires, videoWidth/videoHeight are 0 even though play() has
+  // resolved, and drawImage(video,…) writes a blank frame. We disable
+  // the Capture button on !videoReady so the user can't tap before
+  // dimensions exist, and we gate handleCapture defensively as well.
+  const [videoReady, setVideoReady] = useState(false);
   const [searchResult, setSearchResult] = useState<FaceSearchResponse | null>(null);
   const [matchedAssets, setMatchedAssets] = useState<Asset[]>([]);
 
@@ -141,6 +147,7 @@ export default function PhotoSearchPage({
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setVideoReady(false);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -148,6 +155,7 @@ export default function PhotoSearchPage({
     setCameraError(null);
     setSearchResult(null);
     setMatchedAssets([]);
+    setVideoReady(false);
 
     // Up-front secure-context check. If the page is on a LAN IP over
     // HTTP, `navigator.mediaDevices` is undefined in modern Chrome —
@@ -178,17 +186,59 @@ export default function PhotoSearchPage({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
+      // IMPORTANT: stash the stream BEFORE flipping the stage. The
+      // <video> element is only rendered when stage ∈ {preview,
+      // searching}, so videoRef.current is null at this point. The
+      // attach-on-mount effect below picks the stream up once React
+      // mounts the element. Previously we attempted srcObject = stream
+      // here, the `if (videoRef.current)` was false, the assignment
+      // was silently skipped, and the preview stayed blank with
+      // videoWidth=0 → "Camera not ready yet" when the user pressed
+      // Capture.
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => undefined);
-      }
       setStage("preview");
     } catch (err) {
       setCameraError(classifyCameraError(err));
       setStage("camera-error");
     }
   }, []);
+
+  // Attach the MediaStream to the <video> AFTER the element mounts.
+  // Runs whenever stage flips into preview/searching, which is the
+  // first render where videoRef.current is non-null. Also wires the
+  // `loadedmetadata` listener that toggles videoReady — until that
+  // fires, videoWidth/videoHeight are 0 and drawImage produces a
+  // blank canvas.
+  useEffect(() => {
+    if (stage !== "preview" && stage !== "searching") return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    const handleLoadedMetadata = () => {
+      // Some browsers (Safari occasionally) need an explicit play()
+      // here even when autoPlay is set on the element. Failures are
+      // benign — the user can retry — so we swallow them.
+      void video.play().catch(() => undefined);
+      setVideoReady(video.videoWidth > 0 && video.videoHeight > 0);
+    };
+
+    // If metadata is already loaded by the time this effect runs
+    // (cached element re-use, fast camera), use it immediately.
+    if (video.readyState >= 1 && video.videoWidth > 0) {
+      handleLoadedMetadata();
+    } else {
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    }
+
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+    };
+  }, [stage]);
 
   // Auto-stop camera on unmount so the OS camera light goes out the
   // moment the user navigates away — even if they used the back button
@@ -204,10 +254,25 @@ export default function PhotoSearchPage({
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const w = video.videoWidth;
-    const h = video.videoHeight;
+
+    // Try a short polling window for videoWidth before giving up.
+    // Browsers populate videoWidth after `loadedmetadata`, but on a
+    // slow machine or first-permission-grant a tap on Capture can
+    // race the event by a few frames. Wait up to ~1s instead of
+    // surfacing the cryptic "Camera not ready yet" on the first try.
+    let w = video.videoWidth;
+    let h = video.videoHeight;
     if (!w || !h) {
-      setErrorDetail("Camera not ready yet — try again in a moment.");
+      for (let i = 0; i < 20 && (!w || !h); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        w = video.videoWidth;
+        h = video.videoHeight;
+      }
+    }
+    if (!w || !h) {
+      setErrorDetail(
+        "Camera still warming up — wait a moment for the preview to fill the frame, then tap Capture again.",
+      );
       return;
     }
     canvas.width = w;
@@ -330,6 +395,7 @@ export default function PhotoSearchPage({
                 className="h-full w-full object-cover"
                 playsInline
                 muted
+                autoPlay
                 aria-label="Camera preview"
               />
               {/* Subtle reticle so users know roughly where to put
@@ -342,17 +408,22 @@ export default function PhotoSearchPage({
                 <div className="h-2/3 w-2/3 rounded-full border-2 border-white/30" />
               </div>
             </div>
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-1">
               <button
                 type="button"
                 onClick={() => void handleCapture()}
-                disabled={stage === "searching"}
+                disabled={stage === "searching" || !videoReady}
                 className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {stage === "searching" ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
                     Searching…
+                  </>
+                ) : !videoReady ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+                    Warming up camera…
                   </>
                 ) : (
                   <>
@@ -361,6 +432,11 @@ export default function PhotoSearchPage({
                   </>
                 )}
               </button>
+              {!videoReady && stage === "preview" && (
+                <p className="text-[11px] text-text-tertiary">
+                  Waiting for the first video frame…
+                </p>
+              )}
             </div>
             {errorDetail && (
               <p className="text-center text-xs text-feedback-error">{errorDetail}</p>
