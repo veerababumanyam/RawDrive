@@ -320,13 +320,23 @@ func (s *AlbumService) resolveFaceClusterAssets(ctx context.Context, galleryID u
 }
 
 // UtilityAlbums are well-known smart albums seeded on gallery creation.
+//
+// 2026-05-18: "RAW" smart album dropped from the seed list. The
+// content_type=image/x- filter caught raw camera files (CR2, NEF, ARW,
+// DNG, RAF) but raw originals are never exposed to clients — the gallery
+// only serves WebP derivatives, so a guest-facing "RAW" chip surfaced
+// nothing they could open. Photographers managing the dashboard side
+// also have no use for filtering by raw container type since every
+// thumbnail is already WebP regardless of origin. Existing galleries
+// still have a "RAW" row in the DB; the frontend filters it out at the
+// list-API layer (lib/api/galleries.ts) so the chip disappears for
+// both new and historical galleries without a data migration.
 var UtilityAlbums = []struct {
 	Name        string
 	SmartFilter map[string]interface{}
 }{
 	{Name: "Favorites", SmartFilter: map[string]interface{}{"is_favorite": true}},
 	{Name: "Videos", SmartFilter: map[string]interface{}{"content_type": "video/"}},
-	{Name: "RAW", SmartFilter: map[string]interface{}{"content_type": "image/x-"}},
 }
 
 // SeedUtilityAlbums creates the standard smart albums for a new gallery.

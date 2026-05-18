@@ -388,9 +388,20 @@ export async function listGalleryAlbums(_token: string, galleryId: string): Prom
   const res = await authFetch(`/api/v1/galleries/${galleryId}/albums`);
   if (!res.ok) throw new Error(`Failed to list albums: ${res.status}`);
   const body = await res.json();
-  if (Array.isArray(body)) return body;
-  if (body && Array.isArray(body.data)) return body.data;
-  return [];
+  const raw: GalleryAlbum[] = Array.isArray(body)
+    ? body
+    : body && Array.isArray(body.data)
+      ? body.data
+      : [];
+  // 2026-05-18: "RAW" smart album was retired (seed dropped in
+  // backend/internal/service/album_service.go::UtilityAlbums) because
+  // the gallery only serves WebP derivatives — a guest filter for raw
+  // camera files surfaced nothing they could open. Historical galleries
+  // still have a "RAW" album row in the DB; filter it client-side so
+  // the chip stays hidden without a backend data migration. Drop only
+  // when name === "RAW" exactly so a user-created album named e.g.
+  // "Raw selects" or "BTS raw" survives the filter.
+  return raw.filter((a) => a.name !== "RAW");
 }
 
 export async function createGalleryAlbum(
@@ -502,8 +513,12 @@ export async function getPublicGalleryAlbums(slug: string): Promise<PublicGaller
     const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/albums`);
     if (!res.ok) return [];
     const body = await res.json();
-    if (Array.isArray(body)) return body;
-    return [];
+    const raw: PublicGalleryAlbum[] = Array.isArray(body) ? body : [];
+    // Match the dashboard-side filter in listGalleryAlbums — the "RAW"
+    // smart album was retired 2026-05-18. Guests never had a use for it
+    // (every served asset is WebP). Drop only the exact "RAW" name so
+    // a photographer's own album titled e.g. "Raw edits" still appears.
+    return raw.filter((a) => a.name !== "RAW");
   } catch {
     return [];
   }
