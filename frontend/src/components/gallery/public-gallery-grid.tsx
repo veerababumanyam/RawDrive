@@ -1062,13 +1062,31 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               )}
 
               {fullUrl ? (
-                <img
-                  src={fullUrl}
-                  alt={photo.filename}
-                  className="h-full w-full object-contain transition-transform duration-200"
-                  style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
-                  draggable={false}
-                />
+                // The watermark overlay is wrapped in a relative container
+                // so it tracks the <img>'s zoom transform — pointer-events-
+                // none keeps the lightbox's mouse-move (chrome auto-hide)
+                // and click-to-close still working through the overlay.
+                <div className="relative h-full w-full">
+                  <img
+                    src={fullUrl}
+                    alt={photo.filename}
+                    className="h-full w-full object-contain transition-transform duration-200"
+                    style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+                    draggable={false}
+                  />
+                  {watermarkOverlay && (
+                    <div
+                      className="pointer-events-none absolute inset-0"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+                    >
+                      <WatermarkOverlay
+                        text={watermarkOverlay.text}
+                        opacity={watermarkOverlay.opacity}
+                        position={watermarkOverlay.position}
+                      />
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p className="text-white/40 text-sm">Image unavailable</p>
               )}

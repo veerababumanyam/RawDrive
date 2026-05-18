@@ -29,10 +29,23 @@ type PublicGalleryHandler struct {
 	// without these continue to compile).
 	pool     *pgxpool.Pool // subscription tier lookup for GAL-FR-115
 	faceRepo *ai.FaceRepo  // gallery-scoped face match for GAL-FR-107/108
+
+	// 2026-05-18: watermark baking for the public download path. Optional —
+	// when nil, PublicAssetDownload streams the raw original. When set and
+	// the gallery's watermark_config is enabled, the original is decoded,
+	// watermarked, and re-encoded as JPEG before being streamed.
+	watermarkSvc *service.WatermarkService
 }
 
 func NewPublicGalleryHandler(gs *service.GalleryService, as *service.AssetService, ss *service.ShareLinkService) *PublicGalleryHandler {
 	return &PublicGalleryHandler{gallerySvc: gs, assetSvc: as, shareSvc: ss}
+}
+
+// WithWatermarkService wires the optional watermark baker used by
+// PublicAssetDownload. Returns the receiver for chained construction.
+func (h *PublicGalleryHandler) WithWatermarkService(ws *service.WatermarkService) *PublicGalleryHandler {
+	h.watermarkSvc = ws
+	return h
 }
 
 // WithM13Deps injects the M13 deferred-FR closure dependencies (pool + face
@@ -719,6 +732,36 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 	}
 	defer reader.Close()
 
+	// 2026-05-18: bake the gallery's text watermark into the download when:
+	//   1. The photographer enabled it on /galleries/{id}/settings
+	//      (watermark_config.enabled = true with non-empty text)
+	//   2. The source content_type is a JPEG/PNG image — stdlib decoders
+	//      can't handle RAW (CR2/NEF/ARW) or HEIC, and we don't want to
+	//      bake into the WebP/AVIF derivatives either (we serve originals).
+	//   3. A watermark service was wired at startup (always true in main.go
+	//      since v0.0.51; nil-safe so tests that omit it still pass through).
+	if h.watermarkSvc != nil && service.IsEnabled(gallery.WatermarkConfig) && supportsWatermarkBaking(asset.ContentType) {
+		cfg := service.ConfigFromMap(gallery.WatermarkConfig)
+		watermarked, werr := h.watermarkSvc.Apply(r.Context(), reader, cfg)
+		if werr == nil {
+			// The watermark service re-encodes as JPEG. Update headers
+			// accordingly so the browser names the file with .jpg and the
+			// MIME type matches the bytes being sent. Drop Content-Length
+			// — re-encoding changes the byte count and we don't know the
+			// new size without buffering the whole stream first.
+			outName := watermarkedFilename(asset.Filename)
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, outName))
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Header().Set("X-Watermarked", "true")
+			io.Copy(w, watermarked)
+			return
+		}
+		// Bake failed (decode error, unsupported color profile, etc.) —
+		// fall through to the original-stream path below so the download
+		// still completes. The watermark is "best effort" on the download
+		// path; the public viewer keeps its CSS overlay as a second line.
+	}
+
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, asset.Filename))
 	w.Header().Set("Content-Type", asset.ContentType)
 	if asset.SizeBytes > 0 {
@@ -726,4 +769,27 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 	}
 
 	io.Copy(w, reader)
+}
+
+// supportsWatermarkBaking reports whether the asset's content type can be
+// decoded by the stdlib image package + imaging library used by
+// WatermarkService.Apply. RAW formats (CR2/NEF/ARW/DNG) and HEIC are not
+// supported — those downloads stream untouched.
+func supportsWatermarkBaking(contentType string) bool {
+	switch strings.ToLower(contentType) {
+	case "image/jpeg", "image/jpg", "image/pjpeg", "image/png":
+		return true
+	default:
+		return false
+	}
+}
+
+// watermarkedFilename swaps the original extension for .jpg since the bake
+// path re-encodes as JPEG. Preserves the stem ("Wedding (42).NEF" →
+// "Wedding (42).jpg") and tolerates dotted filenames.
+func watermarkedFilename(name string) string {
+	if i := strings.LastIndex(name, "."); i > 0 {
+		return name[:i] + ".jpg"
+	}
+	return name + ".jpg"
 }

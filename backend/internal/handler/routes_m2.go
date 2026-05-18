@@ -354,6 +354,13 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	if deps.AlbumService != nil {
 		publicHandler = publicHandler.WithAlbumService(deps.AlbumService)
 	}
+	// 2026-05-18: wire the watermark baker for the public download path.
+	// WatermarkService is stateless — constructing one inline avoids
+	// threading it through M2Dependencies for what is a single-handler
+	// dependency. When the gallery's watermark_config.enabled is true the
+	// download will be re-encoded as a watermarked JPEG; otherwise the
+	// original streams through unchanged.
+	publicHandler = publicHandler.WithWatermarkService(service.NewWatermarkService())
 	// GAL-FR-115 + 107/108: inject optional pool + face repo for branding
 	// tier lookup and gallery-scoped FaceID matching.
 	if deps.Pool != nil {
