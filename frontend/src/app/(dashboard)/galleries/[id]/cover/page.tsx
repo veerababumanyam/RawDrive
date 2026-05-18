@@ -582,7 +582,12 @@ export default function CoverDesignPage() {
               <PanelTypography config={config} setConfig={setConfig} />
             )}
             {tab === "grid" && (
-              <PanelGrid config={config} setConfig={setConfig} />
+              <PanelGrid
+                config={config}
+                setConfig={setConfig}
+                assets={assets}
+                token={token}
+              />
             )}
             {tab === "theme" && (
               <PanelTheme config={config} setConfig={setConfig} />
@@ -887,9 +892,13 @@ function PanelTypography({
 function PanelGrid({
   config,
   setConfig,
+  assets,
+  token,
 }: {
   config: DesignConfig;
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+  assets: Asset[];
+  token: string | null;
 }) {
   return (
     <div className="space-y-4">
@@ -955,6 +964,150 @@ function PanelGrid({
         />
         Show filename caption under photos
       </label>
+
+      {/* Live grid preview — renders the user's actual gallery assets in
+          the chosen layout so they see exactly how the published page
+          will arrange photos. Mirrors the rules in public-gallery-grid:
+          masonry uses CSS columns, grid uses N square cells, justified
+          uses varied-width flex rows, carousel uses a horizontal strip. */}
+      <div className="space-y-2 border-t border-white/10 pt-4">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold">Preview</h3>
+          <span className="text-[10px] text-on-surface-variant/70">
+            {config.grid.layout} · {config.grid.columns} col · {config.grid.gap}px gap
+          </span>
+        </div>
+        <GridLivePreview config={config} assets={assets} token={token} />
+      </div>
+    </div>
+  );
+}
+
+function GridLivePreview({
+  config,
+  assets,
+  token,
+}: {
+  config: DesignConfig;
+  assets: Asset[];
+  token: string | null;
+}) {
+  // Cap the preview at 12 tiles so it stays compact even for big galleries.
+  // Empty-state handled below — if the gallery has no assets yet, show a
+  // placeholder grid using surface tiles so users can still preview the
+  // layout choice before uploading.
+  const sample = assets.slice(0, 12);
+  const empty = sample.length === 0;
+  const placeholderCount = empty ? Math.max(6, config.grid.columns * 2) : 0;
+  const gap = config.grid.gap;
+  const cols = config.grid.columns;
+
+  if (config.grid.layout === "carousel") {
+    return (
+      <div
+        className="overflow-x-auto rounded-lg border border-white/10 bg-surface/40 p-3"
+        style={{ maxHeight: 200 }}
+      >
+        <div className="flex" style={{ gap }}>
+          {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
+            const asset = empty ? null : (a as Asset);
+            const url = asset ? getAssetPreviewUrl(asset, token) : "";
+            return (
+              <div
+                key={i}
+                className="shrink-0 overflow-hidden rounded-md bg-surface-container-high"
+                style={{ width: 120, height: 80 }}
+              >
+                {url ? (
+                  <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (config.grid.layout === "masonry") {
+    // CSS columns + break-inside-avoid is the same technique
+    // public-gallery-grid uses for masonry. Heights vary so the asymmetry
+    // is visible at preview scale.
+    const heights = [70, 100, 80, 120, 90, 110, 75, 95, 105, 85, 115, 90];
+    return (
+      <div
+        className="rounded-lg border border-white/10 bg-surface/40 p-3"
+        style={{ columnCount: cols, columnGap: gap }}
+      >
+        {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
+          const asset = empty ? null : (a as Asset);
+          const url = asset ? getAssetPreviewUrl(asset, token) : "";
+          const h = heights[i % heights.length];
+          return (
+            <div
+              key={i}
+              className="mb-[var(--gap)] overflow-hidden rounded-md bg-surface-container-high"
+              style={{ ["--gap" as never]: `${gap}px`, marginBottom: gap, height: h, breakInside: "avoid" }}
+            >
+              {url ? (
+                <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (config.grid.layout === "justified") {
+    // Justified: flex rows with varying-width tiles, all the same height.
+    // public-gallery-grid uses flex-row + flex-grow tiles.
+    const widthWeights = [1.5, 1, 2, 1, 1.7, 1.2, 1, 1.8, 1.3, 1.4, 1, 1.6];
+    return (
+      <div
+        className="rounded-lg border border-white/10 bg-surface/40 p-3"
+        style={{ display: "flex", flexWrap: "wrap", gap }}
+      >
+        {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
+          const asset = empty ? null : (a as Asset);
+          const url = asset ? getAssetPreviewUrl(asset, token) : "";
+          const w = widthWeights[i % widthWeights.length];
+          return (
+            <div
+              key={i}
+              className="overflow-hidden rounded-md bg-surface-container-high"
+              style={{ flex: `${w} 1 ${w * 60}px`, height: 80 }}
+            >
+              {url ? (
+                <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // grid (default) — uniform square cells in N columns.
+  return (
+    <div
+      className="rounded-lg border border-white/10 bg-surface/40 p-3"
+      style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
+    >
+      {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
+        const asset = empty ? null : (a as Asset);
+        const url = asset ? getAssetPreviewUrl(asset, token) : "";
+        return (
+          <div
+            key={i}
+            className="aspect-square overflow-hidden rounded-md bg-surface-container-high"
+          >
+            {url ? (
+              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
