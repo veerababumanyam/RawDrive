@@ -49,7 +49,6 @@ import {
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
-import { COVER_STYLES } from "@/components/gallery/cover-styles";
 
 // ──────────────────────────── Data ────────────────────────────
 
@@ -124,14 +123,6 @@ const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
   { id: "justified", label: "Justified" },
   { id: "carousel", label: "Carousel" },
 ];
-
-const ASPECT_RATIOS = [
-  { id: "16/9", label: "16:9" },
-  { id: "21/9", label: "21:9" },
-  { id: "4/3", label: "4:3" },
-  { id: "3/4", label: "3:4" },
-  { id: "1/1", label: "1:1" },
-] as const;
 
 const DEFAULT_CONFIG: DesignConfig = {
   theme: { id: "liquid-glass", variant: "dark", accentColor: "" },
@@ -531,23 +522,6 @@ export default function CoverDesignPage() {
               </div>
             )}
           </div>
-
-          {/* Aspect ratio chips below preview — global, applies regardless of tab */}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {ASPECT_RATIOS.map((ar) => (
-              <button
-                key={ar.id}
-                onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, aspectRatio: ar.id } }))}
-                className={`min-h-[36px] rounded-lg border px-3 py-1.5 text-xs transition-colors ${
-                  config.cover.aspectRatio === ar.id
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-white/10 text-on-surface-variant hover:bg-white/5"
-                }`}
-              >
-                {ar.label}
-              </button>
-            ))}
-          </div>
         </section>
 
         {/* ───────── EDITOR PANEL ───────── */}
@@ -623,28 +597,6 @@ function PanelCover({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold">Cover style</h3>
-        <p className="text-xs text-on-surface-variant">Affects overlay anchoring &amp; default crop.</p>
-      </div>
-      <div className="max-h-[220px] overflow-y-auto pr-1">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {COVER_STYLES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, styleId: s.id } }))}
-              className={`aspect-[16/9] rounded-md border p-1 text-[10px] font-medium leading-tight transition-colors ${
-                config.cover.styleId === s.id
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-white/10 text-on-surface-variant hover:bg-white/5"
-              }`}
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="border-t border-white/10 pt-4">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Cover photo</h3>
           <span className="text-xs text-on-surface-variant">
