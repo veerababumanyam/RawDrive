@@ -15,6 +15,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { authFetch } from "@/lib/api/authFetch";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
 import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
 type GalleryCard = {
@@ -78,18 +79,36 @@ export default function DashboardPage() {
   // shows an empty state further down rather than the old placeholder
   // fallback set which leaked a different studio's fake data into
   // every fresh account.
+  //
+  // Cover image: gallery.cover_thumbnails carries the LEFT JOIN'd
+  // thumbnail map (thumb_sm_webp / thumb_md_webp / thumb_lg_webp /
+  // display_webp) for the gallery's chosen cover asset, populated by
+  // listGalleries. getAssetPreviewUrl picks the preferred size and
+  // signs the URL with the access token so the backend's auth-gated
+  // asset endpoint accepts the request. Without this the card tile
+  // rendered with no background and just the "Delivered" chip floated
+  // on the empty placeholder — the bug from the dashboard screenshot.
   const cards = useMemo<GalleryCard[]>(
-    () =>
-      galleries.slice(0, 4).map((gallery) => ({
-        id: gallery.id,
-        title: gallery.title,
-        meta: `${gallery.gallery_type} • ${new Date(gallery.created_at).toLocaleDateString("en-IN")}`,
-        client: "Studio Client",
-        status: gallery.is_published ? "Delivered" : "Draft",
-        chipClass: gallery.is_published
-          ? "bg-accent-subtle text-accent"
-          : "bg-surface-container-high text-text-primary",
-      })),
+    () => {
+      const token = getStoredAccessToken();
+      return galleries.slice(0, 4).map((gallery) => {
+        const coverUrl = getAssetPreviewUrl(
+          { thumbnail_urls: gallery.cover_thumbnails || {} },
+          token,
+        );
+        return {
+          id: gallery.id,
+          title: gallery.title,
+          meta: `${gallery.gallery_type} • ${new Date(gallery.created_at).toLocaleDateString("en-IN")}`,
+          client: "Studio Client",
+          status: gallery.is_published ? "Delivered" : "Draft",
+          chipClass: gallery.is_published
+            ? "bg-accent-subtle text-accent"
+            : "bg-surface-container-high text-text-primary",
+          image: coverUrl || undefined,
+        };
+      });
+    },
     [galleries],
   );
 
