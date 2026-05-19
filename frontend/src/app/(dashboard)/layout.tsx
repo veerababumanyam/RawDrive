@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import { HeaderClock } from "@/components/layout/HeaderClock";
+import { PwaInstallBanner, PwaInstallHeaderButton } from "@/components/pwa/install-banner";
 import {
   AdminSidebar,
   DealerSidebar,
@@ -451,6 +452,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               shared header so every authenticated route surfaces the
               current time without per-page work. */}
           <HeaderClock />
+          {/* PWA install affordance — renders only when Chromium has
+              emitted beforeinstallprompt and the app isn't already
+              installed. Sits next to the bell so it's a peer of the
+              other ambient header actions, not a CTA. */}
+          <PwaInstallHeaderButton />
           <ThemeToggleButton />
           <a
             href="/notifications"
@@ -465,6 +471,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Main content — offset by sidebar on desktop */}
       <main className="min-h-screen px-4 pb-12 pt-24 transition-[margin-left] duration-200 ease-out lg:ml-[var(--sidebar-width)] lg:px-6">{children}</main>
+
+      {/* PWA install banner — mounted once at layout level so every
+          authenticated page surfaces the same prompt. The component
+          self-hides unless Chromium has emitted beforeinstallprompt,
+          and respects a 30-day dismiss cooldown via localStorage. */}
+      <PwaInstallBanner />
     </div>
   );
 }
