@@ -18,7 +18,7 @@ set -euo pipefail
 
 APP1_IP="187.127.142.42"
 APP2_IP="187.127.142.44"
-SSH_KEY="$HOME/.ssh/id_ed25519"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="docker-compose.prod-app.yml"
@@ -63,6 +63,8 @@ EOF
 }
 
 tar_excludes=(
+  --exclude='._*'
+  --exclude='*/._*'
   --exclude=node_modules
   --exclude='*/node_modules'
   --exclude=.git
@@ -121,6 +123,11 @@ push_code() {
 }
 
 docker_build_args() {
+  # macOS bash 3.2 + set -u: "${args[@]}" on an empty array errors with
+  # "unbound variable". The deploy halted on this every time both flags
+  # were unset (the normal path — cache enabled, no --pull). The
+  # ${args[@]+...} guard skips expansion when the array is empty, which
+  # is the documented bash workaround.
   local args=()
   if [ "$NO_CACHE" = true ]; then
     args+=(--no-cache)
@@ -128,7 +135,9 @@ docker_build_args() {
   if [ "$PULL" = true ]; then
     args+=(--pull)
   fi
-  printf '%s ' "${args[@]}"
+  if [ ${#args[@]} -gt 0 ]; then
+    printf '%s ' "${args[@]}"
+  fi
 }
 
 deploy_node() {

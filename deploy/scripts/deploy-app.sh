@@ -28,6 +28,8 @@ if [ "$(uname -s 2>/dev/null || true)" = "Linux" ] && [ -r /proc/version ] && gr
 fi
 
 tar_excludes=(
+    --exclude='._*'
+    --exclude='*/._*'
     --exclude=node_modules
     --exclude='*/node_modules'
     --exclude=.git
@@ -79,18 +81,18 @@ fi
 
 echo "==> pushing source to $NODE_IP"
 tar "${tar_excludes[@]}" -cf - . \
-    | ssh "root@$NODE_IP" 'tar -xf - -C /opt/rawdrive/app'
+    | ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" 'tar -xf - -C /opt/rawdrive/app'
 
 echo "==> building images on $NODE_IP"
-ssh "root@$NODE_IP" \
+ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" \
     "cd /opt/rawdrive/app/deploy && docker compose -f docker-compose.prod-app.yml build ${build_args[*]}"
 
 echo "==> rolling up (respects dependency order: pgbouncer -> migrate -> backend -> frontend -> nginx)"
-ssh "root@$NODE_IP" \
+ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" \
     'cd /opt/rawdrive/app/deploy && docker compose -f docker-compose.prod-app.yml up -d'
 
 echo "==> verifying health"
-ssh "root@$NODE_IP" 'curl -fsS http://127.0.0.1:8080/health' \
+ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" 'curl -fsS http://127.0.0.1:8080/health' \
     || { echo "backend health check failed on $NODE_IP"; exit 2; }
 
 echo "==> deploy complete: $NODE_IP"
