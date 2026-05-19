@@ -119,6 +119,12 @@ push_code() {
   cd "$REPO_ROOT"
   tar "${tar_excludes[@]}" -cf - . \
     | $SSH "root@$ip" 'tar -xf - -C /opt/rawdrive/app'
+  # Belt-and-suspenders: the tar excludes ._* on push, but tar -xf never
+  # deletes files that exist on the target but not in the new stream.
+  # Without this sweep, AppleDouble droppings from earlier deploys
+  # (pre-2026-05-19) remain and re-break the migration runner with
+  # SQLSTATE 08P01 on ._NNN_*.sql files. Idempotent + fast.
+  $SSH "root@$ip" 'find /opt/rawdrive/app -name "._*" -type f -delete 2>/dev/null'
   log "Code pushed to $ip"
 }
 
