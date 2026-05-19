@@ -3,15 +3,20 @@
 /**
  * PublicGalleryGrid — client-side masonry grid for the public gallery page.
  *
- * Replaces the server-rendered grid markup so that two interactive features
+ * Replaces the server-rendered grid markup so that an interactive feature
  * from the M13 deferred FR closure can actually change what the viewer sees:
  *
- *   - GAL-FR-099: Map view toggle (grid ↔ map) — MapView is mounted here
  *   - GAL-FR-107/108/109: FaceID result filter — listens for
  *     `rawdrive:face-filter` window events dispatched by FaceIDGate and
  *     reduces the rendered asset set to the matched IDs. When the user
  *     clicks "Browse all" in the fallback chip, a `rawdrive:face-filter-clear`
  *     event restores the full set.
+ *
+ * 2026-05-19: the GAL-FR-099 Grid/Map view toggle was removed from this
+ * surface because the Map view was distracting for the typical guest
+ * (wedding clients viewing curated highlights, not exploring by location).
+ * The MapView component still exists in the codebase and could be
+ * remounted in a follow-up if studios ask for the affordance back.
  *
  * The grid intentionally keeps the CSS-columns masonry layout from the
  * server version so visual output is identical when no filter is active.
@@ -21,8 +26,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
-import { MapView } from "./map-view";
-import type { Asset } from "@/lib/api/assets";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
@@ -336,8 +339,6 @@ function designGridItemStyle(grid: GridConfig | undefined): React.CSSProperties 
   return undefined;
 }
 
-type ViewMode = "grid" | "map";
-
 // Watermark overlay primitive — shared by every grid tile (and could be
 // reused in the lightbox / preview chrome in a follow-up). Renders the
 // configured text as an absolutely-positioned white-with-shadow label
@@ -420,7 +421,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     const position = typeof watermark.position === "string" ? watermark.position : "bottom-right";
     return { text: rawText, opacity, position };
   })();
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  // viewMode + the Grid/Map toggle were removed 2026-05-19. The grid is
+  // now the only render path; see the file header for context.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -602,30 +604,6 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
   }, [lightboxIdx, visibleAssets.length, toggleFullscreen]);
 
-  // Adapt PublicAsset → Asset shape for the MapView component. PublicAsset
-  // doesn't carry EXIF GPS, so the map filters based on assets with
-  // populated `gps_latitude`/`gps_longitude` — when nothing matches the map
-  // shows its empty state, which is the correct fallback.
-  const mapAssets: Asset[] = useMemo(
-    () =>
-      visibleAssets.map((a) => ({
-        id: a.id,
-        workspace_id: "",
-        filename: a.filename,
-        content_type: a.content_type,
-        size_bytes: 0,
-        storage_key: "",
-        width: a.width,
-        height: a.height,
-        blurhash: a.blurhash,
-        exif_data: {},
-        thumbnail_urls: a.thumbnail_urls,
-        status: "ready",
-        created_at: "",
-      })),
-    [visibleAssets],
-  );
-
   if (visibleAssets.length === 0) {
     return (
       <div className="text-center py-16">
@@ -638,59 +616,9 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
   return (
     <>
-      {/* View toggle — only surfaces when the gallery has more than one
-          photo; solo-photo galleries don't benefit from a map. */}
-      {assets.length > 1 && (
-        <div className="mb-4 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setViewMode("grid")}
-            aria-pressed={viewMode === "grid"}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              viewMode === "grid"
-                ? "bg-accent-primary text-accent-primary-contrast"
-                : "border border-border-subtle text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Grid
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("map")}
-            aria-pressed={viewMode === "map"}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              viewMode === "map"
-                ? "bg-accent-primary text-accent-primary-contrast"
-                : "border border-border-subtle text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Map
-          </button>
-        </div>
-      )}
-
-      {viewMode === "map" ? (
-        <div className="h-[600px]" aria-label={`Map view for gallery ${slug}`}>
-          <MapView
-            assets={mapAssets}
-            onSelect={(assetId) => {
-              // Map selection — switch to grid view then scroll the target
-              // asset into view. React batches state updates, so we must
-              // defer the DOM lookup until after the grid commits. Double
-              // rAF: first tick lands after React commit, second after
-              // browser paint when the grid DOM is actually mounted.
-              setViewMode("grid");
-              requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  const el = document.getElementById(`asset-${assetId}`);
-                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                });
-              });
-            }}
-          />
-        </div>
-      ) : (
-        <div
+      {/* Grid render — single render path. The legacy Grid/Map toggle
+          was removed 2026-05-19 (see file header). */}
+      <div
           // Container layout driven by the design config when present.
           // - masonry / justified: CSS columns flow — the studio's "justified"
           //   row-mode lands here as a close-enough vertical-flow approximation
@@ -912,8 +840,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               </div>
             );
           })}
-        </div>
-      )}
+      </div>
 
       {/* End-of-gallery indicator */}
       <div className="mt-12 text-center pb-8">
