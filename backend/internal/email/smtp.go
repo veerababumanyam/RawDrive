@@ -322,6 +322,39 @@ func (d *OTPDelivery) SendOTP(ctx context.Context, email, code string) error {
 	return sendConfigured(d.mailer, cfg, email, composeOTPMessage(cfg, email, code))
 }
 
+// SendPasswordResetOTP delivers the 6-digit password-reset code via
+// SMTP. Uses a distinct subject + body from SendOTP so the user can
+// tell at a glance whether the email is verifying a new account (OTP)
+// or letting them reset an existing password — same channel, two
+// different intents. Mirrors auth.SecurityNotifier — see auth/auth.go.
+// 2026-05-19: added because the prior NewPasswordService wiring
+// passed a nil notifier and password-reset emails never went out.
+func (d *OTPDelivery) SendPasswordResetOTP(ctx context.Context, email, code string, expirySeconds int) error {
+	cfg, err := resolveConfig(ctx, d.cfg, d.loader)
+	if err != nil {
+		return err
+	}
+	expiryMinutes := expirySeconds / 60
+	if expiryMinutes < 1 {
+		expiryMinutes = 1
+	}
+	return sendConfigured(d.mailer, cfg, email, composePasswordResetMessage(cfg, email, code, expiryMinutes))
+}
+
+// SendSecurityNotification delivers a security-event alert (e.g.
+// "Your password has been changed"). The body is the message string
+// verbatim — callers compose the human-readable message. Implements
+// auth.SecurityNotifier so OTPDelivery can be passed in as both the
+// EmailDelivery (for signup OTP) and SecurityNotifier (for password
+// flows) without an adapter wrapper in main.go.
+func (d *OTPDelivery) SendSecurityNotification(ctx context.Context, email, message string) error {
+	cfg, err := resolveConfig(ctx, d.cfg, d.loader)
+	if err != nil {
+		return err
+	}
+	return sendConfigured(d.mailer, cfg, email, composeSecurityNotificationMessage(cfg, email, message))
+}
+
 // InvitationSender is the SMTP-backed implementation of
 // team.EmailSender. It is wired into team.NewInvitationService from
 // main.go.
@@ -373,6 +406,54 @@ func smtpAuth(cfg *SMTPConfig) smtp.Auth {
 		return nil
 	}
 	return smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+}
+
+// composePasswordResetMessage builds an RFC 5322 text/plain message
+// for a password-reset OTP. Kept as a pure function so message
+// formatting can be unit-tested without a live SMTP server.
+//
+// The body is deliberately separate from composeOTPMessage so the
+// subject + framing make the password-reset intent obvious — "Your
+// RawDrive verification code" reads as a signup confirmation, which
+// is the wrong mental model for someone who just clicked
+// "Forgot password" expecting to recover an existing account.
+func composePasswordResetMessage(cfg *SMTPConfig, to, code string, expiryMinutes int) []byte {
+	var b strings.Builder
+	writeFromHeader(&b, cfg)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
+	b.WriteString("Subject: Reset your RawDrive password\r\n")
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	b.WriteString("\r\n")
+	b.WriteString("Hi,\r\n\r\n")
+	b.WriteString("We received a request to reset the password for your RawDrive account.\r\n")
+	b.WriteString("Enter the 6-digit code below on the password reset page to choose a new password.\r\n\r\n")
+	fmt.Fprintf(&b, "    %s\r\n\r\n", code)
+	fmt.Fprintf(&b, "This code expires in %d minutes.\r\n\r\n", expiryMinutes)
+	b.WriteString("If you did not request a password reset, you can safely ignore this email — your account is unchanged. ")
+	b.WriteString("For your security, never share this code with anyone, including RawDrive support.\r\n\r\n")
+	b.WriteString("— The RawDrive team\r\n")
+	return []byte(b.String())
+}
+
+// composeSecurityNotificationMessage wraps an arbitrary security
+// alert string in an RFC 5322 envelope. Used by
+// OTPDelivery.SendSecurityNotification (the "your password has been
+// changed" notice after a successful reset). The message body is
+// the caller-supplied string verbatim.
+func composeSecurityNotificationMessage(cfg *SMTPConfig, to, message string) []byte {
+	var b strings.Builder
+	writeFromHeader(&b, cfg)
+	fmt.Fprintf(&b, "To: <%s>\r\n", sanitizeHeaderValue(to))
+	b.WriteString("Subject: Security update for your RawDrive account\r\n")
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	b.WriteString("\r\n")
+	b.WriteString("Hi,\r\n\r\n")
+	fmt.Fprintf(&b, "%s.\r\n\r\n", message)
+	b.WriteString("If this wasn't you, please reset your password right away and contact support.\r\n\r\n")
+	b.WriteString("— The RawDrive team\r\n")
+	return []byte(b.String())
 }
 
 // composeOTPMessage builds an RFC 5322 text/plain message for a

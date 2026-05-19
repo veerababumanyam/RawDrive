@@ -329,6 +329,23 @@ func (p *logOTPDelivery) SendOTP(_ context.Context, email, code string) error {
 	return nil
 }
 
+// 2026-05-19 dev stub of auth.SecurityNotifier — used only when
+// DEV_STUB_EMAIL=true and APP_ENV is not production. Mirrors
+// logOTPDelivery's "print to stdout, never fail" contract so password
+// reset and security-alert flows are exercised in local dev without
+// an SMTP listener.
+type logSecurityNotifier struct{}
+
+func (n *logSecurityNotifier) SendSecurityNotification(_ context.Context, email, message string) error {
+	log.Printf("[SECURITY] %s -> %s", email, message)
+	return nil
+}
+
+func (n *logSecurityNotifier) SendPasswordResetOTP(_ context.Context, email, code string, expirySeconds int) error {
+	log.Printf("[PWD-RESET] %s -> code: %s (expires in %ds)", email, code, expirySeconds)
+	return nil
+}
+
 // onboardingWorkspaceCreator adapts workspace.Service for onboarding.
 // It resolves 2-letter state codes (e.g. "TS") to integer state IDs from the DB,
 // updates the user's state_id, and creates the workspace + membership.
@@ -715,9 +732,18 @@ func main() {
 	var teamEmailSender teamPkg.EmailSender
 	var galleryShareSender *email.GalleryShareSender
 	var notificationEmailSender *email.NotificationSender
+	// 2026-05-19: SecurityNotifier for the password-reset flow. The
+	// concrete OTPDelivery satisfies the auth.SecurityNotifier interface
+	// (SendSecurityNotification + SendPasswordResetOTP), so in prod
+	// (smtpCfg != nil) the same delivery handles signup OTPs and
+	// password-reset OTPs through the same SMTP transport. Dev stub
+	// shadows the same surface so forgot-password works in dev too.
+	var pwdResetNotifier auth.SecurityNotifier
 
 	if smtpCfg != nil {
-		otpDelivery = email.NewDynamicOTPDelivery(smtpReader)
+		realOTPDelivery := email.NewDynamicOTPDelivery(smtpReader)
+		otpDelivery = realOTPDelivery
+		pwdResetNotifier = realOTPDelivery
 		teamEmailSender = email.NewDynamicInvitationSender(smtpReader)
 		galleryShareSender = email.NewDynamicGalleryShareSender(smtpReader)
 		notificationEmailSender = email.NewDynamicNotificationSender(smtpReader)
@@ -735,6 +761,7 @@ func main() {
 				"(ISSUE-002 production-readiness guard.)", envName)
 		}
 		otpDelivery = &logOTPDelivery{}
+		pwdResetNotifier = &logSecurityNotifier{}
 		teamEmailSender = &logEmailSender{}
 		log.Println("WARNING: Email stubs active (DEV_STUB_EMAIL=true) — every email " +
 			"goes to stdout. DO NOT USE IN PRODUCTION.")
@@ -969,7 +996,7 @@ func main() {
 		ResetOTPExpiry:    15 * 60,
 		MaxFailedAttempts: 5,
 		LockoutDuration:   15 * 60,
-	}, newPgPasswordStore(dbPool), nil)
+	}, newPgPasswordStore(dbPool), pwdResetNotifier)
 	pwResetRevoker := newPgRefreshSessionRevokerForReset(dbPool)
 	pwResetHandler := handler.NewAuthPasswordResetHandler(passwordSvc, pwResetRevoker)
 	r.With(credLimiter).Post("/auth/request-password-reset", pwResetHandler.RequestReset)

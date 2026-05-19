@@ -11,11 +11,17 @@ import (
 
 // mockNotifier records security notifications.
 type mockNotifier struct {
-	notifications []string
+	notifications  []string
+	passwordResets []string // recorded by SendPasswordResetOTP, format "email: code"
 }
 
 func (m *mockNotifier) SendSecurityNotification(ctx context.Context, email, message string) error {
 	m.notifications = append(m.notifications, email+": "+message)
+	return nil
+}
+
+func (m *mockNotifier) SendPasswordResetOTP(ctx context.Context, email, code string, expirySeconds int) error {
+	m.passwordResets = append(m.passwordResets, email+": "+code)
 	return nil
 }
 
