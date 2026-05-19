@@ -38,8 +38,23 @@ interface ProviderDescriptor {
   accentClass: string;
 }
 
+// 2026-05-19: PhonePe is hidden from the subscription payment picker
+// while the upstream PhonePe v2 Standard Checkout integration is broken
+// on the merchant-risk-engine side (INTERNAL_SECURITY_BLOCK_1 / TXN_BLOCKED
+// — escalated with PhonePe support, not a code defect on our side). When
+// PhonePe support restores the merchant's payment surface, flip this flag
+// back to true to restore the tile. The backend create-order route +
+// payment-callback handler for provider="phonepe" are intentionally left
+// wired so the path can be re-enabled without code changes.
+const PHONEPE_ENABLED = false;
+
+// All known providers. Render-time filter below uses PHONEPE_ENABLED to
+// hide the PhonePe tile while keeping the descriptor in one place — when
+// the gate flips back to true the user-facing UI returns to its prior
+// two-tile layout without further edits.
+//
 // Order matters: rendered top-to-bottom on mobile, left-to-right on desktop.
-const PROVIDERS: ProviderDescriptor[] = [
+const ALL_PROVIDERS: ProviderDescriptor[] = [
   {
     id: "razorpay",
     name: "Razorpay",
@@ -63,6 +78,10 @@ const PROVIDERS: ProviderDescriptor[] = [
     accentClass: "bg-feedback-info/10 text-feedback-info",
   },
 ];
+
+const PROVIDERS: ProviderDescriptor[] = ALL_PROVIDERS.filter(
+  (p) => p.id !== "phonepe" || PHONEPE_ENABLED,
+);
 
 // Minimal Razorpay types (no @types/razorpay needed).
 interface RazorpayOptions {
@@ -118,7 +137,13 @@ export default function ChoosePaymentPage() {
     if (typeof window === "undefined") return;
     try {
       const v = window.localStorage.getItem("rawdrive-payment-provider");
-      if (v === "razorpay" || v === "phonepe") setLastUsed(v);
+      if (v === "razorpay" || v === "phonepe") {
+        // Only restore the "last used" hint if the provider is still
+        // visible. A user whose previous attempt was PhonePe (now
+        // hidden, see PHONEPE_ENABLED above) gets no badge instead of
+        // a "Last used" hint pointing at a tile that no longer exists.
+        if (PROVIDERS.some((p) => p.id === v)) setLastUsed(v);
+      }
     } catch { /* private mode — non-critical */ }
   }, []);
 
