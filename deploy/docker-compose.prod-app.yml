@@ -199,6 +199,41 @@ services:
     profiles:
       - postgres-replica  # only .44 uses this
 
+  # Python face-detection + ArcFace embedding sidecar. Backend reaches
+  # it on the compose network at http://face-svc:8000 via FACE_SVC_URL.
+  # Not in backend.depends_on — backend works without it (face endpoints
+  # return 503 when face-svc is unreachable), so adding the coupling
+  # would gate startup unnecessarily and slow rolling deploys.
+  #
+  # First boot downloads the buffalo_l model (~280 MB) into the named
+  # volume. Subsequent recreates reuse the cached weights and are
+  # instant. Without the volume every deploy would re-download.
+  #
+  # No exposed ports — internal-only, no peer-failover semantics like
+  # backend has. Each app node runs its own face-svc; the backend on
+  # the same node always calls localhost (compose-DNS), so failure of
+  # face-svc on .42 doesn't affect .44 (and vice versa).
+  face-svc:
+    build:
+      context: ../services/face-svc
+      dockerfile: Dockerfile
+    image: rawdrive-face-svc:local
+    container_name: deploy-face-svc-1
+    restart: unless-stopped
+    volumes:
+      - face_svc_models:/home/facesvc/.insightface
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 90s   # first boot downloads buffalo_l from upstream
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
   nginx:
     image: nginx:1.27-alpine
     container_name: deploy-nginx-1
@@ -244,4 +279,8 @@ volumes:
   postgres_replica_data:
     driver: local
   nginx_cache:
+    driver: local
+  # Persists ~280 MB buffalo_l model across container recreates.
+  # Without this the model re-downloads on every deploy.
+  face_svc_models:
     driver: local
