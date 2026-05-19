@@ -1,3 +1,5 @@
+import { authFetch } from "@/lib/api/authFetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // ── Types ──
@@ -135,36 +137,53 @@ export interface PaginatedResponse<T> {
 
 // ── Helpers ──
 
+// 2026-05-19: route admin GET/PUT/POST through authFetch instead of raw
+// fetch so a stale-token 401 transparently refreshes + retries before
+// surfacing as an error to the caller. The previous raw-fetch approach
+// produced the "Failed to load platform stats. The admin API may be
+// unreachable." banner on /admin/dashboard whenever the user's access
+// token had expired mid-session — the four endpoints fired in parallel,
+// each got a single-shot 401, and the page set error=true because none
+// of the four returned data. With authFetch, each 401 triggers a shared
+// in-flight refresh (deduplicated across the parallel calls) and the
+// retry succeeds with the new token.
+//
+// The `token` parameter is kept on every helper signature for backward
+// compatibility — every call site in this file already passes
+// getStoredAccessToken() and would need an audit to drop it — but it is
+// unused. authFetch reads the token itself from auth storage so the
+// passed value would only matter if a caller wanted to override it,
+// which no admin call site does.
 const headers = (token: string) => ({
   Authorization: `Bearer ${token}`,
   "Content-Type": "application/json",
 });
 
-async function get<T>(token: string, path: string, params?: Record<string, string>): Promise<T> {
+async function get<T>(_token: string, path: string, params?: Record<string, string>): Promise<T> {
   const query = params ? `?${new URLSearchParams(params).toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/admin${path}${query}`, { headers: headers(token) });
+  const res = await authFetch(`/api/v1/admin${path}${query}`);
   if (!res.ok) throw new Error(`Admin API error: ${res.status}`);
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
-async function put<T>(token: string, path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}/api/v1/admin${path}`, {
+async function put<T>(_token: string, path: string, body: unknown): Promise<T> {
+  const res = await authFetch(`/api/v1/admin${path}`, {
     method: "PUT",
-    headers: headers(token),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Admin API error: ${res.status}`);
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
-async function post<T>(token: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}/api/v1/admin${path}`, {
+async function post<T>(_token: string, path: string, body?: unknown): Promise<T> {
+  const res = await authFetch(`/api/v1/admin${path}`, {
     method: "POST",
-    headers: headers(token),
+    headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`Admin API error: ${res.status}`);
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 // ── User Management ──
