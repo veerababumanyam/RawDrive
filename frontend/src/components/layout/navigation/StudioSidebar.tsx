@@ -2,7 +2,6 @@
 
 import {
   BarChart3,
-  BrainCircuit,
   Home,
   ImageIcon,
   MessageSquare,
@@ -27,7 +26,10 @@ const groups: NavGroup[] = [
       { href: "/dashboard", label: "Dashboard", icon: Home },
       { href: "/galleries", label: "Galleries", icon: ImageIcon },
       { href: "/streams", label: "Live Streams", icon: Radio },
-      { href: "/ai", label: "AI Studio", icon: BrainCircuit },
+      // "AI Studio" tile removed from sidebar 2026-05-19 to declutter
+      // the photographer-facing left nav. The /ai route (and its
+      // /ai/layout.tsx wrapper) stays mounted, so deep links and
+      // existing bookmarks continue to work.
     ],
   },
   {

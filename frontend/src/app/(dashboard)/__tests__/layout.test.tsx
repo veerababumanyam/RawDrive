@@ -138,7 +138,11 @@ describe("DashboardLayout role-based sidebar", () => {
     expect(screen.getByText("Business")).toBeInTheDocument();
     // Key nav items
     expect(screen.getByRole("link", { name: /Galleries/i })).toHaveAttribute("href", "/galleries");
-    expect(screen.getByRole("link", { name: /AI Studio/i })).toHaveAttribute("href", "/ai");
+    // AI Studio tile was removed from the photographer sidebar 2026-05-19
+    // to declutter the left nav. The /ai route is still mounted but no
+    // longer surfaced from the nav, mirroring the "AI" tab removal from
+    // the gallery workspace nav.
+    expect(screen.queryByRole("link", { name: /AI Studio/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Studio CRM/i })).toHaveAttribute("href", "/crm");
     expect(screen.queryByRole("link", { name: /^Invoices$/i })).not.toBeInTheDocument();
   });
