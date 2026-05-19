@@ -74,7 +74,16 @@ const securityHeaders = [
       // api.razorpay.com / checkout.razorpay.com. Without an explicit
       // frame-src the directive falls back to default-src 'self' and the
       // iframe gets blocked, causing the modal to render blank.
-      "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+      //
+      // www.youtube.com / youtube-nocookie.com / player.vimeo.com — the
+      // per-gallery embedded videos panel (frontend/src/components/gallery/
+      // embedded-videos-panel.tsx) renders YouTube and Vimeo iframes
+      // pointing at https://www.youtube.com/embed/<id> and
+      // https://player.vimeo.com/video/<id>. Without these origins the
+      // browser blocks the iframes silently (Chrome logs "Refused to frame
+      // 'https://www.youtube.com/'"), so the video tiles render as an
+      // empty black box in dev and prod alike. Added 2026-05-19.
+      "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
