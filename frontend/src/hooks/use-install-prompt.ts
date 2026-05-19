@@ -85,25 +85,165 @@ function detectStandalone(): boolean {
   return Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
 }
 
+// Recognised browser families for the "How to install" fallback.
+// We only sniff coarsely — enough to give the right written
+// instructions when beforeinstallprompt isn't going to fire. Each
+// detection result drives one entry in the manualInstructions map
+// below; "unknown" gets a generic fallback so we never render an
+// empty state.
+export type InstallBrowser =
+  | "chromium-desktop"
+  | "chromium-android"
+  | "safari-ios"
+  | "safari-macos"
+  | "firefox-android"
+  | "firefox-desktop"
+  | "unknown";
+
+export interface ManualInstallInstructions {
+  browser: InstallBrowser;
+  // User-facing label of the detected browser ("Safari on iPhone",
+  // "Chrome on Windows", etc.) so the card heading can address the
+  // user directly.
+  label: string;
+  // Ordered numbered steps the user follows in their browser chrome.
+  // Short, imperative. Localised strings should land here in a
+  // future i18n pass.
+  steps: string[];
+  // Optional note rendered below the steps for context that doesn't
+  // fit a step ("Firefox desktop currently lacks PWA install
+  // support" etc.).
+  note?: string;
+}
+
 export interface UseInstallPromptResult {
-  // True iff the browser has emitted beforeinstallprompt AND the user
-  // has neither dismissed within the cooldown nor already installed.
-  // This is what UI surfaces should gate "Install" buttons on.
+  // True iff a deferred BeforeInstallPromptEvent is in hand AND the
+  // app isn't already running as a standalone PWA. Independent of
+  // dismiss state — used by surfaces that want a manual install
+  // affordance available even after the user closed the auto-popup.
   canInstall: boolean;
+  // canInstall AND user hasn't dismissed within the cooldown. Used
+  // by the auto-popup banner only, so an accidental dismiss doesn't
+  // permanently kill the banner but ALSO doesn't tickle the user a
+  // second time within the cooldown window.
+  bannerVisible: boolean;
   // True when the page is already running as the installed PWA.
-  // Surfaces should hide install affordances entirely in this case
-  // — a user who already has the app installed seeing "Install" is
-  // confusing.
+  // Surfaces should hide install affordances entirely in this case.
   isStandalone: boolean;
+  // Browser-specific manual install instructions for surfaces that
+  // want to show a "How to install" fallback when canInstall is
+  // false (Safari, Firefox, or Chromium before the heuristic fires).
+  // Never null — always returns at least the generic fallback.
+  manualInstructions: ManualInstallInstructions;
   // Open the native install dialog. Returns the outcome so callers
   // can surface a toast. Calling when canInstall=false is a no-op
   // that resolves to "unavailable".
   promptInstall: () => Promise<"accepted" | "dismissed" | "unavailable">;
-  // User-initiated dismissal. Sets the cooldown and hides the banner;
-  // does NOT consume the deferred prompt, so the header "Install App"
-  // button can still trigger installation later within the same
-  // session.
+  // User-initiated dismissal. Sets the cooldown and hides the
+  // auto-popup banner; does NOT consume the deferred prompt, so the
+  // header pill and dashboard card stay clickable.
   dismiss: () => void;
+}
+
+function detectBrowser(): ManualInstallInstructions {
+  if (typeof navigator === "undefined") {
+    return {
+      browser: "unknown",
+      label: "your browser",
+      steps: [
+        "Look for an 'Install' option in your browser menu or address bar.",
+        "If you don't see one, try opening RawDrive in Chrome, Edge, or Brave for the full app experience.",
+      ],
+    };
+  }
+  const ua = navigator.userAgent;
+  // iOS / iPadOS: every browser is WebKit. iPad on iPadOS 13+ reports
+  // a Mac UA but exposes touch points, so check that too.
+  const isIOS =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (ua.includes("Macintosh") && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    return {
+      browser: "safari-ios",
+      label: "Safari on iPhone / iPad",
+      steps: [
+        "Tap the Share button at the bottom of the screen.",
+        "Scroll down and tap 'Add to Home Screen'.",
+        "Tap 'Add' in the top-right corner.",
+      ],
+      note: "On iOS the Share menu is the only way to install — there's no install button in the address bar.",
+    };
+  }
+  const isAndroid = /Android/i.test(ua);
+  const isFirefox = /Firefox\//i.test(ua) && !/Seamonkey\//i.test(ua);
+  if (isFirefox && isAndroid) {
+    return {
+      browser: "firefox-android",
+      label: "Firefox on Android",
+      steps: [
+        "Tap the menu (⋮) in the address bar.",
+        "Tap 'Install' or 'Add to Home screen'.",
+        "Confirm by tapping 'Add'.",
+      ],
+    };
+  }
+  if (isFirefox) {
+    return {
+      browser: "firefox-desktop",
+      label: "Firefox on desktop",
+      steps: [
+        "Open Chrome, Edge, or Brave to install the RawDrive app.",
+        "Sign in with the same email there — your galleries and settings stay synced.",
+      ],
+      note: "Firefox on desktop doesn't currently support installing web apps as standalone windows.",
+    };
+  }
+  // Treat Edge / Brave / Opera as Chromium for instruction purposes.
+  const isChromiumLike = /Chrome|Chromium|Edg|OPR|Brave/i.test(ua);
+  if (isChromiumLike && isAndroid) {
+    return {
+      browser: "chromium-android",
+      label: "Chrome on Android",
+      steps: [
+        "Tap the menu (⋮) in the top-right of the browser.",
+        "Tap 'Install app' or 'Add to Home screen'.",
+        "Tap 'Install' to confirm.",
+      ],
+    };
+  }
+  if (isChromiumLike) {
+    return {
+      browser: "chromium-desktop",
+      label: "Chrome / Edge / Brave on desktop",
+      steps: [
+        "Look for the install icon (a small monitor with a down-arrow) on the right side of the address bar.",
+        "If you don't see it, open the browser menu and choose 'Install RawDrive…' or 'Apps → Install this site as an app'.",
+        "Click 'Install' to confirm.",
+      ],
+      note: "Browsers wait until you've used the site a bit before offering the address-bar install icon. The button above will light up the moment it's available.",
+    };
+  }
+  const isSafariMac = ua.includes("Safari") && ua.includes("Macintosh") && !ua.includes("Chrome");
+  if (isSafariMac) {
+    return {
+      browser: "safari-macos",
+      label: "Safari on Mac",
+      steps: [
+        "Click 'Share' in the toolbar (the icon with the arrow).",
+        "Choose 'Add to Dock'.",
+        "Click 'Add'.",
+      ],
+      note: "Requires macOS Sonoma or newer. On older macOS, use Chrome or Edge instead.",
+    };
+  }
+  return {
+    browser: "unknown",
+    label: "your browser",
+    steps: [
+      "Look for an 'Install' option in your browser menu or address bar.",
+      "If you don't see one, try opening RawDrive in Chrome, Edge, or Brave for the full app experience.",
+    ],
+  };
 }
 
 export function useInstallPrompt(): UseInstallPromptResult {
@@ -193,7 +333,20 @@ export function useInstallPrompt(): UseInstallPromptResult {
     notify();
   }, []);
 
-  const canInstall = Boolean(deferredPromptCache) && !isStandalone && !dismissedActive;
+  // canInstall is the raw "we have a deferred prompt and the app
+  // isn't already installed" gate — used by the dashboard card and
+  // header pill so they stay clickable even after the user dismisses
+  // the auto-popup banner.
+  const canInstall = Boolean(deferredPromptCache) && !isStandalone;
+  // bannerVisible additionally suppresses while the dismiss cooldown
+  // is active — used ONLY by the auto-popup banner so we don't tickle
+  // the user repeatedly within a single 30-day window.
+  const bannerVisible = canInstall && !dismissedActive;
 
-  return { canInstall, isStandalone, promptInstall, dismiss };
+  // Memoise the browser-detection result so dependent components
+  // don't re-render on every state tick. Detection is pure and
+  // depends on navigator only, so first-call caching is safe.
+  const manualInstructions = detectBrowser();
+
+  return { canInstall, bannerVisible, isStandalone, manualInstructions, promptInstall, dismiss };
 }

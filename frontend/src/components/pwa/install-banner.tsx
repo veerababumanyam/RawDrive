@@ -17,10 +17,14 @@ import { useState } from "react";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 
 export function PwaInstallBanner() {
-  const { canInstall, promptInstall, dismiss } = useInstallPrompt();
+  // The auto-popup gates on bannerVisible (canInstall + not in
+  // dismiss cooldown). The dashboard install card and the header
+  // pill use canInstall instead, so an "I'll install later" dismiss
+  // from this banner doesn't hide the manual surfaces.
+  const { bannerVisible, promptInstall, dismiss } = useInstallPrompt();
   const [installing, setInstalling] = useState(false);
 
-  if (!canInstall) return null;
+  if (!bannerVisible) return null;
 
   const handleInstall = async () => {
     setInstalling(true);

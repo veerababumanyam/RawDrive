@@ -16,6 +16,7 @@ import { authFetch } from "@/lib/api/authFetch";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
 import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
+import { PwaInstallCard } from "@/components/pwa/install-card";
 import { cn } from "@/lib/utils";
 
 type GalleryCard = {
@@ -311,6 +312,14 @@ export default function DashboardPage() {
         </section>
 
         <aside className="col-span-12 space-y-8 lg:col-span-4">
+          {/* PWA install card — surfaces a friendly install button
+              right inside the dashboard. Self-hides when the app is
+              already installed; on browsers where the native install
+              prompt isn't available yet (Safari, Firefox, or Chromium
+              before its installability heuristic fires) it falls back
+              to browser-specific written instructions. */}
+          <PwaInstallCard />
+
           <section className="surface-panel p-6">
             <h3 className="mb-6 font-headline text-lg font-bold text-text-primary">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-4">
