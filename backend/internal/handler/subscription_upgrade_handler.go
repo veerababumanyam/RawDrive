@@ -226,9 +226,17 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		redirectURL := strings.TrimRight(h.publicBaseURL, "/") +
 			"/settings/plans/payment-callback?provider=phonepe&order_id=" +
 			upgradeOrderID.String()
-		phResult, err := h.phonepe.CreateOrder(r.Context(),
-			upgradeOrderID.String(), amountPaise, redirectURL,
-			"RawDrive — upgrade to "+body.ToTier)
+		phResult, err := h.phonepe.CreateOrder(r.Context(), CreateOrderInput{
+			MerchantOrderID: upgradeOrderID.String(),
+			AmountPaise:     amountPaise,
+			RedirectURL:     redirectURL,
+			Message:         "RawDrive — upgrade to " + body.ToTier,
+			WorkspaceID:     wsID,
+			ToTier:          body.ToTier,
+			// PhoneNumber left blank — not collected on upgrade form.
+			// PhonePe's hosted page prompts the user. The Python SDK
+			// requires the field to be present; empty string is fine.
+		})
 		if err != nil {
 			log.Printf("phonepe.CreateOrder failed: %v", err)
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe order create failed"})

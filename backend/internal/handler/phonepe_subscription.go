@@ -174,16 +174,41 @@ type phonepeMerchantURLs struct {
 }
 
 type phonepePaymentFlow struct {
-	Type          string              `json:"type"`
-	Message       string              `json:"message,omitempty"`
-	MerchantURLs  phonepeMerchantURLs `json:"merchantUrls"`
+	Type         string              `json:"type"`
+	Message      string              `json:"message,omitempty"`
+	MerchantURLs phonepeMerchantURLs `json:"merchantUrls"`
+}
+
+// phonepeMetaInfo — user-defined fields PhonePe surfaces back in
+// webhooks + status responses. Per the official Python SDK example
+// (StandardCheckoutPayRequest.build_request with meta_info=MetaInfo(...)),
+// providing this is expected for the checkout UI to render functional
+// payment instruments. Without it the merchant's checkout page can
+// fall through to a degraded "placeholder QR" render.
+type phonepeMetaInfo struct {
+	UDF1 string `json:"udf1,omitempty"`
+	UDF2 string `json:"udf2,omitempty"`
+	UDF3 string `json:"udf3,omitempty"`
+}
+
+// phonepePrefillUserLoginDetails seeds the user's mobile number on
+// PhonePe's checkout page. The Python SDK's PrefillUserLoginDetails
+// model always includes this field. When the merchant config requires
+// a user identity for UPI Collect to render, the absence of this field
+// breaks the QR widget (verified 2026-05-19 — checkout page rendered
+// placeholder QR with paymentDetails:[] across multiple orders).
+type phonepePrefillUserLoginDetails struct {
+	PhoneNumber string `json:"phoneNumber"`
 }
 
 type phonepePayRequest struct {
-	MerchantOrderID string             `json:"merchantOrderId"`
-	Amount          int64              `json:"amount"`      // paise
-	ExpireAfter     int                `json:"expireAfter"` // seconds; PhonePe min 300
-	PaymentFlow     phonepePaymentFlow `json:"paymentFlow"`
+	MerchantOrderID         string                          `json:"merchantOrderId"`
+	Amount                  int64                           `json:"amount"`      // paise
+	ExpireAfter             int                             `json:"expireAfter"` // seconds; SDK default 3600
+	MetaInfo                *phonepeMetaInfo                `json:"metaInfo,omitempty"`
+	PaymentFlow             phonepePaymentFlow              `json:"paymentFlow"`
+	PrefillUserLoginDetails *phonepePrefillUserLoginDetails `json:"prefillUserLoginDetails,omitempty"`
+	DisablePaymentRetry     bool                            `json:"disablePaymentRetry,omitempty"`
 }
 
 type phonepePayResponse struct {
@@ -205,32 +230,65 @@ type PhonePeOrderResult struct {
 	ExpireAt        int64  `json:"expire_at"`         // epoch seconds
 }
 
+// CreateOrderInput is the input bundle for /checkout/v2/pay. Mirrors
+// the field set the official PhonePe Python SDK's
+// StandardCheckoutPayRequest.build_request() accepts — keeping our
+// wire format matched to what PhonePe expects from a "standard"
+// SDK-shaped request, which is what the merchant config is tested
+// against. UDF1/UDF2/PhoneNumber are optional from the caller's
+// perspective but are always serialized into the request body
+// (empty-string for PhoneNumber when unknown — required-present per
+// the SDK shape).
+type CreateOrderInput struct {
+	MerchantOrderID string
+	AmountPaise     int64
+	RedirectURL     string
+	Message         string
+	WorkspaceID     string // surfaces as udf1
+	ToTier          string // surfaces as udf2
+	PhoneNumber     string // empty string is acceptable; PhonePe asks user on the page
+}
+
 // CreateOrder calls /checkout/v2/pay and returns the redirect URL.
 // merchantOrderID must be unique per workspace+order and is the key we
 // use to look up our subscription_upgrade_orders row on callback.
-func (c *PhonePeV2Client) CreateOrder(ctx context.Context, merchantOrderID string, amountPaise int64, redirectURL, message string) (*PhonePeOrderResult, error) {
+func (c *PhonePeV2Client) CreateOrder(ctx context.Context, in CreateOrderInput) (*PhonePeOrderResult, error) {
 	token, err := c.fetchToken(ctx)
 	if err != nil {
 		return nil, err
 	}
+	message := in.Message
 	if message == "" {
 		message = "RawDrive plan upgrade"
 	}
-	payload, _ := json.Marshal(phonepePayRequest{
-		MerchantOrderID: merchantOrderID,
-		Amount:          amountPaise,
-		// 20 minutes — comfortably above PhonePe's 300s minimum and
-		// generous enough that users don't get expired-order errors
-		// from idle tab time.
-		ExpireAfter: 1200,
+	reqBody := phonepePayRequest{
+		MerchantOrderID: in.MerchantOrderID,
+		Amount:          in.AmountPaise,
+		// 1 hour — matches the PhonePe Python SDK's default
+		// expire_after=3600. Shorter windows (we used 1200 previously)
+		// can correlate with degraded checkout-UI renders on some
+		// merchant configs; the SDK ships with 3600 for a reason.
+		ExpireAfter: 3600,
+		MetaInfo: &phonepeMetaInfo{
+			UDF1: in.WorkspaceID,
+			UDF2: in.ToTier,
+		},
 		PaymentFlow: phonepePaymentFlow{
 			Type:    "PG_CHECKOUT",
 			Message: message,
 			MerchantURLs: phonepeMerchantURLs{
-				RedirectURL: redirectURL,
+				RedirectURL: in.RedirectURL,
 			},
 		},
-	})
+		// Always include — the Python SDK does. Empty phoneNumber is
+		// acceptable; PhonePe prompts the user on their page when
+		// blank. The presence of the field itself is what matters.
+		PrefillUserLoginDetails: &phonepePrefillUserLoginDetails{
+			PhoneNumber: in.PhoneNumber,
+		},
+		DisablePaymentRetry: true,
+	}
+	payload, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		strings.TrimRight(c.cfg.BaseURL, "/")+"/checkout/v2/pay", bytes.NewReader(payload))
 	if err != nil {
@@ -257,7 +315,7 @@ func (c *PhonePeV2Client) CreateOrder(ctx context.Context, merchantOrderID strin
 		return nil, fmt.Errorf("phonepe: pay empty redirect: state=%q code=%q msg=%q", out.State, out.Code, out.Message)
 	}
 	return &PhonePeOrderResult{
-		MerchantOrderID: merchantOrderID,
+		MerchantOrderID: in.MerchantOrderID,
 		PhonePeOrderID:  out.OrderID,
 		RedirectURL:     out.RedirectURL,
 		ExpireAt:        out.ExpireAt,
