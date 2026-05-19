@@ -11,7 +11,7 @@ package handler
 // to disturb.
 //
 // API reference: https://developer.phonepe.com/v1/reference/checkout-v2-pay
-// OAuth flow:    POST {base}/v1/oauth/token
+// OAuth flow:    POST {authBase}/v1/oauth/token
 //                  grant_type=client_credentials
 //                  client_id, client_secret, client_version
 //                returns {access_token, token_type=O-Bearer, expires_at}
@@ -25,6 +25,19 @@ package handler
 //                  Authorization: O-Bearer <token>
 //                returns {orderId, state: COMPLETED|FAILED|PENDING,
 //                         amount, ...}
+//
+// Asymmetric base URLs (PhonePe quirk, learned the hard way in prod 2026-05-19):
+//   Sandbox / UAT collapses both endpoints under a single base:
+//     https://api-preprod.phonepe.com/apis/pg-sandbox
+//   Production splits them:
+//     auth: https://api.phonepe.com/apis/identity-manager
+//     pay:  https://api.phonepe.com/apis/pg
+//   Using a single BaseURL = .../apis/pg in prod produces a 400
+//   "Api Mapping Not Found" on the token call because no
+//   /apis/pg/v1/oauth/token mapping exists at PhonePe's gateway.
+//   AuthBaseURL (PHONEPE_AUTH_BASE_URL env var) overrides the host
+//   used for the OAuth token call. When empty it falls back to
+//   BaseURL — preserves sandbox + dev-environment behavior.
 
 import (
 	"bytes"
@@ -43,9 +56,15 @@ type PhonePeV2Config struct {
 	ClientID      string
 	ClientSecret  string
 	ClientVersion string // "1" for current live; PhonePe rotates per merchant
-	BaseURL       string // https://api.phonepe.com/apis/pg (live) or
+	BaseURL       string // pay+status host:
+	//                       https://api.phonepe.com/apis/pg (prod)
 	//                       https://api-preprod.phonepe.com/apis/pg-sandbox (test)
-	HTTPClient *http.Client
+	// AuthBaseURL overrides the OAuth-token host. Production splits
+	// auth onto identity-manager; sandbox shares BaseURL. Leave empty
+	// in sandbox/dev to reuse BaseURL. In prod set to:
+	//   https://api.phonepe.com/apis/identity-manager
+	AuthBaseURL string
+	HTTPClient  *http.Client
 }
 
 // PhonePeV2Client is a thin client around PhonePe v2 Standard Checkout.
@@ -103,8 +122,12 @@ func (c *PhonePeV2Client) fetchToken(ctx context.Context) (string, error) {
 		"client_id=%s&client_version=%s&client_secret=%s&grant_type=client_credentials",
 		c.cfg.ClientID, c.cfg.ClientVersion, c.cfg.ClientSecret,
 	))
+	authBase := c.cfg.AuthBaseURL
+	if authBase == "" {
+		authBase = c.cfg.BaseURL
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/oauth/token", form)
+		strings.TrimRight(authBase, "/")+"/v1/oauth/token", form)
 	if err != nil {
 		return "", fmt.Errorf("phonepe: token build req: %w", err)
 	}

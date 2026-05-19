@@ -100,11 +100,19 @@ func NewSubscriptionUpgradeHandlerFromEnv(db *pgxpool.Pool) *SubscriptionUpgrade
 		// MUST set PHONEPE_BASE_URL explicitly to the live host.
 		baseURL = "https://api-preprod.phonepe.com/apis/pg-sandbox"
 	}
+	// PhonePe production splits auth onto a separate host
+	// (api.phonepe.com/apis/identity-manager) while pay+status stay on
+	// api.phonepe.com/apis/pg. Sandbox shares one base. Empty here =
+	// fall back to BaseURL inside the client (sandbox behavior).
+	// Discovered live 2026-05-19 when prod returned 400
+	// "Api Mapping Not Found" on the /v1/oauth/token call.
+	authBaseURL := firstNonEmptyEnv("PHONEPE_AUTH_BASE_URL")
 	h.phonepe = NewPhonePeV2Client(PhonePeV2Config{
 		ClientID:      clientID,
 		ClientSecret:  clientSecret,
 		ClientVersion: clientVersion,
 		BaseURL:       baseURL,
+		AuthBaseURL:   authBaseURL,
 	})
 	h.publicBaseURL = firstNonEmptyEnv("PUBLIC_BASE_URL", "FRONTEND_URL")
 	if h.publicBaseURL == "" {
