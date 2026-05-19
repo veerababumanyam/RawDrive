@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/middleware"
+	"github.com/rawdrive/backend/internal/streaming/recharge"
 )
 
 // planPricePaise maps canonical tier slugs to monthly prices in paise (INR×100).
@@ -53,16 +54,24 @@ type RazorpayUpgradeConfig struct {
 
 // SubscriptionUpgradeHandler creates orders for plan-tier upgrades and
 // processes the resulting payment confirmations. Supports two providers
-// in parallel — Razorpay (modal-based Checkout SDK) and PhonePe v2
-// Standard Checkout (redirect-based hosted page). The provider is
-// chosen per-order via the request body; either can be missing creds
-// and the other will still serve as long as the user picks the
-// configured one.
+// in parallel — Razorpay (modal-based Checkout SDK) and PhonePe v1
+// Standard Checkout (X-VERIFY signed, redirect-based hosted page). The
+// provider is chosen per-order via the request body; either can be
+// missing creds and the other will still serve as long as the user
+// picks the configured one.
+//
+// 2026-05-19: switched from PhonePe v2 (OAuth) back to v1 (salt-key)
+// because (a) v2 prod merchant config rendered placeholder QRs that
+// never resolved to scannable codes — `paymentDetails: []` across all
+// 3 test orders confirmed PhonePe-side UI breakage — and (b) the
+// merchant's live PhonePe dashboard exposes only v1 credentials. The
+// v1 provider was already implemented for M41 upload-recharge and is
+// reused as-is.
 type SubscriptionUpgradeHandler struct {
-	db       *pgxpool.Pool
-	rzp      RazorpayUpgradeConfig
-	phonepe  *PhonePeV2Client // nil when PHONEPE_* env vars are unset
-	publicBaseURL string     // for building the PhonePe redirect-back URL
+	db            *pgxpool.Pool
+	rzp           RazorpayUpgradeConfig
+	phonepe       *recharge.PhonePeProvider // nil when PHONEPE_* env vars are unset
+	publicBaseURL string                    // for building the PhonePe redirect-back URL
 }
 
 // NewSubscriptionUpgradeHandler always returns a handler. When credentials are
@@ -76,44 +85,46 @@ func NewSubscriptionUpgradeHandler(db *pgxpool.Pool, cfg RazorpayUpgradeConfig) 
 }
 
 // NewSubscriptionUpgradeHandlerFromEnv reads RAZORPAY_KEY_ID / _KEY_SECRET /
-// _WEBHOOK_SECRET from the environment plus the PhonePe v2 OAuth creds
-// (PHONEPE_CLIENT_ID / _SECRET / _VERSION / _BASE_URL). Always returns a
-// non-nil handler; the handler itself returns 503 when the requested
-// provider's credentials are missing.
+// _WEBHOOK_SECRET from the environment plus the PhonePe v1 Standard
+// Checkout credentials. Always returns a non-nil handler; the handler
+// itself returns 503 when the requested provider's credentials are
+// missing.
+//
+// PhonePe env-var resolution accepts both the canonical v1 names AND
+// the v2-shaped names that were used in earlier deploys
+// (PHONEPE_CLIENTID/SECRET/VERSION). The legacy values happen to be
+// v1 credentials stored under v2 variable names — the v1 client treats
+// them as MerchantID / SaltKey / SaltIndex respectively. This way the
+// 2026-05-19 prod .env doesn't need a rename to start working.
 func NewSubscriptionUpgradeHandlerFromEnv(db *pgxpool.Pool) *SubscriptionUpgradeHandler {
 	h := NewSubscriptionUpgradeHandler(db, RazorpayUpgradeConfig{
 		KeyID:         os.Getenv("RAZORPAY_KEY_ID"),
 		KeySecret:     os.Getenv("RAZORPAY_KEY_SECRET"),
 		WebhookSecret: os.Getenv("RAZORPAY_WEBHOOK_SECRET"),
 	})
-	// PhonePe v2 — env var resolution mirrors the convention the user
-	// established in .env.backend (PHONEPE_CLIENTID/SECRET/VERSION) but
-	// also accepts the underscored CLIENT_ID form some PhonePe docs
-	// use, so a fresh deploy reading either spelling works.
-	clientID := firstNonEmptyEnv("PHONEPE_CLIENT_ID", "PHONEPE_CLIENTID")
-	clientSecret := firstNonEmptyEnv("PHONEPE_CLIENT_SECRET", "PHONEPE_SECRET")
-	clientVersion := firstNonEmptyEnv("PHONEPE_CLIENT_VERSION", "PHONEPE_VERSION")
+
+	merchantID := firstNonEmptyEnv("PHONEPE_MERCHANT_ID", "PHONEPE_CLIENT_ID", "PHONEPE_CLIENTID")
+	saltKey := firstNonEmptyEnv("PHONEPE_SALT_KEY", "PHONEPE_CLIENT_SECRET", "PHONEPE_SECRET")
+	saltIndex := firstNonEmptyEnv("PHONEPE_SALT_INDEX", "PHONEPE_CLIENT_VERSION", "PHONEPE_VERSION")
+	if saltIndex == "" {
+		saltIndex = "1" // PhonePe's default salt index for fresh merchants
+	}
 	baseURL := firstNonEmptyEnv("PHONEPE_BASE_URL")
 	if baseURL == "" {
-		// Default to the sandbox host so local dev works against test
-		// creds without needing an extra env var. Production deploys
-		// MUST set PHONEPE_BASE_URL explicitly to the live host.
-		baseURL = "https://api-preprod.phonepe.com/apis/pg-sandbox"
+		// v1 sandbox / UAT default. Production deploys MUST set
+		// PHONEPE_BASE_URL=https://api.phonepe.com/apis/hermes explicitly.
+		baseURL = "https://api-preprod.phonepe.com/apis/hermes-uat"
 	}
-	// PhonePe production splits auth onto a separate host
-	// (api.phonepe.com/apis/identity-manager) while pay+status stay on
-	// api.phonepe.com/apis/pg. Sandbox shares one base. Empty here =
-	// fall back to BaseURL inside the client (sandbox behavior).
-	// Discovered live 2026-05-19 when prod returned 400
-	// "Api Mapping Not Found" on the /v1/oauth/token call.
-	authBaseURL := firstNonEmptyEnv("PHONEPE_AUTH_BASE_URL")
-	h.phonepe = NewPhonePeV2Client(PhonePeV2Config{
-		ClientID:      clientID,
-		ClientSecret:  clientSecret,
-		ClientVersion: clientVersion,
-		BaseURL:       baseURL,
-		AuthBaseURL:   authBaseURL,
-	})
+	if provider, err := recharge.NewPhonePeProvider(recharge.PhonePeConfig{
+		MerchantID: merchantID,
+		SaltKey:    saltKey,
+		SaltIndex:  saltIndex,
+		BaseURL:    baseURL,
+	}); err == nil {
+		h.phonepe = provider
+	}
+	// Otherwise creds missing — h.phonepe stays nil; handler returns 503.
+
 	h.publicBaseURL = firstNonEmptyEnv("PUBLIC_BASE_URL", "FRONTEND_URL")
 	if h.publicBaseURL == "" {
 		h.publicBaseURL = "http://localhost:3001"
@@ -219,18 +230,27 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	userID := userIDFromSubscriptionCtx(r)
 
 	if provider == "phonepe" {
-		// PhonePe expects a redirectUrl on its side; the user is
+		// PhonePe v1 expects a redirectUrl on its side; the user is
 		// bounced there after paying so the frontend can fire
 		// /verify?provider=phonepe with the merchantOrderId echoed in
-		// the URL.
+		// the URL. The PhonePe callback URL (server-to-server webhook)
+		// is the same path — we don't have a separate webhook handler
+		// wired yet for subscription upgrades, so for now we rely on
+		// the interactive /verify call. Webhook handler is a follow-up.
 		redirectURL := strings.TrimRight(h.publicBaseURL, "/") +
 			"/settings/plans/payment-callback?provider=phonepe&order_id=" +
 			upgradeOrderID.String()
-		phResult, err := h.phonepe.CreateOrder(r.Context(),
-			upgradeOrderID.String(), amountPaise, redirectURL,
-			"RawDrive — upgrade to "+body.ToTier)
+		callbackURL := strings.TrimRight(h.publicBaseURL, "/") +
+			"/api/v1/webhooks/phonepe/subscription"
+		phResult, err := h.phonepe.InitiateOrder(r.Context(), recharge.InitiateInput{
+			WorkspaceID: wsID,
+			AmountPaise: amountPaise,
+			OrderID:     upgradeOrderID.String(),
+			CallbackURL: callbackURL,
+			RedirectURL: redirectURL,
+		})
 		if err != nil {
-			log.Printf("phonepe.CreateOrder failed: %v", err)
+			log.Printf("phonepe.InitiateOrder failed: %v", err)
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe order create failed"})
 			return
 		}
@@ -240,7 +260,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 			     provider, provider_order_id, initiated_by)
 			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7)`,
 			upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise,
-			upgradeOrderID.String(), userID,
+			phResult.ProviderOrderID, userID,
 		)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist upgrade order"})
@@ -249,8 +269,8 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusCreated, upgradeResponse{
 			UpgradeOrderID: upgradeOrderID.String(),
 			Provider:       "phonepe",
-			RedirectURL:    phResult.RedirectURL,
-			PhonePeOrderID: phResult.PhonePeOrderID,
+			RedirectURL:    phResult.CheckoutURL,
+			PhonePeOrderID: phResult.ProviderOrderID,
 			AmountPaise:    amountPaise,
 			Currency:       "INR",
 		})

@@ -219,6 +219,85 @@ func SignPhonePePay(base64Body, saltKey, saltIndex string) string {
 	return hex.EncodeToString(h[:]) + "###" + saltIndex
 }
 
+// PhonePeOrderStatus is the v1 status response normalised. State is one
+// of "COMPLETED" / "PENDING" / "FAILED" / "EXPIRED"; PrimaryTransaction
+// is PhonePe's `transactionId` (UTR-equivalent) populated on COMPLETED.
+type PhonePeOrderStatus struct {
+	State              string
+	PrimaryTransaction string
+	AmountPaise        int64
+	Code               string // PhonePe's success/failure code, e.g. PAYMENT_SUCCESS
+	Raw                []byte
+}
+
+// v1 status response — top-level wrapper PhonePe returns from
+// GET /pg/v1/status/{merchantId}/{merchantTransactionId}.
+type phonePeStatusResponse struct {
+	Success bool   `json:"success"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		MerchantID            string `json:"merchantId"`
+		MerchantTransactionID string `json:"merchantTransactionId"`
+		TransactionID         string `json:"transactionId"`
+		Amount                int64  `json:"amount"`
+		State                 string `json:"state"`
+		ResponseCode          string `json:"responseCode"`
+	} `json:"data"`
+}
+
+// FetchOrderStatus calls /pg/v1/status/{merchantId}/{merchantTransactionId}
+// and returns a normalised status. Used by the interactive verify
+// endpoint after PhonePe redirects the user back — PhonePe's redirect
+// has no signature, so the status API is the authoritative source.
+//
+// X-VERIFY = SHA256("/pg/v1/status/<merchantId>/<merchantTransactionId>" + saltKey) + "###" + saltIndex
+// (note: no base64 body — different from /pay; status is a GET).
+func (p *PhonePeProvider) FetchOrderStatus(ctx context.Context, merchantTransactionID string) (*PhonePeOrderStatus, error) {
+	path := "/pg/v1/status/" + p.cfg.MerchantID + "/" + merchantTransactionID
+	checksum := signPhonePeStatus(path, p.cfg.SaltKey, p.cfg.SaltIndex)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		strings.TrimRight(p.cfg.BaseURL, "/")+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("phonepe: build status request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-VERIFY", checksum)
+	req.Header.Set("X-MERCHANT-ID", p.cfg.MerchantID)
+
+	resp, err := p.cfg.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("phonepe: status http: %w", err)
+	}
+	defer resp.Body.Close()
+	respBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("phonepe: status http %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var parsed phonePeStatusResponse
+	if err := json.Unmarshal(respBytes, &parsed); err != nil {
+		return nil, fmt.Errorf("phonepe: parse status response: %w", err)
+	}
+	return &PhonePeOrderStatus{
+		State:              strings.ToUpper(parsed.Data.State),
+		PrimaryTransaction: parsed.Data.TransactionID,
+		AmountPaise:        parsed.Data.Amount,
+		Code:               parsed.Code,
+		Raw:                respBytes,
+	}, nil
+}
+
+// signPhonePeStatus computes the X-VERIFY for the /pg/v1/status GET. The
+// status variant signs the URL path + saltKey (no base64 body — it's a
+// GET request). Kept package-private because callers use FetchOrderStatus.
+func signPhonePeStatus(path, saltKey, saltIndex string) string {
+	h := sha256.Sum256([]byte(path + saltKey))
+	return hex.EncodeToString(h[:]) + "###" + saltIndex
+}
+
 // SignPhonePeCallback computes the X-VERIFY for callback bodies.
 // Note: callback variant DOES NOT include a URL path — only base64body+saltKey.
 func SignPhonePeCallback(base64Body, saltKey, saltIndex string) string {
