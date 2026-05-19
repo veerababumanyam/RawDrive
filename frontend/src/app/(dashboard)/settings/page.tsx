@@ -10,7 +10,6 @@ import {
   HardDrive,
   LayoutGrid,
   ShieldCheck,
-  Users,
   UserRound,
 } from "lucide-react";
 import { getStoredPlatformRole } from "@/lib/auth";
@@ -80,16 +79,6 @@ const TILES: Tile[] = [
     description: "Client-facing delivery packages.",
     icon: CreditCard,
     testId: "settings-tile-packages",
-  },
-  // PR-3c: workspace-level face-recognition toggle. Sits between
-  // user-facing settings and admin tiles so it's discoverable to
-  // photographers (who own the consent decision) without being buried.
-  {
-    href: "/settings/face-recognition",
-    label: "Face Recognition",
-    description: "Enable face detection and people grouping for this workspace.",
-    icon: Users,
-    testId: "settings-tile-face-recognition",
   },
   {
     href: "/admin/upload-credits",
