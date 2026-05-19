@@ -28,7 +28,11 @@ const sections: Section[] = [
   // when the user is on the gallery's main page.
   { label: "Overview", path: "" },
   { label: "Cover & Design", path: "/cover" },
-  { label: "AI", path: "/ai" },
+  // AI tab removed from workspace nav 2026-05-19 — the per-gallery
+  // "AI" dashboard surface was hidden to declutter the workspace
+  // chrome. The /galleries/[id]/ai page itself is still mounted (deep
+  // links from gallery-ai-panel.tsx and bookmarks continue to work),
+  // it just no longer appears in the top-level navigation strip.
   // People tab removed 2026-05-18 — the dedicated person-first view
   // ("Unnamed person N photos" tiles) didn't earn its real-estate
   // alongside the cluster-vote Photo Search. Photo Search subsumes
