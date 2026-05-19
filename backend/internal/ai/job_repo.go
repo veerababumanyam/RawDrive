@@ -45,8 +45,15 @@ func (r *JobRepo) Create(ctx context.Context, job *AIJob) error {
 func (r *JobRepo) GetByID(ctx context.Context, id uuid.UUID) (*AIJob, error) {
 	var job AIJob
 	err := r.pool.QueryRow(ctx,
+		// COALESCE(error, '') because AIJob.Error is `string` (not
+		// nullable). Newly-inserted jobs (or any job without a failure)
+		// have error=NULL, and scanning NULL into a non-nullable string
+		// field crashes the worker poll with "cannot scan NULL into
+		// *string". Caught 2026-05-19 when a face-detection backfill
+		// stayed pending forever because every poll cycle bailed on
+		// this scan.
 		`SELECT id, workspace_id, type, status, total_items, processed_items,
-		 result, error, created_at, updated_at
+		 result, COALESCE(error, '') AS error, created_at, updated_at
 		 FROM ai_jobs WHERE id = $1`, id,
 	).Scan(&job.ID, &job.WorkspaceID, &job.Type, &job.Status,
 		&job.TotalItems, &job.ProcessedItems, &job.Result, &job.Error,
@@ -63,8 +70,15 @@ func (r *JobRepo) GetByID(ctx context.Context, id uuid.UUID) (*AIJob, error) {
 // ListPending returns pending jobs of a given type.
 func (r *JobRepo) ListPending(ctx context.Context, jobType string, limit int) ([]*AIJob, error) {
 	rows, err := r.pool.Query(ctx,
+		// COALESCE(error, '') because AIJob.Error is `string` (not
+		// nullable). Newly-inserted jobs (or any job without a failure)
+		// have error=NULL, and scanning NULL into a non-nullable string
+		// field crashes the worker poll with "cannot scan NULL into
+		// *string". Caught 2026-05-19 when a face-detection backfill
+		// stayed pending forever because every poll cycle bailed on
+		// this scan.
 		`SELECT id, workspace_id, type, status, total_items, processed_items,
-		 result, error, created_at, updated_at
+		 result, COALESCE(error, '') AS error, created_at, updated_at
 		 FROM ai_jobs WHERE type = $1 AND status = 'pending'
 		 ORDER BY created_at ASC LIMIT $2`, jobType, limit)
 	if err != nil {
@@ -107,8 +121,15 @@ func (r *JobRepo) MarkDone(ctx context.Context, id uuid.UUID, result map[string]
 func (r *JobRepo) GetLatestByGallery(ctx context.Context, galleryID uuid.UUID) (*AIJob, error) {
 	var job AIJob
 	err := r.pool.QueryRow(ctx,
+		// COALESCE(error, '') because AIJob.Error is `string` (not
+		// nullable). Newly-inserted jobs (or any job without a failure)
+		// have error=NULL, and scanning NULL into a non-nullable string
+		// field crashes the worker poll with "cannot scan NULL into
+		// *string". Caught 2026-05-19 when a face-detection backfill
+		// stayed pending forever because every poll cycle bailed on
+		// this scan.
 		`SELECT id, workspace_id, type, status, total_items, processed_items,
-		 result, error, created_at, updated_at
+		 result, COALESCE(error, '') AS error, created_at, updated_at
 		 FROM ai_jobs
 		 WHERE type = 'face_detection'
 		   AND result->>'gallery_id' = $1
