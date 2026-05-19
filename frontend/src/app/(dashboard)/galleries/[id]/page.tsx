@@ -48,6 +48,86 @@ type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
 };
 
+// Filename-extension fallback for the image-file gate. The MIME-type
+// check (file.type.startsWith("image/")) catches every JPEG/PNG/HEIC
+// the OS recognises, but it misses raw photo formats that browsers
+// don't classify as image/* (Canon CR2/CR3, Nikon NEF, Sony ARW,
+// Adobe DNG, Fuji RAF, generic TIFF). Studios shoot these as a
+// standard workflow, so we accept them by extension.
+const ACCEPTED_RAW_EXT_RE = /\.(cr2|nef|arw|dng|raf|cr3|tiff?)$/i;
+
+function isAcceptedImageFile(f: File): boolean {
+  return f.type.startsWith("image/") || ACCEPTED_RAW_EXT_RE.test(f.name);
+}
+
+// MIME type list accepted by both the file picker and the folder
+// picker. Mirrors handleDrop's filter so the user can't pick non-
+// image files in the first place. Folder picker (webkitdirectory)
+// honours `accept` only as a hint — the picker still lets the
+// browser return everything inside the folder — so isAcceptedImageFile
+// filters server-side too.
+const FILE_INPUT_ACCEPT = "image/*,.cr2,.nef,.arw,.dng,.raf,.cr3,.tif,.tiff";
+
+// Recursively flatten a DataTransferItemList (drag-and-drop source)
+// into a flat File[]. Required when the user drops a FOLDER instead
+// of files — `dataTransfer.files` is empty for folder drops, and the
+// only way to reach the leaf files is via the webkitGetAsEntry +
+// FileSystemDirectoryReader API. Reader returns entries in batches
+// of <=100 per call, so we loop until empty.
+//
+// Returns the raw flattened set. Callers must apply isAcceptedImageFile
+// themselves to keep parity with the file-picker path.
+async function collectFilesFromDataTransfer(items: DataTransferItemList): Promise<File[]> {
+  // Minimal local typing for the webkit file-entry API. The DOM types
+  // ship `FileSystemEntry` but DirectoryReader is omitted from lib.dom.d.ts
+  // for some toolchains; defining narrow local interfaces avoids a
+  // dependency on @types/filesystem and keeps the cast cost contained.
+  interface FsEntry {
+    isFile: boolean;
+    isDirectory: boolean;
+    file?: (cb: (file: File) => void) => void;
+    createReader?: () => { readEntries: (cb: (entries: FsEntry[]) => void) => void };
+  }
+  const collected: File[] = [];
+
+  const walk = (entry: FsEntry): Promise<void> => {
+    if (entry.isFile && entry.file) {
+      return new Promise((resolve) => {
+        entry.file!((f) => {
+          collected.push(f);
+          resolve();
+        });
+      });
+    }
+    if (entry.isDirectory && entry.createReader) {
+      const reader = entry.createReader();
+      return new Promise((resolve) => {
+        const readBatch = () => {
+          reader.readEntries((entries) => {
+            if (entries.length === 0) { resolve(); return; }
+            Promise.all(entries.map(walk)).then(() => readBatch());
+          });
+        };
+        readBatch();
+      });
+    }
+    return Promise.resolve();
+  };
+
+  const tasks: Promise<void>[] = [];
+  for (const item of Array.from(items)) {
+    // webkitGetAsEntry is the cross-browser shorthand for the FileSystem
+    // Entry API. Supported in Chrome 13+, Edge, Firefox 50+, Safari 11.1+.
+    // Returns null for non-file items (e.g. a string drag).
+    const entry = (item as DataTransferItem & {
+      webkitGetAsEntry?: () => FsEntry | null;
+    }).webkitGetAsEntry?.();
+    if (entry) tasks.push(walk(entry));
+  }
+  await Promise.all(tasks);
+  return collected;
+}
+
 export default function GalleryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
@@ -652,9 +732,26 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOver(false);
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith("image/") || /\.(cr2|nef|arw|dng|raf|cr3|tiff?)$/i.test(f.name),
-      );
+      // Folder drops surface as DataTransferItem entries whose
+      // webkitGetAsEntry().isDirectory is true. `e.dataTransfer.files`
+      // is empty in that case, so we must traverse items[] to reach the
+      // leaf files. Pure-file drops fall back to .files so we don't
+      // pay the async traversal cost when there is no folder to walk.
+      const items = e.dataTransfer.items;
+      const hasDirectory =
+        items && Array.from(items).some((it) => {
+          const entry = (it as DataTransferItem & {
+            webkitGetAsEntry?: () => { isDirectory: boolean } | null;
+          }).webkitGetAsEntry?.();
+          return !!entry?.isDirectory;
+        });
+      if (hasDirectory) {
+        collectFilesFromDataTransfer(items).then((all) => {
+          submitFiles(all.filter(isAcceptedImageFile));
+        });
+        return;
+      }
+      const files = Array.from(e.dataTransfer.files).filter(isAcceptedImageFile);
       submitFiles(files);
     },
     [submitFiles],
@@ -664,9 +761,40 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.accept = "image/*,.cr2,.nef,.arw,.dng,.raf,.cr3,.tif,.tiff";
+    input.accept = FILE_INPUT_ACCEPT;
     input.onchange = () => {
       if (input.files) submitFiles(Array.from(input.files));
+    };
+    input.click();
+  }, [submitFiles]);
+
+  // Folder-picker variant. Sets the `webkitdirectory` attribute (also
+  // exposed as a DOM property) so the OS picker opens a folder
+  // selector instead of a file selector — the user picks ONE folder
+  // and the browser returns every file inside it, recursively. The
+  // `accept` hint still applies but is treated as advisory by the
+  // folder picker, so we additionally filter through
+  // isAcceptedImageFile to discard stray .DS_Store / .ini / sidecar
+  // files that ship inside a typical photo-shoot folder.
+  //
+  // Attribute is set via both the DOM property and the HTML attribute
+  // for cross-browser coverage: Chromium and WebKit read the property;
+  // Firefox reads only the attribute string. The cast suppresses
+  // TypeScript's lib.dom complaint that `webkitdirectory` is not in
+  // HTMLInputElement (it is, but with the legacy vendor prefix that
+  // lib.dom omits from the public type for spec-stability reasons).
+  const handleFolderSelect = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = FILE_INPUT_ACCEPT;
+    (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+    input.onchange = () => {
+      if (input.files) {
+        submitFiles(Array.from(input.files).filter(isAcceptedImageFile));
+      }
     };
     input.click();
   }, [submitFiles]);
@@ -964,12 +1092,21 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     )}
                   </>
                 )}
-                <button
-                  onClick={handleFileSelect}
-                  className="btn-primary px-3 py-1.5 text-xs"
-                >
-                  Upload Photos
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleFileSelect}
+                    className="btn-primary px-3 py-1.5 text-xs"
+                  >
+                    Upload Photos
+                  </button>
+                  <button
+                    onClick={handleFolderSelect}
+                    className="btn-tertiary px-3 py-1.5 text-xs"
+                    title="Pick a folder — every photo inside (including subfolders) is uploaded."
+                  >
+                    Upload Folder
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1311,9 +1448,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               )}
               onClick={handleFileSelect}
             >
-              <p className="font-medium">{isDragOver ? "Drop photos here" : "Drag photos here or click to browse"}</p>
+              <p className="font-medium">{isDragOver ? "Drop photos or folders here" : "Drag photos or folders here, or click to browse"}</p>
               <p className="text-xs text-text-tertiary mt-1">
-                JPEG, PNG, TIFF, RAW (CR2, NEF, ARW, DNG, RAF) — up to 2GB per file
+                JPEG, PNG, TIFF, RAW (CR2, NEF, ARW, DNG, RAF) — up to 2GB per file. Folders upload every photo inside, recursively.
               </p>
             </div>
 
