@@ -513,6 +513,38 @@ export interface CreateUserInput {
   role: string;
   initial_password?: string;
   send_invite?: boolean;
+  // 2026-05-19: optional admin-granted plan comp. When set, the
+  // backend writes users.pending_plan_tier (migration 113) and the
+  // onboarding flow applies the tier at workspace-creation time.
+  // Valid values: free | starter | professional | business |
+  // enterprise. Only valid for role="photographer"; other roles
+  // produce 400 invalid_plan_tier.
+  plan_tier?: string;
+}
+
+// 2026-05-19: dynamic plan catalog served from GET /api/v1/admin/plans.
+// Replaces the prior approach of importing pricingPlans from
+// src/lib/tokens.ts so the admin dropdown reflects backend truth and
+// can change without a frontend re-bundle.
+export interface AdminPlan {
+  tier: string;
+  name: string;
+  monthly_price_paise: number;
+}
+
+export interface ListAdminPlansResponse {
+  plans: AdminPlan[];
+}
+
+export async function listAdminPlans(token: string): Promise<AdminPlan[]> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/plans`, {
+    headers: headers(token),
+  });
+  if (!res.ok) {
+    throw new Error(`List admin plans failed: ${res.status}`);
+  }
+  const body = (await res.json()) as ListAdminPlansResponse;
+  return Array.isArray(body.plans) ? body.plans : [];
 }
 
 /**

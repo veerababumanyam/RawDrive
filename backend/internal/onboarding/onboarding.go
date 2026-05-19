@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 )
 
@@ -86,6 +87,17 @@ type UserUpdater interface {
 	UpdatePhone(ctx context.Context, userID, phone string) error
 }
 
+// PlanGrantStore is the port used to consume an admin-granted plan comp
+// recorded on users.pending_plan_tier (migration 113). The onboarding
+// service calls ConsumePendingPlanTier just before workspace creation;
+// when a grant is present the value overrides the user's wizard-selected
+// plan and the column is cleared atomically so the grant applies once.
+// Returns ("", nil) when no grant exists — the onboarding flow then
+// keeps the user's own selection.
+type PlanGrantStore interface {
+	ConsumePendingPlanTier(ctx context.Context, userID string) (string, error)
+}
+
 type EventPublisher interface {
 	Publish(ctx context.Context, subject string, data []byte) error
 }
@@ -100,10 +112,11 @@ type Service interface {
 // memory — all progress lives in the Repository. This is the fix for
 // the pre-existing "backend restart wipes onboarding progress" bug.
 type service struct {
-	repo    Repository
-	wsc     WorkspaceCreator
-	pub     EventPublisher
-	userUpd UserUpdater
+	repo      Repository
+	wsc       WorkspaceCreator
+	pub       EventPublisher
+	userUpd   UserUpdater
+	planGrant PlanGrantStore
 }
 
 // NewService constructs the Service. repo is required; wsc, pub, and
@@ -127,6 +140,14 @@ type ServiceOption func(*service)
 // WithUserUpdater sets the UserUpdater used to persist phone during onboarding.
 func WithUserUpdater(u UserUpdater) ServiceOption {
 	return func(s *service) { s.userUpd = u }
+}
+
+// WithPlanGrantStore sets the PlanGrantStore used to read and clear an
+// admin-granted plan comp during onboarding. When nil (the default in
+// tests and pre-migration deployments) the user's wizard-selected plan
+// is used as-is.
+func WithPlanGrantStore(g PlanGrantStore) ServiceOption {
+	return func(s *service) { s.planGrant = g }
 }
 
 // SelectState canonicalizes the user-supplied state identifier (any of
@@ -209,6 +230,34 @@ func (s *service) SetProfile(ctx context.Context, userID string, input ProfileIn
 	// able to retry by resubmitting the profile form.
 	if s.wsc == nil {
 		return fmt.Errorf("%w: workspace creator not configured", ErrWorkspaceCreateFail)
+	}
+	// Admin-granted plan comp (migration 113). When a super admin
+	// pre-set users.pending_plan_tier via the New User dialog, the
+	// grant takes precedence over whatever plan the user picked in
+	// the wizard. ConsumePendingPlanTier is atomic (UPDATE ...
+	// RETURNING with NOT NULL guard) so a retry of profile submission
+	// can't apply the same grant twice — the second call returns
+	// "" because the column is already cleared.
+	//
+	// We consume BEFORE CreateWorkspace so a workspace-create failure
+	// has already burned the grant. That's intentional: the
+	// alternative (consume after) would mean a transient DB error
+	// could orphan the workspace at the user's wizard-chosen tier
+	// AND leave the grant unredeemed. Burning the grant up-front
+	// matches the "admin-given, single-use comp" mental model — if
+	// the admin needs to retry they can re-grant via the same dialog.
+	if s.planGrant != nil {
+		granted, gerr := s.planGrant.ConsumePendingPlanTier(ctx, userID)
+		if gerr != nil {
+			// Non-fatal: surface as a log line and fall through to
+			// the user's wizard choice. The grant column is left
+			// untouched in the error path (UPDATE rolls back), so
+			// the admin can retry by re-saving the user.
+			log.Printf("onboarding: consume pending plan tier for user=%s: %v", userID, gerr)
+		} else if granted != "" {
+			log.Printf("onboarding: applying admin plan grant user=%s tier=%s", userID, granted)
+			planTier = granted
+		}
 	}
 	if _, err := s.wsc.CreateWorkspace(
 		ctx,

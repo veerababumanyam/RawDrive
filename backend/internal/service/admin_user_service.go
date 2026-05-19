@@ -45,7 +45,34 @@ type CreateInput struct {
 	InitialPassword *string
 	SendInvite      bool
 	ActorID         uuid.UUID
+	// PlanTier is an optional admin-granted plan comp. When set to one
+	// of the canonical tier slugs (free / starter / professional /
+	// business / enterprise) the value is persisted to
+	// users.pending_plan_tier (migration 113) and applied at the
+	// user's workspace-creation time. Only meaningful for the
+	// photographer role — other roles do not own a workspace. The
+	// service rejects unknown tier values with ErrInvalidPlanTier
+	// rather than silently falling back so a typo from the admin
+	// dialog surfaces as a 400 instead of an unexpected "free" grant.
+	PlanTier *string
 }
+
+// validAdminGrantTiers mirrors the chk_users_pending_plan_tier CHECK
+// constraint (migration 113) and the workspaces.plan_tier CHECK
+// (migration 070). Kept here so the service layer can validate before
+// the repo INSERT — saves a round-trip and gives a clear sentinel error.
+var validAdminGrantTiers = map[string]struct{}{
+	"free":         {},
+	"starter":      {},
+	"professional": {},
+	"business":     {},
+	"enterprise":   {},
+}
+
+// ErrInvalidPlanTier — returned by Create when an unknown plan tier slug
+// is supplied. The handler maps this to HTTP 400 with code
+// "invalid_plan_tier" so the admin dialog can surface a specific message.
+var ErrInvalidPlanTier = errors.New("invalid plan tier")
 
 // E5-S1 role whitelist. superadmin / super_admin are explicitly rejected so
 // privilege escalation via the admin create API is impossible (SEC-F05).
@@ -262,6 +289,24 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 	if input.InitialPassword == nil && !input.SendInvite {
 		return nil, ErrMissingPasswordOrInvite
 	}
+	// Admin-granted plan comp. Only photographers own a workspace; for
+	// any other role a plan grant has no surface to apply against, so
+	// we reject the combination explicitly rather than silently
+	// ignoring it (the latter would let the admin dialog "succeed" but
+	// the grant would never materialize).
+	var pendingPlanTier *string
+	if input.PlanTier != nil {
+		tier := strings.TrimSpace(strings.ToLower(*input.PlanTier))
+		if tier != "" {
+			if _, ok := validAdminGrantTiers[tier]; !ok {
+				return nil, ErrInvalidPlanTier
+			}
+			if role != "photographer" {
+				return nil, ErrInvalidPlanTier
+			}
+			pendingPlanTier = &tier
+		}
+	}
 	var passwordHash *string
 	emailVerified := false
 	if input.InitialPassword != nil {
@@ -283,11 +328,12 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 		return nil, fmt.Errorf("admin user service: repository not configured")
 	}
 	detail, err := s.userRepo.CreateUser(ctx, repository.AdminUserCreate{
-		Email:         email,
-		FullName:      strings.TrimSpace(input.FullName),
-		Role:          role,
-		PasswordHash:  passwordHash,
-		EmailVerified: emailVerified,
+		Email:           email,
+		FullName:        strings.TrimSpace(input.FullName),
+		Role:            role,
+		PasswordHash:    passwordHash,
+		EmailVerified:   emailVerified,
+		PendingPlanTier: pendingPlanTier,
 	})
 	if err != nil {
 		if errors.Is(err, repository.ErrDuplicateEmail) {

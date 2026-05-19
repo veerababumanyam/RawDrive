@@ -412,6 +412,24 @@ func (o *onboardingUserUpdater) UpdatePhone(ctx context.Context, userID, phone s
 	return err
 }
 
+// onboardingPlanGrantStore adapts repository.AdminUserRepo into the
+// onboarding.PlanGrantStore interface. The repo method takes uuid.UUID;
+// the onboarding port passes the userID as the same string it gets from
+// the auth context, so we parse here and surface a parse error as a
+// no-op grant (return "" / nil) — a malformed user id can't have a
+// matching pending grant anyway.
+type onboardingPlanGrantStore struct {
+	repo *repository.AdminUserRepo
+}
+
+func (o *onboardingPlanGrantStore) ConsumePendingPlanTier(ctx context.Context, userID string) (string, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return "", nil
+	}
+	return o.repo.ConsumePendingPlanTier(ctx, id)
+}
+
 // envOrFatal tries multiple env var names in order. Returns the first non-empty value.
 // Logs fatal if none are set.
 // buildViewerJWTService loads (or creates and persists) the viewer-session
@@ -897,6 +915,12 @@ func main() {
 		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool},
 		eventPublisher,
 		onboarding.WithUserUpdater(&onboardingUserUpdater{userSvc: userSvc}),
+		// 2026-05-19 admin-granted plan comp (migration 113) — the
+		// onboarding service consumes users.pending_plan_tier just
+		// before workspace creation so super-admin-issued comps land
+		// on the workspace at the granted tier instead of the user's
+		// wizard pick.
+		onboarding.WithPlanGrantStore(&onboardingPlanGrantStore{repo: repository.NewAdminUserRepo(dbPool)}),
 	)
 	onbHandler := onboarding.NewHandler(onbSvc)
 

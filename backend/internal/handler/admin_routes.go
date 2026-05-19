@@ -63,6 +63,13 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Use(middleware.RequireAuth)
 		r.Use(middleware.RequirePlatformRole("super_admin", "admin"))
 
+		// 2026-05-19: GET /admin/plans serves the canonical plan
+		// catalog so the New User dialog renders the plan dropdown
+		// dynamically instead of bundling the tier list into the
+		// frontend at build time.
+		plans := NewAdminPlansHandler()
+		r.Get("/plans", plans.List)
+
 		r.Get("/users", users.List)
 		// M39 E5-S1: admin user create (POST /api/v1/admin/users).
 		r.Post("/users", users.Create)

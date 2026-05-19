@@ -29,6 +29,13 @@ type adminUserCreateRequest struct {
 	Role            string  `json:"role"`
 	InitialPassword *string `json:"initial_password,omitempty"`
 	SendInvite      bool    `json:"send_invite,omitempty"`
+	// 2026-05-19 admin-granted plan comp (migration 113). Optional;
+	// when non-empty the service validates it against the canonical
+	// tier whitelist and persists to users.pending_plan_tier. Only
+	// valid for role="photographer" — other roles return 400
+	// invalid_plan_tier because they don't own a workspace to apply
+	// the grant against.
+	PlanTier *string `json:"plan_tier,omitempty"`
 }
 
 // Create handles POST /api/v1/admin/users. Returns 202 for invite flow,
@@ -51,6 +58,7 @@ func (h *AdminUsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Role:            req.Role,
 		InitialPassword: req.InitialPassword,
 		SendInvite:      req.SendInvite,
+		PlanTier:        req.PlanTier,
 		ActorID:         actorID,
 	})
 	if err != nil {
@@ -63,6 +71,8 @@ func (h *AdminUsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"password does not meet complexity","code":"weak_password"}`, http.StatusBadRequest)
 		case service.ErrMissingPasswordOrInvite:
 			http.Error(w, `{"error":"supply either initial_password or send_invite","code":"missing_auth_path"}`, http.StatusBadRequest)
+		case service.ErrInvalidPlanTier:
+			http.Error(w, `{"error":"invalid plan tier (must be one of free|starter|professional|business|enterprise, and only for role=photographer)","code":"invalid_plan_tier"}`, http.StatusBadRequest)
 		case service.ErrDuplicateEmail:
 			http.Error(w, `{"error":"email already registered","code":"duplicate_email"}`, http.StatusConflict)
 		default:

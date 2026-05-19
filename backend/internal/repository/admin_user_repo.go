@@ -37,6 +37,13 @@ type AdminUserCreate struct {
 	PasswordHash       *string // nil for invite-only path
 	EmailVerified      bool
 	MustChangePassword bool // set true for admin-created dealer accounts
+	// PendingPlanTier captures an admin-granted plan comp (migration
+	// 113). When non-nil and non-empty, the value is written to
+	// users.pending_plan_tier and applied by the onboarding service
+	// when the user's workspace is created. NULL/empty means no
+	// grant — the photographer picks their own plan during the
+	// onboarding wizard (default: free).
+	PendingPlanTier *string
 }
 
 // ErrDuplicateEmail is surfaced when INSERT INTO users collides with the
@@ -275,10 +282,17 @@ func (r *AdminUserRepo) CreateUser(ctx context.Context, in AdminUserCreate) (*Ad
 	id := uuid.New()
 	// INSERT via COALESCE on optional columns so the schema's DEFAULTs apply.
 	// display_name is the persistence name for full_name (see migration 002).
+	// pending_plan_tier is nullable in the DB; pass nil when the
+	// caller didn't pre-set a plan grant so the column stays NULL
+	// (chk_users_pending_plan_tier permits NULL).
+	var pendingPlan any
+	if in.PendingPlanTier != nil && *in.PendingPlanTier != "" {
+		pendingPlan = *in.PendingPlanTier
+	}
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO users (id, email, display_name, platform_role, password_hash, email_verified, must_change_password, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', now(), now())`,
-		id, in.Email, in.FullName, in.Role, in.PasswordHash, in.EmailVerified, in.MustChangePassword,
+		INSERT INTO users (id, email, display_name, platform_role, password_hash, email_verified, must_change_password, pending_plan_tier, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', now(), now())`,
+		id, in.Email, in.FullName, in.Role, in.PasswordHash, in.EmailVerified, in.MustChangePassword, pendingPlan,
 	)
 	if err != nil {
 		msg := err.Error()
@@ -525,4 +539,38 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// ConsumePendingPlanTier atomically reads users.pending_plan_tier for the
+// given user and clears it in the same statement. The onboarding service
+// calls this just before creating the workspace so it can override the
+// user-picked plan with the admin's grant. Returns "" with no error when
+// the column is NULL — the onboarding flow then falls back to the user's
+// own selection.
+//
+// The UPDATE ... RETURNING pattern guarantees the read-and-clear is
+// atomic: a concurrent retry of onboarding completion cannot apply the
+// same grant twice, even if the workspace insert fails and the user
+// resubmits the wizard form a moment later.
+func (r *AdminUserRepo) ConsumePendingPlanTier(ctx context.Context, userID uuid.UUID) (string, error) {
+	var planTier *string
+	err := r.pool.QueryRow(ctx, `
+		UPDATE users
+		   SET pending_plan_tier = NULL,
+		       updated_at = now()
+		 WHERE id = $1
+		   AND pending_plan_tier IS NOT NULL
+		RETURNING pending_plan_tier`, userID).Scan(&planTier)
+	if err == pgx.ErrNoRows {
+		// Either the user doesn't exist (caller's problem; will surface
+		// later) or the column was already NULL — both map to "no grant".
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("consume pending plan tier: %w", err)
+	}
+	if planTier == nil {
+		return "", nil
+	}
+	return *planTier, nil
 }
