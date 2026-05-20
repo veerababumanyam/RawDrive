@@ -299,9 +299,25 @@ func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handle
 
 	handler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-			if ip == "" {
-				ip = r.RemoteAddr
+			// 2026-05-20: bucket by the real client IP, not the immediate
+			// peer. In production every request arrives from the nginx
+			// container so r.RemoteAddr resolves to a single internal docker
+			// IP (e.g. 172.18.0.4) for every user — one user's traffic burns
+			// the entire 60/min budget and everyone else gets 429. Read
+			// X-Forwarded-For (first hop) first, then X-Real-IP, and only
+			// fall back to RemoteAddr in the rare same-origin case where
+			// neither header is set. Mirrors the audit-log middleware's
+			// client-IP extraction (see lines 162-173).
+			ip := r.Header.Get("X-Forwarded-For")
+			if ip != "" {
+				if i := strings.Index(ip, ","); i > 0 {
+					ip = strings.TrimSpace(ip[:i])
+				}
+			} else if ip = r.Header.Get("X-Real-IP"); ip == "" {
+				ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+				if ip == "" {
+					ip = r.RemoteAddr
+				}
 			}
 
 			mu.Lock()
