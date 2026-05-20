@@ -114,6 +114,22 @@ export function useUpload(apiUrl: string, token: string) {
           });
           return;
         }
+        // 2026-05-20: surface plan-storage-quota rejection as a "blocked"
+        // item rather than a raw 403 string, so the dropzone shows a real
+        // sentence (the backend already returns a customer-readable message)
+        // instead of "Create session failed: 403". Status 403 + the documented
+        // `storage_quota_exceeded` error code is the contract — same code
+        // the unused QuotaEnforcer middleware emits. The user will need to
+        // free space or upgrade their plan; no point retrying.
+        if (createRes.status === 403 && errorBody.error === "storage_quota_exceeded") {
+          updateItem(item.id, {
+            status: "blocked",
+            error:
+              errorBody.message ??
+              "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+          });
+          return;
+        }
         throw new Error(`Create session failed: ${createRes.status}`);
       }
 

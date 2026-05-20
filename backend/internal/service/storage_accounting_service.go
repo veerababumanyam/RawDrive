@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +10,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrStorageQuotaExceeded is returned when a workspace's accepted upload would
+// push used_bytes past quota_bytes. Handlers detect this with errors.Is so
+// they can map it to a 403 with the documented JSON shape
+// `{"error":"storage_quota_exceeded", "message":"..."}` — same payload the
+// (previously unmounted) QuotaEnforcer middleware emits, kept identical so
+// the frontend's upload error handler can rely on a stable contract.
+var ErrStorageQuotaExceeded = errors.New("storage quota exceeded")
 
 // analyticsCache is a simple in-memory cache with TTL for storage analytics.
 type analyticsCache struct {

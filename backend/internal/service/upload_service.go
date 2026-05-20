@@ -51,6 +51,26 @@ type UploadResult struct {
 
 // Upload stores a file and creates an asset record.
 func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadResult, error) {
+	// 2026-05-20: enforce per-workspace plan storage quota BEFORE writing to
+	// B2 — otherwise an over-quota user costs us bandwidth + creates an
+	// orphan object that has to be GC'd. CheckQuota returns true for
+	// workspaces without a seeded quota (treated as unlimited) and for any
+	// addition that fits inside `used_bytes + additional <= quota_bytes`.
+	// Returning ErrStorageQuotaExceeded lets handler/asset_handler.go map
+	// this to a 403 with the documented `storage_quota_exceeded` payload.
+	// Best-effort fallback: if the quota service is not wired (e.g. unit
+	// tests pass nil), skip the check rather than fail-closed on infra
+	// misconfiguration — RecordUpload has the same fallback semantics.
+	if s.storageSvc != nil {
+		allowed, qErr := s.storageSvc.CheckQuota(ctx, input.WorkspaceID, input.SizeBytes)
+		if qErr != nil {
+			return nil, fmt.Errorf("upload: quota check: %w", qErr)
+		}
+		if !allowed {
+			return nil, ErrStorageQuotaExceeded
+		}
+	}
+
 	assetID := uuid.New()
 	storageKey := fmt.Sprintf("%s/%s/%s%s",
 		input.WorkspaceID.String(),

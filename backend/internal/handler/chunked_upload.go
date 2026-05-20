@@ -323,6 +323,35 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		input.ChunkSize = 5 * 1024 * 1024 // default 5MB
 	}
 
+	// 2026-05-20: enforce per-workspace plan storage quota BEFORE reserving
+	// an upload credit. Doing this here rather than at finalize means a) we
+	// reject the session up-front so the client can react before chunking
+	// starts, b) we don't burn an upload credit on a session that can never
+	// succeed, c) we don't initiate a multipart upload with B2 (each one
+	// triggers a small per-request charge even when abandoned). CheckQuota
+	// treats workspaces without a seeded quota row as unlimited and
+	// validates `used_bytes + TotalSize <= quota_bytes`. Fail-open on
+	// missing service wiring (unit tests) but fail-closed on DB error —
+	// the previous middleware deliberately fell open here and that was the
+	// behaviour gap that let prod uploads bypass the limit entirely.
+	if h.storageAccountingSvc != nil {
+		allowed, qErr := h.storageAccountingSvc.CheckQuota(r.Context(), workspaceID, input.TotalSize)
+		if qErr != nil {
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"error":   "quota_check_failed",
+				"message": "could not verify storage quota; please retry",
+			})
+			return
+		}
+		if !allowed {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"error":   "storage_quota_exceeded",
+				"message": "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+			})
+			return
+		}
+	}
+
 	uploadUUID := uuid.New()
 	uploadID := uploadUUID.String()
 

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -152,6 +153,18 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		Body:        file,
 	})
 	if err != nil {
+		// 2026-05-20: surface plan-quota rejections as 403 with the documented
+		// `storage_quota_exceeded` payload — same shape as the QuotaEnforcer
+		// middleware, kept stable for the frontend's upload error handler.
+		// Any other error stays at 500 with the generic message so we don't
+		// leak storage-layer details.
+		if errors.Is(err, service.ErrStorageQuotaExceeded) {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"error":   "storage_quota_exceeded",
+				"message": "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+			})
+			return
+		}
 		http.Error(w, `{"error":"upload failed"}`, http.StatusInternalServerError)
 		return
 	}
