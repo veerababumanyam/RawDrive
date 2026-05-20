@@ -72,6 +72,15 @@ func (c *awsS3Client) CreateMultipartUpload(ctx context.Context, key, contentTyp
 	if contentType != "" {
 		input.ContentType = aws.String(contentType)
 	}
+	// 2026-05-20: SSE on multipart uploads is set ONCE at session
+	// creation. S3 / B2 propagate the encryption setting to every
+	// UploadPart automatically — no need (and no permission) to
+	// re-send the header on each chunk. The final assembled object
+	// lands encrypted in the bucket with the same per-object server
+	// key as a single-shot PutObject would have used.
+	if c.sse != "" {
+		input.ServerSideEncryption = c.sse
+	}
 	out, err := c.client.CreateMultipartUpload(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("aws s3 create multipart: %w", err)

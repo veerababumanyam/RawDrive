@@ -1157,6 +1157,12 @@ func main() {
 		Endpoint:  os.Getenv("B2_ENDPOINT"),
 		AccessKey: envOrFatal("B2_KEY_ID", "B2_ACCESS_KEY_ID"),
 		SecretKey: envOrFatal("B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"),
+		// 2026-05-20: opt-in server-side encryption. STORAGE_SSE_MODE=AES256
+		// turns on SSE-B2 (server-managed AES-256). When unset, falls back
+		// to plain PUT — existing objects are unaffected by toggling this
+		// since B2 keeps each object's per-write encryption state. Set in
+		// .env.backend on each prod node and force-recreate backend.
+		SSEMode: os.Getenv("STORAGE_SSE_MODE"),
 	}
 	if storageCfg.Driver == "" {
 		storageCfg.Driver = "s3" // B2 uses S3-compatible API
@@ -1168,7 +1174,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT are set.", err)
 	}
-	log.Printf("Storage: Backblaze B2 initialized (bucket: %s, endpoint: %s)", storageCfg.Bucket, storageCfg.Endpoint)
+	sseDisplay := storageCfg.SSEMode
+	if sseDisplay == "" {
+		sseDisplay = "disabled"
+	}
+	log.Printf("Storage: Backblaze B2 initialized (bucket: %s, endpoint: %s, sse: %s)", storageCfg.Bucket, storageCfg.Endpoint, sseDisplay)
 
 	// M2 Repositories
 	assetRepo := repository.NewAssetRepo(dbPool)

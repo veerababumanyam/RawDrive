@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // awsS3Client wraps the real AWS SDK S3 client to implement S3Client.
@@ -18,6 +20,13 @@ type awsS3Client struct {
 	client    *s3.Client
 	presigner *s3.PresignClient
 	bucket    string
+	// sse, when non-empty, requests server-side encryption on every PUT
+	// and CreateMultipartUpload. "AES256" maps to SSE-B2 against
+	// Backblaze's S3-compatible API and SSE-S3 against AWS S3 — both
+	// providers manage their own keys, decrypt transparently on GET, and
+	// honour the same wire-level header. Sourced from
+	// storage.Config.SSEMode (env: STORAGE_SSE_MODE).
+	sse s3types.ServerSideEncryption
 }
 
 func newAWSS3Client(cfg Config) (S3Client, error) {
@@ -52,10 +61,28 @@ func newAWSS3Client(cfg Config) (S3Client, error) {
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
 
+	// Map STORAGE_SSE_MODE to the typed s3 enum. Empty disables SSE
+	// (back-compat); known values pass through. Anything else fails fast
+	// at construction so an operator typo doesn't silently leave objects
+	// unencrypted in production.
+	var sse s3types.ServerSideEncryption
+	switch strings.TrimSpace(cfg.SSEMode) {
+	case "":
+		// SSE disabled — objects still live on B2's encrypted disks but
+		// without the customer-visible SSE-B2 key envelope.
+	case "AES256":
+		sse = s3types.ServerSideEncryptionAes256
+	case "aws:kms":
+		sse = s3types.ServerSideEncryptionAwsKms
+	default:
+		return nil, fmt.Errorf("storage: unsupported STORAGE_SSE_MODE %q (allowed: AES256, aws:kms, or empty)", cfg.SSEMode)
+	}
+
 	return &awsS3Client{
 		client:    client,
 		presigner: s3.NewPresignClient(client),
 		bucket:    cfg.Bucket,
+		sse:       sse,
 	}, nil
 }
 
@@ -92,6 +119,18 @@ func (c *awsS3Client) PutObject(ctx context.Context, key string, body io.Reader,
 	}
 	if size > 0 {
 		input.ContentLength = aws.Int64(size)
+	}
+	// 2026-05-20: when STORAGE_SSE_MODE is set, tell the backend to wrap
+	// this object in server-managed encryption. B2's S3 API honours
+	// `x-amz-server-side-encryption: AES256` as SSE-B2; AWS S3 honours
+	// the same header as SSE-S3. No client-side key handling, transparent
+	// on GET. The header MUST be set on PutObject (this path is used by
+	// the legacy direct-upload + every WebP derivative the thumbnail
+	// pipeline writes, so a single line here also encrypts every
+	// derivative). For chunked uploads the equivalent header lives on
+	// CreateMultipartUpload — see multipart.go.
+	if c.sse != "" {
+		input.ServerSideEncryption = c.sse
 	}
 
 	_, err := c.client.PutObject(ctx, input)
