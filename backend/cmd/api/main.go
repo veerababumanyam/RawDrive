@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -637,6 +638,18 @@ func loadEnvFiles(paths ...string) {
 	}
 }
 
+// envIntOrDefault reads an integer env var, returning the default on missing
+// or unparseable values. Used for tunables like RATE_LIMIT_PER_MINUTE where
+// ops should be able to override without touching code.
+func envIntOrDefault(key string, def int) int {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 func main() {
 	// Load env vars from .env.cobolt / .env before anything reads os.Getenv.
 	// Process environment always wins; files only fill gaps.
@@ -655,11 +668,24 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(middleware.SecurityHeaders)
-	globalRateMax := 60
+	// 2026-05-20: prod default raised from 60/min to 600/min. RawDrive is a
+	// cloud SaaS — photographers running bulk-upload sessions legitimately
+	// burn through dozens of requests per second (one POST per photo +
+	// metadata fetches + derivative GETs + dashboard polling). The previous
+	// 60/min cap meant a single moderately active photographer would 429
+	// themselves mid-upload. 600/min = 10 req/sec average per real client IP
+	// (after the X-Forwarded-For fix), with bursts allowed inside the
+	// minute. Overridable via RATE_LIMIT_PER_MINUTE if a tenant needs more
+	// (or for emergency tightening). Window is also tunable via
+	// RATE_LIMIT_WINDOW_SECONDS so we can move to a wider sliding window
+	// (e.g. 6000/10min) without a redeploy if abuse patterns emerge.
+	globalRateMax := envIntOrDefault("RATE_LIMIT_PER_MINUTE", 600)
+	globalRateWindow := time.Duration(envIntOrDefault("RATE_LIMIT_WINDOW_SECONDS", 60)) * time.Second
 	if os.Getenv("APP_ENV") == "development" {
-		globalRateMax = 10000 // effectively unlimited in dev/test
+		globalRateMax = 100000 // effectively unlimited in dev/test
 	}
-	r.Use(middleware.RateLimit(globalRateMax, time.Minute))
+	log.Printf("Rate limit: %d requests / %s per client IP", globalRateMax, globalRateWindow)
+	r.Use(middleware.RateLimit(globalRateMax, globalRateWindow))
 
 	// ──────────────────────── Database Connection (shared M1 + M2) ────────────────
 	dbURL := os.Getenv("DATABASE_URL")
