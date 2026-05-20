@@ -2336,6 +2336,13 @@ func main() {
 
 		rc, err := storageProvider.Get(r.Context(), key)
 		if err != nil {
+			// 2026-05-20: log the actual storage-layer error so we can
+			// distinguish real 404s from auth/encryption misconfigurations
+			// (e.g. SSE-C key mismatch returning 403 → silently rendered
+			// as 404 to the client). Without this, every B2 error path —
+			// missing object, wrong SSE key, throttling, network — looked
+			// identical from the outside.
+			log.Printf("storage proxy GET %q failed: %v", key, err)
 			http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
 			return
 		}
