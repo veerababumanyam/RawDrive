@@ -194,6 +194,33 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	}
 	gallery.Settings["design_config"] = raw
 
+	// 2026-05-20: mirror the chosen cover asset back onto the canonical
+	// galleries.cover_asset_id column. The Cover & Design page lets the
+	// photographer pick a new cover photo, which used to only land in
+	// design_config.cover.assetId — the public viewer at /g/{slug} reads
+	// from there so the public page updated correctly, but the Galleries
+	// list and dashboard Recent Galleries cards both derive their
+	// thumbnail via `LEFT JOIN LATERAL ... ORDER BY a.id = g.cover_asset_id`
+	// (see GalleryRepo.List). With cover_asset_id never updated, those
+	// surfaces kept showing the stale first-uploaded photo even after the
+	// photographer saved a brand-new cover. Mirroring on the server side
+	// keeps the design endpoint as the single source of truth — no extra
+	// frontend round-trip, no chance of the two writes interleaving.
+	if cover, ok := raw["cover"].(map[string]interface{}); ok {
+		if assetIDRaw, present := cover["assetId"]; present {
+			switch v := assetIDRaw.(type) {
+			case string:
+				if v == "" {
+					gallery.CoverAssetID = nil
+				} else if parsed, err := uuid.Parse(v); err == nil {
+					gallery.CoverAssetID = &parsed
+				}
+			case nil:
+				gallery.CoverAssetID = nil
+			}
+		}
+	}
+
 	return s.galleryRepo.Update(ctx, gallery)
 }
 
