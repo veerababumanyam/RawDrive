@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rawdrive/backend/internal/repository"
@@ -67,6 +68,65 @@ func (h *DealerAnalyticsHandler) Dashboard(w http.ResponseWriter, r *http.Reques
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 			return
 		}
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, resp)
+}
+
+// Photographers returns all photographers in the same state as the authenticated dealer.
+// GET /api/v1/dealer/photographers
+func (h *DealerAnalyticsHandler) Photographers(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	dealer, err := h.dealerRepo.GetByUserID(r.Context(), userID)
+	if err != nil {
+		http.Error(w, `{"error":"not a registered dealer"}`, http.StatusNotFound)
+		return
+	}
+
+	photographers, err := h.svc.GetStatePhotographers(r.Context(), dealer.ID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, photographers)
+}
+
+// RevenueCalendar returns per-day revenue share data for the authenticated dealer.
+// GET /api/v1/dealer/revenue-calendar?year=2026&month=5
+func (h *DealerAnalyticsHandler) RevenueCalendar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	dealer, err := h.dealerRepo.GetByUserID(r.Context(), userID)
+	if err != nil {
+		http.Error(w, `{"error":"not a registered dealer"}`, http.StatusNotFound)
+		return
+	}
+
+	now := time.Now()
+	year := now.Year()
+	month := int(now.Month())
+
+	if y := r.URL.Query().Get("year"); y != "" {
+		if parsed, err := strconv.Atoi(y); err == nil && parsed > 2000 {
+			year = parsed
+		}
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		if parsed, err := strconv.Atoi(m); err == nil && parsed >= 1 && parsed <= 12 {
+			month = parsed
+		}
+	}
+
+	resp, err := h.svc.GetRevenueCalendar(r.Context(), dealer.ID, year, month)
+	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

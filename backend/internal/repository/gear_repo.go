@@ -217,6 +217,33 @@ func (r *GearRepo) List(ctx context.Context, filter GearFilter) ([]GearListing, 
 	return results, rows.Err()
 }
 
+// ListByOwner returns all gear listings owned by the given user (published and unpublished).
+func (r *GearRepo) ListByOwner(ctx context.Context, userID uuid.UUID) ([]GearListing, error) {
+	rows, err := r.DB.Query(ctx,
+		`SELECT `+gearCols+` FROM gear_listings WHERE user_id = $1 ORDER BY created_at DESC`,
+		userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []GearListing
+	for rows.Next() {
+		var g GearListing
+		if err := rows.Scan(
+			&g.ID, &g.UserID, &g.WorkspaceID, &g.StateID, &g.ListingType,
+			&g.Title, &g.Category, &g.Brand, &g.Model, &g.Condition,
+			&g.PricePaisa, &g.Description, &g.Images, &g.City,
+			&g.IsPublished, &g.IsAvailable, &g.AvailabilityCalendar,
+			&g.CreatedAt, &g.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, g)
+	}
+	return results, rows.Err()
+}
+
 // GearBooking represents a gear rental booking.
 type GearBooking struct {
 	ID            uuid.UUID       `json:"id"`

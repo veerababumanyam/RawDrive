@@ -81,6 +81,44 @@ export async function createGearListing(token: string, data: {
     headers: headers(token),
     body: JSON.stringify(data),
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function getMyGearListings(token: string): Promise<GearListing[]> {
+  const res = await fetch(`${API_BASE}/api/v1/gear/mine`, {
+    headers: headers(token),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data || [];
+}
+
+export async function updateGearListing(token: string, id: string, data: {
+  listing_type: string;
+  title: string;
+  category: string;
+  brand?: string;
+  model?: string;
+  condition?: string;
+  price_paisa: number;
+  description?: string;
+  images?: string[];
+  city?: string;
+  is_published: boolean;
+}): Promise<GearListing> {
+  const res = await fetch(`${API_BASE}/api/v1/marketplace/gear/${id}`, {
+    method: "PUT",
+    headers: headers(token),
+    body: JSON.stringify(data),
+  });
   const json = await res.json();
   return json.data;
 }

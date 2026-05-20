@@ -141,7 +141,7 @@ export const pricingPlans = [
     name: "Free",
     monthlyPrice: 0,
     annualPrice: 0,
-    trialDays: 90,
+    trialDays: 30,
     storage: "1GB",
     galleries: 3,
     clients: 5,

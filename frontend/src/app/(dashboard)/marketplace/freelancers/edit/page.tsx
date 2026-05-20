@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { createFreelancerListing } from "@/lib/api/marketplace";
+import { BackButton } from "@/components/ui/back-button";
 import { cn } from "@/lib/utils";
 
 const SPECIALIZATIONS = [
@@ -64,6 +65,7 @@ export default function FreelancerProfileEditorPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+      <BackButton href="/marketplace/freelancers" label="Back to freelancers" />
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold text-text-primary">Create Freelancer Profile</h1>
         <p className="text-sm text-text-secondary">

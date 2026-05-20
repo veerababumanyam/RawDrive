@@ -20,6 +20,7 @@ type M6Dependencies struct {
 	MarginRepo      *repository.MarginRepo
 	PayoutRepo      *repository.PayoutRepo
 	KycDocumentRepo *repository.KycDocumentRepo
+	SubDealerRepo   *repository.SubDealerRepo
 	DealerAnalytics *service.DealerAnalyticsService
 	AuditLogSvc     *service.AuditLogService
 	CredentialsSender service.DealerCredentialsSender // optional email sender
@@ -106,8 +107,21 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	// M6 gap-fill: dealer analytics dashboard with period selection.
 	// GET /api/v1/dealer/analytics?period=current_month|last_month|last_7_days|
 	//   last_30_days|last_quarter|custom&from=RFC3339&to=RFC3339
+	// GET /api/v1/dealer/photographers — photographers in dealer's state
+	// GET /api/v1/dealer/revenue-calendar?year=YYYY&month=M
 	if deps.DealerAnalytics != nil {
 		analyticsHandler := NewDealerAnalyticsHandler(deps.DealerAnalytics, deps.DealerRepo)
 		r.Get("/api/v1/dealer/analytics", analyticsHandler.Dashboard)
+		r.Get("/api/v1/dealer/photographers", analyticsHandler.Photographers)
+		r.Get("/api/v1/dealer/revenue-calendar", analyticsHandler.RevenueCalendar)
+	}
+
+	// Sub-dealer management: dealer registers city/district-level representatives.
+	// GET  /api/v1/dealer/sub-dealers — list sub-dealers under this dealer
+	// POST /api/v1/dealer/sub-dealers — register a new sub-dealer
+	if deps.SubDealerRepo != nil {
+		subDealerHandler := NewSubDealerHandler(deps.SubDealerRepo, deps.DealerRepo)
+		r.Get("/api/v1/dealer/sub-dealers", subDealerHandler.List)
+		r.Post("/api/v1/dealer/sub-dealers", subDealerHandler.Create)
 	}
 }

@@ -206,17 +206,23 @@ func (r *FreelancerRepo) List(ctx context.Context, filter FreelancerFilter) ([]F
 
 // MarketplaceInquiry represents an inquiry sent to a freelancer or gear owner.
 type MarketplaceInquiry struct {
-	ID           uuid.UUID  `json:"id"`
-	InquiryType  string     `json:"type"`
-	ListingID    uuid.UUID  `json:"listing_id"`
-	FromUserID   uuid.UUID  `json:"from_user_id"`
-	ToUserID     uuid.UUID  `json:"to_user_id"`
-	Message      string     `json:"message"`
-	EventDate    *time.Time `json:"event_date"`
-	DurationDays *int       `json:"duration_days"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	InquiryType     string     `json:"type"`
+	ListingID       uuid.UUID  `json:"listing_id"`
+	FromUserID      uuid.UUID  `json:"from_user_id"`
+	ToUserID        uuid.UUID  `json:"to_user_id"`
+	Message         string     `json:"message"`
+	EventDate       *time.Time `json:"event_date"`
+	DurationDays    *int       `json:"duration_days"`
+	Status          string     `json:"status"`
+	ReplyMessage    *string    `json:"reply_message,omitempty"`
+	// Populated by ListInquiries JOIN — not stored in the inquiries table.
+	FromUserName  *string `json:"from_user_name,omitempty"`
+	FromUserEmail *string `json:"from_user_email,omitempty"`
+	ToUserName    *string `json:"to_user_name,omitempty"`
+	ToUserEmail   *string `json:"to_user_email,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 func (r *FreelancerRepo) CreateInquiry(ctx context.Context, inq *MarketplaceInquiry) error {
@@ -238,10 +244,16 @@ func (r *FreelancerRepo) CreateInquiry(ctx context.Context, inq *MarketplaceInqu
 
 func (r *FreelancerRepo) ListInquiries(ctx context.Context, userID uuid.UUID) ([]MarketplaceInquiry, error) {
 	rows, err := r.DB.Query(ctx, `
-		SELECT id, inquiry_type, listing_id, from_user_id, to_user_id, message, event_date, duration_days, status, created_at, updated_at
-		FROM marketplace_inquiries
-		WHERE from_user_id = $1 OR to_user_id = $1
-		ORDER BY created_at DESC LIMIT 50`, userID)
+		SELECT mi.id, mi.inquiry_type, mi.listing_id, mi.from_user_id, mi.to_user_id,
+		       mi.message, mi.event_date, mi.duration_days, mi.status, mi.reply_message,
+		       u_from.display_name, u_from.email,
+		       u_to.display_name, u_to.email,
+		       mi.created_at, mi.updated_at
+		FROM marketplace_inquiries mi
+		LEFT JOIN users u_from ON u_from.id = mi.from_user_id
+		LEFT JOIN users u_to   ON u_to.id   = mi.to_user_id
+		WHERE mi.from_user_id = $1 OR mi.to_user_id = $1
+		ORDER BY mi.created_at DESC LIMIT 50`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +264,10 @@ func (r *FreelancerRepo) ListInquiries(ctx context.Context, userID uuid.UUID) ([
 		var inq MarketplaceInquiry
 		if err := rows.Scan(&inq.ID, &inq.InquiryType, &inq.ListingID, &inq.FromUserID,
 			&inq.ToUserID, &inq.Message, &inq.EventDate, &inq.DurationDays,
-			&inq.Status, &inq.CreatedAt, &inq.UpdatedAt); err != nil {
+			&inq.Status, &inq.ReplyMessage,
+			&inq.FromUserName, &inq.FromUserEmail,
+			&inq.ToUserName, &inq.ToUserEmail,
+			&inq.CreatedAt, &inq.UpdatedAt); err != nil {
 			return nil, err
 		}
 		results = append(results, inq)
@@ -264,6 +279,74 @@ func (r *FreelancerRepo) UpdateInquiryStatus(ctx context.Context, id uuid.UUID, 
 	_, err := r.DB.Exec(ctx,
 		`UPDATE marketplace_inquiries SET status = $2, updated_at = $3 WHERE id = $1`,
 		id, status, time.Now().UTC())
+	return err
+}
+
+// ReplyInquiry sets reply_message and transitions status to "replied".
+func (r *FreelancerRepo) ReplyInquiry(ctx context.Context, id uuid.UUID, replyMsg string) error {
+	_, err := r.DB.Exec(ctx,
+		`UPDATE marketplace_inquiries SET reply_message = $2, status = 'replied', updated_at = $3 WHERE id = $1`,
+		id, replyMsg, time.Now().UTC())
+	return err
+}
+
+// InquiryMessage is one message in a per-inquiry conversation thread.
+type InquiryMessage struct {
+	ID         uuid.UUID `json:"id"`
+	InquiryID  uuid.UUID `json:"inquiry_id"`
+	SenderID   uuid.UUID `json:"sender_id"`
+	SenderName *string   `json:"sender_name,omitempty"`
+	Body       string    `json:"body"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// GetInquiryByID fetches a single inquiry record (no JOINs).
+func (r *FreelancerRepo) GetInquiryByID(ctx context.Context, id uuid.UUID) (MarketplaceInquiry, error) {
+	var inq MarketplaceInquiry
+	err := r.DB.QueryRow(ctx, `
+		SELECT id, inquiry_type, listing_id, from_user_id, to_user_id,
+		       message, event_date, duration_days, status, reply_message,
+		       created_at, updated_at
+		FROM marketplace_inquiries WHERE id = $1`, id).Scan(
+		&inq.ID, &inq.InquiryType, &inq.ListingID, &inq.FromUserID, &inq.ToUserID,
+		&inq.Message, &inq.EventDate, &inq.DurationDays, &inq.Status, &inq.ReplyMessage,
+		&inq.CreatedAt, &inq.UpdatedAt,
+	)
+	return inq, err
+}
+
+// GetInquiryMessages returns all thread messages for an inquiry, oldest first.
+func (r *FreelancerRepo) GetInquiryMessages(ctx context.Context, inquiryID uuid.UUID) ([]InquiryMessage, error) {
+	rows, err := r.DB.Query(ctx, `
+		SELECT im.id, im.inquiry_id, im.sender_id, u.display_name, im.body, im.created_at
+		FROM inquiry_messages im
+		LEFT JOIN users u ON u.id = im.sender_id
+		WHERE im.inquiry_id = $1
+		ORDER BY im.created_at ASC`, inquiryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []InquiryMessage
+	for rows.Next() {
+		var m InquiryMessage
+		if err := rows.Scan(&m.ID, &m.InquiryID, &m.SenderID, &m.SenderName, &m.Body, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, m)
+	}
+	return results, rows.Err()
+}
+
+// CreateInquiryMessage inserts one new message into the inquiry thread.
+func (r *FreelancerRepo) CreateInquiryMessage(ctx context.Context, msg *InquiryMessage) error {
+	msg.ID = uuid.New()
+	msg.CreatedAt = time.Now().UTC()
+	_, err := r.DB.Exec(ctx, `
+		INSERT INTO inquiry_messages (id, inquiry_id, sender_id, body, created_at)
+		VALUES ($1, $2, $3, $4, $5)`,
+		msg.ID, msg.InquiryID, msg.SenderID, msg.Body, msg.CreatedAt,
+	)
 	return err
 }
 

@@ -25,7 +25,7 @@ const planHighlights: Record<SelfServePlanId, readonly string[]> = {
   free: [
     "1GB storage, 3 galleries",
     "5 client profiles",
-    "90-day full-access trial",
+    "30-day full-access trial",
   ],
   starter: [
     "30GB storage, 10 galleries",
@@ -232,7 +232,7 @@ export function RegisterForm() {
                         Free
                       </span>
                       <span className="text-[11px] font-medium text-text-tertiary">
-                        · 90-day trial
+                        · 30-day trial
                       </span>
                     </>
                   ) : (

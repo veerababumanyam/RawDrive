@@ -109,6 +109,61 @@ func NewDealerAnalyticsService(analyticsRepo *repository.DealerAnalyticsRepo, de
 	return &DealerAnalyticsService{analyticsRepo: analyticsRepo, dealerRepo: dealerRepo}
 }
 
+// RevenueCalendarResponse wraps per-day revenue shares for a calendar month.
+type RevenueCalendarResponse struct {
+	Year              int                              `json:"year"`
+	Month             int                              `json:"month"`
+	CommissionRatePct float64                          `json:"commission_rate_pct"`
+	TotalRevenuePaisa int64                            `json:"total_revenue_paisa"`
+	TotalSharePaisa   int64                            `json:"total_share_paisa"`
+	Days              []repository.DailyRevenueShare   `json:"days"`
+}
+
+// GetStatePhotographers returns all photographers registered in the same state as the dealer.
+func (s *DealerAnalyticsService) GetStatePhotographers(ctx context.Context, dealerID uuid.UUID) ([]repository.StatePhotographer, error) {
+	dealer, err := s.dealerRepo.GetByID(ctx, dealerID)
+	if err != nil {
+		return nil, err
+	}
+	return s.analyticsRepo.GetPhotographersByState(ctx, dealer.StateID)
+}
+
+// GetRevenueCalendar returns per-day subscription revenue and the dealer's share for a month.
+func (s *DealerAnalyticsService) GetRevenueCalendar(ctx context.Context, dealerID uuid.UUID, year, month int) (*RevenueCalendarResponse, error) {
+	dealer, err := s.dealerRepo.GetByID(ctx, dealerID)
+	if err != nil {
+		return nil, err
+	}
+
+	commissionRate := float64(0)
+	if dealer.CommissionRatePct != nil {
+		commissionRate = *dealer.CommissionRatePct
+	}
+
+	days, err := s.analyticsRepo.GetDailyRevenueShares(ctx, dealer.StateID, commissionRate, year, month)
+	if err != nil {
+		return nil, err
+	}
+	if days == nil {
+		days = []repository.DailyRevenueShare{}
+	}
+
+	var totalRevenue, totalShare int64
+	for _, d := range days {
+		totalRevenue += d.TotalSubscriptionPaisa
+		totalShare += d.RevenueSharePaisa
+	}
+
+	return &RevenueCalendarResponse{
+		Year:              year,
+		Month:             month,
+		CommissionRatePct: commissionRate,
+		TotalRevenuePaisa: totalRevenue,
+		TotalSharePaisa:   totalShare,
+		Days:              days,
+	}, nil
+}
+
 // GetDashboard returns dealer dashboard metrics for the given period. Missing
 // period defaults to current_month, matching the legacy behavior.
 func (s *DealerAnalyticsService) GetDashboard(ctx context.Context, dealerID uuid.UUID, period Period, customFrom, customTo *time.Time) (*DealerDashboardResponse, error) {

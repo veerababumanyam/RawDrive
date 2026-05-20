@@ -75,6 +75,8 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 	// refuses to Mount a second subrouter on a prefix the public
 	// registration already claimed — the attempted mount would panic
 	// at startup.
+	r.Get("/api/v1/freelancer-profile/mine", marketplaceHandler.GetMyFreelancerListing)
+	r.Get("/api/v1/gear/mine", gearHandler.GetMyGear)
 	r.Post("/api/v1/marketplace/freelancers", marketplaceHandler.CreateFreelancerListing)
 	r.Put("/api/v1/marketplace/freelancers/{id}", marketplaceHandler.UpdateFreelancerListing)
 	r.Put("/api/v1/marketplace/freelancers/{id}/availability", marketplaceHandler.UpdateFreelancerAvailability)
@@ -89,6 +91,11 @@ func RegisterM5Routes(r chi.Router, deps M5Dependencies) {
 	r.Post("/api/v1/marketplace/inquiries", marketplaceHandler.CreateInquiry)
 	r.Get("/api/v1/marketplace/inquiries", marketplaceHandler.ListInquiries)
 	r.Put("/api/v1/marketplace/inquiries/{id}", marketplaceHandler.UpdateInquiry)
+	// /api/v1/marketplace/inquiries/{id}/* would be swallowed by the
+	// public subrouter mounted at /api/v1/marketplace. Use a separate
+	// prefix (no subrouter conflict) — same pattern as /freelancer-profile/mine.
+	r.Get("/api/v1/inquiry/{id}/messages", marketplaceHandler.GetInquiryMessages)
+	r.Post("/api/v1/inquiry/{id}/messages", marketplaceHandler.SendInquiryMessage)
 
 	r.Post("/api/v1/marketplace/freelancers/{id}/hire", hireRequestHandler.CreateHireRequest)
 	r.Get("/api/v1/marketplace/hire-requests", hireRequestHandler.ListHireRequests)

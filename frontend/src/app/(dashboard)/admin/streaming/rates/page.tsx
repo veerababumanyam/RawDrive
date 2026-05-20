@@ -17,6 +17,7 @@ import {
   type StreamingPackage,
   type RateCard,
 } from "@/lib/api/streaming";
+import { BackButton } from "@/components/ui/back-button";
 
 function formatINR(paise: number): string {
   return (paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -86,6 +87,7 @@ export default function SuperAdminStreamingRatesPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-8">
+      <BackButton label="Go back" />
       <header className="space-y-2">
         <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">
           Streaming Rate Cards

@@ -195,6 +195,12 @@ func (r *DealerRepo) SetReferralCode(ctx context.Context, id uuid.UUID, code str
 	return err
 }
 
+// SetCommissionRate persists the commission rate assigned by admin when approving a dealer.
+func (r *DealerRepo) SetCommissionRate(ctx context.Context, id uuid.UUID, rate float64) error {
+	_, err := r.DB.Exec(ctx, `UPDATE dealers SET commission_rate_pct=$2, updated_at=now() WHERE id=$1`, id, rate)
+	return err
+}
+
 func (r *DealerRepo) ReferralCodeExists(ctx context.Context, code string) (bool, error) {
 	var exists bool
 	err := r.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM dealers WHERE referral_code=$1)`, code).Scan(&exists)

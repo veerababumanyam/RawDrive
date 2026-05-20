@@ -374,6 +374,24 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 	return detail, nil
 }
 
+// ChangeTier updates the plan tier of the workspace owned by the given user.
+// Only accepts canonical tier slugs. Syncs workspace_storage quota to the
+// new tier's default. Restricted to super_admin at the handler layer.
+func (s *AdminUserService) ChangeTier(ctx context.Context, id uuid.UUID, newTier string, actorID uuid.UUID) error {
+	if _, ok := validAdminGrantTiers[newTier]; !ok {
+		return ErrInvalidPlanTier
+	}
+	quotaBytes := PlanDefaultQuotaBytes(newTier)
+	if err := s.userRepo.UpdateTier(ctx, id, newTier, quotaBytes, actorID); err != nil {
+		return fmt.Errorf("updating tier: %w", err)
+	}
+	s.auditLog.RecordAction(ctx, repository.AuditLogCreate{
+		ActorID: actorID, ActorType: "admin", Action: "user.change_tier",
+		ResourceType: "user", ResourceID: id.String(),
+	})
+	return nil
+}
+
 func (s *AdminUserService) BulkSuspend(ctx context.Context, ids []uuid.UUID, reason string, actorID uuid.UUID) (int64, error) {
 	filtered := make([]uuid.UUID, 0, len(ids))
 	for _, id := range ids {

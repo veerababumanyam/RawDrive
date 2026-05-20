@@ -214,6 +214,10 @@ export async function changeUserRole(token: string, id: string, role: string): P
   await put(token, `/users/${id}/role`, { role });
 }
 
+export async function changeUserTier(token: string, id: string, tier: string): Promise<void> {
+  await put(token, `/users/${id}/tier`, { tier });
+}
+
 export async function deleteUser(token: string, id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/admin/users/${id}`, {
     method: "DELETE",

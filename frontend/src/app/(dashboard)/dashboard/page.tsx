@@ -116,6 +116,7 @@ export default function DashboardPage() {
   // Fetch real storage usage from API
   const [storageUsed, setStorageUsed] = useState<string>("— / —");
   const [storageMeta, setStorageMeta] = useState<string>("loading");
+  const [storagePercent, setStoragePercent] = useState<number>(0);
 
   useEffect(() => {
     if (!getStoredAccessToken()) return;
@@ -134,6 +135,7 @@ export default function DashboardPage() {
           };
           setStorageUsed(`${fmt(used)} / ${fmt(quota)}`);
           setStorageMeta(`${Math.round(pct)}% used`);
+          setStoragePercent(Math.min(Math.round(pct), 100));
         }
       })
       .catch(() => {
@@ -164,7 +166,7 @@ export default function DashboardPage() {
         toneClass: "text-accent-tertiary",
       },
     ],
-    [galleries.length, storageUsed, storageMeta],
+    [galleries.length, storageUsed, storageMeta, storagePercent],
   );
 
   return (
@@ -220,7 +222,7 @@ export default function DashboardPage() {
             </p>
             {stat.label === "Storage Used" ? (
               <div className="mt-4 h-1.5 rounded-full bg-surface-container-high">
-                <div className="h-1.5 w-[42%] rounded-full bg-accent" />
+                <div className="h-1.5 rounded-full bg-accent" style={{ width: `${storagePercent}%` }} />
               </div>
             ) : null}
           </article>

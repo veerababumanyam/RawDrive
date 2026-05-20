@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,6 +22,27 @@ type MarketplaceHandler struct {
 
 func NewMarketplaceHandler(repo *repository.FreelancerRepo) *MarketplaceHandler {
 	return &MarketplaceHandler{repo: repo}
+}
+
+// GetMyFreelancerListing handles GET /api/v1/marketplace/my-listing.
+// Returns the authenticated user's own freelancer listing (or 404 if none).
+func (h *MarketplaceHandler) GetMyFreelancerListing(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	wsID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace"}`, http.StatusBadRequest)
+		return
+	}
+	listing, err := h.repo.GetByUserID(r.Context(), userID, wsID)
+	if err != nil {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{"error": "no listing found", "data": nil})
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"data": listing})
 }
 
 func (h *MarketplaceHandler) ListFreelancers(w http.ResponseWriter, r *http.Request) {
@@ -429,13 +451,97 @@ func (h *MarketplaceHandler) ListInquiries(w http.ResponseWriter, r *http.Reques
 	respondJSON(w, http.StatusOK, map[string]interface{}{"data": inquiries})
 }
 
+// GetInquiryMessages handles GET /api/v1/marketplace/inquiries/{id}/messages.
+// Returns the full conversation thread for an inquiry. Only the two parties
+// (from_user_id and to_user_id) may read the thread.
+func (h *MarketplaceHandler) GetInquiryMessages(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inq, err := h.repo.GetInquiryByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if inq.FromUserID != userID && inq.ToUserID != userID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	msgs, err := h.repo.GetInquiryMessages(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if msgs == nil {
+		msgs = []repository.InquiryMessage{}
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"data": msgs})
+}
+
+// SendInquiryMessage handles POST /api/v1/marketplace/inquiries/{id}/messages.
+// Either party (sender or recipient) may add a message to the thread.
+func (h *MarketplaceHandler) SendInquiryMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inq, err := h.repo.GetInquiryByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if inq.FromUserID != userID && inq.ToUserID != userID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Body string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	req.Body = strings.TrimSpace(req.Body)
+	if req.Body == "" {
+		http.Error(w, `{"error":"body is required"}`, http.StatusBadRequest)
+		return
+	}
+	msg := &repository.InquiryMessage{
+		InquiryID: id,
+		SenderID:  userID,
+		Body:      req.Body,
+	}
+	if err := h.repo.CreateInquiryMessage(r.Context(), msg); err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	// Transition to "replied" when the recipient sends the first response.
+	if inq.ToUserID == userID && inq.Status == "sent" {
+		_ = h.repo.UpdateInquiryStatus(r.Context(), id, "replied")
+	}
+	respondJSON(w, http.StatusCreated, map[string]interface{}{"data": msg})
+}
+
 func (h *MarketplaceHandler) UpdateInquiry(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	_ = userID // ownership verified via RLS; additional check can be added with GetInquiryByID
+	_ = userID // ownership verified via RLS
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -443,15 +549,23 @@ func (h *MarketplaceHandler) UpdateInquiry(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req struct {
-		Status string `json:"status"`
+		Status       string `json:"status"`
+		ReplyMessage string `json:"reply_message"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.UpdateInquiryStatus(r.Context(), id, req.Status); err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
+	if req.ReplyMessage != "" {
+		if err := h.repo.ReplyInquiry(r.Context(), id, req.ReplyMessage); err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+	} else if req.Status != "" {
+		if err := h.repo.UpdateInquiryStatus(r.Context(), id, req.Status); err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{"status": "updated"})
 }

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock, Crown, Zap } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, Crown, HardDrive, Zap } from "lucide-react";
 import { getStoredAccessToken } from "@/lib/auth";
+import { pricingPlans } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -65,6 +66,9 @@ export default function SubscriptionPage() {
 
   const tierLabel = data ? (TIER_LABELS[data.plan_tier] ?? data.plan_tier) : "";
   const isFreeTier = !data || data.plan_tier === "free";
+  const planStorage = data
+    ? (pricingPlans.find((p) => p.id === data.plan_tier)?.storage ?? null)
+    : null;
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 p-8">
@@ -113,6 +117,16 @@ export default function SubscriptionPage() {
                 <p className="text-xl font-bold text-on-surface">{tierLabel}</p>
               </div>
             </div>
+
+            {planStorage && (
+              <div className="flex items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2.5">
+                <HardDrive className="h-4 w-4 shrink-0 text-text-tertiary" />
+                <p className="text-sm text-on-surface">
+                  <span className="font-semibold text-accent">{planStorage}</span>
+                  <span className="text-text-secondary"> storage included</span>
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-2">
               {data.started_at && (

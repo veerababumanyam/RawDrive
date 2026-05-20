@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { getFreelancer, createInquiry, type FreelancerListing, type FreelancerReview } from "@/lib/api/marketplace";
+import { BackButton } from "@/components/ui/back-button";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -28,6 +29,8 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
   const [showInquiry, setShowInquiry] = useState(false);
   const [inquiryMsg, setInquiryMsg] = useState("");
   const [sending, setSending] = useState(false);
+  const [inquirySent, setInquirySent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   // Availability state
   const [availability, setAvailability] = useState<Availability>(BLANK_AVAILABILITY);
   const [nextAvailable, setNextAvailable] = useState<string>("");
@@ -111,15 +114,21 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
   const handleSendInquiry = async () => {
     if (!inquiryMsg.trim() || !listing) return;
     setSending(true);
+    setSendError(null);
     const token = getStoredAccessToken();
-    await createInquiry(token, {
-      type: "freelancer",
-      listing_id: listing.id,
-      message: inquiryMsg,
-    });
-    setSending(false);
-    setShowInquiry(false);
-    setInquiryMsg("");
+    try {
+      await createInquiry(token, {
+        type: "freelancer",
+        listing_id: listing.id,
+        message: inquiryMsg,
+      });
+      setInquirySent(true);
+      setInquiryMsg("");
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Failed to send inquiry. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   if (loading) {
@@ -144,6 +153,7 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <BackButton href="/marketplace/freelancers" label="Back to freelancers" />
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -263,7 +273,25 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
 
       {/* Send Inquiry */}
       <div className="space-y-3">
-        {!showInquiry ? (
+        {inquirySent ? (
+          <div className="surface-panel p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-feedback-success/15 text-feedback-success text-sm">✓</span>
+              <div>
+                <p className="font-semibold text-on-surface text-sm">Inquiry sent!</p>
+                <p className="text-sm text-text-secondary mt-0.5">
+                  Your message has been delivered to the photographer. They&apos;ll respond shortly.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setInquirySent(false); setShowInquiry(true); }}
+              className="surface-button text-sm"
+            >
+              Send another inquiry
+            </button>
+          </div>
+        ) : !showInquiry ? (
           <button
             onClick={() => setShowInquiry(true)}
             className="btn-primary px-6 py-3 text-sm"
@@ -273,6 +301,11 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
         ) : (
           <div className="surface-panel space-y-3 p-5">
             <h3 className="text-sm font-semibold text-text-primary">Send an inquiry</h3>
+            {sendError && (
+              <p className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 px-3 py-2 text-sm text-feedback-error">
+                {sendError}
+              </p>
+            )}
             <textarea
               value={inquiryMsg}
               onChange={(e) => setInquiryMsg(e.target.value)}
@@ -288,7 +321,7 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
                 {sending ? "Sending..." : "Send"}
               </button>
               <button
-                onClick={() => setShowInquiry(false)}
+                onClick={() => { setShowInquiry(false); setSendError(null); }}
                 className="surface-button text-sm"
               >
                 Cancel

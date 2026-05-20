@@ -28,6 +28,24 @@ import (
 	"github.com/rawdrive/backend/internal/middleware"
 )
 
+// planQuotaBytes maps canonical tier slugs to storage quota in bytes.
+// Keep in sync with service.PlanDefaultQuotaBytes and frontend/src/lib/tokens.ts.
+var planQuotaBytes = map[string]int64{
+	"free":         1 << 30,        // 1 GB
+	"starter":      30 * (1 << 30), // 30 GB
+	"professional": 300 * (1 << 30), // 300 GB
+	"business":     3 * (1 << 40),  // 3 TB
+	"enterprise":   6 * (1 << 40),  // 6 TB
+}
+
+// planDefaultQuota returns the quota bytes for a tier, defaulting to 1 GB.
+func planDefaultQuota(tier string) int64 {
+	if q, ok := planQuotaBytes[tier]; ok {
+		return q
+	}
+	return 1 << 30
+}
+
 // planPricePaise maps canonical tier slugs to monthly prices in paise (INR×100).
 var planPricePaise = map[string]int64{
 	"starter":      9900,   // ₹99
@@ -534,6 +552,15 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 	); err != nil {
 		return fmt.Errorf("update plan_tier: %w", err)
 	}
+	// Sync storage quota to the new plan tier.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 0, 0, $2)
+		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
+		wsID, planDefaultQuota(toTier),
+	); err != nil {
+		return fmt.Errorf("update storage quota: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE subscriptions SET status = 'churned', cancelled_at = NOW()
 		 WHERE workspace_id = $1 AND status = 'active'`, wsID,
@@ -637,6 +664,16 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 		`UPDATE workspaces SET plan_tier = $1 WHERE id = $2`, toTier, wsID,
 	); err != nil {
 		return fmt.Errorf("update plan_tier: %w", err)
+	}
+
+	// Sync storage quota to the new plan tier.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 0, 0, $2)
+		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
+		wsID, planDefaultQuota(toTier),
+	); err != nil {
+		return fmt.Errorf("update storage quota: %w", err)
 	}
 
 	// Deactivate any existing active subscription row for this workspace.

@@ -2,10 +2,10 @@
 
 import {
   Home,
-  MapPin,
   PieChart,
   Ticket,
   UserPlus,
+  Users,
   Wallet,
 } from "lucide-react";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
@@ -21,8 +21,8 @@ const groups: NavGroup[] = [
   {
     items: [
       { href: "/dealer", label: "Dashboard Overview", icon: Home },
-      { href: "/dealer/territory", label: "My Territory", icon: MapPin },
       { href: "/dealer/registrations", label: "Registrations", icon: UserPlus },
+      { href: "/dealer/photographers", label: "Photographers", icon: Users },
       { href: "/dealer/coupons", label: "Coupons", icon: Ticket },
       { href: "/dealer/revenue-share", label: "Revenue Share", icon: PieChart },
       { href: "/dealer/payouts", label: "Payouts", icon: Wallet },

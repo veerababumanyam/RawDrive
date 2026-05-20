@@ -415,6 +415,16 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 		 ON CONFLICT DO NOTHING`,
 		ws.ID, userID)
 
+	// Initialize storage quota based on the chosen plan tier so the
+	// storage settings page shows a meaningful limit immediately.
+	quotaBytes := service.PlanDefaultQuotaBytes(planTier)
+	_, _ = o.pool.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 0, 0, $2)
+		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2
+		 WHERE workspace_storage.quota_bytes = 0`,
+		ws.ID, quotaBytes)
+
 	return ws.ID, nil
 }
 
@@ -1791,6 +1801,7 @@ func main() {
 		auditLogSvc := service.NewAuditLogService(auditLogRepo)
 		m6AdminUserRepo := repository.NewAdminUserRepo(dbPool)
 
+		subDealerRepo := repository.NewSubDealerRepo(dbPool)
 		m6Deps := handler.M6Dependencies{
 			DB:              dbPool,
 			DealerRepo:      dealerRepo,
@@ -1799,6 +1810,7 @@ func main() {
 			MarginRepo:      marginRepo,
 			PayoutRepo:      payoutRepo,
 			KycDocumentRepo: kycDocumentRepo,
+			SubDealerRepo:   subDealerRepo,
 			DealerAnalytics: dealerAnalyticsSvc,
 			AuditLogSvc:     auditLogSvc,
 			FrontendURL:     os.Getenv("FRONTEND_URL"),

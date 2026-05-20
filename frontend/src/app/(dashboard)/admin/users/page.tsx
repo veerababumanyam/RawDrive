@@ -8,6 +8,7 @@ import {
   reactivateUser,
   deleteUser,
   changeUserRole,
+  changeUserTier,
   exportUsers,
   type AdminUser,
 } from "@/lib/api/admin";
@@ -18,6 +19,53 @@ import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 // never wired to the admin users page — QA #4 in RawDrive_NewUniqueIssues
 // flagged the missing button. Reuse the existing tested component.
 import NewUserDialog from "@/components/admin/NewUserDialog";
+
+interface ConfirmDialogProps {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger, onConfirm, onCancel }: ConfirmDialogProps) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm rounded-xl bg-surface-container p-6 shadow-lg border border-border-subtle">
+        <h2 id="confirm-dialog-title" className="text-base font-semibold text-on-surface mb-2">
+          {title}
+        </h2>
+        <p className="text-sm text-text-secondary mb-5">{message}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg px-4 py-2 text-sm border border-border-subtle hover:bg-surface-container-high transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={
+              danger
+                ? "rounded-lg px-4 py-2 text-sm font-medium bg-feedback-error text-white hover:bg-feedback-error/90 transition-colors"
+                : "btn-primary px-4 py-2 text-sm"
+            }
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
@@ -41,8 +89,14 @@ export default function AdminUsersPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   // Issue #4: modal state for admin-initiated user creation.
   const [createOpen, setCreateOpen] = useState(false);
+  const [pendingRoleChange, setPendingRoleChange] = useState<{
+    id: string; currentRole: string; newRole: string; userName: string;
+  } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState<{ email: string; name: string } | null>(null);
 
   const fetchUsers = async () => {
     const token = getStoredAccessToken();
@@ -81,8 +135,14 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Permanently delete user "${name}"? This action cannot be undone.`)) return;
+  const handleDelete = (id: string, name: string) => {
+    setPendingDelete({ id, name });
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    setPendingDelete(null);
     try {
       const token = getStoredAccessToken();
       await deleteUser(token, id);
@@ -92,13 +152,31 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleRoleChange = async (id: string, newRole: string) => {
+  const handleRoleChange = (id: string, newRole: string, currentRole: string, userName: string) => {
+    if (newRole === currentRole) return;
+    setPendingRoleChange({ id, currentRole, newRole, userName });
+  };
+
+  const confirmRoleChange = async () => {
+    if (!pendingRoleChange) return;
+    const { id, newRole } = pendingRoleChange;
+    setPendingRoleChange(null);
     try {
       const token = getStoredAccessToken();
       await changeUserRole(token, id, newRole);
       fetchUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to change user role");
+    }
+  };
+
+  const handleTierChange = async (id: string, newTier: string) => {
+    try {
+      const token = getStoredAccessToken();
+      await changeUserTier(token, id, newTier);
+      fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change user tier");
     }
   };
 
@@ -109,12 +187,18 @@ export default function AdminUsersPage() {
   // admin-specific endpoint is required — the public endpoint is safe to
   // call with any email and returns 202 regardless (enumeration defense,
   // SEC-F02). The admin sees a confirmation toast so they know it was sent.
-  const handleSendPasswordReset = async (email: string, name: string) => {
-    if (!confirm(`Send password reset email to ${name} (${email})?`)) return;
+  const handleSendPasswordReset = (email: string, name: string) => {
+    setPendingPasswordReset({ email, name });
+  };
+
+  const confirmPasswordReset = async () => {
+    if (!pendingPasswordReset) return;
+    const { email } = pendingPasswordReset;
+    setPendingPasswordReset(null);
     try {
       await requestPasswordReset(email);
       setError(null);
-      alert(`Password reset email sent to ${email}. They can use the link to set a new password.`);
+      setSuccessMsg(`Password reset email sent to ${email}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send password reset");
     }
@@ -130,6 +214,8 @@ export default function AdminUsersPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const stateOptions = [...new Set(users.map((u) => u.state_name).filter(Boolean))].sort() as string[];
 
   const columns: ColumnDef<UserRow>[] = [
     {
@@ -172,6 +258,8 @@ export default function AdminUsersPage() {
       key: "state_name",
       label: "State",
       sortable: true,
+      filterable: true,
+      filterOptions: stateOptions,
       className: "text-text-tertiary",
       render: (value) => <span>{value ? String(value) : "\u2014"}</span>,
     },
@@ -218,7 +306,7 @@ export default function AdminUsersPage() {
             <select
               onClick={(e) => e.stopPropagation()}
               value={row.platform_role}
-              onChange={(e) => handleRoleChange(row.id, e.target.value)}
+              onChange={(e) => handleRoleChange(row.id, e.target.value, row.platform_role as string, row.full_name)}
               className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-lg px-2 py-1 text-xs text-on-surface cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
               aria-label={`Change role for ${row.full_name}`}
             >
@@ -229,6 +317,22 @@ export default function AdminUsersPage() {
               <option value="client">Client</option>
               <option value="team_member">Team Member</option>
             </select>
+            {row.tier_slug && (
+              <select
+                onClick={(e) => e.stopPropagation()}
+                value={row.tier_slug}
+                onChange={(e) => handleTierChange(row.id, e.target.value)}
+                className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-lg px-2 py-1 text-xs text-primary cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
+                aria-label={`Change tier for ${row.full_name}`}
+                title="Change subscription tier"
+              >
+                <option value="free">Free</option>
+                <option value="starter">Starter</option>
+                <option value="professional">Professional</option>
+                <option value="business">Business</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            )}
             {/* QA #40: admin can send a password-reset link to the user's
                 email. Uses the shared /auth/request-password-reset flow so
                 the backend (PasswordService) handles OTP mint + rate limit
@@ -302,7 +406,7 @@ export default function AdminUsersPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-on-accent hover:bg-accent-hover transition-all text-sm font-semibold"
+              className="btn-primary flex items-center gap-2 px-6 py-2.5 text-sm font-semibold"
               aria-label="Create user"
             >
               <UserPlus className="h-4 w-4" />
@@ -327,6 +431,54 @@ export default function AdminUsersPage() {
           fetchUsers();
         }}
       />
+
+      {successMsg && (
+        <div
+          role="status"
+          className="fixed bottom-4 right-4 z-40 rounded-xl border border-feedback-success/30 bg-feedback-success/10 px-4 py-3 text-sm text-feedback-success shadow-lg"
+        >
+          {successMsg}
+          <button
+            type="button"
+            onClick={() => setSuccessMsg(null)}
+            className="ml-3 text-feedback-success/70 hover:text-feedback-success"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {pendingRoleChange && (
+        <ConfirmDialog
+          title="Change user role?"
+          message={`Change "${pendingRoleChange.userName}" from ${pendingRoleChange.currentRole} to ${pendingRoleChange.newRole}?`}
+          confirmLabel="Change role"
+          onConfirm={confirmRoleChange}
+          onCancel={() => setPendingRoleChange(null)}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete user?"
+          message={`Permanently delete "${pendingDelete.name}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {pendingPasswordReset && (
+        <ConfirmDialog
+          title="Send password reset?"
+          message={`Send a password reset email to ${pendingPasswordReset.name} (${pendingPasswordReset.email})?`}
+          confirmLabel="Send email"
+          onConfirm={confirmPasswordReset}
+          onCancel={() => setPendingPasswordReset(null)}
+        />
+      )}
     </div>
   );
 }

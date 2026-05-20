@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { createGearListing } from "@/lib/api/gear";
+import { BackButton } from "@/components/ui/back-button";
 
 const CATEGORY_OPTIONS = [
   { value: "camera_body", label: "Camera body" },
@@ -62,6 +63,7 @@ export default function GearListingEditorPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+      <BackButton href="/marketplace/gear" label="Back to gear" />
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold text-text-primary">List Your Gear</h1>
         <p className="text-sm text-text-secondary">
@@ -143,13 +145,18 @@ export default function GearListingEditorPage() {
 
           <label className="space-y-2">
             <span className="text-sm font-medium text-text-primary">Condition</span>
-            <input
-              type="text"
+            <select
               value={condition}
               onChange={(event) => setCondition(event.target.value)}
               className="input-base w-full"
-              placeholder="Excellent"
-            />
+            >
+              <option value="">Select condition</option>
+              <option value="new">New</option>
+              <option value="like_new">Like New</option>
+              <option value="good">Good</option>
+              <option value="fair">Fair</option>
+              <option value="poor">Poor</option>
+            </select>
           </label>
 
           <label className="space-y-2">

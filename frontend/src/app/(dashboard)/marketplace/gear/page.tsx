@@ -5,6 +5,7 @@ import Link from "next/link";
 import { listGear, type GearListing } from "@/lib/api/gear";
 import { availabilityClasses } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { Plus } from "@/components/icons";
 
 const CATEGORIES = [
   { value: "", label: "All" },
@@ -76,8 +77,9 @@ export default function GearPage() {
         </div>
         <Link
           href="/marketplace/gear/new"
-          className="btn-primary px-4 py-2.5 text-sm"
+          className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 text-sm"
         >
+          <Plus className="h-4 w-4" />
           List Your Gear
         </Link>
       </div>

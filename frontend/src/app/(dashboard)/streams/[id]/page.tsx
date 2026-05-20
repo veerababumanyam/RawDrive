@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/api/authFetch";
 import { ConsoleTabs, type ConsolePayload } from "@/components/streams/ConsoleTabs";
+import { BackButton } from "@/components/ui/back-button";
 
 export default function StreamConsolePage({
   params,
@@ -75,6 +76,9 @@ export default function StreamConsolePage({
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-8">
+      <div className="mb-6">
+        <BackButton href="/streams" label="Back to streams" />
+      </div>
       <ConsoleTabs payload={payload} />
     </main>
   );

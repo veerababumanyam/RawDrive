@@ -254,6 +254,9 @@ func (s *DealerService) ApproveDealer(ctx context.Context, dealerID, adminID uui
 	if err := s.repo.UpdateStatus(ctx, dealerID, "approved", &adminID, nil); err != nil {
 		return nil, err
 	}
+	if err := s.repo.SetCommissionRate(ctx, dealerID, commissionRate); err != nil {
+		return nil, err
+	}
 	if err := s.repo.SetReferralCode(ctx, dealerID, code); err != nil {
 		return nil, err
 	}

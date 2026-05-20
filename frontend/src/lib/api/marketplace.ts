@@ -31,6 +31,15 @@ export interface FreelancerReview {
   created_at: string;
 }
 
+export interface InquiryMessage {
+  id: string;
+  inquiry_id: string;
+  sender_id: string;
+  sender_name?: string;
+  body: string;
+  created_at: string;
+}
+
 export interface MarketplaceInquiry {
   id: string;
   type: string;
@@ -40,6 +49,11 @@ export interface MarketplaceInquiry {
   message: string;
   event_date?: string;
   status: string;
+  reply_message?: string;
+  from_user_name?: string;
+  from_user_email?: string;
+  to_user_name?: string;
+  to_user_email?: string;
   created_at: string;
 }
 
@@ -132,6 +146,61 @@ export async function createInquiry(token: string, data: {
     headers: headers(token),
     body: JSON.stringify(data),
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function replyToInquiry(token: string, id: string, replyMessage: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/marketplace/inquiries/${id}`, {
+    method: "PUT",
+    headers: headers(token),
+    body: JSON.stringify({ reply_message: replyMessage }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+}
+
+export async function getMyListing(token: string): Promise<FreelancerListing | null> {
+  const res = await fetch(`${API_BASE}/api/v1/freelancer-profile/mine`, {
+    headers: headers(token),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function getInquiryMessages(token: string, inquiryId: string): Promise<InquiryMessage[]> {
+  const res = await fetch(`${API_BASE}/api/v1/inquiry/${inquiryId}/messages`, {
+    headers: headers(token),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data || [];
+}
+
+export async function sendInquiryMessage(token: string, inquiryId: string, messageBody: string): Promise<InquiryMessage> {
+  const res = await fetch(`${API_BASE}/api/v1/inquiry/${inquiryId}/messages`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify({ body: messageBody }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
   const json = await res.json();
   return json.data;
 }
@@ -140,6 +209,10 @@ export async function listInquiries(token: string): Promise<MarketplaceInquiry[]
   const res = await fetch(`${API_BASE}/api/v1/marketplace/inquiries`, {
     headers: headers(token),
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
   const json = await res.json();
   return json.data || [];
 }

@@ -132,6 +132,12 @@ export default function DealerAdminReview() {
               <p className="text-sm text-text-secondary">
                 PAN: {dealer.pan_number} | State: {stateNames[dealer.state_id] ?? `#${dealer.state_id}`}
               </p>
+              {dealer.commission_rate_pct !== null && dealer.commission_rate_pct !== undefined && (
+                <p className="text-sm text-text-secondary mt-0.5">
+                  Commission Rate:{" "}
+                  <span className="font-semibold text-accent">{dealer.commission_rate_pct}%</span>
+                </p>
+              )}
             </div>
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[dealer.status]}`}>
               {dealer.status}

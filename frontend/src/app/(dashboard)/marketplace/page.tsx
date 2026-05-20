@@ -24,12 +24,22 @@ export default function MarketplacePage() {
         </Link>
 
         <Link
+          href="/marketplace/camera-rentals"
+          className="block p-6 rounded-xl border border-border-default bg-surface-raised hover:bg-surface-sunken transition-colors min-h-[120px]"
+        >
+          <h2 className="text-lg font-semibold text-text-primary">Camera Rentals</h2>
+          <p className="text-sm text-text-secondary mt-2">
+            Rent cameras, lenses, lighting, and accessories from other photographers
+          </p>
+        </Link>
+
+        <Link
           href="/marketplace/gear"
           className="block p-6 rounded-xl border border-border-default bg-surface-raised hover:bg-surface-sunken transition-colors min-h-[120px]"
         >
-          <h2 className="text-lg font-semibold text-text-primary">Gear Rental</h2>
+          <h2 className="text-lg font-semibold text-text-primary">Gear Marketplace</h2>
           <p className="text-sm text-text-secondary mt-2">
-            Rent cameras, lenses, lighting, and accessories from other photographers
+            Browse all gear listings — rentals and sales from photographers near you
           </p>
         </Link>
       </div>

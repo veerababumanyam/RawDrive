@@ -78,6 +78,7 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Post("/users/{id}/reactivate", users.Reactivate)
 		r.Post("/users/{id}/impersonate", users.Impersonate)
 		r.Put("/users/{id}/role", users.ChangeRole)
+		r.Put("/users/{id}/tier", users.ChangeTier)
 		// M7 E20-S1: GDPR erasure + activity timeline
 		r.Delete("/users/{id}", users.Delete)
 		r.Get("/users/{id}/activity", users.Activity)

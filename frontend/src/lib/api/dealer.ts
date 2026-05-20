@@ -1,3 +1,5 @@
+import { authFetch } from "@/lib/api/authFetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export type DealerStatus = "pending" | "approved" | "suspended" | "terminated";
@@ -117,9 +119,89 @@ export async function enableDealer(token: string, id: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to enable dealer");
 }
 
-export async function getDealerDashboard(token: string): Promise<Dealer> {
-  const res = await fetch(`${API_BASE}/api/v1/dealers/dashboard`, { headers: headers(token) });
+export async function getDealerDashboard(): Promise<Dealer> {
+  const res = await authFetch(`/api/v1/dealers/dashboard`);
   if (!res.ok) throw new Error("Failed to fetch dealer dashboard");
+  return res.json();
+}
+
+export interface StatePhotographer {
+  user_id: string;
+  full_name: string;
+  email: string;
+  subscription_plan: string; // tier_slug or ""
+  subscription_status: "active" | "none";
+}
+
+export interface DailyRevenueShare {
+  date: string; // "YYYY-MM-DD"
+  total_subscription_paisa: number;
+  commission_rate_pct: number;
+  revenue_share_paisa: number;
+  subscriber_count: number;
+}
+
+export interface RevenueCalendarResponse {
+  year: number;
+  month: number;
+  commission_rate_pct: number;
+  total_revenue_paisa: number;
+  total_share_paisa: number;
+  days: DailyRevenueShare[];
+}
+
+export async function getDealerPhotographers(): Promise<StatePhotographer[]> {
+  const res = await authFetch(`/api/v1/dealer/photographers`);
+  if (!res.ok) throw new Error("Failed to fetch photographers");
+  const body = await res.json();
+  return Array.isArray(body) ? body : [];
+}
+
+export async function getDealerRevenueCalendar(year: number, month: number): Promise<RevenueCalendarResponse> {
+  const res = await authFetch(`/api/v1/dealer/revenue-calendar?year=${year}&month=${month}`);
+  if (!res.ok) throw new Error("Failed to fetch revenue calendar");
+  return res.json();
+}
+
+export interface SubDealer {
+  id: string;
+  dealer_id: string;
+  state_id: number;
+  name: string;
+  email: string;
+  phone: string;
+  city_district: string;
+  status: "pending" | "active" | "suspended";
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSubDealerRequest {
+  name: string;
+  email?: string;
+  phone?: string;
+  city_district: string;
+  notes?: string;
+}
+
+export async function listSubDealers(): Promise<SubDealer[]> {
+  const res = await authFetch(`/api/v1/dealer/sub-dealers`);
+  if (!res.ok) throw new Error("Failed to fetch sub-dealers");
+  const body = await res.json();
+  return Array.isArray(body) ? body : [];
+}
+
+export async function createSubDealer(data: CreateSubDealerRequest): Promise<SubDealer> {
+  const res = await authFetch(`/api/v1/dealer/sub-dealers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "unknown" }));
+    throw new Error(err.error || "Failed to register sub-dealer");
+  }
   return res.json();
 }
 

@@ -54,7 +54,6 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
   const [businessName, setBusinessName] = useState("");
   const [dealerEmail, setDealerEmail] = useState("");
   const [stateId, setStateId] = useState<number>(0);
-  const [territoryType, setTerritoryType] = useState<"primary" | "secondary" | "ambassador">("primary");
   const [panNumber, setPanNumber] = useState("");
   const [gstin, setGstin] = useState("");
   const [bank, setBank] = useState("");
@@ -103,7 +102,7 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
         business_name: businessName,
         dealer_email: dealerEmail || undefined,
         state_id: stateId,
-        territory_type: territoryType,
+        territory_type: "primary",
         pan_number: panNumber,
         gstin: gstin || undefined,
         bank_account: JSON.stringify({ bank, ifsc, account_number: accountNumber, upi_id: upiId || undefined }),
@@ -167,25 +166,6 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1">Territory Type *</label>
-          <div className="flex gap-4">
-            {(["primary", "secondary", "ambassador"] as const).map((type) => (
-              <label key={type} className="flex items-center gap-2 min-h-[44px] cursor-pointer">
-                <input
-                  type="radio"
-                  name="territory_type"
-                  value={type}
-                  checked={territoryType === type}
-                  onChange={() => setTerritoryType(type)}
-                  className="accent-accent-primary"
-                />
-                <span className="text-text-primary capitalize">{type}</span>
-              </label>
-            ))}
-          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

@@ -8,6 +8,7 @@ import {
   type BlockedAssetRow,
 } from "@/lib/api/admin";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+import { BackButton } from "@/components/ui/back-button";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // M16 E50-S1 — Upload moderation dashboard (admin).
@@ -131,6 +132,7 @@ export default function UploadModerationPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 p-8">
+      <BackButton href="/admin/workspace-policy" label="Back" />
       <div>
         <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">
           Upload Moderation

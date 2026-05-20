@@ -145,8 +145,15 @@ const adminUserSelectColumns = `
 		u.status,
 		u.state_id,
 		st.name AS state_name,
-		CAST(NULL AS text) AS tier_slug,
-		CAST(NULL AS text) AS tier_name,
+		(SELECT w.plan_tier FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) AS tier_slug,
+		(SELECT CASE w.plan_tier
+		    WHEN 'starter'      THEN 'Starter'
+		    WHEN 'professional' THEN 'Professional'
+		    WHEN 'business'     THEN 'Business'
+		    WHEN 'enterprise'   THEN 'Enterprise'
+		    ELSE                     'Free'
+		 END
+		 FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) AS tier_name,
 		COALESCE(
 			(SELECT SUM(size_bytes) FROM assets WHERE uploaded_by = u.id AND deleted_at IS NULL),
 			0
@@ -179,11 +186,6 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 		where = append(where, fmt.Sprintf("u.platform_role = $%d", idx))
 		args = append(args, f.Role)
 		idx++
-	} else {
-		// Exclude dealers from the general user list — they have their own
-		// management screen (/admin/dealers). Only show them when the role
-		// filter explicitly requests "dealer".
-		where = append(where, "u.platform_role != 'dealer'")
 	}
 	if f.Status != "" {
 		where = append(where, fmt.Sprintf("u.status = $%d", idx))
@@ -539,6 +541,32 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// UpdateTier changes the plan_tier on the workspace owned by userID and
+// syncs the workspace_storage quota to the new tier's default bytes.
+func (r *AdminUserRepo) UpdateTier(ctx context.Context, userID uuid.UUID, tier string, quotaBytes int64, actorID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE workspaces SET plan_tier = $1 WHERE owner_id = $2`,
+		tier, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("admin update tier: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	_, _ = r.pool.Exec(ctx, `
+		INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		SELECT id, 0, 0, $1 FROM workspaces WHERE owner_id = $2
+		ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $1`,
+		quotaBytes, userID,
+	)
+	_, err = r.pool.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_id, actor_type, action, resource_type, resource_id, metadata, severity, created_at)
+		VALUES ($1, $2, 'admin', 'user.tier_change', 'user', $3, jsonb_build_object('tier', $4::text), 'warning', NOW())`,
+		uuid.New(), actorID, userID, tier)
+	return err
 }
 
 // ConsumePendingPlanTier atomically reads users.pending_plan_tier for the

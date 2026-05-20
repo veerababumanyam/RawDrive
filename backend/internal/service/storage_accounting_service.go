@@ -47,6 +47,24 @@ func (c *analyticsCache) invalidate(workspaceID uuid.UUID) {
 	delete(c.entries, workspaceID)
 }
 
+// PlanDefaultQuotaBytes returns the storage quota (in bytes) for a given plan tier.
+// This is the single source of truth for plan quotas in the backend — keep in sync
+// with pricingPlans in frontend/src/lib/tokens.ts.
+func PlanDefaultQuotaBytes(tier string) int64 {
+	switch tier {
+	case "starter":
+		return 30 * (1 << 30) // 30 GB
+	case "professional":
+		return 300 * (1 << 30) // 300 GB
+	case "business":
+		return 3 * (1 << 40) // 3 TB
+	case "enterprise":
+		return 6 * (1 << 40) // 6 TB
+	default: // "free" and any unknown tier
+		return 1 << 30 // 1 GB
+	}
+}
+
 // StorageAccounting tracks per-workspace storage usage with quota enforcement.
 type StorageAccounting struct {
 	pool  *pgxpool.Pool
@@ -83,16 +101,26 @@ func (ws *WorkspaceStorage) WarningLevel() string {
 	return "none"
 }
 
-// GetUsage retrieves current storage usage for a workspace.
+// GetUsage retrieves current storage usage for a workspace. When quota_bytes is
+// 0 (not yet seeded), it falls back to the plan-tier default so the UI always
+// displays a meaningful limit rather than "0 B / 0 B".
 func (s *StorageAccounting) GetUsage(ctx context.Context, workspaceID uuid.UUID) (*WorkspaceStorage, error) {
 	ws := &WorkspaceStorage{WorkspaceID: workspaceID}
+	var planTier string
 	err := s.pool.QueryRow(ctx,
-		`SELECT COALESCE(used_bytes, 0), COALESCE(derivative_bytes, 0), COALESCE(quota_bytes, 0), COALESCE(grace_bytes, 0)
-		 FROM workspace_storage WHERE workspace_id = $1`,
+		`SELECT COALESCE(ws.used_bytes, 0), COALESCE(ws.derivative_bytes, 0),
+		        COALESCE(ws.quota_bytes, 0), COALESCE(ws.grace_bytes, 0),
+		        COALESCE(w.plan_tier, 'free')
+		 FROM workspaces w
+		 LEFT JOIN workspace_storage ws ON ws.workspace_id = w.id
+		 WHERE w.id = $1`,
 		workspaceID,
-	).Scan(&ws.UsedBytes, &ws.DerivativeBytes, &ws.QuotaBytes, &ws.GraceBytes)
+	).Scan(&ws.UsedBytes, &ws.DerivativeBytes, &ws.QuotaBytes, &ws.GraceBytes, &planTier)
 	if err != nil {
 		return nil, fmt.Errorf("storage accounting: get usage: %w", err)
+	}
+	if ws.QuotaBytes == 0 {
+		ws.QuotaBytes = PlanDefaultQuotaBytes(planTier)
 	}
 	if ws.QuotaBytes > 0 {
 		ws.PercentUsed = float64(ws.UsedBytes) / float64(ws.QuotaBytes) * 100

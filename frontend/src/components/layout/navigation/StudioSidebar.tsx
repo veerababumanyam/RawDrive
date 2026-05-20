@@ -2,11 +2,11 @@
 
 import {
   BarChart3,
+  Film,
   Home,
   ImageIcon,
   MessageSquare,
   Monitor,
-  Radio,
   Settings,
   ShoppingBag,
   UserCircle,
@@ -25,11 +25,6 @@ const groups: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: Home },
       { href: "/galleries", label: "Galleries", icon: ImageIcon },
-      { href: "/streams", label: "Live Streams", icon: Radio },
-      // "AI Studio" tile removed from sidebar 2026-05-19 to declutter
-      // the photographer-facing left nav. The /ai route (and its
-      // /ai/layout.tsx wrapper) stays mounted, so deep links and
-      // existing bookmarks continue to work.
     ],
   },
   {
@@ -44,9 +39,10 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "Grow",
+    title: "Marketplace",
     items: [
-      { href: "/marketplace/freelancers", label: "Marketplace", icon: ShoppingBag },
+      { href: "/marketplace/freelancers", label: "Freelancers", icon: ShoppingBag },
+      { href: "/marketplace/camera-rentals", label: "Camera Rentals", icon: Film },
       { href: "/messages", label: "Messages", icon: MessageSquare },
     ],
   },

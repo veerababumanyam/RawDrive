@@ -9,7 +9,7 @@ import { useStreamingPackages, formatINR } from "@/lib/streaming-packages";
 const faqItems = [
   {
     q: "Is there a free trial?",
-    a: "Yes! The Free plan gives you 90 days to explore RawDrive with 1GB storage, 3 galleries, and 5 client profiles.",
+    a: "Yes! The Free plan gives you 30 days to explore RawDrive with 1GB storage, 3 galleries, and 5 client profiles.",
   },
   {
     q: "Can I switch plans later?",
@@ -122,7 +122,7 @@ export function PricingContent() {
         <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
           {pricingPlans.map((plan) => {
             const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
-            const period = plan.id === "free" ? "/90 days" : isAnnual ? "/year" : "/month";
+            const period = plan.id === "free" ? "/30 days" : isAnnual ? "/year" : "/month";
 
             return (
               <div

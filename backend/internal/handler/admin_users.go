@@ -229,6 +229,33 @@ func (h *AdminUsersHandler) Activity(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, entries)
 }
 
+func (h *AdminUsersHandler) ChangeTier(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Tier == "" {
+		http.Error(w, `{"error":"tier is required"}`, http.StatusBadRequest)
+		return
+	}
+	actorID := middleware.GetActorID(r.Context())
+	if err := h.svc.ChangeTier(r.Context(), id, body.Tier, actorID); err != nil {
+		switch err {
+		case service.ErrInvalidPlanTier:
+			http.Error(w, `{"error":"invalid plan tier","code":"invalid_plan_tier"}`, http.StatusBadRequest)
+		default:
+			log.Printf("admin: change tier user %s to %s failed: %v", id, body.Tier, err)
+			http.Error(w, `{"error":"failed to change tier"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "tier_updated"})
+}
+
 func (h *AdminUsersHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

@@ -124,6 +124,11 @@ func (h *GearHandler) CreateGearListing(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, `{"error":"invalid category"}`, http.StatusBadRequest)
 		return
 	}
+	validConditions := map[string]bool{"new": true, "like_new": true, "good": true, "fair": true, "poor": true}
+	if req.Condition != nil && *req.Condition != "" && !validConditions[*req.Condition] {
+		http.Error(w, `{"error":"invalid condition, must be one of: new, like_new, good, fair, poor"}`, http.StatusBadRequest)
+		return
+	}
 
 	listing := &repository.GearListing{
 		UserID:      userID,
@@ -239,6 +244,23 @@ func (h *GearHandler) DeleteGearListing(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *GearHandler) GetMyGear(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	listings, err := h.repo.ListByOwner(r.Context(), userID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if listings == nil {
+		listings = []repository.GearListing{}
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"data": listings})
 }
 
 // GAP-002 fix: Gear booking endpoints

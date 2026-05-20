@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { BackButton } from "@/components/ui/back-button";
 import { getProject, type StudioProjectAggregate } from "@/lib/api/crm";
 import { formatPaisa } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -53,6 +54,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <CRMSecondaryNav />
+      <BackButton href="/crm/projects" label="Back to projects" />
 
       {error && <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">{error}</div>}
 

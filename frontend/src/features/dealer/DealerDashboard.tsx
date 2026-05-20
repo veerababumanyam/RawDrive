@@ -3,7 +3,6 @@
 
 import { useState, useEffect } from "react";
 import { getDealerDashboard, type Dealer } from "@/lib/api/dealer";
-import { getStoredAccessToken } from "@/lib/auth";
 
 // Same pattern as DealerAdminReview: dealer responses only carry state_id,
 // so we look up id → name from GET /api/v1/states once on mount to render
@@ -16,8 +15,7 @@ export default function DealerDashboard() {
   const [stateNames, setStateNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    const storedToken = getStoredAccessToken();
-    getDealerDashboard(storedToken)
+    getDealerDashboard()
       .then(setDealer)
       .catch(() => setDealer(null))
       .finally(() => setLoading(false));

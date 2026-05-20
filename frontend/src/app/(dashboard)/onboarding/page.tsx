@@ -50,7 +50,7 @@ const ONBOARDING_PLANS = pricingPlans.filter((p) =>
 
 // Short highlight lines shown on each plan card (3 max).
 const PLAN_HIGHLIGHTS: Record<string, string[]> = {
-  free: ["1GB storage · 3 galleries", "5 client profiles", "90-day full-access trial"],
+  free: ["1GB storage · 3 galleries", "5 client profiles", "30-day full-access trial"],
   starter: ["30GB storage · 10 galleries", "Client proofing & basic CRM", "Priority email support"],
   professional: ["300GB storage · 50 galleries", "AI culling + full CRM & bookings", "Live streaming · marketplace listing"],
   business: ["3TB storage · 200 galleries", "Unlimited AI culling + API access", "Dedicated account manager"],

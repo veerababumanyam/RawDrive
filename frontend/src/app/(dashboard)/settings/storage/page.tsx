@@ -1,30 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getStoredAccessToken, getStoredWorkspaceId } from "@/lib/auth";
+import Link from "next/link";
+import { getStoredAccessToken } from "@/lib/auth";
 
 // ──────────────────────── Types ────────────────────────
 
-type Provider = "s3" | "minio" | "b2";
-type WizardStep = 1 | 2 | 3;
 type PlanTier = "free" | "starter" | "professional" | "enterprise" | "standard";
-
-interface StorageConfig {
-  provider: Provider;
-  bucketName: string;
-  region: string;
-  endpoint: string;
-  accessKey: string;
-  secretKey: string;
-}
-
-const BYOS_PROVIDERS: { id: Provider; name: string; desc: string }[] = [
-  { id: "b2", name: "Backblaze B2", desc: "Same provider as the managed default — affordable, S3-compatible" },
-  { id: "s3", name: "AWS S3", desc: "Industry standard object storage" },
-  { id: "minio", name: "MinIO", desc: "Self-hosted S3-compatible" },
-];
-
-// ──────────────────────── Page ────────────────────────
 
 interface StorageAnalytics {
   usage: { used_bytes: number; derivative_bytes: number; quota_bytes: number; percent_used: number; warning_level: string };
@@ -39,13 +21,13 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+// ──────────────────────── Page ────────────────────────
+
 export default function StorageSettingsPage() {
   // F-011 (audit 2026-04-10): plan tier was previously hardcoded to
   // "professional" with a TODO, which hid the BYOS wizard from enterprise
   // users AND showed a misleading "Upgrade" prompt to everyone else. Source
   // it from the authoritative backend endpoint that reads from the DB.
-  // While plan tier is unknown we render neither the wizard nor the upgrade
-  // prompt — prevents a visible flip when the fetch resolves.
   const [planTier, setPlanTier] = useState<PlanTier | null>(null);
   const isEnterprise = planTier === "enterprise";
   const planLoaded = planTier !== null;
@@ -54,11 +36,7 @@ export default function StorageSettingsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-    // Cross-origin fetches against api.rawdrive.in must send the JWT in
-    // the Authorization header — only the refresh cookie is shared via
-    // credentials: include, and protected endpoints expect Bearer tokens
-    // from JWTAuth middleware (see backend/internal/middleware/jwt_auth.go).
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
     const token = getStoredAccessToken();
     fetch(`${apiUrl}/api/v1/storage/analytics`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -71,10 +49,9 @@ export default function StorageSettingsPage() {
 
   // F-011: fetch authoritative plan tier. This is a separate effect so
   // analytics and plan-tier load independently — one failing does not
-  // block the other. On failure we fall through to the safest default
-  // ("standard") which hides the BYOS wizard and shows the upgrade prompt.
+  // block the other.
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
     const token = getStoredAccessToken();
     fetch(`${apiUrl}/api/v1/workspaces/current/plan`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -93,56 +70,16 @@ export default function StorageSettingsPage() {
   const pctUsed = usage?.percent_used ?? 0;
   const warningLevel = usage?.warning_level ?? "none";
 
-  const [step, setStep] = useState<WizardStep>(1);
-  const [config, setConfig] = useState<StorageConfig>({
-    provider: "b2", bucketName: "", region: "", endpoint: "", accessKey: "", secretKey: "",
-  });
-  const [testResult, setTestResult] = useState<"idle" | "testing" | "success" | "error">("idle");
-
-  const handleTestConnection = async () => {
-    setTestResult("testing");
-    try {
-      // F-011 (audit 2026-04-10): the URL previously used the literal
-      // "current" as the workspace id segment, which doesn't match the
-      // backend route shape (/api/v1/workspaces/{workspaceId}/storage-config/test
-      // where {workspaceId} must be a real UUID — see routes_m2.go and
-      // storage_config_handler.go TestConnection). The correct workspace
-      // ID lives in the JWT access token.
-      const wsId = getStoredWorkspaceId();
-      if (!wsId) {
-        setTestResult("error");
-        return;
-      }
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8229";
-      const token = getStoredAccessToken();
-      const res = await fetch(`${apiUrl}/api/v1/workspaces/${wsId}/storage-config/test`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(config),
-      });
-      setTestResult(res.ok ? "success" : "error");
-    } catch {
-      setTestResult("error");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-surface text-on-surface p-8">
       <div className="max-w-4xl mx-auto">
         <nav className="text-xs text-on-surface-variant mb-2">Settings <span className="mx-1">&rsaquo;</span> Storage</nav>
         <h1 className="text-2xl font-semibold font-headline mb-8">Storage Settings</h1>
 
-        {/* ────────── Current Storage Status (all plans) ────────── */}
+        {/* ────────── Current Storage Usage (all plans) ────────── */}
         <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-sm text-on-surface-variant">Storage Provider</p>
-              <p className="text-lg font-semibold">Backblaze B2</p>
-              <p className="text-xs text-on-surface-variant mt-0.5">Managed by RawDrive — S3-compatible object storage</p>
-            </div>
+            <p className="text-sm text-on-surface-variant">Storage Used</p>
             <span className={`text-xs px-3 py-1 rounded-full ${warningLevel === "critical" ? "bg-feedback-error/10 text-feedback-error" : warningLevel === "warning" ? "bg-feedback-warning/10 text-feedback-warning" : "bg-primary/10 text-primary"}`}>
               {warningLevel === "critical" ? "Storage Critical" : warningLevel === "warning" ? "Storage Warning" : "Active"}
             </span>
@@ -153,129 +90,27 @@ export default function StorageSettingsPage() {
           <p className="text-xs text-on-surface-variant mt-2">{loading ? "Loading..." : `${usedDisplay} / ${quotaDisplay} used`}</p>
         </div>
 
-        {/* ────────── BYOS Section (enterprise only) ────────── */}
-        {/* F-011: while the plan tier is loading we render nothing here so
-            the UI doesn't briefly flash the upgrade prompt and then swap
-            to the wizard for enterprise users. */}
-        {!planLoaded ? (
-          <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8 text-xs text-on-surface-variant">
-            Loading storage plan…
-          </div>
-        ) : !isEnterprise ? (
-          /* Non-enterprise: show upgrade prompt */
+        {/* ────────── Upgrade prompt (non-enterprise only) ────────── */}
+        {planLoaded && !isEnterprise && (
           <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-lg">🔒</div>
+              <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-lg">⚡</div>
               <div>
-                <h3 className="text-sm font-semibold">Bring Your Own Storage (BYOS)</h3>
-                <p className="text-xs text-on-surface-variant">Available on Enterprise plan only</p>
+                <h3 className="text-sm font-semibold">Need more storage?</h3>
+                <p className="text-xs text-on-surface-variant">Upgrade your plan to unlock additional storage and features.</p>
               </div>
             </div>
-            <p className="text-xs text-on-surface-variant mb-4">
-              Connect your own AWS S3, MinIO, or Backblaze B2 bucket for full control over your storage infrastructure.
-              All tiers use the RawDrive-managed Backblaze B2 bucket by default; BYOS lets you override it with your own credentials.
-            </p>
-            <button className="px-5 py-2 text-xs font-medium rounded-xl border border-primary/30 text-primary hover:bg-primary/5 transition-colors">
-              Upgrade to Enterprise
-            </button>
+            <Link
+              href="/settings/plans"
+              className="inline-block px-5 py-2 text-xs font-medium rounded-xl border border-primary/30 text-primary hover:bg-primary/5 transition-colors"
+            >
+              Upgrade Plan
+            </Link>
           </div>
-        ) : (
-          /* Enterprise: show BYOS wizard */
-          <>
-            <h2 className="text-lg font-semibold mb-4">Bring Your Own Storage</h2>
-            <p className="text-xs text-on-surface-variant mb-6">
-              Enterprise plan — connect your own storage bucket. The RawDrive-managed Backblaze B2 bucket remains the default; BYOS is an additional override.
-            </p>
-
-            {/* Stepper */}
-            <div className="flex items-center gap-2 mb-8">
-              {([1, 2, 3] as WizardStep[]).map((s) => (
-                <div key={s} className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${s <= step ? "bg-primary/20 text-primary" : "bg-surface-container text-on-surface-variant"}`}>{s}</div>
-                  <span className={`text-xs ${s <= step ? "text-on-surface" : "text-on-surface-variant"}`}>{s === 1 ? "Provider" : s === 2 ? "Credentials" : "Confirm"}</span>
-                  {s < 3 && <div className={`w-12 h-px ${s < step ? "bg-primary" : "bg-surface-container"}`} />}
-                </div>
-              ))}
-            </div>
-
-            {/* Step 1: Choose BYOS Provider (managed B2 is the default and is NOT a wizard option — these are overrides only) */}
-            {step === 1 && (
-              <div className="space-y-3 mb-8">
-                {BYOS_PROVIDERS.map((p) => (
-                  <button key={p.id} onClick={() => setConfig((c) => ({ ...c, provider: p.id }))}
-                    className={`w-full p-4 rounded-2xl text-left transition-all backdrop-blur-md border ${config.provider === p.id ? "border-primary bg-primary/10 ring-2 ring-primary/30" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-surface-container" />
-                      <div>
-                        <span className="font-semibold text-sm">{p.name}</span>
-                        <p className="text-xs text-on-surface-variant">{p.desc}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                <div className="flex justify-end mt-4">
-                  <button onClick={() => setStep(2)} className="px-6 py-2.5 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary">Next</button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Credentials */}
-            {step === 2 && (
-              <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
-                <div className="space-y-4">
-                  {[
-                    { key: "bucketName", label: "Bucket Name", type: "text", placeholder: "my-studio-bucket" },
-                    { key: "region", label: "Region", type: "text", placeholder: "us-east-1" },
-                    { key: "endpoint", label: "Endpoint URL", type: "text", placeholder: "https://s3.amazonaws.com" },
-                    { key: "accessKey", label: "Access Key ID", type: "password", placeholder: "Enter access key" },
-                    { key: "secretKey", label: "Secret Access Key", type: "password", placeholder: "Enter secret key" },
-                  ].map((field) => (
-                    <label key={field.key} className="block">
-                      <span className="text-xs text-on-surface-variant">{field.label}</span>
-                      <input type={field.type} placeholder={field.placeholder}
-                        value={(config as unknown as Record<string, string>)[field.key] || ""}
-                        onChange={(e) => setConfig((c) => ({ ...c, [field.key]: e.target.value }))}
-                        className="mt-1 w-full px-4 py-2.5 rounded-xl bg-surface-container border border-white/10 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </label>
-                  ))}
-                  <button onClick={handleTestConnection} disabled={testResult === "testing"}
-                    className="px-5 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5 transition-colors disabled:opacity-50">
-                    {testResult === "testing" ? "Testing..." : testResult === "success" ? "Connected" : testResult === "error" ? "Failed — Retry" : "Test Connection"}
-                  </button>
-                  {testResult === "success" && <p className="text-xs text-feedback-success">Connection successful.</p>}
-                  {testResult === "error" && <p className="text-xs text-feedback-error">Connection failed — check credentials.</p>}
-                </div>
-                <div className="flex justify-between mt-6">
-                  <button onClick={() => setStep(1)} className="px-5 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5">Back</button>
-                  <button onClick={() => setStep(3)} disabled={testResult !== "success"}
-                    className="px-6 py-2.5 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary disabled:opacity-40">Next</button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Confirm */}
-            {step === 3 && (
-              <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
-                <h3 className="text-sm font-semibold mb-4">Configuration Summary</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-on-surface-variant">Provider</span><span>{BYOS_PROVIDERS.find((p) => p.id === config.provider)?.name}</span></div>
-                  <div className="flex justify-between"><span className="text-on-surface-variant">Bucket</span><span>{config.bucketName || "—"}</span></div>
-                  <div className="flex justify-between"><span className="text-on-surface-variant">Region</span><span>{config.region || "—"}</span></div>
-                </div>
-                <p className="text-xs text-on-surface-variant mt-4 p-3 rounded-xl bg-surface-container border border-white/5">
-                  New uploads will land in your configured bucket. Existing assets on the managed B2 backend remain accessible; reach out to support if you need them migrated.
-                </p>
-                <div className="flex justify-between mt-6">
-                  <button onClick={() => setStep(2)} className="px-5 py-2 text-sm rounded-xl border border-white/10 hover:bg-white/5">Back</button>
-                  <button className="px-6 py-2.5 text-sm font-medium rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary">Activate BYOS Storage</button>
-                </div>
-              </div>
-            )}
-          </>
         )}
 
         {/* ────────── Storage Analytics (all plans) ────────── */}
-        <h2 className="text-lg font-semibold mt-12 mb-4">Storage Analytics</h2>
+        <h2 className="text-lg font-semibold mt-4 mb-4">Storage Analytics</h2>
         <div className="grid grid-cols-2 gap-6">
           <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-5">
             <h3 className="text-sm font-medium mb-4">Top Galleries by Size</h3>

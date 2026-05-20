@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getGear, type GearListing } from "@/lib/api/gear";
 import { availabilityClasses } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { BackButton } from "@/components/ui/back-button";
 
 export default function GearDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -40,6 +41,7 @@ export default function GearDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <BackButton href="/marketplace/camera-rentals" label="Back to camera rentals" />
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">{gear.title}</h1>

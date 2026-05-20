@@ -262,6 +262,7 @@ function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+  const isSecurityPage = pathname.startsWith("/settings/security");
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [role, setRole] = useState<string>("photographer");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -292,8 +293,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       const claims = getStoredAccessTokenClaims();
       const platformRole = claims?.platform_role;
-      const isAdminRole = platformRole === "super_admin" || platformRole === "admin";
-      if (!isOnboarding && !isAdminRole && (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id)) {
+      // Dealer and client accounts are admin-provisioned and have their own
+      // role-specific dashboards. They must never be sent through the
+      // photographer self-service onboarding flow. Admins are also excluded.
+      // /settings/security is also exempted so a must_change_password redirect
+      // cannot loop back into the onboarding check.
+      const skipOnboarding = platformRole === "super_admin" || platformRole === "admin"
+        || platformRole === "dealer" || platformRole === "client";
+      if (!isOnboarding && !isSecurityPage && !skipOnboarding && (claims?.workspace_id === "pending-onboarding" || !claims?.workspace_id)) {
         setAuthenticated(false);
         window.location.assign("/onboarding");
         return;
@@ -312,8 +319,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         if (res.ok && active) {
           const me = await res.json();
           setUserInfo({ display_name: me.display_name, email: me.email, avatar_url: me.avatar_url || undefined, plan_tier: me.plan_tier || undefined });
-          // Dealer first-login: force password change before proceeding
-          if (me.must_change_password && !pathname.startsWith("/settings/security")) {
+          // First-login forced password change — redirect to security settings.
+          if (me.must_change_password && !isSecurityPage) {
             window.location.assign("/settings/security?change_required=1");
             return;
           }
@@ -325,7 +332,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [isOnboarding]);
+  }, [isOnboarding, isSecurityPage]);
 
   // 2026-05-18: refetch /auth/me when the plans page dispatches
   // `rawdrive:plan-changed` after a successful Razorpay payment
