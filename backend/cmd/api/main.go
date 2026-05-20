@@ -1157,12 +1157,16 @@ func main() {
 		Endpoint:  os.Getenv("B2_ENDPOINT"),
 		AccessKey: envOrFatal("B2_KEY_ID", "B2_ACCESS_KEY_ID"),
 		SecretKey: envOrFatal("B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"),
-		// 2026-05-20: opt-in server-side encryption. STORAGE_SSE_MODE=AES256
-		// turns on SSE-B2 (server-managed AES-256). When unset, falls back
-		// to plain PUT — existing objects are unaffected by toggling this
-		// since B2 keeps each object's per-write encryption state. Set in
-		// .env.backend on each prod node and force-recreate backend.
-		SSEMode: os.Getenv("STORAGE_SSE_MODE"),
+		// 2026-05-20: opt-in server-side encryption. STORAGE_SSE_MODE values:
+		//   "AES256" → SSE-B2 (server-managed AES-256), transparent on GET
+		//   "SSE-C"  → customer-managed key (we hold it); requires
+		//              STORAGE_SSE_C_KEY (64-char hex of 32-byte AES key)
+		//   ""       → no SSE header (existing-bucket pass-through)
+		// SSE-C key custody: LOSING THE KEY = LOSING ALL ENCRYPTED DATA.
+		// Backed up in .env.backend on the dev laptop; production reads
+		// from /opt/rawdrive/app/.env on each node.
+		SSEMode:           os.Getenv("STORAGE_SSE_MODE"),
+		SSECustomerKeyHex: os.Getenv("STORAGE_SSE_C_KEY"),
 	}
 	if storageCfg.Driver == "" {
 		storageCfg.Driver = "s3" // B2 uses S3-compatible API
@@ -1177,6 +1181,17 @@ func main() {
 	sseDisplay := storageCfg.SSEMode
 	if sseDisplay == "" {
 		sseDisplay = "disabled"
+	}
+	if sseDisplay == "SSE-C" {
+		// Decorate with key-fingerprint info (first 4 hex chars of the
+		// configured key) so operators can verify the right key is loaded
+		// without exposing the secret. Length validation already happened
+		// inside the s3 client constructor; if we got here, the key is
+		// well-formed.
+		k := storageCfg.SSECustomerKeyHex
+		if len(k) >= 8 {
+			sseDisplay = fmt.Sprintf("SSE-C (key fingerprint: %s…%s)", k[:4], k[len(k)-4:])
+		}
 	}
 	log.Printf("Storage: Backblaze B2 initialized (bucket: %s, endpoint: %s, sse: %s)", storageCfg.Bucket, storageCfg.Endpoint, sseDisplay)
 

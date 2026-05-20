@@ -81,6 +81,15 @@ func (c *awsS3Client) CreateMultipartUpload(ctx context.Context, key, contentTyp
 	if c.sse != "" {
 		input.ServerSideEncryption = c.sse
 	}
+	// SSE-C is different from SSE-B2/SSE-S3 — every UploadPart MUST
+	// also carry the customer key headers (see UploadPart below). The
+	// CreateMultipartUpload only seeds the session; per-part keys are
+	// re-validated against the MD5 stored at session start.
+	if c.sseCActive {
+		input.SSECustomerAlgorithm = c.sseCAlgorithm
+		input.SSECustomerKey = c.sseCKeyB64
+		input.SSECustomerKeyMD5 = c.sseCKeyMD5B64
+	}
 	out, err := c.client.CreateMultipartUpload(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("aws s3 create multipart: %w", err)
@@ -101,6 +110,15 @@ func (c *awsS3Client) UploadPart(ctx context.Context, key, uploadID string, part
 	}
 	if size > 0 {
 		input.ContentLength = aws.Int64(size)
+	}
+	// SSE-C: each chunk must carry the customer key headers — B2/S3 will
+	// reject any UploadPart that doesn't match the MD5 stored at session
+	// create time. SSE-B2/SSE-S3 don't need this because the server picked
+	// its own key once at CreateMultipartUpload time.
+	if c.sseCActive {
+		input.SSECustomerAlgorithm = c.sseCAlgorithm
+		input.SSECustomerKey = c.sseCKeyB64
+		input.SSECustomerKeyMD5 = c.sseCKeyMD5B64
 	}
 	out, err := c.client.UploadPart(ctx, input)
 	if err != nil {

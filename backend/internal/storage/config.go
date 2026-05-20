@@ -17,16 +17,25 @@ type Config struct {
 
 	// SSEMode requests server-side encryption on PUT operations.
 	// Accepted values:
-	//   ""       — no SSE header sent (back-compat default; objects still
-	//              live on B2's encrypted disks but not under SSE-B2 keys)
-	//   "AES256" — SSE-B2 / SSE-S3 with AES-256, server-managed keys.
-	//              B2's S3-compatible API translates this to native
-	//              SSE-B2; AWS S3 reads it as SSE-S3.
-	//   "aws:kms" — reserved for future SSE-KMS support on AWS S3 targets.
-	// Source: STORAGE_SSE_MODE env var, set in .env.backend. Applied to
-	// PutObject and CreateMultipartUpload; GetObject needs nothing because
-	// the server decrypts transparently on read.
+	//   ""        — no SSE header sent
+	//   "AES256"  — SSE-B2 / SSE-S3 with AES-256, server-managed keys
+	//   "aws:kms" — reserved for future SSE-KMS support on AWS S3 targets
+	//   "SSE-C"   — customer-managed AES-256 key. We supply the key with
+	//               every request; B2 stores ciphertext + MD5(key) only.
+	//               Requires SSECustomerKeyHex.
+	// Source: STORAGE_SSE_MODE env var. SSE-B2/SSE-S3 mode applies to PUTs
+	// only (decrypt is transparent on GET). SSE-C mode also requires the
+	// key on every GET/HEAD/Copy/MultipartUpload/UploadPart.
 	SSEMode string
+
+	// SSECustomerKeyHex is the 64-char hex representation of a 32-byte
+	// (256-bit) AES key, required when SSEMode == "SSE-C". The same key
+	// MUST accompany every request that reads or writes the object —
+	// B2 stores only an MD5 hash of the key for verification, never the
+	// key itself. Losing this key = losing all SSE-C-encrypted objects
+	// permanently. Source: STORAGE_SSE_C_KEY env var (.env.backend on
+	// dev, /opt/rawdrive/app/.env on prod).
+	SSECustomerKeyHex string
 }
 
 // Validate checks the config for required fields depending on the driver.

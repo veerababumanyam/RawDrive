@@ -3,6 +3,9 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -27,6 +30,18 @@ type awsS3Client struct {
 	// honour the same wire-level header. Sourced from
 	// storage.Config.SSEMode (env: STORAGE_SSE_MODE).
 	sse s3types.ServerSideEncryption
+
+	// sseCActive is true when SSEMode == "SSE-C". When active, every
+	// PUT / GET / HEAD / Copy / multipart op must carry the three
+	// customer-key headers: algorithm (AES256), base64(raw key),
+	// base64(md5(raw key)). B2 stores only the MD5 and uses it to
+	// verify subsequent requests use the right key. The three string
+	// fields below are precomputed once at construction so we don't
+	// hash the key on every request.
+	sseCActive    bool
+	sseCAlgorithm *string // always "AES256" when sseCActive
+	sseCKeyB64    *string // base64-encoded 32-byte AES key
+	sseCKeyMD5B64 *string // base64-encoded MD5 of raw key bytes
 }
 
 func newAWSS3Client(cfg Config) (S3Client, error) {
@@ -66,6 +81,7 @@ func newAWSS3Client(cfg Config) (S3Client, error) {
 	// at construction so an operator typo doesn't silently leave objects
 	// unencrypted in production.
 	var sse s3types.ServerSideEncryption
+	var sseCActive bool
 	switch strings.TrimSpace(cfg.SSEMode) {
 	case "":
 		// SSE disabled — objects still live on B2's encrypted disks but
@@ -74,16 +90,49 @@ func newAWSS3Client(cfg Config) (S3Client, error) {
 		sse = s3types.ServerSideEncryptionAes256
 	case "aws:kms":
 		sse = s3types.ServerSideEncryptionAwsKms
+	case "SSE-C":
+		// Customer-managed key. Validated below — must succeed before
+		// we hand back a client that would otherwise silently send
+		// unencrypted PUTs.
+		sseCActive = true
 	default:
-		return nil, fmt.Errorf("storage: unsupported STORAGE_SSE_MODE %q (allowed: AES256, aws:kms, or empty)", cfg.SSEMode)
+		return nil, fmt.Errorf("storage: unsupported STORAGE_SSE_MODE %q (allowed: AES256, aws:kms, SSE-C, or empty)", cfg.SSEMode)
 	}
 
-	return &awsS3Client{
+	c := &awsS3Client{
 		client:    client,
 		presigner: s3.NewPresignClient(client),
 		bucket:    cfg.Bucket,
 		sse:       sse,
-	}, nil
+	}
+
+	if sseCActive {
+		// Required-key validation. Fail FAST at startup if the key is
+		// missing, wrong length, or unparseable — a misconfigured
+		// process must never get far enough to make B2 calls without
+		// the customer key headers.
+		raw := strings.TrimSpace(cfg.SSECustomerKeyHex)
+		if raw == "" {
+			return nil, fmt.Errorf("storage: STORAGE_SSE_MODE=SSE-C requires STORAGE_SSE_C_KEY (64-char hex of a 32-byte AES key)")
+		}
+		keyBytes, err := hex.DecodeString(raw)
+		if err != nil {
+			return nil, fmt.Errorf("storage: STORAGE_SSE_C_KEY is not valid hex: %w", err)
+		}
+		if len(keyBytes) != 32 {
+			return nil, fmt.Errorf("storage: STORAGE_SSE_C_KEY must decode to exactly 32 bytes (got %d)", len(keyBytes))
+		}
+		keyB64 := base64.StdEncoding.EncodeToString(keyBytes)
+		sum := md5.Sum(keyBytes)
+		md5B64 := base64.StdEncoding.EncodeToString(sum[:])
+		alg := "AES256"
+		c.sseCActive = true
+		c.sseCAlgorithm = &alg
+		c.sseCKeyB64 = &keyB64
+		c.sseCKeyMD5B64 = &md5B64
+	}
+
+	return c, nil
 }
 
 func (c *awsS3Client) PutObject(ctx context.Context, key string, body io.Reader, size int64, contentType string) error {
@@ -132,6 +181,15 @@ func (c *awsS3Client) PutObject(ctx context.Context, key string, body io.Reader,
 	if c.sse != "" {
 		input.ServerSideEncryption = c.sse
 	}
+	// SSE-C: pass our customer key on the wire. B2 derives the encryption
+	// key from these headers, encrypts the bytes, and stores only the MD5
+	// of the key — never the key itself. Every subsequent read/head/copy
+	// of this object MUST present the same key.
+	if c.sseCActive {
+		input.SSECustomerAlgorithm = c.sseCAlgorithm
+		input.SSECustomerKey = c.sseCKeyB64
+		input.SSECustomerKeyMD5 = c.sseCKeyMD5B64
+	}
 
 	_, err := c.client.PutObject(ctx, input)
 	if err != nil {
@@ -141,10 +199,21 @@ func (c *awsS3Client) PutObject(ctx context.Context, key string, body io.Reader,
 }
 
 func (c *awsS3Client) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
-	result, err := c.client.GetObject(ctx, &s3.GetObjectInput{
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
-	})
+	}
+	// SSE-C reads require the same key headers that were sent on PUT.
+	// B2 uses the headers to derive the decryption key on the fly,
+	// verifies against the stored MD5, and rejects with 403 if they
+	// don't match. Without these headers, a GET on an SSE-C object
+	// returns 400 Bad Request.
+	if c.sseCActive {
+		input.SSECustomerAlgorithm = c.sseCAlgorithm
+		input.SSECustomerKey = c.sseCKeyB64
+		input.SSECustomerKeyMD5 = c.sseCKeyMD5B64
+	}
+	result, err := c.client.GetObject(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("aws s3 get: %w", err)
 	}
@@ -163,10 +232,27 @@ func (c *awsS3Client) DeleteObject(ctx context.Context, key string) error {
 }
 
 func (c *awsS3Client) PresignGetObject(ctx context.Context, key string, expiresInSeconds int64) (string, error) {
-	req, err := c.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
-	}, s3.WithPresignExpires(time.Duration(expiresInSeconds)*time.Second))
+	}
+	// SSE-C: when active, the presigned URL by itself is not enough — the
+	// client that fetches it must also send the SSE-C key headers. The SDK
+	// can pre-sign the request including those headers; that means the
+	// signed URL is only usable by someone who already holds the key, which
+	// defeats the typical "share a signed URL" use case. We keep this
+	// branch wired for symmetry, but note: nothing in the current handler
+	// surface calls PresignURL in production (asset_service.go comment
+	// confirms it was replaced by the JWT-gated /storage/* proxy). If a
+	// future flow needs SSE-C-aware presigning, ensure the URL is consumed
+	// only by trusted endpoints that hold the key.
+	if c.sseCActive {
+		input.SSECustomerAlgorithm = c.sseCAlgorithm
+		input.SSECustomerKey = c.sseCKeyB64
+		input.SSECustomerKeyMD5 = c.sseCKeyMD5B64
+	}
+	req, err := c.presigner.PresignGetObject(ctx, input,
+		s3.WithPresignExpires(time.Duration(expiresInSeconds)*time.Second))
 	if err != nil {
 		return "", fmt.Errorf("aws s3 presign: %w", err)
 	}
