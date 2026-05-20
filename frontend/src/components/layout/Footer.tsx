@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Heart } from "lucide-react";
 
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
@@ -32,20 +31,55 @@ export function Footer() {
     <footer className="border-t border-border bg-surface-elevated">
       <div className="mx-auto max-w-7xl px-4 py-12 lg:px-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Brand */}
+          {/* Brand — Swaz Consultants */}
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2 text-xl font-bold text-text-primary">
-              <Image src="/logo/android-chrome-192x192.png" alt="RawDrive Logo" width={32} height={32} className="h-8 w-8 rounded-lg" />
-              RawDrive
-            </Link>
+            <a
+              href="https://www.swazconsultants.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2.5"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e07b39] text-sm font-bold text-white">
+                sc
+              </div>
+              <div>
+                <div className="text-lg font-bold leading-none text-text-primary">
+                  <span>Swaz </span>
+                  <span className="text-[#e07b39]">Consultants</span>
+                </div>
+                <div className="mt-0.5 text-xs text-text-tertiary">Pvt. Ltd.</div>
+              </div>
+            </a>
             <p className="mt-3 max-w-xs text-sm text-text-secondary">
-              The Operating System for Photography Businesses in India.
+              We engineer software that powers businesses — from ambitious startups to large enterprises across India and beyond.
             </p>
-            <div className="mt-4 flex items-center gap-2 text-xs text-text-tertiary">
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent-subtle px-3 py-1 text-accent font-medium">
-                Made with <Heart className="h-3 w-3 fill-red-500 text-feedback-error" /> in India
-              </span>
-            </div>
+            <ul className="mt-4 space-y-1.5 text-xs text-text-tertiary">
+              <li className="flex items-center gap-2">
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 21c-4-4-7-7.5-7-11a7 7 0 0 1 14 0c0 3.5-3 7-7 11z" />
+                  <circle cx="12" cy="10" r="2" />
+                </svg>
+                <span>Andhra Pradesh, India</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="m2 7 10 7 10-7" />
+                </svg>
+                <a href="mailto:hello@swazconsultants.com" className="hover:text-accent transition-colors">
+                  hello@swazconsultants.com
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+                <a href="https://www.swazconsultants.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
+                  www.swazconsultants.com
+                </a>
+              </li>
+            </ul>
           </div>
 
           {/* Solutions & Product */}
