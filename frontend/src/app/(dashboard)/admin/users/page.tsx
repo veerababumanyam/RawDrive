@@ -95,6 +95,9 @@ export default function AdminUsersPage() {
   const [pendingRoleChange, setPendingRoleChange] = useState<{
     id: string; currentRole: string; newRole: string; userName: string;
   } | null>(null);
+  const [pendingTierChange, setPendingTierChange] = useState<{
+    id: string; currentTier: string; newTier: string; userName: string;
+  } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [pendingPasswordReset, setPendingPasswordReset] = useState<{ email: string; name: string } | null>(null);
 
@@ -170,7 +173,15 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleTierChange = async (id: string, newTier: string) => {
+  const handleTierChange = (id: string, newTier: string, currentTier: string, userName: string) => {
+    if (newTier === currentTier) return;
+    setPendingTierChange({ id, currentTier, newTier, userName });
+  };
+
+  const confirmTierChange = async () => {
+    if (!pendingTierChange) return;
+    const { id, newTier } = pendingTierChange;
+    setPendingTierChange(null);
     try {
       const token = getStoredAccessToken();
       await changeUserTier(token, id, newTier);
@@ -321,7 +332,7 @@ export default function AdminUsersPage() {
               <select
                 onClick={(e) => e.stopPropagation()}
                 value={row.tier_slug}
-                onChange={(e) => handleTierChange(row.id, e.target.value)}
+                onChange={(e) => handleTierChange(row.id, e.target.value, row.tier_slug as string, row.full_name)}
                 className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-lg px-2 py-1 text-xs text-primary cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
                 aria-label={`Change tier for ${row.full_name}`}
                 title="Change subscription tier"
@@ -477,6 +488,16 @@ export default function AdminUsersPage() {
           confirmLabel="Send email"
           onConfirm={confirmPasswordReset}
           onCancel={() => setPendingPasswordReset(null)}
+        />
+      )}
+
+      {pendingTierChange && (
+        <ConfirmDialog
+          title="Change subscription tier?"
+          message={`Change "${pendingTierChange.userName}" from ${pendingTierChange.currentTier} to ${pendingTierChange.newTier}?`}
+          confirmLabel="Change tier"
+          onConfirm={confirmTierChange}
+          onCancel={() => setPendingTierChange(null)}
         />
       )}
     </div>
