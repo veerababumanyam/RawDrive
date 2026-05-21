@@ -1572,10 +1572,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         <p className="truncate text-sm font-medium text-text-primary">
                           {entry.asset?.filename || "Unresolved asset"}
                         </p>
-                        <div className="flex items-center justify-between text-xs text-text-secondary">
-                          <span>Sort #{entry.sort_order}</span>
-                          {entry.is_hero && <span className="status-badge status-badge--accent">Hero</span>}
-                        </div>
+                        {entry.is_hero && (
+                          <div className="flex items-center justify-end text-xs text-text-secondary">
+                            <span className="status-badge status-badge--accent">Hero</span>
+                          </div>
+                        )}
                       </div>
                     </article>
                   );
