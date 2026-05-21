@@ -426,6 +426,39 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   ).length;
   const completedUploadCount = upload.items.filter((i) => i.status === "complete").length;
   const failedUploadCount = upload.items.filter((i) => i.status === "error").length;
+  // 2026-05-21: pre-flight rejections that also keep the panel mounted so
+  // the user can see why a file didn't go through. Not retryable (same file
+  // would block again) but explicitly dismissible.
+  const blockedUploadCount = upload.items.filter(
+    (i) => i.status === "blocked" || i.status === "needs_desktop",
+  ).length;
+  // Aggregate byte progress across all items that actually transmit (active
+  // + complete + errored). Pre-flight rejections (blocked / needs_desktop)
+  // are excluded — they never started uploading so their size is not part
+  // of the "bytes-uploaded out of total" denominator.
+  const byteProgressItems = upload.items.filter(
+    (i) =>
+      i.status === "uploading" ||
+      i.status === "pending" ||
+      i.status === "screening" ||
+      i.status === "complete" ||
+      i.status === "error",
+  );
+  const bytesTotal = byteProgressItems.reduce((sum, i) => sum + i.file.size, 0);
+  const bytesUploaded = byteProgressItems.reduce(
+    (sum, i) => sum + Math.floor(((i.status === "complete" ? 100 : i.progress) / 100) * i.file.size),
+    0,
+  );
+  const overallBytePercent = bytesTotal > 0 ? Math.round((bytesUploaded / bytesTotal) * 100) : 0;
+  const formatUploadBytes = (b: number): string => {
+    if (b < 1024) return `${b} B`;
+    const units = ["KB", "MB", "GB", "TB"];
+    let n = b / 1024;
+    let u = 0;
+    while (n >= 1024 && u < units.length - 1) { n /= 1024; u++; }
+    return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[u]}`;
+  };
+  const uploadPanelOpen = activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
   const prevActiveUploadCountRef = useRef(0);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;
@@ -1012,26 +1045,64 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       <div>
         <section className="space-y-4">
 
-          {/* Upload progress — only mounted while uploads are in
-              flight. The "all done" terminal state is surfaced via the
-              right-side toast (see uploadToast) instead of leaving the
-              panel mounted showing "Uploading 0 files" with 100% bars,
-              which was the old behavior. */}
-          {activeUploadCount > 0 && (
+          {/* Upload panel — 2026-05-21: now persists while any upload is
+              in-flight OR has failed / been blocked, so failures stay
+              visible until the user retries or dismisses them. The "all
+              done" terminal state (no active, no failed) still surfaces
+              via the right-side toast and the panel auto-unmounts. */}
+          {uploadPanelOpen && (
             <div className="surface-panel space-y-3 p-5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-text-primary">
-                  Uploading {activeUploadCount} {activeUploadCount === 1 ? "file" : "files"}
+                  {activeUploadCount > 0
+                    ? `Uploading ${activeUploadCount} ${activeUploadCount === 1 ? "file" : "files"}`
+                    : failedUploadCount > 0
+                      ? `${failedUploadCount} upload${failedUploadCount === 1 ? "" : "s"} failed`
+                      : `${blockedUploadCount} upload${blockedUploadCount === 1 ? "" : "s"} blocked`}
                 </h2>
-                <div className="flex gap-2">
-                  {upload.isPaused ? (
-                    <button onClick={upload.resumeAll} className="text-xs text-accent hover:underline">Resume All</button>
-                  ) : (
-                    <button onClick={upload.pauseAll} className="text-xs text-text-secondary hover:underline">Pause All</button>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  {activeUploadCount > 0 && (
+                    <>
+                      {upload.isPaused ? (
+                        <button onClick={upload.resumeAll} className="text-xs text-accent hover:underline">Resume All</button>
+                      ) : (
+                        <button onClick={upload.pauseAll} className="text-xs text-text-secondary hover:underline">Pause All</button>
+                      )}
+                      <button onClick={upload.cancelAll} className="text-xs text-danger hover:underline">Cancel All</button>
+                    </>
                   )}
-                  <button onClick={upload.cancelAll} className="text-xs text-danger hover:underline">Cancel All</button>
+                  {activeUploadCount === 0 && failedUploadCount > 0 && (
+                    <button onClick={upload.retryAll} className="text-xs text-accent hover:underline">
+                      Retry All ({failedUploadCount})
+                    </button>
+                  )}
+                  {activeUploadCount === 0 && (failedUploadCount > 0 || blockedUploadCount > 0) && (
+                    <button onClick={upload.clearFinished} className="text-xs text-text-secondary hover:underline">
+                      Dismiss
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* Aggregate byte-based progress — total upload size and how
+                  many bytes have actually transferred. Completed items
+                  count at 100% of their size; pre-flight blocked items
+                  don't contribute (they never started). */}
+              {bytesTotal > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs text-text-secondary">
+                    <span>{formatUploadBytes(bytesUploaded)} of {formatUploadBytes(bytesTotal)}</span>
+                    <span className="font-medium text-text-primary">{overallBytePercent}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-300"
+                      style={{ width: `${overallBytePercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {upload.items.map((item) => {
                   // QA #22: surface low-severity scan findings (duplicates,
@@ -1043,16 +1114,47 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   const warnings = (item.scanManifest?.findings || []).filter(
                     (f) => f.severity === "low",
                   );
+                  const isFailed = item.status === "error";
+                  const isTerminal =
+                    item.status === "complete" ||
+                    item.status === "error" ||
+                    item.status === "blocked" ||
+                    item.status === "needs_desktop";
                   return (
                     <div key={item.id} className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-3 text-xs">
                         <span className="truncate flex-1 text-text-primary">{item.file.name}</span>
+                        <span className="text-text-tertiary tabular-nums">{formatUploadBytes(item.file.size)}</span>
                         <div className="w-24 h-1.5 rounded-full bg-surface-sunken overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-danger" : "bg-accent"}`} style={{ width: `${item.progress}%` }} />
+                          <div className={`h-full rounded-full transition-all ${isFailed ? "bg-danger" : "bg-accent"}`} style={{ width: `${item.progress}%` }} />
                         </div>
-                        <span className="w-8 text-right text-text-tertiary">{item.progress}%</span>
-                        <span className={`w-16 text-right ${item.status === "complete" ? "text-success" : item.status === "error" ? "text-danger" : "text-text-secondary"}`}>{item.status}</span>
+                        <span className="w-8 text-right text-text-tertiary tabular-nums">{item.progress}%</span>
+                        <span className={`w-16 text-right ${item.status === "complete" ? "text-success" : isFailed ? "text-danger" : item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" : "text-text-secondary"}`}>{item.status}</span>
+                        {isFailed && (
+                          <button
+                            onClick={() => upload.retry(item.id)}
+                            className="text-xs text-accent hover:underline"
+                            title="Retry this upload"
+                          >
+                            Retry
+                          </button>
+                        )}
+                        {isTerminal && (
+                          <button
+                            onClick={() => upload.dismiss(item.id)}
+                            className="text-xs text-text-tertiary hover:text-text-secondary"
+                            title="Dismiss"
+                            aria-label="Dismiss"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
+                      {isFailed && item.error && (
+                        <div className="pl-2 text-[10px] text-danger">
+                          {item.error}
+                        </div>
+                      )}
                       {warnings.length > 0 && (
                         <div className="pl-2 text-[10px] text-feedback-warning">
                           ⚠ {warnings.length === 1

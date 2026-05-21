@@ -212,6 +212,41 @@ export function useUpload(apiUrl: string, token: string) {
     }
   }, [chunkedUpload, items]);
 
+  // 2026-05-21: bulk-retry every item in the "error" set so the UI can offer
+  // a single "Retry All" button on the persisted-after-failure upload panel.
+  // Blocked / needs_desktop items are intentionally excluded — those were
+  // rejected at the screening stage and the same file would block again.
+  const retryAll = useCallback(() => {
+    const failed = items.filter((i) => i.status === "error");
+    for (const item of failed) {
+      void chunkedUpload({ ...item, status: "pending", progress: 0 });
+    }
+  }, [chunkedUpload, items]);
+
+  // dismiss(id) removes a non-active item from the queue. Unlike cancel(),
+  // it does NOT abort in-flight uploads — it only clears completed / errored
+  // / blocked / needs_desktop entries that the user has acknowledged.
+  const dismiss = useCallback((id: string) => {
+    setItems((prev) =>
+      prev.filter((item) => {
+        if (item.id !== id) return true;
+        const active = item.status === "uploading" || item.status === "pending" || item.status === "screening";
+        return active; // keep active items even if dismiss is called on them
+      }),
+    );
+  }, []);
+
+  // clearFinished removes every non-active item at once — the "Dismiss"
+  // action on the persisted-after-failure panel. Active uploads survive.
+  const clearFinished = useCallback(() => {
+    setItems((prev) =>
+      prev.filter(
+        (item) =>
+          item.status === "uploading" || item.status === "pending" || item.status === "screening",
+      ),
+    );
+  }, []);
+
   const cancelAll = useCallback(() => {
     abortControllers.current.forEach((controller) => controller.abort());
     abortControllers.current.clear();
@@ -233,6 +268,9 @@ export function useUpload(apiUrl: string, token: string) {
     addFiles,
     cancel,
     retry,
+    retryAll,
+    dismiss,
+    clearFinished,
     cancelAll,
     pauseAll,
     resumeAll,
