@@ -13,10 +13,13 @@ function currentFinancialYear(): string {
   return `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
 }
 
+const GSTR_PAGE_SIZE = 25;
+
 export default function GSTR1ReportPage() {
   const [fy, setFy] = useState(currentFinancialYear());
   const [report, setReport] = useState<GSTR1Report | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "B2B" | "B2C">("all");
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +53,9 @@ export default function GSTR1ReportPage() {
     return all.filter((entry) => entry.supply_type === activeTab);
   }, [activeTab, report]);
 
+  const pageCount = Math.ceil(entries.length / GSTR_PAGE_SIZE);
+  const pageEntries = entries.slice(page * GSTR_PAGE_SIZE, (page + 1) * GSTR_PAGE_SIZE);
+
   const handleDownload = async () => {
     try {
       const token = getStoredAccessToken();
@@ -79,7 +85,7 @@ export default function GSTR1ReportPage() {
             Financial year
             <input
               value={fy}
-              onChange={(e) => setFy(e.target.value)}
+              onChange={(e) => { setFy(e.target.value); setPage(0); }}
               className="input-field"
               placeholder="2026-27"
             />
@@ -128,7 +134,7 @@ export default function GSTR1ReportPage() {
               <button
                 key={tab}
                 type="button"
-                onClick={() => setActiveTab(tab)}
+                onClick={() => { setActiveTab(tab); setPage(0); }}
                 className={cn(
                   "segmented-control-button text-sm",
                   activeTab === tab ? "segmented-control-button--active" : "segmented-control-button--inactive",
@@ -143,43 +149,68 @@ export default function GSTR1ReportPage() {
             {entries.length === 0 ? (
               <div className="p-10 text-center text-sm text-text-secondary">No filing rows for this period.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-surface-sunken text-xs text-text-tertiary">
-                    <tr>
-                      <th className="px-4 py-3">Invoice</th>
-                      <th className="px-4 py-3">Client</th>
-                      <th className="px-4 py-3">Supply</th>
-                      <th className="px-4 py-3 text-right">Taxable</th>
-                      <th className="px-4 py-3 text-right">GST</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((entry) => (
-                      <tr key={`${entry.invoice_number}-${entry.invoice_date}`} className="border-t border-border-default">
-                        <td className="px-4 py-3 font-mono text-xs text-text-primary">
-                          {entry.invoice_number}
-                          <span className="block pt-1 font-sans text-text-tertiary">{entry.invoice_date}</span>
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {entry.client_name || "Client"}
-                          {entry.client_gstin ? <span className="block pt-1 text-xs text-text-tertiary">{entry.client_gstin}</span> : null}
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {entry.supply_type}
-                          <span className="block pt-1 text-xs text-text-tertiary">SAC {entry.sac_code}</span>
-                        </td>
-                        <td className="px-4 py-3 text-right text-text-primary">{formatPaisa(entry.taxable_value_paisa)}</td>
-                        <td className="px-4 py-3 text-right text-text-secondary">
-                          {formatPaisa(entry.cgst_paisa + entry.sgst_paisa + entry.igst_paisa)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-text-primary">{formatPaisa(entry.total_paisa)}</td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full table-auto text-left text-sm">
+                    <thead className="bg-surface-sunken text-xs text-text-tertiary">
+                      <tr>
+                        <th className="px-4 py-3">Invoice</th>
+                        <th className="px-4 py-3">Client</th>
+                        <th className="px-4 py-3">Supply</th>
+                        <th className="px-4 py-3 text-right">Taxable</th>
+                        <th className="px-4 py-3 text-right">GST</th>
+                        <th className="px-4 py-3 text-right">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {pageEntries.map((entry) => (
+                        <tr key={`${entry.invoice_number}-${entry.invoice_date}`} className="border-t border-border-default">
+                          <td className="px-4 py-3 font-mono text-xs text-text-primary">
+                            {entry.invoice_number}
+                            <span className="block pt-1 font-sans text-text-tertiary">{entry.invoice_date}</span>
+                          </td>
+                          <td className="px-4 py-3 text-text-secondary">
+                            {entry.client_name || "Client"}
+                            {entry.client_gstin ? <span className="block pt-1 text-xs text-text-tertiary">{entry.client_gstin}</span> : null}
+                          </td>
+                          <td className="px-4 py-3 text-text-secondary">
+                            {entry.supply_type}
+                            <span className="block pt-1 text-xs text-text-tertiary">SAC {entry.sac_code}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-text-primary">{formatPaisa(entry.taxable_value_paisa)}</td>
+                          <td className="px-4 py-3 text-right text-text-secondary">
+                            {formatPaisa(entry.cgst_paisa + entry.sgst_paisa + entry.igst_paisa)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-text-primary">{formatPaisa(entry.total_paisa)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {pageCount > 1 && (
+                  <div className="flex items-center justify-between border-t border-border-default bg-surface-raised px-4 py-3 text-sm text-text-secondary">
+                    <span>Page {page + 1} of {pageCount} ({entries.length} entries)</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => p - 1)}
+                        disabled={page === 0}
+                        className="rounded-lg border border-border-default px-3 py-1.5 text-xs hover:bg-surface-sunken disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => p + 1)}
+                        disabled={page >= pageCount - 1}
+                        className="rounded-lg border border-border-default px-3 py-1.5 text-xs hover:bg-surface-sunken disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </>

@@ -15,7 +15,7 @@ export function StudioControlSection() {
   return (
     <section
       aria-labelledby="studio-heading"
-      className="mx-auto max-w-7xl px-6 py-24 sm:px-8 lg:px-12"
+      className="mx-auto max-w-7xl px-6 py-12 sm:px-8 sm:py-16 lg:px-12 lg:py-20"
     >
       <div className="mb-12 max-w-2xl">
         <p className="font-headline text-xs font-semibold uppercase tracking-[0.32em] text-text-tertiary">

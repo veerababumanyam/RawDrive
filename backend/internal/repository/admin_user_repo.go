@@ -440,8 +440,13 @@ func (r *AdminUserRepo) GetActivityTimeline(ctx context.Context, userID uuid.UUI
 		limit = 20
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, actor_id, actor_type, action, resource_type, resource_id,
-			   metadata, before_state, after_state, ip_address, user_agent,
+		SELECT id, actor_id, actor_type, action,
+			   COALESCE(resource_type, '') AS resource_type,
+			   COALESCE(resource_id, '')   AS resource_id,
+			   COALESCE(metadata, '{}'::jsonb)     AS metadata,
+			   COALESCE(before_state, '{}'::jsonb) AS before_state,
+			   COALESCE(after_state, '{}'::jsonb)  AS after_state,
+			   ip_address, user_agent,
 			   workspace_id, state_id, severity, created_at
 		FROM audit_logs
 		WHERE actor_id = $1 OR resource_id = $1::text

@@ -178,7 +178,7 @@ export function PricingContent() {
             Feature Comparison
           </h2>
           <div className="overflow-x-auto rounded-xl border border-border bg-surface-elevated shadow-glass">
-            <table className="w-full text-left text-sm">
+            <table className="w-full table-auto text-left text-sm">
               <thead>
                 <tr className="border-b border-border">
                   <th className="sticky left-0 bg-surface-elevated px-4 py-3 text-text-primary font-semibold">

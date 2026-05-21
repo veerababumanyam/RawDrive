@@ -60,7 +60,7 @@ const securityHeaders = [
       // and /onboarding to open the payment modal). Without it the script tag
       // gets blocked by CSP and the polling loop in those pages throws
       // "Razorpay script timeout" after 8s. Added 2026-05-18.
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
+      `script-src 'self' 'unsafe-inline' blob:${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:" + devImgExtras,
       // connect-src must include the API origin for same-origin fetches

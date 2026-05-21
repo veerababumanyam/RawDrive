@@ -19,10 +19,10 @@ describe("Landing Page", () => {
   it("renders the hero H1 with the editorial headline", () => {
     render(<LandingPage />);
     // The headline is split across three lines via <br/>, so we match
-    // the "Run every wedding" opener which lives on its own line and
+    // the "Run every celebration" opener which lives on its own line and
     // is uniquely stable.
     const hero = screen.getByRole("heading", { level: 1 });
-    expect(hero).toHaveTextContent(/Run every wedding/i);
+    expect(hero).toHaveTextContent(/Run every celebration/i);
     expect(hero).toHaveTextContent(/final delivery/i);
   });
 

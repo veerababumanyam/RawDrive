@@ -642,6 +642,17 @@ body[data-chrome="marketing"] {
     animation-duration: 0ms !important;
     transition-duration: 0ms !important;
   }
+  /* Elements that start at opacity:0 and animate to 1 must be made
+     immediately visible when animation is disabled — otherwise the
+     forwards fill never fires and they stay invisible forever. */
+  .landing-hero__eyebrow,
+  .landing-hero__headline,
+  .landing-hero__subhead,
+  .landing-hero__ctas,
+  .landing-hero__scroll-cue {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* ============================================================
@@ -680,31 +691,31 @@ body[data-chrome="marketing"] {
 }
 
 .landing-hero__image {
+  object-position: 60% center;
   /* Gentle cinematic settle on page load. Pure CSS. Auto-disabled
      by the global prefers-reduced-motion rule above. */
   animation: landing-hero-image-reveal 900ms var(--easing-out) both;
   will-change: opacity, transform;
-  transform-origin: center 60%;
+  transform-origin: 60% center;
 }
 
 .landing-hero__scrim {
   position: absolute;
   inset: 0;
+  /* Theme-aware scrim — fades the left-to-center region toward the
+     theme's surface-base so the text block always hits AA contrast. */
   background:
-    /* Left-anchored horizontal gradient that fades to transparent,
-       guaranteeing text contrast against the photograph's midtones. */
     linear-gradient(
       105deg,
-      color-mix(in srgb, var(--surface-base) 92%, transparent) 0%,
-      color-mix(in srgb, var(--surface-base) 82%, transparent) 28%,
-      color-mix(in srgb, var(--surface-base) 38%, transparent) 58%,
+      color-mix(in srgb, var(--surface-base) 72%, transparent) 0%,
+      color-mix(in srgb, var(--surface-base) 58%, transparent) 28%,
+      color-mix(in srgb, var(--surface-base) 20%, transparent) 58%,
       transparent 90%
     ),
-    /* Bottom fade for depth and scroll-cue legibility. */
     linear-gradient(
       180deg,
       transparent 58%,
-      color-mix(in srgb, var(--surface-base) 40%, transparent) 100%
+      color-mix(in srgb, var(--surface-base) 30%, transparent) 100%
     );
   pointer-events: none;
 }
@@ -791,8 +802,8 @@ body[data-chrome="marketing"] {
      while this wrapper scrolls. The wrapper is intentionally tall so
      the scroll-progression has room to play out on every viewport size. */
   position: relative;
-  padding-top: 6rem;
-  padding-bottom: 6rem;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 
 @media (min-width: 1024px) {
@@ -805,8 +816,8 @@ body[data-chrome="marketing"] {
        (Originally padded to 18rem — that wasn't enough on 900px viewports
        where the total section was only 773px, shorter than the viewport.) */
     min-height: 200vh;
-    padding-top: 8rem;
-    padding-bottom: 8rem;
+    padding-top: 5rem;
+    padding-bottom: 5rem;
   }
 }
 
@@ -1118,5 +1129,5 @@ body[data-chrome="marketing"] {
 /* --- Final CTA (§4.7) ---------------------------------------- */
 .landing-final-cta {
   text-align: center;
-  padding: 6rem 1.5rem 9rem;
+  padding: 4rem 1.5rem 5rem;
 }

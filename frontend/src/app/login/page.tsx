@@ -38,9 +38,6 @@ export default function LoginPage() {
             <h1 className="font-headline text-3xl font-extrabold tracking-tight text-text-primary">
               Welcome back
             </h1>
-            <p className="mt-2 text-sm text-text-secondary">
-              Enter your details to access your studio
-            </p>
           </div>
 
           <Suspense fallback={<LoginFormFallback />}>

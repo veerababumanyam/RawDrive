@@ -10,7 +10,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Grid, ListBullet, Trash } from "@/components/icons";
+import { Grid, ListBullet, Trash, Share } from "@/components/icons";
 
 export default function GalleriesPage() {
   const searchParams = useSearchParams();
@@ -36,6 +36,8 @@ export default function GalleriesPage() {
   // means arming Delete on a different card auto-disarms the previous one,
   // so the inline confirm bar never appears on two cards simultaneously.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // ID of the gallery whose share link was just copied — cleared after 1.5s.
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
@@ -70,6 +72,16 @@ export default function GalleriesPage() {
     e.preventDefault();
     e.stopPropagation();
     setConfirmDeleteId(galleryId);
+  };
+
+  const copyShareLink = (e: React.MouseEvent, gallery: Gallery) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = `${window.location.origin}/g/${gallery.slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(gallery.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }).catch(() => {});
   };
 
   const confirmDelete = async (galleryId: string) => {
@@ -516,9 +528,26 @@ export default function GalleriesPage() {
                         When armed, the corner swaps to an inline
                         confirm bar instead of firing window.confirm. */}
                     <div
-                      className="absolute top-2 right-2 z-10"
+                      className="absolute top-2 right-2 z-10 flex items-center gap-1.5"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     >
+                      {/* Share — copies the public gallery link. Solid circle
+                          matches the delete button treatment so it reads as
+                          a tappable affordance against any cover photo. */}
+                      <button
+                        type="button"
+                        aria-label={copiedId === g.id ? "Link copied!" : "Copy share link"}
+                        title={copiedId === g.id ? "Link copied!" : "Copy share link"}
+                        onClick={(e) => copyShareLink(e, g)}
+                        className={cn(
+                          "inline-flex h-9 w-9 items-center justify-center rounded-full text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-0",
+                          copiedId === g.id
+                            ? "bg-feedback-success focus:ring-feedback-success/50"
+                            : "bg-accent-primary hover:bg-accent-primary/90 focus:ring-accent-primary/50",
+                        )}
+                      >
+                        <Share className="h-4 w-4" />
+                      </button>
                       {confirmDeleteId === g.id ? (
                         <div
                           role="alertdialog"
@@ -649,41 +678,61 @@ export default function GalleriesPage() {
                     {new Date(g.created_at).toLocaleDateString("en-IN")}
                   </span>
                   {viewMode === "list" && (
-                    confirmDeleteId === g.id ? (
-                      <div
-                        role="alertdialog"
-                        aria-label="Confirm gallery deletion"
-                        className="ml-2 flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      >
-                        <span className="px-1.5 text-[11px] font-medium text-text-primary">Delete?</span>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }}
-                          className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          autoFocus
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
-                          className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
-                        >
-                          Confirm
-                        </button>
-                      </div>
-                    ) : (
+                    <div
+                      className="ml-2 flex items-center gap-1.5"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    >
+                      {/* Share — copies the public gallery link */}
                       <button
                         type="button"
-                        aria-label="Delete gallery"
-                        title="Delete gallery"
-                        onClick={(e) => armDelete(e, g.id)}
-                        className="ml-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-error text-white shadow-elevation-1 transition-all hover:bg-feedback-error/90 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-error/50"
+                        aria-label={copiedId === g.id ? "Link copied!" : "Copy share link"}
+                        title={copiedId === g.id ? "Link copied!" : "Copy share link"}
+                        onClick={(e) => copyShareLink(e, g)}
+                        className={cn(
+                          "inline-flex h-9 w-9 items-center justify-center rounded-full text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-0",
+                          copiedId === g.id
+                            ? "bg-feedback-success focus:ring-feedback-success/50"
+                            : "bg-accent-primary hover:bg-accent-primary/90 focus:ring-accent-primary/50",
+                        )}
                       >
-                        <Trash className="h-4 w-4" />
+                        <Share className="h-4 w-4" />
                       </button>
-                    )
+                      {confirmDeleteId === g.id ? (
+                        <div
+                          role="alertdialog"
+                          aria-label="Confirm gallery deletion"
+                          className="flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        >
+                          <span className="px-1.5 text-[11px] font-medium text-text-primary">Delete?</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }}
+                            className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            autoFocus
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
+                            className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label="Delete gallery"
+                          title="Delete gallery"
+                          onClick={(e) => armDelete(e, g.id)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-error text-white shadow-elevation-1 transition-all hover:bg-feedback-error/90 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-error/50"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </Link>

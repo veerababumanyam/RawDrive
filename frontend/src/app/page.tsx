@@ -10,11 +10,11 @@ import { TrustRow } from "@/components/landing/TrustRow";
 import { WorkflowPipeline } from "@/components/landing/WorkflowPipeline";
 
 export const metadata: Metadata = {
-  title: "RawDrive — Run every wedding from inquiry to final delivery",
+  title: "RawDrive — Run every celebration from inquiry to final delivery",
   description:
     "Galleries, proofing, AI culling, bookings, invoices, and client delivery for modern Indian studios. Built in India. Honest about what it does.",
   openGraph: {
-    title: "RawDrive — Run every wedding from inquiry to final delivery",
+    title: "RawDrive — Run every celebration from inquiry to final delivery",
     description:
       "Galleries, proofing, AI culling, bookings, invoices, and client delivery for modern Indian studios.",
     images: [{ url: "/landing/11.webp", width: 2048, height: 1363, alt: "" }],

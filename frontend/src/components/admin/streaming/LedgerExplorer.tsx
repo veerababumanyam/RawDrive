@@ -72,10 +72,13 @@ function shortId(id: string | null | undefined): string {
   return id.length > 12 ? `${id.slice(0, 8)}…` : id;
 }
 
+const LEDGER_TABLE_PAGE_SIZE = 50;
+
 export function LedgerExplorer() {
   const [draft, setDraft] = useState<FilterDraft>(EMPTY_DRAFT);
   const [applied, setApplied] = useState<FilterDraft>(EMPTY_DRAFT);
   const [rows, setRows] = useState<LedgerRow[]>([]);
+  const [tablePage, setTablePage] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,12 +111,14 @@ export function LedgerExplorer() {
 
   const onApply = () => {
     setApplied(draft);
+    setTablePage(0);
     void load(draft);
   };
 
   const onReset = () => {
     setDraft(EMPTY_DRAFT);
     setApplied(EMPTY_DRAFT);
+    setTablePage(0);
     void load(EMPTY_DRAFT);
   };
 
@@ -275,54 +280,79 @@ export function LedgerExplorer() {
       )}
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/[0.03] bg-surface-container-low/40 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">
-            <tr>
-              <th className="text-left p-3">Created at</th>
-              <th className="text-left p-3">Workspace</th>
-              <th className="text-left p-3">Actor</th>
-              <th className="text-left p-3">Entry type</th>
-              <th className="text-right p-3">Δ Minutes</th>
-              <th className="text-right p-3">Amount (paise)</th>
-              <th className="text-left p-3">Stream</th>
-              <th className="text-left p-3">Reference</th>
-              <th className="text-left p-3">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-white/[0.04]">
-                <td className="p-3 text-text-secondary whitespace-nowrap">
-                  {formatDateTime(r.created_at)}
-                </td>
-                <td className="p-3 font-mono text-xs">{r.workspace}</td>
-                <td className="p-3 font-mono text-xs" title={r.created_by ?? ""}>
-                  {shortId(r.created_by)}
-                </td>
-                <td className="p-3">{r.type}</td>
-                <td className="p-3 text-right font-mono">{r.minutes_delta}</td>
-                <td className="p-3 text-right font-mono">{r.amount}</td>
-                <td className="p-3 font-mono text-xs" title={r.stream_id ?? ""}>
-                  {shortId(r.stream_id)}
-                </td>
-                <td className="p-3 font-mono text-xs">
-                  {shortId(r.reservation_id ?? r.purchase_id)}
-                </td>
-                <td className="p-3 font-mono text-xs text-text-secondary">
-                  {r.idempotency_key ?? "—"}
-                </td>
-              </tr>
-            ))}
-            {!loading && rows.length === 0 && (
+      <div className="rounded-2xl border border-white/[0.03] bg-surface-container-low/40 overflow-hidden">
+        <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
+          <table className="w-full table-auto text-sm">
+            <thead className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">
               <tr>
-                <td colSpan={9} className="p-8 text-center text-text-secondary">
-                  No ledger entries match the current filters.
-                </td>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Created at</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Workspace</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Actor</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Entry type</th>
+                <th className="text-right p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Δ Minutes</th>
+                <th className="text-right p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Amount (paise)</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Stream</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Reference</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Notes</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.slice(tablePage * LEDGER_TABLE_PAGE_SIZE, (tablePage + 1) * LEDGER_TABLE_PAGE_SIZE).map((r) => (
+                <tr key={r.id} className="border-t border-white/[0.04]">
+                  <td className="p-3 text-text-secondary whitespace-nowrap">
+                    {formatDateTime(r.created_at)}
+                  </td>
+                  <td className="p-3 font-mono text-xs">{r.workspace}</td>
+                  <td className="p-3 font-mono text-xs" title={r.created_by ?? ""}>
+                    {shortId(r.created_by)}
+                  </td>
+                  <td className="p-3">{r.type}</td>
+                  <td className="p-3 text-right font-mono">{r.minutes_delta}</td>
+                  <td className="p-3 text-right font-mono">{r.amount}</td>
+                  <td className="p-3 font-mono text-xs" title={r.stream_id ?? ""}>
+                    {shortId(r.stream_id)}
+                  </td>
+                  <td className="p-3 font-mono text-xs">
+                    {shortId(r.reservation_id ?? r.purchase_id)}
+                  </td>
+                  <td className="p-3 font-mono text-xs text-text-secondary">
+                    {r.idempotency_key ?? "—"}
+                  </td>
+                </tr>
+              ))}
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-text-secondary">
+                    No ledger entries match the current filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE) > 1 && (
+          <div className="flex items-center justify-between border-t border-white/[0.04] bg-surface-container-low/40 px-4 py-3 text-sm text-text-secondary">
+            <span>Page {tablePage + 1} of {Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE)} ({rows.length} loaded)</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTablePage((p) => p - 1)}
+                disabled={tablePage === 0}
+                className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs hover:bg-white/[0.06] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setTablePage((p) => p + 1)}
+                disabled={tablePage >= Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE) - 1}
+                className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs hover:bg-white/[0.06] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between text-sm text-text-secondary">

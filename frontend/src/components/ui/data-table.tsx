@@ -218,17 +218,17 @@ export function DataTable<T extends Record<string, unknown>>({
         <div className="text-center py-12 text-text-secondary">{emptyMessage}</div>
       ) : (
         <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
+            <table className="w-full table-auto text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
+                <tr className="text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
                   {columns.map((col) => {
                     const align = col.headerAlign || col.align || "left";
                     return (
                       <th
                         key={col.key}
                         className={cn(
-                          "px-6 py-4 font-semibold",
+                          "px-6 py-4 font-semibold sticky top-0 z-10 bg-surface-container-low",
                           align === "right" && "text-right",
                           align === "center" && "text-center",
                           col.sortable && "cursor-pointer select-none group hover:text-on-surface transition-colors",

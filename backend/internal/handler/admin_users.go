@@ -138,6 +138,10 @@ func (h *AdminUsersHandler) Suspend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actorID := middleware.GetActorID(r.Context())
+	if actorID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 	if err := h.svc.SuspendUser(r.Context(), id, body.Reason, actorID); err != nil {
 		log.Printf("admin: suspend user %s failed: %v", id, err)
 		http.Error(w, `{"error":"failed to suspend user"}`, http.StatusInternalServerError)

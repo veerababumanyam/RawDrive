@@ -367,9 +367,13 @@ const columns: ColumnDef<AuditLogRow>[] = [
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
+const AUDIT_PAGE_SIZE = 100;
+
 export default function AdminAuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -385,7 +389,7 @@ export default function AdminAuditLogsPage() {
   // Debounce timer for text filters
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const fetchLogs = useCallback(async (f: FilterState) => {
+  const fetchLogs = useCallback(async (f: FilterState, cursor?: string, append = false) => {
     let token = getStoredAccessToken();
     if (!token) {
       const { refreshAuthSession } = await import("@/lib/auth");
@@ -393,8 +397,9 @@ export default function AdminAuditLogsPage() {
       token = await refreshAuthSession(API_BASE);
     }
     if (!token) { setError("Session expired. Please log in again."); setLoading(false); return; }
-    setLoading(true);
-    const params: Record<string, string> = { limit: "1000" };
+    if (append) setLoadingMore(true); else setLoading(true);
+    const params: Record<string, string> = { limit: String(AUDIT_PAGE_SIZE) };
+    if (cursor) params.cursor = cursor;
     if (f.dateFrom) params.date_from = f.dateFrom;
     if (f.dateTo) params.date_to = f.dateTo;
     if (f.actorId) params.actor_id = f.actorId;
@@ -418,14 +423,16 @@ export default function AdminAuditLogsPage() {
           throw firstErr;
         }
       }
-      setLogs(res.items as AuditLogRow[]);
+      setLogs((prev) => append ? [...prev, ...res.items as AuditLogRow[]] : res.items as AuditLogRow[]);
       setTotal(res.total_count);
+      setNextCursor(res.next_cursor);
       setError(null);
     } catch {
       setError("Failed to load audit logs. Try refreshing the page.");
-      setLogs([]);
+      if (!append) setLogs([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
@@ -445,6 +452,10 @@ export default function AdminAuditLogsPage() {
     setFilters(emptyFilters);
     fetchLogs(emptyFilters);
   }, [fetchLogs]);
+
+  const handleLoadMore = useCallback(() => {
+    if (nextCursor && !loadingMore) fetchLogs(filters, nextCursor, true);
+  }, [fetchLogs, filters, nextCursor, loadingMore]);
 
   // Row click → open detail
   const handleRowClick = useCallback(async (row: AuditLogRow) => {
@@ -579,6 +590,23 @@ export default function AdminAuditLogsPage() {
           </button>
         }
       />
+
+      {/* Load more — cursor pagination */}
+      {(nextCursor || loadingMore) && (
+        <div className="flex items-center justify-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="inline-flex items-center gap-2 rounded-xl bg-surface-container-low/60 border border-white/[0.05] px-5 py-2.5 text-sm text-on-surface hover:border-primary/40 disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : `Load next ${AUDIT_PAGE_SIZE} entries`}
+          </button>
+          <span className="text-xs text-text-tertiary">
+            {logs.length.toLocaleString()} of {total.toLocaleString()} loaded
+          </span>
+        </div>
+      )}
 
       {/* Detail slide-over */}
       <DetailPanel

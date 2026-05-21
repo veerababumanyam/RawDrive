@@ -27,7 +27,7 @@ export function TrustRow() {
   return (
     <section
       aria-labelledby="trust-heading"
-      className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12"
+      className="mx-auto max-w-7xl px-6 py-10 sm:px-8 sm:py-14 lg:px-12 lg:py-16"
     >
       <h2 id="trust-heading" className="sr-only">
         Why Indian studios trust RawDrive

@@ -1210,13 +1210,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm text-text-secondary">
-                      {assets.length === 0
-                        ? "No assets yet"
-                        : (faceFilterIds || proofingFilter)
-                          ? `${visibleAssets.length} of ${assets.length} assets`
-                          : `${assets.length} assets`}
-                    </p>
                     {assets.length > 0 && (
                       <button onClick={() => setBulkMode(true)} className="text-xs text-text-tertiary hover:text-text-primary">Select</button>
                     )}
@@ -1250,21 +1243,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 <div className="flex items-center gap-2">
                   {gallery.slug && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => copyShareUrl()}
-                        className="btn-tertiary px-3 py-1.5 text-xs"
-                      >
-                        Copy gallery link
-                      </button>
-                      <ShareQrPopover
-                        url={gallery.is_published ? buildShareUrl() : ""}
-                        disabled={!gallery.is_published}
-                        label="Show QR code for gallery link"
-                        filename={`${gallery.slug}-gallery-qr`}
-                      />
-                    </>
+                    <ShareQrPopover
+                      url={gallery.is_published ? buildShareUrl() : ""}
+                      disabled={!gallery.is_published}
+                      label="Show QR code for gallery link"
+                      filename={`${gallery.slug}-gallery-qr`}
+                    />
                   )}
                   <button
                     type="button"
@@ -1542,29 +1526,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 else imports it but it's trivially re-wirable if a
                 future iteration wants the chip strip back. */}
 
-            {/* Embedded videos (YouTube / Vimeo).
-                Added 2026-05-18 — sits between sub-galleries/face filter
-                and the photo dropzone so photographers see and manage
-                the gallery's video links inline with the rest of the
-                content surface. Same component renders read-only on the
-                public viewer; the persistence shape is identical.
-                onChange syncs the parent's gallery state so other reads
-                of gallery.settings.embedded_videos within this page
-                stay consistent without a network refetch. */}
-            {gallery && (
-              <EmbeddedVideosPanel
-                galleryId={id}
-                initialVideos={readEmbeddedVideos(gallery.settings as Record<string, unknown>)}
-                onChange={(next: EmbeddedVideo[]) => {
-                  setGallery((prev) =>
-                    prev
-                      ? { ...prev, settings: { ...(prev.settings ?? {}), embedded_videos: next } }
-                      : prev,
-                  );
-                }}
-              />
-            )}
-
             {/* Drop zone — always visible, acts as upload target */}
             <div
               onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -1712,6 +1673,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   );
                 })}
               </div>
+            )}
+
+            {gallery && (
+              <EmbeddedVideosPanel
+                galleryId={id}
+                initialVideos={readEmbeddedVideos(gallery.settings as Record<string, unknown>)}
+                onChange={(next: EmbeddedVideo[]) => {
+                  setGallery((prev) =>
+                    prev
+                      ? { ...prev, settings: { ...(prev.settings ?? {}), embedded_videos: next } }
+                      : prev,
+                  );
+                }}
+              />
             )}
           </div>
         </section>

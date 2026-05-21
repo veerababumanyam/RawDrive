@@ -24,7 +24,7 @@ export function Hero() {
       {/* Photograph — absolutely positioned, full-bleed, priority for LCP. */}
       <div className="landing-hero__photo absolute inset-0 -z-10">
         <Image
-          src="/landing/11.webp"
+          src="/landing/hero-couple.webp"
           alt=""
           fill
           priority
@@ -54,9 +54,9 @@ export function Hero() {
 
           <h1
             id="hero-heading"
-            className="landing-hero__headline mt-6 font-headline text-4xl font-bold leading-[1.02] tracking-tight text-text-primary sm:text-5xl md:text-6xl lg:text-[76px] lg:leading-[0.98]"
+            className="landing-hero__headline mt-6 font-headline text-3xl font-bold leading-[1.02] tracking-tight text-text-primary sm:text-4xl md:text-5xl lg:text-[60px] lg:leading-[1.0]"
           >
-            Run every wedding
+            Run every celebration
             <br />
             from inquiry to
             <br />

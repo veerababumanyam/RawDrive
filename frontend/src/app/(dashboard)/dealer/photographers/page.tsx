@@ -21,11 +21,14 @@ function PlanBadge({ plan, status }: { plan: string; status: string }) {
   );
 }
 
+const PHOTO_PAGE_SIZE = 25;
+
 export default function DealerPhotographersPage() {
   const [photographers, setPhotographers] = useState<StatePhotographer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     getDealerPhotographers()
@@ -40,6 +43,9 @@ export default function DealerPhotographersPage() {
       p.full_name.toLowerCase().includes(search.toLowerCase()) ||
       p.email.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const pageCount = Math.ceil(filtered.length / PHOTO_PAGE_SIZE);
+  const pageData = filtered.slice(page * PHOTO_PAGE_SIZE, (page + 1) * PHOTO_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -62,7 +68,7 @@ export default function DealerPhotographersPage() {
         <input
           type="search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
           placeholder="Search by name or email…"
           className="input-base flex-1 max-w-sm"
         />
@@ -87,7 +93,7 @@ export default function DealerPhotographersPage() {
         </div>
       ) : (
         <div className="glass-card overflow-hidden rounded-2xl">
-          <table className="w-full text-sm">
+          <table className="w-full table-auto text-sm">
             <thead>
               <tr className="border-b border-border-subtle">
                 <th className="px-4 py-3 text-left font-medium text-text-secondary">Name</th>
@@ -96,7 +102,7 @@ export default function DealerPhotographersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle">
-              {filtered.map((p) => (
+              {pageData.map((p) => (
                 <tr key={p.user_id} className="hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3 font-medium text-text-primary">
                     {p.full_name || <span className="text-text-tertiary">—</span>}
@@ -109,6 +115,29 @@ export default function DealerPhotographersPage() {
               ))}
             </tbody>
           </table>
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between border-t border-border-subtle px-4 py-3 text-sm text-text-secondary">
+              <span>Page {page + 1} of {pageCount} ({filtered.length} total)</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => p - 1)}
+                  disabled={page === 0}
+                  className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page >= pageCount - 1}
+                  className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

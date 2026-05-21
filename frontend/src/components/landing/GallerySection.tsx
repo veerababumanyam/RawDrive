@@ -14,7 +14,7 @@ export function GallerySection() {
   return (
     <section
       aria-labelledby="gallery-heading"
-      className="mx-auto max-w-7xl px-6 py-24 sm:px-8 lg:px-12"
+      className="mx-auto max-w-7xl px-6 py-12 sm:px-8 sm:py-16 lg:px-12 lg:py-20"
     >
       <div className="mb-12 max-w-2xl">
         <p className="font-headline text-xs font-semibold uppercase tracking-[0.32em] text-text-tertiary">
@@ -35,8 +35,8 @@ export function GallerySection() {
 
       <div className="landing-gallery-photo">
         <Image
-          src="/landing/13.webp"
-          alt="A bride at the mandap during a traditional Indian wedding ritual — the kind of moment clients star as a favorite in their RawDrive gallery."
+          src="/landing/gallery-baby.jpg"
+          alt="A baby splashing in ocean waves at a beach birthday shoot — the kind of joyful moment clients star as a favorite in their RawDrive gallery."
           fill
           sizes="(min-width: 1280px) 1280px, 100vw"
           className="object-cover"

@@ -15,10 +15,13 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+const ANALYTICS_PAGE_SIZE = 20;
+
 export default function AdminAnalyticsPage() {
   const [engagement, setEngagement] = useState<EngagementMetrics | null>(null);
   const [growth, setGrowth] = useState<GrowthMetrics | null>(null);
   const [features, setFeatures] = useState<FeatureAdoption[]>([]);
+  const [featurePage, setFeaturePage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,24 +73,49 @@ export default function AdminAnalyticsPage() {
         <div>
           <h3 className="font-headline text-xl font-bold text-on-surface mb-4">Feature Adoption</h3>
           <div className="bg-surface-container-low/20 border border-white/[0.03] rounded-2xl overflow-hidden backdrop-blur-sm">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
-                  <th className="px-6 py-4 font-semibold">Feature</th>
-                  <th className="px-6 py-4 font-semibold">Adoption</th>
-                  <th className="px-6 py-4 font-semibold">Active Users</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.03]">
-                {features.map((f) => (
-                  <tr key={f.feature} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-5 text-sm font-semibold text-on-surface">{f.feature}</td>
-                    <td className="px-6 py-5 text-sm text-primary font-bold">{f.adoption_pct}%</td>
-                    <td className="px-6 py-5 text-sm text-text-tertiary">{formatNum(f.active_users)}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full table-auto text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low text-text-secondary font-label text-[10px] uppercase tracking-[0.1em]">
+                    <th className="px-6 py-4 font-semibold">Feature</th>
+                    <th className="px-6 py-4 font-semibold">Adoption</th>
+                    <th className="px-6 py-4 font-semibold">Active Users</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03]">
+                  {features.slice(featurePage * ANALYTICS_PAGE_SIZE, (featurePage + 1) * ANALYTICS_PAGE_SIZE).map((f) => (
+                    <tr key={f.feature} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-6 py-5 text-sm font-semibold text-on-surface">{f.feature}</td>
+                      <td className="px-6 py-5 text-sm text-primary font-bold">{f.adoption_pct}%</td>
+                      <td className="px-6 py-5 text-sm text-text-tertiary">{formatNum(f.active_users)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {Math.ceil(features.length / ANALYTICS_PAGE_SIZE) > 1 && (
+              <div className="flex items-center justify-between border-t border-white/[0.03] bg-surface-container-low/40 px-6 py-3 text-sm text-text-secondary">
+                <span>Page {featurePage + 1} of {Math.ceil(features.length / ANALYTICS_PAGE_SIZE)} ({features.length} features)</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFeaturePage((p) => p - 1)}
+                    disabled={featurePage === 0}
+                    className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs hover:bg-white/[0.06] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeaturePage((p) => p + 1)}
+                    disabled={featurePage >= Math.ceil(features.length / ANALYTICS_PAGE_SIZE) - 1}
+                    className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs hover:bg-white/[0.06] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

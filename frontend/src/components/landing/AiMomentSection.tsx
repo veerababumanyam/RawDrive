@@ -42,12 +42,12 @@ export function AiMomentSection() {
   return (
     <section
       aria-labelledby="ai-heading"
-      className="mx-auto max-w-7xl px-6 py-24 sm:px-8 lg:px-12"
+      className="mx-auto max-w-7xl px-6 py-12 sm:px-8 sm:py-16 lg:px-12 lg:py-20"
     >
       <div className="landing-ai relative overflow-hidden rounded-[var(--radius-2xl)]">
         <div className="landing-ai__photo">
           <Image
-            src="/landing/16.webp"
+            src="/landing/ai-couple.jpg"
             alt=""
             fill
             sizes="(min-width: 1280px) 1280px, 100vw"
