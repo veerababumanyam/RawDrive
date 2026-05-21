@@ -192,7 +192,21 @@ export function useUpload(apiUrl: string, token: string) {
       status: "pending" as const,
     }));
 
-    setItems((prev) => [...prev, ...newItems]);
+    // 2026-05-21: a fresh batch should not inherit stale terminal rows
+    // from prior batches. Without this, the panel showed last batch's
+    // "complete" rows above the new uploads AND the aggregate byte bar
+    // double-counted the prior batch's bytes as already-uploaded. Active
+    // uploads (uploading/pending/screening) survive so a user can drop
+    // additional files mid-batch. Failed/blocked items from prior batches
+    // also clear — the user has already seen those errors; they're
+    // stale state relative to the new upload session.
+    setItems((prev) => {
+      const active = prev.filter(
+        (i) =>
+          i.status === "uploading" || i.status === "pending" || i.status === "screening",
+      );
+      return [...active, ...newItems];
+    });
 
     for (const item of newItems) {
       void chunkedUpload(item);
