@@ -1197,6 +1197,10 @@ func main() {
 
 	// M2 Repositories
 	assetRepo := repository.NewAssetRepo(dbPool)
+	// 2026-05-21: asset_derivatives writer is wired into the thumbnail
+	// worker so per-variant WebP size/dims land in the DB and the dashboard
+	// storage-by-type widget can render non-zero derivatives.
+	assetDerivativeRepo := repository.NewAssetDerivativeRepo(dbPool)
 	galleryRepo := repository.NewGalleryRepo(dbPool)
 	galleryAssetRepo := repository.NewGalleryAssetRepo(dbPool)
 	shareLinkRepo := repository.NewShareLinkRepo(dbPool)
@@ -2380,7 +2384,9 @@ func main() {
 	// prod once FACE_SVC_URL is required) the field stays nil and the
 	// worker skips the enqueue silently.
 	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).
-		WithPublisher(eventBroker)
+		WithPublisher(eventBroker).
+		WithDerivativeRepo(assetDerivativeRepo).
+		WithStorageAccounting(storageAccountingSvc)
 	if faceEnqueueAdapter != nil {
 		thumbWorker = thumbWorker.WithFaceEnqueuer(faceEnqueueAdapter)
 	}

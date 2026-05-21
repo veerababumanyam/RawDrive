@@ -81,8 +81,16 @@ func (s *ThumbnailService) GetStore() storage.Provider {
 }
 
 // ThumbnailResult holds the generated thumbnail URLs and metadata.
+//
+// 2026-05-21: Variants was added so callers (worker/thumbnail_worker.go) can
+// persist size_bytes per variant into asset_derivatives and increment the
+// workspace_storage.derivative_bytes counter that drives dashboard "total
+// storage". Before this, the worker only got URLs map and threw away the
+// SizeBytes/Width/Height that generateWebPDerivative already produced —
+// dashboard showed only originals and B2 footprint silently grew uncounted.
 type ThumbnailResult struct {
-	URLs     map[string]string // size name -> storage key
+	URLs     map[string]string  // size name -> storage key (legacy field, retained)
+	Variants []DerivativeResult // per-variant {Variant, StorageKey, Width, Height, SizeBytes, Format}
 	Blurhash string
 	Width    int
 	Height   int
@@ -159,6 +167,7 @@ func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src 
 
 	var keysMu sync.Mutex
 	keys := make(map[string]string, len(jobs))
+	variants := make([]DerivativeResult, 0, len(jobs))
 	g, gctx := errgroup.WithContext(ctx)
 	for _, j := range jobs {
 		j := j // capture for the closure
@@ -169,6 +178,7 @@ func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src 
 			}
 			keysMu.Lock()
 			keys[j.variant] = webp.StorageKey
+			variants = append(variants, *webp)
 			keysMu.Unlock()
 			return nil
 		})
@@ -179,6 +189,7 @@ func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src 
 	for variant, key := range keys {
 		result.URLs[variant] = key
 	}
+	result.Variants = variants
 
 	// Generate blurhash from the source so loading states + LQIP overlays
 	// don't regress (the previous implementation used the smallest JPG

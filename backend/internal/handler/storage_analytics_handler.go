@@ -75,6 +75,7 @@ func (h *StorageAnalyticsHandler) GetUsage(w http.ResponseWriter, r *http.Reques
 		"data": map[string]interface{}{
 			"used_bytes":       usage.UsedBytes,
 			"derivative_bytes": usage.DerivativeBytes,
+			"total_bytes":      usage.TotalBytes,
 			"quota_bytes":      usage.QuotaBytes,
 			"percent_used":     usage.PercentUsed,
 			"warning_level":    usage.WarningLevel(),

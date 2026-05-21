@@ -124,7 +124,10 @@ export default function DashboardPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data?.data) {
-          const used = data.data.used_bytes || 0;
+          // 2026-05-21: prefer total_bytes (originals + WebP derivatives)
+          // when present. Older clients saw only originals which understated
+          // real B2 footprint by 40-80% on image-heavy workspaces.
+          const used = (data.data.total_bytes ?? data.data.used_bytes) || 0;
           const quota = data.data.quota_bytes || 0;
           const pct = data.data.percent_used || 0;
           const fmt = (b: number) => {

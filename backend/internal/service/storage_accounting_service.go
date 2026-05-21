@@ -86,13 +86,20 @@ func NewStorageAccounting(pool *pgxpool.Pool) *StorageAccounting {
 }
 
 // WorkspaceStorage represents current storage usage for a workspace.
+//
+// 2026-05-21: TotalBytes = UsedBytes + DerivativeBytes. This is the
+// authoritative number to render on dashboards because B2 charges for the
+// whole footprint (originals + WebP variants), not just originals. Quota
+// enforcement still keys on UsedBytes only — changing that is a separate
+// policy decision and is intentionally out of scope for this change.
 type WorkspaceStorage struct {
-	WorkspaceID    uuid.UUID `json:"workspace_id"`
-	UsedBytes      int64     `json:"used_bytes"`
-	DerivativeBytes int64    `json:"derivative_bytes"`
-	QuotaBytes     int64     `json:"quota_bytes"`
-	GraceBytes     int64     `json:"grace_bytes"`
-	PercentUsed    float64   `json:"percent_used"`
+	WorkspaceID     uuid.UUID `json:"workspace_id"`
+	UsedBytes       int64     `json:"used_bytes"`
+	DerivativeBytes int64     `json:"derivative_bytes"`
+	TotalBytes      int64     `json:"total_bytes"`
+	QuotaBytes      int64     `json:"quota_bytes"`
+	GraceBytes      int64     `json:"grace_bytes"`
+	PercentUsed     float64   `json:"percent_used"`
 }
 
 // WarningLevel returns the storage warning level.
@@ -131,10 +138,35 @@ func (s *StorageAccounting) GetUsage(ctx context.Context, workspaceID uuid.UUID)
 	if ws.QuotaBytes == 0 {
 		ws.QuotaBytes = PlanDefaultQuotaBytes(planTier)
 	}
+	ws.TotalBytes = ws.UsedBytes + ws.DerivativeBytes
 	if ws.QuotaBytes > 0 {
 		ws.PercentUsed = float64(ws.UsedBytes) / float64(ws.QuotaBytes) * 100
 	}
 	return ws, nil
+}
+
+// ApplyDerivativeDelta adjusts a workspace's derivative_bytes by `delta`
+// (signed). Idempotent companion to RecordUpload — the thumbnail worker
+// computes the delta as (new total for this asset) - (existing total for
+// this asset) so re-runs of the same asset produce delta=0 and don't
+// double-count. GREATEST(0, ...) guards against the floor going below
+// zero if the row somehow gets out of sync.
+func (s *StorageAccounting) ApplyDerivativeDelta(ctx context.Context, workspaceID uuid.UUID, delta int64) error {
+	if delta == 0 {
+		return nil
+	}
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 0, GREATEST(0, $2), 0)
+		 ON CONFLICT (workspace_id) DO UPDATE
+		 SET derivative_bytes = GREATEST(0, workspace_storage.derivative_bytes + $2)`,
+		workspaceID, delta,
+	)
+	if err != nil {
+		return fmt.Errorf("storage accounting: apply derivative delta: %w", err)
+	}
+	s.cache.invalidate(workspaceID)
+	return nil
 }
 
 // CheckQuota verifies if a workspace can accept additional bytes.

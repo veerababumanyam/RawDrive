@@ -9,7 +9,18 @@ import { getStoredAccessToken } from "@/lib/auth";
 type PlanTier = "free" | "starter" | "professional" | "enterprise" | "standard";
 
 interface StorageAnalytics {
-  usage: { used_bytes: number; derivative_bytes: number; quota_bytes: number; percent_used: number; warning_level: string };
+  usage: {
+    used_bytes: number;
+    derivative_bytes: number;
+    // 2026-05-21: total_bytes = originals + WebP derivatives. The
+    // headline figure on this page now uses total_bytes so it matches
+    // what B2 actually bills us for. used_bytes is retained for the
+    // breakdown chart and for backwards-compatible API consumers.
+    total_bytes?: number;
+    quota_bytes: number;
+    percent_used: number;
+    warning_level: string;
+  };
   top_galleries: { gallery_id: string; gallery_name: string; used_bytes: number }[];
   type_breakdown: { originals_bytes: number; derivatives_bytes: number; thumbnails_bytes: number };
 }
@@ -65,7 +76,10 @@ export default function StorageSettingsPage() {
   }, []);
 
   const usage = analytics?.usage;
-  const usedDisplay = usage ? formatBytes(usage.used_bytes) : "—";
+  // 2026-05-21: use total_bytes (originals + WebP derivatives) when the
+  // backend supplies it, fall back to used_bytes for older API responses.
+  const headlineBytes = usage ? (usage.total_bytes ?? usage.used_bytes) : 0;
+  const usedDisplay = usage ? formatBytes(headlineBytes) : "—";
   const quotaDisplay = usage ? formatBytes(usage.quota_bytes) : "—";
   const pctUsed = usage?.percent_used ?? 0;
   const warningLevel = usage?.warning_level ?? "none";

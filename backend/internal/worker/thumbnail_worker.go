@@ -33,13 +33,15 @@ func (f FaceEnqueuerFunc) EnqueueDetection(ctx context.Context, workspaceID uuid
 
 // ThumbnailWorker processes assets that need thumbnails generated.
 type ThumbnailWorker struct {
-	assetRepo    *repository.AssetRepo
-	thumbnailSvc *service.ThumbnailService
-	store        storage.Provider
-	publisher    Publisher    // optional — emits asset.ready events when set
-	faceEnqueuer FaceEnqueuer // optional — enqueues face_detection AIJob after ready
-	pollInterval time.Duration
-	stopCh       chan struct{}
+	assetRepo     *repository.AssetRepo
+	thumbnailSvc  *service.ThumbnailService
+	store         storage.Provider
+	publisher     Publisher    // optional — emits asset.ready events when set
+	faceEnqueuer  FaceEnqueuer // optional — enqueues face_detection AIJob after ready
+	derivRepo     *repository.AssetDerivativeRepo // optional — persists per-variant size into asset_derivatives
+	accountingSvc *service.StorageAccounting      // optional — increments workspace_storage.derivative_bytes
+	pollInterval  time.Duration
+	stopCh        chan struct{}
 }
 
 // WithPublisher wires an event publisher for asset.ready notifications.
@@ -57,6 +59,25 @@ func (w *ThumbnailWorker) WithPublisher(p Publisher) *ThumbnailWorker {
 // non-fatal — the asset is still marked ready.
 func (w *ThumbnailWorker) WithFaceEnqueuer(e FaceEnqueuer) *ThumbnailWorker {
 	w.faceEnqueuer = e
+	return w
+}
+
+// WithDerivativeRepo wires the asset_derivatives table writer. Without it,
+// per-variant size_bytes/width/height never make it to the DB and the
+// dashboard's storage-by-type widget reports zero derivatives even when the
+// WebP files exist in B2. Optional for test compatibility; production main
+// must wire this.
+func (w *ThumbnailWorker) WithDerivativeRepo(repo *repository.AssetDerivativeRepo) *ThumbnailWorker {
+	w.derivRepo = repo
+	return w
+}
+
+// WithStorageAccounting wires the workspace_storage accountant. Without it,
+// derivative_bytes stays 0 forever and dashboard "total storage" only
+// reflects originals. Pairs with WithDerivativeRepo — both must be wired
+// for the accounting to land.
+func (w *ThumbnailWorker) WithStorageAccounting(s *service.StorageAccounting) *ThumbnailWorker {
+	w.accountingSvc = s
 	return w
 }
 
@@ -162,6 +183,49 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	// Update asset with thumbnails and dimensions
 	if err := w.assetRepo.UpdateThumbnails(ctx, asset.ID, thumbnailURLs, result.Blurhash); err != nil {
 		return fmt.Errorf("update thumbnails: %w", err)
+	}
+
+	// Persist per-variant metadata into asset_derivatives + update the
+	// workspace_storage.derivative_bytes counter (2026-05-21). This is the
+	// upload-time half of the dashboard-total-storage fix; without it the
+	// WebP files exist in B2 but the accounting layer reports zero.
+	//
+	// Idempotency: compute (existing_total - new_total) BEFORE upserting so
+	// re-runs of the same asset (worker crash recovery, re-processing on
+	// status reset) produce a delta of 0 instead of double-counting. The
+	// Upsert is unique on (asset_id, variant) and will UPDATE on conflict
+	// so the asset_derivatives table converges regardless of run count.
+	if w.derivRepo != nil && len(result.Variants) > 0 {
+		var prevTotal int64
+		if w.accountingSvc != nil {
+			if existing, err := w.derivRepo.TotalSizeByAsset(ctx, asset.ID); err == nil {
+				prevTotal = existing
+			}
+		}
+		var newTotal int64
+		for _, v := range result.Variants {
+			d := &repository.AssetDerivative{
+				AssetID:    asset.ID,
+				Variant:    v.Variant,
+				StorageKey: v.StorageKey,
+				Width:      v.Width,
+				Height:     v.Height,
+				SizeBytes:  v.SizeBytes,
+				Format:     v.Format,
+			}
+			if err := w.derivRepo.Upsert(ctx, d); err != nil {
+				log.Printf("thumbnail worker: derivative upsert %s/%s failed (non-fatal): %v", asset.ID, v.Variant, err)
+				continue
+			}
+			newTotal += v.SizeBytes
+		}
+		if w.accountingSvc != nil {
+			delta := newTotal - prevTotal
+			if err := w.accountingSvc.ApplyDerivativeDelta(ctx, asset.WorkspaceID, delta); err != nil {
+				log.Printf("thumbnail worker: derivative-bytes delta %s ws=%s delta=%d failed (non-fatal): %v",
+					asset.ID, asset.WorkspaceID, delta, err)
+			}
+		}
 	}
 
 	// Update dimensions if detected
