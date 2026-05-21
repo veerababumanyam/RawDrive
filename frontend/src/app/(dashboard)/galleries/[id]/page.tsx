@@ -1054,11 +1054,25 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <div className="surface-panel space-y-3 p-5">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-text-primary">
-                  {activeUploadCount > 0
-                    ? `Uploading ${activeUploadCount} ${activeUploadCount === 1 ? "file" : "files"}`
-                    : failedUploadCount > 0
-                      ? `${failedUploadCount} upload${failedUploadCount === 1 ? "" : "s"} failed`
-                      : `${blockedUploadCount} upload${blockedUploadCount === 1 ? "" : "s"} blocked`}
+                  {(() => {
+                    // 2026-05-21: header now reflects the visible row count
+                    // accurately. Previous "Uploading 1 file" with two rows
+                    // visible (one complete + one in-flight) was confusing —
+                    // it counted only active items but the panel rendered
+                    // every non-blocked item. Use "Uploading N of M files"
+                    // when there's a mix.
+                    const totalShown = byteProgressItems.length;
+                    if (activeUploadCount > 0 && totalShown > activeUploadCount) {
+                      return `Uploading ${completedUploadCount + 1} of ${totalShown} files`;
+                    }
+                    if (activeUploadCount > 0) {
+                      return `Uploading ${activeUploadCount} ${activeUploadCount === 1 ? "file" : "files"}`;
+                    }
+                    if (failedUploadCount > 0) {
+                      return `${failedUploadCount} upload${failedUploadCount === 1 ? "" : "s"} failed`;
+                    }
+                    return `${blockedUploadCount} upload${blockedUploadCount === 1 ? "" : "s"} blocked`;
+                  })()}
                 </h2>
                 <div className="flex flex-wrap gap-2 justify-end">
                   {activeUploadCount > 0 && (
@@ -1120,16 +1134,30 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     item.status === "error" ||
                     item.status === "blocked" ||
                     item.status === "needs_desktop";
+                  // 2026-05-21: per-row mini progress bar removed — it
+                  // duplicated the aggregate bar at the top of the panel and
+                  // created the "two progress bars" confusion. Rows now show
+                  // filename + size + status badge + action buttons only;
+                  // the aggregate bar communicates byte progress.
+                  const statusLabel =
+                    item.status === "complete" ? "Done" :
+                    isFailed ? "Failed" :
+                    item.status === "uploading" ? "Uploading…" :
+                    item.status === "screening" ? "Screening" :
+                    item.status === "pending" ? "Queued" :
+                    item.status === "blocked" ? "Blocked" :
+                    item.status === "needs_desktop" ? "Desktop" : item.status;
+                  const statusTone =
+                    item.status === "complete" ? "text-success" :
+                    isFailed ? "text-danger" :
+                    item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" :
+                    "text-text-secondary";
                   return (
                     <div key={item.id} className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-3 text-xs">
                         <span className="truncate flex-1 text-text-primary">{item.file.name}</span>
                         <span className="text-text-tertiary tabular-nums">{formatUploadBytes(item.file.size)}</span>
-                        <div className="w-24 h-1.5 rounded-full bg-surface-sunken overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${isFailed ? "bg-danger" : "bg-accent"}`} style={{ width: `${item.progress}%` }} />
-                        </div>
-                        <span className="w-8 text-right text-text-tertiary tabular-nums">{item.progress}%</span>
-                        <span className={`w-16 text-right ${item.status === "complete" ? "text-success" : isFailed ? "text-danger" : item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" : "text-text-secondary"}`}>{item.status}</span>
+                        <span className={`w-20 text-right ${statusTone}`}>{statusLabel}</span>
                         {isFailed && (
                           <button
                             onClick={() => upload.retry(item.id)}
