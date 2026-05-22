@@ -19,11 +19,10 @@
   "customAgentsCount": 0,
   "agentTeamsCount": 0,
   "pipeline": {
-    "currentStage": "paused",
     "infra_verified": true,
     "infra_started": true,
     "infra_healthy": true,
-    "teamActive": false,
+    "teamActive": true,
     "stages": {
       "S1-S4": {
         "filesWritten": [
@@ -102,12 +101,9 @@
     },
     "dispatchDepth": 0,
     "autonomousStopBlock": 0,
-    "autonomous": true,
-    "mode": "autonomous",
-    "currentMilestone": "M41",
-    "fixStage": "complete",
-    "pausedReason": "User restarted dev stack mid-build (M41 round 3 / step 03-tdd-green). Resume: /cobolt-build M41 --resume --autonomous",
-    "pausedAt": "2026-05-17T04:52:41Z"
+    "autonomous": false,
+    "mode": "interactive",
+    "lightweight": false
   },
   "prQueue": {
     "watchedRepos": [],
@@ -127,7 +123,7 @@
     "tddMode": "sequential",
     "useWorktrees": true,
     "generateSkills": true,
-    "autonomous": true,
+    "autonomous": false,
     "hasUI": true
   },
   "designMCP": {
@@ -191,7 +187,7 @@
     "requestedPath": "C:/Users/admin/Desktop/rawdrive",
     "resolvedPath": "C:/Users/admin/Desktop/RawDriveCobolt",
     "scanMode": "full",
-    "autonomous": true,
+    "autonomous": false,
     "startedAt": "2026-04-10T15:25:36.897Z",
     "lastUpdated": "2026-04-10T15:58:52.059Z",
     "phases": {
@@ -233,40 +229,23 @@
   },
   "build": {
     "version": "2.1.0",
-    "autoMode": true,
-    "autonomous": true,
-    "currentMilestone": "M41",
+    "autoMode": false,
+    "autonomous": false,
     "featureMode": true,
-    "currentStep": "03-tdd-green",
-    "stepsCompleted": [
-      "00-preflight",
-      "01-milestone-setup",
-      "01a-story-specs",
-      "01b-spec-validation",
-      "02-tdd-red"
-    ],
+    "stepsCompleted": [],
     "startedAt": "2026-04-21T00:04:29.568Z",
     "milestoneLoop": {
-      "autoMode": true,
-      "autonomous": true,
-      "current": "M41",
+      "autoMode": false,
+      "autonomous": false,
+      "current": null,
       "remaining": [],
       "featureMode": true,
       "completed": [
         "M40"
       ]
     },
-    "currentRound": 3,
     "totalRounds": 5,
-    "roundsCompleted": [
-      "round-01-foundation",
-      "round-02-core-logic-input",
-      "round-03-api-slice-1",
-      "round-03-api-slice-2-wiring",
-      "round-02-db-slice",
-      "round-03-api-slice-3-admin",
-      "round-05-slice-uat-seed"
-    ],
+    "roundsCompleted": [],
     "reviewFixLoop": {
       "iteration": 0,
       "maxIterations": 5,
@@ -277,15 +256,15 @@
     "artifactsProduced": 0,
     "phantomRates": {},
     "parallelMode": false,
-    "tddPhase": "green"
+    "roundStrikes": {}
   },
   "planning": {
-    "auto": 1,
+    "auto": 0,
     "enhance": 1,
     "scope": "standard",
     "rigorous": 0,
     "resume": 0,
-    "autonomous": true,
+    "autonomous": false,
     "mode": "feature"
   },
   "planningArtifacts": {
@@ -873,7 +852,6 @@
       "timestamp": "2026-04-17T14:37:47.937Z"
     }
   },
-  "currentMilestone": "M41",
   "stage": "build",
   "_integrity": {
     "sha256": "6ce0f62c5c28aecb93ab4748265e8394484b6573bd7fbd6aa669b8a697e81042",
@@ -897,21 +875,6 @@
   },
   "fix": {
     "mode": "pipeline",
-    "iteration": 1,
-    "maxIterations": 5,
-    "checkpoint": "rca-complete",
-    "completedAt": "2026-04-21T01:26:04Z",
-    "chainedTo": "halted-by-user-continue-on-branch",
     "haltReason": "no-progress-loop-after-audit-fail"
-  },
-  "audit": {
-    "lastRun": "2026-04-21T00:42:16Z",
-    "milestone": "M41",
-    "mode": "milestone",
-    "score": 0,
-    "grade": "F",
-    "verdict": "FAIL",
-    "stubCount": 49,
-    "criticalStubCount": 0
   }
 }
