@@ -18,7 +18,8 @@ import (
 // lets us inspect the raw bytes and forward them to the service-layer
 // resolver without locking into one type. The resolver normalizes.
 type StateSelectionRequest struct {
-	StateID json.RawMessage `json:"state_id"`
+	StateID  json.RawMessage `json:"state_id"`
+	District string          `json:"district,omitempty"`
 }
 
 type ProfileRequest struct {
@@ -83,7 +84,7 @@ func (h *Handler) SelectState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.svc.SelectState(r.Context(), userID, StateSelectionInput{StateID: raw})
+	err := h.svc.SelectState(r.Context(), userID, StateSelectionInput{StateID: raw, District: req.District})
 	if err != nil {
 		if errors.Is(err, ErrInvalidState) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid state"})

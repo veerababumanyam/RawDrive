@@ -35,6 +35,7 @@ type User struct {
 	// registration per CLAUDE.md — callers set it during Create; the repo
 	// INSERT persists it so onboarding no longer owns the first write.
 	StateID            *int
+	District           *string
 	MustChangePassword bool // set true for admin-created dealer accounts until first password change
 }
 
@@ -43,12 +44,16 @@ type CreateUserInput struct {
 	Phone       string
 	Password    string
 	DisplayName string
+	StateID     *int
+	District    string
 }
 
 type UpdateUserInput struct {
 	DisplayName *string
 	AvatarURL   *string
 	Phone       *string
+	StateID     *int
+	District    *string
 }
 
 type Repository interface {
@@ -91,6 +96,10 @@ func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, err
 		Email:       input.Email,
 		Phone:       input.Phone,
 		DisplayName: input.DisplayName,
+		StateID:     input.StateID,
+	}
+	if input.District != "" {
+		u.District = &input.District
 	}
 
 	if input.Password != "" {
@@ -127,6 +136,12 @@ func (s *service) Update(ctx context.Context, id string, input UpdateUserInput) 
 	}
 	if input.Phone != nil {
 		u.Phone = *input.Phone
+	}
+	if input.StateID != nil {
+		u.StateID = input.StateID
+	}
+	if input.District != nil {
+		u.District = input.District
 	}
 
 	return s.repo.Update(ctx, u)

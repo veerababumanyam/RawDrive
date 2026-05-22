@@ -43,10 +43,10 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 	// validated in the register handler but only written during
 	// onboarding — users who skipped onboarding ended up with NULL.
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO users (email, phone, display_name, avatar_url, password_hash, email_verified, platform_role, state_id)
-		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7, $8)
+		`INSERT INTO users (email, phone, display_name, avatar_url, password_hash, email_verified, platform_role, state_id, district)
+		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7, $8, NULLIF($9, ''))
 		 RETURNING id`,
-		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole, u.StateID,
+		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole, u.StateID, nilStrVal(u.District),
 	).Scan(&u.ID)
 	if err != nil {
 		if isPhoneUniqueViolation(err) {
@@ -60,9 +60,9 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
 	u := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer'), COALESCE(must_change_password, false)
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer'), COALESCE(must_change_password, false), state_id, district
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole, &u.MustChangePassword, &u.StateID, &u.District)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -75,9 +75,9 @@ func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
 func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
 	u := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer'), COALESCE(must_change_password, false)
+		`SELECT id, COALESCE(email,''), COALESCE(phone,''), COALESCE(display_name,''), COALESCE(avatar_url,''), password_hash, email_verified, COALESCE(platform_role,'photographer'), COALESCE(must_change_password, false), state_id, district
 		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.PasswordHash, &u.EmailVerified, &u.PlatformRole, &u.MustChangePassword, &u.StateID, &u.District)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -87,10 +87,19 @@ func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
 	return u, nil
 }
 
+// nilStrVal dereferences a *string for SQL params; returns "" when nil so
+// NULLIF($n, '') coerces it to SQL NULL.
+func nilStrVal(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 func (r *PgRepo) Update(ctx context.Context, u *User) (*User, error) {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE users SET display_name = $1, avatar_url = $2, phone = NULLIF($3, ''), updated_at = now() WHERE id = $4`,
-		u.DisplayName, u.AvatarURL, u.Phone, u.ID,
+		`UPDATE users SET display_name = $1, avatar_url = $2, phone = NULLIF($3, ''), state_id = $4, district = NULLIF($5, ''), updated_at = now() WHERE id = $6`,
+		u.DisplayName, u.AvatarURL, u.Phone, u.StateID, nilStrVal(u.District), u.ID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user repo update: %w", err)

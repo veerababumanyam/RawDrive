@@ -36,16 +36,17 @@ type GearListing struct {
 }
 
 type GearFilter struct {
-	StateID      *int
-	City         string
-	Category     string
-	Brand        string
+	StateID       *int
+	City          string
+	District      string
+	Category      string
+	Brand         string
 	MinPricePaisa *int64
 	MaxPricePaisa *int64
-	ListingType  string
-	Sort         string
-	Limit        int
-	Cursor       *time.Time
+	ListingType   string
+	Sort          string
+	Limit         int
+	Cursor        *time.Time
 	PublishedOnly bool
 }
 
@@ -153,6 +154,11 @@ func (r *GearRepo) List(ctx context.Context, filter GearFilter) ([]GearListing, 
 	if filter.Brand != "" {
 		conditions = append(conditions, fmt.Sprintf("brand ILIKE $%d", argN))
 		args = append(args, "%"+filter.Brand+"%")
+		argN++
+	}
+	if filter.District != "" {
+		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", argN))
+		args = append(args, "%"+filter.District+"%")
 		argN++
 	}
 	if filter.ListingType != "" {

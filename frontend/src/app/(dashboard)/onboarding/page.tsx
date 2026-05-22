@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 import { pricingPlans } from "@/lib/tokens";
+import { getDistrictsForState } from "@/lib/data/india-districts";
 
 // Minimal Razorpay types.
 interface RazorpayOptions {
@@ -66,6 +67,7 @@ export default function OnboardingPage() {
 
   // Step 1 — state selection
   const [selectedStateID, setSelectedStateID] = useState<number | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState("");
   const [states, setStates] = useState<IndianState[]>([]);
   const [statesLoading, setStatesLoading] = useState(true);
 
@@ -144,6 +146,19 @@ export default function OnboardingPage() {
     document.head.appendChild(script);
   }, []);
 
+  // Pre-fill phone from registration profile
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/api/v1/users/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data: { phone?: string }) => {
+        if (data.phone) setPhone(data.phone);
+      })
+      .catch(() => {});
+  }, [token]);
+
   // Carry plan intent from registration
   useEffect(() => {
     let plan: string | null = null;
@@ -169,7 +184,10 @@ export default function OnboardingPage() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ state_id: selectedStateID }),
+        body: JSON.stringify({
+          state_id: selectedStateID,
+          ...(selectedDistrict ? { district: selectedDistrict } : {}),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -413,8 +431,9 @@ export default function OnboardingPage() {
               onChange={(e) => {
                 const v = e.target.value;
                 setSelectedStateID(v ? Number(v) : null);
+                setSelectedDistrict("");
               }}
-              className="input-base mb-6 w-full min-h-[44px]"
+              className="input-base mb-4 w-full min-h-[44px]"
               disabled={statesLoading}
               required
             >
@@ -444,6 +463,28 @@ export default function OnboardingPage() {
                 </optgroup>
               )}
             </select>
+            {selectedStateID != null && (() => {
+              const stateName = states.find((s) => s.id === selectedStateID)?.name ?? "";
+              const districts = getDistrictsForState(stateName);
+              return districts.length > 0 ? (
+                <div className="mb-6">
+                  <label htmlFor="onboarding-district" className="mb-1 block text-sm font-medium text-text-secondary">
+                    District <span className="text-text-tertiary">(optional)</span>
+                  </label>
+                  <select
+                    id="onboarding-district"
+                    value={selectedDistrict}
+                    onChange={(e) => setSelectedDistrict(e.target.value)}
+                    className="input-base w-full min-h-[44px]"
+                  >
+                    <option value="">Select district…</option>
+                    {districts.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : <div className="mb-6" />;
+            })()}
             <button
               type="submit"
               disabled={selectedStateID == null || submitting || statesLoading}

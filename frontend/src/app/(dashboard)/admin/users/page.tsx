@@ -278,6 +278,8 @@ export default function AdminUsersPage() {
       key: "tier_name",
       label: "Tier",
       sortable: true,
+      filterable: true,
+      filterOptions: ["Free", "Starter", "Professional", "Business", "Enterprise"],
       render: (value) => (
         <span className="text-sm font-medium text-primary">{value ? String(value) : "\u2014"}</span>
       ),

@@ -46,6 +46,12 @@ func (h *GearHandler) ListGear(w http.ResponseWriter, r *http.Request) {
 			filter.StateID = &sid
 		}
 	}
+	if c := r.URL.Query().Get("city"); c != "" {
+		filter.City = c
+	}
+	if d := r.URL.Query().Get("district"); d != "" {
+		filter.District = d
+	}
 	if c := r.URL.Query().Get("category"); c != "" {
 		filter.Category = c
 	}

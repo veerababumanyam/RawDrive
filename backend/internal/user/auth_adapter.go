@@ -27,8 +27,8 @@ func NewAuthAdapter(svc Service) *AuthAdapter {
 // auth package can recognize the condition and respond 409 without
 // needing to import this package (which would create a cycle —
 // user already imports auth for UserProfile).
-func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, phone string) (string, error) {
-	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, DisplayName: displayName, Phone: phone})
+func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, phone string, stateID *int, district string) (string, error) {
+	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, DisplayName: displayName, Phone: phone, StateID: stateID, District: district})
 	if err != nil {
 		if errors.Is(err, ErrPhoneTaken) {
 			return "", auth.ErrPhoneTaken
@@ -99,12 +99,18 @@ func (a *AuthAdapter) GetProfileByID(ctx context.Context, userID string) (*auth.
 		}
 		return nil, false, err
 	}
+	district := ""
+	if u.District != nil {
+		district = *u.District
+	}
 	return &auth.UserProfile{
 		ID:                 u.ID,
 		Email:              u.Email,
 		Phone:              u.Phone,
 		DisplayName:        u.DisplayName,
 		AvatarURL:          u.AvatarURL,
+		StateID:            u.StateID,
+		District:           district,
 		MustChangePassword: u.MustChangePassword,
 	}, true, nil
 }

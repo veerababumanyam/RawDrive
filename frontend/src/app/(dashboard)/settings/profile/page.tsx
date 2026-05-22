@@ -2,14 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getDistrictsForState } from "@/lib/data/india-districts";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+interface IndianState {
+  id: number;
+  name: string;
+  code: string;
+}
 
 interface UserProfile {
   display_name: string;
   email: string;
   phone: string;
   avatar_url: string;
+  state_id: number | null;
+  district: string;
 }
 
 const EMPTY_PROFILE: UserProfile = {
@@ -17,14 +26,26 @@ const EMPTY_PROFILE: UserProfile = {
   email: "",
   phone: "",
   avatar_url: "",
+  state_id: null,
+  district: "",
 };
 
 export default function ProfileSettingsPage() {
   const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
+  const [states, setStates] = useState<IndianState[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/v1/states`)
+      .then((r) => r.json())
+      .then((body: { states?: IndianState[] }) =>
+        setStates(Array.isArray(body.states) ? body.states : []),
+      )
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -32,7 +53,7 @@ export default function ProfileSettingsPage() {
       setLoading(false);
       return;
     }
-    fetch(`${API_BASE}/api/v1/auth/me`, {
+    fetch(`${API_BASE}/api/v1/users/profile`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : EMPTY_PROFILE))
@@ -42,6 +63,8 @@ export default function ProfileSettingsPage() {
           email: data.email ?? "",
           phone: data.phone ?? "",
           avatar_url: data.avatar_url ?? "",
+          state_id: data.state_id ?? null,
+          district: data.district ?? "",
         }),
       )
       .catch(() => {})
@@ -64,6 +87,8 @@ export default function ProfileSettingsPage() {
           display_name: profile.display_name,
           phone: profile.phone,
           avatar_url: profile.avatar_url,
+          state_id: profile.state_id,
+          district: profile.district || null,
         }),
       });
       if (!res.ok) {
@@ -183,6 +208,61 @@ export default function ProfileSettingsPage() {
               placeholder="https://example.com/photo.jpg"
               className="input-base w-full min-h-[44px]"
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="profile-state"
+              className="mb-1 block text-sm font-medium text-text-secondary"
+            >
+              State
+            </label>
+            <select
+              id="profile-state"
+              value={profile.state_id ?? ""}
+              onChange={(e) =>
+                setProfile((p) => ({
+                  ...p,
+                  state_id: e.target.value ? Number(e.target.value) : null,
+                  district: "",
+                }))
+              }
+              className="input-base w-full min-h-[44px]"
+            >
+              <option value="">Select state…</option>
+              {states.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="profile-district"
+              className="mb-1 block text-sm font-medium text-text-secondary"
+            >
+              District
+            </label>
+            {(() => {
+              const selectedStateName = states.find((s) => s.id === profile.state_id)?.name ?? "";
+              const districts = getDistrictsForState(selectedStateName);
+              return (
+                <select
+                  id="profile-district"
+                  value={profile.district}
+                  onChange={(e) => setProfile((p) => ({ ...p, district: e.target.value }))}
+                  disabled={districts.length === 0}
+                  className="input-base w-full min-h-[44px] disabled:opacity-50"
+                >
+                  <option value="">{districts.length === 0 ? "Select state first" : "Select district…"}</option>
+                  {districts.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              );
+            })()}
           </div>
         </div>
       </section>

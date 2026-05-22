@@ -26,6 +26,8 @@ type updateProfileRequest struct {
 	DisplayName *string `json:"display_name"`
 	Phone       *string `json:"phone"`
 	AvatarURL   *string `json:"avatar_url"`
+	StateID     *int    `json:"state_id"`
+	District    *string `json:"district"`
 }
 
 // GetProfile returns the current user's profile.
@@ -53,6 +55,8 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		"phone":        u.Phone,
 		"display_name": u.DisplayName,
 		"avatar_url":   u.AvatarURL,
+		"state_id":     u.StateID,
+		"district":     u.District,
 	})
 }
 
@@ -79,6 +83,8 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		DisplayName: req.DisplayName,
 		AvatarURL:   req.AvatarURL,
 		Phone:       req.Phone,
+		StateID:     req.StateID,
+		District:    req.District,
 	}
 
 	updated, err := h.userSvc.Update(r.Context(), sub, input)
@@ -93,5 +99,7 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		"phone":        updated.Phone,
 		"display_name": updated.DisplayName,
 		"avatar_url":   updated.AvatarURL,
+		"state_id":     updated.StateID,
+		"district":     updated.District,
 	})
 }

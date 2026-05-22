@@ -69,22 +69,19 @@ describe("Pricing Page", () => {
     expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
-  it("renders feature comparison table", () => {
+  it("does not render feature comparison table (hidden)", () => {
     render(<PricingContent />);
-    expect(screen.getByText("Feature Comparison")).toBeInTheDocument();
-    expect(screen.getByText("Storage")).toBeInTheDocument();
+    expect(screen.queryByText("Feature Comparison")).not.toBeInTheDocument();
   });
 
-  it("renders storage boosters", () => {
+  it("does not render storage boosters (hidden)", () => {
     render(<PricingContent />);
-    expect(screen.getByText("Storage Boosters")).toBeInTheDocument();
-    expect(screen.getByText("50GB Booster")).toBeInTheDocument();
+    expect(screen.queryByText("Storage Boosters")).not.toBeInTheDocument();
   });
 
-  it("renders streaming packs", () => {
+  it("does not render streaming packs (hidden)", () => {
     render(<PricingContent />);
-    expect(screen.getByText("Streaming Session Packs")).toBeInTheDocument();
-    expect(screen.getByText("5 Sessions")).toBeInTheDocument();
+    expect(screen.queryByText("Streaming Session Packs")).not.toBeInTheDocument();
   });
 
   it("renders FAQ section with 8 items", () => {

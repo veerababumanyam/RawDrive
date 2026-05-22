@@ -56,6 +56,9 @@ func (h *MarketplaceHandler) ListFreelancers(w http.ResponseWriter, r *http.Requ
 	if c := r.URL.Query().Get("city"); c != "" {
 		filter.City = c
 	}
+	if d := r.URL.Query().Get("district"); d != "" {
+		filter.District = d
+	}
 	if sp := r.URL.Query().Get("specialization"); sp != "" {
 		filter.Specialization = sp
 	}

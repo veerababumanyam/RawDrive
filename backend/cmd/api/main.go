@@ -440,6 +440,11 @@ func (o *onboardingUserUpdater) UpdatePhone(ctx context.Context, userID, phone s
 	return err
 }
 
+func (o *onboardingUserUpdater) UpdateDistrict(ctx context.Context, userID, district string) error {
+	_, err := o.userSvc.Update(ctx, userID, user.UpdateUserInput{District: &district})
+	return err
+}
+
 // onboardingPlanGrantStore adapts repository.AdminUserRepo into the
 // onboarding.PlanGrantStore interface. The repo method takes uuid.UUID;
 // the onboarding port passes the userID as the same string it gets from

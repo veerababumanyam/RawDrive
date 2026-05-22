@@ -36,6 +36,7 @@ type FreelancerListing struct {
 type FreelancerFilter struct {
 	StateID        *int
 	City           string
+	District       string
 	Specialization string
 	MinRatePaisa   *int64
 	MaxRatePaisa   *int64
@@ -139,6 +140,11 @@ func (r *FreelancerRepo) List(ctx context.Context, filter FreelancerFilter) ([]F
 	if filter.City != "" {
 		conditions = append(conditions, fmt.Sprintf("city ILIKE $%d", argN))
 		args = append(args, "%"+filter.City+"%")
+		argN++
+	}
+	if filter.District != "" {
+		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", argN))
+		args = append(args, "%"+filter.District+"%")
 		argN++
 	}
 	if filter.Specialization != "" {

@@ -65,6 +65,7 @@ const headers = (token: string) => ({
 export async function listFreelancers(params?: {
   state_id?: number;
   city?: string;
+  district?: string;
   specialization?: string;
   sort?: string;
   min_rate_paisa?: number;
@@ -73,6 +74,7 @@ export async function listFreelancers(params?: {
   const query = new URLSearchParams();
   if (params?.state_id) query.set("state_id", String(params.state_id));
   if (params?.city) query.set("city", params.city);
+  if (params?.district) query.set("district", params.district);
   if (params?.specialization) query.set("specialization", params.specialization);
   if (params?.sort) query.set("sort", params.sort);
   if (params?.min_rate_paisa) query.set("min_rate_paisa", String(params.min_rate_paisa));

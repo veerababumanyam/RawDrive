@@ -54,7 +54,7 @@ export function PricingContent() {
 
   return (
     <div className="bg-surface text-text-primary">
-      <section className="mx-auto grid max-w-7xl gap-10 px-4 py-16 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
+      <section className="mx-auto max-w-7xl px-4 py-16 lg:px-8 lg:py-24">
         <div className="space-y-8">
           <span className="inline-flex rounded-full bg-accent-subtle px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-accent">
             Pricing
@@ -64,7 +64,7 @@ export function PricingContent() {
               Choose the plan that matches your studio today and scale without replatforming later.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              This route now leans on the original Stitch plan-selection page instead of a generic SaaS pricing header.
+              Transparent pricing built for Indian photography studios — from solo shooters to large teams. No hidden fees, no lock-in.
             </p>
           </div>
 
@@ -104,6 +104,8 @@ export function PricingContent() {
           </div>
         </div>
 
+        {/* Pricing hero image — hidden */}
+        {false && (
         <div className="relative">
           <div className="absolute inset-x-8 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
           <div className="glass-card relative overflow-hidden p-3">
@@ -116,6 +118,7 @@ export function PricingContent() {
             </div>
           </div>
         </div>
+        )}
       </section>
 
       <section className="px-4 pb-16 lg:px-8">
@@ -171,7 +174,8 @@ export function PricingContent() {
         </div>
       </section>
 
-      {/* Feature Comparison Table */}
+      {/* Feature Comparison Table — hidden */}
+      {false && (
       <section className="bg-surface-sunken px-4 py-16 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
@@ -226,8 +230,10 @@ export function PricingContent() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* Storage Boosters */}
+      {/* Storage Boosters — hidden */}
+      {false && (
       <section className="px-4 py-16 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
@@ -250,8 +256,10 @@ export function PricingContent() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* Streaming Packs */}
+      {/* Streaming Packs — hidden */}
+      {false && (
       <section className="bg-surface-sunken px-4 py-16 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
@@ -278,6 +286,7 @@ export function PricingContent() {
           </noscript>
         </div>
       </section>
+      )}
 
       {/* Coupon Code */}
       <section className="px-4 py-16 lg:px-8">

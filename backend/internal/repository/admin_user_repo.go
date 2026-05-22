@@ -197,6 +197,11 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 		args = append(args, *f.StateID)
 		idx++
 	}
+	if f.TierSlug != "" {
+		where = append(where, fmt.Sprintf("(SELECT w.plan_tier FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) = $%d", idx))
+		args = append(args, f.TierSlug)
+		idx++
+	}
 	if f.Cursor != nil {
 		where = append(where, fmt.Sprintf("u.id > $%d", idx))
 		args = append(args, *f.Cursor)

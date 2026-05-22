@@ -41,15 +41,21 @@ func (f *failingWorkspaceCreator) CreateWorkspace(_ context.Context, _, _, _, _ 
 }
 
 type stubUserUpdater struct {
-	phones map[string]string // userID → phone
+	phones    map[string]string // userID → phone
+	districts map[string]string // userID → district
 }
 
 func newStubUserUpdater() *stubUserUpdater {
-	return &stubUserUpdater{phones: map[string]string{}}
+	return &stubUserUpdater{phones: map[string]string{}, districts: map[string]string{}}
 }
 
 func (s *stubUserUpdater) UpdatePhone(_ context.Context, userID, phone string) error {
 	s.phones[userID] = phone
+	return nil
+}
+
+func (s *stubUserUpdater) UpdateDistrict(_ context.Context, userID, district string) error {
+	s.districts[userID] = district
 	return nil
 }
 

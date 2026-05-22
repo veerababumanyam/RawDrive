@@ -12,7 +12,6 @@ import { IndianFlag } from "@/components/layout/IndianFlag";
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
   { href: "/solutions/ai-intelligence", label: "AI Culling & FaceID" },
-  { href: "/solutions/digital-invitations", label: "Digital Invitations" },
   { href: "/solutions/crm-contracts", label: "CRM & Contracts" },
   { href: "/solutions/live-streaming", label: "Live Streaming" },
   { href: "/solutions/scheduling", label: "Calendar & Scheduling" },

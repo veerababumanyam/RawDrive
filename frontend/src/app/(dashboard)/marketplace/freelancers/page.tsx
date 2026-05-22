@@ -10,8 +10,14 @@ import {
 } from "@/lib/api/marketplace";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { getDistrictsForState } from "@/lib/data/india-districts";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+interface IndianState {
+  id: number;
+  name: string;
+}
 
 const SPECIALIZATIONS = [
   "wedding",
@@ -398,7 +404,10 @@ function PhotographersTab() {
   const [hasProfile, setHasProfile] = useState(false);
   const [specialization, setSpecialization] = useState("");
   const [city, setCity] = useState("");
-  const requestKey = `${specialization}:${city}`;
+  const [stateID, setStateID] = useState<number | "">("");
+  const [district, setDistrict] = useState("");
+  const [states, setStates] = useState<IndianState[]>([]);
+  const requestKey = `${stateID}:${city}:${district}:${specialization}`;
   const [requestState, setRequestState] = useState<{
     key: string;
     freelancers: FreelancerListing[];
@@ -415,18 +424,38 @@ function PhotographersTab() {
   const loading = requestState.key !== requestKey;
 
   useEffect(() => {
+    fetch(`${API_BASE}/api/v1/states`)
+      .then((r) => r.json())
+      .then((body: { states?: IndianState[] }) =>
+        setStates(Array.isArray(body.states) ? body.states : []),
+      )
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!token) return;
     getMyListing(token)
       .then((listing) => setHasProfile(listing !== null))
       .catch(() => {/* non-fatal */});
+    fetch(`${API_BASE}/api/v1/users/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data: { state_id?: number; district?: string }) => {
+        if (data.state_id) setStateID(data.state_id);
+        if (data.district) setDistrict(data.district);
+      })
+      .catch(() => {});
   }, [token]);
 
   useEffect(() => {
     let ignore = false;
 
     listFreelancers({
-      specialization: specialization || undefined,
+      state_id: stateID || undefined,
       city: city || undefined,
+      district: district || undefined,
+      specialization: specialization || undefined,
       sort: "rating",
     })
       .then((data) => {
@@ -453,7 +482,7 @@ function PhotographersTab() {
     return () => {
       ignore = true;
     };
-  }, [city, myUserID, requestKey, specialization]);
+  }, [city, district, myUserID, requestKey, specialization, stateID]);
 
   return (
     <div className="space-y-6">
@@ -480,12 +509,44 @@ function PhotographersTab() {
       )}
 
       <div className="flex flex-wrap gap-3">
+        <select
+          value={stateID}
+          onChange={(e) => { setStateID(e.target.value ? Number(e.target.value) : ""); setDistrict(""); }}
+          className="input-base min-w-[160px]"
+          aria-label="Filter by state"
+        >
+          <option value="">All States</option>
+          {states.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {(() => {
+          const selectedStateName = states.find((s) => s.id === stateID)?.name ?? "";
+          const districts = getDistrictsForState(selectedStateName);
+          return (
+            <select
+              value={district}
+              onChange={(e) => setDistrict(e.target.value)}
+              disabled={districts.length === 0}
+              className="input-base min-w-[160px] disabled:opacity-50"
+              aria-label="Filter by district"
+            >
+              <option value="">{districts.length === 0 ? "All Districts" : "All Districts"}</option>
+              {districts.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          );
+        })()}
         <input
           type="text"
           placeholder="Filter by city…"
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          className="input-base min-w-[200px]"
+          className="input-base min-w-[160px]"
+          aria-label="Filter by city"
         />
         <select
           value={specialization}

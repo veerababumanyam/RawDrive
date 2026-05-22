@@ -44,12 +44,16 @@ export async function listGear(params?: {
   category?: string;
   brand?: string;
   state_id?: number;
+  city?: string;
+  district?: string;
   sort?: string;
 }): Promise<GearListing[]> {
   const query = new URLSearchParams();
   if (params?.category) query.set("category", params.category);
   if (params?.brand) query.set("brand", params.brand);
   if (params?.state_id) query.set("state_id", String(params.state_id));
+  if (params?.city) query.set("city", params.city);
+  if (params?.district) query.set("district", params.district);
   if (params?.sort) query.set("sort", params.sort);
 
   const res = await fetch(`${API_BASE}/api/v1/marketplace/gear?${query}`);

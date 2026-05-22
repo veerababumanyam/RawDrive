@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getRevenueDashboard, getRevenueTimeSeries, type RevenueData, type RevenueTimeSeries } from "@/lib/api/admin";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
@@ -71,12 +72,14 @@ const timeSeriesCompareFns = {
 };
 
 export default function AdminRevenuePage() {
+  const router = useRouter();
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
   const [timeSeries, setTimeSeries] = useState<RevenueTimeSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
+    setLoading(true);
     const token = getStoredAccessToken();
     Promise.all([getRevenueDashboard(token), getRevenueTimeSeries(token, { period: "monthly" })])
       .then(([rev, ts]) => {
@@ -97,6 +100,15 @@ export default function AdminRevenuePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    router.refresh();
+    loadData();
+  }, [router, loadData]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   // Memoize data arrays so DataTable doesn't re-render on every parent render
   const stateBreakdownData = useMemo<StateBreakdownRow[]>(
     () => (revenue?.state_breakdown ?? []) as StateBreakdownRow[],
@@ -108,13 +120,33 @@ export default function AdminRevenuePage() {
   );
 
   if (loading) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-text-secondary">Loading revenue data...</p></div>;
-  if (error || !revenue) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error || "No data"}</p></div>;
+  if (error || !revenue) return (
+    <div className="max-w-7xl mx-auto space-y-8 p-8">
+      <p className="text-feedback-error">{error || "No data"}</p>
+      <button
+        type="button"
+        onClick={handleRefresh}
+        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest"
+      >
+        Retry
+      </button>
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      <div>
-        <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">Revenue Dashboard</h2>
-        <p className="text-text-secondary mt-2 font-body text-sm">MRR, ARR, churn, and state-wise revenue breakdown.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">Revenue Dashboard</h2>
+          <p className="text-text-secondary mt-2 font-body text-sm">MRR, ARR, churn, and state-wise revenue breakdown.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest"
+        >
+          Refresh
+        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

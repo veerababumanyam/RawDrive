@@ -4,7 +4,6 @@ import Image from "next/image";
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
   { href: "/solutions/ai-intelligence", label: "AI & FaceID" },
-  { href: "/solutions/digital-invitations", label: "Digital Invitations" },
   { href: "/solutions/crm-contracts", label: "CRM & Contracts" },
   { href: "/solutions/live-streaming", label: "Live Streaming" },
   { href: "/solutions/scheduling", label: "Scheduling" },
@@ -39,9 +38,13 @@ export function Footer() {
               rel="noopener noreferrer"
               className="flex items-center gap-2.5"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e07b39] text-sm font-bold text-white">
-                sc
-              </div>
+              <Image
+                src="/swaz-consultants-logo.jpg"
+                alt="Swaz Consultants Logo"
+                width={36}
+                height={36}
+                className="h-9 w-9 shrink-0 rounded-xl object-cover"
+              />
               <div>
                 <div className="text-lg font-bold leading-none text-text-primary">
                   <span>Swaz </span>

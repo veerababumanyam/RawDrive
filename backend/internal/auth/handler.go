@@ -32,7 +32,9 @@ type RegisterRequest struct {
 	// Plan is the user's self-serve plan intent captured at signup.
 	// Validated via normalizePlan; unknown values fall back to "free".
 	// Carried through onboarding to seed workspaces.plan_tier at creation.
-	Plan string `json:"plan,omitempty"`
+	Plan     string `json:"plan,omitempty"`
+	StateID  *int   `json:"state_id,omitempty"`
+	District string `json:"district,omitempty"`
 }
 
 // selfServePlans is the whitelist of plan IDs that may be self-registered.
@@ -120,11 +122,13 @@ type UserProfile struct {
 	Phone              string
 	DisplayName        string
 	AvatarURL          string
+	StateID            *int
+	District           string
 	MustChangePassword bool // true for admin-created dealer accounts until first password change
 }
 
 type UserService interface {
-	Create(ctx context.Context, email, password, displayName, phone string) (string, error)
+	Create(ctx context.Context, email, password, displayName, phone string, stateID *int, district string) (string, error)
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
 	VerifyPassword(ctx context.Context, email, password string) (string, bool, bool, error)
 	MarkEmailVerified(ctx context.Context, userID string) error
@@ -318,6 +322,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"role":                      claims.Role,
 		"platform_role":             claims.PlatformRole,
 		"state_id":                  claims.StateID,
+		"district":                  profile.District,
 		"must_change_password":      profile.MustChangePassword,
 		"plan_tier":                 planTier,
 		"subscription_started_at":   subStartedAt,
@@ -362,7 +367,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone)
+	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone, req.StateID, req.District)
 	if err != nil {
 		// Phone is unique in the users table (users_phone_key). A second
 		// registration with an already-taken phone used to surface as an

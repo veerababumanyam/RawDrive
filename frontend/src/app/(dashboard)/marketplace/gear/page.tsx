@@ -3,9 +3,18 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { listGear, type GearListing } from "@/lib/api/gear";
+import { getStoredAccessToken } from "@/lib/auth";
 import { availabilityClasses } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { Plus } from "@/components/icons";
+import { getDistrictsForState } from "@/lib/data/india-districts";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+interface IndianState {
+  id: number;
+  name: string;
+}
 
 const CATEGORIES = [
   { value: "", label: "All" },
@@ -18,7 +27,11 @@ const CATEGORIES = [
 
 export default function GearPage() {
   const [category, setCategory] = useState("");
-  const requestKey = category || "__all__";
+  const [stateID, setStateID] = useState<number | "">("");
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  const [states, setStates] = useState<IndianState[]>([]);
+  const requestKey = `${category}:${stateID}:${city}:${district}`;
   const [requestState, setRequestState] = useState<{
     key: string;
     gear: GearListing[];
@@ -34,16 +47,39 @@ export default function GearPage() {
   const loading = requestState.key !== requestKey;
 
   useEffect(() => {
+    fetch(`${API_BASE}/api/v1/states`)
+      .then((r) => r.json())
+      .then((body: { states?: IndianState[] }) =>
+        setStates(Array.isArray(body.states) ? body.states : []),
+      )
+      .catch(() => {});
+
+    const token = getStoredAccessToken();
+    if (token) {
+      fetch(`${API_BASE}/api/v1/users/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((data: { state_id?: number; district?: string }) => {
+          if (data.state_id) setStateID(data.state_id);
+          if (data.district) setDistrict(data.district);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
     let ignore = false;
 
-    listGear({ category: category || undefined })
+    listGear({
+      category: category || undefined,
+      state_id: stateID || undefined,
+      city: city || undefined,
+      district: district || undefined,
+    })
       .then((data) => {
         if (!ignore) {
-          setRequestState({
-            key: requestKey,
-            gear: data,
-            error: null,
-          });
+          setRequestState({ key: requestKey, gear: data, error: null });
         }
       })
       .catch((err) => {
@@ -59,7 +95,7 @@ export default function GearPage() {
     return () => {
       ignore = true;
     };
-  }, [category, requestKey]);
+  }, [category, city, district, requestKey, stateID]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
@@ -101,6 +137,48 @@ export default function GearPage() {
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-3">
+        <select
+          value={stateID}
+          onChange={(e) => { setStateID(e.target.value ? Number(e.target.value) : ""); setDistrict(""); }}
+          className="input-base min-w-[160px]"
+          aria-label="Filter by state"
+        >
+          <option value="">All States</option>
+          {states.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {(() => {
+          const selectedStateName = states.find((s) => s.id === stateID)?.name ?? "";
+          const districts = getDistrictsForState(selectedStateName);
+          return (
+            <select
+              value={district}
+              onChange={(e) => setDistrict(e.target.value)}
+              disabled={districts.length === 0}
+              className="input-base min-w-[160px] disabled:opacity-50"
+              aria-label="Filter by district"
+            >
+              <option value="">All Districts</option>
+              {districts.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          );
+        })()}
+        <input
+          type="text"
+          placeholder="Filter by city…"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          className="input-base min-w-[160px]"
+          aria-label="Filter by city"
+        />
+      </div>
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((item) => (
@@ -109,7 +187,7 @@ export default function GearPage() {
         </div>
       ) : gear.length === 0 ? (
         <div className="text-center py-12 text-text-secondary">
-          No gear listings found. Try a different category.
+          No gear listings found. Try a different filter.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -95,11 +95,12 @@ func (h *AdminUsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = 25
 	}
 	filter := repository.AdminUserFilter{
-		Search: q.Get("search"),
-		Role:   q.Get("role"),
-		Status: q.Get("status"),
-		Sort:   q.Get("sort"),
-		Limit:  limit,
+		Search:   q.Get("search"),
+		Role:     q.Get("role"),
+		Status:   q.Get("status"),
+		Sort:     q.Get("sort"),
+		TierSlug: q.Get("tier"),
+		Limit:    limit,
 	}
 	result, err := h.svc.ListUsers(r.Context(), filter)
 	if err != nil {

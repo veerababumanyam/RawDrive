@@ -29,6 +29,8 @@ import {
   proofingStatusClasses,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { Share, CheckCircle, EllipsisVertical, Trash } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
@@ -166,6 +168,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
+  const [openMenuAssetId, setOpenMenuAssetId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ assetId: string; filename: string; isBulk?: boolean } | null>(null);
 
   // E68-S1: Bulk selection state
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -181,17 +186,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[]));
   };
   const clearSelection = () => { setSelectedAssetIds(new Set()); setBulkMode(false); };
-  const handleBulkDelete = async () => {
-    if (selectedAssetIds.size === 0 || !confirm(`Delete ${selectedAssetIds.size} photos? This cannot be undone.`)) return;
-    const t = getStoredAccessToken();
-    if (!t) return;
-    try {
-      await bulkAssetAction(t, "delete", Array.from(selectedAssetIds));
-      clearSelection();
-      window.location.reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Bulk delete failed");
-    }
+  const handleBulkDelete = () => {
+    if (selectedAssetIds.size === 0) return;
+    setDeleteConfirm({
+      assetId: "",
+      filename: `${selectedAssetIds.size} photo${selectedAssetIds.size === 1 ? "" : "s"}`,
+      isBulk: true,
+    });
   };
 
   useEffect(() => {
@@ -343,6 +344,48 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setShareMessage(url);
     }
   }, [buildShareUrl, gallery?.is_published]);
+
+  const handleShareAsset = useCallback(async (e: React.MouseEvent, assetId: string) => {
+    e.stopPropagation();
+    if (!gallery?.slug) return;
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
+    try {
+      if (typeof navigator !== "undefined" && "share" in navigator) {
+        await (navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }).share({
+          title: gallery.title || "Photo",
+          url,
+        });
+        return;
+      }
+    } catch {
+      /* fall through to clipboard */
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      /* ignore */
+    }
+    setCopiedAssetId(assetId);
+    setTimeout(() => setCopiedAssetId(null), 2000);
+  }, [gallery?.slug, gallery?.title]);
+
+  const handleDeleteAsset = useCallback(async (assetId: string) => {
+    const t = getStoredAccessToken();
+    if (!t) return;
+    try {
+      await bulkAssetAction(t, "delete", [assetId]);
+      setAssets((prev) => prev.filter((a) => a.asset?.id !== assetId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!openMenuAssetId) return;
+    const close = () => setOpenMenuAssetId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openMenuAssetId]);
 
   // Subscribe to face-filter events from the FaceFilter component. The
   // component doesn't know anything about the page's asset list — it
@@ -1585,7 +1628,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   return (
                     <article
                       key={entry.id}
-                      className={cn("surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg relative", bulkMode && entry.asset && selectedAssetIds.has(entry.asset.id) && "ring-2 ring-accent-primary")}
+                      className={cn("surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg relative group", bulkMode && entry.asset && selectedAssetIds.has(entry.asset.id) && "ring-2 ring-accent-primary")}
                       // QA #18: in bulk mode, each tile is draggable. Drop
                       // target is the album chip above. Carries either the
                       // whole selection set (when the dragged asset is part
@@ -1632,33 +1675,84 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           {favoriteCount}
                         </div>
                       )}
-                      {isProcessing ? (
-                        <div
-                          className="relative flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
-                          role="status"
-                          aria-live="polite"
-                          aria-label={
-                            entry.asset?.filename
-                              ? `Processing ${entry.asset.filename}`
-                              : "Processing photo"
-                          }
-                        >
-                          <div className="flex flex-col items-center gap-2 text-text-tertiary">
-                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-text-tertiary/30 border-t-text-tertiary" />
-                            <span className="text-xs">Processing photo…</span>
+                      <div className="relative">
+                        {isProcessing ? (
+                          <div
+                            className="flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
+                            role="status"
+                            aria-live="polite"
+                            aria-label={
+                              entry.asset?.filename
+                                ? `Processing ${entry.asset.filename}`
+                                : "Processing photo"
+                            }
+                          >
+                            <div className="flex flex-col items-center gap-2 text-text-tertiary">
+                              <div className="h-8 w-8 animate-spin rounded-full border-2 border-text-tertiary/30 border-t-text-tertiary" />
+                              <span className="text-xs">Processing photo…</span>
+                            </div>
                           </div>
-                        </div>
-                      ) : previewUrl ? (
-                        <img
-                          src={previewUrl}
-                          alt={entry.asset?.filename || "Gallery asset preview"}
-                          className="aspect-[4/3] w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
-                          Preview unavailable
-                        </div>
-                      )}
+                        ) : previewUrl ? (
+                          <img
+                            src={previewUrl}
+                            alt={entry.asset?.filename || "Gallery asset preview"}
+                            className="aspect-[4/3] w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
+                            Preview unavailable
+                          </div>
+                        )}
+                        {!bulkMode && entry.asset && !isProcessing && (
+                          <div
+                            className={cn(
+                              "absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity",
+                              openMenuAssetId === entry.asset.id && "!opacity-100",
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="relative">
+                              <GlassIconButton
+                                size="sm"
+                                variant="ghost"
+                                label="More options"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuAssetId((prev) => (prev === entry.asset!.id ? null : entry.asset!.id));
+                                }}
+                              >
+                                <EllipsisVertical className="h-4 w-4" />
+                              </GlassIconButton>
+                              {openMenuAssetId === entry.asset.id && (
+                                <div className="absolute bottom-full right-0 mb-1 min-w-[130px] rounded-xl border border-white/[0.08] bg-surface-container-high/95 backdrop-blur-md shadow-xl py-1 z-50">
+                                  <button
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-on-surface hover:bg-white/[0.06] transition-colors rounded-t-xl"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuAssetId(null);
+                                      void handleShareAsset(e, entry.asset!.id);
+                                    }}
+                                  >
+                                    <Share className="h-4 w-4 text-text-secondary shrink-0" />
+                                    <span>{copiedAssetId === entry.asset.id ? "Copied!" : "Share"}</span>
+                                  </button>
+                                  <button
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-white/[0.06] transition-colors rounded-b-xl"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuAssetId(null);
+                                      setDeleteConfirm({ assetId: entry.asset!.id, filename: entry.asset!.filename || "this photo" });
+                                    }}
+                                  >
+                                    <Trash className="h-4 w-4 shrink-0" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <div className="space-y-2 p-4">
                         <p className="truncate text-sm font-medium text-text-primary">
                           {entry.asset?.filename || "Unresolved asset"}
@@ -1692,6 +1786,60 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         </section>
 
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl border border-white/[0.08] bg-surface-container-high p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-on-surface">
+              {deleteConfirm.isBulk ? `Delete ${deleteConfirm.filename}?` : "Delete photo?"}
+            </h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              {deleteConfirm.isBulk
+                ? `${deleteConfirm.filename.charAt(0).toUpperCase() + deleteConfirm.filename.slice(1)} will be permanently deleted. This cannot be undone.`
+                : `"${deleteConfirm.filename}" will be permanently deleted. This cannot be undone.`}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="rounded-xl px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-white/[0.06]"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-danger px-4 py-2 text-sm"
+                onClick={() => {
+                  const target = deleteConfirm;
+                  setDeleteConfirm(null);
+                  if (target.isBulk) {
+                    void (async () => {
+                      const t = getStoredAccessToken();
+                      if (!t) return;
+                      try {
+                        await bulkAssetAction(t, "delete", Array.from(selectedAssetIds));
+                        clearSelection();
+                        window.location.reload();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Bulk delete failed");
+                      }
+                    })();
+                  } else {
+                    void handleDeleteAsset(target.assetId);
+                  }
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Photo lightbox */}
       {lightboxIndex !== null && assets[lightboxIndex]?.asset && (

@@ -62,7 +62,8 @@ type OnboardingStatus struct {
 // code, "IN-XX" code, or full state name. The service delegates
 // canonicalization to Repository.ResolveStateID.
 type StateSelectionInput struct {
-	StateID string `json:"state_id"`
+	StateID  string `json:"state_id"`
+	District string `json:"district,omitempty"`
 }
 
 type ProfileInput struct {
@@ -81,10 +82,11 @@ type WorkspaceCreator interface {
 	CreateWorkspace(ctx context.Context, userID, stateID, businessName, planTier string) (string, error)
 }
 
-// UserUpdater is the port used to update user profile fields (e.g. phone)
-// during onboarding. Kept as an interface so tests can substitute a stub.
+// UserUpdater is the port used to update user profile fields (e.g. phone,
+// district) during onboarding. Kept as an interface so tests can substitute a stub.
 type UserUpdater interface {
 	UpdatePhone(ctx context.Context, userID, phone string) error
+	UpdateDistrict(ctx context.Context, userID, district string) error
 }
 
 // PlanGrantStore is the port used to consume an admin-granted plan comp
@@ -160,11 +162,20 @@ func (s *service) SelectState(ctx context.Context, userID string, input StateSel
 		return err // ErrInvalidState or a wrapped DB error
 	}
 
-	return s.repo.Upsert(ctx, &StatusRecord{
+	if err := s.repo.Upsert(ctx, &StatusRecord{
 		UserID:      userID,
 		CurrentStep: StepProfile,
 		StateID:     &id,
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Best-effort: persist district to user profile when provided.
+	if input.District != "" && s.userUpd != nil {
+		_ = s.userUpd.UpdateDistrict(ctx, userID, input.District)
+	}
+
+	return nil
 }
 
 // SetProfile writes the business profile, creates the user's workspace,
