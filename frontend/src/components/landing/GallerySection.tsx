@@ -39,7 +39,7 @@ export function GallerySection() {
           alt="A baby splashing in ocean waves at a beach birthday shoot — the kind of joyful moment clients star as a favorite in their RawDrive gallery."
           fill
           sizes="(min-width: 1280px) 1280px, 100vw"
-          className="object-cover"
+          className="object-cover object-bottom"
         />
         <div className="landing-gallery-photo__scrim" aria-hidden="true" />
         <div className="landing-gallery-chip" role="note">
