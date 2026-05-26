@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Eye, EyeOff, Sparkles } from "lucide-react";
-import { getGoogleOAuthStartUrl } from "@/lib/auth";
+import { getGoogleOAuthStartUrl, isAndroidWebView, openPageInChrome } from "@/lib/auth";
 import { pricingPlans } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -77,6 +77,7 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [webviewNotice, setWebviewNotice] = useState(false);
 
   // Keep local plan state in sync if the user navigates from /pricing?plan=X to
   // /register?plan=Y without a full reload (Next.js soft nav).
@@ -141,6 +142,10 @@ export function RegisterForm() {
   }
 
   function handleGoogleStart() {
+    if (isAndroidWebView()) {
+      setWebviewNotice(true);
+      return;
+    }
     setGoogleLoading(true);
     try {
       window.sessionStorage.setItem("rawdrive_pending_plan", plan);
@@ -294,6 +299,25 @@ export function RegisterForm() {
         </svg>
         {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
       </button>
+
+      {webviewNotice ? (
+        <div className="rounded-2xl border border-border bg-surface-container-low px-4 py-4 text-sm text-text-secondary">
+          <p className="font-medium text-text-primary">
+            Google sign-in requires Chrome
+          </p>
+          <p className="mt-1">
+            This browser can&apos;t open Google&apos;s sign-in page. Open RawDrive in
+            Chrome to continue.
+          </p>
+          <button
+            type="button"
+            onClick={() => openPageInChrome(window.location.href)}
+            className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Open in Chrome
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative flex items-center justify-center" aria-hidden="true">
         <div className="absolute inset-0 flex items-center">

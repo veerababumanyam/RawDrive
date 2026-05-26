@@ -29,7 +29,7 @@ import type { PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress, Star, Share } from "@/components/icons";
+import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress, Star, Share, EllipsisVertical } from "@/components/icons";
 import {
   addPublicFavorite,
   listPublicFavoriteAssetIds,
@@ -443,6 +443,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   // the grid. Cleared on a per-id timer so two quick clicks on different
   // tiles each animate independently.
   const [tileShareCopiedId, setTileShareCopiedId] = useState<string | null>(null);
+  const [tileMenuOpenId, setTileMenuOpenId] = useState<string | null>(null);
 
   const toggleFullscreen = useCallback(() => {
     if (!lightboxRef.current) return;
@@ -712,80 +713,93 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     Proofing mode hides both — proofing uses tile-click
                     for selection and the action chrome would clash. */}
                 {!isProofing && (
-                  <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                  <div className="absolute top-2 right-2 z-10">
+                    {/* 3-dot toggle — single entry point for all per-tile actions */}
                     <button
                       type="button"
-                      aria-label={favorites.has(asset.id) ? "Remove from favorites" : "Add to favorites"}
-                      aria-pressed={favorites.has(asset.id)}
-                      title={favorites.has(asset.id) ? "Remove from favorites" : "Add to favorites"}
+                      aria-label="Photo options"
+                      aria-haspopup="true"
+                      aria-expanded={tileMenuOpenId === asset.id}
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleFavorite(asset.id);
+                        setTileMenuOpenId((cur) => (cur === asset.id ? null : asset.id));
                       }}
-                      className={
-                        favorites.has(asset.id)
-                          ? "inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-warning text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-warning/60"
-                          : "inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow-elevation-1 ring-2 ring-white/30 backdrop-blur-md transition-all hover:bg-black/70 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
-                      }
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow-elevation-1 ring-2 ring-white/30 backdrop-blur-md transition-all hover:bg-black/70 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
                     >
-                      {/* fill-current makes the star "lit up" when
-                          favorited — matches the universal "active
-                          star" affordance. Unfavorited keeps it as
-                          an outline (no fill). */}
-                      <Star className={favorites.has(asset.id) ? "h-4 w-4 fill-current" : "h-4 w-4"} />
+                      <EllipsisVertical className="h-4 w-4" />
                     </button>
-                    {/* Per-tile Share button — always visible like Star
-                        because the recipient-facing share is one of the
-                        primary actions a client wants to take on a tile
-                        (the lightbox toolbar Share is one extra click
-                        away). Posts the single-photo URL via Web Share
-                        API on mobile or clipboard fallback on desktop;
-                        URL points to /g/{slug}/photo/{assetId} so the
-                        recipient sees only the shared image, not the
-                        rest of the gallery. */}
-                    <button
-                      type="button"
-                      aria-label={tileShareCopiedId === asset.id ? "Link copied" : "Share photo"}
-                      title={tileShareCopiedId === asset.id ? "Link copied" : "Share this photo"}
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const url = buildAssetShareUrl(slug, asset.id);
-                        const result = await shareOrCopy(url, asset.filename);
-                        if (result === "copy-fallback" || result === "shared") {
-                          // Show "Link copied" feedback only on
-                          // clipboard fallback — the Web Share success
-                          // path already gave the user the native sheet
-                          // experience, so a redundant toast feels noisy.
-                          if (result === "copy-fallback") {
-                            setTileShareCopiedId(asset.id);
-                            window.setTimeout(() => {
-                              setTileShareCopiedId((current) => (current === asset.id ? null : current));
-                            }, 1600);
-                          }
-                        }
-                      }}
-                      className={
-                        tileShareCopiedId === asset.id
-                          ? "inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-success text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-success/60"
-                          : "inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow-elevation-1 ring-2 ring-white/30 backdrop-blur-md transition-all hover:bg-black/70 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
-                      }
-                    >
-                      <Share className="h-4 w-4" />
-                    </button>
-                    {downloadEnabled && (
-                      <div className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                        <GlassIconButton
-                          size="sm"
-                          label="Download"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-                            window.open(`${apiBase}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`, "_blank");
-                          }}
+
+                    {tileMenuOpenId === asset.id && (
+                      <>
+                        {/* Invisible overlay to close the menu on outside click */}
+                        <div
+                          className="fixed inset-0 z-10"
+                          aria-hidden="true"
+                          onClick={(e) => { e.stopPropagation(); setTileMenuOpenId(null); }}
+                        />
+                        <div
+                          role="menu"
+                          className="absolute right-0 top-11 z-20 min-w-[140px] overflow-hidden rounded-2xl border border-border bg-surface-elevated/90 shadow-elevation-2 backdrop-blur-md"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Download />
-                        </GlassIconButton>
-                      </div>
+                          {/* Favorite */}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            aria-pressed={favorites.has(asset.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(asset.id);
+                              setTileMenuOpenId(null);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
+                          >
+                            <Star className={favorites.has(asset.id) ? "h-4 w-4 text-feedback-warning fill-current" : "h-4 w-4"} />
+                            <span>{favorites.has(asset.id) ? "Remove favorite" : "Add to favorites"}</span>
+                          </button>
+
+                          {/* Share */}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const url = buildAssetShareUrl(slug, asset.id);
+                              const result = await shareOrCopy(url, asset.filename);
+                              if (result === "copy-fallback") {
+                                setTileShareCopiedId(asset.id);
+                                window.setTimeout(() => {
+                                  setTileShareCopiedId((cur) => (cur === asset.id ? null : cur));
+                                }, 1600);
+                              }
+                              setTileMenuOpenId(null);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface-container-low"
+                          >
+                            <Share className={tileShareCopiedId === asset.id ? "h-4 w-4 text-feedback-success" : "h-4 w-4 text-text-primary"} />
+                            <span className={tileShareCopiedId === asset.id ? "text-feedback-success" : "text-text-primary"}>
+                              {tileShareCopiedId === asset.id ? "Link copied!" : "Share photo"}
+                            </span>
+                          </button>
+
+                          {/* Download — only when studio allows it */}
+                          {downloadEnabled && (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`, "_blank");
+                                setTileMenuOpenId(null);
+                              }}
+                              className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
+                            >
+                              <Download className="h-4 w-4" />
+                              <span>Download</span>
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

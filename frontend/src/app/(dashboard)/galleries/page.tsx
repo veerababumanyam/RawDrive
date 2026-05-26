@@ -20,7 +20,7 @@ export default function GalleriesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newType, setNewType] = useState<"proofing" | "delivery">("proofing");
+  const [newType, setNewType] = useState<"proofing" | "delivery">("delivery");
   const [linkedContactId, setLinkedContactId] = useState("");
   const [linkedProjectId, setLinkedProjectId] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);

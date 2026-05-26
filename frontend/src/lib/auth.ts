@@ -96,6 +96,34 @@ export async function logoutAuthSession(apiBase = "") {
   clearAuthTokens();
 }
 
+// Returns true when the page is running inside a browser context where Google
+// OAuth is known to be blocked. Two categories:
+//
+//  1. Android WebView — the "wv" token appears in the UA when an app wraps
+//     the page in android.webkit.WebView. Regular Chrome on Android omits it.
+//
+//  2. In-app browsers (Facebook, Instagram, WhatsApp, LinkedIn, Snapchat,
+//     Twitter/X, TikTok) — these open links inside their own embedded browser
+//     instead of handing off to Chrome. They don't include "wv" but Google
+//     detects the app-specific UA tokens and rejects the OAuth flow.
+//     This explains why the issue only affects some users on some devices:
+//     only users who tapped a shared link from within one of these apps hit it.
+export function isAndroidWebView(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/Android/.test(ua) && /\bwv\b/.test(ua)) return true;
+  if (/FBAN|FBAV|Instagram|LinkedInApp|Snapchat|Twitter|BytedanceWebview|musical_ly/.test(ua)) return true;
+  return false;
+}
+
+export function openPageInChrome(url: string): void {
+  // Strip the scheme and rebuild as an Android intent URI.
+  // Android resolves this to Chrome; S.browser_fallback_url catches the
+  // (unlikely) case where Chrome is not installed.
+  const stripped = url.replace(/^https?:\/\//, "");
+  window.location.href = `intent://${stripped}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+}
+
 export type GoogleOAuthStartOptions = {
   intent?: "signup" | "login";
   plan?: string;

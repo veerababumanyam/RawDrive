@@ -7,6 +7,8 @@ import { Mail, KeyRound } from "lucide-react";
 import {
   getGoogleOAuthStartUrl,
   getPostLoginPath,
+  isAndroidWebView,
+  openPageInChrome,
   persistAuthTokens,
   refreshAuthSession,
 } from "@/lib/auth";
@@ -36,6 +38,7 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [webviewNotice, setWebviewNotice] = useState(false);
 
   const registered = searchParams.get("registered") === "1";
   const oauthAuthenticated = searchParams.get("authenticated") === "1";
@@ -158,7 +161,13 @@ export function LoginForm() {
 
       <button
         type="button"
-        onClick={() => window.location.assign(googleStartUrl)}
+        onClick={() => {
+          if (isAndroidWebView()) {
+            setWebviewNotice(true);
+          } else {
+            window.location.assign(googleStartUrl);
+          }
+        }}
         className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-surface-container-low px-4 py-4 font-medium text-text-primary transition-colors hover:bg-surface-container-high"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -181,6 +190,25 @@ export function LoginForm() {
         </svg>
         <span>Sign in with Google</span>
       </button>
+
+      {webviewNotice ? (
+        <div className="rounded-2xl border border-border bg-surface-container-low px-4 py-4 text-sm text-text-secondary">
+          <p className="font-medium text-text-primary">
+            Google sign-in requires Chrome
+          </p>
+          <p className="mt-1">
+            This browser can&apos;t open Google&apos;s sign-in page. Open RawDrive in
+            Chrome to continue.
+          </p>
+          <button
+            type="button"
+            onClick={() => openPageInChrome(window.location.href)}
+            className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Open in Chrome
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative flex items-center py-2">
         <div className="soft-divider flex-grow" />
