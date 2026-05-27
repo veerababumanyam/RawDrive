@@ -43,10 +43,6 @@ func (s *AdminRevenueService) GetDashboard(ctx context.Context, from, to time.Ti
 	if err != nil {
 		return nil, fmt.Errorf("fetching state breakdown: %w", err)
 	}
-	var totalSubs int64
-	for _, row := range state {
-		totalSubs += row.SubscriberCount
-	}
 	// Preserve the old empty-but-non-nil contract: the frontend defaults
 	// state_breakdown to [] and will happily iterate, but nil would be
 	// encoded as JSON null and produce a .map() crash on the client.
@@ -59,7 +55,7 @@ func (s *AdminRevenueService) GetDashboard(ctx context.Context, from, to time.Ti
 		ChurnRate:        metrics.ChurnRate,
 		LTVPaisa:         metrics.LTV,
 		ARPUPaisa:        metrics.ARPU,
-		TotalSubscribers: totalSubs,
+		TotalSubscribers: metrics.TotalSubscribers,
 		StateBreakdown:   state,
 	}, nil
 }

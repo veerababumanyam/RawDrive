@@ -171,10 +171,13 @@ export default function BillingPage() {
         project_id: form.project_id || undefined,
         invoice_type: form.invoice_type,
         source_package_id: form.package_id || undefined,
-        quotation_valid_until: form.invoice_type === "quotation" ? form.quotation_valid_until || undefined : undefined,
+        // HTML date inputs produce "YYYY-MM-DD"; Go's time.Time.UnmarshalJSON
+        // requires RFC3339 ("YYYY-MM-DDT00:00:00Z"). Append the time suffix
+        // so the backend's json.Decode doesn't return 400 "invalid request body".
+        quotation_valid_until: form.invoice_type === "quotation" ? (form.quotation_valid_until ? form.quotation_valid_until + "T00:00:00Z" : undefined) : undefined,
         credit_note_invoice_id: form.invoice_type === "credit_note" ? form.credit_note_invoice_id || undefined : undefined,
         credit_note_reason: form.invoice_type === "credit_note" ? form.credit_note_reason || undefined : undefined,
-        due_date: form.due_date || undefined,
+        due_date: form.due_date ? form.due_date + "T00:00:00Z" : undefined,
         line_items: lineItems,
         subtotal_paisa: subtotalPaisa,
         cgst_paisa: cgstPaisa,
@@ -401,6 +404,15 @@ export default function BillingPage() {
 
           <div className="space-y-2">
             <h3 className="text-sm font-medium text-text-secondary">Line items</h3>
+            {/* Column header row — mirrors the 12-col grid used by each line */}
+            <div className="grid grid-cols-12 gap-2 px-1">
+              <span className="col-span-5 text-xs text-text-tertiary">Description</span>
+              <span className="col-span-1 text-xs text-text-tertiary text-right">Qty</span>
+              <span className="col-span-2 text-xs text-text-tertiary text-right">Rate (₹)</span>
+              <span className="col-span-2 text-xs text-text-tertiary">HSN/SAC</span>
+              <span className="col-span-1 text-xs text-text-tertiary text-right">GST %</span>
+              <span className="col-span-1" />
+            </div>
             {form.lines.map((line, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2">
                 <input

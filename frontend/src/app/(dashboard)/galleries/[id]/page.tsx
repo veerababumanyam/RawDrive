@@ -839,7 +839,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     input.multiple = true;
     input.accept = FILE_INPUT_ACCEPT;
     input.onchange = () => {
-      if (input.files) submitFiles(Array.from(input.files));
+      if (input.files) submitFiles(Array.from(input.files).filter(isAcceptedImageFile));
     };
     input.click();
   }, [submitFiles]);

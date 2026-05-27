@@ -15,11 +15,14 @@ const UPGRADE_PLANS = pricingPlans
   .map((p) => ({
     tier: p.id,
     name: p.name,
-    price: p.monthlyPrice as number,
+    monthlyPrice: p.monthlyPrice as number,
+    annualPrice: p.annualPrice as number,
     storage: p.storage,
     features: [...p.features],
     highlighted: p.popular,
   }));
+
+type BillingInterval = "monthly" | "annual";
 
 const TIER_ORDER = ["free", "starter", "professional", "business", "enterprise"];
 
@@ -43,6 +46,7 @@ export default function PlansPage() {
   const successTier = searchParams.get("success") === "1" ? (searchParams.get("tier") ?? "") : "";
 
   const [currentTier, setCurrentTier] = useState<string>("free");
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>("monthly");
   // Compute initial loading state synchronously — if there's no auth token,
   // there's nothing to fetch, so we start in the not-loading state. This
   // avoids the React 19 `react-hooks/set-state-in-effect` lint because the
@@ -72,8 +76,10 @@ export default function PlansPage() {
   // flow — the chooser owns all payment orchestration so this page stays
   // focused on tier selection.
   const handleUpgrade = useCallback((tier: string) => {
-    router.push(`/settings/plans/choose-payment?tier=${encodeURIComponent(tier)}`);
-  }, [router]);
+    router.push(
+      `/settings/plans/choose-payment?tier=${encodeURIComponent(tier)}&interval=${billingInterval}`,
+    );
+  }, [router, billingInterval]);
 
   // Auto-trigger upgrade when arriving from onboarding with upgrade_to param.
   useEffect(() => {
@@ -131,6 +137,42 @@ export default function PlansPage() {
         </div>
       )}
 
+      {/* Billing interval toggle */}
+      <div className="flex items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => setBillingInterval("monthly")}
+          className={[
+            "rounded-full px-5 py-2 text-sm font-semibold transition-colors",
+            billingInterval === "monthly"
+              ? "bg-accent text-text-inverse"
+              : "bg-surface-container-high text-text-secondary hover:bg-surface-container-highest",
+          ].join(" ")}
+        >
+          Monthly
+        </button>
+        <button
+          type="button"
+          onClick={() => setBillingInterval("annual")}
+          className={[
+            "inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold transition-colors",
+            billingInterval === "annual"
+              ? "bg-accent text-text-inverse"
+              : "bg-surface-container-high text-text-secondary hover:bg-surface-container-highest",
+          ].join(" ")}
+        >
+          Annual
+          <span className={[
+            "rounded-full px-2 py-0.5 text-[10px] font-bold",
+            billingInterval === "annual"
+              ? "bg-white/20 text-white"
+              : "bg-feedback-success/15 text-feedback-success",
+          ].join(" ")}>
+            Save ~17%
+          </span>
+        </button>
+      </div>
+
       {loading ? (
         <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-text-secondary text-sm">
           Loading…
@@ -142,6 +184,7 @@ export default function PlansPage() {
             const isUpgrade = tierIndex(plan.tier) > tierIndex(currentTier);
             const isHighlighted = plan.highlighted && !isCurrent;
             const isAutoTarget = plan.tier === upgradeTo;
+            const displayPrice = billingInterval === "annual" ? plan.annualPrice : plan.monthlyPrice;
 
             return (
               <div
@@ -180,10 +223,17 @@ export default function PlansPage() {
                   <h2 className="text-base font-bold text-text-primary">{plan.name}</h2>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-extrabold text-text-primary">
-                      ₹{plan.price.toLocaleString("en-IN")}
+                      ₹{displayPrice.toLocaleString("en-IN")}
                     </span>
-                    <span className="text-sm text-text-tertiary">/ mo</span>
+                    <span className="text-sm text-text-tertiary">
+                      {billingInterval === "annual" ? "/ yr" : "/ mo"}
+                    </span>
                   </div>
+                  {billingInterval === "annual" && (
+                    <p className="text-[11px] text-text-tertiary">
+                      ₹{Math.round(plan.annualPrice / 12).toLocaleString("en-IN")} / mo effective
+                    </p>
+                  )}
                 </div>
 
                 {/* Storage callout */}
@@ -229,8 +279,8 @@ export default function PlansPage() {
       )}
 
       <p className="text-center text-xs text-text-tertiary">
-        Prices in Indian Rupees (₹), billed monthly. 18% GST applicable. Payments processed via Razorpay or PhonePe.{" "}
-        Enterprise pricing and annual plans:{" "}
+        Prices in Indian Rupees (₹), billed {billingInterval === "annual" ? "annually" : "monthly"}. 18% GST applicable. Payments processed via Razorpay or PhonePe.{" "}
+        Enterprise pricing:{" "}
         <a
           href="mailto:sales@rawdrive.in"
           className="underline underline-offset-2 hover:text-text-secondary"

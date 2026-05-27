@@ -15,11 +15,12 @@ import (
 // ---------------------------------------------------------------------------
 
 type RevenueMetrics struct {
-	MRR       int64   `db:"mrr"`        // paisa
-	ARR       int64   `db:"arr"`        // paisa
-	ChurnRate float64 `db:"churn_rate"` // percentage
-	LTV       int64   `db:"ltv"`        // paisa
-	ARPU      int64   `db:"arpu"`       // paisa
+	MRR              int64   `db:"mrr"`               // paisa
+	ARR              int64   `db:"arr"`               // paisa
+	ChurnRate        float64 `db:"churn_rate"`        // percentage
+	LTV              int64   `db:"ltv"`               // paisa
+	ARPU             int64   `db:"arpu"`              // paisa
+	TotalSubscribers int64   `db:"total_subscribers"` // unique active users
 }
 
 // RevenueTimeSeries matches the frontend contract in
@@ -78,23 +79,29 @@ func (r *AdminRevenueRepo) GetMetrics(ctx context.Context, from time.Time, to ti
 	// billing subsystem wires subscription-linked payment history.
 	err := r.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT
-			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active'), 0) AS mrr,
-			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active'), 0) * 12 AS arr,
+			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0) AS mrr,
+			COALESCE(SUM(
+				CASE WHEN COALESCE(s.billing_interval, 'monthly') = 'annual'
+					THEN s.amount_paisa
+					ELSE s.amount_paisa * 12
+				END
+			) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0) AS arr,
 			CASE
-				WHEN COUNT(*) FILTER (WHERE s.status = 'active') = 0 THEN 0
+				WHEN COUNT(*) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free') = 0 THEN 0
 				ELSE ROUND(
-					COUNT(*) FILTER (WHERE s.status = 'churned' AND s.cancelled_at BETWEEN $1 AND $2)::numeric /
-					NULLIF(COUNT(*) FILTER (WHERE s.created_at < $2), 0)::numeric * 100, 2
+					COUNT(*) FILTER (WHERE s.status = 'churned' AND s.tier_slug != 'free' AND s.cancelled_at BETWEEN $1 AND $2)::numeric /
+					NULLIF(COUNT(*) FILTER (WHERE s.created_at < $2 AND s.tier_slug != 'free'), 0)::numeric * 100, 2
 				)
 			END AS churn_rate,
-			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active'), 0) AS ltv,
+			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0) AS ltv,
 			CASE
-				WHEN COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active') = 0 THEN 0
-				ELSE COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active') / NULLIF(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active'), 0), 0)
-			END AS arpu
+				WHEN COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free') = 0 THEN 0
+				ELSE COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free') / NULLIF(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0), 0)
+			END AS arpu,
+			COALESCE(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0) AS total_subscribers
 		FROM subscriptions s
 		WHERE s.created_at <= $2 %s`, stateFilter), args...).Scan(
-		&metrics.MRR, &metrics.ARR, &metrics.ChurnRate, &metrics.LTV, &metrics.ARPU)
+		&metrics.MRR, &metrics.ARR, &metrics.ChurnRate, &metrics.LTV, &metrics.ARPU, &metrics.TotalSubscribers)
 	if err != nil {
 		return nil, fmt.Errorf("revenue metrics: %w", err)
 	}
@@ -127,10 +134,11 @@ func (r *AdminRevenueRepo) GetTimeSeries(ctx context.Context, from time.Time, to
 		SELECT
 			to_char(date_trunc('%s', s.created_at), '%s') AS period,
 			COALESCE(SUM(s.amount_paisa), 0) AS revenue,
-			COUNT(DISTINCT s.id) AS subscriptions,
-			COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'churned' AND s.cancelled_at >= date_trunc('%s', s.created_at)) AS churn
+			COUNT(DISTINCT s.user_id) AS subscriptions,
+			COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'churned' AND s.cancelled_at >= date_trunc('%s', s.created_at)) AS churn
 		FROM subscriptions s
 		WHERE s.created_at BETWEEN $1 AND $2
+			AND s.tier_slug != 'free'
 		GROUP BY date_trunc('%s', s.created_at)
 		ORDER BY date_trunc('%s', s.created_at) ASC`, truncFunc, periodFmt, truncFunc, truncFunc, truncFunc), from, to)
 	if err != nil {
@@ -153,7 +161,7 @@ func (r *AdminRevenueRepo) GetByState(ctx context.Context, from time.Time, to ti
 			COALESCE(SUM(s.amount_paisa), 0) AS revenue,
 			COUNT(DISTINCT s.user_id) AS subscriber_count
 		FROM states st
-		LEFT JOIN subscriptions s ON s.state_id = st.id AND s.status = 'active'
+		LEFT JOIN subscriptions s ON s.state_id = st.id AND s.status = 'active' AND s.tier_slug != 'free'
 		GROUP BY st.id, st.name
 		ORDER BY revenue DESC`)
 	if err != nil {

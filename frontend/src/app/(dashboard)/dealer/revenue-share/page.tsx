@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getDealerRevenueCalendar, type RevenueCalendarResponse, type DailyRevenueShare } from "@/lib/api/dealer";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { ChevronLeft, ChevronRight, XMark } from "@/components/icons";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -38,13 +39,9 @@ function DayModal({ entry, onClose }: DayModalProps) {
             <h2 className="text-lg font-semibold text-text-primary">Revenue Breakdown</h2>
             <p className="text-sm text-text-secondary mt-0.5">{label}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 hover:bg-white/10 transition-colors text-text-tertiary"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <GlassIconButton onClick={onClose} label="Close" size="sm" variant="ghost">
+            <XMark />
+          </GlassIconButton>
         </div>
 
         <div className="space-y-3 text-sm">
@@ -139,24 +136,21 @@ export default function DealerRevenueSharePage() {
 
       {/* Month navigation */}
       <div className="flex items-center justify-between">
-        <button
-          onClick={prevMonth}
-          className="rounded-xl p-2 hover:bg-white/10 transition-colors text-text-secondary"
-          aria-label="Previous month"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+        <GlassIconButton onClick={prevMonth} label="Previous month" size="sm" variant="ghost">
+          <ChevronLeft />
+        </GlassIconButton>
         <h2 className="text-lg font-semibold text-text-primary">
           {MONTH_NAMES[month - 1]} {year}
         </h2>
-        <button
+        <GlassIconButton
           onClick={nextMonth}
           disabled={year === now.getFullYear() && month === now.getMonth() + 1}
-          className="rounded-xl p-2 hover:bg-white/10 transition-colors text-text-secondary disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="Next month"
+          label="Next month"
+          size="sm"
+          variant="ghost"
         >
-          <ChevronRight className="h-5 w-5" />
-        </button>
+          <ChevronRight />
+        </GlassIconButton>
       </div>
 
       {/* Summary cards */}

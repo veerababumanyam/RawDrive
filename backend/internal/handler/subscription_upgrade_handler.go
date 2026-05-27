@@ -54,6 +54,15 @@ var planPricePaise = map[string]int64{
 	"enterprise":   599900, // ₹5,999
 }
 
+// planAnnualPricePaise maps canonical tier slugs to annual prices in paise (INR×100).
+// Keep in sync with pricingPlans[*].annualPrice in frontend/src/lib/tokens.ts.
+var planAnnualPricePaise = map[string]int64{
+	"starter":      99000,   // ₹990
+	"professional": 299000,  // ₹2,990
+	"business":     2999000, // ₹29,990
+	"enterprise":   5999000, // ₹59,990
+}
+
 // validTierOrder defines the valid promotion path; a workspace can only move
 // to a different paid tier (not free).
 var validUpgradeTiers = map[string]bool{
@@ -165,6 +174,9 @@ type upgradeRequest struct {
 	// older frontend builds that don't send Provider still work).
 	// "phonepe" routes through PhonePe v2 Standard Checkout.
 	Provider string `json:"provider,omitempty"`
+	// BillingInterval selects the pricing tier. "annual" charges the annual
+	// price and sets expires_at to +1 year; anything else defaults to monthly.
+	BillingInterval string `json:"billing_interval,omitempty"`
 }
 
 type upgradeResponse struct {
@@ -198,7 +210,18 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid to_tier"})
 		return
 	}
-	amountPaise, ok := planPricePaise[body.ToTier]
+
+	billingInterval := body.BillingInterval
+	if billingInterval != "annual" {
+		billingInterval = "monthly"
+	}
+	var amountPaise int64
+	var ok bool
+	if billingInterval == "annual" {
+		amountPaise, ok = planAnnualPricePaise[body.ToTier]
+	} else {
+		amountPaise, ok = planPricePaise[body.ToTier]
+	}
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no price for tier"})
 		return
@@ -263,10 +286,10 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		_, err = h.db.Exec(r.Context(), `
 			INSERT INTO subscription_upgrade_orders
 			    (id, workspace_id, from_tier, to_tier, amount_paise,
-			     provider, provider_order_id, initiated_by)
-			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7)`,
+			     provider, provider_order_id, initiated_by, billing_interval)
+			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7, $8)`,
 			upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise,
-			upgradeOrderID.String(), userID,
+			upgradeOrderID.String(), userID, billingInterval,
 		)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist upgrade order"})
@@ -292,9 +315,9 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	_, err = h.db.Exec(r.Context(), `
 		INSERT INTO subscription_upgrade_orders
 		    (id, workspace_id, from_tier, to_tier, amount_paise,
-		     razorpay_order_id, provider, provider_order_id, initiated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, 'razorpay', $6, $7)`,
-		upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise, rzpOrderID, userID,
+		     razorpay_order_id, provider, provider_order_id, initiated_by, billing_interval)
+		VALUES ($1, $2, $3, $4, $5, $6, 'razorpay', $6, $7, $8)`,
+		upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise, rzpOrderID, userID, billingInterval,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist upgrade order"})
@@ -535,13 +558,14 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 	var wsID uuid.UUID
 	var toTier string
 	var amountPaise int64
+	var billingIntervalPP string
 	err = tx.QueryRow(ctx, `
 		UPDATE subscription_upgrade_orders
 		   SET status = 'paid', provider_payment_id = $1, updated_at = NOW()
 		 WHERE id::text = $2 AND provider = 'phonepe' AND status = 'pending'
-		RETURNING workspace_id, to_tier, amount_paise`,
+		RETURNING workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly')`,
 		transactionID, merchantOrderID,
-	).Scan(&wsID, &toTier, &amountPaise)
+	).Scan(&wsID, &toTier, &amountPaise, &billingIntervalPP)
 	if err != nil {
 		// Already settled (idempotent) or no matching pending row.
 		return tx.Commit(ctx)
@@ -568,12 +592,15 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 		return fmt.Errorf("deactivate old subscription: %w", err)
 	}
 	now := time.Now().UTC()
-	nextMonth := now.AddDate(0, 1, 0)
+	expiresAtPP := now.AddDate(0, 1, 0)
+	if billingIntervalPP == "annual" {
+		expiresAtPP = now.AddDate(1, 0, 0)
+	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO subscriptions
-		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at)
-		VALUES ($1, $2, $3, 'active', $4, $5)`,
-		wsID, toTier, amountPaise, now, nextMonth,
+		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at, billing_interval)
+		VALUES ($1, $2, $3, 'active', $4, $5, $6)`,
+		wsID, toTier, amountPaise, now, expiresAtPP, billingIntervalPP,
 	); err != nil {
 		return fmt.Errorf("insert subscription: %w", err)
 	}
@@ -647,13 +674,14 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 	var wsID uuid.UUID
 	var toTier string
 	var amountPaise int64
+	var billingIntervalApply string
 	err = tx.QueryRow(ctx, `
 		UPDATE subscription_upgrade_orders
 		   SET status = 'paid', razorpay_payment_id = $1, updated_at = NOW()
 		 WHERE razorpay_order_id = $2 AND status = 'pending'
-		RETURNING id, workspace_id, to_tier, amount_paise`,
+		RETURNING id, workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly')`,
 		rzpPaymentID, rzpOrderID,
-	).Scan(&upgradeOrderID, &wsID, &toTier, &amountPaise)
+	).Scan(&upgradeOrderID, &wsID, &toTier, &amountPaise, &billingIntervalApply)
 	if err != nil {
 		// Already processed (idempotent) or unknown order — treat as OK.
 		return tx.Commit(ctx)
@@ -684,14 +712,18 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 		return fmt.Errorf("deactivate old subscription: %w", err)
 	}
 
-	// Insert new active subscription record.
+	// Insert new active subscription record. Expiry is 1 year for annual
+	// billing, 1 month for monthly.
 	now := time.Now().UTC()
-	nextMonth := now.AddDate(0, 1, 0)
+	expiresAt := now.AddDate(0, 1, 0)
+	if billingIntervalApply == "annual" {
+		expiresAt = now.AddDate(1, 0, 0)
+	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO subscriptions
-		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at)
-		VALUES ($1, $2, $3, 'active', $4, $5)`,
-		wsID, toTier, amountPaise, now, nextMonth,
+		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at, billing_interval)
+		VALUES ($1, $2, $3, 'active', $4, $5, $6)`,
+		wsID, toTier, amountPaise, now, expiresAt, billingIntervalApply,
 	); err != nil {
 		return fmt.Errorf("insert subscription: %w", err)
 	}

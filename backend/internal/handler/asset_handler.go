@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -143,6 +144,11 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
+	if strings.HasPrefix(header.Header.Get("Content-Type"), "video/") {
+		http.Error(w, `{"error":"VIDEO_NOT_ALLOWED","message":"video uploads are not supported in photo galleries"}`, http.StatusUnprocessableEntity)
+		return
+	}
 
 	result, err := h.uploadSvc.Upload(r.Context(), service.UploadInput{
 		WorkspaceID: workspaceID,

@@ -294,6 +294,11 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if strings.HasPrefix(input.ContentType, "video/") {
+		http.Error(w, `{"error":"VIDEO_NOT_ALLOWED","message":"video uploads are not supported in photo galleries"}`, http.StatusUnprocessableEntity)
+		return
+	}
+
 	// M16 E47-S5: Tier D upload manifest validation gate. Preserved across
 	// the wave 6 rewrite — reject block-decision manifests and missing
 	// manifests (in strict mode) before any R2 call happens.

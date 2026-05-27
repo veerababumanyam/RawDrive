@@ -428,12 +428,20 @@ func (r *GalleryRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	// NULL). The DELETE itself is guarded by the FK RESTRICT semantics
 	// on every CRM-side reference, so any contact with leads, deals,
 	// contracts, invoices, projects, or calendar events survives.
+	//
+	// SAVEPOINT is mandatory here. In PostgreSQL, any error inside a
+	// transaction (including FK violations) marks the entire tx as
+	// aborted — subsequent statements, including COMMIT, all fail.
+	// Without SAVEPOINT, a contact with CRM dependencies would abort
+	// the tx and cause the gallery delete itself to return 500 even
+	// though the gallery row was already updated in this same tx.
 	cleanup := func(contactID uuid.UUID) {
 		if contactID == uuid.Nil {
 			return
 		}
-		_, _ = tx.Exec(ctx,
-			`DELETE FROM contacts c WHERE c.id = $1
+		_, _ = tx.Exec(ctx, "SAVEPOINT cleanup_contact")
+		_, err := tx.Exec(ctx,
+			`DELETE FROM contacts WHERE id = $1
 			 AND NOT EXISTS (
 			   SELECT 1 FROM galleries g
 			   WHERE (g.primary_contact_id = $1 OR g.contact_id = $1)
@@ -442,6 +450,11 @@ func (r *GalleryRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 			 )`,
 			contactID, id,
 		)
+		if err != nil {
+			_, _ = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT cleanup_contact")
+		} else {
+			_, _ = tx.Exec(ctx, "RELEASE SAVEPOINT cleanup_contact")
+		}
 	}
 	if primaryContactID != nil {
 		cleanup(*primaryContactID)

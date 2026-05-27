@@ -120,6 +120,7 @@ export default function ChoosePaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tier = searchParams.get("tier") ?? "";
+  const interval = searchParams.get("interval") === "annual" ? "annual" : "monthly";
 
   const plan = useMemo(
     () => pricingPlans.find((p) => p.id === tier && p.id !== "free"),
@@ -191,7 +192,7 @@ export default function ChoosePaymentPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ to_tier: plan.id, provider }),
+        body: JSON.stringify({ to_tier: plan.id, provider, billing_interval: interval }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -298,10 +299,13 @@ export default function ChoosePaymentPage() {
     );
   }
 
-  const monthly = plan.monthlyPrice as number;
+  const displayPrice = interval === "annual"
+    ? (plan.annualPrice as number)
+    : (plan.monthlyPrice as number);
+  const periodLabel = interval === "annual" ? "yr" : "mo";
+  const billingNote = interval === "annual" ? "Billed annually · Cancel anytime" : "Billed monthly · Cancel anytime";
   // GST is shown as a note for transparency. The actual GST inclusion is
-  // backend-owned; the displayed monthly price is what the user will be
-  // charged this cycle.
+  // backend-owned; the displayed price is what the user will be charged this cycle.
   return (
     <div className="max-w-4xl mx-auto space-y-8 p-8">
       {/* Header */}
@@ -334,14 +338,14 @@ export default function ChoosePaymentPage() {
               {plan.name} Plan
             </h2>
             <p className="text-sm text-text-secondary">
-              {plan.storage} storage · Billed monthly · Cancel anytime
+              {plan.storage} storage · {billingNote}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-text-tertiary">Total today</p>
             <p className="text-3xl font-extrabold text-text-primary">
-              ₹{monthly.toLocaleString("en-IN")}
-              <span className="text-sm font-medium text-text-tertiary"> / mo</span>
+              ₹{displayPrice.toLocaleString("en-IN")}
+              <span className="text-sm font-medium text-text-tertiary"> / {periodLabel}</span>
             </p>
             <p className="text-[11px] text-text-tertiary">incl. 18% GST</p>
           </div>
@@ -428,7 +432,7 @@ export default function ChoosePaymentPage() {
                   ) : (
                     <>
                       <Lock className="h-3.5 w-3.5" />
-                      Pay ₹{monthly.toLocaleString("en-IN")} with {provider.name}
+                      Pay ₹{displayPrice.toLocaleString("en-IN")} with {provider.name}
                     </>
                   )}
                 </span>

@@ -152,7 +152,7 @@ export default function AdminRevenuePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="MRR" value={`₹${formatINR(revenue.mrr_paisa)}`} accent />
         <MetricCard label="ARR" value={`₹${formatINR(revenue.arr_paisa)}`} accent />
-        <MetricCard label="Churn Rate" value={`${revenue.churn_rate ?? 0}%`} />
+        <MetricCard label="Churn Rate" value={`${(revenue.churn_rate ?? 0).toFixed(1)}%`} />
         <MetricCard label="Subscribers" value={String(revenue.total_subscribers ?? 0)} />
       </div>
 
@@ -177,7 +177,7 @@ export default function AdminRevenuePage() {
           <DataTable<TimeSeriesRow>
             columns={timeSeriesColumns}
             data={timeSeriesData}
-            rowKey={(row) => row.period || row.revenue_paisa?.toString() || Math.random().toString()}
+            rowKey={(row) => row.period || `${row.revenue_paisa}-${row.subscribers}`}
             compareFns={timeSeriesCompareFns}
             pageSize={50}
             emptyStateMessage="No trend data available."

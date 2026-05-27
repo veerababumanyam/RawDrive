@@ -14,15 +14,17 @@ func TestNewAdminRevenueRepo(t *testing.T) {
 
 func TestRevenueMetrics_Fields(t *testing.T) {
 	m := RevenueMetrics{
-		MRR:       5000000,
-		ARR:       60000000,
-		ChurnRate: 2.5,
-		LTV:       120000,
-		ARPU:      10000,
+		MRR:              5000000,
+		ARR:              60000000,
+		ChurnRate:        2.5,
+		LTV:              120000,
+		ARPU:             10000,
+		TotalSubscribers: 450,
 	}
 	assert.Equal(t, int64(5000000), m.MRR)
 	assert.Equal(t, int64(60000000), m.ARR)
 	assert.InDelta(t, 2.5, m.ChurnRate, 0.01)
+	assert.Equal(t, int64(450), m.TotalSubscribers)
 }
 
 func TestRevenueTimeSeries_Fields(t *testing.T) {
