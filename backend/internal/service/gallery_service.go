@@ -130,7 +130,26 @@ func (s *GalleryService) GetByID(ctx context.Context, id uuid.UUID) (*repository
 }
 
 // GetBySlug retrieves a gallery by slug (for public access).
+//
+// Lookup order — subdomain_slug first, then legacy slug. Lets both URL
+// shapes resolve through the same handler:
+//
+//   - https://<sub>.rawdrive.in/...           → Next.js middleware rewrites to /g/<sub>
+//                                               → API call /api/v1/public/galleries/<sub>
+//                                               → matches subdomain_slug
+//   - https://rawdrive.in/g/<old-slug>/...    → API call /api/v1/public/galleries/<old-slug>
+//                                               → may miss subdomain_slug, falls through to slug
+//
+// A returned gallery has the SAME shape regardless of which column matched —
+// callers don't need to care which path resolved.
 func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error) {
+	g, err := s.galleryRepo.GetBySubdomainSlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if g != nil {
+		return g, nil
+	}
 	return s.galleryRepo.GetBySlug(ctx, slug)
 }
 

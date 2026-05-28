@@ -23,6 +23,12 @@ type Gallery struct {
 	InvoiceID        *uuid.UUID             `json:"invoice_id,omitempty"`
 	Title            string                 `json:"title"`
 	Slug             string                 `json:"slug"`
+	// SubdomainSlug is the globally-unique label used for *.rawdrive.in
+	// routing. Nullable for legacy rows that pre-date migration 120 and
+	// were never touched again; new galleries always populate it.
+	// JSON omits when nil so clients can detect "this gallery has no
+	// subdomain URL yet" — surfaces in the dashboard share modal.
+	SubdomainSlug    *string                `json:"subdomain_slug,omitempty"`
 	Description      string                 `json:"description"`
 	CoverAssetID     *uuid.UUID             `json:"cover_asset_id,omitempty"`
 	GalleryType      string                 `json:"gallery_type"`
@@ -129,6 +135,18 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 	if g.Slug == "" {
 		g.Slug = generateSlug(g.Title)
 	}
+	// Generate a globally-unique subdomain_slug if the caller hasn't set one.
+	// Failure here is non-fatal — we fall back to leaving subdomain_slug NULL
+	// so the gallery still creates, but the *.rawdrive.in URL won't work until
+	// a follow-up backfill or manual edit. The DB unique index would catch a
+	// races with another concurrent create.
+	if g.SubdomainSlug == nil {
+		slug, err := r.GenerateUniqueSubdomainSlug(ctx, g.Title)
+		if err == nil {
+			g.SubdomainSlug = &slug
+		}
+		// silent fallback on err — see comment above; surfaces in repo_test
+	}
 	g.CreatedAt = time.Now()
 	g.UpdatedAt = g.CreatedAt
 	g.normalizeWorkspaceLinks()
@@ -144,13 +162,13 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO galleries (id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
-		 title, slug, description, cover_asset_id,
+		 title, slug, subdomain_slug, description, cover_asset_id,
 		 gallery_type, settings, password_hash, watermark_config, is_published, max_selections,
 		 status, created_by, created_at, updated_at, published_at, archived_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
 		g.ID, g.WorkspaceID, g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
-		g.Title, g.Slug, g.Description, g.CoverAssetID,
+		g.Title, g.Slug, g.SubdomainSlug, g.Description, g.CoverAssetID,
 		g.GalleryType, g.Settings, g.PasswordHash, g.WatermarkConfig, g.IsPublished,
 		g.MaxSelections, g.Status, g.CreatedBy, g.CreatedAt, g.UpdatedAt,
 		g.PublishedAt, g.ArchivedAt,
@@ -206,14 +224,14 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 	g := &Gallery{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
-		 title, slug, description, cover_asset_id, gallery_type,
+		 title, slug, subdomain_slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
 		 faceid_enabled, face_detection_enabled
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
-		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
+		&g.Title, &g.Slug, &g.SubdomainSlug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
@@ -234,14 +252,14 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 	g := &Gallery{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
-		 title, slug, description, cover_asset_id, gallery_type,
+		 title, slug, subdomain_slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
 		 faceid_enabled, face_detection_enabled
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
-		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
+		&g.Title, &g.Slug, &g.SubdomainSlug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
@@ -266,7 +284,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 	}
 
 	query := `SELECT g.id, g.workspace_id, g.contact_id, g.primary_contact_id, g.project_id, g.event_id, g.deal_id, g.invoice_id,
-		g.title, g.slug, g.description, g.cover_asset_id,
+		g.title, g.slug, g.subdomain_slug, g.description, g.cover_asset_id,
 		g.gallery_type, g.settings, g.password_hash, g.watermark_config, g.is_published,
 		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
 		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
@@ -321,7 +339,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		var g Gallery
 		var coverThumbs *map[string]string
 		if err := rows.Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
-			&g.Title, &g.Slug, &g.Description,
+			&g.Title, &g.Slug, &g.SubdomainSlug, &g.Description,
 			&g.CoverAssetID, &g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig,
 			&g.IsPublished, &g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt,
 			&g.UpdatedAt, &g.DeletedAt, &g.PublishedAt, &g.ArchivedAt,
