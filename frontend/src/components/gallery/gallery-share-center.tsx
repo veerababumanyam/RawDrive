@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createGalleryShareLink,
+  galleryPublicUrl,
   listGalleryShareLinks,
   revokeGalleryShareLink,
   type Gallery,
@@ -30,11 +31,24 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Canonical share URL — `<sub>.rawdrive.in` when the gallery has a
+  // subdomain_slug (the case for all post-migration-120 galleries), else
+  // the legacy `/g/{slug}` path. The helper handles SSR + dev origins.
   const publicUrl = useMemo(() => {
     if (!gallery.slug) return "";
-    const path = `/g/${gallery.slug}`;
-    return typeof window === "undefined" ? path : `${window.location.origin}${path}`;
-  }, [gallery.slug]);
+    return galleryPublicUrl(gallery);
+  }, [gallery.slug, gallery.subdomain_slug]);
+
+  // Legacy URL is preserved for the share-center UI so photographers who
+  // have already pasted `/g/<slug>` URLs into their CRM, email templates,
+  // or marketing materials can confirm the old form still resolves.
+  // Empty when we're already showing the legacy URL as primary.
+  const legacyUrl = useMemo(() => {
+    if (!gallery.slug || !gallery.subdomain_slug) return "";
+    return typeof window === "undefined"
+      ? `/g/${gallery.slug}`
+      : `${window.location.origin}/g/${gallery.slug}`;
+  }, [gallery.slug, gallery.subdomain_slug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +145,12 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
       <div className="rounded-2xl border border-border-default bg-surface-sunken p-4">
         <p className="text-xs text-text-tertiary">Public URL</p>
         <p className="mt-1 break-all text-sm text-text-primary">{publicUrl || "Publish to generate a public URL"}</p>
+        {legacyUrl && (
+          <p className="mt-1 text-xs text-text-tertiary">
+            Legacy URL (also works):{" "}
+            <span className="break-all">{legacyUrl}</span>
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={copyPublicUrl} className="btn-tertiary px-3 py-2 text-xs">
             Copy public URL

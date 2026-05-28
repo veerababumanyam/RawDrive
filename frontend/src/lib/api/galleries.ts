@@ -13,6 +13,11 @@ export interface Gallery {
   invoice_id?: string;
   title: string;
   slug: string;
+  // Globally-unique label used for *.rawdrive.in subdomain routing.
+  // Optional because legacy rows that pre-date migration 120 and rare
+  // backfill failures may have NULL. Callers should prefer this over
+  // `slug` when building share URLs and fall back to `/g/{slug}` if absent.
+  subdomain_slug?: string | null;
   description: string;
   cover_asset_id?: string;
   gallery_type: string;
@@ -48,6 +53,53 @@ export interface Gallery {
   download_enabled?: boolean;
   sort_preference?: string;
   whatsapp_template?: string;
+}
+
+/**
+ * Canonical public URL a photographer would share for a gallery.
+ *
+ * Returns the *.rawdrive.in subdomain URL whenever the gallery has a
+ * non-empty subdomain_slug (the case for every gallery created after
+ * migration 120 + the backfilled set of existing galleries). Falls back
+ * to the legacy `/g/{slug}` path for galleries that pre-date the
+ * subdomain feature or whose backfill failed.
+ *
+ * Subdomain URLs are always built from the canonical brand domain
+ * (`rawdrive.in`) regardless of where the dashboard is being viewed —
+ * a photographer reviewing on staging/localhost still gets a shareable
+ * production URL to copy. The legacy path uses `window.location.origin`
+ * for backward compatibility with existing dev workflows.
+ *
+ * SSR-safe: returns the bare subdomain URL or relative path when window
+ * is unavailable. Callers that need an absolute URL during SSR (e.g.
+ * canonical link metadata) can pass an explicit `originOverride`.
+ */
+export function galleryPublicUrl(
+  gallery: Pick<Gallery, "slug" | "subdomain_slug">,
+  originOverride?: string,
+): string {
+  const sub = gallery.subdomain_slug;
+  // Imported lazily inside the function to avoid a top-level cycle:
+  // tokens.ts has no runtime deps but importing it at module load
+  // bloats every api/galleries consumer by ~3KB of design constants
+  // they don't otherwise need.
+  // (rawdrive.in is stable enough to inline — if the brand domain
+  // ever changes, the design-tokens.json single-source-of-truth
+  // process catches it.)
+  const BASE_DOMAIN = "rawdrive.in";
+
+  if (sub && sub.length > 0) {
+    return `https://${sub}.${BASE_DOMAIN}/`;
+  }
+
+  // Legacy fallback: /g/{slug} on whichever origin the user is viewing.
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/g/${gallery.slug}`;
+  }
+  if (originOverride) {
+    return `${originOverride}/g/${gallery.slug}`;
+  }
+  return `/g/${gallery.slug}`;
 }
 
 export interface GalleryWorkspaceContact {

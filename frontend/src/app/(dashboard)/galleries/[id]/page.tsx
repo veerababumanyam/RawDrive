@@ -8,6 +8,7 @@ import {
   addAlbumAssets,
   addAssetToGallery,
   createGalleryAlbum,
+  galleryPublicUrl,
   getGallery,
   listAlbumAssets,
   listGalleryAlbums,
@@ -323,12 +324,17 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [id, newAlbumName, refreshAlbums, selectedAssetIds]);
 
+  // Prefer the *.rawdrive.in subdomain URL when the gallery has one
+  // (every post-mig-120 gallery does). Append album query if provided —
+  // the Next.js middleware passes querystring through to /g/[slug] so the
+  // existing album-deep-link handler picks it up unchanged.
   const buildShareUrl = useCallback((albumId?: string) => {
     if (!gallery?.slug) return "";
-    const query = albumId ? `?album=${encodeURIComponent(albumId)}` : "";
-    const path = `/g/${gallery.slug}${query}`;
-    return typeof window === "undefined" ? path : `${window.location.origin}${path}`;
-  }, [gallery?.slug]);
+    const base = galleryPublicUrl(gallery);
+    if (!albumId) return base;
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}album=${encodeURIComponent(albumId)}`;
+  }, [gallery?.slug, gallery?.subdomain_slug]);
 
   const copyShareUrl = useCallback(async (albumId?: string) => {
     if (!gallery?.is_published) {
