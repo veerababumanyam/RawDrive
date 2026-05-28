@@ -131,29 +131,13 @@ func (s *GalleryService) GetByID(ctx context.Context, id uuid.UUID) (*repository
 
 // GetBySlug retrieves a gallery by slug (for public access).
 //
-// Resolution order — all three paths produce the same Gallery shape so
-// callers don't need to distinguish:
-//
-//   1. Legacy per-gallery subdomain (migration 120 — deprecated but kept
-//      working for the 30-min window when those URLs were live). Match
-//      against galleries.subdomain_slug.
-//   2. Legacy unscoped `slug` lookup — every gallery has a per-workspace
-//      unique slug, and most URLs in the wild use `https://rawdrive.in/g/<slug>`.
-//      This catches them as long as no two workspaces share the same slug,
-//      which is true in practice today because generateSlug appends an
-//      8-char UUID suffix.
-//
-// For the new per-business-subdomain shape (migration 121), the public
-// gallery handler calls GetBySlugScopedByBusinessCode directly — it has the
-// workspace code from the request and doesn't need fallback semantics.
+// Unscoped lookup against galleries.slug — used by the legacy
+// `https://rawdrive.in/g/<slug>` URL pattern. Works because every gallery's
+// slug includes an 8-char UUID suffix from generateSlug, so cross-workspace
+// collisions are astronomically rare. The per-business subdomain path
+// (migration 121) doesn't go through here — it calls
+// GetByBusinessSubdomainAndSlug directly with explicit workspace scope.
 func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error) {
-	g, err := s.galleryRepo.GetBySubdomainSlug(ctx, slug)
-	if err != nil {
-		return nil, err
-	}
-	if g != nil {
-		return g, nil
-	}
 	return s.galleryRepo.GetBySlug(ctx, slug)
 }
 

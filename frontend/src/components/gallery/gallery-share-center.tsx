@@ -31,24 +31,20 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Canonical share URL — `<sub>.rawdrive.in` when the gallery has a
-  // subdomain_slug (the case for all post-migration-120 galleries), else
-  // the legacy `/g/{slug}` path. The helper handles SSR + dev origins.
+  // NOTE: This component is currently orphan code — not imported from any
+  // route. The live share surface is in `app/(dashboard)/galleries/[id]/page.tsx`
+  // (the `Share` button + ShareQrPopover, which both consume `buildShareUrl()`
+  // — see that file for the canonical share-URL construction). Kept here as
+  // future-state template if someone wires a dedicated Share Center page.
+  //
+  // Without workspace identity in props this helper falls back to /g/<slug>
+  // (legacy apex). When this component is eventually wired, pass workspace
+  // identity to galleryPublicUrl as the (dashboard) gallery page does.
   const publicUrl = useMemo(() => {
     if (!gallery.slug) return "";
     return galleryPublicUrl(gallery);
-  }, [gallery.slug, gallery.subdomain_slug]);
-
-  // Legacy URL is preserved for the share-center UI so photographers who
-  // have already pasted `/g/<slug>` URLs into their CRM, email templates,
-  // or marketing materials can confirm the old form still resolves.
-  // Empty when we're already showing the legacy URL as primary.
-  const legacyUrl = useMemo(() => {
-    if (!gallery.slug || !gallery.subdomain_slug) return "";
-    return typeof window === "undefined"
-      ? `/g/${gallery.slug}`
-      : `${window.location.origin}/g/${gallery.slug}`;
-  }, [gallery.slug, gallery.subdomain_slug]);
+  }, [gallery.slug]);
+  const legacyUrl = ""; // unused in the orphan state — keep variable for JSX below
 
   useEffect(() => {
     let cancelled = false;

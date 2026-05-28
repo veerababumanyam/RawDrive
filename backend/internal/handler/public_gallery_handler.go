@@ -109,10 +109,9 @@ func resolveWorkspaceSubdomain(r *http.Request) string {
 //     subdomain URL implicitly promises.
 //
 //   - When no `?ws=` is provided (legacy `/g/<slug>` apex paths), use the
-//     existing unscoped GalleryService.GetBySlug which tries subdomain_slug
-//     (mig 120, deprecated) then plain slug. This keeps the legacy
-//     `https://rawdrive.in/g/<slug>` URL pattern working for galleries that
-//     pre-date the per-business subdomain feature.
+//     unscoped GalleryService.GetBySlug. Works because slugs include an
+//     8-char UUID suffix and are unique in practice. Keeps the legacy
+//     `https://rawdrive.in/g/<slug>` URL pattern working.
 //
 // Original implementation fell back to unscoped lookup on scoped miss, which
 // surfaced as a HTTP-200 on `?ws=fake-studio-deadbeef` against a real slug

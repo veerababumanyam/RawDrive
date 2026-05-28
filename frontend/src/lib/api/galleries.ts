@@ -13,11 +13,6 @@ export interface Gallery {
   invoice_id?: string;
   title: string;
   slug: string;
-  // Globally-unique label used for *.rawdrive.in subdomain routing.
-  // Optional because legacy rows that pre-date migration 120 and rare
-  // backfill failures may have NULL. Callers should prefer this over
-  // `slug` when building share URLs and fall back to `/g/{slug}` if absent.
-  subdomain_slug?: string | null;
   description: string;
   cover_asset_id?: string;
   gallery_type: string;
