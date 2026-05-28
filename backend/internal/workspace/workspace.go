@@ -43,6 +43,13 @@ type Workspace struct {
 	OwnerID      string
 	BusinessName string
 	PlanTier     string
+	// Business-subdomain identity (migration 121). Used to build
+	// <slug>-<code>.rawdrive.in routing URLs. Both fields are populated
+	// by PgRepo.Create from the workspace Name; pre-existing rows are
+	// backfilled by migration 121. Existing callers that don't read
+	// these keep compiling unchanged (zero-value strings).
+	BusinessProfileSlug string
+	BusinessUniqueCode  string
 }
 
 type CreateWorkspaceInput struct {

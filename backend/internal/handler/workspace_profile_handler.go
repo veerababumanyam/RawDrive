@@ -58,6 +58,12 @@ type WorkspaceProfile struct {
 	PANNumber       *string `json:"pan_number,omitempty"`
 	InstagramHandle *string `json:"instagram_handle,omitempty"`
 	StateCode       *string `json:"state_code,omitempty"`
+	// Per-business subdomain identity (migration 121). Read-only on this
+	// endpoint — they're populated by workspace.PgRepo.Create and never
+	// editable via the profile UI. The dashboard reads them to build the
+	// share URL: <business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery-slug>
+	BusinessProfileSlug *string `json:"business_profile_slug,omitempty"`
+	BusinessUniqueCode  *string `json:"business_unique_code,omitempty"`
 }
 
 // GetProfile returns the current workspace's business profile. Any NULL
@@ -97,7 +103,9 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 			COALESCE(upi_id, ''),
 			COALESCE(pan_number, ''),
 			COALESCE(instagram_handle, ''),
-			COALESCE(state_code, '')
+			COALESCE(state_code, ''),
+			COALESCE(business_profile_slug, ''),
+			COALESCE(business_unique_code, '')
 		FROM workspaces WHERE id = $1`, wsID)
 	var (
 		name, gstin, addr1, addr2, city, postal, phone, email, website, logo string
@@ -106,11 +114,13 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		logoMetadata                                                         map[string]interface{}
 		bankName, bankHolder, bankAcc, ifsc, branch, sig, terms, footer      string
 		upiID, panNumber, instaHandle, stateCode                             string
+		businessSlug, businessCode                                           string
 	)
 	if err := row.Scan(&name, &gstin, &addr1, &addr2, &city, &postal, &phone, &email, &website, &logo,
 		&brandName, &brandAccent, &publicBranding, &logoAssetID, &logoMetadata,
 		&bankName, &bankHolder, &bankAcc, &ifsc, &branch, &sig, &terms, &footer,
-		&upiID, &panNumber, &instaHandle, &stateCode); err != nil {
+		&upiID, &panNumber, &instaHandle, &stateCode,
+		&businessSlug, &businessCode); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"failed to load profile: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
@@ -142,6 +152,8 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		"pan_number":              panNumber,
 		"instagram_handle":        instaHandle,
 		"state_code":              stateCode,
+		"business_profile_slug":   businessSlug,
+		"business_unique_code":    businessCode,
 	})
 }
 

@@ -35,6 +35,13 @@ export interface WorkspaceProfile {
   signature_name: string;
   invoice_terms: string;
   invoice_footer: string;
+  // Per-business subdomain identity (migration 121). Backend-populated,
+  // read-only on the dashboard. Empty string when the workspace pre-dates
+  // the migration AND the backfill failed (should be zero rows in practice).
+  // Used to build the share URL:
+  //   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery-slug>
+  business_profile_slug?: string;
+  business_unique_code?: string;
 }
 
 export const EMPTY_WORKSPACE_PROFILE: WorkspaceProfile = {

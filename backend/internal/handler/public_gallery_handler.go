@@ -15,6 +15,7 @@ import (
 
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/face"
+	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -77,6 +78,44 @@ func (h *PublicGalleryHandler) WithFaceClient(c *face.Client) *PublicGalleryHand
 	return h
 }
 
+// extractWorkspaceSubdomain reads the per-business subdomain (migration 121
+// shape: <biz-slug>-<biz-code>) from the request. Two sources, checked in
+// priority order:
+//
+//   1. `?ws=` query parameter — set by the Next.js middleware when it rewrites
+//      <sub>.rawdrive.in/<slug> to /g/<slug>?ws=<sub> before passing the
+//      request to the API server.
+//   2. `X-Workspace-Subdomain` header — fallback for direct API callers
+//      (curl, future native apps) that prefer headers to querystrings.
+//
+// Returns "" when neither is present. The caller decides whether to scope
+// the gallery lookup to a workspace or fall back to the unscoped legacy path.
+func resolveWorkspaceSubdomain(r *http.Request) string {
+	if sub := r.URL.Query().Get("ws"); sub != "" {
+		return sub
+	}
+	return r.Header.Get("X-Workspace-Subdomain")
+}
+
+// resolveGalleryForRequest performs the standard "scope first, fall back to
+// unscoped" lookup. Used by every public-gallery endpoint that takes a slug
+// in the path — they all need the same logic, this keeps it in one place.
+func (h *PublicGalleryHandler) resolveGalleryForRequest(r *http.Request, slug string) (*repository.Gallery, error) {
+	if sub := resolveWorkspaceSubdomain(r); sub != "" {
+		g, err := h.gallerySvc.GetByBusinessSubdomainAndSlug(r.Context(), sub, slug)
+		if err != nil {
+			return nil, err
+		}
+		if g != nil {
+			return g, nil
+		}
+		// Subdomain provided but no match — try the legacy unscoped path
+		// before giving up. Catches the case where someone hand-typed the
+		// subdomain URL with a typo'd code: we still let `/g/<slug>` resolve.
+	}
+	return h.gallerySvc.GetBySlug(r.Context(), slug)
+}
+
 // GetBySlug handles GET /api/v1/public/galleries/{slug}
 func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
@@ -85,7 +124,7 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
@@ -183,7 +222,7 @@ type publicAssetResponse struct {
 // ListAssets handles GET /api/v1/public/galleries/{slug}/assets
 func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -249,7 +288,7 @@ func (h *PublicGalleryHandler) ListAlbums(w http.ResponseWriter, r *http.Request
 	}
 
 	slug := chi.URLParam(r, "slug")
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -298,7 +337,7 @@ func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -399,7 +438,7 @@ func (h *PublicGalleryHandler) GetBranding(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -517,7 +556,7 @@ func (h *PublicGalleryHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -614,7 +653,7 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -723,7 +762,7 @@ func (h *PublicGalleryHandler) ListPeople(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
 		return
 	}
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -781,7 +820,7 @@ func (h *PublicGalleryHandler) ListPersonPhotos(w http.ResponseWriter, r *http.R
 		http.Error(w, `{"error":"invalid personId"}`, http.StatusBadRequest)
 		return
 	}
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -842,7 +881,7 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
@@ -1028,7 +1067,7 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return

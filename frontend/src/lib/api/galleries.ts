@@ -56,43 +56,54 @@ export interface Gallery {
 }
 
 /**
+ * The subset of WorkspaceProfile that the share-URL helper needs.
+ * Decoupled from the full WorkspaceProfile type to avoid a circular
+ * import (workspace-profile.ts ↔ galleries.ts).
+ */
+export interface WorkspaceShareIdentity {
+  business_profile_slug?: string | null;
+  business_unique_code?: string | null;
+}
+
+/**
  * Canonical public URL a photographer would share for a gallery.
  *
- * Returns the *.rawdrive.in subdomain URL whenever the gallery has a
- * non-empty subdomain_slug (the case for every gallery created after
- * migration 120 + the backfilled set of existing galleries). Falls back
- * to the legacy `/g/{slug}` path for galleries that pre-date the
- * subdomain feature or whose backfill failed.
+ * Shape (migration 121, the current scheme):
+ *   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
+ *
+ * Both halves of the subdomain come from the workspace, not the gallery.
+ * One workspace = one permanent subdomain; galleries are paths under it.
+ *
+ * Fallback (`workspace` arg missing or missing identity fields): legacy
+ * /g/{slug} on the brand domain — preserves working URLs for any caller
+ * that doesn't have the workspace in hand yet (e.g. early-mount before
+ * workspace profile loads), and for galleries created in workspaces that
+ * pre-date the migration 121 backfill (should be zero in practice).
  *
  * Subdomain URLs are always built from the canonical brand domain
  * (`rawdrive.in`) regardless of where the dashboard is being viewed —
  * a photographer reviewing on staging/localhost still gets a shareable
  * production URL to copy. The legacy path uses `window.location.origin`
  * for backward compatibility with existing dev workflows.
- *
- * SSR-safe: returns the bare subdomain URL or relative path when window
- * is unavailable. Callers that need an absolute URL during SSR (e.g.
- * canonical link metadata) can pass an explicit `originOverride`.
  */
 export function galleryPublicUrl(
-  gallery: Pick<Gallery, "slug" | "subdomain_slug">,
+  gallery: Pick<Gallery, "slug">,
+  workspace?: WorkspaceShareIdentity | null,
   originOverride?: string,
 ): string {
-  const sub = gallery.subdomain_slug;
-  // Imported lazily inside the function to avoid a top-level cycle:
-  // tokens.ts has no runtime deps but importing it at module load
-  // bloats every api/galleries consumer by ~3KB of design constants
-  // they don't otherwise need.
-  // (rawdrive.in is stable enough to inline — if the brand domain
-  // ever changes, the design-tokens.json single-source-of-truth
-  // process catches it.)
+  const bizSlug = workspace?.business_profile_slug || "";
+  const bizCode = workspace?.business_unique_code || "";
+
+  // Rawdrive.in is stable enough to inline — if the brand domain ever
+  // changes, the design-tokens.json sync process catches it and the build
+  // would fail loudly.
   const BASE_DOMAIN = "rawdrive.in";
 
-  if (sub && sub.length > 0) {
-    return `https://${sub}.${BASE_DOMAIN}/`;
+  if (bizSlug && bizCode && gallery.slug) {
+    return `https://${bizSlug}-${bizCode}.${BASE_DOMAIN}/${gallery.slug}`;
   }
 
-  // Legacy fallback: /g/{slug} on whichever origin the user is viewing.
+  // Legacy fallback — /g/{slug} on whichever origin the user is viewing.
   if (typeof window !== "undefined") {
     return `${window.location.origin}/g/${gallery.slug}`;
   }
@@ -151,8 +162,19 @@ export interface GalleryBranding {
   public_branding_enabled?: boolean;
 }
 
-export async function getPublicGalleryBranding(slug: string): Promise<GalleryBranding> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/branding`);
+// withWorkspaceScope appends `?ws=<sub>` to a public-gallery API URL when the
+// caller supplies a workspace subdomain (set by Next.js middleware on requests
+// arriving via `<biz>-<code>.rawdrive.in/...`). The backend reads `?ws=` and
+// scopes the gallery slug lookup to that workspace. Empty `ws` leaves the
+// URL unchanged so legacy `/g/<slug>` requests still hit the unscoped path.
+function withWorkspaceScope(path: string, ws?: string | null): string {
+  if (!ws) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}ws=${encodeURIComponent(ws)}`;
+}
+
+export async function getPublicGalleryBranding(slug: string, ws?: string | null): Promise<GalleryBranding> {
+  const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)}`);
   if (!res.ok) throw new Error(`Failed to get branding: ${res.status}`);
   return res.json();
 }
@@ -497,8 +519,8 @@ export async function addAlbumAssets(_token: string, albumId: string, assetIds: 
   if (!res.ok) throw new Error(`Failed to add album assets: ${res.status}`);
 }
 
-export async function getPublicGallery(slug: string): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}`);
+export async function getPublicGallery(slug: string, ws?: string | null): Promise<Gallery> {
+  const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)}`);
   if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
   return res.json();
 }
@@ -568,9 +590,9 @@ export interface PublicGalleryAlbum {
 // the filter chip strip between the hero and the asset grid. Returns an
 // empty array on any failure (404 / 5xx / network) so the public page
 // degrades gracefully to the All-Photos-only view rather than blowing up.
-export async function getPublicGalleryAlbums(slug: string): Promise<PublicGalleryAlbum[]> {
+export async function getPublicGalleryAlbums(slug: string, ws?: string | null): Promise<PublicGalleryAlbum[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/albums`);
+    const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)}`);
     if (!res.ok) return [];
     const body = await res.json();
     const raw: PublicGalleryAlbum[] = Array.isArray(body) ? body : [];
@@ -584,11 +606,11 @@ export async function getPublicGalleryAlbums(slug: string): Promise<PublicGaller
   }
 }
 
-export async function getPublicGalleryAssets(slug: string, albumId?: string): Promise<PublicAsset[]> {
+export async function getPublicGalleryAssets(slug: string, albumId?: string, ws?: string | null): Promise<PublicAsset[]> {
   const path = albumId
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
     : `/api/v1/public/galleries/${slug}/assets`;
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetch(`${API_BASE}${withWorkspaceScope(path, ws)}`);
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;

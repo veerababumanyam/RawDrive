@@ -19,7 +19,7 @@ import { readEmbeddedVideos } from "@/lib/embedded-videos";
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ album?: string }>;
+  searchParams?: Promise<{ album?: string; ws?: string }>;
 }
 
 function PublicGalleryUnavailable({
@@ -56,12 +56,18 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   const { slug } = await params;
   const query = searchParams ? await searchParams : {};
   const albumId = typeof query.album === "string" && query.album ? query.album : undefined;
+  // `ws` is set by middleware.ts when the request arrived via the per-business
+  // subdomain `<biz>-<code>.rawdrive.in/<gallery-slug>`. Forwarded to the
+  // backend API so the gallery lookup is scoped to that workspace; absence
+  // means the request hit the apex `/g/<slug>` route and falls back to the
+  // unscoped legacy lookup.
+  const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
 
   let gallery;
   let assets;
   try {
-    gallery = await getPublicGallery(slug);
-    assets = await getPublicGalleryAssets(slug, albumId);
+    gallery = await getPublicGallery(slug, ws);
+    assets = await getPublicGalleryAssets(slug, albumId, ws);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
@@ -92,8 +98,8 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   const [products, banners, branding, albums] = await Promise.all([
     listPublicProducts(slug),
     listPublicBanners(slug),
-    getPublicGalleryBranding(slug).catch(() => null),
-    getPublicGalleryAlbums(slug),
+    getPublicGalleryBranding(slug, ws).catch(() => null),
+    getPublicGalleryAlbums(slug, ws),
   ]);
 
   // For the "All Photos" chip count we need the gallery-wide asset
@@ -101,7 +107,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // Re-fetch only when an album filter is active; otherwise reuse the
   // already-loaded `assets` length to avoid a second round-trip.
   const totalAssetCount = albumId
-    ? (await getPublicGalleryAssets(slug).catch(() => [])).length
+    ? (await getPublicGalleryAssets(slug, undefined, ws).catch(() => [])).length
     : assets.length;
 
   const hasPassword = gallery.settings?.has_password === true;

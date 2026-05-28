@@ -29,6 +29,7 @@ import {
   getAssetPreviewUrl,
   proofingStatusClasses,
 } from "@/lib/dashboard-ui";
+import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Share, CheckCircle, EllipsisVertical, Trash } from "@/components/icons";
@@ -161,6 +162,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // can disable itself + show a "Saving…" state. Prevents double-submit
   // when the user clicks during the round-trip.
   const [publishing, setPublishing] = useState(false);
+  // Per-business subdomain identity for share URLs. Loaded once when the
+  // page mounts — share URLs are only built after this resolves; until then
+  // buildShareUrl falls back to the legacy /g/<slug> shape.
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    getWorkspaceProfile(token)
+      .then((p) => { if (!cancelled) setWorkspaceProfile(p); })
+      .catch(() => { /* fallback to legacy URL via buildShareUrl */ });
+    return () => { cancelled = true; };
+  }, []);
   // E71-S1: Album state
   const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<Record<string, string[]>>({});
@@ -324,17 +338,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [id, newAlbumName, refreshAlbums, selectedAssetIds]);
 
-  // Prefer the *.rawdrive.in subdomain URL when the gallery has one
-  // (every post-mig-120 gallery does). Append album query if provided —
-  // the Next.js middleware passes querystring through to /g/[slug] so the
-  // existing album-deep-link handler picks it up unchanged.
+  // Builds the per-business subdomain URL (migration 121 shape):
+  //   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
+  // Falls back to /g/<slug> on the apex when workspaceProfile hasn't loaded
+  // yet (first render, before the useEffect fetch resolves) or when the
+  // workspace has no business identity assigned (should be impossible
+  // post-migration 121 but the helper is defensive).
+  //
+  // Album query appending: Next.js middleware passes querystring through to
+  // /g/[slug], so adding `?album=<id>` to the share URL keeps album deep
+  // links working under the new shape unchanged.
   const buildShareUrl = useCallback((albumId?: string) => {
     if (!gallery?.slug) return "";
-    const base = galleryPublicUrl(gallery);
+    const base = galleryPublicUrl(gallery, workspaceProfile);
     if (!albumId) return base;
     const sep = base.includes("?") ? "&" : "?";
     return `${base}${sep}album=${encodeURIComponent(albumId)}`;
-  }, [gallery?.slug, gallery?.subdomain_slug]);
+  }, [gallery?.slug, workspaceProfile?.business_profile_slug, workspaceProfile?.business_unique_code]);
 
   const copyShareUrl = useCallback(async (albumId?: string) => {
     if (!gallery?.is_published) {

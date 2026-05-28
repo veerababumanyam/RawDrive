@@ -131,17 +131,21 @@ func (s *GalleryService) GetByID(ctx context.Context, id uuid.UUID) (*repository
 
 // GetBySlug retrieves a gallery by slug (for public access).
 //
-// Lookup order — subdomain_slug first, then legacy slug. Lets both URL
-// shapes resolve through the same handler:
+// Resolution order — all three paths produce the same Gallery shape so
+// callers don't need to distinguish:
 //
-//   - https://<sub>.rawdrive.in/...           → Next.js middleware rewrites to /g/<sub>
-//                                               → API call /api/v1/public/galleries/<sub>
-//                                               → matches subdomain_slug
-//   - https://rawdrive.in/g/<old-slug>/...    → API call /api/v1/public/galleries/<old-slug>
-//                                               → may miss subdomain_slug, falls through to slug
+//   1. Legacy per-gallery subdomain (migration 120 — deprecated but kept
+//      working for the 30-min window when those URLs were live). Match
+//      against galleries.subdomain_slug.
+//   2. Legacy unscoped `slug` lookup — every gallery has a per-workspace
+//      unique slug, and most URLs in the wild use `https://rawdrive.in/g/<slug>`.
+//      This catches them as long as no two workspaces share the same slug,
+//      which is true in practice today because generateSlug appends an
+//      8-char UUID suffix.
 //
-// A returned gallery has the SAME shape regardless of which column matched —
-// callers don't need to care which path resolved.
+// For the new per-business-subdomain shape (migration 121), the public
+// gallery handler calls GetBySlugScopedByBusinessCode directly — it has the
+// workspace code from the request and doesn't need fallback semantics.
 func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error) {
 	g, err := s.galleryRepo.GetBySubdomainSlug(ctx, slug)
 	if err != nil {
@@ -151,6 +155,46 @@ func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repositor
 		return g, nil
 	}
 	return s.galleryRepo.GetBySlug(ctx, slug)
+}
+
+// GetByBusinessSubdomainAndSlug resolves a gallery via the new per-business
+// subdomain shape: <biz-slug>-<biz-code>.rawdrive.in/<gallery-slug>. The
+// `subdomain` arg is the full leading label (e.g. "photoworks-a1b2c3d4");
+// the last 8 chars after the trailing hyphen are the business_unique_code
+// used for the workspace lookup. Returns nil, nil when the subdomain
+// doesn't match the expected shape or when no gallery is found in that
+// workspace — the caller falls back to the unscoped GetBySlug path.
+func (s *GalleryService) GetByBusinessSubdomainAndSlug(ctx context.Context, subdomain, slug string) (*repository.Gallery, error) {
+	// Subdomain shape: <slug>-<code> where code is exactly 8 alphanumeric chars
+	// and the delimiter is a single hyphen. Anything shorter than 9 chars
+	// (1 char of slug + '-' + 8 char code) can't be a valid business subdomain.
+	if len(subdomain) < 10 {
+		return nil, nil
+	}
+	dash := len(subdomain) - 9
+	if subdomain[dash] != '-' {
+		return nil, nil
+	}
+	code := subdomain[dash+1:]
+	// Defensive: 8 lowercase alphanumerics. Migration 121 CHECK enforces
+	// this at write time but the URL could carry garbage from a typo.
+	if !isLowerAlnumExact(code, 8) {
+		return nil, nil
+	}
+	return s.galleryRepo.GetBySlugScopedByBusinessCode(ctx, code, slug)
+}
+
+func isLowerAlnumExact(s string, n int) bool {
+	if len(s) != n {
+		return false
+	}
+	for i := 0; i < n; i++ {
+		c := s[i]
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 // List lists galleries matching the filter.
