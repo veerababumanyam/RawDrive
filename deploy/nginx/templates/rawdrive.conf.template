@@ -52,8 +52,8 @@ server {
     http2 on;
     server_name rawdrive.in www.rawdrive.in;
 
-    ssl_certificate     /etc/letsencrypt/live/rawdrive.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/rawdrive.in/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/wildcard/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/wildcard/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
     ssl_prefer_server_ciphers off;
@@ -169,8 +169,8 @@ server {
     http2 on;
     server_name api.rawdrive.in;
 
-    ssl_certificate     /etc/letsencrypt/live/rawdrive.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/rawdrive.in/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/wildcard/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/wildcard/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -185,6 +185,75 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+    }
+}
+
+# Tenant / gallery subdomains — *.rawdrive.in (single DNS label only).
+# Exact-match server blocks above (rawdrive.in, www.rawdrive.in, api.rawdrive.in)
+# take precedence over this regex match, so reserved labels are unaffected.
+# The captured $gallery_host is passed to upstreams so the app can resolve it
+# to a tenant/gallery without re-parsing Host.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name "~^(?<gallery_host>[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.rawdrive\.in$";
+
+    ssl_certificate     /etc/letsencrypt/wildcard/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/wildcard/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # No HSTS preload here — preload only valid on the apex. Subdomains
+    # inherit HSTS from the apex's includeSubDomains directive anyway.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # API calls from the subdomain origin still hit the backend
+    location /api/ {
+        limit_req zone=api_rate burst=200 nodelay;
+        proxy_pass http://backend_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Gallery-Host $gallery_host;
+        proxy_set_header Connection "";
+        proxy_read_timeout 60s;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+    }
+
+    # Next.js static assets — long cache
+    location /_next/static/ {
+        proxy_pass http://frontend_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Everything else → Next.js. App-layer (middleware) reads Host /
+    # X-Gallery-Host to resolve the gallery slug. Until the app layer ships,
+    # responses will be 404 from Next.js — TLS handshake will succeed cleanly,
+    # which is the intent of this cutover.
+    location / {
+        proxy_pass http://frontend_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Gallery-Host $gallery_host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 60s;
         proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 }
