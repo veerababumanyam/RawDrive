@@ -18,26 +18,38 @@ BEGIN;
 ALTER TABLE galleries
   ADD COLUMN IF NOT EXISTS subdomain_slug VARCHAR(63);
 
+-- Sanitization (used in both backfill passes — kept in a CTE so the
+-- same logic produces the same value each time):
+--   1. lowercase
+--   2. drop everything except [a-z0-9-]
+--   3. collapse runs of hyphens to a single hyphen
+--   4. trim hyphens from both ends
+-- After this, the candidate is RFC-1035-clean. Truncation happens per-pass
+-- (different max body length depending on whether we append a UUID prefix).
+-- The trim(both '-' ...) is applied AGAIN after truncation in case the
+-- 63rd/56th character was itself a hyphen.
+
 -- Backfill pass 1: copy `slug` where it's already globally unique among
--- non-deleted galleries. Sanitizes defensively in case any legacy row
--- bypassed generateSlug (drops non-[a-z0-9-], trims leading hyphens).
+-- non-deleted galleries.
 WITH sanitized AS (
   SELECT
-    id,
-    regexp_replace(
-      regexp_replace(lower(slug), '[^a-z0-9-]', '', 'g'),
-      '^-+', ''
+    g.id,
+    trim(both '-' from
+      regexp_replace(
+        regexp_replace(lower(g.slug), '[^a-z0-9-]', '', 'g'),
+        '-+', '-', 'g'
+      )
     ) AS clean_slug
-  FROM galleries
-  WHERE subdomain_slug IS NULL
-    AND slug != ''
+  FROM galleries g
+  WHERE g.subdomain_slug IS NULL
+    AND g.slug != ''
 )
 UPDATE galleries g
-SET subdomain_slug = substring(s.clean_slug, 1, 63)
+SET subdomain_slug = trim(both '-' from substring(s.clean_slug, 1, 63))
 FROM sanitized s
 WHERE g.id = s.id
   AND s.clean_slug != ''
-  AND length(s.clean_slug) >= 1
+  AND trim(both '-' from substring(s.clean_slug, 1, 63)) != ''
   AND NOT EXISTS (
     SELECT 1 FROM galleries g2
     WHERE g2.id != g.id
@@ -46,18 +58,33 @@ WHERE g.id = s.id
   );
 
 -- Backfill pass 2: collisions get the first 6 chars of gallery UUID appended
--- so they remain globally unique. 56 + 1 + 6 = 63, fits the column.
-UPDATE galleries
-SET subdomain_slug =
-  substring(
-    regexp_replace(
-      regexp_replace(lower(slug), '[^a-z0-9-]', '', 'g'),
-      '^-+', ''
-    ),
-    1, 56
-  ) || '-' || substring(id::text, 1, 6)
-WHERE subdomain_slug IS NULL
-  AND slug != '';
+-- so they remain globally unique. 56 + 1 + 6 = 63, fits the column. The
+-- UUID prefix is always hex (alphanumeric), so the final character is
+-- guaranteed alphanumeric — no trailing-hyphen risk.
+UPDATE galleries g
+SET subdomain_slug = (
+  CASE
+    WHEN trim(both '-' from substring(
+      trim(both '-' from
+        regexp_replace(
+          regexp_replace(lower(g.slug), '[^a-z0-9-]', '', 'g'),
+          '-+', '-', 'g'
+        )
+      ), 1, 56
+    )) = ''
+    THEN 'g'
+    ELSE trim(both '-' from substring(
+      trim(both '-' from
+        regexp_replace(
+          regexp_replace(lower(g.slug), '[^a-z0-9-]', '', 'g'),
+          '-+', '-', 'g'
+        )
+      ), 1, 56
+    ))
+  END
+) || '-' || substring(g.id::text, 1, 6)
+WHERE g.subdomain_slug IS NULL
+  AND g.slug != '';
 
 -- Reserved-label CHECK — defense-in-depth against the Go-side validator.
 -- Future additions need a new migration; that's intentional friction so
