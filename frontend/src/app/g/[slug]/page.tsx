@@ -195,12 +195,18 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   return galleryContent;
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata({ params, searchParams }: Props) {
   const { slug } = await params;
+  // Read `ws` (set by middleware on requests via <biz>-<code>.rawdrive.in)
+  // and forward it to both API calls — otherwise metadata would use the
+  // unscoped lookup and leak the title of any same-slug gallery in a
+  // different workspace, even when the body correctly 404s.
+  const query = searchParams ? await searchParams : {};
+  const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
   try {
     const [gallery, branding] = await Promise.all([
-      getPublicGallery(slug),
-      getPublicGalleryBranding(slug).catch(() => null),
+      getPublicGallery(slug, ws),
+      getPublicGalleryBranding(slug, ws).catch(() => null),
     ]);
     const brandName = branding?.can_customize ? branding.brand_name : "RawDrive";
     const description = gallery.description || `View ${gallery.title} by ${brandName}`;
