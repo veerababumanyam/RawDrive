@@ -163,21 +163,52 @@ deploy_node() {
 
   log "Waiting for $label health..."
   local attempt=0
+  local healthy=false
   while [ $attempt -lt $HEALTH_RETRIES ]; do
     if $SSH "root@$ip" "curl -fsS $HEALTH_URL" > /dev/null 2>&1; then
       log "$label healthy!"
-      return 0
+      healthy=true
+      break
     fi
     attempt=$((attempt + 1))
     log "  Health check attempt $attempt/$HEALTH_RETRIES..."
     sleep $HEALTH_INTERVAL
   done
 
-  log "ERROR: $label failed health check after $((HEALTH_RETRIES * HEALTH_INTERVAL))s"
-  log "Recent backend logs from $label:"
+  if [ "$healthy" = false ]; then
+    log "ERROR: $label failed health check after $((HEALTH_RETRIES * HEALTH_INTERVAL))s"
+    log "Recent backend logs from $label:"
+    $SSH "root@$ip" \
+      "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE logs --tail 50 backend"
+    exit 2
+  fi
+
+  # Force-recreate nginx so it picks up bind-mounted config changes.
+  #
+  # tar -xf on push replaces the host-side template/nginx.conf with a NEW
+  # inode; the running nginx container's bind mount still references the
+  # OLD inode (orphaned but still attached). `docker compose up -d` above
+  # only recreates containers whose image changed — for nginx-config-only
+  # deploys it skips recreate entirely, so the file is updated on disk
+  # but the container keeps serving the previous content forever.
+  #
+  # Burnt by this on 2026-05-28 during the *.rawdrive.in wildcard cutover:
+  # template was updated and pushed cleanly but nginx kept serving the old
+  # single-domain cert until manually --force-recreate'd. Always doing this
+  # at the tail of deploy_node costs ~5s per node and makes the recreate
+  # automatic for the common case (CI/cron-driven deploys where no human
+  # is watching the logs).
+  #
+  # No-op when the nginx image+config changed in this deploy (up -d already
+  # recreated the container). Safe before moving to the next node — nginx
+  # restart is sub-second, backend traffic continues unaffected since the
+  # rolling deploy already serves through the other node.
+  log "Reconciling nginx (--force-recreate) on $label..."
   $SSH "root@$ip" \
-    "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE logs --tail 50 backend"
-  exit 2
+    "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE up -d --force-recreate --no-deps nginx" \
+    > /dev/null
+
+  return 0
 }
 
 # --- Pre-flight ---
