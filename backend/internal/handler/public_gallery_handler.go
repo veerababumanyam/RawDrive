@@ -97,22 +97,35 @@ func resolveWorkspaceSubdomain(r *http.Request) string {
 	return r.Header.Get("X-Workspace-Subdomain")
 }
 
-// resolveGalleryForRequest performs the standard "scope first, fall back to
-// unscoped" lookup. Used by every public-gallery endpoint that takes a slug
-// in the path — they all need the same logic, this keeps it in one place.
+// resolveGalleryForRequest looks up the gallery for a public request.
+//
+// Scoping rules (security-critical — see CVE-style note below):
+//
+//   - When `?ws=<biz>-<code>` is provided, the lookup is STRICTLY scoped to
+//     that workspace. A miss returns nil (caller renders 404). We do NOT
+//     fall back to unscoped lookup in this case — doing so would let a
+//     request to `<bizA>.rawdrive.in/<slug-belonging-to-bizB>` resolve to
+//     bizB's gallery, breaking the workspace isolation guarantee that the
+//     subdomain URL implicitly promises.
+//
+//   - When no `?ws=` is provided (legacy `/g/<slug>` apex paths), use the
+//     existing unscoped GalleryService.GetBySlug which tries subdomain_slug
+//     (mig 120, deprecated) then plain slug. This keeps the legacy
+//     `https://rawdrive.in/g/<slug>` URL pattern working for galleries that
+//     pre-date the per-business subdomain feature.
+//
+// Original implementation fell back to unscoped lookup on scoped miss, which
+// surfaced as a HTTP-200 on `?ws=fake-studio-deadbeef` against a real slug
+// during post-deploy verification 2026-05-28. Fixed in same session.
 func (h *PublicGalleryHandler) resolveGalleryForRequest(r *http.Request, slug string) (*repository.Gallery, error) {
 	if sub := resolveWorkspaceSubdomain(r); sub != "" {
-		g, err := h.gallerySvc.GetByBusinessSubdomainAndSlug(r.Context(), sub, slug)
-		if err != nil {
-			return nil, err
-		}
-		if g != nil {
-			return g, nil
-		}
-		// Subdomain provided but no match — try the legacy unscoped path
-		// before giving up. Catches the case where someone hand-typed the
-		// subdomain URL with a typo'd code: we still let `/g/<slug>` resolve.
+		// Strict scoping — a miss is a miss. Returning nil here causes the
+		// caller to send 404 to the client, which is the only correct answer
+		// when the requested workspace doesn't own the requested slug.
+		return h.gallerySvc.GetByBusinessSubdomainAndSlug(r.Context(), sub, slug)
 	}
+	// No workspace context (apex `/g/<slug>` path) — fall through to the
+	// legacy unscoped lookup chain.
 	return h.gallerySvc.GetBySlug(r.Context(), slug)
 }
 
