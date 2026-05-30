@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { buildCsp } from "@/lib/csp";
 
 /**
  * Per-business subdomain rewrite middleware
@@ -123,19 +124,51 @@ function parseBusinessSubdomain(host: string | null): BusinessSubdomain | null {
   return { fullSubdomain: sub, profileSlug, uniqueCode };
 }
 
+// F-098: a fresh per-request nonce lets the CSP drop 'unsafe-inline' from
+// script-src. Edge-runtime safe — uses Web Crypto + btoa (no node: APIs).
+function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
 export function middleware(req: NextRequest) {
+  // F-098: build the nonced CSP once per request. The nonce is forwarded on the
+  // REQUEST headers so Next.js stamps it onto its framework/bootstrap scripts
+  // (and layout.tsx reads x-nonce for the theme-init <Script>); the same policy
+  // is set on the RESPONSE for browser enforcement. Applied to every return path
+  // via pass()/the rewrite below.
+  const isDev = process.env.NODE_ENV !== "production";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const apiOrigin = apiUrl.startsWith("http://") ? apiUrl : "";
+  const nonce = generateNonce();
+  const csp = buildCsp({ isDev, nonce, apiOrigin });
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  // Forward the request (carrying the nonce) and stamp the CSP on the response.
+  const pass = () => {
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    res.headers.set("Content-Security-Policy", csp);
+    return res;
+  };
+
   const biz = parseBusinessSubdomain(req.headers.get("host"));
   if (biz === null) {
-    return NextResponse.next();
+    return pass();
   }
 
   const { pathname, search } = req.nextUrl;
   if (PASS_THROUGH_EXACT.has(pathname)) {
-    return NextResponse.next();
+    return pass();
   }
   for (const prefix of PASS_THROUGH_PREFIXES) {
     if (pathname.startsWith(prefix)) {
-      return NextResponse.next();
+      return pass();
     }
   }
 
@@ -145,7 +178,7 @@ export function middleware(req: NextRequest) {
   // Next.js renders a 404 rather than rewriting to /g/ which would 404
   // with a less helpful message.
   if (pathname === "/" || pathname === "") {
-    return NextResponse.next();
+    return pass();
   }
 
   // Path is `/wedding-veera` or `/wedding-veera/photo/123` etc. The first
@@ -164,7 +197,8 @@ export function middleware(req: NextRequest) {
   merged.set("ws", biz.fullSubdomain);
   rewritten.search = "?" + merged.toString();
 
-  const res = NextResponse.rewrite(rewritten);
+  const res = NextResponse.rewrite(rewritten, { request: { headers: requestHeaders } });
+  res.headers.set("Content-Security-Policy", csp);
   // Also surface via response headers so server components can read the
   // subdomain via `headers()` if they prefer that over the query string.
   res.headers.set("x-workspace-subdomain", biz.fullSubdomain);

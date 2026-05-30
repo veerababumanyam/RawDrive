@@ -2,11 +2,14 @@
  * Regression test for F-098 — "Production CSP carries 'unsafe-inline' in
  * script-src".
  *
- * next.config.ts now builds its Content-Security-Policy header from an exported
- * `buildCsp()` helper instead of an inline hardcoded string. That gives ONE
- * typed definition of the policy and makes the nonce-based hardening a single
- * switch: when a per-request nonce is supplied, script-src drops 'unsafe-inline'
- * and uses 'nonce-...' + 'strict-dynamic'.
+ * The Content-Security-Policy is built from one exported `buildCsp()` helper
+ * (src/lib/csp.ts) shared by the per-request middleware (src/middleware.ts) and
+ * — historically — the static next.config.ts header. That gives ONE typed
+ * definition of the policy and makes the nonce-based hardening a single switch:
+ * when a per-request nonce is supplied, script-src drops 'unsafe-inline' and
+ * uses 'nonce-...' + 'strict-dynamic'. The static next.config.ts header has now
+ * been removed so the nonced middleware policy is the only CSP on HTML routes;
+ * the no-nonce branch below remains buildCsp's documented fallback contract.
  *
  * Assertions are scoped to the script-src directive specifically — the finding
  * is script-src only. style-src legitimately keeps 'unsafe-inline' (Tailwind v4
@@ -27,7 +30,7 @@
  * which is the smallest reliable regression surface.
  */
 import { describe, it, expect } from "vitest";
-import { buildCsp } from "../../next.config";
+import { buildCsp } from "../lib/csp";
 
 /** Extract just the `script-src ...` directive from a full CSP string. */
 function scriptSrc(csp: string): string {
@@ -57,7 +60,8 @@ describe("next.config CSP (F-098)", () => {
   });
 
   it("static-header path keeps the hardened baseline and Razorpay source", () => {
-    // Mirrors next.config.ts: prod build, no nonce (static header).
+    // buildCsp's no-nonce fallback contract (prod build). This branch is no
+    // longer emitted as a static header, but is kept as the documented default.
     const csp = buildCsp({ isDev: false, apiOrigin: "" });
 
     expect(csp).toContain("default-src 'self'");

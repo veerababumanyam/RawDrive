@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Inter, Manrope } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -52,11 +53,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // F-098: the per-request CSP nonce set by frontend/src/middleware.ts. Passed
+  // to the theme-init <Script> so it executes under the nonce/strict-dynamic
+  // policy that replaces script-src 'unsafe-inline'. undefined in contexts
+  // where middleware didn't run (the static next.config.ts header is gone).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
@@ -98,6 +104,7 @@ export default function RootLayout({
           id="rawdrive-theme-init"
           src="/theme-init.js"
           strategy="beforeInteractive"
+          nonce={nonce}
         />
       </head>
       <body className="flex min-h-full flex-col bg-surface font-sans text-text-primary">
