@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,6 +127,7 @@ func TestPasswordComplexity(t *testing.T) {
 		{"no uppercase", "abcdefg1", true},
 		{"no number", "Abcdefgh", true},
 		{"no lowercase", "ABCDEFG1", true},
+		{"too long", "Aa1!" + strings.Repeat("x", 69), true},
 		{"valid password", "StrongP@ss1", false},
 	}
 
@@ -139,6 +141,22 @@ func TestPasswordComplexity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResetPassword_RejectsOverlongPasswordBeforeHash(t *testing.T) {
+	notifier := &mockNotifier{}
+	svc := newTestPasswordService(notifier)
+	auth.SetPasswordServiceCodeGeneratorForTest(svc, func(int) (string, error) {
+		return "123456", nil
+	})
+	ctx := context.Background()
+
+	require.NoError(t, svc.RequestReset(ctx, "registered@example.com"))
+	err := svc.ResetPassword(ctx, "registered@example.com", "123456", "Aa1!"+strings.Repeat("x", 69))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at most 72")
+	assert.Empty(t, notifier.notifications, "overlong password must be rejected before password update/security notification")
 }
 
 func TestAccountLockout(t *testing.T) {

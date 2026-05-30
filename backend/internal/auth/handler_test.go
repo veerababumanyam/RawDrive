@@ -837,17 +837,17 @@ func TestRefreshToken_PreservesMFAVerifiedAfterWorkspaceChange(t *testing.T) {
 // TestRegisterHandler_RejectsOverlongPassword is the F-056 regression. Before
 // the fix Register only enforced a MINIMUM length, so a password longer than
 // bcrypt's 72-byte truncation boundary was accepted and silently weakened
-// (bytes past 72 add no strength; two such passwords collide). Register must
-// now reject anything over the 128-byte cap with a 400 before it ever reaches
+// (or, in current x/crypto/bcrypt, rejected by the hashing library). Register must
+// now reject anything over the 72-byte cap with a 400 before it ever reaches
 // the downstream hashing site in h.users.Create.
 func TestRegisterHandler_RejectsOverlongPassword(t *testing.T) {
 	handler, _, _, userSvc := setupAuthRouter()
 	ts := newTestServer(handler)
 	defer ts.Close()
 
-	// 129 bytes — one over the cap.
-	longPassword := "Aa1!" + strings.Repeat("x", 125)
-	require.Len(t, longPassword, 129)
+	// 73 bytes — one over bcrypt's byte limit.
+	longPassword := "Aa1!" + strings.Repeat("x", 69)
+	require.Len(t, longPassword, 73)
 
 	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
 		"email":    "toolong@example.com",
@@ -858,7 +858,7 @@ func TestRegisterHandler_RejectsOverlongPassword(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
-		"F-056: password longer than 128 bytes must be rejected, not hashed")
+		"F-056: password longer than 72 bytes must be rejected, not hashed")
 
 	var body map[string]string
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
@@ -870,15 +870,15 @@ func TestRegisterHandler_RejectsOverlongPassword(t *testing.T) {
 }
 
 // TestRegisterHandler_AcceptsBoundaryLengthPassword guards the cap boundary:
-// a password of exactly 128 bytes is still accepted, so the F-056 fix does not
+// a password of exactly 72 bytes is still accepted, so the F-056 fix does not
 // over-correct and lock out legitimate long passphrases.
 func TestRegisterHandler_AcceptsBoundaryLengthPassword(t *testing.T) {
 	handler, _, _, _ := setupAuthRouter()
 	ts := newTestServer(handler)
 	defer ts.Close()
 
-	boundaryPassword := "Aa1!" + strings.Repeat("x", 124)
-	require.Len(t, boundaryPassword, 128)
+	boundaryPassword := "Aa1!" + strings.Repeat("x", 68)
+	require.Len(t, boundaryPassword, 72)
 
 	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
 		"email":    "boundary@example.com",
@@ -889,7 +889,7 @@ func TestRegisterHandler_AcceptsBoundaryLengthPassword(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode,
-		"a 128-byte password is exactly at the cap and must still register")
+		"a 72-byte password is exactly at the cap and must still register")
 }
 
 // ─────────────────────────── F-070: emails masked in logs ───────────────────────────

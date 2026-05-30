@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -41,6 +42,9 @@ func (s *ShareLinkService) Create(ctx context.Context, input CreateShareLinkInpu
 	}
 
 	if input.PIN != "" {
+		if err := passwordpolicy.ValidateBcryptInput("share link: pin", input.PIN); err != nil {
+			return nil, err
+		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(input.PIN), bcrypt.DefaultCost)
 		if err != nil {
 			return nil, fmt.Errorf("share link: hash pin: %w", err)

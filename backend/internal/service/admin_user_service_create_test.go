@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -87,6 +88,20 @@ func TestAdminUserService_Create_WeakPasswordRejected(t *testing.T) {
 	}
 }
 
+func TestAdminUserService_Create_OverlongPasswordRejectedBeforeHash(t *testing.T) {
+	svc := &AdminUserService{}
+	overlong := "Aa1!" + strings.Repeat("x", 69)
+	_, err := svc.Create(context.Background(), CreateInput{
+		Email:           "u@example.com",
+		Role:            "photographer",
+		InitialPassword: &overlong,
+		ActorID:         uuid.New(),
+	})
+	if err != ErrWeakPassword {
+		t.Fatalf("expected ErrWeakPassword for overlong password, got %v", err)
+	}
+}
+
 func TestAdminUserService_Create_MissingPathRejected(t *testing.T) {
 	svc := &AdminUserService{}
 	_, err := svc.Create(context.Background(), CreateInput{
@@ -168,10 +183,10 @@ func TestValidatePasswordComplexity_MixedRequired(t *testing.T) {
 		want error
 	}{
 		{"short", ErrWeakPassword},
-		{"allLowercase12345", ErrWeakPassword},  // no upper, no special
-		{"ALLUPPERCASE1234!", ErrWeakPassword},  // no lower
-		{"NoDigitsHere!Pass", ErrWeakPassword},  // no digit
-		{"NoSpecial1234Pass", ErrWeakPassword},  // no special
+		{"allLowercase12345", ErrWeakPassword}, // no upper, no special
+		{"ALLUPPERCASE1234!", ErrWeakPassword}, // no lower
+		{"NoDigitsHere!Pass", ErrWeakPassword}, // no digit
+		{"NoSpecial1234Pass", ErrWeakPassword}, // no special
 		{"Str0ng!PassWord", nil},
 	}
 	for _, tc := range tests {

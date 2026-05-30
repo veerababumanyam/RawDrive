@@ -2,6 +2,7 @@ package user_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rawdrive/backend/internal/user"
@@ -203,6 +204,27 @@ func TestUpdateUserProfile_Phone(t *testing.T) {
 	// Display name and avatar should remain unchanged.
 	assert.Equal(t, "", updated.DisplayName)
 	assert.Equal(t, "", updated.AvatarURL)
+}
+
+func TestChangePassword_RejectsOverlongPasswordBeforeHash(t *testing.T) {
+	repo := newMockUserRepo()
+	svc := user.NewService(repo)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, user.CreateUserInput{
+		Email:    "changepw@example.com",
+		Password: "CurrentStr0ng!Pass",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, created.PasswordHash)
+	originalHash := *created.PasswordHash
+
+	err = svc.ChangePassword(ctx, created.ID, "CurrentStr0ng!Pass", "Aa1!"+strings.Repeat("x", 69))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "password does not meet complexity requirements")
+	assert.Equal(t, originalHash, *repo.users[created.ID].PasswordHash,
+		"overlong password must be rejected before bcrypt/update")
 }
 
 func strPtr(s string) *string {

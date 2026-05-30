@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/email"
 	"github.com/rawdrive/backend/internal/middleware"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -71,6 +72,12 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if (accessMode == service.AccessPIN || accessMode == service.AccessPassword) && pin == "" {
 		http.Error(w, `{"error":"pin is required for protected share links"}`, http.StatusBadRequest)
 		return
+	}
+	if pin != "" {
+		if err := passwordpolicy.ValidateBcryptInput("pin", pin); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
 	}
 	if accessMode == service.AccessEmail {
 		if len(input.AllowedEmails) == 0 && len(input.RecipientEmails) > 0 {

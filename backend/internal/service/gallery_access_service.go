@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // GalleryAccessService handles gallery access control: passwords, PINs, access modes, and audit logging.
 type GalleryAccessService struct {
-	galleryRepo  *repository.GalleryRepo
+	galleryRepo   *repository.GalleryRepo
 	accessLogRepo *repository.GalleryAccessLogRepo
 }
 
@@ -26,6 +27,9 @@ func NewGalleryAccessService(gr *repository.GalleryRepo, alr *repository.Gallery
 
 // SetPassword hashes and stores a password for gallery access protection.
 func (s *GalleryAccessService) SetPassword(ctx context.Context, galleryID uuid.UUID, password string) error {
+	if err := passwordpolicy.ValidateBcryptInput("gallery access: password", password); err != nil {
+		return err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("gallery access: hash password: %w", err)

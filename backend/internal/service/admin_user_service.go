@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/logging"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -108,9 +109,9 @@ func validatePasswordComplexity(pw string) error {
 	if len(pw) < 12 {
 		return ErrWeakPassword
 	}
-	// F-056: cap length so bcrypt's 72-byte truncation can't silently weaken a
-	// long admin-set password and huge inputs can't waste hashing work.
-	if len(pw) > 128 {
+	// F-056: cap length at bcrypt's byte limit so overlong admin-set passwords
+	// are rejected before hashing.
+	if !passwordpolicy.FitsBcrypt(pw) {
 		return ErrWeakPassword
 	}
 	var hasUpper, hasLower, hasDigit, hasSpecial bool

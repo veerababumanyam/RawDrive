@@ -11,6 +11,7 @@ import (
 
 	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/logging"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 )
 
 // M39 E6-S1 (FR-F02): password-reset HTTP endpoints.
@@ -137,10 +138,10 @@ func validateResetPasswordComplexity(pw string) error {
 	if len(pw) < 12 {
 		return errors.New("password does not meet complexity (min 12 chars)")
 	}
-	// F-056: cap length so bcrypt's 72-byte truncation can't silently weaken a
-	// long reset password and huge inputs can't waste hashing work.
-	if len(pw) > 128 {
-		return errors.New("password too long (max 128 chars)")
+	// F-056: cap length at bcrypt's byte limit so overlong reset passwords are
+	// rejected before hashing.
+	if !passwordpolicy.FitsBcrypt(pw) {
+		return errors.New("password too long (max 72 chars)")
 	}
 	var hasUpper, hasLower, hasDigit, hasSpecial bool
 	for _, c := range pw {

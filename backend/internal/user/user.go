@@ -6,12 +6,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrConflict     = errors.New("conflict: resource already exists")
-	ErrNotFound     = errors.New("not found")
+	ErrConflict = errors.New("conflict: resource already exists")
+	ErrNotFound = errors.New("not found")
 	// ErrPhoneTaken distinguishes phone-uniqueness violations from
 	// generic DB errors so the register handler can respond with a
 	// targeted 409 + actionable message instead of an opaque 500.
@@ -21,6 +22,8 @@ var (
 	// detect the constraint-name-specific 23505 at INSERT time.
 	ErrPhoneTaken = errors.New("phone number is already registered")
 )
+
+const maxPasswordLen = passwordpolicy.MaxBcryptInputBytes
 
 type User struct {
 	ID            string
@@ -103,6 +106,9 @@ func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, err
 	}
 
 	if input.Password != "" {
+		if err := passwordpolicy.ValidateBcryptInput("password", input.Password); err != nil {
+			return nil, err
+		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 		if err != nil {
 			return nil, fmt.Errorf("failed to hash password: %w", err)
@@ -178,6 +184,9 @@ func (s *service) ChangePassword(ctx context.Context, userID, currentPassword, n
 // validatePasswordComplexity enforces >=12 chars, upper, lower, digit, special.
 func validatePasswordComplexity(pw string) error {
 	if len(pw) < 12 {
+		return errors.New("password does not meet complexity requirements")
+	}
+	if !passwordpolicy.FitsBcrypt(pw) {
 		return errors.New("password does not meet complexity requirements")
 	}
 	var hasUpper, hasLower, hasDigit, hasSpecial bool

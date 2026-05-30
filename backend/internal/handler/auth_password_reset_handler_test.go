@@ -164,6 +164,21 @@ func TestResetPassword_WeakPassword_Returns400(t *testing.T) {
 	}
 }
 
+func TestResetPassword_OverlongPassword_Returns400BeforeService(t *testing.T) {
+	svc := &fakePasswordSvc{}
+	h := NewAuthPasswordResetHandler(svc, nil)
+	body := []byte(`{"email":"user@example.com","otp":"123456","new_password":"Aa1!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ResetPassword(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on overlong password, got %d", rec.Code)
+	}
+	if len(svc.resets) != 0 {
+		t.Fatalf("service must not be called for overlong password; got %d calls", len(svc.resets))
+	}
+}
+
 // TestResetPassword_ComplexityRejection_NoVerbatimLeak is the F-101 regression.
 // Before the fix the handler echoed validateResetPasswordComplexity's sentinel
 // verbatim via `+err.Error()+`, normalizing a leak-prone pattern. The handler

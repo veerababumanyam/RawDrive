@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -844,6 +845,10 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) error 
 }
 
 func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPassword string) error {
+	if err := s.ValidatePassword(newPassword); err != nil {
+		return err
+	}
+
 	// F-031 (audit 2026-05-30): the mutex guards only the in-memory
 	// failedAttempts/resets maps. The lockout check, OTP comparison, attempt
 	// increments, and reset-entry deletion run under the lock; the slow DB
@@ -922,11 +927,9 @@ func (s *passwordService) ValidatePassword(password string) error {
 	if len(password) < 8 {
 		return errors.New("password must be at least 8 characters")
 	}
-	// F-056: cap length so bcrypt's 72-byte truncation can't silently weaken a
-	// long password, and a huge input can't waste hashing work. maxPasswordLen
-	// is defined in handler.go (same package).
-	if len(password) > maxPasswordLen {
-		return errors.New("password must be at most 128 characters")
+	// F-056: cap length so overlong inputs never reach bcrypt.
+	if err := passwordpolicy.ValidateBcryptInput("password", password); err != nil {
+		return err
 	}
 
 	hasUpper := false

@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/logging"
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 )
 
 // ErrPhoneTaken is returned by UserService.Create when the phone column
@@ -23,15 +24,9 @@ import (
 // AuthAdapter translates its own user.ErrPhoneTaken into this sentinel.
 var ErrPhoneTaken = errors.New("auth: phone number already registered")
 
-// maxPasswordLen caps the password length accepted at registration.
-//
-// F-056: bcrypt silently truncates at 72 bytes, so two passwords that
-// differ only past byte 72 hash to the same value (a real strength
-// collision), and an arbitrarily long input wastes the server-side copy
-// bcrypt performs before truncating. 128 bytes is well past any realistic
-// passphrase yet safely below the truncation boundary's blast radius, and
-// mirrors the cap the password service enforces for change-password.
-const maxPasswordLen = 128
+// maxPasswordLen caps user passwords at bcrypt's byte limit. Kept for local
+// readability while the numeric value lives in passwordpolicy.
+const maxPasswordLen = passwordpolicy.MaxBcryptInputBytes
 
 // ──────────────────────────── Request / Response Types ────────────────────────────
 
@@ -358,13 +353,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// F-056: reject over-long passwords. Without an upper bound, bcrypt
-	// truncates anything past 72 bytes (so the bytes beyond 72 add no
-	// strength and two such passwords collide), and a megabyte-long string
-	// is hashed anyway. Cap length here, before the password ever reaches
-	// the hashing site in h.users.Create.
-	if len(req.Password) > maxPasswordLen {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at most 128 characters"})
+	// F-056: reject over-long passwords before the password ever reaches the
+	// hashing site in h.users.Create. bcrypt's limit is 72 bytes.
+	if err := passwordpolicy.ValidateBcryptInput("password", req.Password); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
