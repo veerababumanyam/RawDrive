@@ -5,7 +5,7 @@
 - **Method:** 15 specialist finder agents + 15 adversarial verifiers (30 agents, agent teams)
 - **Audited version:** `v0.0.65`
 - **Audited branch:** `main`
-- **Audited commit:** `1d2b6b6` (`1d2b6b6577a95bafe199184824768b89adcb77ca`)
+- **Audited commit:** `1d2b6b6` (pre-rewrite SHA; the audit ran against this commit. Git history was later rewritten on 2026-05-30 to purge a leaked token, so this SHA no longer exists — see §0 History purge. Post-rewrite base is `ca0adf1`.)
 - **Scale:** ~82K LOC Go backend (675 files, 28 packages), ~67K LOC Next.js frontend (423 files), 122 SQL migrations
 - **Result:** **124 verified findings** out of 131 raw (7 false-positives rejected by adversarial verification)
 - **Status:** ✅ Complete
