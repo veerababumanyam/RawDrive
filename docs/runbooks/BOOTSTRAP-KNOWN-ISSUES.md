@@ -51,7 +51,7 @@
    ssh root@187.127.142.46 "rclone lsf r2:rawdrive-backups/daily/"
    ```
 7. **Run the restore rehearsal** (see Phase B Task B.9 in the plan for the exact commands).
-8. **Also rotate the Cloudflare API Token** while you're there (`cfat_REDACTED_ROTATE_IN_CLOUDFLARE`) — if the R2 creds were silently revoked, the CF zone token may also be compromised.
+8. **Also rotate the Cloudflare API Token** while you're there (`[REDACTED-SECRET]`) — if the R2 creds were silently revoked, the CF zone token may also be compromised.
 
 ---
 
