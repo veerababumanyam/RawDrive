@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/rawdrive/backend/internal/auth"
+	"github.com/rawdrive/backend/internal/logging"
 )
 
 // M39 E6-S1 (FR-F02): password-reset HTTP endpoints.
@@ -124,7 +125,7 @@ func (h *AuthPasswordResetHandler) ResetPassword(w http.ResponseWriter, r *http.
 	// SEC-F03: invalidate every active refresh session for this user.
 	if h.revoker != nil {
 		if err := h.revoker.RevokeAllByEmail(r.Context(), email); err != nil {
-			log.Printf("password reset: failed to revoke sessions for %s: %v", email, err)
+			log.Printf("password reset: failed to revoke sessions for %s: %v", logging.MaskEmail(email), err)
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -135,6 +136,11 @@ func (h *AuthPasswordResetHandler) ResetPassword(w http.ResponseWriter, r *http.
 func validateResetPasswordComplexity(pw string) error {
 	if len(pw) < 12 {
 		return errors.New("password does not meet complexity (min 12 chars)")
+	}
+	// F-056: cap length so bcrypt's 72-byte truncation can't silently weaken a
+	// long reset password and huge inputs can't waste hashing work.
+	if len(pw) > 128 {
+		return errors.New("password too long (max 128 chars)")
 	}
 	var hasUpper, hasLower, hasDigit, hasSpecial bool
 	for _, c := range pw {

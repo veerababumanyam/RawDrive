@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/rawdrive/backend/internal/logging"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -51,10 +52,10 @@ type DealerCredentialsSender interface {
 }
 
 type DealerService struct {
-	repo         *repository.DealerRepo
-	adminUserRepo *repository.AdminUserRepo  // for creating dealer user accounts
-	credsSender  DealerCredentialsSender     // nil = skip email (dev/test)
-	frontendURL  string                      // for login link in credentials email
+	repo          *repository.DealerRepo
+	adminUserRepo *repository.AdminUserRepo // for creating dealer user accounts
+	credsSender   DealerCredentialsSender   // nil = skip email (dev/test)
+	frontendURL   string                    // for login link in credentials email
 }
 
 func NewDealerService(repo *repository.DealerRepo) *DealerService {
@@ -315,10 +316,10 @@ func (s *DealerService) sendDealerCredentialsEmail(ctx context.Context, dealerUs
 		body,
 		base+"/login",
 	); err != nil {
-		log.Printf("[dealer-creds] email send failed to %s: %v", dealerEmail, err)
+		log.Printf("[dealer-creds] email send failed to %s: %v", logging.MaskEmail(dealerEmail), err)
 		return
 	}
-	log.Printf("[dealer-creds] credentials email sent to %s for dealer %q", dealerEmail, businessName)
+	log.Printf("[dealer-creds] credentials email sent to %s for dealer %q", logging.MaskEmail(dealerEmail), businessName)
 }
 
 func (s *DealerService) RejectDealer(ctx context.Context, dealerID, adminID uuid.UUID, reason string) error {

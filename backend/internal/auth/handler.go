@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/logging"
 )
 
 // ErrPhoneTaken is returned by UserService.Create when the phone column
@@ -878,24 +879,12 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 // ──────────────────────────── Helpers ────────────────────────────
 
-// maskEmail redacts an email address for logging so user PII (F-070) does
-// not persist in log aggregators with no TTL (DPDP/GDPR). It keeps just
-// enough to correlate support reports: the first character of the local
-// part and the full domain, e.g. "alice@example.com" -> "a***@example.com".
-// Inputs that don't look like an email are reported as "[redacted]" so a
-// malformed value can never leak verbatim. Empty input stays empty.
+// maskEmail redacts an email address for logging so user PII (F-070) does not
+// persist in log aggregators. It is a thin delegate to logging.MaskEmail (the
+// single source of truth, shared with the service/handler packages); retained
+// so the existing auth call sites and MaskEmailForTest keep their signature.
 func maskEmail(email string) string {
-	if email == "" {
-		return ""
-	}
-	at := strings.LastIndex(email, "@")
-	if at <= 0 || at >= len(email)-1 {
-		// No usable local part or domain — never echo the raw value.
-		return "[redacted]"
-	}
-	local := email[:at]
-	domain := email[at+1:]
-	return local[:1] + "***@" + domain
+	return logging.MaskEmail(email)
 }
 
 func isValidEmail(email string) bool {

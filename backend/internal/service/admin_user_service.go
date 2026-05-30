@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/auth"
+	"github.com/rawdrive/backend/internal/logging"
 	"github.com/rawdrive/backend/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -105,6 +106,11 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 // rules in auth.PasswordService).
 func validatePasswordComplexity(pw string) error {
 	if len(pw) < 12 {
+		return ErrWeakPassword
+	}
+	// F-056: cap length so bcrypt's 72-byte truncation can't silently weaken a
+	// long admin-set password and huge inputs can't waste hashing work.
+	if len(pw) > 128 {
 		return ErrWeakPassword
 	}
 	var hasUpper, hasLower, hasDigit, hasSpecial bool
@@ -464,7 +470,7 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 		}
 		inviteLink := fmt.Sprintf("%s/forgot-password?email=%s", base, url.QueryEscape(email))
 		if err := s.inviteSender.SendAdminInvitation(ctx, email, role, inviteLink); err != nil {
-			log.Printf("admin: invite email to %s failed: %v", email, err)
+			log.Printf("admin: invite email to %s failed: %v", logging.MaskEmail(email), err)
 		}
 	}
 	return detail, nil

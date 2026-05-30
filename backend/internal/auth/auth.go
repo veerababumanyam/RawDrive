@@ -835,7 +835,7 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) error 
 		user, lookupErr := s.store.FindByEmail(ctx, email)
 		if lookupErr == nil && user != nil {
 			if err := s.notifier.SendPasswordResetOTP(ctx, email, code, s.config.ResetOTPExpiry); err != nil {
-				log.Printf("password reset: SendPasswordResetOTP to %s failed: %v", email, err)
+				log.Printf("password reset: SendPasswordResetOTP to %s failed: %v", maskEmail(email), err)
 			}
 		}
 	}
@@ -921,6 +921,12 @@ func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPass
 func (s *passwordService) ValidatePassword(password string) error {
 	if len(password) < 8 {
 		return errors.New("password must be at least 8 characters")
+	}
+	// F-056: cap length so bcrypt's 72-byte truncation can't silently weaken a
+	// long password, and a huge input can't waste hashing work. maxPasswordLen
+	// is defined in handler.go (same package).
+	if len(password) > maxPasswordLen {
+		return errors.New("password must be at most 128 characters")
 	}
 
 	hasUpper := false
