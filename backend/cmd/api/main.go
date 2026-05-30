@@ -11,6 +11,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -281,6 +283,74 @@ func (l streamingrechargePackageLookup) ActivePackage(ctx context.Context, packa
 		return nil, err
 	}
 	return &info, nil
+}
+
+// registerStreamingRechargeRoutes wires the F-014 recharge endpoints onto the
+// correct routers (F-010 fix).
+//
+//   - api: the authenticated sub-router (JWTAuth + TenantContext already
+//     applied by the caller). RequireAuth / RequirePlatformRole here see the
+//     injected claims, so the recharge / orders / balance / refund endpoints
+//     work instead of always returning 401.
+//   - public: the outer router with no JWTAuth. The public package catalogue
+//     and the provider webhooks live here on purpose — webhooks are
+//     signature-verified inside the handler and must NOT inherit
+//     TenantContext/RequireMFA (providers send no JWT and no workspace header).
+//
+// Paths mirror streamingrecharge.RegisterRoutes exactly; only the router and
+// per-route middleware placement differ.
+func registerStreamingRechargeRoutes(api, public chi.Router, h *streamingrecharge.Handler) {
+	// Public catalogue (no auth — landing page reads this).
+	public.Get("/api/v1/public/streaming/packages", h.ListPublicPackages)
+
+	// Provider webhooks (no auth; signature verification done in the handler).
+	public.Post("/api/v1/webhooks/phonepe/streaming", h.PhonePeWebhook)
+	public.Post("/api/v1/webhooks/razorpay/streaming", h.RazorpayWebhook)
+
+	// Workspace-authenticated recharge initiation + reads.
+	api.With(middleware.RequireAuth).Post("/api/v1/streaming/recharge", h.CreateRecharge)
+	api.With(middleware.RequireAuth).Get("/api/v1/streaming/recharges", h.ListMyOrders)
+	api.With(middleware.RequireAuth).Get("/api/v1/streaming/balance", h.GetMyBalance)
+
+	// Super-admin refund.
+	api.With(middleware.RequireAuth).
+		With(middleware.RequirePlatformRole("super_admin")).
+		Post("/api/v1/admin/streaming/recharges/{id}/refund", h.RefundRecharge)
+}
+
+// publicThumbnailKeyRe matches the ONLY storage keys that may be served without
+// a bearer token: workspace-derivative thumbnails written by the derivative
+// pipeline, keyed as thumbnails/<uuid>/<variant>.webp. Anything else (originals,
+// downloads, ZIPs, BYOS prefixes) requires JWT auth. (F-035 hardening.)
+var publicThumbnailKeyRe = regexp.MustCompile(`^thumbnails/[0-9a-fA-F-]{36}/(thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
+
+// validateStorageKey rejects storage-proxy keys that attempt path traversal or
+// absolute-path escapes before they ever reach the storage provider. B2/S3 use
+// a flat keyspace so this is defense-in-depth, not a live exploit fix: it closes
+// the unvalidated-key surface and prevents a future prefix collision from
+// silently bypassing auth. (F-035.)
+func validateStorageKey(key string) error {
+	if key == "" {
+		return errors.New("missing key")
+	}
+	if strings.HasPrefix(key, "/") {
+		return errors.New("absolute key not allowed")
+	}
+	if strings.Contains(key, "..") {
+		return errors.New("traversal not allowed")
+	}
+	// path.Clean collapses any "./" / redundant separators; if cleaning changes
+	// the key it was not already normalized and we reject rather than guess.
+	if path.Clean(key) != key {
+		return errors.New("non-normalized key not allowed")
+	}
+	return nil
+}
+
+// isPublicThumbnailKey reports whether a (already-validated) key is a derivative
+// thumbnail safe to serve anonymously. (F-035.)
+func isPublicThumbnailKey(key string) bool {
+	return publicThumbnailKeyRe.MatchString(key)
 }
 
 type platformSettingsSMTPReader struct {
@@ -1356,7 +1426,11 @@ func main() {
 	// In-process event broker for real-time SSE delivery to frontend
 	eventBroker := handler.NewEventBroker()
 
-	var m8Deps handler.M8Dependencies                        // declared here so public routes can reference
+	var m8Deps handler.M8Dependencies // declared here so public routes can reference
+	// F-009: shared PIN brute-force limiter (5 attempts / 5 min per IP+resource),
+	// consumed by BOTH the public gallery verify-pin (M2) and the stream
+	// verify-pin (M8) so the two PIN gates share throttling state.
+	pinLimiter := middleware.NewMemoryPINRateLimiter(5, 5*time.Minute)
 	var m6Scheduler *scheduler.Scheduler                     // declared here so it can be started below next to workers
 	var publicLeadDispatcher *handler.NotificationDispatcher // set inside protected block, consumed by public lead embed below
 
@@ -1423,16 +1497,17 @@ func main() {
 		}
 
 		m2Deps := handler.M2Dependencies{
-			AssetService:         assetSvc,
-			UploadService:        uploadSvc,
-			GalleryService:       gallerySvc,
-			ShareLinkService:     shareLinkSvc,
-			GalleryShareSender:   galleryShareSender,
-			GalleryShareLogRepo:  galleryShareLogRepo,
-			PublicBaseURL:        os.Getenv("FRONTEND_URL"),
+			AssetService:            assetSvc,
+			UploadService:           uploadSvc,
+			GalleryService:          gallerySvc,
+			ShareLinkService:        shareLinkSvc,
+			GalleryShareSender:      galleryShareSender,
+			GalleryShareLogRepo:     galleryShareLogRepo,
+			PublicBaseURL:           os.Getenv("FRONTEND_URL"),
 			ProofingService:         proofingSvc,
 			GalleryFavoritesService: galleryFavoritesSvc,
 			StorageConfigService:    storageConfigSvc,
+			PINRateLimiter:          pinLimiter, // F-009: brute-force defence on public gallery verify-pin
 			// M11
 			AlbumService:         albumSvc,
 			StorageAccountingSvc: storageAccountingSvc,
@@ -1466,9 +1541,9 @@ func main() {
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
 			// ai.NewFaceRepo is stateless — constructing it twice (here and in
 			// the AI init block below) is safe and keeps this block self-contained.
-			Pool:        dbPool,
-			FaceRepo:    ai.NewFaceRepo(dbPool),
-			FaceClient:  earlyFaceClient, // nil when FACE_SVC_URL unset → endpoint returns 503
+			Pool:       dbPool,
+			FaceRepo:   ai.NewFaceRepo(dbPool),
+			FaceClient: earlyFaceClient, // nil when FACE_SVC_URL unset → endpoint returns 503
 			// Subscription upgrade payments via Razorpay. Nil when env vars absent.
 			SubscriptionUpgradeHandler: handler.NewSubscriptionUpgradeHandlerFromEnv(dbPool),
 			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
@@ -2013,7 +2088,19 @@ func main() {
 			streamingrecharge.NewPlatformSettingsResolver(settingsAdapter),
 			packageLookup, invoiceNumberer, gstStateCode,
 		)
-		streamingrecharge.RegisterRoutes(r, streamingrecharge.NewHandler(rechargeSvc, dbPool))
+		// F-010 (audit 2026-05-30): the recharge handler exposes a MIX of
+		// authenticated routes (RequireAuth / RequirePlatformRole) and
+		// unauthenticated ones (public catalogue + provider webhooks).
+		// The old single RegisterRoutes(r, ...) call mounted everything on
+		// the OUTER router `r`, which has no JWTAuth — so middleware.RequireAuth
+		// always saw nil claims and every authenticated recharge/balance/refund
+		// endpoint returned 401. Split the wiring: authenticated routes go on
+		// the `api` sub-router (JWTAuth + TenantContext already applied here,
+		// matching the sibling registrations above), while the public catalogue
+		// and signature-verified webhooks stay on `r` — webhooks MUST NOT inherit
+		// TenantContext/RequireMFA since providers send no JWT and no workspace.
+		rechargeHandler := streamingrecharge.NewHandler(rechargeSvc, dbPool)
+		registerStreamingRechargeRoutes(api, r, rechargeHandler)
 		log.Println("M32/F-014: Recharge + webhooks (PhonePe/Razorpay) + GST invoice + refund registered")
 
 		// ──────────────────────── M34 / F-014: streaming commercial v1 ──────────────
@@ -2177,11 +2264,9 @@ func main() {
 			viewerJWT = nil
 		}
 
-		// PIN brute-force defence: in-memory limiter, 5 attempts per 5min
-		// per (IP, stream). Sufficient for single-node staging; production
-		// should swap a Valkey-backed limiter behind the same interface.
-		pinLimiter := middleware.NewMemoryPINRateLimiter(5, 5*time.Minute)
-
+		// PIN brute-force defence uses the shared pinLimiter declared at function
+		// scope (F-009) so the gallery (M2) and stream (M8) verify-pin gates share
+		// throttling state. Production should swap a Valkey-backed limiter.
 		m8Deps = handler.M8Dependencies{
 			StreamService:  streamSvc,
 			VideoService:   videoSvc,
@@ -2311,19 +2396,27 @@ func main() {
 	// preserved for fetch() callers that already set it.
 	r.Get("/storage/*", func(w http.ResponseWriter, r *http.Request) {
 		key := chi.URLParam(r, "*")
-		if key == "" {
-			http.Error(w, `{"error":"missing key"}`, http.StatusBadRequest)
+		// F-035 (audit 2026-05-30): sanitize the raw URL key BEFORE any
+		// auth decision. The router has no CleanPath middleware, so a key
+		// could contain "..", a leading "/", or other non-normalized
+		// segments. B2/S3 use a flat keyspace (so traversal is not a live
+		// exploit), but rejecting malformed keys closes the unvalidated
+		// unauthenticated key surface and prevents a future prefix collision
+		// from silently bypassing the auth gate.
+		if err := validateStorageKey(key); err != nil {
+			http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 			return
 		}
-		// Public gallery access: thumbnails/* objects are derivative
-		// renders (small JPEG/WebP previews) and are safe to serve
-		// anonymously because they are the exact bytes a visitor
-		// already receives from a /g/{slug} client gallery. Originals
-		// (keyed under <workspace>/<upload>/original.<ext>) still
-		// require a bearer token. This is what unlocked the public
-		// gallery grid during UAT — otherwise anonymous visitors
-		// hit 401 on every <img src>.
-		isPublicThumbnail := strings.HasPrefix(key, "thumbnails/")
+		// Public gallery access: derivative thumbnails are safe to serve
+		// anonymously because they are the exact bytes a visitor already
+		// receives from a /g/{slug} client gallery. Originals, downloads,
+		// ZIPs and BYOS prefixes still require a bearer token. The bypass is
+		// gated behind a STRICT key shape (thumbnails/<uuid>/<variant>.webp)
+		// rather than a loose "thumbnails/" prefix, so no other object can
+		// ever be lexically smuggled past the auth check. This is what
+		// unlocked the public gallery grid during UAT — otherwise anonymous
+		// visitors hit 401 on every <img src>.
+		isPublicThumbnail := isPublicThumbnailKey(key)
 
 		if !isPublicThumbnail {
 			// Verify JWT — accept Bearer header OR ?token=... for <img src>.

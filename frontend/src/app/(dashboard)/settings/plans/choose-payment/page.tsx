@@ -202,6 +202,13 @@ export default function ChoosePaymentPage() {
 
       if (order.provider === "phonepe") {
         if (!order.redirect_url) throw new Error("PhonePe order missing redirect URL");
+        // Scheme guard: only navigate to https URLs. Mirrors the guard in
+        // components/streams/RechargeModal.tsx. Blocks javascript:/data:/http:
+        // payloads in case the backend response is misconfigured or tampered
+        // with (open redirect / XSS defense-in-depth) before window.location.
+        if (!order.redirect_url.startsWith("https:")) {
+          throw new Error("Invalid payment redirect URL");
+        }
         try {
           window.sessionStorage.setItem("rawdrive-pending-plan-name", plan.name);
         } catch { /* non-critical */ }

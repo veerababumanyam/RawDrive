@@ -37,6 +37,22 @@
 -- now that every row matches the WHERE clause. Not worth dropping —
 -- the index size is bounded by row count, not selectivity.
 
+-- F-006 fix (2026-05-30): the migration that originally ADDED this column
+-- (slot 110) was deleted when slot 110 was recycled for inquiry_messages
+-- (now 115). On a fresh DB the column never existed, so the statements
+-- below failed with "column \"face_recognition_enabled\" does not exist",
+-- halting the runner before migrations 113-122 could apply.
+--
+-- This ADD COLUMN IF NOT EXISTS is idempotent: production DBs (already past
+-- 112, version recorded in schema_migrations, never re-run) are unaffected,
+-- while fresh DBs (CI / staging / new VPS) now get the column created here
+-- so the ALTER DEFAULT / UPDATE / COMMENT below succeed. Editing an
+-- already-applied migration in place is the sanctioned exception to the
+-- append-only rule precisely because the runner never re-executes it.
+-- A belt-and-suspenders standalone add also ships as migration 125.
+ALTER TABLE workspaces
+    ADD COLUMN IF NOT EXISTS face_recognition_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
 ALTER TABLE workspaces
     ALTER COLUMN face_recognition_enabled SET DEFAULT TRUE;
 

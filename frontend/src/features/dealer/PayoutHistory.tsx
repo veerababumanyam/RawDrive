@@ -57,7 +57,7 @@ export default function PayoutHistory() {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
       .then((r) => (r.ok ? r.json() : []))
-      .then(setPayouts)
+      .then((d) => setPayouts(Array.isArray(d) ? d : []))
       .catch(() => setPayouts([]))
       .finally(() => setLoading(false));
   }, []);

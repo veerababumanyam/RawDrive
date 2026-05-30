@@ -29,9 +29,9 @@ type PublicGalleryHandler struct {
 	// M13 deferred-FR closure deps (optional — nil-safe handlers degrade
 	// gracefully so existing tests that construct PublicGalleryHandler
 	// without these continue to compile).
-	pool        *pgxpool.Pool // subscription tier lookup for GAL-FR-115
-	faceRepo    *ai.FaceRepo  // gallery-scoped face match for GAL-FR-107/108
-	faceClient  *face.Client  // optional face-svc client for server-side
+	pool       *pgxpool.Pool // subscription tier lookup for GAL-FR-115
+	faceRepo   *ai.FaceRepo  // gallery-scoped face match for GAL-FR-107/108
+	faceClient *face.Client  // optional face-svc client for server-side
 	// detect+embed on the public Photo Search endpoint. Nil when
 	// FACE_SVC_URL is unset — the endpoint returns 503 in that case
 	// rather than throwing the request away silently.
@@ -41,6 +41,63 @@ type PublicGalleryHandler struct {
 	// the gallery's watermark_config is enabled, the original is decoded,
 	// watermarked, and re-encoded as JPEG before being streamed.
 	watermarkSvc *service.WatermarkService
+
+	// F-029: bulk asset lookup for the public list endpoints. Optional and
+	// nil-safe — when set (production wires it from the same pool injected via
+	// WithM13Deps) ListAssets/ListAlbumAssets fetch every asset for the gallery
+	// in a single `id = ANY($1)` query instead of one GetByID per junction row.
+	// When nil (e.g. tests that construct the handler without a pool) the
+	// enrichment path degrades to the previous per-ID lookups, so behaviour is
+	// unchanged for callers that never wired a batch source.
+	assetBatch publicAssetBatchSource
+}
+
+// publicAssetBatchSource is the narrow bulk-read seam the public list
+// endpoints use to collapse the per-asset N+1 (F-029) into one query. Defining
+// it locally keeps the handler testable with an in-memory fake while
+// production wires the pool-backed poolAssetBatchSource.
+type publicAssetBatchSource interface {
+	// GetByIDs fetches every live (non-soft-deleted) asset whose ID is in the
+	// set with a single query. Missing IDs are simply absent from the result;
+	// order is not guaranteed (callers index by ID).
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*repository.Asset, error)
+}
+
+// poolAssetBatchSource is the production publicAssetBatchSource: a thin wrapper
+// over the request pool that issues the bulk `id = ANY($1)` query. The column
+// list mirrors AssetRepo.GetByID so the enriched response carries the same
+// fields the per-ID path produced.
+type poolAssetBatchSource struct {
+	pool *pgxpool.Pool
+}
+
+func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*repository.Asset, error) {
+	if s.pool == nil || len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
+		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
+		 status, created_at, updated_at, deleted_at
+		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("public gallery: bulk get assets: %w", err)
+	}
+	defer rows.Close()
+
+	var assets []*repository.Asset
+	for rows.Next() {
+		a := &repository.Asset{}
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		); err != nil {
+			return nil, fmt.Errorf("public gallery: bulk get assets scan: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
 }
 
 func NewPublicGalleryHandler(gs *service.GalleryService, as *service.AssetService, ss *service.ShareLinkService) *PublicGalleryHandler {
@@ -60,6 +117,22 @@ func (h *PublicGalleryHandler) WithWatermarkService(ws *service.WatermarkService
 func (h *PublicGalleryHandler) WithM13Deps(pool *pgxpool.Pool, faceRepo *ai.FaceRepo) *PublicGalleryHandler {
 	h.pool = pool
 	h.faceRepo = faceRepo
+	// F-029: the same pool backs the bulk asset lookup used by ListAssets /
+	// ListAlbumAssets. Wiring it here means production (which always passes a
+	// non-nil pool) gets the single-query path automatically, while handlers
+	// constructed without M13 deps keep the per-ID fallback.
+	if pool != nil {
+		h.assetBatch = poolAssetBatchSource{pool: pool}
+	}
+	return h
+}
+
+// WithAssetBatchSource overrides the bulk asset lookup used by the public list
+// endpoints (F-029). Primarily a test seam so the N+1 collapse can be verified
+// against an in-memory fake; production wires the pool-backed source via
+// WithM13Deps. Returns the receiver for chained construction.
+func (h *PublicGalleryHandler) WithAssetBatchSource(src publicAssetBatchSource) *PublicGalleryHandler {
+	h.assetBatch = src
 	return h
 }
 
@@ -82,11 +155,11 @@ func (h *PublicGalleryHandler) WithFaceClient(c *face.Client) *PublicGalleryHand
 // shape: <biz-slug>-<biz-code>) from the request. Two sources, checked in
 // priority order:
 //
-//   1. `?ws=` query parameter — set by the Next.js middleware when it rewrites
-//      <sub>.rawdrive.in/<slug> to /g/<slug>?ws=<sub> before passing the
-//      request to the API server.
-//   2. `X-Workspace-Subdomain` header — fallback for direct API callers
-//      (curl, future native apps) that prefer headers to querystrings.
+//  1. `?ws=` query parameter — set by the Next.js middleware when it rewrites
+//     <sub>.rawdrive.in/<slug> to /g/<slug>?ws=<sub> before passing the
+//     request to the API server.
+//  2. `X-Workspace-Subdomain` header — fallback for direct API callers
+//     (curl, future native apps) that prefer headers to querystrings.
 //
 // Returns "" when neither is present. The caller decides whether to scope
 // the gallery lookup to a workspace or fall back to the unscoped legacy path.
@@ -231,6 +304,52 @@ type publicAssetResponse struct {
 	SortOrder     int               `json:"sort_order"`
 }
 
+// resolveAssetsByID bulk-fetches the given asset IDs and returns an O(1)
+// lookup map keyed by asset ID (F-029). When a batch source is wired it issues
+// a single `id = ANY($1)` query, collapsing the previous one-GetByID-per-asset
+// N+1 on the unauthenticated hot read path. When no batch source is available
+// (handler constructed without a pool) it degrades to per-ID assetSvc.GetByID
+// calls so behaviour is unchanged for those callers.
+//
+// Missing or soft-deleted assets are simply absent from the map; callers skip
+// them, matching the prior "skip missing assets" behaviour.
+func (h *PublicGalleryHandler) resolveAssetsByID(ctx context.Context, ids []uuid.UUID) map[uuid.UUID]*repository.Asset {
+	byID := make(map[uuid.UUID]*repository.Asset, len(ids))
+	if len(ids) == 0 {
+		return byID
+	}
+
+	if h.assetBatch != nil {
+		assets, err := h.assetBatch.GetByIDs(ctx, ids)
+		if err == nil {
+			for _, a := range assets {
+				if a != nil {
+					byID[a.ID] = a
+				}
+			}
+			return byID
+		}
+		// On bulk-fetch error fall through to the per-ID path so a transient
+		// batch failure degrades gracefully rather than emptying the gallery.
+	}
+
+	// Per-ID fallback. Only reachable when no batch source is wired, or when a
+	// wired batch source erred. Guarded against a nil assetSvc so degraded
+	// constructions (no pool, no asset service) return an empty map instead of
+	// panicking on the unauthenticated public path.
+	if h.assetSvc == nil {
+		return byID
+	}
+	for _, id := range ids {
+		asset, err := h.assetSvc.GetByID(ctx, id)
+		if err != nil || asset == nil {
+			continue
+		}
+		byID[id] = asset.Asset
+	}
+	return byID
+}
+
 // ListAssets handles GET /api/v1/public/galleries/{slug}/assets
 func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
@@ -246,11 +365,19 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Enrich gallery assets with full asset details
+	// Enrich gallery assets with full asset details. F-029: fetch every asset
+	// in one query and index by ID instead of issuing a GetByID per junction
+	// row (which scaled the public hot path linearly with photo count).
+	ids := make([]uuid.UUID, 0, len(galleryAssets))
+	for _, ga := range galleryAssets {
+		ids = append(ids, ga.AssetID)
+	}
+	assetsByID := h.resolveAssetsByID(r.Context(), ids)
+
 	var result []publicAssetResponse
 	for _, ga := range galleryAssets {
-		asset, err := h.assetSvc.GetByID(r.Context(), ga.AssetID)
-		if err != nil || asset == nil {
+		asset, ok := assetsByID[ga.AssetID]
+		if !ok {
 			continue // skip missing assets
 		}
 		result = append(result, publicAssetResponse{
@@ -367,10 +494,18 @@ func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// F-029: same single-query enrichment as ListAssets — one bulk fetch keyed
+	// by ID rather than a GetByID per album-asset junction row.
+	ids := make([]uuid.UUID, 0, len(albumAssets))
+	for _, aa := range albumAssets {
+		ids = append(ids, aa.AssetID)
+	}
+	assetsByID := h.resolveAssetsByID(r.Context(), ids)
+
 	result := make([]publicAssetResponse, 0, len(albumAssets))
 	for _, aa := range albumAssets {
-		asset, err := h.assetSvc.GetByID(r.Context(), aa.AssetID)
-		if err != nil || asset == nil {
+		asset, ok := assetsByID[aa.AssetID]
+		if !ok {
 			continue
 		}
 		result = append(result, publicAssetResponse{

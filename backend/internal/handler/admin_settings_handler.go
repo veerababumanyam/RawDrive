@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -106,13 +107,32 @@ func (h *AdminSettingsHandler) DeleteSetting(w http.ResponseWriter, r *http.Requ
 }
 
 // RegisterAdminSettingsRoutes wires up the admin settings CRUD endpoints.
+//
+// These routes are mounted on the JWT-only `api` group in main.go, which is a
+// more-specific mount than the guarded `/api/v1/admin` group — chi routes
+// requests to this subrouter, so the platform-role gate MUST be applied here.
+// Without it, any authenticated workspace user could read/enumerate setting
+// metadata and overwrite or delete platform secrets (B2, SMTP, JWT, payment
+// keys). Reads are restricted to platform staff (super_admin + admin, mirroring
+// the /api/v1/admin group); mutations (PUT/DELETE) require super_admin
+// specifically, since they can rotate/destroy platform secrets.
 func RegisterAdminSettingsRoutes(r chi.Router, repo *repository.PlatformSettingsRepo) {
 	h := NewAdminSettingsHandler(repo)
 	r.Route("/api/v1/admin/settings", func(sr chi.Router) {
+		// Base gate: only platform staff may read/enumerate settings,
+		// mirroring the RequirePlatformRole("super_admin", "admin") gate on
+		// the rest of the /api/v1/admin group (see admin_routes.go).
+		sr.Use(middleware.RequirePlatformRole("super_admin", "admin"))
+
 		sr.Get("/categories", h.ListCategories)
 		sr.Get("/{category}", h.ListByCategory)
 		sr.Get("/{category}/{key}", h.GetSetting)
-		sr.Put("/{category}/{key}", h.UpsertSetting)
-		sr.Delete("/{category}/{key}", h.DeleteSetting)
+
+		// Mutations are higher-severity and require super_admin specifically.
+		sr.Group(func(mr chi.Router) {
+			mr.Use(middleware.RequirePlatformRole("super_admin"))
+			mr.Put("/{category}/{key}", h.UpsertSetting)
+			mr.Delete("/{category}/{key}", h.DeleteSetting)
+		})
 	})
 }

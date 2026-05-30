@@ -29,10 +29,10 @@ type ProviderResolver interface {
 // PackageInfo is the minimal projection the recharge service needs about a
 // streaming_package + active rate_card. Avoids importing the rate package.
 type PackageInfo struct {
-	PackageID    uuid.UUID
-	RateCardID   uuid.UUID
-	PricePaise   int64
-	Minutes      int
+	PackageID  uuid.UUID
+	RateCardID uuid.UUID
+	PricePaise int64
+	Minutes    int
 }
 
 // PackageLookup resolves a package + active rate card.
@@ -78,7 +78,7 @@ func NewService(
 type CreateOrderInput struct {
 	WorkspaceID   uuid.UUID
 	PackageID     uuid.UUID
-	Provider      Name   // "phonepe" or "razorpay"; if "" defaults to phonepe.
+	Provider      Name // "phonepe" or "razorpay"; if "" defaults to phonepe.
 	CallbackURL   string
 	RedirectURL   string
 	CustomerPhone string
@@ -89,18 +89,18 @@ type CreateOrderInput struct {
 
 // Order is the recharge_orders row returned to the caller.
 type Order struct {
-	ID                uuid.UUID  `json:"id"`
-	WorkspaceID       uuid.UUID  `json:"workspace_id"`
-	PackageID         uuid.UUID  `json:"package_id"`
-	RateCardID        uuid.UUID  `json:"rate_card_id"`
-	AmountPaise       int64      `json:"amount_paise"`
-	Minutes           int        `json:"minutes"`
-	Provider          Name       `json:"provider"`
-	ProviderOrderID   string     `json:"provider_order_id"`
-	ProviderPaymentID *string    `json:"provider_payment_id,omitempty"`
-	Status            string     `json:"status"`
-	CheckoutURL       *string    `json:"checkout_url,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                uuid.UUID `json:"id"`
+	WorkspaceID       uuid.UUID `json:"workspace_id"`
+	PackageID         uuid.UUID `json:"package_id"`
+	RateCardID        uuid.UUID `json:"rate_card_id"`
+	AmountPaise       int64     `json:"amount_paise"`
+	Minutes           int       `json:"minutes"`
+	Provider          Name      `json:"provider"`
+	ProviderOrderID   string    `json:"provider_order_id"`
+	ProviderPaymentID *string   `json:"provider_payment_id,omitempty"`
+	Status            string    `json:"status"`
+	CheckoutURL       *string   `json:"checkout_url,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // CreateOrder picks a provider, opens an order with them, and persists the
@@ -395,15 +395,21 @@ func (s *Service) generateInvoiceIfMissing(ctx context.Context, order *Order, pr
 	}
 
 	// 18% GST on streaming services. Split by intra/inter-state.
+	//
+	// F-016/F-017: GST is computed with the SAME round-half-up arithmetic the
+	// billing engine (gst_engine.go) uses, so a streaming invoice's tax matches
+	// a billing invoice for the same subtotal. For intra-state supplies CGST and
+	// SGST are each computed INDEPENDENTLY at 9% (not by splitting a rounded
+	// total), which guarantees CGST == SGST for every amount. For inter-state
+	// supplies IGST is the full 18%.
 	subtotal := order.AmountPaise
-	totalGST := (subtotal * 18) / 100
 
 	var cgst, sgst, igst int64
 	if buyerStateCode != "" && !strings.EqualFold(buyerStateCode, s.gstStateCode) {
-		igst = totalGST
+		igst = gstRoundHalfUpPercent(subtotal, gstRatePercent)
 	} else {
-		cgst = totalGST / 2
-		sgst = totalGST - cgst
+		cgst = gstRoundHalfUpPercent(subtotal, gstRatePercent/2)
+		sgst = gstRoundHalfUpPercent(subtotal, gstRatePercent/2)
 	}
 	total := subtotal + cgst + sgst + igst
 
@@ -468,4 +474,22 @@ func nullableString(s string) any {
 		return nil
 	}
 	return s
+}
+
+// gstRatePercent is the streaming-services GST rate. CGST and SGST are each
+// gstRatePercent/2; IGST is the full gstRatePercent. Keep this in lockstep with
+// the billing engine (gst_engine.go) so both invoice families agree.
+const gstRatePercent = 18
+
+// gstRoundHalfUpPercent computes percent% of amount with round-half-up to the
+// nearest paisa, matching gst_engine.go's roundHalfUpPercent exactly:
+//
+//	(amount*percent + 50) / 100
+//
+// Integer division floors, so adding 50 before dividing by 100 rounds halves
+// up. Because CGST and SGST are each computed independently from the same
+// subtotal at the same rate, they are always equal on intra-state invoices
+// (F-017), and the total matches the billing path's round-half-up tax (F-016).
+func gstRoundHalfUpPercent(amount int64, percent int64) int64 {
+	return (amount*percent + 50) / 100
 }

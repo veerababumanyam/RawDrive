@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,14 +12,68 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 )
 
+// paymentRepository is the subset of *repository.PaymentRepo that this
+// handler depends on. Declaring it as an interface (which the concrete
+// repo already satisfies) lets RecordPayment's error paths be unit-tested
+// with lightweight fakes — no DB and no new mock library required.
+type paymentRepository interface {
+	Create(ctx context.Context, p *repository.Payment) error
+	ListByInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) ([]repository.Payment, error)
+	GetTotalPaidForInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (int64, error)
+}
+
+// invoiceRepository is the subset of *repository.InvoiceRepo this handler uses.
+type invoiceRepository interface {
+	GetByID(ctx context.Context, workspaceID, id uuid.UUID) (repository.Invoice, error)
+	UpdateStatusAndPaid(ctx context.Context, workspaceID, id uuid.UUID, status string, amountPaidPaisa int64) error
+}
+
 // PaymentHandler handles payment recording and payment link generation.
 type PaymentHandler struct {
-	paymentRepo *repository.PaymentRepo
-	invoiceRepo *repository.InvoiceRepo
+	paymentRepo paymentRepository
+	invoiceRepo invoiceRepository
 }
 
 func NewPaymentHandler(paymentRepo *repository.PaymentRepo, invoiceRepo *repository.InvoiceRepo) *PaymentHandler {
 	return &PaymentHandler{paymentRepo: paymentRepo, invoiceRepo: invoiceRepo}
+}
+
+// computeInvoiceStatus derives the invoice status from the authoritative
+// sum of recorded payments and the invoice total (both in paisa). An
+// invoice is "paid" once recorded payments cover (or exceed) the total,
+// otherwise "partially_paid". Extracted as a pure function so the
+// threshold rule is unit-testable without a DB.
+func computeInvoiceStatus(totalPaidPaisa, invoiceTotalPaisa int64) string {
+	if totalPaidPaisa >= invoiceTotalPaisa {
+		return "paid"
+	}
+	return "partially_paid"
+}
+
+// syncInvoiceFromPayments recomputes an invoice's amount_paid + status from
+// the authoritative sum of its payment rows and persists the result. Every
+// step's error is returned (never swallowed) so the caller can fail the
+// request instead of silently leaving the invoice in a stale status — the
+// root cause of F-014/F-026.
+//
+// NOTE: this is not yet atomic with respect to concurrent payments. Closing
+// the lost-update race requires a single transaction with SELECT ... FOR
+// UPDATE on the invoice row (repository-layer change tracked as the F-014
+// follow-up).
+func syncInvoiceFromPayments(ctx context.Context, paymentRepo paymentRepository, invoiceRepo invoiceRepository, workspaceID, invoiceID uuid.UUID) error {
+	totalPaid, err := paymentRepo.GetTotalPaidForInvoice(ctx, workspaceID, invoiceID)
+	if err != nil {
+		return fmt.Errorf("recompute total paid: %w", err)
+	}
+	inv, err := invoiceRepo.GetByID(ctx, workspaceID, invoiceID)
+	if err != nil {
+		return fmt.Errorf("load invoice for status sync: %w", err)
+	}
+	newStatus := computeInvoiceStatus(totalPaid, inv.TotalPaisa)
+	if err := invoiceRepo.UpdateStatusAndPaid(ctx, workspaceID, invoiceID, newStatus, totalPaid); err != nil {
+		return fmt.Errorf("update invoice status: %w", err)
+	}
+	return nil
 }
 
 // RecordPayment handles POST /api/v1/billing/invoices/{id}/payments
@@ -68,17 +123,15 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update invoice amount_paid and status based on total payments
-	totalPaid, err := h.paymentRepo.GetTotalPaidForInvoice(r.Context(), workspaceID, invoiceID)
-	if err == nil {
-		inv, err := h.invoiceRepo.GetByID(r.Context(), workspaceID, invoiceID)
-		if err == nil {
-			newStatus := "partially_paid"
-			if totalPaid >= inv.TotalPaisa {
-				newStatus = "paid"
-			}
-			_ = h.invoiceRepo.UpdateStatusAndPaid(r.Context(), workspaceID, invoiceID, newStatus, totalPaid)
-		}
+	// Sync the invoice amount_paid + status from the authoritative sum of
+	// payment rows. The payment row is already committed at this point, so a
+	// failure here leaves a real inconsistency (invoice stuck in its old
+	// status). Surface it as a 500 instead of silently swallowing the error
+	// and returning 201 — billing reconciliation depends on this staying
+	// consistent (F-014 / F-026).
+	if err := syncInvoiceFromPayments(r.Context(), h.paymentRepo, h.invoiceRepo, workspaceID, invoiceID); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"invoice status sync failed: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
 	}
 
 	respondJSON(w, http.StatusCreated, p)

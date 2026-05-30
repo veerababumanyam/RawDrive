@@ -32,7 +32,7 @@ import {
 import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Share, CheckCircle, EllipsisVertical, Trash } from "@/components/icons";
+import { Share, CheckCircle, EllipsisVertical, Trash, XMark } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
@@ -187,6 +187,17 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [openMenuAssetId, setOpenMenuAssetId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ assetId: string; filename: string; isBulk?: boolean } | null>(null);
 
+  // F-046: render the grid in bounded windows instead of mounting the
+  // full asset set at once. A 500–2000 photo wedding gallery would
+  // otherwise emit that many <article>/<img> nodes on first paint,
+  // causing multi-second layout/paint and mobile-tab crashes. We render
+  // GRID_PAGE_SIZE tiles at a time and grow the window via a "Load more"
+  // control. (True backend cursor pagination lands in the galleries API
+  // layer; this client-side window is the in-page mitigation for the
+  // DOM-node explosion.)
+  const GRID_PAGE_SIZE = 60;
+  const [visibleLimit, setVisibleLimit] = useState(GRID_PAGE_SIZE);
+
   // E68-S1: Bulk selection state
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
@@ -240,16 +251,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           }),
         ]);
 
-        const hydratedAssets = await Promise.all(
-          galleryAssets.map(async (entry) => {
-            try {
-              const asset = await getAsset(token, entry.asset_id);
-              return { ...entry, asset };
-            } catch {
-              return { ...entry, asset: null };
-            }
-          }),
-        );
+        const hydratedAssets = await hydrateGalleryAssets(token, galleryAssets);
 
         if (cancelled) {
           return;
@@ -476,6 +478,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
     return result;
   }, [activeAlbum, albumAssetIdsByAlbum, assets, faceFilterIds, proofingFilterAssetIds]);
+
+  // F-046: collapse the window back to one page whenever the filtered
+  // set identity changes (album switch, face filter, proofing filter,
+  // or a fresh asset load). Without this, switching from a 2000-photo
+  // "All" view to a 12-photo album would keep an oversized limit and
+  // the reverse (album → All) would show a stale partial page until the
+  // user re-triggered "Load more".
+  useEffect(() => {
+    setVisibleLimit(GRID_PAGE_SIZE);
+  }, [activeAlbum, faceFilterIds, proofingFilterAssetIds, GRID_PAGE_SIZE]);
+
+  // The actual tiles mounted into the DOM — never more than visibleLimit.
+  const pagedAssets = useMemo(
+    () => visibleAssets.slice(0, visibleLimit),
+    [visibleAssets, visibleLimit],
+  );
+  const hasMoreAssets = visibleAssets.length > pagedAssets.length;
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -784,16 +803,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       // Reload assets list after linking
       try {
         const galleryAssets = await listGalleryAssets(t, id);
-        const hydratedAssets = await Promise.all(
-          galleryAssets.map(async (entry) => {
-            try {
-              const asset = await getAsset(t, entry.asset_id);
-              return { ...entry, asset };
-            } catch {
-              return { ...entry, asset: null };
-            }
-          }),
-        );
+        const hydratedAssets = await hydrateGalleryAssets(t, galleryAssets);
         setAssets(hydratedAssets);
       } catch (err) {
         console.warn("Failed to reload assets after upload:", err);
@@ -1628,7 +1638,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {visibleAssets.map((entry) => {
+                {pagedAssets.map((entry) => {
                   const previewUrl = getAssetPreviewUrl(entry.asset || undefined, token);
                   // A freshly-uploaded asset lands in the listing instantly
                   // (POST /galleries/{id}/assets → 201) but the thumbnail
@@ -1723,6 +1733,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                             src={previewUrl}
                             alt={entry.asset?.filename || "Gallery asset preview"}
                             className="aspect-[4/3] w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         ) : (
                           <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
@@ -1792,6 +1804,24 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     </article>
                   );
                 })}
+              </div>
+            )}
+
+            {/* F-046: grow the render window on demand. Showing X of N keeps
+                the photographer oriented in a large wedding gallery without
+                mounting every tile up front. */}
+            {hasMoreAssets && (
+              <div className="flex flex-col items-center gap-2 py-4">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit((n) => n + GRID_PAGE_SIZE)}
+                  className="rounded-xl border border-border-default bg-surface-sunken/60 px-5 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-accent/50 hover:bg-accent/[0.04] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                >
+                  Load more photos
+                </button>
+                <span className="text-xs text-text-tertiary">
+                  Showing {pagedAssets.length} of {visibleAssets.length}
+                </span>
               </div>
             )}
 
@@ -1971,16 +2001,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   : "Open the upload list to retry the failed items."}
               </p>
             </div>
-            <button
-              type="button"
+            <GlassIconButton
+              size="sm"
+              variant="ghost"
+              label="Dismiss"
+              className="-mr-1 -mt-1 text-text-tertiary"
               onClick={() => setUploadToast((t) => (t ? { ...t, visible: false } : null))}
-              className="-mr-1 -mt-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-sunken hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-              aria-label="Dismiss"
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              <XMark />
+            </GlassIconButton>
           </div>
         </div>
       )}
@@ -2052,23 +2081,59 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 Rename the files locally and try again if you meant to upload them.
               </p>
             </div>
-            <button
-              type="button"
+            <GlassIconButton
+              size="sm"
+              variant="ghost"
+              label="Dismiss"
+              className="-mr-1 -mt-1 text-text-tertiary"
               onClick={() =>
                 setDuplicateWarning((t) => (t ? { ...t, visible: false } : null))
               }
-              className="-mr-1 -mt-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-sunken hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-              aria-label="Dismiss"
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              <XMark />
+            </GlassIconButton>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+// F-045: hydrate gallery entries into full Asset records WITHOUT firing
+// one getAsset() per entry concurrently. The previous `Promise.all(
+// entries.map(getAsset))` issued N parallel authenticated GETs — on a
+// 500-photo gallery that saturates the HTTP/1.1 6-connection-per-host
+// pool, delays time-to-interactive, and hammers the Go API + DB. We cap
+// in-flight requests to HYDRATE_CONCURRENCY and walk the list in order,
+// so the connection pool stays healthy and the grid still fills quickly.
+// (The true fix is a batch/embedded-asset endpoint on the galleries API;
+// this bounded worker pool is the in-page mitigation for the N+1.)
+const HYDRATE_CONCURRENCY = 6;
+
+async function hydrateGalleryAssets(
+  token: string,
+  entries: GalleryAsset[],
+): Promise<GalleryAssetRecord[]> {
+  const results = new Array<GalleryAssetRecord>(entries.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < entries.length) {
+      const index = cursor++;
+      const entry = entries[index];
+      try {
+        const asset = await getAsset(token, entry.asset_id);
+        results[index] = { ...entry, asset };
+      } catch {
+        results[index] = { ...entry, asset: null };
+      }
+    }
+  };
+  const pool = Array.from(
+    { length: Math.min(HYDRATE_CONCURRENCY, entries.length) },
+    () => worker(),
+  );
+  await Promise.all(pool);
+  return results;
 }
 
 // formatDuplicateNames — show up to 3 filenames then "+N more" so the

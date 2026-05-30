@@ -23,6 +23,33 @@ interface PublicGalleryBannersProps {
   initialBanners?: GalleryBanner[];
 }
 
+// isSafeUrl gates the studio-controlled banner CTA URL before it lands in
+// an <a href>. A studio owner with banner-management access could otherwise
+// set cta_url to a `javascript:` (or `data:`, `vbscript:`, …) URI and land
+// stored XSS on every public visitor who clicks the CTA — `rel="noopener"`
+// only severs window.opener, it does NOT block javascript: execution, and
+// CSP `unsafe-inline` does not cover javascript: href activation.
+//
+// We allow only absolute http(s) URLs and site-relative paths. The URL
+// constructor normalizes the input (stripping the leading/trailing
+// whitespace and embedded control chars that browsers would otherwise
+// ignore, so `\tjava\nscript:alert(1)` cannot sneak through) and we then
+// assert the resolved protocol is http: or https:. Anything unparseable or
+// non-http(s) — including protocol-relative `//evil` rewritten through the
+// base, mailto:, tel:, data:, blob:, file: — is rejected.
+function isSafeUrl(raw: string): boolean {
+  if (!raw) return false;
+  try {
+    // A non-URL base lets the parser resolve site-relative hrefs ("/sale",
+    // "shop") while still surfacing the real scheme of absolute inputs.
+    const base = "https://rawdrive.invalid/";
+    const url = new URL(raw, base);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function PublicGalleryBanners({ slug, initialBanners }: PublicGalleryBannersProps) {
   const [banners, setBanners] = useState<GalleryBanner[]>(initialBanners ?? []);
   const [loaded, setLoaded] = useState<boolean>(Boolean(initialBanners));
@@ -98,7 +125,7 @@ function BannerCard({ slug, banner }: { slug: string; banner: GalleryBanner }) {
           </p>
         ) : null}
       </div>
-      {banner.cta_url && banner.cta_label ? (
+      {banner.cta_url && banner.cta_label && isSafeUrl(banner.cta_url) ? (
         <a
           href={banner.cta_url}
           onClick={handleClick}

@@ -32,4 +32,23 @@ describe("gallery route contracts", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  // F-042: the active-filter chips must reuse the shared XMark icon from the
+  // icon registry instead of hand-rolling an inline close-glyph <svg>. The
+  // inline SVG (path d="M6 18L18 6M6 6l12 12") drifted from the registry's
+  // 1.5px stroke default and re-implemented an icon that already exists.
+  it("renders filter-chip dismiss glyphs via the shared XMark icon, not inline SVG", () => {
+    const source = fs.readFileSync(
+      path.join(dashboardRoot, "galleries/page.tsx"),
+      "utf8",
+    );
+
+    // The shared icon must be imported and used.
+    expect(source).toContain("XMark");
+    expect(source).toMatch(/import\s*{[^}]*\bXMark\b[^}]*}\s*from\s*"@\/components\/icons"/);
+    expect(source).toContain("<XMark");
+
+    // No hand-rolled close-glyph SVG path should remain anywhere on this page.
+    expect(source).not.toContain("M6 18L18 6M6 6l12 12");
+  });
 });

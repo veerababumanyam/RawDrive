@@ -1,0 +1,33 @@
+-- F-033: thumbnail worker ListByStatus query cannot use any existing index
+-- (full table scan + top-N sort every 1 second).
+--
+-- AssetRepo.ListByStatus (asset_repo.go) runs, across ALL workspaces:
+--     SELECT ... FROM assets
+--     WHERE status = $1 AND deleted_at IS NULL
+--     ORDER BY created_at ASC LIMIT $2
+-- The thumbnail worker (internal/worker/thumbnail_worker.go) calls this every 1s
+-- with status='processing' LIMIT 10 as its recovery-floor poll loop.
+--
+-- No pre-existing index supports this predicate:
+--   * idx_assets_workspace_status ON assets(workspace_id, status) (migration 011) has
+--     LEADING column workspace_id, which is ABSENT from this cross-workspace predicate,
+--     so the planner cannot use it.
+--   * idx_assets_processing_status ON assets(processing_status) (migration 038) is on the
+--     DIFFERENT column processing_status, not the status column queried here.
+-- Result: every 1s tick degrades to a sequential scan plus a top-N sort whose cost grows
+-- with total asset count, on a hot poll loop.
+--
+-- Add a partial index whose key order (status, created_at) lets a single index scan satisfy
+-- both the status equality filter and the created_at ASC ordering, and whose partial WHERE
+-- predicate matches the worker query exactly so the index stays tiny (only the in-flight
+-- 'processing' backlog, never the full asset table). This mirrors the existing
+-- idx_assets_ai_tag_status pattern from migration 019.
+--
+-- Follow-up: migrating this poll loop to event-driven NATS JetStream processing is already
+-- noted (thumbnail_worker.go NATS comment, G4 fix session 2026-05-17); this index is the
+-- correct fix for as long as the polling recovery floor exists.
+--
+-- Append-only: committed migrations 011 and 038 are never edited; this is a new pair.
+CREATE INDEX IF NOT EXISTS idx_assets_status_created
+    ON assets (status, created_at)
+    WHERE deleted_at IS NULL AND status = 'processing';

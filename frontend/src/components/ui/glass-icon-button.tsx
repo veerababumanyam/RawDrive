@@ -45,12 +45,18 @@ const sizeClasses: Record<Size, string> = {
 const variantClasses: Record<Variant, { base: string; active: string }> = {
   glass: {
     base: [
-      "bg-white/[0.12] dark:bg-white/[0.08]",
+      // NOTE: do not reintroduce `dark:` modifiers here. Tailwind v4 has no
+      // `@custom-variant dark` defined in globals.css, so `dark:` resolves to
+      // @media (prefers-color-scheme: dark) and tracks the OS, NOT the in-app
+      // data-theme toggle (liquid-glass / liquid-glass-dark / midnight). The
+      // translucent white glass surface below already renders correctly across
+      // all three themes, so it stays theme-independent without `dark:`.
+      "bg-white/[0.12]",
       "backdrop-blur-[12px] backdrop-saturate-[180%]",
-      "border border-white/[0.18] dark:border-white/[0.10]",
+      "border border-white/[0.18]",
       "shadow-[0_2px_8px_-2px_hsla(0,0%,0%,0.08)]",
       "text-white/90",
-      "hover:bg-white/[0.22] dark:hover:bg-white/[0.16]",
+      "hover:bg-white/[0.22]",
       "hover:shadow-[0_4px_12px_-2px_hsla(0,0%,0%,0.12)]",
       "hover:border-white/[0.28]",
     ].join(" "),
@@ -58,7 +64,7 @@ const variantClasses: Record<Variant, { base: string; active: string }> = {
   },
   solid: {
     base: [
-      "bg-white/20 dark:bg-white/15",
+      "bg-white/20",
       "backdrop-blur-[8px]",
       "border border-white/20",
       "shadow-[0_2px_8px_-2px_hsla(0,0%,0%,0.1)]",
@@ -77,7 +83,7 @@ const variantClasses: Record<Variant, { base: string; active: string }> = {
       "backdrop-blur-[12px]",
       "border border-feedback-error/[0.25]",
       "text-feedback-error/70",
-      "hover:bg-red-500/[0.25] hover:border-red-400/[0.35]",
+      "hover:bg-feedback-error/[0.25] hover:border-feedback-error/[0.35]",
     ].join(" "),
     active: "bg-feedback-error/[0.35] border-feedback-error/[0.45]",
   },
@@ -87,7 +93,7 @@ const variantClasses: Record<Variant, { base: string; active: string }> = {
       "backdrop-blur-[12px]",
       "border border-feedback-success/[0.25]",
       "text-feedback-success/70",
-      "hover:bg-green-500/[0.25] hover:border-green-400/[0.35]",
+      "hover:bg-feedback-success/[0.25] hover:border-feedback-success/[0.35]",
     ].join(" "),
     active: "bg-feedback-success/[0.35] border-feedback-success/[0.45]",
   },
@@ -97,7 +103,7 @@ const variantClasses: Record<Variant, { base: string; active: string }> = {
       "backdrop-blur-[12px]",
       "border border-accent-secondary/[0.25]",
       "text-accent-secondary/70",
-      "hover:bg-blue-500/[0.25] hover:border-blue-400/[0.35]",
+      "hover:bg-accent-secondary/[0.25] hover:border-accent-secondary/[0.35]",
     ].join(" "),
     active: "bg-accent-secondary/[0.35] border-accent-secondary/[0.45]",
   },

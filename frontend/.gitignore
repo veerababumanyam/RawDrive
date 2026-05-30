@@ -3,6 +3,11 @@
 # dependencies
 /node_modules
 /.pnp
+# This package uses pnpm (see "packageManager" in package.json + corepack).
+# Never commit an npm/yarn lockfile here — only pnpm-lock.yaml is authoritative.
+# A stray package-lock.json lets `npm install` resolve from a stale tree (F-039).
+package-lock.json
+yarn.lock
 .pnp.*
 .yarn/*
 !.yarn/patches

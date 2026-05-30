@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -31,9 +30,15 @@ func JWTAuth(jwtSvc auth.JWTService) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Inject claims into context as map[string]interface{} for TenantContext
+			// Inject claims into context as map[string]interface{} for TenantContext.
+			// "user_id" mirrors "sub" (the authenticated user's UUID) because
+			// several handlers read claims["user_id"] directly (gallery
+			// duplication created_by, design-collab presence/lock sessions,
+			// design templates). Without this key those reads returned "" and
+			// uuid.Parse("") silently yielded uuid.Nil, losing user identity.
 			claimsMap := map[string]interface{}{
 				"sub":           claims.Sub,
+				"user_id":       claims.Sub,
 				"workspace_id":  claims.WorkspaceID,
 				"role":          claims.Role,
 				"platform_role": claims.PlatformRole,
@@ -42,8 +47,6 @@ func JWTAuth(jwtSvc auth.JWTService) func(http.Handler) http.Handler {
 			}
 
 			ctx := WithJWTClaims(r.Context(), claimsMap)
-			// Also set user_id for handlers that need it directly
-			ctx = context.WithValue(ctx, contextKey("user_id"), claims.Sub)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

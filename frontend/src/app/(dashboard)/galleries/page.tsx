@@ -10,7 +10,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Grid, ListBullet, Trash, Share } from "@/components/icons";
+import { Grid, ListBullet, Trash, Share, XMark } from "@/components/icons";
 
 export default function GalleriesPage() {
   const searchParams = useSearchParams();
@@ -305,9 +305,7 @@ export default function GalleriesPage() {
               className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
             >
               {filterType}
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <XMark className="w-3 h-3" aria-hidden="true" />
             </button>
           )}
           {filterStatus && (
@@ -319,9 +317,7 @@ export default function GalleriesPage() {
                   filterStatus values are publish-state buckets
                   (published / unpublished / archived) since 2026-05-18. */}
               {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <XMark className="w-3 h-3" aria-hidden="true" />
             </button>
           )}
           {searchQuery.trim() && (
@@ -330,9 +326,7 @@ export default function GalleriesPage() {
               className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
             >
               &quot;{searchQuery.trim()}&quot;
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <XMark className="w-3 h-3" aria-hidden="true" />
             </button>
           )}
           <button

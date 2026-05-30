@@ -13,6 +13,18 @@ import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 
 type Tab = "channels" | "inquiries";
 
+// safeAttachmentUrl returns the attachment URL only when it is an https: URL,
+// otherwise null. Attachment URLs flow from the messaging API and are NOT
+// trusted: messaging_handler.go decodes attachment_url straight from the
+// request body and persists it verbatim, so any workspace member can POST a
+// `javascript:`/`data:` URL that would otherwise execute in the recipient's
+// dashboard origin when the Attachment <a href> is clicked (stored XSS).
+// We use a positive allowlist (https only) — backend storage links are https.
+export function safeAttachmentUrl(url: string | undefined | null): string | null {
+  if (typeof url !== "string") return null;
+  return url.startsWith("https:") ? url : null;
+}
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -462,11 +474,14 @@ export default function MessagesPage() {
                               )}
                             </div>
                             <p className="text-sm text-text-secondary mt-0.5">{msg.body}</p>
-                            {msg.attachment_url && (
-                              <a href={msg.attachment_url} className="text-xs text-accent underline mt-1 block" target="_blank" rel="noopener noreferrer">
-                                Attachment
-                              </a>
-                            )}
+                            {(() => {
+                              const href = safeAttachmentUrl(msg.attachment_url);
+                              return href ? (
+                                <a href={href} className="text-xs text-accent underline mt-1 block" target="_blank" rel="noopener noreferrer">
+                                  Attachment
+                                </a>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       ))

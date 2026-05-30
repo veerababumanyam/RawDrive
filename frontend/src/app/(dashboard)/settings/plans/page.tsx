@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Crown, HardDrive, Zap } from "lucide-react";
@@ -37,7 +37,7 @@ function tierIndex(tier: string): number {
 // user evaluate plans without committing to a payment method, and makes
 // the payment-method choice an in-context decision tied to a specific
 // plan purchase.
-export default function PlansPage() {
+function PlansPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const upgradeTo = searchParams.get("upgrade_to") ?? "";
@@ -289,5 +289,27 @@ export default function PlansPage() {
         </a>
       </p>
     </div>
+  );
+}
+
+// Next 15/16 requires useSearchParams() to sit inside a Suspense boundary;
+// without it this client page de-opts static prerendering / bails the whole
+// route to CSR (and can error during static generation). Mirror the pattern
+// used by login/page.tsx (LoginForm), forgot-password, and reset-password:
+// keep the search-param-dependent logic in a child client component wrapped
+// in <Suspense>.
+export default function PlansPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-6xl mx-auto space-y-10 p-8">
+          <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-text-secondary text-sm">
+            Loading…
+          </div>
+        </div>
+      }
+    >
+      <PlansPageContent />
+    </Suspense>
   );
 }

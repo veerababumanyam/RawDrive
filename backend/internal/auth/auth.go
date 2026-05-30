@@ -141,8 +141,14 @@ func generateCode(length int) (string, error) {
 }
 
 func (s *otpService) Generate(ctx context.Context, identifier string) (string, error) {
+	// F-032 (audit 2026-05-30): only the in-memory entries/rateLog maps are
+	// shared mutable state, so the mutex is held for that read/write window
+	// alone. SendOTP is an SMTP round-trip and must run lock-free, otherwise a
+	// single slow/timing-out send serializes every concurrent registration OTP
+	// behind one global lock (effective DoS on sign-up). On send failure we
+	// re-acquire and roll back both the stored entry and the rate-log slot so a
+	// failed send leaves no usable code and does not consume the caller's quota.
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Rate limiting
 	now := time.Now()
@@ -154,11 +160,13 @@ func (s *otpService) Generate(ctx context.Context, identifier string) (string, e
 		}
 	}
 	if len(recent) >= s.config.RateLimitMax {
+		s.mu.Unlock()
 		return "", errors.New("rate limit exceeded")
 	}
 
 	code, err := generateCode(s.config.CodeLength)
 	if err != nil {
+		s.mu.Unlock()
 		return "", err
 	}
 
@@ -169,9 +177,16 @@ func (s *otpService) Generate(ctx context.Context, identifier string) (string, e
 		used:      false,
 	}
 	s.rateLog[identifier] = append(recent, now)
+	s.mu.Unlock()
 
 	if s.delivery != nil {
 		if err := s.delivery.SendOTP(ctx, identifier, code); err != nil {
+			// Roll back the entry and the rate-log slot we just recorded so the
+			// failed send is not chargeable and the unsent code is unusable.
+			s.mu.Lock()
+			delete(s.entries, identifier)
+			s.rateLog[identifier] = recent
+			s.mu.Unlock()
 			return "", err
 		}
 	}
@@ -761,12 +776,15 @@ func NewPasswordService(config PasswordConfig, store PasswordStore, notifier Sec
 }
 
 func (s *passwordService) RequestReset(ctx context.Context, email string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Always succeed (enumeration protection) - store OTP only if user exists
 	code, _ := s.codeGenerator(6)
 
+	// F-031 (audit 2026-05-30): the mutex guards only the in-memory resets map.
+	// FindByEmail (DB) and SendPasswordResetOTP (SMTP) touch no shared mutable
+	// state, so they must run lock-free — otherwise a single slow DB query or
+	// SMTP timeout serializes every concurrent password-reset request behind
+	// one global lock (request pile-up / effective DoS on the reset endpoint).
+	s.mu.Lock()
 	if s.config.ResetOTPExpiry <= 0 {
 		// Immediate expiry - set expiresAt to past
 		s.resets[email] = &resetEntry{
@@ -780,6 +798,7 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) error 
 			expiresAt: time.Now().Add(expiry),
 		}
 	}
+	s.mu.Unlock()
 
 	// 2026-05-19: actually send the OTP. The previous implementation
 	// generated and stored the code but never delivered it, so the
@@ -804,23 +823,34 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) error 
 }
 
 func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPassword string) error {
+	// F-031 (audit 2026-05-30): the mutex guards only the in-memory
+	// failedAttempts/resets maps. The lockout check, OTP comparison, attempt
+	// increments, and reset-entry deletion run under the lock; the slow DB
+	// (RecordFailedAttempt, UpdatePassword) and SMTP (SendSecurityNotification)
+	// calls touch no shared mutable state and run lock-free. Holding the lock
+	// across them serialized every concurrent reset behind one global mutex, so
+	// a single slow DB write or SMTP timeout could pile up reset requests
+	// (effective DoS). We resolve the verification decision under the lock, then
+	// release before any external I/O.
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Check lockout
 	if s.failedAttempts[email] >= s.config.MaxFailedAttempts {
+		s.mu.Unlock()
 		return errors.New("account locked due to too many failed attempts")
 	}
 
 	entry, ok := s.resets[email]
 	if !ok {
 		s.failedAttempts[email]++
+		s.mu.Unlock()
 		_, _ = s.store.RecordFailedAttempt(ctx, email)
 		return errors.New("invalid or expired OTP")
 	}
 
 	if time.Now().After(entry.expiresAt) {
 		s.failedAttempts[email]++
+		s.mu.Unlock()
 		_, _ = s.store.RecordFailedAttempt(ctx, email)
 		return errors.New("OTP expired")
 	}
@@ -831,9 +861,13 @@ func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPass
 	// mismatch, which is the desired behavior for fixed-width codes.
 	if subtle.ConstantTimeCompare([]byte(entry.otp), []byte(otp)) != 1 {
 		s.failedAttempts[email]++
+		s.mu.Unlock()
 		_, _ = s.store.RecordFailedAttempt(ctx, email)
 		return errors.New("invalid OTP")
 	}
+
+	// OTP verified — release the lock before any external I/O.
+	s.mu.Unlock()
 
 	// Hash the new password before persisting — audit F-001 (2026-05-30).
 	// PasswordStore.UpdatePassword writes its argument verbatim into
@@ -850,8 +884,12 @@ func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPass
 		return err
 	}
 
-	// Clear reset entry
+	// Clear reset entry only after a successful update (preserves the prior
+	// "consume on success" semantics — a failed UpdatePassword leaves the
+	// still-valid OTP in place so the user can retry without a new request).
+	s.mu.Lock()
 	delete(s.resets, email)
+	s.mu.Unlock()
 
 	// Send security notification
 	_ = s.notifier.SendSecurityNotification(ctx, email, "Your password has been changed")

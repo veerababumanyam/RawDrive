@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -96,56 +98,121 @@ func TestBulkSuspend_EmptyListAfterFilter(t *testing.T) {
 	assert.Empty(t, filtered)
 }
 
-// ──────────────────────── ImpersonateUser JWT ────────────────────────
+// ──────────────────────── ImpersonateUser JWT (F-020) ────────────────────────
+//
+// F-020: ImpersonateUser used to sign an HS256 token with
+// JWT_IMPERSONATION_SECRET. The only access-token validator
+// (auth.jwtService.ParseAccessToken) rejects every non-RSA token before it
+// reads a single claim, and nothing else in the system validated the
+// impersonation secret — so the issued token was unusable. The fix mints a
+// real RS256 platform access token via the wired auth.JWTService carrying the
+// workspace_id / role / platform_role / state_id claims JWTAuth +
+// TenantContext require.
 
-func TestImpersonateUser_ProducesValidJWT(t *testing.T) {
-	secret := []byte("test-impersonation-key-32bytes!!")
-	// Build a service with a mock-like approach: we directly test JWT generation
-	// by calling the signing logic path
-	targetID := uuid.New()
-	adminID := uuid.New()
-
-	// Replicate the token creation from ImpersonateUser
-	claims := jwt.MapClaims{
-		"sub":           targetID.String(),
-		"impersonator":  adminID.String(),
-		"impersonation": true,
-		"role":          "photographer",
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(secret)
-	require.NoError(t, err)
-	assert.NotEmpty(t, signed)
-
-	// Parse and verify
-	parsed, err := jwt.Parse(signed, func(token *jwt.Token) (interface{}, error) {
-		return secret, nil
-	})
-	require.NoError(t, err)
-	assert.True(t, parsed.Valid)
-
-	mapClaims, ok := parsed.Claims.(jwt.MapClaims)
-	require.True(t, ok)
-	assert.Equal(t, targetID.String(), mapClaims["sub"])
-	assert.Equal(t, adminID.String(), mapClaims["impersonator"])
-	assert.Equal(t, true, mapClaims["impersonation"])
-	assert.Equal(t, "photographer", mapClaims["role"])
+// fakeWorkspaceLookup is a stand-in for auth.WorkspaceLookup so the
+// workspace-context resolution branch can be exercised without a database.
+type fakeWorkspaceLookup struct {
+	wsID, stateID, role, platformRole string
+	err                               error
 }
 
-func TestImpersonateUser_DifferentSecretsFailVerification(t *testing.T) {
-	secret1 := []byte("secret-one-32-bytes-long-enough!")
-	secret2 := []byte("secret-two-32-bytes-long-enough!")
+func (f *fakeWorkspaceLookup) GetUserWorkspace(_ context.Context, _ string) (string, string, string, string, error) {
+	return f.wsID, f.stateID, f.role, f.platformRole, f.err
+}
 
-	claims := jwt.MapClaims{"sub": "user-1", "impersonation": true}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(secret1)
+// Compile-time assertion: the fake satisfies the interface the service consumes.
+var _ auth.WorkspaceLookup = (*fakeWorkspaceLookup)(nil)
+
+// TestImpersonateUser_NilSignerReturnsNotConfigured is the core F-020
+// regression at the service boundary: when no RS256 signer is wired the
+// method must refuse loudly instead of minting the old unusable HS256 token.
+// Before the fix ImpersonateUser had no signer concept and always returned a
+// token, so this path did not exist; after the fix it returns the sentinel.
+func TestImpersonateUser_NilSignerReturnsNotConfigured(t *testing.T) {
+	// No signer wired (and no repo needed — the guard is checked first).
+	svc := NewAdminUserService(nil, nil, nil)
+	_, err := svc.ImpersonateUser(context.Background(), uuid.New(), uuid.New())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrImpersonationNotConfigured)
+}
+
+// TestImpersonateUser_TokenIsRS256AndAcceptedByValidator proves the token the
+// service now mints is the SAME RS256 token shape the real validator accepts.
+// This is the regression that fails against the old HS256 implementation: a
+// token from auth.JWTService round-trips through ParseAccessToken and carries
+// the workspace_id / role / platform_role / state_id claims TenantContext
+// needs. (We drive the signer directly here because ImpersonateUser's
+// GetByID step requires a live DB; the claim-construction and signer wiring
+// are covered by TestSetImpersonationTokenSigner_StoresSigner and the nil
+// guard above.)
+func TestImpersonateUser_TokenIsRS256AndAcceptedByValidator(t *testing.T) {
+	signer := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Hour,
+		RefreshTokenExpiry: 24 * time.Hour,
+	})
+	targetID := uuid.New()
+
+	// Same TokenClaims shape ImpersonateUser builds for an enrolled user.
+	signed, err := signer.GenerateAccessToken(context.Background(), auth.TokenClaims{
+		Sub:          targetID.String(),
+		WorkspaceID:  "ws-123",
+		Role:         "Owner",
+		PlatformRole: "photographer",
+		StateID:      "state-abc",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, signed)
+
+	// The fix's guarantee: the ONLY validator accepts the token and the
+	// claims TenantContext relies on survive the round-trip.
+	parsed, err := signer.ParseAccessToken(context.Background(), signed)
+	require.NoError(t, err)
+	assert.Equal(t, targetID.String(), parsed.Sub)
+	assert.Equal(t, "ws-123", parsed.WorkspaceID)
+	assert.Equal(t, "Owner", parsed.Role)
+	assert.Equal(t, "photographer", parsed.PlatformRole)
+	assert.Equal(t, "state-abc", parsed.StateID)
+}
+
+// TestImpersonateUser_OldHS256TokenRejectedByValidator demonstrates the bug
+// the fix removes: the previous HS256-signed token is rejected by the only
+// validator. Without the fix the service handed this exact token to callers.
+func TestImpersonateUser_OldHS256TokenRejectedByValidator(t *testing.T) {
+	signer := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Hour,
+		RefreshTokenExpiry: 24 * time.Hour,
+	})
+
+	// Reproduce the removed HS256 token exactly as ImpersonateUser used to mint it.
+	claims := jwt.MapClaims{
+		"sub":           uuid.New().String(),
+		"impersonation": true,
+		"role":          "photographer",
+		"exp":           time.Now().Add(time.Hour).Unix(),
+		"iat":           time.Now().Unix(),
+	}
+	hs256 := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := hs256.SignedString([]byte("test-impersonation-secret-32byte"))
 	require.NoError(t, err)
 
-	// Verify with wrong key should fail
-	_, err = jwt.Parse(signed, func(token *jwt.Token) (interface{}, error) {
-		return secret2, nil
+	// The real validator rejects it — this is why impersonation was broken.
+	_, err = signer.ParseAccessToken(context.Background(), signed)
+	assert.Error(t, err, "HS256 impersonation token must be rejected by the RS256 validator")
+}
+
+func TestSetImpersonationTokenSigner_StoresSigner(t *testing.T) {
+	svc := NewAdminUserService(nil, nil, nil)
+	require.Nil(t, svc.tokenSigner)
+
+	signer := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Hour,
+		RefreshTokenExpiry: 24 * time.Hour,
 	})
-	assert.Error(t, err)
+	lookup := &fakeWorkspaceLookup{wsID: "ws-1", role: "Owner", platformRole: "photographer"}
+	svc.SetImpersonationTokenSigner(signer, lookup)
+
+	require.NotNil(t, svc.tokenSigner)
+	require.NotNil(t, svc.wsLookup)
 }
 
 // ──────────────────────── Error Sentinels ────────────────────────

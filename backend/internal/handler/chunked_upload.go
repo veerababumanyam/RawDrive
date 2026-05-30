@@ -603,14 +603,19 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 	}
 	state := stateI.(*sessionStreamState)
 
+	// F-023: read the part number and the keys WITHOUT mutating the rolling
+	// hash or committing nextPart yet. TUS serializes PATCHes for a session
+	// via the Upload-Offset check above (the offset only advances after a
+	// fully-successful chunk), so the same partNumber is reserved for the
+	// retry of a failed chunk. If UploadPart fails we return 500 without
+	// having advanced nextPart or written the chunk bytes into the rolling
+	// SHA-256 — a client retry at the same offset then re-processes the
+	// chunk EXACTLY ONCE. Previously absorbChunk + nextPart++ ran before
+	// UploadPart, so a transient B2/network failure followed by a TUS retry
+	// double-absorbed the same bytes, corrupting the rolling hash and
+	// forcing finalize into ErrScanHashMismatch (refund + delete).
 	state.mu.Lock()
 	partNumber := state.nextPart
-	state.nextPart++
-	// Only update rolling hash + head/tail if we have a reliable hasher
-	// (i.e. we did not rehydrate after restart).
-	if state.hasher != nil {
-		state.absorbChunk(chunk)
-	}
 	storageKey := state.storageKey
 	mpID := state.multipartID
 	state.mu.Unlock()
@@ -647,6 +652,29 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// F-023: only NOW — after the part is durably persisted (R2 UploadPart),
+	// recorded (AppendPartETag) and the offset has advanced in the DB
+	// (UpdateOffset) — commit the part number and fold the chunk into the
+	// rolling hash + head/tail windows. Doing it here (rather than before
+	// UploadPart) means any failure above returns 500 with the in-memory
+	// state untouched AND the DB offset unchanged, so a TUS client retry at
+	// the same offset passes the offset check and re-processes the chunk
+	// EXACTLY ONCE. R2 UploadPart for a given part number is idempotent
+	// (last write wins), so the retry overwrites the same part rather than
+	// appending a duplicate. Previously absorbChunk + nextPart++ ran before
+	// UploadPart, so a transient B2/network failure followed by a retry
+	// double-absorbed the same bytes, corrupting the rolling SHA-256 and
+	// forcing finalize into ErrScanHashMismatch (refund + delete). Only
+	// update the rolling hash if we have a reliable hasher (i.e. we did not
+	// rehydrate after restart; rehydrated sessions use the finalize
+	// cold-path re-read instead).
+	state.mu.Lock()
+	state.nextPart++
+	if state.hasher != nil {
+		state.absorbChunk(chunk)
+	}
+	state.mu.Unlock()
+
 	h.setTUSHeaders(w)
 	w.Header().Set("Upload-Offset", strconv.FormatInt(newOffset, 10))
 
@@ -667,24 +695,27 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 				// bytes never made it intact. Refund the reservation so
 				// the user isn't billed for a failed upload. This is the
 				// stream-hash-fail refund case in feature-prd.md §4.
-				_ = h.creditGate.Refund(r.Context(), state.reservation,
-					fmt.Sprintf("refund:%s:hashfail", uploadID),
-					"stream-hash-fail")
+				logRefundFailure(uploadID, "stream-hash-fail",
+					h.creditGate.Refund(r.Context(), state.reservation,
+						fmt.Sprintf("refund:%s:hashfail", uploadID),
+						"stream-hash-fail"))
 				http.Error(w, `{"error":"SCAN_HASH_MISMATCH"}`, http.StatusUnprocessableEntity)
 				return
 			}
 			if errors.Is(err, service.ErrScanManifestInvalid) {
-				_ = h.creditGate.Refund(r.Context(), state.reservation,
-					fmt.Sprintf("refund:%s:manifest", uploadID),
-					"scan-manifest-invalid")
+				logRefundFailure(uploadID, "scan-manifest-invalid",
+					h.creditGate.Refund(r.Context(), state.reservation,
+						fmt.Sprintf("refund:%s:manifest", uploadID),
+						"scan-manifest-invalid"))
 				http.Error(w, `{"error":"SCAN_MANIFEST_INVALID"}`, http.StatusUnprocessableEntity)
 				return
 			}
 			// Any other finalize error refunds too — user isn't charged for
 			// infra failures (feature-prd.md §4 Decision 3).
-			_ = h.creditGate.Refund(r.Context(), state.reservation,
-				fmt.Sprintf("refund:%s:infra", uploadID),
-				"infra-failure")
+			logRefundFailure(uploadID, "infra-failure",
+				h.creditGate.Refund(r.Context(), state.reservation,
+					fmt.Sprintf("refund:%s:infra", uploadID),
+					"infra-failure"))
 			http.Error(w, fmt.Sprintf(`{"error":"finalize failed: %s"}`, err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -830,9 +861,17 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 	if len(row.ScanManifest) > 0 {
 		manifest = &service.UploadScanManifest{}
 		if err := json.Unmarshal(row.ScanManifest, manifest); err != nil {
-			// Bad manifest on the row is a data-integrity problem, not a
-			// user error — surface it but don't roll back the upload
-			// (finalize has already completed the R2 composition).
+			// F-021: a corrupt scan_manifest on the row is a data-integrity
+			// problem, not a user error. CompleteMultipartUpload has already
+			// assembled the full object in storage above, and the
+			// multipart-abort sweeper is a no-op once Complete succeeds, so
+			// returning here without deleting would orphan the binary
+			// forever with no DB row to reclaim it. Delete the assembled
+			// object before surfacing the error, mirroring the
+			// resolveFinalizeDigest (843) and verifyManifestAtFinalize (848)
+			// cleanup paths. Best-effort: the Delete outcome does not change
+			// the error returned to the caller.
+			_ = h.store.Delete(ctx, storageKey)
 			return nil, fmt.Errorf("decode scan manifest: %w", err)
 		}
 	}
@@ -866,8 +905,8 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 	}
 	applyScanMetadata(asset, manifest)
 	if h.assetRepo != nil {
-		if err := h.assetRepo.Create(ctx, asset); err != nil {
-			return nil, fmt.Errorf("create asset: %w", err)
+		if err := h.persistAssetOrCleanup(ctx, asset, storageKey, h.assetRepo.Create); err != nil {
+			return nil, err
 		}
 	}
 
@@ -900,6 +939,32 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		"complete":    true,
 		"storage_key": storageKey,
 	}, nil
+}
+
+// persistAssetOrCleanup inserts the asset row via create and, on failure,
+// deletes the already-assembled storage object before returning the wrapped
+// error.
+//
+// F-005: by the time finalizeUpload reaches the asset insert,
+// CompleteMultipartUpload has already assembled the full object in storage.
+// If the assets row insert fails (e.g. a transient Postgres write error) the
+// object would be orphaned forever — the multipart-abort sweeper is a no-op
+// after Complete succeeded, so it can never reclaim the composed binary. We
+// therefore delete the object here, mirroring the cleanup performed on the
+// resolveFinalizeDigest and verifyManifestAtFinalize failure paths. The
+// Delete is best-effort: its outcome does not change the error surfaced to
+// the caller (which must still see the original create failure).
+func (h *ChunkedUploadHandler) persistAssetOrCleanup(
+	ctx context.Context,
+	asset *repository.Asset,
+	storageKey string,
+	create func(context.Context, *repository.Asset) error,
+) error {
+	if err := create(ctx, asset); err != nil {
+		_ = h.store.Delete(ctx, storageKey)
+		return fmt.Errorf("create asset: %w", err)
+	}
+	return nil
 }
 
 // resolveFinalizeDigest returns the full-file SHA-256 hex plus the head
@@ -1094,4 +1159,21 @@ func verifyUploadChecksum(chunk []byte, header string) (int, error) {
 
 func uuidPtr(u uuid.UUID) *uuid.UUID {
 	return &u
+}
+
+// logRefundFailure surfaces a failed upload-credit refund at ERROR level so
+// the credit ledger inconsistency is observable. F-027: the three
+// finalize-failure refund paths (stream-hash-fail, scan-manifest-invalid,
+// infra-failure) previously discarded the Refund error with `_ =`, so if the
+// refund itself failed the user stayed billed for a failed upload with no
+// detection path — even though the adjacent success-path Consume already
+// logged its failures. The refund reasons carry idempotency keys, so this log
+// line is the trigger a reconciliation / retry job needs to settle the
+// dangling reservation. No-op when err is nil (the common case) so the log is
+// only emitted on an actual failure.
+func logRefundFailure(uploadID, reason string, err error) {
+	if err == nil {
+		return
+	}
+	log.Printf("m40: credit refund on finalize failed upload=%s reason=%s err=%v", uploadID, reason, err)
 }

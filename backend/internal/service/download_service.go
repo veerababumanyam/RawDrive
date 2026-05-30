@@ -6,16 +6,87 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/download"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
 )
 
+// assetSource is the narrow read surface DownloadService needs from the asset
+// repository. Defining it locally lets the ZIP-streaming paths be unit-tested
+// with in-memory fakes while production wires the concrete *repository.AssetRepo
+// (via assetRepoAdapter) without changing the public constructor signature.
+type assetSource interface {
+	// GetByID returns a single asset (nil, nil when not found).
+	GetByID(ctx context.Context, id uuid.UUID) (*repository.Asset, error)
+	// GetByIDs bulk-fetches assets by ID in a single query (F-030: kills the
+	// per-asset N+1 in the download loop). Missing/soft-deleted IDs are simply
+	// absent from the returned slice; order is not guaranteed.
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*repository.Asset, error)
+}
+
+// assetRepoAdapter wraps the concrete *repository.AssetRepo and adds the bulk
+// GetByIDs lookup the download path needs. The bulk query lives here (using the
+// repo's exported Pool) rather than in the service body so the service stays
+// free of raw SQL and remains testable against the assetSource seam.
+type assetRepoAdapter struct {
+	repo *repository.AssetRepo
+}
+
+func (a assetRepoAdapter) GetByID(ctx context.Context, id uuid.UUID) (*repository.Asset, error) {
+	return a.repo.GetByID(ctx, id)
+}
+
+func (a assetRepoAdapter) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*repository.Asset, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	pool := a.repo.Pool()
+	if pool == nil {
+		// No pool available (defensive) — caller falls back to per-ID lookups.
+		return nil, nil
+	}
+	return bulkGetAssetsFromPool(ctx, pool, ids)
+}
+
+// bulkGetAssetsFromPool fetches all live assets whose IDs are in the set with a
+// single `id = ANY($1)` query, mirroring AssetRepo.GetByID's column list.
+func bulkGetAssetsFromPool(ctx context.Context, pool *pgxpool.Pool, ids []uuid.UUID) ([]*repository.Asset, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
+		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
+		 status, created_at, updated_at, deleted_at
+		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("download zip: bulk get assets: %w", err)
+	}
+	defer rows.Close()
+
+	var assets []*repository.Asset
+	for rows.Next() {
+		a := &repository.Asset{}
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		); err != nil {
+			return nil, fmt.Errorf("download zip: bulk get assets scan: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	if err := rows.Err(); err != nil && err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("download zip: bulk get assets rows: %w", err)
+	}
+	return assets, nil
+}
+
 // DownloadService handles single and batch asset downloads.
 type DownloadService struct {
-	assetRepo        *repository.AssetRepo
+	assets           assetSource
 	galleryAssetRepo *repository.GalleryAssetRepo
 	store            storage.Provider
 	downloadRepo     *repository.DownloadRepo
@@ -23,7 +94,7 @@ type DownloadService struct {
 
 // NewDownloadService creates a new DownloadService.
 func NewDownloadService(ar *repository.AssetRepo, gar *repository.GalleryAssetRepo, store storage.Provider) *DownloadService {
-	return &DownloadService{assetRepo: ar, galleryAssetRepo: gar, store: store}
+	return &DownloadService{assets: assetRepoAdapter{repo: ar}, galleryAssetRepo: gar, store: store}
 }
 
 // WithDownloadRepo sets the download repo for job tracking.
@@ -34,7 +105,7 @@ func (s *DownloadService) WithDownloadRepo(dr *repository.DownloadRepo) *Downloa
 
 // GetOriginal returns a reader for the original asset file.
 func (s *DownloadService) GetOriginal(ctx context.Context, assetID uuid.UUID) (io.ReadCloser, string, error) {
-	asset, err := s.assetRepo.GetByID(ctx, assetID)
+	asset, err := s.assets.GetByID(ctx, assetID)
 	if err != nil || asset == nil {
 		return nil, "", fmt.Errorf("download: asset not found")
 	}
@@ -45,6 +116,27 @@ func (s *DownloadService) GetOriginal(ctx context.Context, assetID uuid.UUID) (i
 	}
 
 	return reader, asset.Filename, nil
+}
+
+// resolveAssets bulk-fetches the assets for the given IDs and returns an
+// O(1) lookup map keyed by asset ID (F-030). On bulk-fetch failure it returns
+// an empty map so callers degrade to skipping assets rather than aborting the
+// whole archive — matching the existing "skip missing assets" behaviour.
+func (s *DownloadService) resolveAssets(ctx context.Context, ids []uuid.UUID) map[uuid.UUID]*repository.Asset {
+	byID := make(map[uuid.UUID]*repository.Asset, len(ids))
+	if len(ids) == 0 {
+		return byID
+	}
+	assets, err := s.assets.GetByIDs(ctx, ids)
+	if err != nil {
+		return byID
+	}
+	for _, a := range assets {
+		if a != nil {
+			byID[a.ID] = a
+		}
+	}
+	return byID
 }
 
 // WriteZIP streams a ZIP file containing all assets in a gallery to the writer.
@@ -65,12 +157,27 @@ func (s *DownloadService) WriteZIPWithPolicy(ctx context.Context, galleryID uuid
 	}
 
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	// F-028: Close() flushes the ZIP central directory; its error must reach the
+	// caller. closed guards against double-closing on the early-error paths.
+	closed := false
+	defer func() {
+		if !closed {
+			_ = zw.Close()
+		}
+	}()
+
+	// F-030: bulk-fetch every asset up front (1 query) instead of GetByID per
+	// asset (N queries) inside the loop.
+	ids := make([]uuid.UUID, 0, len(galleryAssets))
+	for _, ga := range galleryAssets {
+		ids = append(ids, ga.AssetID)
+	}
+	byID := s.resolveAssets(ctx, ids)
 
 	seen := make(map[string]int) // track duplicate filenames
 	for _, ga := range galleryAssets {
-		asset, err := s.assetRepo.GetByID(ctx, ga.AssetID)
-		if err != nil || asset == nil {
+		asset := byID[ga.AssetID]
+		if asset == nil {
 			continue // skip missing assets
 		}
 
@@ -80,22 +187,7 @@ func (s *DownloadService) WriteZIPWithPolicy(ctx context.Context, galleryID uuid
 		}
 
 		// Deduplicate filenames
-		filename := asset.Filename
-		if count, exists := seen[filename]; exists {
-			seen[filename] = count + 1
-			ext := ""
-			base := filename
-			for i := len(filename) - 1; i >= 0; i-- {
-				if filename[i] == '.' {
-					ext = filename[i:]
-					base = filename[:i]
-					break
-				}
-			}
-			filename = fmt.Sprintf("%s_%d%s", base, count+1, ext)
-		} else {
-			seen[filename] = 1
-		}
+		filename := dedupeFilename(asset.Filename, seen)
 
 		entry, err := zw.Create(filename)
 		if err != nil {
@@ -131,24 +223,40 @@ func (s *DownloadService) WriteZIPWithPolicy(ctx context.Context, galleryID uuid
 		}
 	}
 
+	closed = true
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("download zip: finalize archive: %w", err)
+	}
 	return nil
 }
 
-// isJPEGFilename returns true for filenames the EXIF stripper can process.
-func isJPEGFilename(filename string) bool {
-	if len(filename) < 4 {
-		return false
-	}
-	lower := make([]byte, len(filename))
-	for i := 0; i < len(filename); i++ {
-		c := filename[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 32
+// dedupeFilename returns a collision-free filename, recording the running count
+// of each base name in seen. The second occurrence of "a.jpg" becomes "a_1.jpg".
+func dedupeFilename(filename string, seen map[string]int) string {
+	if count, exists := seen[filename]; exists {
+		seen[filename] = count + 1
+		ext := ""
+		base := filename
+		for i := len(filename) - 1; i >= 0; i-- {
+			if filename[i] == '.' {
+				ext = filename[i:]
+				base = filename[:i]
+				break
+			}
 		}
-		lower[i] = c
+		return fmt.Sprintf("%s_%d%s", base, count+1, ext)
 	}
-	s := string(lower)
-	return len(s) >= 4 && (s[len(s)-4:] == ".jpg" || s[len(s)-5:] == ".jpeg")
+	seen[filename] = 1
+	return filename
+}
+
+// isJPEGFilename returns true for filenames the EXIF stripper can process.
+//
+// F-022: strings.HasSuffix is length-safe, so 4-char names that are not ".jpg"
+// (e.g. "test", "a.jp") no longer slice out of range and panic.
+func isJPEGFilename(filename string) bool {
+	lower := strings.ToLower(filename)
+	return strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg")
 }
 
 // ── M14: Download Job Tracking ──
@@ -267,13 +375,22 @@ func (s *DownloadService) writeZipWithProgress(
 	onProgress func(int),
 ) error {
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	// F-028: surface the central-directory flush error to the caller.
+	closed := false
+	defer func() {
+		if !closed {
+			_ = zw.Close()
+		}
+	}()
+
+	// F-030: one bulk fetch instead of GetByID per asset in the loop.
+	byID := s.resolveAssets(ctx, assetIDs)
 
 	seen := make(map[string]int)
 	total := len(assetIDs)
 	for i, id := range assetIDs {
-		asset, err := s.assetRepo.GetByID(ctx, id)
-		if err != nil || asset == nil {
+		asset := byID[id]
+		if asset == nil {
 			continue
 		}
 		reader, err := s.store.Get(ctx, asset.StorageKey)
@@ -281,22 +398,7 @@ func (s *DownloadService) writeZipWithProgress(
 			continue
 		}
 
-		filename := asset.Filename
-		if count, exists := seen[filename]; exists {
-			seen[filename] = count + 1
-			ext := ""
-			base := filename
-			for j := len(filename) - 1; j >= 0; j-- {
-				if filename[j] == '.' {
-					ext = filename[j:]
-					base = filename[:j]
-					break
-				}
-			}
-			filename = fmt.Sprintf("%s_%d%s", base, count+1, ext)
-		} else {
-			seen[filename] = 1
-		}
+		filename := dedupeFilename(asset.Filename, seen)
 
 		entry, err := zw.Create(filename)
 		if err != nil {
@@ -313,18 +415,32 @@ func (s *DownloadService) writeZipWithProgress(
 			onProgress(((i + 1) * 100) / total)
 		}
 	}
+
+	closed = true
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("download zip: finalize archive: %w", err)
+	}
 	return nil
 }
 
 // WriteSelectedZIP streams a ZIP containing only selected asset IDs.
 func (s *DownloadService) WriteSelectedZIP(ctx context.Context, assetIDs []uuid.UUID, w io.Writer) error {
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	// F-028: surface the central-directory flush error to the caller.
+	closed := false
+	defer func() {
+		if !closed {
+			_ = zw.Close()
+		}
+	}()
+
+	// F-030: one bulk fetch instead of GetByID per asset in the loop.
+	byID := s.resolveAssets(ctx, assetIDs)
 
 	seen := make(map[string]int)
 	for _, id := range assetIDs {
-		asset, err := s.assetRepo.GetByID(ctx, id)
-		if err != nil || asset == nil {
+		asset := byID[id]
+		if asset == nil {
 			continue
 		}
 
@@ -333,22 +449,7 @@ func (s *DownloadService) WriteSelectedZIP(ctx context.Context, assetIDs []uuid.
 			continue
 		}
 
-		filename := asset.Filename
-		if count, exists := seen[filename]; exists {
-			seen[filename] = count + 1
-			ext := ""
-			base := filename
-			for i := len(filename) - 1; i >= 0; i-- {
-				if filename[i] == '.' {
-					ext = filename[i:]
-					base = filename[:i]
-					break
-				}
-			}
-			filename = fmt.Sprintf("%s_%d%s", base, count+1, ext)
-		} else {
-			seen[filename] = 1
-		}
+		filename := dedupeFilename(asset.Filename, seen)
 
 		entry, err := zw.Create(filename)
 		if err != nil {
@@ -363,5 +464,9 @@ func (s *DownloadService) WriteSelectedZIP(ctx context.Context, assetIDs []uuid.
 		}
 	}
 
+	closed = true
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("download zip: finalize archive: %w", err)
+	}
 	return nil
 }

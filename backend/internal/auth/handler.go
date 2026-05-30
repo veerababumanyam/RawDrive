@@ -465,24 +465,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// the step-up path. Mandatory enforcement for un-enrolled
 	// photographer + staff roles lands in wave 3 along with the grace
 	// window UI and the frontend enrollment wizard.
-	if h.mfaEnrollments != nil && h.mfaHandler != nil {
-		if uid, parseErr := uuid.Parse(userID); parseErr == nil {
-			if row, mfaErr := h.mfaEnrollments.GetByUserID(r.Context(), uid); mfaErr == nil {
-				if row.LastVerifiedAt != nil && row.DisabledAt == nil {
-					mfaToken, err := h.mfaHandler.IssueMFAChallengeToken(userID, wsID, role, platformRole, stateID)
-					if err != nil {
-						writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to issue mfa challenge"})
-						return
-					}
-					writeJSON(w, http.StatusUnauthorized, map[string]interface{}{
-						"mfa_required": true,
-						"mfa_token":    mfaToken,
-						"challenge":    "totp",
-					})
-					return
-				}
-			}
+	if h.requiresMFAStepUp(r.Context(), userID) {
+		mfaToken, err := h.mfaHandler.IssueMFAChallengeToken(userID, wsID, role, platformRole, stateID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to issue mfa challenge"})
+			return
 		}
+		writeJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"mfa_required": true,
+			"mfa_token":    mfaToken,
+			"challenge":    "totp",
+		})
+		return
 	}
 
 	// Generate tokens
@@ -665,6 +659,28 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+// requiresMFAStepUp reports whether the given user must complete a TOTP
+// step-up before receiving full tokens. It returns true only when MFA is
+// wired (store + handler present), the userID parses, and the user has a
+// verified, non-disabled enrollment. This is the single source of truth
+// for the opt-in step-up rule shared by the password Login and Google
+// OAuth paths — keeping them in lockstep so OAuth can never silently skip
+// the second factor that password login enforces.
+func (h *Handler) requiresMFAStepUp(ctx context.Context, userID string) bool {
+	if h.mfaEnrollments == nil || h.mfaHandler == nil {
+		return false
+	}
+	uid, parseErr := uuid.Parse(userID)
+	if parseErr != nil {
+		return false
+	}
+	row, mfaErr := h.mfaEnrollments.GetByUserID(ctx, uid)
+	if mfaErr != nil {
+		return false
+	}
+	return row.LastVerifiedAt != nil && row.DisabledAt == nil
+}
+
 func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	if h.oauth == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "OAuth not configured"})
@@ -716,6 +732,37 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// F-007 (M17 wave 2): MFA step-up on the OAuth path. Same opt-in rule
+	// as the password Login handler — if the user has a verified, active
+	// TOTP enrollment we must NOT issue full tokens here. Instead mint a
+	// short-lived challenge token and redirect the frontend to the TOTP
+	// step-up page. The client then POSTs to /auth/verify-totp to finish
+	// authentication. Without this gate an enrolled user could bypass the
+	// second factor entirely by logging in via Google.
+	if h.requiresMFAStepUp(r.Context(), user.ID) {
+		mfaToken, mfaTokErr := h.mfaHandler.IssueMFAChallengeToken(user.ID, oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
+		if mfaTokErr != nil {
+			http.Redirect(
+				w,
+				r,
+				buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": "oauth_failed"}),
+				http.StatusFound,
+			)
+			return
+		}
+		http.Redirect(
+			w,
+			r,
+			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{
+				"mfa_required": "1",
+				"mfa_token":    mfaToken,
+				"challenge":    "totp",
+			}),
+			http.StatusFound,
+		)
+		return
+	}
+
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+uuid.New().String(), oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
@@ -758,13 +805,18 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		if parseErr == nil && claims.Sub != "" {
 			wsID, stateID, role, platformRole, _ := h.workspaces.GetUserWorkspace(r.Context(), claims.Sub)
 			if wsID != "" && wsID != claims.WorkspaceID {
-				// Claims changed — regenerate access token with fresh data
+				// Claims changed — regenerate access token with fresh data.
+				// Carry MFAVerified forward from the rotated token so a
+				// post-onboarding refresh never silently downgrades a
+				// verified TOTP session (AGENTS.md: "refresh token rotation
+				// preserves mfa_verified").
 				freshAccess, genErr := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
 					Sub:          claims.Sub,
 					WorkspaceID:  wsID,
 					Role:         role,
 					PlatformRole: platformRole,
 					StateID:      stateID,
+					MFAVerified:  claims.MFAVerified,
 				})
 				if genErr == nil {
 					newAccess = freshAccess

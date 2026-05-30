@@ -8,10 +8,9 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,6 +27,17 @@ var (
 	ErrCannotImpersonateSuperAdmin = errors.New("cannot impersonate a super_admin")
 	ErrInvalidRole                 = errors.New("invalid role")
 	ErrUserNotFound                = errors.New("user not found")
+
+	// F-020: ImpersonateUser previously minted an HS256 token signed with
+	// JWT_IMPERSONATION_SECRET that NOTHING in the system could validate —
+	// the only access-token validator (auth.jwtService.ParseAccessToken)
+	// rejects any non-RSA token before reading a single claim, and no
+	// middleware/exchange endpoint ever validated the impersonation secret.
+	// The feature now mints a real RS256 platform access token via the
+	// wired auth.JWTService so JWTAuth/TenantContext accept it. When the
+	// signer is not wired we refuse loudly rather than handing back a
+	// useless token.
+	ErrImpersonationNotConfigured = errors.New("impersonation token signer not configured")
 
 	// M39 E5-S1 (FR-F01): admin user creation sentinels.
 	ErrDuplicateEmail          = errors.New("email already registered")
@@ -122,10 +132,31 @@ type AdminUserService struct {
 	jwtSecret    []byte
 	inviteSender AdminInviteSender
 	frontendURL  string
+	// F-020: optional impersonation deps. tokenSigner mints RS256 platform
+	// access tokens that the real validator accepts; wsLookup resolves the
+	// target user's primary workspace / state / role context so the minted
+	// token carries the workspace_id + role + platform_role claims that
+	// TenantContext requires (without them the token 403s at TenantContext).
+	// Wired via SetImpersonationTokenSigner so the existing 3-arg
+	// constructor and its callers/tests stay unchanged.
+	tokenSigner auth.JWTService
+	wsLookup    auth.WorkspaceLookup
 }
 
 func NewAdminUserService(userRepo *repository.AdminUserRepo, auditLog *AuditLogService, jwtSecret []byte) *AdminUserService {
 	return &AdminUserService{userRepo: userRepo, auditLog: auditLog, jwtSecret: jwtSecret}
+}
+
+// SetImpersonationTokenSigner wires the RS256 platform JWT service and the
+// workspace lookup used by ImpersonateUser (F-020). Kept as a setter so the
+// original 3-arg constructor and its existing callers/tests do not change —
+// main.go calls this during bootstrap with the same jwtSvc + workspace
+// resolver the auth/login path uses. Passing a nil signer leaves
+// impersonation disabled: ImpersonateUser then returns
+// ErrImpersonationNotConfigured rather than minting an unusable token.
+func (s *AdminUserService) SetImpersonationTokenSigner(signer auth.JWTService, wsLookup auth.WorkspaceLookup) {
+	s.tokenSigner = signer
+	s.wsLookup = wsLookup
 }
 
 // SetAdminInviteSender wires the platform-role invitation email sender
@@ -180,7 +211,26 @@ func (s *AdminUserService) ReactivateUser(ctx context.Context, id uuid.UUID, act
 	return nil
 }
 
+// ImpersonateUser mints a platform access token that lets an admin act as the
+// target user (M6 E16-S1). F-020 fix: the token is now an RS256 token signed by
+// the same auth.JWTService that the login path uses, carrying the
+// workspace_id / role / platform_role / state_id claims required by
+// JWTAuth + TenantContext. The previous implementation signed an HS256 token
+// with JWT_IMPERSONATION_SECRET that the only validator (ParseAccessToken,
+// which rejects every non-RSA token) could never accept and that no
+// middleware ever consumed — so the feature returned a token nothing in the
+// system could use. We mirror the login handler's workspace-context
+// resolution so the impersonation session behaves like a real login as that
+// user.
 func (s *AdminUserService) ImpersonateUser(ctx context.Context, targetID uuid.UUID, adminID uuid.UUID) (string, error) {
+	// Refuse loudly when the RS256 signer is not wired rather than handing
+	// back the old unusable HS256 token. The handler maps this to a 500 and
+	// the admin sees an honest failure instead of a "successful" no-op.
+	// Checked first so a misconfigured deployment fails fast without a
+	// pointless DB round-trip.
+	if s.tokenSigner == nil {
+		return "", ErrImpersonationNotConfigured
+	}
 	user, err := s.userRepo.GetByID(ctx, targetID)
 	if err != nil {
 		return "", fmt.Errorf("fetching target user: %w", err)
@@ -191,13 +241,45 @@ func (s *AdminUserService) ImpersonateUser(ctx context.Context, targetID uuid.UU
 	if user.PlatformRole == "super_admin" {
 		return "", ErrCannotImpersonateSuperAdmin
 	}
-	claims := jwt.MapClaims{
-		"sub": targetID.String(), "impersonator": adminID.String(),
-		"impersonation": true, "role": user.PlatformRole,
-		"exp": time.Now().Add(1 * time.Hour).Unix(), "iat": time.Now().Unix(),
+
+	// Resolve the target user's primary workspace context exactly like the
+	// login handler does (auth/handler.go): default to the onboarding
+	// placeholders, then overlay anything the lookup resolves. This keeps
+	// the impersonation token shape identical to a genuine login token so
+	// every downstream workspace API treats it the same.
+	wsID := "pending-onboarding"
+	stateID := "pending-onboarding"
+	role := "Owner"
+	platformRole := user.PlatformRole
+	if platformRole == "" {
+		platformRole = "photographer"
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(s.jwtSecret)
+	if s.wsLookup != nil {
+		resolvedWS, resolvedState, resolvedRole, resolvedPlatformRole, lookupErr := s.wsLookup.GetUserWorkspace(ctx, targetID.String())
+		if lookupErr != nil {
+			return "", fmt.Errorf("resolving impersonation workspace: %w", lookupErr)
+		}
+		if resolvedWS != "" {
+			wsID = resolvedWS
+		}
+		if resolvedState != "" {
+			stateID = resolvedState
+		}
+		if resolvedRole != "" {
+			role = resolvedRole
+		}
+		if resolvedPlatformRole != "" {
+			platformRole = resolvedPlatformRole
+		}
+	}
+
+	signed, err := s.tokenSigner.GenerateAccessToken(ctx, auth.TokenClaims{
+		Sub:          targetID.String(),
+		WorkspaceID:  wsID,
+		Role:         role,
+		PlatformRole: platformRole,
+		StateID:      stateID,
+	})
 	if err != nil {
 		return "", fmt.Errorf("signing impersonation token: %w", err)
 	}
@@ -212,7 +294,21 @@ func (s *AdminUserService) ChangeRole(ctx context.Context, id uuid.UUID, newRole
 	if id == actorID {
 		return errors.New("cannot change your own role")
 	}
-	if err := s.userRepo.UpdateRole(ctx, id, newRole, actorID); err != nil {
+	// F-004: validate the target role BEFORE delegating to the repo. Without
+	// this guard an admin-tier user could promote any account to super_admin
+	// (the migration 035 CHECK constraint permits it and UpdateRole runs a raw
+	// UPDATE with no whitelist), breaking the two-tier privilege model. Mirror
+	// the Create path: explicitly reject the super_admin variants and require
+	// the role to be in allowedCreateRoles. allowedCreateRoles intentionally
+	// omits super_admin, so role escalation via this endpoint is impossible.
+	role := strings.TrimSpace(strings.ToLower(newRole))
+	if role == "superadmin" || role == "super_admin" {
+		return ErrInvalidRole
+	}
+	if _, ok := allowedCreateRoles[role]; !ok {
+		return ErrInvalidRole
+	}
+	if err := s.userRepo.UpdateRole(ctx, id, role, actorID); err != nil {
 		return fmt.Errorf("updating role: %w", err)
 	}
 	s.auditLog.RecordAction(ctx, repository.AuditLogCreate{

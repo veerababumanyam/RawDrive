@@ -29,7 +29,7 @@ func newMockUserService() *mockUserService {
 	return &mockUserService{users: make(map[string]string), verified: make(map[string]bool)}
 }
 
-func (m *mockUserService) Create(_ context.Context, email, password, _, _ string) (string, error) {
+func (m *mockUserService) Create(_ context.Context, email, password, _, _ string, _ *int, _ string) (string, error) {
 	if m.errOnCreate {
 		return "", errors.New("mock create error")
 	}
@@ -750,4 +750,82 @@ func TestLogoutHandler_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	assert.Equal(t, -1, refreshCookieFromResponse(t, resp).MaxAge)
+}
+
+// ─────────────────────────── F-011: MFA preserved across post-onboarding refresh ───────────────────────────
+
+// stubWorkspaceLookup returns a fixed workspace/state/role tuple for every
+// user, simulating the "onboarding just completed → workspace now exists"
+// transition that drives RefreshToken's access-token regeneration branch.
+type stubWorkspaceLookup struct {
+	wsID, stateID, role, platformRole string
+}
+
+func (s stubWorkspaceLookup) GetUserWorkspace(_ context.Context, _ string) (string, string, string, string, error) {
+	return s.wsID, s.stateID, s.role, s.platformRole, nil
+}
+
+// TestRefreshToken_PreservesMFAVerifiedAfterWorkspaceChange is the F-011
+// regression. A user logs in with MFA (mfa_verified=true) BEFORE their
+// workspace exists, so the refresh token carries workspace_id=pending-onboarding
+// + mfa_verified=true. On the first refresh AFTER onboarding completes, the
+// handler detects the workspace changed and regenerates the access token. That
+// regeneration must carry MFAVerified forward — before the fix it dropped the
+// field, silently downgrading the verified session to mfa_verified=false and
+// violating the documented "refresh preserves mfa_verified" invariant.
+func TestRefreshToken_PreservesMFAVerifiedAfterWorkspaceChange(t *testing.T) {
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+
+	// Pre-onboarding refresh token: mfa_verified=true, workspace pending.
+	refreshToken, err := jwtSvc.GenerateRefreshTokenWithMFA(
+		context.Background(),
+		"00000000-0000-0000-0000-000000000001",
+		"family-f011",
+		"pending-onboarding",
+		"Owner",
+		"photographer",
+		"pending-onboarding",
+		true, // mfa_verified
+	)
+	require.NoError(t, err)
+
+	// Onboarding completed: the workspace lookup now returns a real workspace,
+	// which differs from the token's "pending-onboarding" and forces the
+	// access-token regeneration branch in RefreshToken.
+	handler := auth.NewHandler(nil, jwtSvc, nil, nil).
+		WithWorkspaceLookup(stubWorkspaceLookup{
+			wsID:         "11111111-1111-1111-1111-111111111111",
+			stateID:      "state-1",
+			role:         "Owner",
+			platformRole: "photographer",
+		})
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/refresh", nil)
+	require.NoError(t, err)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: refreshToken})
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]string
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	require.NotEmpty(t, result["access_token"])
+
+	// Parse the regenerated access token and assert it still claims MFA.
+	claims, err := jwtSvc.ParseAccessToken(context.Background(), result["access_token"])
+	require.NoError(t, err)
+	assert.Equal(t, "11111111-1111-1111-1111-111111111111", claims.WorkspaceID,
+		"regenerated token should carry the freshly-resolved workspace")
+	assert.True(t, claims.MFAVerified,
+		"F-011: post-onboarding refresh must NOT downgrade mfa_verified — "+
+			"the regenerated access token must preserve MFAVerified=true")
 }

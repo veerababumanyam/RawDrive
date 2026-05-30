@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -142,11 +143,37 @@ func (r *CouponRepo) CountByDealer(ctx context.Context, dealerID uuid.UUID, stat
 	return count, err
 }
 
+// ErrCouponExhausted is returned when a coupon's redemption limit has been
+// reached. It is surfaced when IncrementRedemption's guarded UPDATE matches no
+// row, which happens when redemption_count has already hit max_redemptions.
+var ErrCouponExhausted = errors.New("coupon redemption limit reached")
+
+// LockCouponForUpdate selects a coupon row inside the supplied transaction with
+// FOR UPDATE, serializing concurrent redemptions of the same coupon. Callers
+// must run this before re-validating redemption limits so the check-then-
+// increment sequence is atomic with respect to other transactions.
+func (r *CouponRepo) LockCouponForUpdate(ctx context.Context, tx pgx.Tx, couponID uuid.UUID) (Coupon, error) {
+	row := tx.QueryRow(ctx, `SELECT `+couponCols+` FROM coupons WHERE id=$1 FOR UPDATE`, couponID)
+	return scanCoupon(row)
+}
+
+// IncrementRedemption atomically bumps redemption_count, but only while the
+// coupon is still below its cap. The WHERE guard makes the limit check and the
+// increment a single atomic statement, so two concurrent transactions can never
+// both push the count past max_redemptions (TOCTOU over-redemption). When the
+// guard matches no row the cap is already reached and ErrCouponExhausted is
+// returned. A NULL max_redemptions means unlimited.
 func (r *CouponRepo) IncrementRedemption(ctx context.Context, tx pgx.Tx, couponID uuid.UUID) error {
-	_, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		UPDATE coupons SET redemption_count = redemption_count + 1, updated_at = now()
-		WHERE id = $1`, couponID)
-	return err
+		WHERE id = $1 AND (max_redemptions IS NULL OR redemption_count < max_redemptions)`, couponID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrCouponExhausted
+	}
+	return nil
 }
 
 func (r *CouponRepo) GetUserRedemptionCount(ctx context.Context, couponID, userID uuid.UUID) (int, error) {

@@ -215,6 +215,15 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 }
 
 // ListByStatus retrieves assets by status across all workspaces (for workers).
+//
+// The thumbnail worker polls this with status='processing' on a 1s loop. The predicate
+// (status = $1 AND deleted_at IS NULL ORDER BY created_at ASC) is backed by the partial
+// index idx_assets_status_created ON assets(status, created_at)
+// WHERE deleted_at IS NULL AND status = 'processing' (migration 129, F-033). Do NOT assume
+// the older idx_assets_workspace_status / idx_assets_processing_status indexes serve this query:
+// the former leads on workspace_id (absent here) and the latter is on the processing_status
+// column, not status. If the partial index is dropped this query reverts to a full table scan
+// plus top-N sort on every tick.
 func (r *AssetRepo) ListByStatus(ctx context.Context, status string, limit int) ([]Asset, error) {
 	if limit <= 0 {
 		limit = 10

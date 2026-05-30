@@ -91,3 +91,93 @@ describe("PublicGalleryBanners", () => {
     });
   });
 });
+
+// F-050: the banner CTA URL is studio/photographer-controlled and lands
+// straight in an <a href>. Without scheme validation a `javascript:` (or
+// data:/vbscript:/file:…) URI yields stored XSS against every public visitor
+// who clicks the CTA — rel="noopener" and CSP unsafe-inline do NOT block
+// javascript: href execution. isSafeUrl must drop the CTA for any non-http(s)
+// scheme while preserving legitimate http(s) and site-relative links.
+describe("PublicGalleryBanners — CTA URL scheme hardening (F-050)", () => {
+  beforeEach(() => {
+    mockList.mockReset();
+    mockTrack.mockReset();
+    mockTrack.mockResolvedValue(true);
+  });
+
+  it("renders the CTA for a safe https URL", () => {
+    render(
+      <PublicGalleryBanners
+        slug="my-slug"
+        initialBanners={[fakeBanner({ cta_url: "https://example.com/prints" })]}
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: /shop prints/i }),
+    ).toHaveAttribute("href", "https://example.com/prints");
+  });
+
+  it("renders the CTA for a safe http URL", () => {
+    render(
+      <PublicGalleryBanners
+        slug="my-slug"
+        initialBanners={[fakeBanner({ cta_url: "http://example.com/prints" })]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: /shop prints/i })).toBeInTheDocument();
+  });
+
+  it("renders the CTA for a site-relative path", () => {
+    render(
+      <PublicGalleryBanners
+        slug="my-slug"
+        initialBanners={[fakeBanner({ cta_url: "/galleries/my-slug/shop" })]}
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: /shop prints/i }),
+    ).toHaveAttribute("href", "/galleries/my-slug/shop");
+  });
+
+  it("drops the CTA for a javascript: URI (stored XSS) but keeps the banner", () => {
+    render(
+      <PublicGalleryBanners
+        slug="my-slug"
+        initialBanners={[fakeBanner({ cta_url: "javascript:alert(document.cookie)" })]}
+      />,
+    );
+    // The banner content still renders; only the dangerous CTA is removed.
+    expect(screen.getByText("Early bird sale")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /shop prints/i })).toBeNull();
+  });
+
+  it("drops the CTA when javascript: is obfuscated with whitespace/control chars", () => {
+    render(
+      <PublicGalleryBanners
+        slug="my-slug"
+        initialBanners={[fakeBanner({ cta_url: "\t java\nscript:alert(1)" })]}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /shop prints/i })).toBeNull();
+  });
+
+  it("drops the CTA for data:, vbscript:, file:, blob:, and mailto: schemes", () => {
+    const hostile = [
+      "data:text/html,<script>alert(1)</script>",
+      "vbscript:msgbox(1)",
+      "file:///etc/passwd",
+      "blob:https://evil.example.com/abc",
+      "mailto:victim@example.com",
+    ];
+    for (const cta_url of hostile) {
+      const { unmount } = render(
+        <PublicGalleryBanners
+          slug="my-slug"
+          initialBanners={[fakeBanner({ id: cta_url, cta_url })]}
+        />,
+      );
+      expect(screen.queryByRole("link", { name: /shop prints/i })).toBeNull();
+      unmount();
+    }
+  });
+});

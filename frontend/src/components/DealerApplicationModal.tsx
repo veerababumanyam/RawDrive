@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { XMark } from "@/components/icons";
 
 interface State {
   id: number;
@@ -108,14 +110,16 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
           <h2 id="dealer-app-title" className="font-headline text-xl font-bold text-text-primary">
             Partner application
           </h2>
-          <button
+          <GlassIconButton
             type="button"
             onClick={handleClose}
-            aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-container-high transition-colors"
+            label="Close"
+            variant="ghost"
+            size="md"
+            className="text-text-secondary hover:text-text-primary hover:bg-surface-container-high"
           >
-            ✕
-          </button>
+            <XMark />
+          </GlassIconButton>
         </div>
 
         {submitted ? (

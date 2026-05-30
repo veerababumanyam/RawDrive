@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/email"
 	"github.com/rawdrive/backend/internal/face"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -400,7 +403,23 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		r.Get("/galleries/{slug}/albums", publicHandler.ListAlbums)
 		r.Get("/galleries/{slug}/albums/{albumId}/assets", publicHandler.ListAlbumAssets)
 		r.Get("/galleries/{slug}/assets/{assetId}/download", publicHandler.PublicAssetDownload)
-		r.Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
+		// F-009 (audit 2026-05-30): brute-force defence for the gallery PIN
+		// gate. Without a PIN-specific limiter a numeric/short PIN can be
+		// enumerated under only the loose global 600/min IP limit. Mirror the
+		// M8 stream verify-pin hardening (routes_m8.go) — wrap with
+		// RequirePINRateLimit (5 attempts / 5 min).
+		//
+		// middleware.RequirePINRateLimit keys on (clientIP, chi URL param
+		// "id"), matching the M8 stream route whose segment is named {id}.
+		// This gallery route names its segment {slug}, so aliasGalleryPINKey
+		// copies the matched {slug} value into an "id" route param BEFORE the
+		// limiter runs. The limiter then keys on (IP, slug) — per the F-009
+		// recommendation — instead of seeing an empty key and passing through
+		// unthrottled. Order matters: the alias must precede the limiter.
+		// Nil-safe: when deps.PINRateLimiter is nil RequirePINRateLimit is a
+		// no-op pass-through, so existing wiring keeps working.
+		r.With(aliasGalleryPINKey, middleware.RequirePINRateLimit(deps.PINRateLimiter)).
+			Post("/galleries/{slug}/verify-pin", publicHandler.VerifyPIN)
 		r.Post("/galleries/{slug}/proof", proofingHandler.SubmitPublic)
 
 		// PR-3b: public People tab (face recognition). Gated on
@@ -506,23 +525,53 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	r.Post("/api/v1/webhooks/razorpay/subscription", deps.SubscriptionUpgradeHandler.Webhook)
 }
 
+// aliasGalleryPINKey bridges the public gallery verify-pin route (segment
+// named {slug}) to middleware.RequirePINRateLimit, which keys its limiter on
+// the chi URL param "id" (the M8 stream route uses {id}). It copies the
+// matched {slug} value into an "id" route param so the limiter keys on
+// (clientIP, slug) instead of seeing an empty key and passing through
+// unthrottled (F-009). It is a no-op when no {slug} is present or when an
+// "id" param already exists, so it is safe to chain ahead of the limiter on
+// any route. The downstream handler continues to read {slug} unchanged —
+// chi.URLParam walks keys from the end, so the original {slug} entry is
+// untouched.
+func aliasGalleryPINKey(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rctx := chi.RouteContext(r.Context()); rctx != nil {
+			if chi.URLParam(r, "id") == "" {
+				if slug := chi.URLParam(r, "slug"); slug != "" {
+					rctx.URLParams.Add("id", slug)
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // M2Dependencies holds all service dependencies for M2 and M11 handlers.
 type M2Dependencies struct {
 	// M13 deferred-FR deps (optional — nil-safe)
-	Pool        *pgxpool.Pool // subscription tier lookup (GAL-FR-115)
-	FaceRepo    *ai.FaceRepo  // gallery-scoped face match (GAL-FR-107/108)
-	FaceClient  *face.Client  // optional face-svc client — when wired
+	Pool       *pgxpool.Pool // subscription tier lookup (GAL-FR-115)
+	FaceRepo   *ai.FaceRepo  // gallery-scoped face match (GAL-FR-107/108)
+	FaceClient *face.Client  // optional face-svc client — when wired
 	// enables the anonymous Photo Search endpoint on the public side.
 	// Nil-safe: when unwired the handler returns 503.
 
-	AssetService         *service.AssetService
-	UploadService        *service.UploadService
-	GalleryService       *service.GalleryService
-	ShareLinkService     *service.ShareLinkService
-	GalleryShareSender   *email.GalleryShareSender
-	GalleryShareLogRepo  *repository.GalleryShareLogRepo
-	PublicBaseURL        string
-	ProofingService      *service.ProofingService
+	// F-009: brute-force defence for the public gallery PIN gate. Optional —
+	// when nil, RequirePINRateLimit is a no-op pass-through (matches the M8
+	// stream verify-pin wiring). Construct with
+	// middleware.NewMemoryPINRateLimiter(5, 5*time.Minute) in main.go; reuse
+	// the same shared limiter as the stream endpoint when available.
+	PINRateLimiter middleware.PINRateLimiter
+
+	AssetService        *service.AssetService
+	UploadService       *service.UploadService
+	GalleryService      *service.GalleryService
+	ShareLinkService    *service.ShareLinkService
+	GalleryShareSender  *email.GalleryShareSender
+	GalleryShareLogRepo *repository.GalleryShareLogRepo
+	PublicBaseURL       string
+	ProofingService     *service.ProofingService
 	// M41/105: anonymous guest favorites for the public viewer. Nil-safe —
 	// the favorites routes (3 public + 1 owner) are conditionally mounted
 	// inside RegisterM2Routes / RegisterPublicGalleryRoutes so the rest of

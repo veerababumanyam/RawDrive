@@ -7,6 +7,7 @@ import (
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 // This file is only compiled during `go test` (because of the _test.go suffix).
@@ -53,4 +54,40 @@ func ApplyScanMetadataForTest(asset *repository.Asset, manifest *service.UploadS
 // seen and failed with NoSuchUpload.
 func DeriveKeyAndUploadIDForTest(row *repository.UploadSession) (string, string) {
 	return deriveKeyAndUploadID(row)
+}
+
+// PersistAssetOrCleanupForTest is a test-only seam over the unexported
+// persistAssetOrCleanup helper. F-005 regression coverage: when the asset
+// insert fails after CompleteMultipartUpload has assembled the object, the
+// helper must delete the orphaned storage object. The seam injects a fake
+// store and a controllable create func so the cleanup branch can be
+// exercised without a live Postgres *repository.AssetRepo (which is a
+// concrete type that cannot otherwise be made to fail in a unit test).
+func PersistAssetOrCleanupForTest(
+	store storage.Provider,
+	asset *repository.Asset,
+	storageKey string,
+	create func(context.Context, *repository.Asset) error,
+) error {
+	h := &ChunkedUploadHandler{store: store}
+	return h.persistAssetOrCleanup(context.Background(), asset, storageKey, create)
+}
+
+// FinalizeUploadForTest is a test-only seam over the unexported
+// finalizeUpload method. F-021 regression coverage: when the persisted
+// scan_manifest JSON fails to decode AFTER CompleteMultipartUpload has
+// assembled the object, finalize must delete the orphaned storage object
+// (mirroring the digest/verify failure paths) rather than leaking it. The
+// seam builds a handler over the supplied store + sessions and a reliable
+// in-memory stream state (non-nil hasher) keyed to the row's storage key so
+// the test can drive the manifest-decode branch with a corrupt manifest.
+func FinalizeUploadForTest(
+	store storage.Provider,
+	sessions UploadSessionStore,
+	row *repository.UploadSession,
+) (map[string]interface{}, error) {
+	h := &ChunkedUploadHandler{store: store, sessions: sessions}
+	storageKey, mpID := deriveKeyAndUploadID(row)
+	state := newStreamState(storageKey, mpID, nil)
+	return h.finalizeUpload(context.Background(), row, state)
 }

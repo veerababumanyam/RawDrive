@@ -26,7 +26,16 @@ services:
       - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5432:5432"
+      # Bind to the DB node's own host IP, NOT 0.0.0.0. Docker publishes
+      # ports via its own iptables chain (DOCKER), which is evaluated
+      # BEFORE UFW's INPUT rules — a "0.0.0.0:5432" publish is reachable
+      # on every interface and silently bypasses UFW. App nodes (.42/.44)
+      # reach this primary cross-host via the public IP (see
+      # pgbouncer/databases.ini host=187.127.142.46), so loopback-only
+      # binding (as pgbouncer uses) would break them; instead we scope the
+      # publish to this single host IP. pg_hba.conf still restricts to
+      # .42/.44 with scram-sha-256 as defense-in-depth.
+      - "${DB_NODE_IP:-187.127.142.46}:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -58,7 +67,13 @@ services:
       - valkey_data:/data
       - ./valkey/valkey.conf:/etc/valkey/valkey.conf:ro
     ports:
-      - "6379:6379"
+      # Same rationale as postgres above: scope the publish to this host's
+      # IP instead of 0.0.0.0 so Docker's iptables doesn't expose Valkey on
+      # every interface and bypass UFW. App nodes reach this cross-host via
+      # the public IP (VALKEY_URL=redis://...@187.127.142.46:6379), so a
+      # loopback-only bind would break them. requirepass remains the
+      # defense-in-depth control.
+      - "${DB_NODE_IP:-187.127.142.46}:6379:6379"
     healthcheck:
       test: ["CMD-SHELL", "valkey-cli -a $${VALKEY_PASSWORD} ping | grep -q PONG"]
       interval: 10s

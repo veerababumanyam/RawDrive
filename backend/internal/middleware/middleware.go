@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -278,6 +280,108 @@ type rateLimitEntry struct {
 	windowEnd time.Time
 }
 
+// defaultTrustedProxyCIDRs are the private/loopback ranges trusted to set
+// X-Forwarded-For / X-Real-IP when TRUSTED_PROXY_CIDR is not configured.
+// In production the only hop in front of the API is the nginx container on
+// the docker bridge network (172.16.0.0/12), plus the host's own
+// loopback/private ranges. These are used ONLY as a fallback and a warning
+// is logged so ops know to set TRUSTED_PROXY_CIDR explicitly. They are NOT
+// secrets — they are RFC 1918 / loopback ranges, never public addresses.
+var defaultTrustedProxyCIDRs = []string{
+	"127.0.0.0/8",    // IPv4 loopback (same-host / tests)
+	"::1/128",        // IPv6 loopback
+	"10.0.0.0/8",     // RFC 1918
+	"172.16.0.0/12",  // RFC 1918 (docker default bridge range)
+	"192.168.0.0/16", // RFC 1918
+}
+
+// parseTrustedProxyCIDRs reads TRUSTED_PROXY_CIDR (comma-separated CIDRs)
+// and returns the parsed networks. Config resolution follows the project
+// order: env var present → use it; absent → fall back to the documented
+// private/loopback defaults and warn (feature stays enabled but with the
+// safe default posture, never disabled — rate limiting is a hard security
+// control). Unparseable entries are skipped with a warning rather than
+// crashing the boot path.
+func parseTrustedProxyCIDRs() []*net.IPNet {
+	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXY_CIDR"))
+	specs := defaultTrustedProxyCIDRs
+	if raw != "" {
+		specs = strings.Split(raw, ",")
+	} else {
+		log.Printf("middleware: TRUSTED_PROXY_CIDR not set — defaulting to private/loopback ranges %v for proxy-header trust; set it explicitly in production", defaultTrustedProxyCIDRs)
+	}
+	nets := make([]*net.IPNet, 0, len(specs))
+	for _, spec := range specs {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+		_, ipNet, err := net.ParseCIDR(spec)
+		if err != nil {
+			log.Printf("middleware: ignoring invalid TRUSTED_PROXY_CIDR entry %q: %v", spec, err)
+			continue
+		}
+		nets = append(nets, ipNet)
+	}
+	return nets
+}
+
+// ipIsTrusted reports whether the given host IP falls within any trusted
+// proxy CIDR.
+func ipIsTrusted(host string, trusted []*net.IPNet) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, n := range trusted {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientIPForRateLimit returns the IP address to key a rate-limit bucket on.
+//
+// SECURITY (F-008): X-Forwarded-For / X-Real-IP are attacker-controlled on a
+// direct connection. We only honor them when the immediate peer
+// (r.RemoteAddr) is itself a trusted proxy — otherwise an attacker could
+// rotate spoofed XFF values to defeat every in-memory limiter (the 5/min
+// auth brute-force guard, the 10/min TOTP guard, and the global 600/min
+// limit). When the peer is untrusted we key strictly on the real peer host
+// from net.SplitHostPort(r.RemoteAddr), which cannot be spoofed without a
+// new TCP connection from a new source address.
+func clientIPForRateLimit(r *http.Request, trusted []*net.IPNet) string {
+	peerHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// RemoteAddr had no port (unusual, e.g. some test transports) —
+		// use it verbatim as the peer host.
+		peerHost = r.RemoteAddr
+	}
+
+	// Only trust forwarding headers when the direct peer is a known proxy.
+	if ipIsTrusted(peerHost, trusted) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// XFF is "client, proxy1, proxy2"; the left-most entry is the
+			// original client as seen by our trusted edge.
+			first := xff
+			if i := strings.Index(xff, ","); i > 0 {
+				first = xff[:i]
+			}
+			if first = strings.TrimSpace(first); first != "" {
+				return first
+			}
+		}
+		if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+			return xrip
+		}
+	}
+
+	// Untrusted peer (or trusted peer that sent no forwarding header):
+	// key on the unspoofable TCP source address.
+	return peerHost
+}
+
 func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Handler {
 	h, _ := RateLimitWithReset(maxRequests, window)
 	return h
@@ -291,6 +395,13 @@ func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handle
 	var mu sync.Mutex
 	entries := make(map[string]*rateLimitEntry)
 
+	// Parse the trusted-proxy allowlist once at construction time so every
+	// request handled by this limiter shares the same policy. All three
+	// in-memory limiters (credLimiter 5/min, mfaVerifyLimiter 10/min, and
+	// the global 600/min limiter) route through here, so they all inherit
+	// the F-008 anti-spoofing fix.
+	trusted := parseTrustedProxyCIDRs()
+
 	reset := func() {
 		mu.Lock()
 		entries = make(map[string]*rateLimitEntry)
@@ -303,22 +414,14 @@ func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handle
 			// peer. In production every request arrives from the nginx
 			// container so r.RemoteAddr resolves to a single internal docker
 			// IP (e.g. 172.18.0.4) for every user — one user's traffic burns
-			// the entire 60/min budget and everyone else gets 429. Read
-			// X-Forwarded-For (first hop) first, then X-Real-IP, and only
-			// fall back to RemoteAddr in the rare same-origin case where
-			// neither header is set. Mirrors the audit-log middleware's
-			// client-IP extraction (see lines 162-173).
-			ip := r.Header.Get("X-Forwarded-For")
-			if ip != "" {
-				if i := strings.Index(ip, ","); i > 0 {
-					ip = strings.TrimSpace(ip[:i])
-				}
-			} else if ip = r.Header.Get("X-Real-IP"); ip == "" {
-				ip, _, _ = net.SplitHostPort(r.RemoteAddr)
-				if ip == "" {
-					ip = r.RemoteAddr
-				}
-			}
+			// the entire budget and everyone else gets 429.
+			//
+			// SECURITY (F-008): forwarding headers are honored ONLY when the
+			// direct peer (r.RemoteAddr) is inside a trusted proxy CIDR.
+			// Otherwise we key strictly on the unspoofable TCP source so an
+			// attacker cannot rotate fake X-Forwarded-For values to bypass
+			// the brute-force / TOTP / global limits. See clientIPForRateLimit.
+			ip := clientIPForRateLimit(r, trusted)
 
 			mu.Lock()
 			now := time.Now()
