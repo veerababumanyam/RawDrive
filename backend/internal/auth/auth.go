@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ──────────────────────────── Types ────────────────────────────
@@ -834,8 +835,18 @@ func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPass
 		return errors.New("invalid OTP")
 	}
 
+	// Hash the new password before persisting — audit F-001 (2026-05-30).
+	// PasswordStore.UpdatePassword writes its argument verbatim into
+	// users.password_hash, so passing the raw newPassword stored plaintext
+	// credentials on every reset. bcrypt cost 12 matches the ChangePassword
+	// path in backend/internal/user/user.go.
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return err
+	}
+
 	// Update password
-	if err := s.store.UpdatePassword(ctx, email, newPassword); err != nil {
+	if err := s.store.UpdatePassword(ctx, email, string(hashed)); err != nil {
 		return err
 	}
 
