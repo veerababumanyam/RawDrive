@@ -12,6 +12,69 @@
 
 ---
 
+## 0. Remediation Status (2026-05-30)
+
+All 124 verified findings were remediated on an **isolated git worktree/branch**
+(`audit/full-fixes-2026-05-30`, branched from `main` @ `1d2b6b6`) so `main` and the
+pre-existing `security/audit-fixes-2026-05-30` branch were never touched. Fixes were
+applied by `cobolt-fix` agent teams in severity waves, each finding carrying a
+regression test where feasible, with a full build/vet/test gate between waves.
+
+### Commits (oldest → newest)
+| Commit | Scope |
+|--------|-------|
+| `8bd8da4` | Audit report (this document) |
+| `be281cf` | F-007 — leaked Cloudflare token redacted from runbook |
+| `41b4e14` | **Wave 1 — 7 Critical** (F-001…F-006) |
+| `317c537` | **Wave 2 — 45 High** (F-008…F-052) |
+| `3d81c0d` | **Wave 3 — 46 Medium** (F-053…F-098) |
+| `9c6962b` | **Wave 4 — Low (partial)** — config R2→B2 docs, settings allowlist, token-test |
+| `d4f8e21` | **Wave 4 — remaining Low** (F-099…F-124) |
+
+### Quality gates (final committed state)
+- **Backend:** `go build ./...` PASS · `go vet ./...` PASS · all test binaries compile ·
+  changed-package tests pass incl. real-Postgres testcontainer migration tests
+  (auth, handler, middleware, repository, service, streaming/recharge, user, cmd/api,
+  ai, webhook/cloudflare, database/migrations).
+- **Frontend:** `tsc --noEmit` clean · `next build` PASS · **zero NEW vitest failures**
+  vs the `main` baseline (the 58–62 failing tests are a pre-existing baseline — admin/
+  credit/gallery suites — unrelated to these fixes and identical on `main`).
+- Integration errors from concurrent agent edits (`AssetRepo.GetByIDs`,
+  `markUpgradeOrderFailed`, a duplicate `captureLog` helper, stale `UserService.Create`
+  mocks) were caught by the gate and repaired; the stale mocks were a pre-existing
+  `main` compile break this branch also fixes.
+- Critical/high fixes were re-verified to survive later-wave edits to shared files
+  (auth.go bcrypt reset, middleware trusted-proxy CIDR, admin-settings
+  RequirePlatformRole, idempotent migration 112).
+
+### REQUIRED manual actions (cannot be fully automated)
+1. **F-007 — ROTATE the Cloudflare API token.** Redaction does NOT purge it from git
+   history (it lives in `1d2b6b6` and earlier). Revoke/rotate in the Cloudflare
+   dashboard and run a coordinated `git filter-repo`/BFG history scrub.
+2. **F-001 — plaintext-password backfill.** Reset-path passwords stored before the fix
+   are cleartext and code cannot distinguish them; run an ops scan for
+   `users.password_hash` values lacking a `$2`/`$argon2` prefix and force-reset those
+   accounts.
+3. **F-008 — set `TRUSTED_PROXY_CIDR`** in prod (safe RFC1918+loopback defaults ship).
+4. **F-036 — set `NATS_AUTH_TOKEN`** in prod and enable NATS client auth.
+5. **Deps:** F-038 (Next.js 16.2.5) applied; run `govulncheck ./...` + `pnpm audit`
+   and upgrade `disintegration/imaging`, `golang.org/x/crypto`, and pin `pnpm`.
+
+### Cross-file follow-ups (in-file portion done, remainder tracked)
+- **F-056 / F-070** — password max-length cap + email masking also needed in
+  `auth.go`, `admin_user_service.go`, `dealer_service.go`, `auth_password_reset_handler.go`.
+- **F-091** — album-membership N+1 needs a new batched backend endpoint + api-client fn
+  (the smart-album path was already batched via the new `AssetRepo.GetByIDs`).
+- **F-098** — full per-request CSP nonce needs `middleware.ts` + `layout.tsx` wiring;
+  `next.config.ts` already exposes a one-flag `buildCsp({nonce})`.
+
+### Reconciliation note
+A sibling branch `security/audit-fixes-2026-05-30` independently added RLS work
+(migration **123**). This branch deliberately numbered new migrations from **124** to
+avoid collision; reconcile the two branches at merge time.
+
+---
+
 ## 1. Scope & Objective
 
 Full-repo audit of the RawDrive monorepo for **bugs, configuration issues, performance issues, security vulnerabilities, database/migration discipline, and UI/design-system compliance**, requested via `/goal`.
