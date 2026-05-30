@@ -51,11 +51,13 @@ WORKDIR /app
 
 # Cache the wheel install layer separately from app source so code edits
 # don't bust the heavy insightface/onnxruntime install (~600 MB layer).
-# numpy+cython pre-installed because insightface's source build imports
-# both at setup-time.
+# numpy+cython pre-installed to satisfy any setup-time imports during the
+# requirements resolve. Pinned to numpy 2.x to match requirements.txt — the
+# CV stack (opencv>=4.13, onnxruntime>=1.26) requires numpy>=2, so pinning
+# 1.x here would force an install-then-upgrade churn (or a hard conflict).
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir numpy==1.26.4 cython \
+    && pip install --no-cache-dir numpy==2.4.6 cython \
     && pip install --no-cache-dir -r /app/requirements.txt \
     && apt-get purge -y build-essential python3-dev \
     && apt-get autoremove -y \
