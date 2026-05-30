@@ -55,11 +55,23 @@ const StreamName = "RAWDRIVE_EVENTS"
 // stream filter.
 const SubjectPrefix = "rawdrive."
 
-// NewNATSPublisher connects to the NATS server at url, obtains a
+// NewNATSPublisher connects without client authentication. Retained for
+// callers — and integration tests against an open local broker — that need
+// no token; it delegates to NewNATSPublisherWithAuth with an empty token.
+func NewNATSPublisher(url string) (*NATSPublisher, error) {
+	return NewNATSPublisherWithAuth(url, "")
+}
+
+// NewNATSPublisherWithAuth connects to the NATS server at url, obtains a
 // JetStream context, and best-effort ensures the RAWDRIVE_EVENTS
 // stream exists. If the stream already exists with a different
 // configuration, the existing config wins — we never mutate an
 // operator's retention/storage choices.
+//
+// F-036: when authToken is non-empty the client authenticates with it via
+// nats.Token, and the NATS server must be configured with the same token
+// (authorization { token: ... }). An empty token sends no credential, which
+// is the dev / docker-compose default.
 //
 // The initial connect is verified synchronously: after nats.Connect
 // returns, we check conn.Status() == nats.CONNECTED before handing a
@@ -69,12 +81,16 @@ const SubjectPrefix = "rawdrive."
 // callers would then get an apparently-working publisher whose every
 // Publish call blocks or errors. Failing fast at construction is
 // worth the extra round-trip.
-func NewNATSPublisher(url string) (*NATSPublisher, error) {
-	conn, err := nats.Connect(url,
+func NewNATSPublisherWithAuth(url, authToken string) (*NATSPublisher, error) {
+	opts := []nats.Option{
 		nats.Name("rawdrive-backend"),
-		nats.ReconnectWait(2*time.Second),
+		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(-1),
-	)
+	}
+	if authToken != "" {
+		opts = append(opts, nats.Token(authToken))
+	}
+	conn, err := nats.Connect(url, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats connect %q: %w", url, err)
 	}

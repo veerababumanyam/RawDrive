@@ -1068,13 +1068,16 @@ func main() {
 		if natsURL == "" {
 			natsURL = "nats://nats:4222"
 		}
-		natsPub, err := events.NewNATSPublisher(natsURL)
+		// F-036: authenticate the NATS client when NATS_AUTH_TOKEN is set.
+		// Empty token (dev / docker-compose) connects without a credential.
+		natsAuthToken := os.Getenv("NATS_AUTH_TOKEN")
+		natsPub, err := events.NewNATSPublisherWithAuth(natsURL, natsAuthToken)
 		if err != nil {
 			log.Fatalf("FATAL: EVENT_BROKER=nats but NATS connection failed (ISSUE-003): %v", err)
 		}
 		defer natsPub.Close()
 		eventPublisher = natsPub
-		log.Printf("Events: NATS JetStream publisher wired to %s", natsURL)
+		log.Printf("Events: NATS JetStream publisher wired to %s (client auth: %v)", natsURL, natsAuthToken != "")
 	default:
 		eventPublisher = &logEventPublisher{}
 		log.Println("Events: in-process stdout stub active (set EVENT_BROKER=nats to switch to JetStream)")

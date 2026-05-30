@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL    string
 	ValkeyURL      string
 	NATSURL        string
+	NATSAuthToken  string
 	Port           int
 	Environment    string
 	AppSecret      string
@@ -40,6 +41,7 @@ func Load() (*Config, error) {
 		DatabaseURL:           dbURL,
 		ValkeyURL:             envOrDefault("VALKEY_URL", ""),
 		NATSURL:               envOrDefault("NATS_URL", ""),
+		NATSAuthToken:         envOrDefault("NATS_AUTH_TOKEN", ""),
 		Port:                  envIntOrDefault("PORT", 8080),
 		Environment:           envOrDefault("ENVIRONMENT", "development"),
 		AppSecret:             os.Getenv("APP_SECRET"),
