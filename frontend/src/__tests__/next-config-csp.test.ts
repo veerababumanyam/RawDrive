@@ -1,0 +1,83 @@
+/**
+ * Regression test for F-098 — "Production CSP carries 'unsafe-inline' in
+ * script-src".
+ *
+ * next.config.ts now builds its Content-Security-Policy header from an exported
+ * `buildCsp()` helper instead of an inline hardcoded string. That gives ONE
+ * typed definition of the policy and makes the nonce-based hardening a single
+ * switch: when a per-request nonce is supplied, script-src drops 'unsafe-inline'
+ * and uses 'nonce-...' + 'strict-dynamic'.
+ *
+ * Assertions are scoped to the script-src directive specifically — the finding
+ * is script-src only. style-src legitimately keeps 'unsafe-inline' (Tailwind v4
+ * + inline styles, which cannot execute) and is out of scope for F-098.
+ *
+ *   1. NONCE path (what the middleware follow-up will pass) MUST drop
+ *      'unsafe-inline' from script-src and emit 'nonce-<value>'. This is the
+ *      contract that actually closes F-098.
+ *   2. STATIC-header path (no nonce, what next.config.ts emits today) keeps the
+ *      hardened baseline and the Razorpay source. This locks the live header so
+ *      a future edit cannot silently weaken it further, and documents that the
+ *      static path's residual 'unsafe-inline' is by design until middleware
+ *      threads a nonce.
+ *
+ * Verifying the live wire header end-to-end requires running the app and reading
+ * the response header (a static next.config.ts header cannot carry a per-request
+ * nonce). This unit test guards the policy builder that next.config.ts consumes,
+ * which is the smallest reliable regression surface.
+ */
+import { describe, it, expect } from "vitest";
+import { buildCsp } from "../../next.config";
+
+/** Extract just the `script-src ...` directive from a full CSP string. */
+function scriptSrc(csp: string): string {
+  const directive = csp
+    .split(";")
+    .map((d) => d.trim())
+    .find((d) => d.startsWith("script-src"));
+  if (!directive) throw new Error(`no script-src directive in CSP: ${csp}`);
+  return directive;
+}
+
+describe("next.config CSP (F-098)", () => {
+  it("nonce path DROPS 'unsafe-inline' from script-src and uses a nonce", () => {
+    const nonce = "dGVzdC1ub25jZS12YWx1ZQ=="; // arbitrary base64-ish token
+    const script = scriptSrc(buildCsp({ isDev: false, nonce }));
+
+    // The core F-098 fix contract: with a nonce, script-src must NOT allow
+    // arbitrary inline scripts.
+    expect(script).not.toContain("'unsafe-inline'");
+    expect(script).toContain(`'nonce-${nonce}'`);
+    expect(script).toContain("'strict-dynamic'");
+    // The Razorpay allowance and 'self' must survive the nonce switch.
+    expect(script).toContain("'self'");
+    expect(script).toContain("https://checkout.razorpay.com");
+    // prod must never enable unsafe-eval.
+    expect(script).not.toContain("'unsafe-eval'");
+  });
+
+  it("static-header path keeps the hardened baseline and Razorpay source", () => {
+    // Mirrors next.config.ts: prod build, no nonce (static header).
+    const csp = buildCsp({ isDev: false, apiOrigin: "" });
+
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self'");
+
+    const script = scriptSrc(csp);
+    expect(script).toContain("'self'");
+    expect(script).toContain("https://checkout.razorpay.com");
+    // No nonce supplied -> the static header cannot carry one, so this path
+    // still falls back to 'unsafe-inline'. (Removing it for real is the
+    // middleware nonce follow-up — see manualActionNeeded in the fix report.)
+    expect(script).toContain("'unsafe-inline'");
+    expect(script).not.toContain("'unsafe-eval'");
+  });
+
+  it("dev still adds 'unsafe-eval' (turbopack/react-refresh need it)", () => {
+    const devScript = scriptSrc(buildCsp({ isDev: true }));
+    expect(devScript).toContain("'unsafe-eval'");
+  });
+});

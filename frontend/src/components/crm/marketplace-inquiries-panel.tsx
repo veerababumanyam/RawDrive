@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { listInquiries, replyToInquiry, type MarketplaceInquiry } from "@/lib/api/marketplace";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 
@@ -27,8 +27,12 @@ function senderLabel(inq: MarketplaceInquiry): string {
 
 export function MarketplaceInquiriesPanel() {
   const token = getStoredAccessToken();
-  const claims = typeof window !== "undefined" ? getStoredAccessTokenClaims() : null;
-  const currentUserID = claims?.sub ?? "";
+  // Decode the JWT once on mount instead of on every render. getStoredAccessTokenClaims
+  // runs window.atob internally, so memoizing avoids a per-render decode.
+  const currentUserID = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return getStoredAccessTokenClaims()?.sub ?? "";
+  }, []);
 
   const [inquiries, setInquiries] = useState<MarketplaceInquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,25 +43,36 @@ export function MarketplaceInquiriesPanel() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySent, setReplySent] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     if (!token) {
       setError("Not authenticated");
       setLoading(false);
-      return;
+      return undefined;
     }
+    // Guard against a stale closure: if token/currentUserID change (e.g. a token
+    // refresh) before this request resolves, the cleanup flips `ignore` so the
+    // superseded response never calls setState — preventing the concurrent
+    // listInquiries race.
+    let ignore = false;
     setLoading(true);
+    setError(null);
     listInquiries(token)
       .then((data) => {
-        setInquiries(data.filter((inq) => inq.to_user_id === currentUserID));
+        if (ignore) return;
+        setInquiries((data ?? []).filter((inq) => inq.to_user_id === currentUserID));
         setLoading(false);
       })
       .catch((err: unknown) => {
+        if (ignore) return;
         setError(err instanceof Error ? err.message : "Failed to load inquiries");
         setLoading(false);
       });
-  };
+    return () => {
+      ignore = true;
+    };
+  }, [token, currentUserID]);
 
-  useEffect(() => { load(); }, [token, currentUserID]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => load(), [load]);
 
   const openDetail = (inq: MarketplaceInquiry) => {
     setSelected(inq);

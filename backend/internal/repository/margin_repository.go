@@ -19,12 +19,16 @@ type MarginRatio struct {
 	DealerPct        float64    `json:"dealer_pct"`
 	PlatformPct      float64    `json:"platform_pct"`
 	CalculationBasis string     `json:"calculation_basis"`
-	FixedIncentiveINR int64     `json:"fixed_incentive_inr"`
-	EffectiveFrom    time.Time  `json:"effective_from"`
-	EffectiveUntil   *time.Time `json:"effective_until"`
-	CreatedBy        uuid.UUID  `json:"created_by"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	// FixedIncentivePaise is the flat per-attribution incentive in integer
+	// paisa (BIGINT column fixed_incentive_paise), matching the BIGINT-paisa
+	// money convention used across billing. Renamed from FixedIncentiveINR /
+	// fixed_incentive_inr DECIMAL(10,2) by migration 124. (F-065)
+	FixedIncentivePaise int64      `json:"fixed_incentive_paise"`
+	EffectiveFrom       time.Time  `json:"effective_from"`
+	EffectiveUntil      *time.Time `json:"effective_until"`
+	CreatedBy           uuid.UUID  `json:"created_by"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 type MarginRepo struct {
@@ -35,12 +39,12 @@ func NewMarginRepo(db *pgxpool.Pool) *MarginRepo {
 	return &MarginRepo{DB: db}
 }
 
-const marginCols = `id, state_id, plan_id, product_type, channel, dealer_pct, platform_pct, calculation_basis, fixed_incentive_inr, effective_from, effective_until, created_by, created_at, updated_at`
+const marginCols = `id, state_id, plan_id, product_type, channel, dealer_pct, platform_pct, calculation_basis, fixed_incentive_paise, effective_from, effective_until, created_by, created_at, updated_at`
 
 func scanMargin(row pgx.Row) (MarginRatio, error) {
 	var m MarginRatio
 	err := row.Scan(&m.ID, &m.StateID, &m.PlanID, &m.ProductType, &m.Channel,
-		&m.DealerPct, &m.PlatformPct, &m.CalculationBasis, &m.FixedIncentiveINR,
+		&m.DealerPct, &m.PlatformPct, &m.CalculationBasis, &m.FixedIncentivePaise,
 		&m.EffectiveFrom, &m.EffectiveUntil, &m.CreatedBy, &m.CreatedAt, &m.UpdatedAt)
 	return m, err
 }
@@ -57,7 +61,7 @@ func (r *MarginRepo) Create(ctx context.Context, m *MarginRatio) error {
 		INSERT INTO margin_ratios (`+marginCols+`)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		m.ID, m.StateID, m.PlanID, m.ProductType, m.Channel,
-		m.DealerPct, m.PlatformPct, m.CalculationBasis, m.FixedIncentiveINR,
+		m.DealerPct, m.PlatformPct, m.CalculationBasis, m.FixedIncentivePaise,
 		m.EffectiveFrom, m.EffectiveUntil, m.CreatedBy, m.CreatedAt, m.UpdatedAt,
 	)
 	return err

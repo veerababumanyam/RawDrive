@@ -3,11 +3,22 @@ package service
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
 )
+
+// marginSumTolerance is the allowed absolute deviation when validating that
+// dealer_pct + platform_pct == 100. Percentages are stored as float64, and
+// IEEE-754 addition cannot always represent a decimal sum of exactly 100.0
+// (e.g. operands carrying accumulated representation error). An exact equality
+// check (`sum != 100`) would wrongly reject otherwise-valid fractional splits,
+// so we compare within a small tolerance instead. 0.001 (0.001 percentage
+// points) is far larger than the ~1e-13 float error yet far smaller than any
+// meaningful business split granularity.
+const marginSumTolerance = 0.001
 
 var (
 	ErrInvalidMarginSum = errors.New("dealer_pct + platform_pct must equal 100")
@@ -24,7 +35,7 @@ type ResolvedMargin struct {
 }
 
 type MarginService struct {
-	repo      *repository.MarginRepo
+	repo       *repository.MarginRepo
 	dealerRepo *repository.DealerRepo
 }
 
@@ -33,7 +44,7 @@ func NewMarginService(repo *repository.MarginRepo, dealerRepo *repository.Dealer
 }
 
 func (s *MarginService) ConfigureMargin(ctx context.Context, m *repository.MarginRatio) error {
-	if m.DealerPct+m.PlatformPct != 100 {
+	if math.Abs(m.DealerPct+m.PlatformPct-100) > marginSumTolerance {
 		return ErrInvalidMarginSum
 	}
 	today := time.Now().UTC().Truncate(24 * time.Hour)

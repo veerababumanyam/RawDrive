@@ -498,7 +498,22 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-  const token = getStoredAccessToken();
+  // F-089: read the access token ONCE per mount instead of on every render.
+  // getStoredAccessToken() is not a pure getter — it calls
+  // clearLegacyStoredTokens() which performs 4 synchronous
+  // localStorage/sessionStorage removeItem() writes (2 keys × 2 stores) on
+  // every call. This component re-renders frequently while uploads are in
+  // flight (per-byte progress state updates), so calling it inline in the
+  // render body fired those 4 main-thread storage writes on each progress
+  // tick during the most performance-sensitive UX window. accessTokenCache
+  // is a module-level value that only changes on login/refresh/logout, so
+  // a once-per-mount snapshot via useRef is correct and stable for the
+  // upload hook + the SSE subscription below.
+  const tokenRef = useRef<string | null>(null);
+  if (tokenRef.current === null) {
+    tokenRef.current = getStoredAccessToken();
+  }
+  const token = tokenRef.current;
   const upload = useUpload(apiUrl, token);
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
 

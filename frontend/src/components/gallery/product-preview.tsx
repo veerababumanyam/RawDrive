@@ -245,7 +245,7 @@ export function ProductPreview({
       </footer>
 
       {addError ? (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-feedback-error">
           {addError}
         </p>
       ) : null}
@@ -265,7 +265,7 @@ function DPIQualityBadge({
 }) {
   if (error) {
     return (
-      <div className="flex items-start gap-2 text-xs text-amber-400" role="status">
+      <div className="flex items-start gap-2 text-xs text-feedback-warning" role="status">
         <InfoCircle />
         <span>Print quality check unavailable: {error}</span>
       </div>
@@ -325,27 +325,27 @@ function qualityPalette(quality: PrintPreflightResult["quality"]): {
     case "excellent":
     case "good":
       return {
-        container: "bg-emerald-500/10 border-emerald-500/30",
-        icon: "text-emerald-400",
-        label: "text-emerald-400",
+        container: "bg-feedback-success/10 border-feedback-success/30",
+        icon: "text-feedback-success",
+        label: "text-feedback-success",
       };
     case "acceptable":
       return {
-        container: "bg-blue-500/10 border-blue-500/30",
-        icon: "text-blue-400",
-        label: "text-blue-400",
+        container: "bg-info/10 border-info/30",
+        icon: "text-info",
+        label: "text-info",
       };
     case "warning":
       return {
-        container: "bg-amber-500/10 border-amber-500/30",
-        icon: "text-amber-400",
-        label: "text-amber-400",
+        container: "bg-feedback-warning/10 border-feedback-warning/30",
+        icon: "text-feedback-warning",
+        label: "text-feedback-warning",
       };
     case "fail":
       return {
-        container: "bg-red-500/10 border-red-500/40",
-        icon: "text-red-400",
-        label: "text-red-400",
+        container: "bg-feedback-error/10 border-feedback-error/40",
+        icon: "text-feedback-error",
+        label: "text-feedback-error",
       };
   }
 }

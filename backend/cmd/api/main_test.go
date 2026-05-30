@@ -3,13 +3,17 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/rawdrive/backend/internal/middleware"
+	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/service"
 	streamingrecharge "github.com/rawdrive/backend/internal/streaming/recharge"
 )
 
@@ -160,6 +164,57 @@ func TestF035_IsPublicThumbnailKey(t *testing.T) {
 		if got := isPublicThumbnailKey(tt.key); got != tt.want {
 			t.Errorf("isPublicThumbnailKey(%q) = %v, want %v", tt.key, got, tt.want)
 		}
+	}
+}
+
+// ── F-062: AdminWorkspaceService must be constructed WITH an audit log so
+// workspace suspend/unsuspend/delete write to the immutable audit_logs trail. ─
+
+// adminWorkspaceAuditLog reads the unexported `auditLog` field off an
+// *service.AdminWorkspaceService so the test can assert whether the audit log
+// was actually wired. recordAudit is nil-guarded, so a nil here means every
+// suspend/unsuspend/delete silently produces no audit_logs row — the F-062 bug.
+func adminWorkspaceAuditLog(t *testing.T, svc *service.AdminWorkspaceService) *service.AuditLogService {
+	t.Helper()
+	v := reflect.ValueOf(svc).Elem().FieldByName("auditLog")
+	if !v.IsValid() {
+		t.Fatalf("AdminWorkspaceService has no auditLog field — test needs updating")
+	}
+	// Field is unexported; bypass the access guard to read its pointer value.
+	v = reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem()
+	if v.IsNil() {
+		return nil
+	}
+	return v.Interface().(*service.AuditLogService)
+}
+
+// TestF062_AdminWorkspaceServiceHasAuditLog proves newAdminWorkspaceService
+// (the seam main.go now uses for AdminDeps.WorkspaceSvc) wires the audit log,
+// while the bare service.NewAdminWorkspaceService constructor — the pre-fix
+// wiring at main.go's RegisterAdminRoutes call — leaves it nil. Without the
+// audit log, SuspendWorkspace/UnsuspendWorkspace/DeleteWorkspace call a
+// nil-guarded recordAudit that no-ops, so the privileged actions never reach
+// audit_logs (undermining SOC2/DPDPA incident reconstruction).
+func TestF062_AdminWorkspaceServiceHasAuditLog(t *testing.T) {
+	// repo + audit constructors only stash the (nil) pool pointer; no DB I/O.
+	repo := repository.NewAdminWorkspaceRepo(nil)
+	auditLog := service.NewAuditLogService(repository.NewAuditLogRepo(nil))
+
+	// Pre-fix control: the bare constructor leaves auditLog nil → recordAudit
+	// no-ops → no audit trail. This is exactly the F-062 finding.
+	unwired := service.NewAdminWorkspaceService(repo)
+	if adminWorkspaceAuditLog(t, unwired) != nil {
+		t.Fatal("control: bare NewAdminWorkspaceService should leave auditLog nil")
+	}
+
+	// Post-fix: the helper main.go calls must always wire the audit log.
+	wired := newAdminWorkspaceService(repo, auditLog)
+	got := adminWorkspaceAuditLog(t, wired)
+	if got == nil {
+		t.Fatal("newAdminWorkspaceService left auditLog nil — workspace suspend/delete would write no audit_logs row (F-062 regression)")
+	}
+	if got != auditLog {
+		t.Fatal("newAdminWorkspaceService wired a different audit log than the one provided")
 	}
 }
 

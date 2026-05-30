@@ -46,7 +46,12 @@ CREATE TABLE IF NOT EXISTS coupon_redemptions (
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
     state_id INTEGER REFERENCES states(id),
     invoice_id UUID,
-    discount_applied DECIMAL(10,2) NOT NULL,
+    -- Monetary amount in integer paisa (BIGINT), matching the BIGINT-paisa
+    -- billing convention used throughout (migration 022: subtotal_paisa,
+    -- total_paisa, amount_paisa). The Go redemption path already inserts an
+    -- int64 paisa value here (coupon_validation_service.go). Migration 124
+    -- converts already-applied DBs from the legacy DECIMAL(10,2) rupee form. (F-065)
+    discount_applied BIGINT NOT NULL,
     redeemed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -17,14 +18,14 @@ import (
 // Must stay in sync with frontend/src/components/gallery/consent-banner.tsx.
 // See _cobolt-output/latest/build/M15/M15-design-decisions.md § 2.
 const (
-	ConsentTerms               = "terms_of_service"
-	ConsentNotifications       = "gallery_notifications"
-	ConsentBiometric           = "biometric_face_id"
-	ConsentAIContentTagging    = "ai_content_tagging"
-	ConsentAnalyticsTracking   = "analytics_tracking"
-	ConsentMarketing           = "marketing_communications"
-	ConsentThirdPartySharing   = "third_party_sharing"
-	ConsentDSARProcessing      = "dsar_processing"
+	ConsentTerms             = "terms_of_service"
+	ConsentNotifications     = "gallery_notifications"
+	ConsentBiometric         = "biometric_face_id"
+	ConsentAIContentTagging  = "ai_content_tagging"
+	ConsentAnalyticsTracking = "analytics_tracking"
+	ConsentMarketing         = "marketing_communications"
+	ConsentThirdPartySharing = "third_party_sharing"
+	ConsentDSARProcessing    = "dsar_processing"
 
 	// Legacy short names kept for backwards compatibility with existing records.
 	// The service normalizes these to the canonical names on read/write.
@@ -77,6 +78,10 @@ type ConsentService struct {
 	consentRepo *repository.ConsentRepo
 	emitter     WithdrawalCascadeEmitter // optional — nil in tests or when Valkey is down
 
+	// Structured logger for compliance-sensitive paths. Never log raw PII
+	// (visitor email) — use a non-reversible correlation ref instead.
+	logger *slog.Logger
+
 	// Cache of version hashes so we don't recompute SHA-256 for the same banner text
 	versionCache sync.Map
 }
@@ -84,7 +89,32 @@ type ConsentService struct {
 // NewConsentService creates a new ConsentService.
 // emitter may be nil; in that case withdrawal cascade is logged but not dispatched.
 func NewConsentService(cr *repository.ConsentRepo, emitter WithdrawalCascadeEmitter) *ConsentService {
-	return &ConsentService{consentRepo: cr, emitter: emitter}
+	return &ConsentService{
+		consentRepo: cr,
+		emitter:     emitter,
+		logger:      slog.Default().With("component", "consent"),
+	}
+}
+
+// visitorRef derives a short, non-reversible correlation token from a visitor
+// email so cascade failures can be correlated in logs WITHOUT writing the raw
+// email (PII) to stdout. DPDP/GDPR: never log the plaintext address.
+func visitorRef(email string) string {
+	if email == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+// log returns the service logger, defaulting to slog.Default() so a
+// zero-value ConsentService (constructed without NewConsentService, e.g. in
+// unit tests) never panics.
+func (s *ConsentService) log() *slog.Logger {
+	if s.logger != nil {
+		return s.logger
+	}
+	return slog.Default().With("component", "consent")
 }
 
 // normalizeConsentType maps legacy short names to canonical purpose names.
@@ -164,14 +194,14 @@ func (s *ConsentService) RecordBundle(ctx context.Context, b ConsentBundle) erro
 			return fmt.Errorf("invalid consent type in bundle: %s", rawType)
 		}
 		record := &repository.ConsentRecord{
-			GalleryID:           b.GalleryID,
-			VisitorEmail:        email,
-			VisitorIP:           b.VisitorIP,
-			UserAgent:           b.UserAgent,
-			ConsentType:         ct,
-			Granted:             b.Grants[rawType],
-			Language:            b.Language,
-			ConsentVersionHash:  versionHash,
+			GalleryID:          b.GalleryID,
+			VisitorEmail:       email,
+			VisitorIP:          b.VisitorIP,
+			UserAgent:          b.UserAgent,
+			ConsentType:        ct,
+			Granted:            b.Grants[rawType],
+			Language:           b.Language,
+			ConsentVersionHash: versionHash,
 		}
 		if err := s.consentRepo.Create(ctx, record); err != nil {
 			return fmt.Errorf("record %s: %w", ct, err)
@@ -223,7 +253,14 @@ func (s *ConsentService) WithdrawConsent(ctx context.Context, galleryID *uuid.UU
 			// Log but don't fail the withdrawal itself. DPDP requires the withdrawal
 			// to take immediate effect from the user's perspective; the cascade purge
 			// runs async and has its own retry logic.
-			fmt.Printf("[consent] cascade emit failed for %s/%s: %v\n", email, ct, err)
+			//
+			// PII: never log the raw visitor email. Emit a non-reversible
+			// correlation ref instead so the failure stays traceable.
+			s.log().Error("cascade emit failed",
+				slog.String("visitor_ref", visitorRef(email)),
+				slog.String("consent_type", ct),
+				slog.Any("error", err),
+			)
 		}
 	}
 	return nil

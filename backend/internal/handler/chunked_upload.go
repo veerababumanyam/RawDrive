@@ -305,9 +305,13 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	if h.validationSvc != nil {
 		mode, err := h.validationSvc.WorkspacePolicyMode(r.Context(), workspaceID)
 		if err != nil {
+			// F-053: log the raw DB error server-side; return a generic
+			// message so Postgres table/column/constraint text is not
+			// disclosed. Keep the POLICY_LOOKUP_FAILED code for the client.
+			log.Printf("chunked_upload: policy_lookup_failed workspace=%s err=%v", workspaceID, err)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"error":   "POLICY_LOOKUP_FAILED",
-				"message": err.Error(),
+				"message": "could not verify upload policy; please retry",
 			})
 			return
 		}
@@ -400,7 +404,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 			respondJSON(w, http.StatusBadRequest, gate.InsufficientCreditsResponse(details))
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"credit reservation failed: %s"}`, credErr.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "credit_reservation_failed", credErr)
 		return
 	}
 
@@ -440,7 +444,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	}
 	r2UploadID, err := mpc.CreateMultipartUpload(r.Context(), storageKey, input.ContentType)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to create multipart upload: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "create_multipart_upload_failed", err)
 		return
 	}
 
@@ -481,7 +485,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		// Best-effort: abort the R2 multipart we just started so we don't
 		// leak storage state on a DB write failure.
 		_ = mpc.AbortMultipartUpload(r.Context(), storageKey, r2UploadID)
-		http.Error(w, fmt.Sprintf(`{"error":"failed to persist upload session: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "persist_upload_session_failed", err)
 		return
 	}
 
@@ -511,18 +515,30 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 			http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"session lookup failed: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "session_lookup_failed", err)
 		return
 	}
 
-	// Parse Upload-Offset header (TUS requirement).
+	// Parse Upload-Offset header. TUS 1.0.0 §5.3 makes the header MANDATORY on
+	// PATCH and requires a 409 when it does not match the server's current
+	// offset. F-064: the header was previously gated behind `if offsetStr !=
+	// ""`, so an absent header skipped validation entirely and an
+	// unparseable one was silently ignored (parseErr swallowed) — both
+	// removed the offset-ordering guard. Enforce it: 400 when the header is
+	// absent or malformed, 409 on mismatch.
 	offsetStr := r.Header.Get("Upload-Offset")
-	if offsetStr != "" {
-		offset, parseErr := strconv.ParseInt(offsetStr, 10, 64)
-		if parseErr == nil && offset != row.UploadOffset {
-			http.Error(w, fmt.Sprintf(`{"error":"offset mismatch: expected %d, got %d"}`, row.UploadOffset, offset), http.StatusConflict)
-			return
-		}
+	if offsetStr == "" {
+		http.Error(w, `{"error":"Upload-Offset header required"}`, http.StatusBadRequest)
+		return
+	}
+	offset, parseErr := strconv.ParseInt(offsetStr, 10, 64)
+	if parseErr != nil {
+		http.Error(w, `{"error":"Upload-Offset header invalid"}`, http.StatusBadRequest)
+		return
+	}
+	if offset != row.UploadOffset {
+		http.Error(w, fmt.Sprintf(`{"error":"offset mismatch: expected %d, got %d"}`, row.UploadOffset, offset), http.StatusConflict)
+		return
 	}
 
 	// Buffer the chunk into memory so we can verify the Upload-Checksum
@@ -628,7 +644,7 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 	}
 	etag, err := mpc.UploadPart(r.Context(), storageKey, mpID, partNumber, bytes.NewReader(chunk), int64(len(chunk)))
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to upload part: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "upload_part_failed", err)
 		return
 	}
 
@@ -642,13 +658,13 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 		SHA256:     hex.EncodeToString(chunkHash[:]),
 	}
 	if err := h.sessions.AppendPartETag(r.Context(), uploadID, part); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to record part etag: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "record_part_etag_failed", err)
 		return
 	}
 
 	newOffset := row.UploadOffset + int64(len(chunk))
 	if err := h.sessions.UpdateOffset(r.Context(), uploadID, newOffset); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to update offset: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "update_offset_failed", err)
 		return
 	}
 
@@ -683,7 +699,7 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 		// Refresh the row so scan_manifest + size info is current.
 		finalRow, err := h.sessions.GetByTUSUploadID(r.Context(), uploadID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"session refresh failed: %s"}`, err.Error()), http.StatusInternalServerError)
+			internalError(w, uploadID, "session_refresh_failed", err)
 			return
 		}
 		result, err := h.finalizeUpload(r.Context(), finalRow, state)
@@ -716,7 +732,7 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 				h.creditGate.Refund(r.Context(), state.reservation,
 					fmt.Sprintf("refund:%s:infra", uploadID),
 					"infra-failure"))
-			http.Error(w, fmt.Sprintf(`{"error":"finalize failed: %s"}`, err.Error()), http.StatusInternalServerError)
+			internalError(w, uploadID, "finalize_failed", err)
 			return
 		}
 		// Success: convert the reservation into a terminal consume entry.
@@ -750,7 +766,7 @@ func (h *ChunkedUploadHandler) GetOffset(w http.ResponseWriter, r *http.Request)
 			http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"session lookup failed: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "session_lookup_failed", err)
 		return
 	}
 
@@ -770,7 +786,7 @@ func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"upload session not found"}`, http.StatusNotFound)
 			return
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"session lookup failed: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "session_lookup_failed", err)
 		return
 	}
 
@@ -784,7 +800,7 @@ func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.sessions.Delete(r.Context(), uploadID); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to delete session: %s"}`, err.Error()), http.StatusInternalServerError)
+		internalError(w, uploadID, "delete_session_failed", err)
 		return
 	}
 
@@ -1092,6 +1108,20 @@ func applyScanMetadata(asset *repository.Asset, manifest *service.UploadScanMani
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────
+
+// internalError logs the raw error server-side and writes a generic 500 body
+// to the client. F-053: handlers previously embedded err.Error() directly in
+// 5xx bodies, leaking storage-layer detail (B2 bucket names, object paths,
+// multipart upload IDs) and Postgres error text (table/column/constraint
+// names) to callers. The opaque error key lets the client distinguish failure
+// sites for support without exposing internals; the full error stays in the
+// server log keyed by upload ID. Reserve echoing err.Error() for 400-class
+// validation where the message is user-actionable and carries no internal
+// detail.
+func internalError(w http.ResponseWriter, uploadID, errKey string, err error) {
+	log.Printf("chunked_upload: %s upload=%s err=%v", errKey, uploadID, err)
+	http.Error(w, fmt.Sprintf(`{"error":"internal server error","code":%q}`, errKey), http.StatusInternalServerError)
+}
 
 func deriveKeyAndUploadID(row *repository.UploadSession) (string, string) {
 	if row == nil {

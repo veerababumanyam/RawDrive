@@ -29,7 +29,12 @@ services:
         max-file: "3"
 
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    # Pinned (F-082): never use a floating :latest tag for the prod connection
+    # pooler — a deploy-day `docker compose pull` could otherwise silently swap
+    # in a different (or compromised) image between the backend and prod
+    # Postgres. Bump deliberately, matching the pinned nats/valkey/pgvector/nginx
+    # images below.
+    image: edoburu/pgbouncer:1.22.1
     container_name: deploy-pgbouncer-1
     restart: unless-stopped
     ports:

@@ -36,8 +36,8 @@ type ThumbnailWorker struct {
 	assetRepo     *repository.AssetRepo
 	thumbnailSvc  *service.ThumbnailService
 	store         storage.Provider
-	publisher     Publisher    // optional — emits asset.ready events when set
-	faceEnqueuer  FaceEnqueuer // optional — enqueues face_detection AIJob after ready
+	publisher     Publisher                       // optional — emits asset.ready events when set
+	faceEnqueuer  FaceEnqueuer                    // optional — enqueues face_detection AIJob after ready
 	derivRepo     *repository.AssetDerivativeRepo // optional — persists per-variant size into asset_derivatives
 	accountingSvc *service.StorageAccounting      // optional — increments workspace_storage.derivative_bytes
 	pollInterval  time.Duration
@@ -124,9 +124,18 @@ func (w *ThumbnailWorker) Start(ctx context.Context) {
 	}
 }
 
-// Stop signals the worker to stop.
+// Stop signals the worker to stop. Idempotent: a second or concurrent
+// call is a no-op rather than panicking with "close of closed channel".
+// During graceful shutdown both context cancellation and an explicit
+// StopAll() can fire, so the select guard (mirroring DownloadWorker.Stop)
+// is required to keep teardown from crashing the process.
 func (w *ThumbnailWorker) Stop() {
-	close(w.stopCh)
+	select {
+	case <-w.stopCh:
+		// already closed
+	default:
+		close(w.stopCh)
+	}
 }
 
 // processNextBatch finds assets with status "processing" and generates thumbnails.

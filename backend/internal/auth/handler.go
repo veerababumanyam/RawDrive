@@ -22,6 +22,16 @@ import (
 // AuthAdapter translates its own user.ErrPhoneTaken into this sentinel.
 var ErrPhoneTaken = errors.New("auth: phone number already registered")
 
+// maxPasswordLen caps the password length accepted at registration.
+//
+// F-056: bcrypt silently truncates at 72 bytes, so two passwords that
+// differ only past byte 72 hash to the same value (a real strength
+// collision), and an arbitrarily long input wastes the server-side copy
+// bcrypt performs before truncating. 128 bytes is well past any realistic
+// passphrase yet safely below the truncation boundary's blast radius, and
+// mirrors the cap the password service enforces for change-password.
+const maxPasswordLen = 128
+
 // ──────────────────────────── Request / Response Types ────────────────────────────
 
 type RegisterRequest struct {
@@ -313,20 +323,20 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	// Pass selected claims through to the client so the frontend has a
 	// single network call to populate its user-state store.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":                        profile.ID,
-		"email":                     profile.Email,
-		"phone":                     profile.Phone,
-		"display_name":              profile.DisplayName,
-		"avatar_url":                profile.AvatarURL,
-		"workspace_id":              claims.WorkspaceID,
-		"role":                      claims.Role,
-		"platform_role":             claims.PlatformRole,
-		"state_id":                  claims.StateID,
-		"district":                  profile.District,
-		"must_change_password":      profile.MustChangePassword,
-		"plan_tier":                 planTier,
-		"subscription_started_at":   subStartedAt,
-		"subscription_expires_at":   subExpiresAt,
+		"id":                      profile.ID,
+		"email":                   profile.Email,
+		"phone":                   profile.Phone,
+		"display_name":            profile.DisplayName,
+		"avatar_url":              profile.AvatarURL,
+		"workspace_id":            claims.WorkspaceID,
+		"role":                    claims.Role,
+		"platform_role":           claims.PlatformRole,
+		"state_id":                claims.StateID,
+		"district":                profile.District,
+		"must_change_password":    profile.MustChangePassword,
+		"plan_tier":               planTier,
+		"subscription_started_at": subStartedAt,
+		"subscription_expires_at": subExpiresAt,
 	})
 }
 
@@ -344,6 +354,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if len(req.Password) < 8 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+		return
+	}
+
+	// F-056: reject over-long passwords. Without an upper bound, bcrypt
+	// truncates anything past 72 bytes (so the bytes beyond 72 add no
+	// strength and two such passwords collide), and a megabyte-long string
+	// is hashed anyway. Cap length here, before the password ever reaches
+	// the hashing site in h.users.Create.
+	if len(req.Password) > maxPasswordLen {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at most 128 characters"})
 		return
 	}
 
@@ -384,7 +404,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		// Any other DB error: log the underlying cause so future drift is
 		// visible in the server log instead of vanishing. Response body
 		// stays generic to avoid leaking DB internals to the client.
-		log.Printf("auth.Register: create user failed email=%s: %v", req.Email, err)
+		log.Printf("auth.Register: create user failed email=%s: %v", maskEmail(req.Email), err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
 	}
@@ -396,7 +416,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		// (SMTP delivery failure, rate limit, etc.) is visible in the
 		// server log instead of vanishing behind the generic message
 		// shown to the client.
-		log.Printf("auth.Register: OTP generation failed email=%s: %v", req.Email, err)
+		log.Printf("auth.Register: OTP generation failed email=%s: %v", maskEmail(req.Email), err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate activation OTP"})
 		return
 	}
@@ -619,7 +639,7 @@ func (h *Handler) ResendOTP(w http.ResponseWriter, r *http.Request) {
 	// caller is treated as "no account" so we never leak DB problems.
 	verified, exists, err := h.users.IsEmailVerified(r.Context(), req.Email)
 	if err != nil {
-		log.Printf("auth.ResendOTP: user lookup failed email=%s: %v", req.Email, err)
+		log.Printf("auth.ResendOTP: user lookup failed email=%s: %v", maskEmail(req.Email), err)
 		writeJSON(w, http.StatusOK, ResendOTPResponse{Message: resendOTPGenericMessage})
 		return
 	}
@@ -632,7 +652,7 @@ func (h *Handler) ResendOTP(w http.ResponseWriter, r *http.Request) {
 	// window resets).
 	if exists && !verified {
 		if _, otpErr := h.otp.Generate(r.Context(), req.Email); otpErr != nil {
-			log.Printf("auth.ResendOTP: otp generate failed email=%s: %v", req.Email, otpErr)
+			log.Printf("auth.ResendOTP: otp generate failed email=%s: %v", maskEmail(req.Email), otpErr)
 		}
 	}
 
@@ -857,6 +877,26 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // ──────────────────────────── Helpers ────────────────────────────
+
+// maskEmail redacts an email address for logging so user PII (F-070) does
+// not persist in log aggregators with no TTL (DPDP/GDPR). It keeps just
+// enough to correlate support reports: the first character of the local
+// part and the full domain, e.g. "alice@example.com" -> "a***@example.com".
+// Inputs that don't look like an email are reported as "[redacted]" so a
+// malformed value can never leak verbatim. Empty input stays empty.
+func maskEmail(email string) string {
+	if email == "" {
+		return ""
+	}
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at >= len(email)-1 {
+		// No usable local part or domain — never echo the raw value.
+		return "[redacted]"
+	}
+	local := email[:at]
+	domain := email[at+1:]
+	return local[:1] + "***@" + domain
+}
 
 func isValidEmail(email string) bool {
 	if len(email) < 3 {

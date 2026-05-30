@@ -23,6 +23,13 @@ type MessagingHandler struct {
 	repo    *repository.MessagingRepo
 	modRepo *repository.ModerationRepo
 	events  EventPublisher
+
+	// createChannelFn / addMemberFn are test seams over the corresponding repo
+	// methods so the creator-membership path in CreateChannel can be unit-tested
+	// without a live database. When nil (production), CreateChannel falls back to
+	// the real repo methods.
+	createChannelFn func(ctx context.Context, ch *repository.Channel) error
+	addMemberFn     func(ctx context.Context, m *repository.ChannelMember) error
 }
 
 func NewMessagingHandler(repo *repository.MessagingRepo, modRepo *repository.ModerationRepo, events EventPublisher) *MessagingHandler {
@@ -75,7 +82,11 @@ func (h *MessagingHandler) CreateChannel(w http.ResponseWriter, r *http.Request)
 		ChannelType: req.ChannelType,
 		CreatedBy:   userID,
 	}
-	if err := h.repo.CreateChannel(r.Context(), ch); err != nil {
+	createChannel := h.createChannelFn
+	if createChannel == nil {
+		createChannel = h.repo.CreateChannel
+	}
+	if err := createChannel(r.Context(), ch); err != nil {
 		log.Printf("MessagingHandler.CreateChannel: %v", err)
 		msg, _ := json.Marshal(map[string]string{"error": fmt.Sprintf("failed to create channel: %v", err)})
 		w.Header().Set("Content-Type", "application/json")
@@ -83,12 +94,21 @@ func (h *MessagingHandler) CreateChannel(w http.ResponseWriter, r *http.Request)
 		w.Write(msg)
 		return
 	}
-	// Auto-add creator as admin member
-	h.repo.AddMember(r.Context(), &repository.ChannelMember{
+	// Auto-add creator as admin member. The channel is already persisted, so a
+	// membership failure here does not invalidate the 201, but the error must
+	// not be swallowed silently — an unlogged failure leaves the creator unable
+	// to access a channel they just created (orphaned channel, F-066).
+	addMember := h.addMemberFn
+	if addMember == nil {
+		addMember = h.repo.AddMember
+	}
+	if err := addMember(r.Context(), &repository.ChannelMember{
 		ChannelID: ch.ID,
 		UserID:    userID,
 		Role:      "admin",
-	})
+	}); err != nil {
+		log.Printf("MessagingHandler.CreateChannel: failed to add creator %s as admin to channel %s: %v", userID, ch.ID, err)
+	}
 	respondJSON(w, http.StatusCreated, map[string]any{"data": ch})
 }
 

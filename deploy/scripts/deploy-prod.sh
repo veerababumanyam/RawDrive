@@ -13,13 +13,44 @@
 #   --skip-push   Skip the tar push step (code already on servers).
 #   --no-cache    Force a clean Docker rebuild. Slow; use only when cache is suspect.
 #   --pull        Ask Docker Compose to pull newer base images before building.
+#
+# SSH host-key verification (supply-chain hardening):
+#   This script streams a source tarball over SSH and builds the prod Docker
+#   images from it on the VPS. If host-key verification were disabled, a MITM
+#   on the SSH path could tamper with the streamed tarball and inject code into
+#   the prod image with no warning. We therefore pin the VPS host keys and run
+#   with StrictHostKeyChecking=yes.
+#
+#   Known-hosts file (pinned VPS fingerprints), resolution order:
+#     1. $DEPLOY_KNOWN_HOSTS env var (if set)
+#     2. deploy/known_hosts next to this script (checked into the repo)
+#     3. ~/.ssh/known_hosts (operator default)
+#
+#   First-connect / key-rotation seeding (do this ONCE per VPS, out of band,
+#   then verify the fingerprint against the value the VPS provider published):
+#     ssh-keyscan -t ed25519 187.127.142.42 >> deploy/known_hosts
+#     ssh-keyscan -t ed25519 187.127.142.44 >> deploy/known_hosts
+#     ssh-keygen -lf deploy/known_hosts        # print fingerprints to verify
+#   Compare the printed SHA256 fingerprints against the documented VPS host-key
+#   fingerprints before committing deploy/known_hosts. NEVER seed blind on an
+#   untrusted network — that reintroduces the TOFU/MITM window this guards against.
 
 set -euo pipefail
 
 APP1_IP="187.127.142.42"
 APP2_IP="187.127.142.44"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
-SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+# Pinned known-hosts file for strict host-key verification. Env override first,
+# then the repo-committed deploy/known_hosts, then the operator's default.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+  KNOWN_HOSTS="$DEPLOY_KNOWN_HOSTS"
+elif [ -f "$SCRIPT_DIR/../known_hosts" ]; then
+  KNOWN_HOSTS="$SCRIPT_DIR/../known_hosts"
+else
+  KNOWN_HOSTS="$HOME/.ssh/known_hosts"
+fi
+SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o ConnectTimeout=10"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="docker-compose.prod-app.yml"
 DEPLOY_DIR="/opt/rawdrive/app/deploy"

@@ -18,13 +18,23 @@ export function BYOKSetup({ token }: BYOKSetupProps) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let ignore = false;
+
     getAIConfig(token)
       .then((cfg) => {
-        setConfig(cfg);
-        if (cfg.model_preference) setModel(cfg.model_preference);
+        if (!ignore) {
+          setConfig(cfg);
+          if (cfg.model_preference) setModel(cfg.model_preference);
+        }
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [token]);
 
   const handleSave = async () => {

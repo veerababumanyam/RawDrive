@@ -2,6 +2,7 @@ package service
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -301,6 +302,12 @@ func (s *DownloadService) GetDownloadAudit(ctx context.Context, galleryID uuid.U
 	return s.downloadRepo.ListEventsByGallery(ctx, galleryID, limit)
 }
 
+// multipartZipPartSize is the size of each ZIP chunk streamed to object
+// storage during a multipart upload. S3/B2 require every part except the
+// last to be at least 5 MiB; 8 MiB keeps the part count low for multi-GB
+// bundles while bounding the in-flight buffer to a single part.
+const multipartZipPartSize = 8 << 20 // 8 MiB
+
 // ProcessJob implements worker.DownloadJobProcessor. It builds a ZIP
 // containing the job's asset IDs, uploads it to object storage under
 // a downloads/ prefix, and returns the storage key and the total bytes
@@ -309,14 +316,16 @@ func (s *DownloadService) GetDownloadAudit(ctx context.Context, galleryID uuid.U
 //
 // M14 GAL-FR-150/151/152: background ZIP build with progress tracking.
 //
-// Implementation note: we buffer the ZIP to an OS temp file before
-// calling store.Put because the storage interface requires the size
-// up front (S3-style PutObject). A temp file keeps memory bounded
-// regardless of gallery size — a 5 GB bundle only costs the
-// filesystem scratch space, not heap. The temp file is cleaned up
-// after the upload finishes or errors out. If the process is killed
-// mid-build the OS will reclaim the file on reboot (or the /tmp
-// tmpfiles cleanup timer on Linux).
+// F-076: the ZIP is streamed directly to object storage via the
+// MultipartCapable interface (multipart.go) through an io.Pipe — the
+// archive is never materialized on the local filesystem (/tmp), so a
+// large or concurrent download can no longer exhaust pod scratch space
+// (ENOSPC/OOM). This also keeps RawDrive's "no local disk" hard law
+// intact for the download path: B2/S3 is the only place bytes land.
+//
+// Providers that do not implement MultipartCapable (e.g. unit tests with
+// a plain in-memory provider) fall back to the bounded temp-file path so
+// behaviour is unchanged where multipart is unavailable.
 func (s *DownloadService) ProcessJob(
 	ctx context.Context,
 	job *repository.DownloadJob,
@@ -326,9 +335,100 @@ func (s *DownloadService) ProcessJob(
 		return "", 0, fmt.Errorf("download job %s: no assets", job.ID)
 	}
 
-	// os.CreateTemp drops the file in $TMPDIR (or /tmp). Named with the
-	// job ID so a half-built file is easy to correlate with a log line
-	// during triage.
+	storageKey := fmt.Sprintf("downloads/%s/%s.zip", job.GalleryID, job.ID)
+
+	if mp, ok := s.store.(storage.MultipartCapable); ok {
+		return s.processJobStreaming(ctx, mp, job, storageKey, onProgress)
+	}
+	return s.processJobTempFile(ctx, job, storageKey, onProgress)
+}
+
+// processJobStreaming builds the ZIP into an io.Pipe and uploads it to
+// object storage as it is produced, so the full archive is never written
+// to local disk. The zip.Writer runs in a goroutine writing to the pipe
+// writer; this goroutine drains the pipe reader in fixed-size parts and
+// hands each part to UploadPart.
+func (s *DownloadService) processJobStreaming(
+	ctx context.Context,
+	mp storage.MultipartCapable,
+	job *repository.DownloadJob,
+	storageKey string,
+	onProgress func(int),
+) (string, int64, error) {
+	uploadID, err := mp.CreateMultipartUpload(ctx, storageKey, "application/zip")
+	if err != nil {
+		return "", 0, fmt.Errorf("download job %s: create multipart: %w", job.ID, err)
+	}
+
+	pr, pw := io.Pipe()
+
+	// Producer: write the ZIP into the pipe. Any build error is propagated
+	// to the reader side via CloseWithError so the consumer aborts.
+	go func() {
+		err := s.writeZipWithProgress(ctx, job.AssetIDs, pw, onProgress)
+		_ = pw.CloseWithError(err)
+	}()
+
+	var (
+		parts      []storage.CompletedPart
+		total      int64
+		partNumber int32 = 1
+		buf              = make([]byte, multipartZipPartSize)
+	)
+
+	abort := func(cause error) (string, int64, error) {
+		_ = pr.CloseWithError(cause)
+		_ = mp.AbortMultipartUpload(ctx, storageKey, uploadID)
+		return "", 0, cause
+	}
+
+	for {
+		// Fill a full part before uploading (io.ReadFull coalesces the small
+		// writes the zip.Writer emits into one >=part-size chunk).
+		n, readErr := io.ReadFull(pr, buf)
+		if n > 0 {
+			etag, upErr := mp.UploadPart(ctx, storageKey, uploadID, partNumber, bytes.NewReader(buf[:n]), int64(n))
+			if upErr != nil {
+				return abort(fmt.Errorf("download job %s: upload part %d: %w", job.ID, partNumber, upErr))
+			}
+			parts = append(parts, storage.CompletedPart{PartNumber: partNumber, ETag: etag})
+			partNumber++
+			total += int64(n)
+		}
+		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+			break // clean end of stream (last short part already uploaded above)
+		}
+		if readErr != nil {
+			// Propagated zip-build error or pipe failure.
+			return abort(fmt.Errorf("download job %s: zip build: %w", job.ID, readErr))
+		}
+	}
+
+	if len(parts) == 0 {
+		// Defensive: an empty ZIP still has a central-directory trailer, so
+		// this should not happen, but never complete a zero-part upload.
+		return abort(fmt.Errorf("download job %s: empty archive", job.ID))
+	}
+
+	if err := mp.CompleteMultipartUpload(ctx, storageKey, uploadID, parts); err != nil {
+		_ = mp.AbortMultipartUpload(ctx, storageKey, uploadID)
+		return "", 0, fmt.Errorf("download job %s: complete multipart: %w", job.ID, err)
+	}
+	return storageKey, total, nil
+}
+
+// processJobTempFile is the legacy single-PUT path used when the storage
+// provider does not support multipart uploads. It buffers the ZIP to an OS
+// temp file (cleaned up unconditionally) because store.Put needs the size
+// up front. Production never takes this path — the B2/S3 driver is
+// MultipartCapable — so this exists only for providers (and tests) without
+// multipart support.
+func (s *DownloadService) processJobTempFile(
+	ctx context.Context,
+	job *repository.DownloadJob,
+	storageKey string,
+	onProgress func(int),
+) (string, int64, error) {
 	tmp, err := os.CreateTemp("", fmt.Sprintf("rawdrive-dl-%s-*.zip", job.ID))
 	if err != nil {
 		return "", 0, fmt.Errorf("download job %s: create temp: %w", job.ID, err)
@@ -359,7 +459,6 @@ func (s *DownloadService) ProcessJob(
 		return "", 0, fmt.Errorf("download job %s: seek temp: %w", job.ID, err)
 	}
 
-	storageKey := fmt.Sprintf("downloads/%s/%s.zip", job.GalleryID, job.ID)
 	if err := s.store.Put(ctx, storageKey, tmp, size, "application/zip"); err != nil {
 		return "", 0, fmt.Errorf("download job %s: storage put: %w", job.ID, err)
 	}

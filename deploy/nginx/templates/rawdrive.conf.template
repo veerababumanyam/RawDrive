@@ -61,7 +61,12 @@ server {
     ssl_session_timeout 1d;
     ssl_session_tickets off;
 
-    # Security headers
+    # Security headers (F-078). Kept identical across the apex/api/gallery
+    # server blocks below to prevent drift; the apex additionally carries
+    # `preload` on HSTS plus the COOP/COEP pair. CSP is intentionally
+    # frame-ancestors 'none' + default-src 'self' with the relaxations the
+    # Next.js app needs (inline/eval for the bundler runtime, data:/blob:
+    # images for WebP previews, ws/wss for HMR-style live updates).
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -69,6 +74,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Cross-Origin-Opener-Policy "unsafe-none" always;
     add_header Cross-Origin-Embedder-Policy "unsafe-none" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" always;
 
     # www → apex redirect
     if ($host = www.rawdrive.in) {
@@ -173,8 +179,16 @@ server {
     ssl_certificate_key /etc/letsencrypt/wildcard/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # Security headers (F-078). The api subdomain serves only JSON/API
+    # responses, so the CSP is locked down to default-src 'none' (no page
+    # is ever meant to render here). HSTS omits `preload` — only valid on
+    # the apex; subdomains inherit it via the apex includeSubDomains.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" always;
 
     location / {
         limit_req zone=api_rate burst=200 nodelay;
@@ -209,11 +223,16 @@ server {
     ssl_session_timeout 1d;
     ssl_session_tickets off;
 
-    # No HSTS preload here — preload only valid on the apex. Subdomains
-    # inherit HSTS from the apex's includeSubDomains directive anyway.
+    # Security headers (F-078). Mirrors the apex set so gallery subdomains
+    # can't drift. No HSTS `preload` here — preload is only valid on the
+    # apex; subdomains inherit HSTS from the apex includeSubDomains anyway.
+    # CSP matches the apex because this block also serves the Next.js app.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" always;
 
     # API calls from the subdomain origin still hit the backend
     location /api/ {

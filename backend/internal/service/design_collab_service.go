@@ -20,6 +20,12 @@ type DesignCollabService struct {
 	presence map[string]map[string]*PresenceEntry
 	// galleryID -> map[sectionID]->lock
 	locks map[string]map[string]*SectionLock
+
+	// stopCh signals the background cleanupLoop goroutine to terminate.
+	// Closed exactly once by Stop(); guarded by stopOnce so repeated Stop
+	// calls are safe.
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // PresenceEntry tracks a user's presence in a design session.
@@ -55,10 +61,21 @@ func NewDesignCollabService(nc *nats.Conn) *DesignCollabService {
 		nc:       nc,
 		presence: make(map[string]map[string]*PresenceEntry),
 		locks:    make(map[string]map[string]*SectionLock),
+		stopCh:   make(chan struct{}),
 	}
 	// Clean up stale presence every 30s
 	go svc.cleanupLoop()
 	return svc
+}
+
+// Stop terminates the background cleanupLoop goroutine and releases its
+// ticker. It is safe to call multiple times and from multiple goroutines.
+// Callers should invoke Stop during graceful shutdown to avoid leaking the
+// goroutine and ticker (mirrors ThumbnailWorker.Stop).
+func (s *DesignCollabService) Stop() {
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 }
 
 // JoinSession registers a user's presence in a design session.
@@ -247,32 +264,37 @@ func (s *DesignCollabService) broadcastLocks(galleryID string) {
 func (s *DesignCollabService) cleanupLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.mu.Lock()
-		now := time.Now()
-		for gid, m := range s.presence {
-			for uid, p := range m {
-				if now.Sub(p.LastSeen) > 2*time.Minute {
-					delete(m, uid)
-					log.Printf("collab: evicted stale user %s from gallery %s", uid, gid)
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.mu.Lock()
+			now := time.Now()
+			for gid, m := range s.presence {
+				for uid, p := range m {
+					if now.Sub(p.LastSeen) > 2*time.Minute {
+						delete(m, uid)
+						log.Printf("collab: evicted stale user %s from gallery %s", uid, gid)
+					}
+				}
+				if len(m) == 0 {
+					delete(s.presence, gid)
 				}
 			}
-			if len(m) == 0 {
-				delete(s.presence, gid)
-			}
-		}
-		// Clean expired locks
-		for gid, locks := range s.locks {
-			for sid, lock := range locks {
-				if lock.ExpiresAt.Before(now) {
-					delete(locks, sid)
+			// Clean expired locks
+			for gid, locks := range s.locks {
+				for sid, lock := range locks {
+					if lock.ExpiresAt.Before(now) {
+						delete(locks, sid)
+					}
+				}
+				if len(locks) == 0 {
+					delete(s.locks, gid)
 				}
 			}
-			if len(locks) == 0 {
-				delete(s.locks, gid)
-			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 	}
 }
 

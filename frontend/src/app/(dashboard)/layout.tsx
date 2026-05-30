@@ -1,20 +1,24 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, SVGProps } from "react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+// F-090: the dashboard shell previously pulled nine glyphs from
+// `lucide-react`, mixing a second icon system into the liquid-glass UI and
+// adding lucide to this client-bundled shell. The SF-Symbols barrel at
+// `@/components/icons` is the project's single icon source (24x24 viewBox,
+// 1.5px stroke, round caps), but it does not yet export every glyph this
+// shell needs. To remove the lucide import from the shell without editing
+// the shared barrel (owned elsewhere / edited in parallel), the three glyphs
+// that already exist are imported from the barrel and the remaining six are
+// declared locally below in the identical SF-Symbols style. If/when the
+// barrel gains these glyphs, swap these locals for barrel imports.
 import {
-  Bell,
-  FolderOpen,
-  Home,
-  LogOut,
-  Menu,
   Search,
-  Settings,
-  User,
-  X,
-} from "lucide-react";
+  XMark as X,
+  Gear as Settings,
+} from "@/components/icons";
 import {
   getStoredAccessToken,
   getStoredAccessTokenClaims,
@@ -32,6 +36,57 @@ import {
   StudioSidebar,
   ClientSidebar,
 } from "@/components/layout/navigation";
+
+/* ------------------------------------------------------------------ */
+/*  Local SF-Symbols glyphs (F-090)                                   */
+/*                                                                    */
+/*  These six icons are not yet exported by the shared barrel at      */
+/*  @/components/icons, so they are declared here in the identical    */
+/*  SF-Symbols aesthetic (24x24 viewBox, 1.5px stroke, round caps)    */
+/*  to keep this client-bundled shell free of `lucide-react`. Move    */
+/*  them into the barrel when it is widened.                          */
+/* ------------------------------------------------------------------ */
+
+type ShellIconProps = SVGProps<SVGSVGElement>;
+
+const shellIconDefaults: ShellIconProps = {
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.5,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+const ShellIcon = (props: ShellIconProps & { children: ReactNode }) => (
+  <svg {...shellIconDefaults} {...props}>{props.children}</svg>
+);
+
+const Home = (p: ShellIconProps) => (
+  <ShellIcon {...p}><path d="M3 10.5L12 3l9 7.5M5.25 9v10.5a.75.75 0 00.75.75H9.75v-6h4.5v6H18a.75.75 0 00.75-.75V9" /></ShellIcon>
+);
+
+const FolderOpen = (p: ShellIconProps) => (
+  <ShellIcon {...p}><path d="M3.75 6.75a1.5 1.5 0 011.5-1.5h3.879a1.5 1.5 0 011.06.44l1.122 1.12a1.5 1.5 0 001.06.44h4.879a1.5 1.5 0 011.5 1.5v1.5M3.75 9.75h15.69a1.5 1.5 0 011.47 1.79l-1.2 6A1.5 1.5 0 0118.24 18.75H5.76a1.5 1.5 0 01-1.47-1.21l-1.2-6A1.5 1.5 0 013.75 9.75z" /></ShellIcon>
+);
+
+const Bell = (p: ShellIconProps) => (
+  <ShellIcon {...p}><path d="M14.857 17.082a23.85 23.85 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022 23.85 23.85 0 005.454 1.31m6.715 0a24.255 24.255 0 01-6.715 0m6.715 0a3 3 0 11-6.715 0" /></ShellIcon>
+);
+
+const User = (p: ShellIconProps) => (
+  <ShellIcon {...p}><path d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" /></ShellIcon>
+);
+
+const LogOut = (p: ShellIconProps) => (
+  <ShellIcon {...p}><path d="M15.75 9V5.25A1.5 1.5 0 0014.25 3.75h-7.5A1.5 1.5 0 005.25 5.25v13.5a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5V15M18 15l3-3m0 0l-3-3m3 3H9" /></ShellIcon>
+);
+
+const Menu = (p: ShellIconProps) => (
+  <ShellIcon {...p}><path d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></ShellIcon>
+);
 
 /* ------------------------------------------------------------------ */
 /*  Role-specific header quick-nav items                              */

@@ -97,21 +97,40 @@ type ReorderItem struct {
 	SortOrder int
 }
 
-// Reorder updates sort_order for multiple assets in a single transaction.
+// reorderSQL is the single set-based statement that applies every sort_order
+// update in one round-trip via parallel arrays, avoiding N UPDATEs in a loop.
+const reorderSQL = `UPDATE gallery_assets AS ga
+	SET sort_order = v.sort_order
+	FROM unnest($1::uuid[], $2::int[]) AS v(asset_id, sort_order)
+	WHERE ga.gallery_id = $3 AND ga.asset_id = v.asset_id`
+
+// buildReorderArrays splits reorder items into parallel asset_id / sort_order
+// slices for the unnest-based UPDATE. Kept pure so it can be unit-tested
+// independently of the database.
+func buildReorderArrays(items []ReorderItem) ([]uuid.UUID, []int32) {
+	assetIDs := make([]uuid.UUID, len(items))
+	sortOrders := make([]int32, len(items))
+	for i, item := range items {
+		assetIDs[i] = item.AssetID
+		sortOrders[i] = int32(item.SortOrder)
+	}
+	return assetIDs, sortOrders
+}
+
+// Reorder updates sort_order for multiple assets in a single round-trip.
+//
+// Instead of issuing one UPDATE per item (N round-trips holding a transaction
+// open and increasing lock contention), it sends two parallel arrays and joins
+// them server-side via unnest, so a 500-photo re-sort is a single statement.
 func (r *GalleryAssetRepo) Reorder(ctx context.Context, galleryID uuid.UUID, items []ReorderItem) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("gallery asset reorder begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	for _, item := range items {
-		if _, err := tx.Exec(ctx,
-			`UPDATE gallery_assets SET sort_order=$1 WHERE gallery_id=$2 AND asset_id=$3`,
-			item.SortOrder, galleryID, item.AssetID); err != nil {
-			return fmt.Errorf("gallery asset reorder: %w", err)
-		}
+	if len(items) == 0 {
+		return nil
 	}
 
-	return tx.Commit(ctx)
+	assetIDs, sortOrders := buildReorderArrays(items)
+
+	if _, err := r.pool.Exec(ctx, reorderSQL, assetIDs, sortOrders, galleryID); err != nil {
+		return fmt.Errorf("gallery asset reorder: %w", err)
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,14 +11,50 @@ import (
 	"github.com/rawdrive/backend/internal/service"
 )
 
-// DesignCollabHandler handles collaborative editing endpoints.
-type DesignCollabHandler struct {
-	svc *service.DesignCollabService
+// CollabProfileLookup resolves a user's display name and avatar for presence
+// and lock attribution. Display fields are NOT JWT claims (the access token
+// only carries sub/workspace_id/role/platform_role/state_id/mfa_verified), so
+// they must come from a profile lookup. Implemented by the user/auth adapter
+// (auth.UserService.GetProfileByID). Optional: when nil, presence falls back
+// to empty display fields rather than the previous always-empty
+// claims["full_name"]/claims["avatar_url"] reads.
+type CollabProfileLookup interface {
+	// DisplayProfile returns (displayName, avatarURL) for the given user id.
+	// Implementations must not error the request path on lookup failure —
+	// return empty strings so collaboration degrades to a blank identity
+	// instead of failing the join/lock.
+	DisplayProfile(ctx context.Context, userID string) (displayName, avatarURL string)
 }
 
-// NewDesignCollabHandler creates a new DesignCollabHandler.
+// DesignCollabHandler handles collaborative editing endpoints.
+type DesignCollabHandler struct {
+	svc      *service.DesignCollabService
+	profiles CollabProfileLookup
+}
+
+// NewDesignCollabHandler creates a new DesignCollabHandler. Display-name/avatar
+// enrichment is opt-in via WithProfileLookup so the existing single-argument
+// wiring keeps compiling; without it, presence shows the user id with empty
+// display fields.
 func NewDesignCollabHandler(svc *service.DesignCollabService) *DesignCollabHandler {
 	return &DesignCollabHandler{svc: svc}
+}
+
+// WithProfileLookup attaches a profile resolver so presence and lock
+// attribution carry real display names/avatars instead of empty strings.
+func (h *DesignCollabHandler) WithProfileLookup(p CollabProfileLookup) *DesignCollabHandler {
+	h.profiles = p
+	return h
+}
+
+// resolveDisplay returns the display name and avatar for a user id, using the
+// optional profile lookup. Display fields are never sourced from JWT claims
+// because the access token does not carry them.
+func (h *DesignCollabHandler) resolveDisplay(ctx context.Context, userID string) (userName, avatarURL string) {
+	if h.profiles == nil || userID == "" {
+		return "", ""
+	}
+	return h.profiles.DisplayProfile(ctx, userID)
 }
 
 // JoinSession handles POST /api/v1/galleries/{id}/collab/join.
@@ -28,9 +65,11 @@ func (h *DesignCollabHandler) JoinSession(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	userID, _ := claims["user_id"].(string)
-	userName, _ := claims["full_name"].(string)
-	avatarURL, _ := claims["avatar_url"].(string)
+	// "sub" is the authenticated user's UUID. "user_id"/"full_name"/"avatar_url"
+	// are NOT in the JWT claims map (see middleware.JWTAuth), so reading them
+	// here attributed every session to uuid.Nil with a blank identity.
+	userID, _ := claims["sub"].(string)
+	userName, avatarURL := h.resolveDisplay(r.Context(), userID)
 
 	if err := h.svc.JoinSession(r.Context(), galleryID, userID, userName, avatarURL); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
@@ -54,7 +93,7 @@ func (h *DesignCollabHandler) LeaveSession(w http.ResponseWriter, r *http.Reques
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	userID, _ := claims["user_id"].(string)
+	userID, _ := claims["sub"].(string)
 	h.svc.LeaveSession(r.Context(), galleryID, userID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": "left"})
@@ -68,8 +107,8 @@ func (h *DesignCollabHandler) AcquireLock(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	userID, _ := claims["user_id"].(string)
-	userName, _ := claims["full_name"].(string)
+	userID, _ := claims["sub"].(string)
+	userName, _ := h.resolveDisplay(r.Context(), userID)
 
 	var req struct {
 		SectionID string `json:"section_id"`
@@ -98,7 +137,7 @@ func (h *DesignCollabHandler) ReleaseLock(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	userID, _ := claims["user_id"].(string)
+	userID, _ := claims["sub"].(string)
 	h.svc.ReleaseLock(r.Context(), galleryID, sectionID, userID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": "released"})

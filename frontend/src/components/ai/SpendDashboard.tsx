@@ -13,10 +13,22 @@ export function SpendDashboard({ token }: SpendDashboardProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     Promise.all([getSpend(token), getCredits(token)])
-      .then(([s, c]) => { setSpend(s); setCredits(c); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then(([s, c]) => {
+        if (cancelled) return;
+        setSpend(s);
+        setCredits(c);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   if (loading) {

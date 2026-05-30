@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,7 +23,7 @@ type GearHandler struct {
 	bookingConflictCheck func(ctx context.Context, gearID uuid.UUID, start, end time.Time) (bool, error)
 }
 
-func NewGearHandler(repo *repository.GearRepo, modRepo ...* repository.ModerationRepo) *GearHandler {
+func NewGearHandler(repo *repository.GearRepo, modRepo ...*repository.ModerationRepo) *GearHandler {
 	h := &GearHandler{repo: repo}
 	if len(modRepo) > 0 {
 		h.modRepo = modRepo[0]
@@ -160,7 +161,10 @@ func (h *GearHandler) CreateGearListing(w http.ResponseWriter, r *http.Request) 
 	// GAP-004 fix: Screen content before publishing
 	if h.modRepo != nil && listing.IsPublished {
 		flagged, err := h.modRepo.ScreenContent(r.Context(), "gear_listing", listing.Title+" "+func() string {
-			if listing.Description != nil { return *listing.Description }; return ""
+			if listing.Description != nil {
+				return *listing.Description
+			}
+			return ""
 		}())
 		if err == nil && flagged {
 			listing.IsPublished = false // force unpublished for review
@@ -391,10 +395,16 @@ func (h *GearHandler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request
 			} else {
 				gear.IsAvailable = true
 			}
-			_ = h.repo.Update(r.Context(), &gear)
+			if uErr := h.repo.Update(r.Context(), &gear); uErr != nil {
+				// F-068: don't swallow — a failed availability sync can leave
+				// stale gear availability and cause double-bookings. The
+				// booking status itself is already persisted (line above), so
+				// this is best-effort and must not change the HTTP response,
+				// but the failure has to be observable.
+				log.Printf("gear booking: availability sync failed for gear %s (booking %s, status %s): %v", booking.GearListingID, bookingID, req.Status, uErr)
+			}
 		}
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{"status": "updated"})
 }
-

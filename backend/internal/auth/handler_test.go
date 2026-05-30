@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -828,4 +830,137 @@ func TestRefreshToken_PreservesMFAVerifiedAfterWorkspaceChange(t *testing.T) {
 	assert.True(t, claims.MFAVerified,
 		"F-011: post-onboarding refresh must NOT downgrade mfa_verified — "+
 			"the regenerated access token must preserve MFAVerified=true")
+}
+
+// ─────────────────────────── F-056: max password length at registration ───────────────────────────
+
+// TestRegisterHandler_RejectsOverlongPassword is the F-056 regression. Before
+// the fix Register only enforced a MINIMUM length, so a password longer than
+// bcrypt's 72-byte truncation boundary was accepted and silently weakened
+// (bytes past 72 add no strength; two such passwords collide). Register must
+// now reject anything over the 128-byte cap with a 400 before it ever reaches
+// the downstream hashing site in h.users.Create.
+func TestRegisterHandler_RejectsOverlongPassword(t *testing.T) {
+	handler, _, _, userSvc := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	// 129 bytes — one over the cap.
+	longPassword := "Aa1!" + strings.Repeat("x", 125)
+	require.Len(t, longPassword, 129)
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "toolong@example.com",
+		"password": longPassword,
+		"phone":    "9000000005",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
+		"F-056: password longer than 128 bytes must be rejected, not hashed")
+
+	var body map[string]string
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	assert.Contains(t, body["error"], "at most")
+
+	// The over-long password must never have reached the user store.
+	_, exists, _ := userSvc.FindByEmail(context.Background(), "toolong@example.com")
+	assert.False(t, exists, "no user should be created when the password is rejected")
+}
+
+// TestRegisterHandler_AcceptsBoundaryLengthPassword guards the cap boundary:
+// a password of exactly 128 bytes is still accepted, so the F-056 fix does not
+// over-correct and lock out legitimate long passphrases.
+func TestRegisterHandler_AcceptsBoundaryLengthPassword(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	boundaryPassword := "Aa1!" + strings.Repeat("x", 124)
+	require.Len(t, boundaryPassword, 128)
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "boundary@example.com",
+		"password": boundaryPassword,
+		"phone":    "9000000006",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode,
+		"a 128-byte password is exactly at the cap and must still register")
+}
+
+// ─────────────────────────── F-070: emails masked in logs ───────────────────────────
+
+// TestMaskEmail_RedactsLocalPart unit-tests the masking rule directly: only
+// the first character of the local part survives; the full domain is kept for
+// support correlation; malformed inputs never echo verbatim.
+func TestMaskEmail_RedactsLocalPart(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"alice@example.com", "a***@example.com"},
+		{"bob.smith@studio.co.in", "b***@studio.co.in"},
+		{"x@y.com", "x***@y.com"},
+		{"", ""},
+		{"no-at-sign", "[redacted]"},
+		{"@nolocal.com", "[redacted]"},
+		{"trailingat@", "[redacted]"},
+	}
+	for _, c := range cases {
+		got := auth.MaskEmailForTest(c.in)
+		assert.Equal(t, c.want, got, "maskEmail(%q)", c.in)
+		if c.in != "" && strings.Contains(c.in, "@") && c.want != "[redacted]" {
+			// The raw local part must never survive intact.
+			rawLocal := c.in[:strings.LastIndex(c.in, "@")]
+			if len(rawLocal) > 1 {
+				assert.NotContains(t, got, rawLocal,
+					"F-070: full local part must not appear in masked output")
+			}
+		}
+	}
+}
+
+// TestRegisterHandler_DoesNotLogRawEmail is the F-070 behavioral regression.
+// The Register create-error path logs a diagnostic line; before the fix it
+// embedded the raw req.Email, leaking PII into the log sink. The line must now
+// carry only the masked form.
+func TestRegisterHandler_DoesNotLogRawEmail(t *testing.T) {
+	handler, _, _, userSvc := setupAuthRouter()
+	userSvc.errOnCreate = true // force the logged create-failure branch
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	// Capture everything written to the standard logger.
+	var logBuf bytes.Buffer
+	prevOut := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&logBuf)
+	log.SetFlags(0)
+	defer func() {
+		log.SetOutput(prevOut)
+		log.SetFlags(prevFlags)
+	}()
+
+	const rawEmail = "secretuser@example.com"
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    rawEmail,
+		"password": "TestPassword123!",
+		"phone":    "9000000007",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode,
+		"errOnCreate should drive the logged failure branch")
+
+	logged := logBuf.String()
+	require.NotEmpty(t, logged, "the create-failure branch must emit a log line")
+	assert.NotContains(t, logged, rawEmail,
+		"F-070: raw email must never be written to logs")
+	assert.Contains(t, logged, "s***@example.com",
+		"F-070: the masked email must be present for support correlation")
 }

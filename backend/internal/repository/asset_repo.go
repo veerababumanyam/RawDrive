@@ -128,6 +128,51 @@ func (r *AssetRepo) GetByID(ctx context.Context, id uuid.UUID) (*Asset, error) {
 	return a, nil
 }
 
+// GetByIDs retrieves multiple assets in a single round-trip (excludes
+// soft-deleted). It is the batched counterpart to GetByID, used to collapse
+// the per-id N+1 loops in smart-album favorite + face-cluster loading.
+//
+// The result is UNORDERED — `WHERE id = ANY($1)` does not preserve the input
+// order. Callers that need the original ordering (e.g. most-favorited-first or
+// face-cluster resolver order) reshape the result with orderAssetsByIDs.
+//
+// IDs that are missing or soft-deleted are simply absent from the result; this
+// is NOT an error, so callers can drop them and continue rather than 500. An
+// empty `ids` slice short-circuits with an empty result and no query.
+func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, error) {
+	if len(ids) == 0 {
+		return []*Asset{}, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
+		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
+		 status, created_at, updated_at, deleted_at
+		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`,
+		ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo get by ids: %w", err)
+	}
+	defer rows.Close()
+
+	assets := make([]*Asset, 0, len(ids))
+	for rows.Next() {
+		a := &Asset{}
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		); err != nil {
+			return nil, fmt.Errorf("asset repo get by ids scan: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("asset repo get by ids rows: %w", err)
+	}
+	return assets, nil
+}
+
 // List retrieves assets matching the filter.
 func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 	limit := f.Limit
@@ -462,6 +507,22 @@ func (r *AssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, statu
 	return tag.RowsAffected(), nil
 }
 
+// sqlBulkMoveInsert is the single multi-row INSERT used by
+// BulkMoveToGallery. UNNEST ... WITH ORDINALITY expands the asset id array
+// into rows in one statement (one round-trip), deriving a 0-based
+// sort_order from the 1-based ordinality so the client-supplied order
+// survives the move. ON CONFLICT DO NOTHING preserves idempotent retries.
+const sqlBulkMoveInsert = `INSERT INTO gallery_assets (gallery_id, asset_id, sort_order, added_at)
+		 SELECT $1, asset_id, (ord - 1)::int, now()
+		 FROM unnest($2::uuid[]) WITH ORDINALITY AS t(asset_id, ord)
+		 ON CONFLICT DO NOTHING`
+
+// sqlBulkRemoveTags is the single UPDATE used by BulkRemoveTags. The whole
+// tag list is passed as a text[] param and filtered out of each row's
+// ai_tags in one JSONB rewrite per row via `!= ALL($1::text[])`, collapsing
+// the former per-tag loop into one round-trip.
+const sqlBulkRemoveTags = `UPDATE assets SET ai_tags = (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb) FROM jsonb_array_elements(COALESCE(ai_tags, '[]'::jsonb)) elem WHERE elem->>'tag' != ALL($1::text[])), updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`
+
 // BulkMoveToGallery moves multiple assets from one gallery to another,
 // but only for assets and galleries owned by the given workspaceID.
 //
@@ -553,16 +614,15 @@ func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID,
 	}
 
 	// Insert into the target gallery preserving the client-supplied
-	// ordering. ON CONFLICT DO NOTHING keeps the call idempotent if
-	// the client retries after a partial failure.
-	for i, id := range owned {
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO gallery_assets (gallery_id, asset_id, sort_order, added_at)
-			 VALUES ($1, $2, $3, now()) ON CONFLICT DO NOTHING`,
-			toGalleryID, id, i,
-		); err != nil {
-			return 0, fmt.Errorf("asset repo bulk move add: %w", err)
-		}
+	// ordering. A single UNNEST ... WITH ORDINALITY multi-row INSERT
+	// collapses what used to be one round-trip per asset into one
+	// statement (shortening the transaction and the time row locks are
+	// held). sort_order is derived from the 1-based ordinality minus one
+	// so it stays 0-based and matches the order in `owned`, which already
+	// mirrors the client's input order. ON CONFLICT DO NOTHING keeps the
+	// call idempotent if the client retries after a partial failure.
+	if _, err := tx.Exec(ctx, sqlBulkMoveInsert, toGalleryID, owned); err != nil {
+		return 0, fmt.Errorf("asset repo bulk move add: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -625,11 +685,17 @@ func (r *AssetRepo) BulkAddTags(ctx context.Context, ids []uuid.UUID, tags []str
 }
 
 func (r *AssetRepo) BulkRemoveTags(ctx context.Context, ids []uuid.UUID, tags []string, workspaceID uuid.UUID) (int64, error) {
-	for _, tagName := range tags {
-		_, err := r.pool.Exec(ctx, `UPDATE assets SET ai_tags = (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb) FROM jsonb_array_elements(COALESCE(ai_tags, '[]'::jsonb)) elem WHERE elem->>'tag' != $1), updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, tagName, ids, workspaceID)
-		if err != nil {
-			return 0, fmt.Errorf("bulk remove tag %s: %w", tagName, err)
-		}
+	if len(tags) == 0 {
+		return 0, nil
 	}
-	return int64(len(ids)), nil
+	// Pass the whole tag list as a text[] param and filter every tag out
+	// in a single JSONB rewrite per row: `!= ALL($1::text[])` keeps an
+	// element only if its tag matches none of the names being removed.
+	// This collapses the former N-tag loop (one full JSONB rewrite of
+	// every affected row per tag) into a single round-trip.
+	tag, err := r.pool.Exec(ctx, sqlBulkRemoveTags, tags, ids, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("bulk remove tags: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

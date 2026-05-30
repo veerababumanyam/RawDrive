@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -266,4 +267,185 @@ func TestF023_TransientUploadPartFailureThenRetryDoesNotCorruptRollingHash(t *te
 	row, err = sessions.GetByTUSUploadID(context.Background(), uploadID)
 	require.NoError(t, err)
 	require.NotNil(t, row.CompletedAt, "session must finalize after the successful retry")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F-064 — TUS Upload-Offset header must be enforced on PATCH.
+//
+// TUS 1.0.0 §5.3 makes Upload-Offset MANDATORY on PATCH and requires a 409 when
+// it does not match the server's current offset. Before the fix the offset
+// check was gated behind `if offsetStr != ""`, so an ABSENT header skipped
+// validation entirely and a PRESENT-but-unparseable header was silently
+// ignored (parseErr swallowed). Both cases removed the offset-ordering guard.
+// After the fix: 400 when the header is absent, 400 when it is malformed, 409
+// on mismatch, and the existing happy path (matching offset) still succeeds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// patchChunkRawOffset PATCHes a chunk through the chi router with full control
+// over the Upload-Offset header. When offsetHeader is the sentinel "<omit>" the
+// header is not set at all (reproducing a non-compliant client). Any other
+// value (including malformed strings) is sent verbatim.
+const omitOffsetHeader = "<omit>"
+
+func (rig *streamingRig) patchChunkRawOffset(t *testing.T, uploadID, offsetHeader string, chunk []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := rig.authedRequest(http.MethodPatch, "/api/v1/uploads/"+uploadID, bytes.NewReader(chunk))
+	req.Header.Set("Content-Type", "application/offset+octet-stream")
+	if offsetHeader != omitOffsetHeader {
+		req.Header.Set("Upload-Offset", offsetHeader)
+	}
+	r := chi.NewRouter()
+	rig.handler.RegisterRoutes(r)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestF064_PatchRejectsAbsentUploadOffsetHeader(t *testing.T) {
+	rig := setupStreamingRig(t)
+	payload := bytes.Repeat([]byte("Z"), 64)
+	uploadID := rig.createSession(t, "noheader.bin", int64(len(payload)))
+
+	rr := rig.patchChunkRawOffset(t, uploadID, omitOffsetHeader, payload)
+	require.Equal(t, http.StatusBadRequest, rr.Code,
+		"absent Upload-Offset must 400 (TUS §5.3 makes it mandatory); got %d: %s", rr.Code, rr.Body.String())
+	assert.Contains(t, rr.Body.String(), "Upload-Offset header required")
+
+	// The offset must NOT have advanced — the chunk was rejected before any
+	// storage/state mutation.
+	row, err := rig.sessions.GetByTUSUploadID(context.Background(), uploadID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), row.UploadOffset, "rejected PATCH must not advance the offset")
+}
+
+func TestF064_PatchRejectsMalformedUploadOffsetHeader(t *testing.T) {
+	rig := setupStreamingRig(t)
+	payload := bytes.Repeat([]byte("Z"), 64)
+	uploadID := rig.createSession(t, "badheader.bin", int64(len(payload)))
+
+	rr := rig.patchChunkRawOffset(t, uploadID, "not-a-number", payload)
+	require.Equal(t, http.StatusBadRequest, rr.Code,
+		"unparseable Upload-Offset must 400, not be silently ignored; got %d: %s", rr.Code, rr.Body.String())
+	assert.Contains(t, rr.Body.String(), "Upload-Offset header invalid")
+
+	row, err := rig.sessions.GetByTUSUploadID(context.Background(), uploadID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), row.UploadOffset, "rejected PATCH must not advance the offset")
+}
+
+func TestF064_PatchRejectsMismatchedUploadOffsetHeader(t *testing.T) {
+	rig := setupStreamingRig(t)
+	payload := bytes.Repeat([]byte("Z"), 64)
+	uploadID := rig.createSession(t, "mismatch.bin", int64(len(payload)))
+
+	// Server offset is 0; declare 999 → 409 per TUS §5.3.
+	rr := rig.patchChunkRawOffset(t, uploadID, "999", payload)
+	require.Equal(t, http.StatusConflict, rr.Code,
+		"mismatched Upload-Offset must 409; got %d: %s", rr.Code, rr.Body.String())
+
+	row, err := rig.sessions.GetByTUSUploadID(context.Background(), uploadID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), row.UploadOffset, "rejected PATCH must not advance the offset")
+}
+
+// Negative control: a correct, matching Upload-Offset header still succeeds —
+// the fix must not break the happy path.
+func TestF064_PatchAcceptsMatchingUploadOffsetHeader(t *testing.T) {
+	rig := setupStreamingRig(t)
+	payload := bytes.Repeat([]byte("Z"), 64)
+	uploadID := rig.createSession(t, "ok.bin", int64(len(payload)))
+
+	rr := rig.patchChunkRawOffset(t, uploadID, "0", payload)
+	require.Equal(t, http.StatusOK, rr.Code,
+		"a matching Upload-Offset must still succeed; got %d: %s", rr.Code, rr.Body.String())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F-053 — 5xx responses must not leak raw internal error text.
+//
+// Numerous handlers embedded err.Error() directly into 500 bodies, exposing
+// storage-layer detail (B2 bucket names, object paths, multipart upload IDs)
+// and Postgres error text (table/column/constraint names) to clients. After
+// the fix the 500 body is generic ("internal server error" + an opaque code)
+// and the raw error is logged server-side only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// sensitiveErr models the kind of error a storage/DB layer returns — it carries
+// a B2 bucket name, an object path, and Postgres constraint text that must
+// never reach the client.
+var sensitiveErr = errors.New("pq: duplicate key value violates unique constraint \"upload_sessions_pkey\" in bucket rawdrive-prod-photos at key ws/obj/original.jpg multipartId=2~aBcXyZ")
+
+func assertNoLeak(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	require.Equal(t, http.StatusInternalServerError, rr.Code,
+		"expected a 500 for this failure path; got %d: %s", rr.Code, rr.Body.String())
+	body := rr.Body.String()
+	assert.NotContains(t, body, "rawdrive-prod-photos", "B2 bucket name must not leak")
+	assert.NotContains(t, body, "upload_sessions_pkey", "Postgres constraint name must not leak")
+	assert.NotContains(t, body, "multipartId", "multipart upload id must not leak")
+	assert.NotContains(t, body, "ws/obj/original.jpg", "object path must not leak")
+	assert.Contains(t, body, "internal server error", "client must receive a generic 500 body")
+}
+
+// TestF053_UploadChunkSessionLookupErrorDoesNotLeak drives the
+// GetByTUSUploadID failure branch in UploadChunk by configuring the fake store
+// to return a sensitive error for a session that otherwise exists.
+func TestF053_UploadChunkSessionLookupErrorDoesNotLeak(t *testing.T) {
+	rig := setupStreamingRig(t)
+	uploadID := rig.createSession(t, "leak.bin", 64)
+
+	// Now make every Get fail with a sensitive error → the non-not-found 500
+	// branch in UploadChunk fires.
+	rig.sessions.getErr = sensitiveErr
+
+	rr := rig.patchChunkRawOffset(t, uploadID, "0", bytes.Repeat([]byte("A"), 64))
+	assertNoLeak(t, rr)
+}
+
+// TestF053_GetOffsetSessionLookupErrorDoesNotLeak drives the GetOffset 500
+// branch.
+func TestF053_GetOffsetSessionLookupErrorDoesNotLeak(t *testing.T) {
+	rig := setupStreamingRig(t)
+	uploadID := rig.createSession(t, "leak.bin", 64)
+	rig.sessions.getErr = sensitiveErr
+
+	req := rig.authedRequest(http.MethodHead, "/api/v1/uploads/"+uploadID, nil)
+	r := chi.NewRouter()
+	rig.handler.RegisterRoutes(r)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	assertNoLeak(t, rr)
+}
+
+// TestF053_CancelDeleteErrorDoesNotLeak drives the Delete 500 branch in Cancel.
+func TestF053_CancelDeleteErrorDoesNotLeak(t *testing.T) {
+	rig := setupStreamingRig(t)
+	uploadID := rig.createSession(t, "leak.bin", 64)
+	rig.sessions.deleteErr = sensitiveErr
+
+	req := rig.authedRequest(http.MethodDelete, "/api/v1/uploads/"+uploadID, nil)
+	r := chi.NewRouter()
+	rig.handler.RegisterRoutes(r)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	assertNoLeak(t, rr)
+}
+
+// TestF053_CreateSessionPersistFailureDoesNotLeak drives the Create 500 branch
+// in CreateSession (the failed-to-persist-session path).
+func TestF053_CreateSessionPersistFailureDoesNotLeak(t *testing.T) {
+	rig := setupStreamingRig(t)
+	rig.sessions.createErr = sensitiveErr
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"filename":     "leak.bin",
+		"content_type": "application/octet-stream",
+		"total_size":   int64(64),
+		"chunk_size":   int64(64),
+	})
+	req := rig.authedRequest(http.MethodPost, "/api/v1/uploads", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	rig.handler.CreateSession(rr, req)
+	assertNoLeak(t, rr)
 }

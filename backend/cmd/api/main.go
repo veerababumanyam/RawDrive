@@ -579,6 +579,15 @@ func newViewerService(signingKey []byte) *viewer.Service {
 	})
 }
 
+// newAdminWorkspaceService constructs the admin workspace service with its
+// audit log always wired (F-062). Suspend/unsuspend/delete call a nil-guarded
+// recordAudit, so omitting WithAuditLog silently drops every audit_logs entry
+// for these privileged actions. Centralising construction here keeps the audit
+// wiring un-droppable and gives the regression test a single seam to assert.
+func newAdminWorkspaceService(repo *repository.AdminWorkspaceRepo, auditLog *service.AuditLogService) *service.AdminWorkspaceService {
+	return service.NewAdminWorkspaceService(repo).WithAuditLog(auditLog)
+}
+
 func generateRandomKey(n int) ([]byte, error) {
 	buf := make([]byte, n)
 	if _, err := cryptorand.Read(buf); err != nil {
@@ -2029,12 +2038,18 @@ func main() {
 		handler.RegisterAdminRoutes(api, handler.AdminDeps{
 			UserSvc:       adminUserSvc,
 			ModerationSvc: service.NewAdminModerationService(adminModerationRepo, auditLogSvc),
-			WorkspaceSvc:  service.NewAdminWorkspaceService(adminWorkspaceRepo),
-			RevenueSvc:    service.NewAdminRevenueService(adminRevenueRepo),
-			AnalyticsSvc:  service.NewAdminAnalyticsService(adminAnalyticsRepo),
-			ExportSvc:     service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
-			HealthSvc:     service.NewAdminHealthService(adminHealthRepo),
-			AuditLogSvc:   auditLogSvc,
+			// F-062: wire auditLogSvc so workspace suspend/unsuspend/delete
+			// write to the immutable audit_logs trail. Without WithAuditLog
+			// the service's nil-guarded recordAudit silently no-ops and the
+			// repo layer (UPDATE-only) writes no compensating audit row, so
+			// SOC2/DPDPA reconstruction of who suspended/deleted a workspace
+			// is lost. Mirrors workspacePolicySvc.WithAuditLog above.
+			WorkspaceSvc: newAdminWorkspaceService(adminWorkspaceRepo, auditLogSvc),
+			RevenueSvc:   service.NewAdminRevenueService(adminRevenueRepo),
+			AnalyticsSvc: service.NewAdminAnalyticsService(adminAnalyticsRepo),
+			ExportSvc:    service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
+			HealthSvc:    service.NewAdminHealthService(adminHealthRepo),
+			AuditLogSvc:  auditLogSvc,
 			// M16 Tier D admin surfaces
 			WorkspacePolicySvc:  workspacePolicySvc,
 			UploadModerationSvc: uploadModerationSvc,

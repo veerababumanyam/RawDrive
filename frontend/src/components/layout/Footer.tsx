@@ -48,7 +48,7 @@ export function Footer() {
               <div>
                 <div className="text-lg font-bold leading-none text-text-primary">
                   <span>Swaz </span>
-                  <span className="text-[#e07b39]">Consultants</span>
+                  <span className="text-accent">Consultants</span>
                 </div>
                 <div className="mt-0.5 text-xs text-text-tertiary">Pvt. Ltd.</div>
               </div>

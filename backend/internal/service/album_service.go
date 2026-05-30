@@ -21,9 +21,9 @@ type FaceClusterResolver interface {
 // AlbumService handles album business logic.
 type AlbumService struct {
 	albumRepo     *repository.AlbumRepo
-	galleryRepo   *repository.GalleryRepo // optional — needed by face smart-album resolver to look up workspace_id
-	faceResolver  FaceClusterResolver     // optional — when set, smart albums with face_cluster_label resolve to real assets
-	assetRepo     *repository.AssetRepo   // optional — needed by ListAssets to dispatch smart-album resolution
+	galleryRepo   *repository.GalleryRepo          // optional — needed by face smart-album resolver to look up workspace_id
+	faceResolver  FaceClusterResolver              // optional — when set, smart albums with face_cluster_label resolve to real assets
+	assetRepo     *repository.AssetRepo            // optional — needed by ListAssets to dispatch smart-album resolution
 	favoritesRepo *repository.GalleryFavoritesRepo // optional — when set, "Favorites" smart album resolves real guest hearts
 }
 
@@ -236,19 +236,19 @@ func (s *AlbumService) GetSmartAlbumAssets(ctx context.Context, albumID uuid.UUI
 		if err != nil {
 			return nil, fmt.Errorf("smart album: list favorites: %w", err)
 		}
-		matched := make([]repository.Asset, 0, len(favIDs))
-		for _, aid := range favIDs {
-			a, err := assetRepo.GetByID(ctx, aid)
-			if err != nil || a == nil {
-				// Asset deleted, soft-deleted, or transient lookup
-				// error — skip so the album doesn't 500. The favorite
-				// row remains in the DB; if the asset is restored the
-				// album resumes including it.
-				continue
-			}
-			matched = append(matched, *a)
+		// Single batched lookup instead of one GetByID per favorite. The
+		// favorites list for a popular gallery can be large and this path
+		// is reachable by anonymous public-gallery visitors, so the old
+		// per-id loop was a genuine N+1. Deleted/missing assets are
+		// dropped (not an error) so the album doesn't 500; the favorite
+		// row remains in the DB and the album resumes including it if the
+		// asset is restored. orderAssetsByIDs preserves the
+		// most-favorited-first ordering ListAssetIDsByGallery returns.
+		rows, err := assetRepo.GetByIDs(ctx, favIDs)
+		if err != nil {
+			return nil, fmt.Errorf("smart album: load favorite assets: %w", err)
 		}
-		return matched, nil
+		return orderAssetsByIDs(favIDs, rows), nil
 	}
 
 	// Build asset filter from smart_filter JSON
@@ -275,24 +275,46 @@ func (s *AlbumService) GetSmartAlbumAssets(ctx context.Context, albumID uuid.UUI
 			// rather than crashing.
 			return []repository.Asset{}, nil
 		}
-		// Intersect cluster assets with the gallery's assets via
-		// per-asset GetByID. This is O(N) on the cluster size which is
-		// always small (faces in one cluster within one gallery), and
-		// avoids needing an AssetIDs filter on AssetFilter.
-		var matched []repository.Asset
-		for _, aid := range clusterAssets {
-			a, err := assetRepo.GetByID(ctx, aid)
-			if err != nil || a == nil {
-				continue
-			}
-			// Confirm asset belongs to this gallery — face_clusters can
-			// store gallery_id but the source of truth is gallery_assets.
-			matched = append(matched, *a)
+		// Resolve cluster asset IDs in a single batched query rather than
+		// one GetByID per id. A face cluster for a popular subject can
+		// reach 50-200 photos and this path is reachable by anonymous
+		// public-gallery visitors, so the old per-id loop was a genuine
+		// N+1. Deleted/missing assets are dropped (not an error);
+		// orderAssetsByIDs preserves the resolver's cluster ordering.
+		rows, err := assetRepo.GetByIDs(ctx, clusterAssets)
+		if err != nil {
+			return nil, fmt.Errorf("smart album: load cluster assets: %w", err)
 		}
-		return matched, nil
+		return orderAssetsByIDs(clusterAssets, rows), nil
 	}
 
 	return assetRepo.List(ctx, f)
+}
+
+// orderAssetsByIDs reshapes the unordered result of a batched
+// AssetRepo.GetByIDs lookup back into the order of the requested ids.
+//
+// Smart-album sources (favorites = most-favorited-first, face clusters =
+// resolver order) carry meaningful ordering that a single
+// `WHERE id = ANY($1)` query does not preserve, so we index the fetched
+// assets by id and walk the original id slice. IDs that did not resolve
+// (deleted/missing assets) are skipped — matching the skip-missing
+// behavior of the per-id GetByID loops this replaced. Returns a non-nil
+// empty slice when nothing matched so callers never have to nil-check.
+func orderAssetsByIDs(ids []uuid.UUID, assets []*repository.Asset) []repository.Asset {
+	byID := make(map[uuid.UUID]*repository.Asset, len(assets))
+	for _, a := range assets {
+		if a != nil {
+			byID[a.ID] = a
+		}
+	}
+	out := make([]repository.Asset, 0, len(ids))
+	for _, id := range ids {
+		if a, ok := byID[id]; ok {
+			out = append(out, *a)
+		}
+	}
+	return out
 }
 
 // resolveFaceClusterAssets looks up the asset IDs in a face cluster,

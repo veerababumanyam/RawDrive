@@ -25,6 +25,18 @@ export function safeAttachmentUrl(url: string | undefined | null): string | null
   return url.startsWith("https:") ? url : null;
 }
 
+// buildEventStreamUrl assembles the SSE EventSource URL for the chat channel.
+// The JWT access token MUST be URL-encoded (encodeURIComponent) before being
+// placed in the query string — EventSource does not support an Authorization
+// header, so a query-param token is unavoidable, but an un-encoded token can
+// corrupt the query string if the token format ever gains reserved characters
+// and leaks the raw token verbatim into proxy/access logs. This mirrors the
+// encoding already done in use-asset-ready-subscription.ts. `channels=chat` is
+// a static literal and needs no encoding.
+export function buildEventStreamUrl(apiBase: string, token: string): string {
+  return `${apiBase}/api/v1/events/stream?token=${encodeURIComponent(token)}&channels=chat`;
+}
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -271,7 +283,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!token) return;
     const es = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/events/stream?token=${token}&channels=chat`
+      buildEventStreamUrl(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080", token)
     );
     es.addEventListener("chat.message", (e) => {
       const msg: Message = JSON.parse(e.data);

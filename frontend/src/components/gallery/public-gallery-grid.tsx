@@ -50,6 +50,21 @@ const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:808
 // as two.
 const GUEST_SESSION_STORAGE_KEY = "rawdrive-guest-session-id";
 
+// Public-grid incremental rendering. A public gallery can hold thousands of
+// photos; rendering every tile eagerly builds one DOM node (plus click /
+// keyboard handlers) per asset, inflating the JS heap and dropping frames
+// while a guest scrolls on a low-end phone. We render an initial window and
+// append a batch each time an IntersectionObserver sentinel near the end of
+// the grid scrolls into view. Network was already throttled (img
+// loading="lazy"), but the DOM tree was not — this caps it.
+//
+// The lightbox, filmstrip, keyboard nav and deep-link still operate over the
+// FULL visibleAssets array, so paging the grid never limits what a guest can
+// open or navigate to; opening an asset beyond the current window just grows
+// the window to include it.
+const INITIAL_GRID_RENDER_COUNT = 60;
+const GRID_RENDER_BATCH = 60;
+
 function getOrCreateGuestSessionId(): string {
   if (typeof window === "undefined") return "";
   try {
@@ -424,6 +439,11 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   // viewMode + the Grid/Map toggle were removed 2026-05-19. The grid is
   // now the only render path; see the file header for context.
   const [faceFilterIds, setFaceFilterIds] = useState<Set<string> | null>(null);
+  // Incremental grid rendering window (see INITIAL_GRID_RENDER_COUNT). Grows
+  // via the IntersectionObserver sentinel below; resets when the filtered set
+  // changes so a newly-applied face filter starts from the top.
+  const [visibleCount, setVisibleCount] = useState(INITIAL_GRID_RENDER_COUNT);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
 
@@ -556,6 +576,47 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     return assets.filter((a) => faceFilterIds.has(a.id));
   }, [assets, faceFilterIds]);
 
+  // Reset the render window whenever the visible set changes (filter applied
+  // or cleared, or the asset list itself changes) so paging always restarts
+  // from the top of the freshly-shown set.
+  useEffect(() => {
+    setVisibleCount(INITIAL_GRID_RENDER_COUNT);
+  }, [faceFilterIds, assets]);
+
+  // The slice of visibleAssets actually mounted into the grid DOM. Lightbox /
+  // filmstrip / keyboard nav deliberately keep using the full visibleAssets
+  // array — only the grid tiles are paged.
+  const renderedAssets = useMemo(
+    () => visibleAssets.slice(0, visibleCount),
+    [visibleAssets, visibleCount],
+  );
+
+  const hasMoreToRender = visibleCount < visibleAssets.length;
+
+  // Grow the render window as the sentinel scrolls into view. Intersection
+  // Observer is supported in every browser this public viewer targets; when
+  // it is unavailable (very old browser / jsdom without a polyfill) we fall
+  // back to rendering everything so no photo is ever unreachable.
+  useEffect(() => {
+    if (!hasMoreToRender) return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisibleCount(visibleAssets.length);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleCount((c) => Math.min(c + GRID_RENDER_BATCH, visibleAssets.length));
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMoreToRender, visibleAssets.length]);
+
   // Deep-link auto-open. Pairs with the Share button's clipboard URL
   // (?asset=<id>). When a recipient lands on the share link, find the
   // matching asset in the rendered set and open the lightbox there so
@@ -634,7 +695,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           style={designGridContainerStyle(design?.grid)}
           aria-label={`Grid view for gallery ${slug}`}
         >
-          {visibleAssets.map((asset) => {
+          {renderedAssets.map((asset) => {
             // Prefer the mandatory WebP derivatives for public display,
             // but keep legacy JPEG keys as fallbacks for older rows.
             const thumbUrl = getStorageBackedUrl(
@@ -856,6 +917,19 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           })}
       </div>
 
+      {/* Incremental-render sentinel. Sits below the rendered grid window;
+          when it scrolls into view the IntersectionObserver above appends the
+          next batch of tiles. Only mounted while more assets remain so guests
+          who reach the true end of the gallery don't keep an idle observer. */}
+      {hasMoreToRender && (
+        <div
+          ref={loadMoreRef}
+          aria-hidden="true"
+          className="h-px w-full"
+          data-testid="grid-load-more-sentinel"
+        />
+      )}
+
       {/* End-of-gallery indicator */}
       <div className="mt-12 text-center pb-8">
         <div className="inline-block h-px w-16 bg-border-subtle" />
@@ -896,7 +970,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
       {/* M19: Submission success message */}
       {submitted && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-green-600/95 backdrop-blur-xl px-4 py-3 shadow-lg">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-feedback-success/95 backdrop-blur-xl px-4 py-3 shadow-lg">
           <div className="max-w-6xl mx-auto text-center">
             <p className="text-sm font-medium text-white">
               Your selections have been submitted! The photographer will review them shortly.

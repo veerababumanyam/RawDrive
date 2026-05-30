@@ -65,4 +65,51 @@ describe("CullingView", () => {
     // All should be selected when 100%
     expect(screen.getByText("5 of 5 selected")).toBeTruthy();
   });
+
+  // F-093: WebP derivatives are mandatory for in-app display ("the UI always
+  // serves WebP variants"). The culling grid must prefer the WebP derivative
+  // over any legacy JPEG key. The backend returns thumb_*_webp / display_webp
+  // keys at runtime even though SearchResult.thumbnail_urls is typed as a
+  // Record<string, string>, so fixtures set those keys directly.
+  const webpAsset = (id: string, thumbnail_urls: Record<string, string>) => ({
+    asset_id: id,
+    filename: `${id}.jpg`,
+    content_type: "image/jpeg",
+    thumbnail_urls,
+    similarity: 1,
+    quality: { sharpness: 0.9, exposure: 0.9, composition: 0.9, overall: 0.9 },
+  });
+
+  it("prefers the WebP derivative over the legacy JPEG src (F-093)", () => {
+    const asset = webpAsset("a1", {
+      thumb_sm_webp: "/t/a1_sm.webp",
+      sm: "/t/a1_sm.jpg",
+    });
+    render(<CullingView assets={[asset]} topPercent={100} />);
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "/t/a1_sm.webp");
+    expect(img.getAttribute("src")).not.toBe("/t/a1_sm.jpg");
+  });
+
+  it("falls back through WebP variants before the legacy key (F-093)", () => {
+    const asset = webpAsset("a2", {
+      thumb_md_webp: "/t/a2_md.webp",
+      sm: "/t/a2_sm.jpg",
+    });
+    render(<CullingView assets={[asset]} topPercent={100} />);
+    expect(screen.getByRole("img")).toHaveAttribute("src", "/t/a2_md.webp");
+  });
+
+  it("falls back to the legacy JPEG key only when no WebP derivative exists (F-093)", () => {
+    const asset = webpAsset("a3", { sm: "/t/a3_sm.jpg" });
+    render(<CullingView assets={[asset]} topPercent={100} />);
+    expect(screen.getByRole("img")).toHaveAttribute("src", "/t/a3_sm.jpg");
+  });
+
+  it("renders a placeholder when no thumbnail url is present (F-093)", () => {
+    const asset = webpAsset("a4", {});
+    render(<CullingView assets={[asset]} topPercent={100} />);
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText("Photo")).toBeInTheDocument();
+  });
 });

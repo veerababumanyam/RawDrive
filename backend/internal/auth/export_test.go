@@ -15,3 +15,10 @@ func SetPasswordServiceCodeGeneratorForTest(svc PasswordService, fn func(int) (s
 		ps.codeGenerator = fn
 	}
 }
+
+// MaskEmailForTest exposes the unexported maskEmail helper (F-070) so the
+// external auth_test package can unit-test the masking rule directly.
+// Test-only; not part of the production API.
+func MaskEmailForTest(email string) string {
+	return maskEmail(email)
+}

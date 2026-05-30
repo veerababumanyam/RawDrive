@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Regression test for F-078 — security-header parity across every HTTPS
+# server block in rawdrive.conf.template.
+#
+# Root cause (F-078): the api.rawdrive.in block carried only HSTS +
+# X-Content-Type-Options, the wildcard gallery block additionally had
+# Referrer-Policy but still lacked X-Frame-Options / X-XSS-Protection, and
+# NO server block declared a Content-Security-Policy. That left api/gallery
+# responses frameable (clickjacking) and left reflected-XSS / injection /
+# mixed-content unmitigated at the proxy.
+#
+# This test asserts that EVERY TLS-terminating server block (each
+# `listen 443 ssl` block: apex rawdrive.in, api.rawdrive.in, and the
+# wildcard gallery host) declares the full security-header set, including a
+# Content-Security-Policy whose policy contains `frame-ancestors 'none'`.
+#
+# Dependency-free: pure awk + grep so ops/CI can run it without nginx
+# installed:
+#
+#   bash deploy/nginx/templates/rawdrive.conf.headers_test.sh
+#   # optional: point at a different file
+#   bash deploy/nginx/templates/rawdrive.conf.headers_test.sh /path/to/template
+#
+# Exit 0 = pass, non-zero = a server block is missing a required header.
+#
+# RED proof: delete any required add_header line (or the CSP) from any 443
+# block and re-run — the test must exit non-zero. That deleted state is
+# exactly the pre-fix config (api block had only HSTS + nosniff; no CSP
+# anywhere), so this test fails before the F-078 fix and passes after.
+
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+TEMPLATE="${1:-${SCRIPT_DIR}/rawdrive.conf.template}"
+
+if [ ! -f "${TEMPLATE}" ]; then
+  echo "FAIL: template not found at ${TEMPLATE}" >&2
+  exit 2
+fi
+
+# The single awk program below:
+#   * walks the file tracking server{...} brace depth,
+#   * for each block that contains a `listen 443 ssl` line, checks that the
+#     required add_header directives are all present and that the CSP forbids
+#     framing (frame-ancestors 'none'),
+#   * prints a FAIL line per missing header and exits 1 if any block fails,
+#   * also fails if fewer than 3 TLS blocks are found (apex/api/gallery).
+awk '
+  function reset_block() {
+    in_server = 1; depth = 0; is443 = 0;
+    has_hsts = 0; has_xfo = 0; has_xcto = 0; has_xss = 0; has_ref = 0;
+    has_csp = 0; csp_no_frame = 0; sname = "";
+  }
+  /^[[:space:]]*server[[:space:]]*\{/ { reset_block() }
+  in_server {
+    # brace accounting
+    n = gsub(/\{/, "{"); depth += n;
+    m = gsub(/\}/, "}"); depth -= m;
+
+    if ($0 ~ /listen[[:space:]]+(\[::\]:)?443[[:space:]]+ssl/) is443 = 1;
+
+    if ($0 ~ /server_name[[:space:]]/) {
+      sname = $0; sub(/^[[:space:]]*server_name[[:space:]]+/, "", sname);
+      sub(/;.*$/, "", sname);
+    }
+
+    if ($0 ~ /add_header[[:space:]]+[Ss]trict-[Tt]ransport-[Ss]ecurity/)   has_hsts = 1;
+    if ($0 ~ /add_header[[:space:]]+[Xx]-[Ff]rame-[Oo]ptions/)             has_xfo  = 1;
+    if ($0 ~ /add_header[[:space:]]+[Xx]-[Cc]ontent-[Tt]ype-[Oo]ptions/)   has_xcto = 1;
+    if ($0 ~ /add_header[[:space:]]+[Xx]-[Xx][Ss][Ss]-[Pp]rotection/)      has_xss  = 1;
+    if ($0 ~ /add_header[[:space:]]+[Rr]eferrer-[Pp]olicy/)                has_ref  = 1;
+    if ($0 ~ /add_header[[:space:]]+[Cc]ontent-[Ss]ecurity-[Pp]olicy/) {
+      has_csp = 1;
+      if ($0 ~ /frame-ancestors[[:space:]]+'\''none'\''/) csp_no_frame = 1;
+    }
+
+    if (depth <= 0) {
+      in_server = 0;
+      if (is443) {
+        blocks++;
+        if (sname == "") sname = "(unnamed block #" blocks ")";
+        if (!has_hsts) { print "FAIL: [" sname "] missing Strict-Transport-Security"; fail = 1 }
+        if (!has_xfo)  { print "FAIL: [" sname "] missing X-Frame-Options";          fail = 1 }
+        if (!has_xcto) { print "FAIL: [" sname "] missing X-Content-Type-Options";   fail = 1 }
+        if (!has_xss)  { print "FAIL: [" sname "] missing X-XSS-Protection";         fail = 1 }
+        if (!has_ref)  { print "FAIL: [" sname "] missing Referrer-Policy";          fail = 1 }
+        if (!has_csp)  { print "FAIL: [" sname "] missing Content-Security-Policy";  fail = 1 }
+        else if (!csp_no_frame) { print "FAIL: [" sname "] CSP missing frame-ancestors '\''none'\''"; fail = 1 }
+      }
+    }
+  }
+  END {
+    if (blocks < 3) {
+      print "FAIL: expected >=3 TLS server blocks (apex, api, gallery); found " blocks;
+      fail = 1;
+    }
+    if (fail) {
+      print "F-078 regression test FAILED (" blocks " TLS blocks checked)";
+      exit 1;
+    }
+    print "PASS: F-078 — all " blocks " TLS server blocks declare the full security-header set (incl. CSP with frame-ancestors '\''none'\'')";
+  }
+' "${TEMPLATE}"

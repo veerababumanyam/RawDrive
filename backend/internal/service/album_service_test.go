@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 // fakeFaceClusterResolver is a test double for FaceClusterResolver.
 type fakeFaceClusterResolver struct {
-	called      bool
+	called       bool
 	calledWithWS uuid.UUID
 	calledWithID uuid.UUID
 	returnIDs    []uuid.UUID
@@ -89,6 +91,76 @@ func TestFakeResolverPropagatesError(t *testing.T) {
 	_, err := resolver.ListClusterAssetIDs(context.Background(), uuid.New(), uuid.New())
 	if !errors.Is(err, want) {
 		t.Errorf("want %v, got %v", want, err)
+	}
+}
+
+// TestF075_OrderAssetsByIDs_PreservesOrderAndSkipsMissing is the
+// regression guard for F-075. Smart-album resolution (favorites + face
+// clusters) used to issue one assetRepo.GetByID per id — an N+1 reachable
+// by anonymous public-gallery visitors. That loop was replaced by a single
+// batched AssetRepo.GetByIDs call whose `WHERE id = ANY($1)` result is
+// reshaped by orderAssetsByIDs. This test pins the two behaviors the old
+// per-id loop guaranteed and the batched query does NOT give for free:
+//
+//  1. The requested id order is preserved (favorites are most-favorited
+//     first; cluster order is resolver-defined). ANY($1) returns rows in
+//     arbitrary order, so the helper must reorder.
+//  2. IDs that don't resolve (deleted/soft-deleted/missing assets) are
+//     dropped without erroring, exactly as the old `if a == nil continue`.
+//
+// Before the fix there was no batched path and no helper, so this test
+// could not even compile against the per-id loop; after the fix it locks
+// the contract.
+func TestF075_OrderAssetsByIDs_PreservesOrderAndSkipsMissing(t *testing.T) {
+	id1 := uuid.New()
+	id2 := uuid.New() // intentionally has no matching asset (deleted/missing)
+	id3 := uuid.New()
+	id4 := uuid.New() // also missing
+
+	// Requested order: id1, id2, id3, id4.
+	requested := []uuid.UUID{id1, id2, id3, id4}
+
+	// Batched lookup returns only id1 and id3, and in a DIFFERENT order
+	// than requested (mimicking `WHERE id = ANY($1)` which gives no
+	// ordering guarantee). id2 and id4 are absent (deleted/missing).
+	fetched := []*repository.Asset{
+		{ID: id3, Filename: "third.jpg"},
+		{ID: id1, Filename: "first.jpg"},
+	}
+
+	got := orderAssetsByIDs(requested, fetched)
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 resolved assets (missing ids dropped), got %d", len(got))
+	}
+	if got[0].ID != id1 {
+		t.Errorf("expected first asset to be id1 (requested order preserved), got %v", got[0].ID)
+	}
+	if got[1].ID != id3 {
+		t.Errorf("expected second asset to be id3 (requested order preserved), got %v", got[1].ID)
+	}
+	for _, a := range got {
+		if a.ID == id2 || a.ID == id4 {
+			t.Errorf("missing id %v should have been skipped, but appeared in output", a.ID)
+		}
+	}
+}
+
+// TestF075_OrderAssetsByIDs_EmptyInputs verifies the helper never returns
+// nil (callers map over it without nil-checks) and tolerates nil entries
+// in the fetched slice.
+func TestF075_OrderAssetsByIDs_EmptyInputs(t *testing.T) {
+	if got := orderAssetsByIDs(nil, nil); got == nil {
+		t.Error("expected non-nil empty slice for nil inputs")
+	} else if len(got) != 0 {
+		t.Errorf("expected empty result, got %d", len(got))
+	}
+
+	id := uuid.New()
+	// A nil entry in the fetched slice must not panic and must not match.
+	got := orderAssetsByIDs([]uuid.UUID{id}, []*repository.Asset{nil})
+	if len(got) != 0 {
+		t.Errorf("expected nil fetched entry to be ignored, got %d assets", len(got))
 	}
 }
 

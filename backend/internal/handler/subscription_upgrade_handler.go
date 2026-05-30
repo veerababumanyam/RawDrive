@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/middleware"
 )
@@ -31,11 +32,11 @@ import (
 // planQuotaBytes maps canonical tier slugs to storage quota in bytes.
 // Keep in sync with service.PlanDefaultQuotaBytes and frontend/src/lib/tokens.ts.
 var planQuotaBytes = map[string]int64{
-	"free":         1 << 30,        // 1 GB
-	"starter":      30 * (1 << 30), // 30 GB
+	"free":         1 << 30,         // 1 GB
+	"starter":      30 * (1 << 30),  // 30 GB
 	"professional": 300 * (1 << 30), // 300 GB
-	"business":     3 * (1 << 40),  // 3 TB
-	"enterprise":   6 * (1 << 40),  // 6 TB
+	"business":     3 * (1 << 40),   // 3 TB
+	"enterprise":   6 * (1 << 40),   // 6 TB
 }
 
 // planDefaultQuota returns the quota bytes for a tier, defaulting to 1 GB.
@@ -86,10 +87,10 @@ type RazorpayUpgradeConfig struct {
 // and the other will still serve as long as the user picks the
 // configured one.
 type SubscriptionUpgradeHandler struct {
-	db       *pgxpool.Pool
-	rzp      RazorpayUpgradeConfig
-	phonepe  *PhonePeV2Client // nil when PHONEPE_* env vars are unset
-	publicBaseURL string     // for building the PhonePe redirect-back URL
+	db            *pgxpool.Pool
+	rzp           RazorpayUpgradeConfig
+	phonepe       *PhonePeV2Client // nil when PHONEPE_* env vars are unset
+	publicBaseURL string           // for building the PhonePe redirect-back URL
 }
 
 // NewSubscriptionUpgradeHandler always returns a handler. When credentials are
@@ -180,8 +181,8 @@ type upgradeRequest struct {
 }
 
 type upgradeResponse struct {
-	UpgradeOrderID  string `json:"upgrade_order_id"`
-	Provider        string `json:"provider"` // "razorpay" | "phonepe"
+	UpgradeOrderID string `json:"upgrade_order_id"`
+	Provider       string `json:"provider"` // "razorpay" | "phonepe"
 	// Razorpay-specific fields — present only when Provider="razorpay".
 	RazorpayOrderID string `json:"razorpay_order_id,omitempty"`
 	RazorpayKeyID   string `json:"razorpay_key_id,omitempty"`
@@ -522,9 +523,8 @@ func (h *SubscriptionUpgradeHandler) verifyPhonePe(w http.ResponseWriter, r *htt
 		return
 	default:
 		// FAILED, EXPIRED, etc. — mark the row failed but don't change the plan.
-		_, _ = h.db.Exec(r.Context(),
-			`UPDATE subscription_upgrade_orders SET status = 'failed', updated_at = NOW()
-			 WHERE id::text = $1 AND status = 'pending'`, body.MerchantOrderID)
+		// The plan tier is intentionally left unchanged.
+		markUpgradeOrderFailed(r.Context(), h.db, body.MerchantOrderID)
 		writeJSON(w, http.StatusOK, verifyPaymentResponse{Status: "failed", PlanTier: ""})
 		return
 	}
@@ -605,6 +605,48 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 		return fmt.Errorf("insert subscription: %w", err)
 	}
 	return tx.Commit(ctx)
+}
+
+// orderExecer is the minimal surface markUpgradeOrderFailed needs from the DB
+// pool. *pgxpool.Pool satisfies it directly; tests substitute a fake. Keeping
+// the dependency narrow lets the failure-marking path be unit-tested without a
+// live Postgres connection.
+type orderExecer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// markUpgradeOrderFailed flips a still-pending PhonePe upgrade order to
+// 'failed' after PhonePe reports a terminal non-success state (FAILED, EXPIRED,
+// …). It is intentionally side-effect-only on the order row: the workspace
+// plan_tier is never touched here.
+//
+// F-067: the previous implementation discarded the Exec result with
+// `_, _ = db.Exec(...)`, so a failed UPDATE — or one that matched no pending
+// row — silently left the order stuck in 'pending', hiding the failure from any
+// reconciliation job. We now surface both conditions on the logger:
+//   - a non-nil Exec error is logged at ERROR level with the underlying cause;
+//   - a zero-rows-affected result is logged as a no-op warning (the order was
+//     already terminal, or the id did not match a pending row).
+//
+// The WHERE clause scopes the update to pending rows only so a row already
+// settled as 'paid' by a racing webhook is never clobbered back to 'failed'.
+// Errors are logged rather than returned because the caller has already decided
+// to respond "failed" to the client regardless; the log line is the durable
+// signal for out-of-band reconciliation.
+func markUpgradeOrderFailed(ctx context.Context, db orderExecer, orderID string) {
+	tag, err := db.Exec(ctx, `
+		UPDATE subscription_upgrade_orders
+		   SET status = 'failed', updated_at = NOW()
+		 WHERE id::text = $1 AND status = 'pending'`,
+		orderID,
+	)
+	if err != nil {
+		log.Printf("failed to mark phonepe order %s failed: %v", orderID, err)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		log.Printf("mark phonepe order %s failed: no pending row matched (already terminal?)", orderID)
+	}
 }
 
 // ── Webhook ──────────────────────────────────────────────────────────────────

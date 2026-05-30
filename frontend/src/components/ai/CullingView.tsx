@@ -14,6 +14,24 @@ interface CullingViewProps {
   onApply?: (keepAssetIds: string[]) => void;
 }
 
+// WebP derivatives are mandatory for in-app display (see AGENTS.md "WebP
+// Derivatives": "The application UI always serves WebP variants"). The API
+// returns thumb_*_webp / display_webp keys alongside the legacy sm/md/lg JPEG
+// keys, so prefer the smallest WebP first and only fall back to a legacy JPEG
+// when no WebP derivative exists.
+function pickThumbSrc(urls: CullingAsset["thumbnail_urls"]): string | undefined {
+  if (!urls) return undefined;
+  return (
+    urls.thumb_sm_webp ||
+    urls.thumb_md_webp ||
+    urls.thumb_lg_webp ||
+    urls.display_webp ||
+    urls.sm ||
+    urls.md ||
+    urls.lg
+  );
+}
+
 export function CullingView({ assets, topPercent = 20, onApply }: CullingViewProps) {
   const sorted = [...assets].sort((a, b) => (b.quality?.overall || 0) - (a.quality?.overall || 0));
   const keepCount = Math.ceil(sorted.length * (topPercent / 100));
@@ -60,8 +78,8 @@ export function CullingView({ assets, topPercent = 20, onApply }: CullingViewPro
             }`}
           >
             <div className="aspect-square bg-surface-sunken flex items-center justify-center">
-              {asset.thumbnail_urls?.sm ? (
-                <img src={asset.thumbnail_urls.sm} alt={asset.filename} className="w-full h-full object-cover" loading="lazy" />
+              {pickThumbSrc(asset.thumbnail_urls) ? (
+                <img src={pickThumbSrc(asset.thumbnail_urls)} alt={asset.filename} className="w-full h-full object-cover" loading="lazy" />
               ) : (
                 <span className="text-text-tertiary text-xs">Photo</span>
               )}
