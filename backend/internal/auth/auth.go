@@ -17,6 +17,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// F-103 (audit 2026-05-30): jwtIssuer / jwtAudience bind every access token this
+// service mints to a single logical service identity. Without them a token
+// signed by this key would be accepted by any peer that merely trusts the same
+// RS256 public key (token-confusion / cross-service replay). These are public
+// identifiers, not secrets, so they are a compile-time constant rather than a
+// platform_settings/env value. ParseAccessToken now enforces both via
+// jwt.WithIssuer / jwt.WithAudience.
+const (
+	jwtIssuer   = "rawdrive-api"
+	jwtAudience = "rawdrive-api"
+)
+
 // ──────────────────────────── Types ────────────────────────────
 
 type User struct {
@@ -217,7 +229,7 @@ func (s *otpService) Validate(ctx context.Context, identifier, code string) (boo
 
 	entry.attempts++
 
-	if entry.code != code {
+	if subtle.ConstantTimeCompare([]byte(entry.code), []byte(code)) != 1 {
 		if entry.attempts >= s.config.MaxAttempts {
 			// Already counted, next call will error
 		}
@@ -290,7 +302,7 @@ type jwtService struct {
 func NewJWTService(config JWTConfig) JWTService {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		panic("failed to generate RSA key: " + err.Error())
+		log.Fatalf("auth: failed to generate RSA key for JWT service: %v", err)
 	}
 	return &jwtService{
 		config:       config,
@@ -331,7 +343,9 @@ func (s *jwtService) GenerateAccessToken(ctx context.Context, claims TokenClaims
 		"role":          claims.Role,
 		"platform_role": claims.PlatformRole,
 		"state_id":      claims.StateID,
-		"mfa_verified":  claims.MFAVerified, // F-007 (M17 wave 1): second-factor state for mandatory-MFA roles
+		"mfa_verified":  claims.MFAVerified,            // F-007 (M17 wave 1): second-factor state for mandatory-MFA roles
+		"iss":           jwtIssuer,                     // F-103: bind issuer
+		"aud":           jwt.ClaimStrings{jwtAudience}, // F-103: bind audience
 		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
 		"iat":           now.Unix(),
 	})
@@ -345,7 +359,12 @@ func (s *jwtService) ParseAccessToken(ctx context.Context, tokenStr string) (*To
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.publicKey, nil
-	})
+	},
+		// F-103: reject tokens not issued for this service (token confusion /
+		// cross-service replay) by enforcing the issuer + audience binding.
+		jwt.WithIssuer(jwtIssuer),
+		jwt.WithAudience(jwtAudience),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -574,7 +593,9 @@ func (s *jwtService) generateAccessTokenUnlocked(claims TokenClaims) (string, er
 		"role":          claims.Role,
 		"platform_role": claims.PlatformRole,
 		"state_id":      claims.StateID,
-		"mfa_verified":  claims.MFAVerified, // F-007 (M17 wave 1): carried from caller (RotateRefreshToken sets false until wave 2 adds session-level persistence)
+		"mfa_verified":  claims.MFAVerified,            // F-007 (M17 wave 1): carried from caller (RotateRefreshToken sets false until wave 2 adds session-level persistence)
+		"iss":           jwtIssuer,                     // F-103: bind issuer
+		"aud":           jwt.ClaimStrings{jwtAudience}, // F-103: bind audience
 		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
 		"iat":           now.Unix(),
 	})

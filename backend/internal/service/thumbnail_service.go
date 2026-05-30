@@ -68,11 +68,34 @@ var WatermarkPreviewSize = ThumbnailSize{Name: "watermark_preview", MaxWidth: 12
 type ThumbnailService struct {
 	store        storage.Provider
 	watermarkSvc *WatermarkService
+
+	// cwebpPath is the absolute path to the cwebp binary, resolved ONCE at
+	// construction. cwebpErr captures a missing/unresolvable binary so callers
+	// can fail fast without re-running exec.LookPath on every derivative.
+	//
+	// Why resolve once: GenerateAll fans out 4 concurrent goroutines (3
+	// WebPThumbSizes + display_webp). Previously each goroutine called
+	// exec.LookPath("cwebp") *after* its Lanczos resize, so a single upload
+	// triggered 4 concurrent PATH walks and — if cwebp was absent — burned the
+	// resize CPU for all four variants before discovering the binary was
+	// missing. Resolving here (sync.Once-equivalent: it runs exactly once per
+	// service) collapses that to one lookup at startup, and checking cwebpErr
+	// at the top of generateWebPDerivative short-circuits before any resize.
+	cwebpPath string
+	cwebpErr  error
 }
 
 // NewThumbnailService creates a new ThumbnailService.
+//
+// cwebp is resolved here exactly once. A missing binary is recorded in
+// cwebpErr rather than failing construction: the WebP hardcode law requires
+// derivatives, but the resolution-order/feature-disable convention means the
+// caller (worker) surfaces the cwebpErr per-upload via generateWebPDerivative
+// instead of crashing the whole service at boot.
 func NewThumbnailService(store storage.Provider) *ThumbnailService {
-	return &ThumbnailService{store: store, watermarkSvc: NewWatermarkService()}
+	s := &ThumbnailService{store: store, watermarkSvc: NewWatermarkService()}
+	s.cwebpPath, s.cwebpErr = exec.LookPath("cwebp")
+	return s
 }
 
 // GetStore returns the storage provider (used by edge delivery handler).
@@ -324,12 +347,17 @@ func isWebPThumbnailVariant(name string) bool {
 }
 
 // generateWebPDerivative creates a WebP derivative using cwebp (libwebp).
+//
+// The cwebp existence check runs BEFORE the Lanczos resize: cwebp is resolved
+// once at construction (NewThumbnailService), so a missing binary fails fast
+// here without wasting the (expensive) resize across all four concurrent
+// goroutines.
 func (s *ThumbnailService) generateWebPDerivative(ctx context.Context, assetID string, src image.Image, size ThumbnailSize) (*DerivativeResult, error) {
-	resized := imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
-
-	if _, err := exec.LookPath("cwebp"); err != nil {
-		return nil, fmt.Errorf("cwebp is required for RawDrive WebP derivatives: %w", err)
+	if s.cwebpErr != nil {
+		return nil, fmt.Errorf("cwebp is required for RawDrive WebP derivatives: %w", s.cwebpErr)
 	}
+
+	resized := imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
 	return s.encodeWebPViaCwebp(ctx, assetID, resized, size)
 }
 
@@ -354,7 +382,14 @@ func (s *ThumbnailService) encodeWebPViaCwebp(ctx context.Context, assetID strin
 	// ~1-3% smaller files. At q=82 the visual diff is imperceptible. The
 	// time saved (≈400ms per variant on a 1.5MP source × 4 variants) is
 	// the dominant CPU win for the upload→render-thumbnail latency path.
-	cmd := exec.CommandContext(ctx, "cwebp", "-q", "82", "-m", "4", tmpIn.Name(), "-o", tmpOut)
+	// Use the path resolved once at construction (s.cwebpPath) rather than the
+	// bare "cwebp" name so we neither re-run a PATH lookup nor risk picking up
+	// a different binary than the one validated at NewThumbnailService.
+	cwebp := s.cwebpPath
+	if cwebp == "" {
+		cwebp = "cwebp"
+	}
+	cmd := exec.CommandContext(ctx, cwebp, "-q", "82", "-m", "4", tmpIn.Name(), "-o", tmpOut)
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("cwebp: %w", err)
 	}

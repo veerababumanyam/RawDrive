@@ -2,7 +2,10 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -238,13 +241,43 @@ func PlanTierContext(pool PlanTierPool) func(http.Handler) http.Handler {
 			var planTier string
 			row := pool.QueryRow(r.Context(),
 				`SELECT COALESCE(plan_tier, '') FROM workspaces WHERE id = $1`, wsID)
-			// Fail-open on scan error — log would be nice but import scope
-			// here is minimal and the audit table already records the request.
-			_ = row.Scan(&planTier)
+			// Fail-open-to-empty on scan error (see doc comment above): an
+			// empty tier downgrades privileges, it never escalates them.
+			// A "no rows" result just means the workspace row is absent, which
+			// is a legitimate empty-tier case and must not be logged as a fault.
+			// We can't import pgx here (it isn't in this package's import set),
+			// and the production adapter may surface its own no-rows sentinel
+			// (pgx.ErrNoRows) rather than sql.ErrNoRows, so we treat both the
+			// database/sql sentinel AND the canonical "no rows in result set"
+			// message (shared verbatim by pgx) as the benign absent-row case.
+			// Any OTHER scan error is a transient/structural lookup failure
+			// that was previously invisible — emit a WARN so it is observable.
+			if err := row.Scan(&planTier); err != nil && !isNoRows(err) {
+				slog.Warn("middleware: plan tier scan failed; defaulting to empty tier",
+					"workspace_id", wsID,
+					"error", err,
+				)
+				planTier = ""
+			}
 			ctx := WithPlanTier(r.Context(), planTier)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// isNoRows reports whether err represents an empty result set. It matches the
+// database/sql sentinel via errors.Is and, defensively, the canonical
+// "no rows in result set" message that pgx (the production driver behind the
+// PlanTierPool adapter) returns — so an absent workspace is never mislabeled
+// as a lookup fault regardless of which driver the adapter wraps. The
+// middleware package does not import pgx, so we cannot errors.Is against
+// pgx.ErrNoRows directly; the message comparison keeps the check dependency
+// free while staying correct for both drivers.
+func isNoRows(err error) bool {
+	if errors.Is(err, sql.ErrNoRows) {
+		return true
+	}
+	return strings.Contains(err.Error(), "no rows in result set")
 }
 
 // ──────────────────────────── State Check Middleware ────────────────────────────

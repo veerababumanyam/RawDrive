@@ -734,6 +734,30 @@ func envIntOrDefault(key string, def int) int {
 	return def
 }
 
+// kekRequiredForEnv reports whether PLATFORM_SETTINGS_KEK must be present
+// (i.e. at-rest envelope encryption is mandatory) for the given APP_ENV.
+//
+// F-113 (audit 2026-05-30): the KEK is required in EVERY environment except
+// the explicit local-development/test allowlist. Staging, review, preview,
+// UAT, demo and any unrecognized/empty-but-nonlocal APP_ENV all hold real
+// third-party credentials (SMTP/Razorpay/PhonePe/TOTP), so they must not
+// fall back to plaintext secret storage — a staging DB compromise or a
+// staging→prod clone would otherwise expose those secrets without the KEK.
+//
+// Only "development", "test" and the empty string (unset APP_ENV = local
+// dev) are allowed to run without a KEK, preserving the F-005 local escape
+// hatch. The caller is expected to pass a trimmed, lower-cased APP_ENV.
+func kekRequiredForEnv(appEnv string) bool {
+	switch appEnv {
+	case "", "development", "dev", "test", "testing", "local":
+		return false
+	default:
+		// production, prod, staging, stage, review, preview, uat, demo,
+		// and anything unrecognized → KEK is mandatory (fail closed).
+		return true
+	}
+}
+
 func main() {
 	// Load env vars from .env.cobolt / .env before anything reads os.Getenv.
 	// Process environment always wins; files only fill gaps.
@@ -813,13 +837,25 @@ func main() {
 			platformSettingsRepo = platformSettingsRepo.WithEnvelope(envelope)
 			log.Println("F-005: platform_settings at-rest encryption ENABLED (envelope wired)")
 		} else {
-			appEnv := strings.ToLower(os.Getenv("APP_ENV"))
-			if appEnv == "production" || appEnv == "prod" {
-				log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required in production (APP_ENV=%s). "+
+			appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+			// F-113 (audit 2026-05-30): previously only production/prod
+			// hard-failed on a missing KEK; staging/review/UAT and any
+			// unrecognized APP_ENV silently fell through to PLAINTEXT
+			// secret storage. Those environments routinely hold real
+			// SMTP/Razorpay/PhonePe/TOTP credentials, so a staging DB
+			// compromise (or a staging→prod clone) leaked those secrets
+			// without needing the KEK. We now require the KEK in every
+			// environment EXCEPT the explicit local-dev/test allowlist
+			// (development, test, ""), preserving the F-005 local escape
+			// hatch while closing the clone-to-prod plaintext-leak path.
+			if kekRequiredForEnv(appEnv) {
+				log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is required for APP_ENV=%q. "+
+					"Only development/test/local environments may run without it. "+
 					"Generate a 32-byte hex KEK and set it in your secret store. "+
-					"See F-005 in docs/audits/rawdrive-v0.0.35-m16-360-audit-2026-04-10.md.", appEnv)
+					"See F-005 in docs/audits/rawdrive-v0.0.35-m16-360-audit-2026-04-10.md "+
+					"and F-113 (2026-05-30 audit).", appEnv)
 			}
-			log.Println("WARNING: PLATFORM_SETTINGS_KEK not set - platform settings secrets will be stored in PLAINTEXT. This is only acceptable in non-production environments.")
+			log.Println("WARNING: PLATFORM_SETTINGS_KEK not set - platform settings secrets will be stored in PLAINTEXT. This is only acceptable in local development/test environments.")
 		}
 	}
 

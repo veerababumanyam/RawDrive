@@ -21,9 +21,9 @@ type StreamRepo interface {
 // Stream is the minimal record the webhook needs to route an event. The
 // repo layer fills this out; extra fields are irrelevant here.
 type Stream struct {
-	ID        string
-	CFUID     string
-	PlanTier  string // "standard" | "professional" | "enterprise"
+	ID       string
+	CFUID    string
+	PlanTier string // "standard" | "professional" | "enterprise"
 }
 
 // EventDeliveryRepo records every webhook delivery for operational audit.
@@ -61,11 +61,11 @@ func NewHandler(v SignatureVerifier, s StreamRepo, d EventDeliveryRepo, r Replay
 }
 
 // ServeHTTP implements http.Handler. The handler:
-//   1. Reads the body under a size limit
-//   2. Verifies the Webhook-Signature header (HMAC-SHA256, anti-replay window)
-//   3. Parses the event
-//   4. Dispatches known event types to the state machine, acks 200
-//   5. Unknown events → 200 (so CF does not retry)
+//  1. Reads the body under a size limit
+//  2. Verifies the Webhook-Signature header (HMAC-SHA256, anti-replay window)
+//  3. Parses the event
+//  4. Dispatches known event types to the state machine, acks 200
+//  5. Unknown events → 200 (so CF does not retry)
 //
 // Per NFR-014-PERF-02 the happy path must complete under 500ms p95. This
 // handler keeps writes synchronous to preserve ordering; if DB latency
@@ -153,7 +153,7 @@ func (h *Handler) dispatch(ctx context.Context, evt StreamEvent) error {
 	case EvtLiveInputErrored:
 		return h.streams.UpdateLiveState(ctx, s.ID, "failed")
 	case EvtRecordingReady:
-		replayURL := extractReplayURL(evt.Payload)
+		replayURL := h.extractReplayURL(evt.Payload)
 		if h.replay != nil {
 			return h.replay.OnRecordingReady(ctx, evt.UID, evt.VideoID, replayURL)
 		}
@@ -165,13 +165,21 @@ func (h *Handler) dispatch(ctx context.Context, evt StreamEvent) error {
 	return nil
 }
 
-func extractReplayURL(p json.RawMessage) string {
+func (h *Handler) extractReplayURL(p json.RawMessage) string {
 	if len(p) == 0 {
 		return ""
 	}
 	var m struct {
 		ReplayURL string `json:"replayUrl"`
 	}
-	_ = json.Unmarshal(p, &m)
+	if err := json.Unmarshal(p, &m); err != nil {
+		// Degrade gracefully (return empty) but make the loss observable:
+		// payload-shape drift would otherwise silently drop VOD replay URLs.
+		h.logger.Warn("webhook replay url unmarshal failed",
+			"alert", "replay_url_parse_failed",
+			"err", err.Error(),
+		)
+		return ""
+	}
 	return m.ReplayURL
 }

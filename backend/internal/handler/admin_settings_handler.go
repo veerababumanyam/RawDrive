@@ -134,6 +134,11 @@ func (h *AdminSettingsHandler) DeleteSetting(w http.ResponseWriter, r *http.Requ
 	category := chi.URLParam(r, "category")
 	key := chi.URLParam(r, "key")
 
+	if !isValidCategory(category) {
+		http.Error(w, `{"error":"invalid category"}`, http.StatusBadRequest)
+		return
+	}
+
 	if err := h.repo.Delete(r.Context(), category, key); err != nil {
 		http.Error(w, `{"error":"failed to delete setting"}`, http.StatusInternalServerError)
 		return

@@ -164,6 +164,40 @@ func TestResetPassword_WeakPassword_Returns400(t *testing.T) {
 	}
 }
 
+// TestResetPassword_ComplexityRejection_NoVerbatimLeak is the F-101 regression.
+// Before the fix the handler echoed validateResetPasswordComplexity's sentinel
+// verbatim via `+err.Error()+`, normalizing a leak-prone pattern. The handler
+// must now return a fixed, known-safe message and never reflect the error value.
+func TestResetPassword_ComplexityRejection_NoVerbatimLeak(t *testing.T) {
+	svc := &fakePasswordSvc{}
+	h := NewAuthPasswordResetHandler(svc, nil)
+	// Valid email + valid-length OTP so the request reaches the complexity gate,
+	// but a weak password ("short") that trips validateResetPasswordComplexity.
+	body := []byte(`{"email":"user@example.com","otp":"123456","new_password":"short"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on weak password, got %d", rec.Code)
+	}
+	got := strings.TrimSpace(rec.Body.String())
+	const want = `{"error":"password does not meet complexity requirements"}`
+	if got != want {
+		t.Fatalf("expected fixed safe body %q, got %q", want, got)
+	}
+	// The verbatim internal sentinel text must never appear in the response.
+	for _, leak := range []string{"min 12 chars", "upper, lower, digit"} {
+		if strings.Contains(got, leak) {
+			t.Fatalf("response leaked internal complexity detail %q: %q", leak, got)
+		}
+	}
+	// The complexity gate returns before the service is ever touched.
+	if len(svc.resets) != 0 {
+		t.Fatalf("service must not be called for weak password; got %d calls", len(svc.resets))
+	}
+}
+
 func TestResetPassword_MissingOTP_Returns400(t *testing.T) {
 	svc := &fakePasswordSvc{}
 	h := NewAuthPasswordResetHandler(svc, nil)

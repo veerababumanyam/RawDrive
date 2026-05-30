@@ -22,6 +22,15 @@ services:
       - /opt/rawdrive/app/.env
     restart: "no"
     depends_on: []
+    # F-116: one-shot migration runner — small, but capped so a pathological
+    # migration can't balloon memory on first deploy.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          memory: 64M
     logging:
       driver: json-file
       options:
@@ -29,11 +38,13 @@ services:
         max-file: "3"
 
   pgbouncer:
-    # Pinned (F-082): never use a floating :latest tag for the prod connection
-    # pooler — a deploy-day `docker compose pull` could otherwise silently swap
+    # Pinned (F-082, re-confirmed F-114): never use a floating :latest tag for
+    # the prod connection pooler — a deploy-day `docker compose pull` (the
+    # deploy script even exposes a --pull flag) could otherwise silently swap
     # in a different (or compromised) image between the backend and prod
-    # Postgres. Bump deliberately, matching the pinned nats/valkey/pgvector/nginx
-    # images below.
+    # Postgres. The concrete 1.22.x tag also matches the pgbouncer.ini syntax
+    # this repo ships. Bump deliberately, matching the pinned
+    # nats/valkey/pgvector/nginx images below.
     image: edoburu/pgbouncer:1.22.1
     container_name: deploy-pgbouncer-1
     restart: unless-stopped
@@ -45,6 +56,16 @@ services:
       - /opt/rawdrive/app/deploy/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     environment:
       - DATABASE_URL  # passed through for some edoburu image variants
+    # F-116: bound the connection pooler so a runaway connection storm can't
+    # starve Postgres/Valkey on the shared VPS. pgbouncer is tiny — 128M is
+    # generous for the pool plus per-conn buffers.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          memory: 32M
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 6432 || exit 1"]
       interval: 10s
@@ -73,6 +94,17 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # F-116: the API can spike during WebP-derivative generation and JetStream
+    # consumption. Cap it so an in-process pile-up OOM-kills the backend (which
+    # restarts: unless-stopped) instead of the shared Postgres/Valkey, which
+    # would risk in-flight WAL corruption.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
     healthcheck:
       # Backend's health endpoint is /health (not /api/v1/health — that's
       # a plan doc typo). Confirmed via backend/cmd/api/main.go:1245.
@@ -108,6 +140,15 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # F-116: Next.js SSR memory is fairly stable; cap it so a leak can't grow
+    # unbounded and pressure the shared host.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 256M
     healthcheck:
       # Frontend runtime has curl (installed in Dockerfile) not wget.
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
@@ -138,6 +179,15 @@ services:
         condition: service_healthy
     profiles:
       - worker  # optional — start with `docker compose --profile worker up`
+    # F-116: same image as backend, runs the WebP/AI processing loop — cap it
+    # so batch processing can't OOM the shared host.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
     logging:
       driver: json-file
       options:
@@ -160,6 +210,16 @@ services:
       - "4222:4222"
       - "6222:6222"
       - "8222:8222"
+    # F-116: cap JetStream memory so a consumer pile-up can't grow unbounded
+    # and OOM the shared host. NATS also enforces store/memory limits in its
+    # own config; this is the hard backstop.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
       interval: 10s
@@ -184,6 +244,16 @@ services:
     volumes:
       - valkey_replica_data:/data
       - ./valkey/valkey-replica.conf:/etc/valkey/valkey-replica.conf:ro
+    # F-116: bound the replica's dataset memory. valkey-replica.conf should
+    # also set maxmemory below this hard cap so eviction kicks in before the
+    # OOM killer does.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 256M
     profiles:
       - valkey-replica  # only .42 uses this
 
@@ -201,6 +271,16 @@ services:
       - postgres_replica_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"  # only peer-open, UFW blocks public
+    # F-116: bound the standby. shared_buffers + work_mem in the replica's
+    # config must stay comfortably under this cap so a heavy read query can't
+    # OOM the standby and break streaming replication.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
     profiles:
       - postgres-replica  # only .44 uses this
 
@@ -227,6 +307,17 @@ services:
     restart: unless-stopped
     volumes:
       - face_svc_models:/home/facesvc/.insightface
+    # F-116: the buffalo_l model + per-image inference tensors are the largest
+    # memory consumer on the node. Cap it so a batch of large images can't OOM
+    # the shared host; restart: unless-stopped recovers the sidecar (face
+    # endpoints return 503 in the meantime, by design).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 3G
+        reservations:
+          memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 15s
@@ -259,6 +350,15 @@ services:
       - nginx_cache:/var/cache/nginx
     environment:
       - PEER_NODE_IP=${PEER_NODE_IP}
+    # F-116: nginx is the edge proxy/cache — cap it so a flood of buffered
+    # responses or a large proxy cache can't pressure the shared host.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          memory: 64M
     # envsubst only substitutes the named variables, leaving nginx's own
     # $var references alone. Also delete the default.conf that ships
     # with the nginx:alpine image (server localhost block that catches

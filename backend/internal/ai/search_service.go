@@ -94,20 +94,10 @@ func (s *SearchService) IndexAsset(ctx context.Context, assetID, workspaceID uui
 		return fmt.Errorf("search service: get asset tags: %w", err)
 	}
 
-	var tags []AITag
-	_ = json.Unmarshal(tagsJSON, &tags)
+	tags := decodeAITags(assetID, tagsJSON)
 
 	// Build text for embedding
-	text := ""
-	if caption != nil {
-		text = *caption + " "
-	}
-	for _, t := range tags {
-		text += t.Tag + " "
-	}
-	if text == "" {
-		text = "photograph"
-	}
+	text := buildEmbeddingText(caption, tags)
 
 	embedding, tokensUsed, err := s.gemini.GenerateEmbedding(ctx, apiKey, text)
 	if err != nil {
@@ -127,6 +117,36 @@ func (s *SearchService) IndexAsset(ctx context.Context, assetID, workspaceID uui
 		`UPDATE assets SET embedding = $2, updated_at = now() WHERE id = $1`,
 		assetID, pgvector.NewVector(embedding))
 	return err
+}
+
+// decodeAITags unmarshals stored ai_tags JSONB into a slice of AITag.
+// On malformed JSONB it logs a WARN with the asset_id and returns nil so the
+// caller degrades gracefully (e.g. caption-only embedding) instead of silently
+// producing worse search results with no operator visibility.
+func decodeAITags(assetID uuid.UUID, tagsJSON []byte) []AITag {
+	var tags []AITag
+	if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+		log.Printf("WARN search service: unmarshal ai_tags failed, falling back to caption-only embedding: asset_id=%s err=%v", assetID, err)
+		return nil
+	}
+	return tags
+}
+
+// buildEmbeddingText composes the source text used to generate an embedding from
+// an optional caption and the decoded tags. It falls back to a generic term when
+// neither a caption nor any tags are available.
+func buildEmbeddingText(caption *string, tags []AITag) string {
+	text := ""
+	if caption != nil {
+		text = *caption + " "
+	}
+	for _, t := range tags {
+		text += t.Tag + " "
+	}
+	if text == "" {
+		text = "photograph"
+	}
+	return text
 }
 
 // SemanticSearch performs natural language search using pgvector similarity.

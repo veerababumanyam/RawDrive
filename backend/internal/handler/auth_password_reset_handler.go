@@ -102,7 +102,12 @@ func (h *AuthPasswordResetHandler) ResetPassword(w http.ResponseWriter, r *http.
 		return
 	}
 	if err := validateResetPasswordComplexity(body.NewPassword); err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		// F-101: do NOT echo err.Error() into the response body. Even though
+		// the complexity sentinel text is in-process and controlled, echoing
+		// +err.Error()+ normalizes a leak-prone pattern. Return a fixed,
+		// known-safe string instead so this handler never establishes the
+		// precedent of reflecting an error value into client output.
+		http.Error(w, `{"error":"password does not meet complexity requirements"}`, http.StatusBadRequest)
 		return
 	}
 	if err := h.svc.ResetPassword(r.Context(), email, otp, body.NewPassword); err != nil {

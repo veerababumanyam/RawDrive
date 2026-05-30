@@ -9,7 +9,7 @@
 --
 -- This table holds:
 --   - TUS upload_id (client-facing opaque token)
---   - R2 multipart upload ID (for direct-to-R2 streaming, solves F-008 Part B)
+--   - S3 multipart upload ID (for direct-to-storage streaming, solves F-008 Part B)
 --   - part etags (jsonb array, preserving order for CompleteMultipartUpload)
 --   - offset + total_size for resumption
 --   - expiry for GC
@@ -17,6 +17,21 @@
 --
 -- Decision packet §3.2 authoritative source:
 --   docs/superpowers/plans/2026-04-11-m17-decision-packet.md
+--
+-- F-106 (audit, low/cosmetic) NAMING NOTE: the two `r2_*` columns below are a
+-- legacy naming artifact from the pre-B2 era when object storage used Cloudflare
+-- R2. RawDrive now routes ALL tiers through the `s3` driver
+-- (backend/internal/storage/factory.go) to Backblaze B2 via its S3-compatible
+-- API; the `r2` prefix has NO functional effect — these are standard S3
+-- multipart-upload identifiers regardless of which S3-compatible bucket backs
+-- them. The columns are intentionally NOT renamed here: the column names are
+-- hardcoded in queries across non-migration code owned elsewhere
+-- (backend/internal/repository/upload_sessions_repo.go,
+--  backend/internal/worker/upload_session_cleanup_worker.go,
+--  backend/internal/handler/chunked_upload.go and their tests), so a rename must
+-- be done as one coordinated multi-file change, not as a standalone schema
+-- migration — otherwise those queries would break on fresh databases. Treat
+-- `r2_multipart_upload_id` / `r2_part_etags` as `s3_*` for all intents.
 
 CREATE TABLE upload_sessions (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

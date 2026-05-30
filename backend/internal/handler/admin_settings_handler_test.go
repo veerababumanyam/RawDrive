@@ -60,6 +60,64 @@ func gateRequest(t *testing.T, h http.Handler, method, path string) int {
 	return rec.Code
 }
 
+// TestF100_AdminSettings_RejectsUnlistedCategory is the regression test for
+// F-100: the platform settings CRUD handlers accepted any {category} path
+// param with no allowlist, letting a super_admin create/read/delete rows under
+// arbitrary undefined categories (table pollution). The fix adds an allowlist
+// {storage, auth, payments, ai, email, messaging} and 400s on anything else,
+// on every parameterized handler (ListByCategory, GetSetting, UpsertSetting,
+// DeleteSetting).
+//
+// All requests use a super_admin so they clear the auth gate (see F-003) and
+// reach the handler — this isolates the category check from the role check.
+// The repo is nil: an *unlisted* category must be rejected with 400 by the
+// allowlist guard BEFORE the nil repo is touched. (A *valid* category would
+// instead reach the repo, nil-panic, and Recoverer would return 500 — proving
+// the 400 comes from the allowlist, not from a generic failure.) On the pre-fix
+// code the unlisted-category requests reach the nil repo and return 500 (or, with
+// a real repo, succeed), so each sub-assertion fails before the fix.
+func TestF100_AdminSettings_RejectsUnlistedCategory(t *testing.T) {
+	const base = "/api/v1/admin/settings"
+	const bogus = "bogus_undefined_category"
+
+	h := newAdminSettingsRouterForTest(platformRoleClaims("superadmin-user", "super_admin"))
+
+	// Every handler that takes a {category} path param must 400 on an unlisted
+	// category. GET {category} -> ListByCategory; GET/PUT/DELETE {category}/{key}
+	// -> GetSetting/UpsertSetting/DeleteSetting.
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, base + "/" + bogus},
+		{http.MethodGet, base + "/" + bogus + "/SOME_KEY"},
+		{http.MethodPut, base + "/" + bogus + "/SOME_KEY"},
+		{http.MethodDelete, base + "/" + bogus + "/SOME_KEY"},
+	}
+
+	t.Run("unlisted category rejected with 400 on every handler", func(t *testing.T) {
+		for _, ep := range endpoints {
+			if got := gateRequest(t, h, ep.method, ep.path); got != http.StatusBadRequest {
+				t.Errorf("%s %s: expected 400 for unlisted category, got %d", ep.method, ep.path, got)
+			}
+		}
+	})
+
+	t.Run("allowlisted category passes the category gate", func(t *testing.T) {
+		// "storage" is in the allowlist, so the request clears the category
+		// guard and reaches the nil repo -> panic -> Recoverer returns 500.
+		// The assertion is only that it is NOT 400 (i.e. the allowlist let it
+		// through), confirming the gate keys off the allowlist and does not
+		// reject every category.
+		for _, ep := range endpoints {
+			validPath := base + "/storage" + ep.path[len(base+"/"+bogus):]
+			if got := gateRequest(t, h, ep.method, validPath); got == http.StatusBadRequest {
+				t.Errorf("%s %s: allowlisted category should pass the category gate, but got 400", ep.method, validPath)
+			}
+		}
+	})
+}
+
 // TestF003_AdminSettings_RequiresPlatformRole is the regression test for F-003:
 // the platform settings CRUD endpoints were registered on the JWT-only `api`
 // group with NO RequirePlatformRole gate, so any authenticated workspace user

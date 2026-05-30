@@ -23,10 +23,13 @@ WORKDIR /app
 # Node 22.11's shipped corepack has an outdated signing-key bundle and
 # rejects current pnpm releases with "Cannot find matching keyid". Fix
 # by upgrading corepack itself first (via npm), then enabling it. Pin
-# pnpm to 9.x (matches frontend/pnpm-lock.yaml lockfileVersion 9.0).
+# pnpm to the latest 9.x patch (9.15.9): it keeps lockfileVersion 9.0
+# (matches frontend/pnpm-lock.yaml) while picking up every 9.5.x-9.15.x
+# fix. This version MUST stay in sync with the `packageManager` field in
+# frontend/package.json so local dev and CI resolve the identical pnpm.
 RUN npm install -g corepack@latest \
   && corepack enable \
-  && corepack prepare pnpm@9.4.0 --activate
+  && corepack prepare pnpm@9.15.9 --activate
 
 # Copy only the manifests first so the deps layer caches across code
 # changes. pnpm-workspace.yaml is intentionally NOT copied — pnpm 9.x

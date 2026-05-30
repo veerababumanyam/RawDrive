@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,14 +29,51 @@ type invoiceRepository interface {
 	UpdateStatusAndPaid(ctx context.Context, workspaceID, id uuid.UUID, status string, amountPaidPaisa int64) error
 }
 
+// settingsResolver is the minimal surface the payment handler needs to read
+// admin-managed configuration from the platform_settings table. The concrete
+// *repository.PlatformSettingsRepo already satisfies it (it exposes GetByKey),
+// so it can be wired directly without an adapter. Declaring it as an interface
+// keeps the handler DB-free-testable and keeps wiring optional.
+type settingsResolver interface {
+	GetByKey(ctx context.Context, category, key string) (*repository.PlatformSetting, error)
+}
+
 // PaymentHandler handles payment recording and payment link generation.
 type PaymentHandler struct {
 	paymentRepo paymentRepository
 	invoiceRepo invoiceRepository
+	// settings is optional. When set, configuration (e.g. the UPI payee
+	// address) is resolved from platform_settings first; otherwise the
+	// environment is used. It is never populated with a hardcoded fallback.
+	settings settingsResolver
 }
 
 func NewPaymentHandler(paymentRepo *repository.PaymentRepo, invoiceRepo *repository.InvoiceRepo) *PaymentHandler {
 	return &PaymentHandler{paymentRepo: paymentRepo, invoiceRepo: invoiceRepo}
+}
+
+// WithSettingsResolver wires a platform_settings resolver onto the handler so
+// admin-managed config takes precedence over environment variables. It returns
+// the handler for chaining and deliberately keeps NewPaymentHandler's signature
+// stable so existing call sites compile unchanged (mirrors
+// AssetHandler.WithValidation).
+func (h *PaymentHandler) WithSettingsResolver(s settingsResolver) *PaymentHandler {
+	h.settings = s
+	return h
+}
+
+// resolveUPIPayeeAddress resolves the UPI payee address (PA) following the
+// project-wide config order: platform_settings (payments/upi_pa) -> env
+// (UPI_PA) -> empty (caller must disable the feature). It never returns a
+// hardcoded literal — that would violate the no-hardcoded-credentials
+// invariant. Production uses Razorpay payment links instead of this stub.
+func (h *PaymentHandler) resolveUPIPayeeAddress(ctx context.Context) string {
+	if h.settings != nil {
+		if s, err := h.settings.GetByKey(ctx, "payments", "upi_pa"); err == nil && s != nil && s.Value != "" {
+			return s.Value
+		}
+	}
+	return os.Getenv("UPI_PA")
 }
 
 // computeInvoiceStatus derives the invoice status from the authoritative
@@ -183,6 +221,18 @@ func (h *PaymentHandler) GeneratePaymentLink(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Resolve the UPI payee address (PA) from config: platform_settings ->
+	// env -> disable. Never fall back to a hardcoded literal (the previous
+	// `pa=rawdrive@upi` violated the no-hardcoded-credentials invariant). When
+	// no source provides a PA, disable the feature with a clear 503 rather than
+	// emitting an unusable link.
+	upiPA := h.resolveUPIPayeeAddress(r.Context())
+	if upiPA == "" {
+		log.Printf("[payment-link] UPI payee address not configured (set platform_settings payments/upi_pa or UPI_PA); feature disabled")
+		http.Error(w, `{"error":"UPI payment link is not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
 	// Generate UPI payment link (dev stub — production uses Razorpay)
 	amountRupees := float64(outstanding) / 100.0
 	log.Printf("[payment-link] Generated for invoice %s, amount: ₹%.2f", inv.InvoiceNumber, amountRupees)
@@ -191,7 +241,7 @@ func (h *PaymentHandler) GeneratePaymentLink(w http.ResponseWriter, r *http.Requ
 		"invoice_id":     invoiceID.String(),
 		"invoice_number": inv.InvoiceNumber,
 		"amount_paisa":   outstanding,
-		"payment_link":   "upi://pay?pa=rawdrive@upi&pn=RawDrive&am=" + fmt.Sprintf("%.2f", amountRupees) + "&cu=INR&tn=" + inv.InvoiceNumber,
+		"payment_link":   "upi://pay?pa=" + upiPA + "&pn=RawDrive&am=" + fmt.Sprintf("%.2f", amountRupees) + "&cu=INR&tn=" + inv.InvoiceNumber,
 		"provider":       "upi_stub",
 		"note":           "Production will use Razorpay payment links",
 	})

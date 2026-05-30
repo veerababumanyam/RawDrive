@@ -2,10 +2,16 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -150,4 +156,151 @@ func TestF026StatusSyncErrorIsNotSwallowed(t *testing.T) {
 			t.Fatalf("synced (%q,%d), want (partially_paid,6000)", ir.lastStatus, ir.lastAmountPaisa)
 		}
 	})
+}
+
+// fakeSettingsResolver implements settingsResolver for tests, backed by a map
+// keyed "category/key". Mirrors *repository.PlatformSettingsRepo.GetByKey.
+type fakeSettingsResolver struct {
+	values map[string]string
+}
+
+func (f *fakeSettingsResolver) GetByKey(_ context.Context, category, key string) (*repository.PlatformSetting, error) {
+	v, ok := f.values[category+"/"+key]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return &repository.PlatformSetting{Category: category, Key: key, Value: v}, nil
+}
+
+// Compile-time assertion: the concrete repo must satisfy the resolver interface
+// so it can be wired in production without an adapter.
+var _ settingsResolver = (*repository.PlatformSettingsRepo)(nil)
+
+// paymentLinkRequest builds a GeneratePaymentLink request carrying workspace
+// context (via the typed key getWorkspaceID reads) and the invoice id as a chi
+// URL param, matching the real route wiring this handler depends on.
+func paymentLinkRequest(invoiceID uuid.UUID) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/payments/link", nil)
+	ctx := middleware.WithWorkspaceID(req.Context(), uuid.New().String())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", invoiceID.String())
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	return req.WithContext(ctx)
+}
+
+// readPaymentLink decodes the "payment_link" field from a JSON response body.
+func readPaymentLink(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode response: %v (body=%s)", err, string(body))
+	}
+	link, _ := resp["payment_link"].(string)
+	return link
+}
+
+// TestF104UPIPayeeAddressFromSettings is the core regression for F-104: the UPI
+// payee address must come from platform_settings (payments/upi_pa) and the
+// previously hardcoded literal `rawdrive@upi` must never appear in the link.
+func TestF104UPIPayeeAddressFromSettings(t *testing.T) {
+	h := (&PaymentHandler{
+		invoiceRepo: &fakeInvoiceRepo{invoice: repository.Invoice{
+			InvoiceNumber: "INV-1",
+			TotalPaisa:    15000,
+		}},
+	}).WithSettingsResolver(&fakeSettingsResolver{values: map[string]string{
+		"payments/upi_pa": "studio@okhdfcbank",
+	}})
+
+	rr := httptest.NewRecorder()
+	h.GeneratePaymentLink(rr, paymentLinkRequest(uuid.New()))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	link := readPaymentLink(t, rr.Body.Bytes())
+	if !strings.Contains(link, "pa=studio@okhdfcbank") {
+		t.Fatalf("expected configured PA in link, got %q", link)
+	}
+	// Regression guard: the previously hardcoded literal must never appear.
+	if strings.Contains(link, "rawdrive@upi") {
+		t.Fatalf("hardcoded UPI PA leaked into link: %q", link)
+	}
+	if !strings.Contains(link, "am=150.00") {
+		t.Fatalf("expected formatted amount in link, got %q", link)
+	}
+}
+
+// TestF104UPIPayeeAddressFromEnv verifies the env fallback (UPI_PA) is used when
+// no platform_settings resolver provides a value.
+func TestF104UPIPayeeAddressFromEnv(t *testing.T) {
+	t.Setenv("UPI_PA", "env@okaxis")
+	h := &PaymentHandler{
+		invoiceRepo: &fakeInvoiceRepo{invoice: repository.Invoice{
+			InvoiceNumber: "INV-2",
+			TotalPaisa:    5000,
+		}},
+	}
+
+	rr := httptest.NewRecorder()
+	h.GeneratePaymentLink(rr, paymentLinkRequest(uuid.New()))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	link := readPaymentLink(t, rr.Body.Bytes())
+	if !strings.Contains(link, "pa=env@okaxis") {
+		t.Fatalf("expected env PA in link, got %q", link)
+	}
+	if strings.Contains(link, "rawdrive@upi") {
+		t.Fatalf("hardcoded UPI PA leaked into link: %q", link)
+	}
+}
+
+// TestF104UPIPayeeAddressUnsetReturns503 verifies the handler disables the
+// feature (503) instead of defaulting to a literal when no source provides a PA.
+func TestF104UPIPayeeAddressUnsetReturns503(t *testing.T) {
+	t.Setenv("UPI_PA", "")
+	h := &PaymentHandler{
+		invoiceRepo: &fakeInvoiceRepo{invoice: repository.Invoice{
+			InvoiceNumber: "INV-3",
+			TotalPaisa:    5000,
+		}},
+		// no settings resolver, env empty -> must disable
+	}
+
+	rr := httptest.NewRecorder()
+	h.GeneratePaymentLink(rr, paymentLinkRequest(uuid.New()))
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when PA unset, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "rawdrive@upi") {
+		t.Fatalf("hardcoded UPI PA leaked into response: %s", rr.Body.String())
+	}
+}
+
+// TestF104SettingsPrecedesEnv verifies platform_settings wins over the env var
+// when both are present, matching the project-wide resolution order.
+func TestF104SettingsPrecedesEnv(t *testing.T) {
+	t.Setenv("UPI_PA", "env@okaxis")
+	h := (&PaymentHandler{
+		invoiceRepo: &fakeInvoiceRepo{invoice: repository.Invoice{
+			InvoiceNumber: "INV-4",
+			TotalPaisa:    9900,
+		}},
+	}).WithSettingsResolver(&fakeSettingsResolver{values: map[string]string{
+		"payments/upi_pa": "db@okicici",
+	}})
+
+	rr := httptest.NewRecorder()
+	h.GeneratePaymentLink(rr, paymentLinkRequest(uuid.New()))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	link := readPaymentLink(t, rr.Body.Bytes())
+	if !strings.Contains(link, "pa=db@okicici") {
+		t.Fatalf("expected platform_settings PA to win, got %q", link)
+	}
 }

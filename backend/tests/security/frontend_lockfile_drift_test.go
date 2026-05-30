@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -109,4 +110,82 @@ func TestF039_NoNpmLockfileInFrontend(t *testing.T) {
 	assert.Truef(t, strings.HasPrefix(pj.PackageManager, "pnpm@"),
 		"F-039: frontend/package.json must set \"packageManager\": \"pnpm@<version>\" "+
 			"so corepack enforces pnpm (got %q)", pj.PackageManager)
+}
+
+// dockerfilePnpmPin matches the version in the deps stage's
+//
+//	corepack prepare pnpm@<version> --activate
+//
+// line of frontend/Dockerfile.
+var dockerfilePnpmPin = regexp.MustCompile(`corepack\s+prepare\s+pnpm@([0-9]+\.[0-9]+\.[0-9]+)`)
+
+// pnpmMajor returns the leading major-version segment of a "pnpm@X.Y.Z" or
+// "X.Y.Z" string (e.g. "9" from "pnpm@9.15.9"). Empty if it can't be parsed.
+func pnpmMajor(version string) string {
+	version = strings.TrimPrefix(version, "pnpm@")
+	parts := strings.SplitN(version, ".", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return ""
+	}
+	return parts[0]
+}
+
+// TestF118_PnpmVersionPinConsistency guards F-118: the pnpm version must be
+// pinned identically in frontend/Dockerfile (corepack prepare) and
+// frontend/package.json (packageManager), and must stay on the pnpm 9.x major
+// so it remains compatible with frontend/pnpm-lock.yaml's lockfileVersion 9.0.
+//
+// Before the fix the Dockerfile pinned pnpm@9.4.0 — an outdated 9.x patch that
+// missed 9.5.x-9.15.x fixes. A drift between the two pins (or a bump to a
+// different major) silently breaks CI: a developer on pnpm 10/11 would
+// regenerate a lockfileVersion 10 lockfile that the pinned 9.x build rejects.
+//
+// Pure file-parsing test — no DB, no network, no Docker required.
+func TestF118_PnpmVersionPinConsistency(t *testing.T) {
+	root := findRepoRoot(t)
+	if root == "" {
+		t.Skip("repo root (frontend/package.json) not reachable from this package; skipping")
+	}
+	frontend := filepath.Join(root, "frontend")
+
+	// Extract the pnpm pin from the Dockerfile's corepack prepare line.
+	dockerRaw, err := os.ReadFile(filepath.Join(frontend, "Dockerfile"))
+	require.NoErrorf(t, err, "F-118: reading frontend/Dockerfile")
+	m := dockerfilePnpmPin.FindStringSubmatch(string(dockerRaw))
+	require.Lenf(t, m, 2,
+		"F-118: frontend/Dockerfile must pin pnpm via "+
+			"\"corepack prepare pnpm@<X.Y.Z> --activate\"")
+	dockerVer := m[1]
+
+	// Extract the packageManager pin from package.json.
+	pjRaw, err := os.ReadFile(filepath.Join(frontend, "package.json"))
+	require.NoErrorf(t, err, "F-118: reading frontend/package.json")
+	var pj struct {
+		PackageManager string `json:"packageManager"`
+	}
+	require.NoErrorf(t, json.Unmarshal(pjRaw, &pj),
+		"F-118: parsing frontend/package.json")
+	require.Truef(t, strings.HasPrefix(pj.PackageManager, "pnpm@"),
+		"F-118: frontend/package.json packageManager must be a pnpm pin (got %q)",
+		pj.PackageManager)
+	pkgVer := strings.TrimPrefix(pj.PackageManager, "pnpm@")
+
+	// 1. The two pins must be byte-identical.
+	assert.Equalf(t, pkgVer, dockerVer,
+		"F-118: pnpm pin drift — frontend/Dockerfile pins pnpm@%s but "+
+			"frontend/package.json packageManager pins pnpm@%s; they must match",
+		dockerVer, pkgVer)
+
+	// 2. Both must stay on the pnpm 9.x major (lockfileVersion 9.0 compat).
+	//    Bumping to 10+ requires regenerating frontend/pnpm-lock.yaml.
+	assert.Equalf(t, "9", pnpmMajor(dockerVer),
+		"F-118: pnpm must stay on the 9.x major to match "+
+			"frontend/pnpm-lock.yaml lockfileVersion 9.0 (Dockerfile pins %s); "+
+			"bumping to 10+ requires regenerating the lockfile", dockerVer)
+
+	// 3. Must not be the stale 9.4.0 the finding flagged — pin a later 9.x
+	//    patch so 9.5.x-9.15.x fixes are picked up.
+	assert.NotEqualf(t, "9.4.0", dockerVer,
+		"F-118: pnpm@9.4.0 is the stale pin flagged by the audit; bump to a "+
+			"later 9.x patch (e.g. 9.15.9) for upstream fixes")
 }

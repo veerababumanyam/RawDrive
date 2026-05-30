@@ -121,7 +121,12 @@ export const GlassIconButton = forwardRef<HTMLButtonElement, GlassIconButtonProp
           // Base: circle, center content, smooth transitions
           "relative inline-flex items-center justify-center rounded-full",
           "transition-all duration-200 ease-out",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
+          // Focus ring uses the token-driven border-focus color (per-theme
+          // `--border-focus` var) so the indicator stays visible on light
+          // dashboard surfaces as well as dark/glass media contexts. Do not
+          // revert to `ring-white/40` — a 40%-white ring is low-contrast on
+          // light backgrounds (WCAG 2.4.7).
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
           "disabled:opacity-40 disabled:pointer-events-none",
           "active:scale-[0.92] active:transition-transform active:duration-100",
           // Size

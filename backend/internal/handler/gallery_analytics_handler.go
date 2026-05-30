@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/service"
 )
+
+// analyticsErrMsg is the static, schema-safe message returned to clients on
+// any analytics 5xx. Raw service/DB errors are logged server-side only — they
+// can contain Postgres table/column/constraint names and must never reach an
+// (authenticated) caller. Mirrors the GetSummary path in this file (F-099).
+const analyticsErrMsg = "analytics failed"
 
 // GalleryAnalyticsHandler handles gallery analytics HTTP requests.
 type GalleryAnalyticsHandler struct {
@@ -86,7 +93,8 @@ func (h *GalleryAnalyticsHandler) GetDailyStats(w http.ResponseWriter, r *http.R
 
 	stats, err := h.analyticsSvc.GetDailyStats(r.Context(), galleryID, days)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		log.Printf("gallery analytics GetDailyStats failed (gallery=%s): %v", galleryID, err)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", analyticsErrMsg)
 		return
 	}
 
@@ -104,7 +112,8 @@ func (h *GalleryAnalyticsHandler) GetDeviceBreakdown(w http.ResponseWriter, r *h
 	days = clampDays(days)
 	points, err := h.analyticsSvc.DeviceBreakdown(r.Context(), galleryID, days)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		log.Printf("gallery analytics DeviceBreakdown failed (gallery=%s): %v", galleryID, err)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", analyticsErrMsg)
 		return
 	}
 	respondJSON(w, http.StatusOK, points)
@@ -121,7 +130,8 @@ func (h *GalleryAnalyticsHandler) GetDownloadVelocity(w http.ResponseWriter, r *
 	days = clampDays(days)
 	points, err := h.analyticsSvc.DownloadVelocity(r.Context(), galleryID, days)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		log.Printf("gallery analytics DownloadVelocity failed (gallery=%s): %v", galleryID, err)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", analyticsErrMsg)
 		return
 	}
 	respondJSON(w, http.StatusOK, points)
@@ -138,7 +148,8 @@ func (h *GalleryAnalyticsHandler) GetShareChannels(w http.ResponseWriter, r *htt
 	days = clampDays(days)
 	points, err := h.analyticsSvc.ShareChannelBreakdown(r.Context(), galleryID, days)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		log.Printf("gallery analytics ShareChannelBreakdown failed (gallery=%s): %v", galleryID, err)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", analyticsErrMsg)
 		return
 	}
 	respondJSON(w, http.StatusOK, points)
@@ -155,7 +166,8 @@ func (h *GalleryAnalyticsHandler) GetTopViews(w http.ResponseWriter, r *http.Req
 	limit = clampLimit(limit)
 	points, err := h.analyticsSvc.TopViewed(r.Context(), galleryID, limit)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		log.Printf("gallery analytics TopViewed failed (gallery=%s): %v", galleryID, err)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", analyticsErrMsg)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"data": points})
@@ -172,7 +184,8 @@ func (h *GalleryAnalyticsHandler) GetTopDownloads(w http.ResponseWriter, r *http
 	limit = clampLimit(limit)
 	points, err := h.analyticsSvc.TopDownloaded(r.Context(), galleryID, limit)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "analytics_failed", err.Error())
+		log.Printf("gallery analytics TopDownloaded failed (gallery=%s): %v", galleryID, err)
+		respondError(w, http.StatusInternalServerError, "analytics_failed", analyticsErrMsg)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"data": points})
