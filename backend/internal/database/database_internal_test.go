@@ -5,23 +5,25 @@ import (
 	"testing"
 )
 
-// TestF024_MigrationOrderingNoZeroPaddingInterleave is a pure unit-level
-// regression for finding F-024: the four M5 migrations are committed with a
-// 6-digit zero-padded prefix (000014..000017) while the surrounding core
-// M2/M3 migrations use a 3-digit prefix (014..017). Both prefixes parse to the
-// same numeric value, so the old comparator fell back to a raw lexicographic
-// string compare in which "000014" < "014" — sorting each 6-digit M5 file
-// BEFORE its 3-digit core counterpart and interleaving the two groups at
-// logical orders 14-17.
+// TestMigrationOrderingValueFirstDependencySafe pins the corrected migration
+// ordering. The four M5 migrations are committed with a 6-digit zero-padded
+// prefix (000014..000017) while the surrounding core migrations use a 3-digit
+// prefix; both "014_..." and "000014_..." parse to the numeric value 14.
 //
-// lessMigration must instead keep each zero-padding family contiguous: the
-// 3-digit core numbering runs as one block in numeric order, then the 6-digit
-// M5 group (000014..000017) runs as a trailing block. This test fails against
-// the previous `return files[i] < files[j]` tie-break and passes after the
-// width-first fix.
-func TestF024_MigrationOrderingNoZeroPaddingInterleave(t *testing.T) {
-	// Deliberately shuffled, reproducing the real on-disk filenames around
-	// the collision plus a couple of neighbours on either side.
+// The original F-024 fix sorted by prefix *width* first, which ran the 6-digit
+// M5 block as a trailing group after every 3-digit migration. That regressed
+// once migrations 114 (marketplace_inquiry_reply) and 115 (inquiry_messages) —
+// both 3-digit — began depending on marketplace_inquiries, a table created in
+// the 6-digit 000014 block: under width-first ordering 000014 ran last, so a
+// fresh DB failed at 114 with "relation marketplace_inquiries does not exist".
+//
+// lessMigration now sorts by numeric *value* first (width only breaks ties), so
+// the M5 block runs at its logical slots 14-17 — after the foundation tables it
+// references and before its 114/115 consumers. This test fails against the
+// width-first comparator and passes after the value-first fix.
+func TestMigrationOrderingValueFirstDependencySafe(t *testing.T) {
+	// Deliberately shuffled, reproducing the real on-disk filenames around the
+	// collision, plus the 114 consumer that depends on the 000014 M5 block.
 	files := []string{
 		"000016_create_m5_messaging_tables.up.sql",
 		"014_create_share_links.up.sql",
@@ -33,6 +35,7 @@ func TestF024_MigrationOrderingNoZeroPaddingInterleave(t *testing.T) {
 		"000015_create_m5_gear_tables.up.sql",
 		"016_create_invitations.up.sql",
 		"018_ai_configs_jobs.up.sql",
+		"114_marketplace_inquiry_reply.up.sql",
 	}
 
 	sort.Slice(files, func(i, j int) bool {
@@ -40,21 +43,20 @@ func TestF024_MigrationOrderingNoZeroPaddingInterleave(t *testing.T) {
 	})
 
 	want := []string{
-		// The entire 3-digit core family sorts first, in numeric order,
-		// as one contiguous block — no 6-digit M5 file interleaved among them.
+		// True numeric order. At each tied value the 3-digit core file precedes
+		// its 6-digit M5 neighbour (the retained width tie-break), and the M5
+		// block is interleaved at slots 14-17 rather than dumped at the end.
 		"013_create_gallery_assets.up.sql",
 		"014_create_share_links.up.sql",
-		"015_create_proofing_selections.up.sql",
-		"016_create_invitations.up.sql",
-		"017_pgvector_face_clusters.up.sql",
-		"018_ai_configs_jobs.up.sql",
-		// Then the 6-digit M5 family runs as a trailing contiguous block,
-		// after every core dependency (users/workspaces/states/galleries) it
-		// references is already in place.
 		"000014_create_m5_marketplace_tables.up.sql",
+		"015_create_proofing_selections.up.sql",
 		"000015_create_m5_gear_tables.up.sql",
+		"016_create_invitations.up.sql",
 		"000016_create_m5_messaging_tables.up.sql",
+		"017_pgvector_face_clusters.up.sql",
 		"000017_create_m5_moderation_tables.up.sql",
+		"018_ai_configs_jobs.up.sql",
+		"114_marketplace_inquiry_reply.up.sql",
 	}
 
 	if len(files) != len(want) {
@@ -62,21 +64,21 @@ func TestF024_MigrationOrderingNoZeroPaddingInterleave(t *testing.T) {
 	}
 	for i := range want {
 		if files[i] != want[i] {
-			t.Fatalf("migration ordering interleaved at index %d:\n got:  %v\n want: %v", i, files, want)
+			t.Fatalf("migration ordering wrong at index %d:\n got:  %v\n want: %v", i, files, want)
 		}
 	}
 
-	// Guard the precise invariant the finding cares about: every 3-digit core
-	// file must sort strictly before every 6-digit M5 file. 018 is the
-	// numerically-last core file in this sample, so it bounds the core block.
-	lastCore := indexOf(files, "018_ai_configs_jobs.up.sql")
-	firstM5 := indexOf(files, "000014_create_m5_marketplace_tables.up.sql")
-	if lastCore == -1 || firstM5 == -1 {
+	// The precise invariant the fresh-DB failure cares about: the 000014 M5
+	// block (which CREATEs marketplace_inquiries) must sort strictly before the
+	// 114 migration that references that table.
+	m5Create := indexOf(files, "000014_create_m5_marketplace_tables.up.sql")
+	consumer := indexOf(files, "114_marketplace_inquiry_reply.up.sql")
+	if m5Create == -1 || consumer == -1 {
 		t.Fatalf("expected files missing from sorted slice: %v", files)
 	}
-	if lastCore >= firstM5 {
-		t.Fatalf("last core migration 018 (idx %d) must sort before M5 migration 000014 (idx %d): %v",
-			lastCore, firstM5, files)
+	if m5Create >= consumer {
+		t.Fatalf("000014 M5 marketplace block (idx %d) must sort before its 114 consumer (idx %d): %v",
+			m5Create, consumer, files)
 	}
 }
 

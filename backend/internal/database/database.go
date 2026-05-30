@@ -186,33 +186,46 @@ func getMigrationFiles(direction string) ([]string, error) {
 	return files, nil
 }
 
-// lessMigration is the canonical ordering for migration filenames. It groups
-// files by the *width* (digit count) of their numeric prefix first, then sorts
-// numerically by value within each width group, then by full filename.
+// lessMigration is the canonical ordering for migration filenames. It sorts by
+// the *numeric value* of the prefix first, then by prefix width (digit count)
+// as a tie-break, then by full filename.
 //
-// Width is the primary key because the repo mixes two zero-padding widths: the
-// established core migrations use a 3-digit prefix (001..122) while the four M5
-// migrations were committed with a 6-digit prefix (000014..000017). Both
-// "014_create_share_links" and "000014_create_m5_marketplace_tables" parse to
-// the numeric value 14, so a value-first ordering interleaves the 6-digit M5
-// files among the 3-digit core M2/M3 files at logical orders 14-17 (and mirrors
-// that interleave on rollback). The naive lexicographic tie-break makes it
-// worse: "000014" < "014" sorts each M5 file BEFORE its core counterpart.
+// History: the repo mixes two zero-padding widths. The established core
+// migrations use a 3-digit prefix (001..132) while the four M5 migrations were
+// committed with a 6-digit prefix (000014..000017). Both "014_create_share_links"
+// and "000014_create_m5_marketplace_tables" parse to the numeric value 14.
 //
-// Sorting by width first keeps each zero-padding family contiguous and runs the
-// whole 3-digit core sequence (which the M5 tables depend on — users,
-// workspaces, states, galleries) before the 6-digit M5 block. That is the same
-// effect the finding's "renumber 000014-000017 to a slot above the highest
-// migration" recommendation would have, achieved without mutating committed
-// migration files or rewriting schema_migrations on existing databases. (F-024)
+// F-024 originally sorted by *width* first, which ran the entire 3-digit core
+// sequence and only then the 6-digit M5 block as a trailing group. That was
+// dependency-safe at the time because nothing numbered above 017 referenced the
+// M5 tables. That assumption no longer holds: migrations 114
+// (marketplace_inquiry_reply) and 115 (inquiry_messages) are 3-digit migrations
+// that depend on marketplace_inquiries — a table created in the 6-digit 000014
+// block. Under width-first ordering the 000014 block ran *last* (after 132), so
+// a fresh database failed at 114 with "relation marketplace_inquiries does not
+// exist".
+//
+// Value-first ordering runs every migration in true numeric order, placing the
+// M5 block at its logical slots 14-17 — after the foundational tables it
+// references (users=002, workspaces=005, states=001, galleries=007, all < 14)
+// and before its later consumers (114/115). The width tie-break is retained so
+// that within a tied value the 3-digit core file still precedes its 6-digit M5
+// neighbour (e.g. 014_create_share_links before 000014_create_m5_marketplace_tables);
+// this is dependency-safe because no M5 file references a 3-digit migration in
+// the 15-113 range (verified: M5 FKs target only users/workspaces/states/
+// galleries plus tables created within the M5 block itself). Changing the
+// comparator does not rewrite schema_migrations: already-applied versions are
+// tracked by full filename and simply skipped, so existing databases are
+// unaffected and only fresh migrations observe the new order. (F-024 / fresh-DB
+// marketplace-inquiry ordering fix)
 func lessMigration(a, b string) bool {
 	aOrder, aWidth := migrationOrder(a)
 	bOrder, bWidth := migrationOrder(b)
-	if aWidth != bWidth {
-		return aWidth < bWidth
-	}
 	if aOrder != bOrder {
 		return aOrder < bOrder
+	}
+	if aWidth != bWidth {
+		return aWidth < bWidth
 	}
 	return a < b
 }
