@@ -12,7 +12,7 @@
 #   to image builds and breaks intermittently. Slim is the pragmatic choice
 #   for an ML container; size is dwarfed by the model anyway.
 
-FROM python:3.11-slim AS runtime
+FROM python:3.11.15-slim AS runtime
 
 # System deps split into two groups:
 #
