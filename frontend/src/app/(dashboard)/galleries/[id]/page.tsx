@@ -10,7 +10,6 @@ import {
   createGalleryAlbum,
   galleryPublicUrl,
   getGallery,
-  listAlbumAssets,
   listGalleryAlbums,
   listGalleryAssets,
   updateGallery,
@@ -287,15 +286,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     const t = getStoredAccessToken();
     if (!t) return;
     try {
-      const nextAlbums = await listGalleryAlbums(t, id);
-      const memberships = await Promise.all(
-        nextAlbums.map(async (album) => {
-          const albumAssets = await listAlbumAssets(t, album.id).catch(() => []);
-          return [album.id, albumAssets.map((item) => item.asset_id)] as const;
-        }),
-      );
+      // F-091: one request returns every album with its member asset IDs inline,
+      // replacing the previous 1 + N (listGalleryAlbums + per-album listAlbumAssets).
+      const nextAlbums = await listGalleryAlbums(t, id, { includeAssetIds: true });
       setAlbums(nextAlbums);
-      setAlbumAssetIdsByAlbum(Object.fromEntries(memberships));
+      setAlbumAssetIdsByAlbum(
+        Object.fromEntries(nextAlbums.map((album) => [album.id, album.asset_ids ?? []])),
+      );
     } catch {
       setAlbums([]);
       setAlbumAssetIdsByAlbum({});

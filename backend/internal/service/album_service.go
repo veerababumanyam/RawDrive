@@ -161,6 +161,43 @@ func (s *AlbumService) ListAssets(ctx context.Context, albumID uuid.UUID) ([]rep
 	return s.albumRepo.ListAssets(ctx, albumID)
 }
 
+// ListAssetIDsByGallery returns album_id -> []asset_id for every album in a
+// gallery, collapsing the per-album ListAssets fan-out (F-091). Manual albums
+// are resolved in a single batched repo query; smart albums reuse the existing
+// per-album resolution, which is already batched internally via
+// AssetRepo.GetByIDs. The result always has an entry (possibly empty) per album.
+func (s *AlbumService) ListAssetIDsByGallery(ctx context.Context, galleryID uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	albums, err := s.albumRepo.ListByGallery(ctx, galleryID)
+	if err != nil {
+		return nil, err
+	}
+	manual, err := s.albumRepo.ListAssetIDsByGallery(ctx, galleryID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID][]uuid.UUID, len(albums))
+	for _, al := range albums {
+		if len(al.SmartFilter) > 0 {
+			assets, err := s.ListAssets(ctx, al.ID)
+			if err != nil {
+				return nil, err
+			}
+			ids := make([]uuid.UUID, 0, len(assets))
+			for _, a := range assets {
+				ids = append(ids, a.AssetID)
+			}
+			out[al.ID] = ids
+			continue
+		}
+		if ids := manual[al.ID]; ids != nil {
+			out[al.ID] = ids
+		} else {
+			out[al.ID] = []uuid.UUID{}
+		}
+	}
+	return out, nil
+}
+
 // RemoveAsset removes an asset from an album.
 func (s *AlbumService) RemoveAsset(ctx context.Context, albumID, assetID uuid.UUID) error {
 	return s.albumRepo.RemoveAsset(ctx, albumID, assetID)

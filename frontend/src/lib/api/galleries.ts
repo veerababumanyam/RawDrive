@@ -306,6 +306,10 @@ export interface GalleryAlbum {
   asset_count?: number;
   created_at?: string;
   updated_at?: string;
+  // F-091: populated only when listGalleryAlbums is called with
+  // { includeAssetIds: true } (?include_asset_ids=true) — the album's member
+  // asset IDs, inline, so callers avoid a per-album listAlbumAssets fan-out.
+  asset_ids?: string[];
 }
 
 export interface AlbumAsset {
@@ -461,8 +465,13 @@ export async function listGalleryAssets(_token: string, galleryId: string): Prom
   return [];
 }
 
-export async function listGalleryAlbums(_token: string, galleryId: string): Promise<GalleryAlbum[]> {
-  const res = await authFetch(`/api/v1/galleries/${galleryId}/albums`);
+export async function listGalleryAlbums(
+  _token: string,
+  galleryId: string,
+  opts?: { includeAssetIds?: boolean },
+): Promise<GalleryAlbum[]> {
+  const qs = opts?.includeAssetIds ? "?include_asset_ids=true" : "";
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/albums${qs}`);
   if (!res.ok) throw new Error(`Failed to list albums: ${res.status}`);
   const body = await res.json();
   const raw: GalleryAlbum[] = Array.isArray(body)

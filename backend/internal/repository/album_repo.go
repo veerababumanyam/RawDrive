@@ -166,6 +166,35 @@ func (r *AlbumRepo) ListAssets(ctx context.Context, albumID uuid.UUID) ([]AlbumA
 	return items, rows.Err()
 }
 
+// ListAssetIDsByGallery returns manual album membership (album_id -> []asset_id)
+// for every album in a gallery in a SINGLE query, replacing the per-album
+// ListAssets fan-out (F-091). Smart-album membership is resolved separately by
+// the service. Albums with no manual members are simply absent from the map.
+func (r *AlbumRepo) ListAssetIDsByGallery(ctx context.Context, galleryID uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT aa.album_id, aa.asset_id
+		 FROM album_assets aa
+		 JOIN albums al ON al.id = aa.album_id
+		 WHERE al.gallery_id = $1
+		 ORDER BY aa.album_id, aa.position ASC, aa.added_at ASC`,
+		galleryID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("album repo list asset ids by gallery: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[uuid.UUID][]uuid.UUID)
+	for rows.Next() {
+		var albumID, assetID uuid.UUID
+		if err := rows.Scan(&albumID, &assetID); err != nil {
+			return nil, fmt.Errorf("album repo list asset ids by gallery scan: %w", err)
+		}
+		out[albumID] = append(out[albumID], assetID)
+	}
+	return out, rows.Err()
+}
+
 // RemoveAsset removes an asset from an album.
 func (r *AlbumRepo) RemoveAsset(ctx context.Context, albumID, assetID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,

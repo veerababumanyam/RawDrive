@@ -75,6 +75,36 @@ func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	// F-091: with ?include_asset_ids=true the client gets each album's membership
+	// inline (one batched request) instead of one ListAssets call per album.
+	// Without the flag the response is byte-for-byte the historical shape.
+	if r.URL.Query().Get("include_asset_ids") == "true" {
+		idsByAlbum, err := h.albumSvc.ListAssetIDsByGallery(r.Context(), galleryID)
+		if err != nil {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+		out := make([]map[string]interface{}, 0, len(albums))
+		for _, al := range albums {
+			b, mErr := json.Marshal(al)
+			if mErr != nil {
+				http.Error(w, `{"error":"encode album failed"}`, http.StatusInternalServerError)
+				return
+			}
+			m := map[string]interface{}{}
+			_ = json.Unmarshal(b, &m)
+			ids := idsByAlbum[al.ID]
+			if ids == nil {
+				ids = []uuid.UUID{}
+			}
+			m["asset_ids"] = ids
+			out = append(out, m)
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": out})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{"data": albums})
 }
 
