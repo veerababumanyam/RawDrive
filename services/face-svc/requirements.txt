@@ -1,12 +1,17 @@
 # Face recognition sidecar — pinned for reproducible builds.
 # Bump deliberately and verify the integration test (backend/internal/face/client_test.go).
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-multipart==0.0.20
-pydantic==2.10.4
-numpy==1.26.4
-opencv-python-headless==4.10.0.84
-onnxruntime==1.20.1
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+python-multipart==0.0.29
+pydantic==2.13.4
+# numpy 2.x is REQUIRED by the rest of the CV stack: opencv-python-headless>=4.13
+# and onnxruntime>=1.26 both declare numpy>=2. Pinning numpy 1.x here makes the
+# install unsatisfiable (verified: pip ResolutionImpossible). Keep numpy + opencv
+# + onnxruntime + insightface aligned as one set; re-test on any bump.
+numpy==2.4.6
+opencv-python-headless==4.13.0.92
+onnxruntime==1.26.0
 # insightface bundles buffalo_l (~280 MB) on first run, cached in $INSIGHTFACE_HOME.
-# 0.7.3 is the latest stable; bumping requires re-testing model load.
-insightface==0.7.3
+# 1.0.1 ships as a pure-Python wheel and imports cleanly with numpy 2.x;
+# bumping requires re-testing model load.
+insightface==1.0.1

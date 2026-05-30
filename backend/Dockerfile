@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------- build stage ----------
-# Pinned to the minor-patch of go.mod (1.26.2). Floating tag
+# Pinned to the minor-patch of go.mod (1.26.3). Floating tag
 # 'golang:1.26-alpine' would silently drift on every patch release and
 # produce compiler-mismatched builds across machines. Bump in lockstep
 # with go.mod when we upgrade Go.
-FROM golang:1.26.2-alpine AS build
+FROM golang:1.26.3-alpine AS build
 
 # git + ca-certs needed for go mod download of pinned deps over https
 RUN apk add --no-cache git ca-certificates
@@ -30,7 +30,7 @@ RUN go build -trimpath -ldflags='-s -w' -o /out/migrate ./cmd/migrate
 # ---------- runtime stage ----------
 # Pinned to a specific alpine patch for reproducibility. Bump when we
 # want new security patches from the alpine base.
-FROM alpine:3.20.3 AS runtime
+FROM alpine:3.20.10 AS runtime
 
 # Runtime dependencies:
 # - ca-certificates, tzdata: outbound TLS + Asia/Kolkata TZ

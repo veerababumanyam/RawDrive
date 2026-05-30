@@ -47,7 +47,7 @@ services:
       start_period: 5s
 
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.30.1
     ports:
       - "${MAILPIT_SMTP_PORT}:1025"
       - "${MAILPIT_UI_PORT}:8025"
@@ -58,7 +58,7 @@ services:
       retries: 3
 
   playwright:
-    image: mcr.microsoft.com/playwright:v1.52.0-noble
+    image: mcr.microsoft.com/playwright:v1.60.0-noble
     working_dir: /app
     entrypoint: ["sleep", "infinity"]
     env_file:

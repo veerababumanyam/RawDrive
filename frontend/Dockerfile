@@ -16,7 +16,7 @@
 
 # ---------- deps stage ----------
 # Pinned to the Node 22 LTS minor-patch for reproducibility.
-FROM node:22.11.0-bookworm-slim AS deps
+FROM node:22.22.3-bookworm-slim AS deps
 
 WORKDIR /app
 
@@ -76,7 +76,7 @@ RUN pnpm build
 # Pinned to the same Node 22 patch as build — if this drifts, the
 # standalone server.js may reference a different Node API surface than
 # what the runtime provides.
-FROM node:22.11.0-bookworm-slim AS runtime
+FROM node:22.22.3-bookworm-slim AS runtime
 
 WORKDIR /app
 
