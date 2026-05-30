@@ -106,9 +106,14 @@ describe("ProductPreview — F-088 semantic feedback tokens", () => {
         />,
       );
 
-      // Wait for the async preflight result to render the badge.
+      // Wait for the async preflight result to render the badge. Match the
+      // badge label specifically ("<quality> — <dpi> DPI") rather than a bare
+      // /<quality>/ regex, which also matches the "<quality> quality" message
+      // paragraph and would throw "Found multiple elements".
       await waitFor(() =>
-        expect(screen.getByText(new RegExp(`${quality}`, "i"))).toBeTruthy(),
+        expect(
+          screen.getByText(new RegExp(`${quality}\\s*—.*DPI`, "i")),
+        ).toBeTruthy(),
       );
 
       const html = container.innerHTML;

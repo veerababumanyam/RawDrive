@@ -9,6 +9,28 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 )
 
+// validCategories is the allowlist of platform-settings categories. It mirrors
+// the canonical set documented in platform_settings_repo.go and AGENTS.md
+// (storage, auth, payments, ai, email, messaging). Without this gate a
+// super_admin could create setting rows under arbitrary, undefined categories,
+// polluting the platform_settings table with categories no part of the app
+// reads. Note: this is NOT an encryption gate — encryption is driven off the
+// per-setting is_secret flag in the repo, not the category.
+var validCategories = map[string]struct{}{
+	"storage":   {},
+	"auth":      {},
+	"payments":  {},
+	"ai":        {},
+	"email":     {},
+	"messaging": {},
+}
+
+// isValidCategory reports whether category is in the allowlist.
+func isValidCategory(category string) bool {
+	_, ok := validCategories[category]
+	return ok
+}
+
 // AdminSettingsHandler handles platform settings CRUD for super admins.
 type AdminSettingsHandler struct {
 	repo *repository.PlatformSettingsRepo
@@ -32,6 +54,10 @@ func (h *AdminSettingsHandler) ListCategories(w http.ResponseWriter, r *http.Req
 // ListByCategory handles GET /api/v1/admin/settings/{category}
 func (h *AdminSettingsHandler) ListByCategory(w http.ResponseWriter, r *http.Request) {
 	category := chi.URLParam(r, "category")
+	if !isValidCategory(category) {
+		http.Error(w, `{"error":"invalid category"}`, http.StatusBadRequest)
+		return
+	}
 	settings, err := h.repo.ListByCategory(r.Context(), category)
 	if err != nil {
 		http.Error(w, `{"error":"failed to list settings"}`, http.StatusInternalServerError)
@@ -53,6 +79,11 @@ func (h *AdminSettingsHandler) GetSetting(w http.ResponseWriter, r *http.Request
 	category := chi.URLParam(r, "category")
 	key := chi.URLParam(r, "key")
 
+	if !isValidCategory(category) {
+		http.Error(w, `{"error":"invalid category"}`, http.StatusBadRequest)
+		return
+	}
+
 	setting, err := h.repo.GetByKey(r.Context(), category, key)
 	if err != nil || setting == nil {
 		http.Error(w, `{"error":"setting not found"}`, http.StatusNotFound)
@@ -70,6 +101,11 @@ func (h *AdminSettingsHandler) GetSetting(w http.ResponseWriter, r *http.Request
 func (h *AdminSettingsHandler) UpsertSetting(w http.ResponseWriter, r *http.Request) {
 	category := chi.URLParam(r, "category")
 	key := chi.URLParam(r, "key")
+
+	if !isValidCategory(category) {
+		http.Error(w, `{"error":"invalid category"}`, http.StatusBadRequest)
+		return
+	}
 
 	userID, _ := getUserID(r)
 
