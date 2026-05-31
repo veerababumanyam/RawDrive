@@ -103,7 +103,9 @@
     "autonomousStopBlock": 0,
     "autonomous": false,
     "mode": "interactive",
-    "lightweight": false
+    "lightweight": false,
+    "currentStage": "S8",
+    "fixStage": "complete"
   },
   "prQueue": {
     "watchedRepos": [],
@@ -150,7 +152,7 @@
     "perfBudgetExceeded": 0,
     "productionReadyScore": {}
   },
-  "lastUpdated": "2026-05-17T04:52:41.828Z",
+  "lastUpdated": "2026-05-31T11:47:55.527Z",
   "resolvedRoot": "/Users/madhuthota/merupuai/rawdrive/RawDrive",
   "initCheckpoints": {
     "detect-configure": {
@@ -874,7 +876,24 @@
     "target": "dev"
   },
   "fix": {
-    "mode": "pipeline",
-    "haltReason": "no-progress-loop-after-audit-fail"
+    "mode": "uat-fix",
+    "haltReason": "no-progress-loop-after-audit-fail",
+    "checkpoint": "rca-complete",
+    "iteration": 1,
+    "findings": {
+      "total": 5,
+      "resolved": 5,
+      "carryForward": 0
+    },
+    "startedAt": "2026-05-31T11:02:12Z",
+    "completedAt": "2026-05-31T11:14:34Z",
+    "testSuiteRepair": {
+      "completedAt": "2026-05-31T11:47:55Z",
+      "frontendSuite": "618 passed / 0 failed"
+    }
+  },
+  "uat": {
+    "status": "passed",
+    "verdict": "EXIT_SUCCESS"
   }
 }
