@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ type PublicGalleryHandler struct {
 	assetSvc   *service.AssetService
 	shareSvc   *service.ShareLinkService
 	albumSvc   *service.AlbumService
+	accessSvc  *service.GalleryAccessService
 
 	// M13 deferred-FR closure deps (optional — nil-safe handlers degrade
 	// gracefully so existing tests that construct PublicGalleryHandler
@@ -78,7 +80,8 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		 status, created_at, updated_at, deleted_at
+		 status, processing_error, created_at, updated_at, deleted_at,
+		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
 	)
 	if err != nil {
@@ -91,7 +94,8 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		a := &repository.Asset{}
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
-			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 		); err != nil {
 			return nil, fmt.Errorf("public gallery: bulk get assets scan: %w", err)
 		}
@@ -140,6 +144,28 @@ func (h *PublicGalleryHandler) WithAssetBatchSource(src publicAssetBatchSource) 
 func (h *PublicGalleryHandler) WithAlbumService(albumSvc *service.AlbumService) *PublicGalleryHandler {
 	h.albumSvc = albumSvc
 	return h
+}
+
+func (h *PublicGalleryHandler) WithGalleryAccessService(accessSvc *service.GalleryAccessService) *PublicGalleryHandler {
+	h.accessSvc = accessSvc
+	return h
+}
+
+func (h *PublicGalleryHandler) requirePublicGallerySession(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) bool {
+	if gallery == nil || gallery.PasswordHash == nil || *gallery.PasswordHash == "" {
+		return true
+	}
+	token := r.Header.Get("X-Gallery-Session")
+	if token == "" {
+		if c, err := r.Cookie("gallery_session"); err == nil {
+			token = c.Value
+		}
+	}
+	if h.accessSvc != nil && h.accessSvc.ValidateSession(r.Context(), gallery.ID, token) {
+		return true
+	}
+	http.Error(w, `{"error":"gallery password required"}`, http.StatusUnauthorized)
+	return false
 }
 
 // WithFaceClient enables the public Photo Search endpoint. Nil-safe:
@@ -358,6 +384,9 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
 	}
+	if !h.requirePublicGallerySession(w, r, gallery) {
+		return
+	}
 
 	galleryAssets, err := h.gallerySvc.ListAssets(r.Context(), gallery.ID)
 	if err != nil {
@@ -432,6 +461,9 @@ func (h *PublicGalleryHandler) ListAlbums(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
 	}
+	if !h.requirePublicGallerySession(w, r, gallery) {
+		return
+	}
 
 	albums, err := h.albumSvc.ListByGallery(r.Context(), gallery.ID)
 	if err != nil {
@@ -479,6 +511,9 @@ func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Re
 	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	if !h.requirePublicGallerySession(w, r, gallery) {
 		return
 	}
 
@@ -1223,6 +1258,9 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
 	}
+	if !h.requirePublicGallerySession(w, r, gallery) {
+		return
+	}
 
 	// M19 F-009: Gallery expiry enforcement
 	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
@@ -1260,8 +1298,14 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 		return
 	}
 
+	variant, err := publicDownloadVariant(asset.Asset, r.URL.Query().Get("format"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
+		return
+	}
+
 	// Stream file from object storage
-	reader, err := h.assetSvc.GetStorageReader(r.Context(), asset.StorageKey)
+	reader, err := h.assetSvc.GetStorageReader(r.Context(), variant.StorageKey)
 	if err != nil {
 		http.Error(w, `{"error":"file retrieval failed"}`, http.StatusInternalServerError)
 		return
@@ -1276,7 +1320,7 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 	//      bake into the WebP/AVIF derivatives either (we serve originals).
 	//   3. A watermark service was wired at startup (always true in main.go
 	//      since v0.0.51; nil-safe so tests that omit it still pass through).
-	if h.watermarkSvc != nil && service.IsEnabled(gallery.WatermarkConfig) && supportsWatermarkBaking(asset.ContentType) {
+	if variant.Format == "original" && h.watermarkSvc != nil && service.IsEnabled(gallery.WatermarkConfig) && supportsWatermarkBaking(asset.ContentType) {
 		cfg := service.ConfigFromMap(gallery.WatermarkConfig)
 		watermarked, werr := h.watermarkSvc.Apply(r.Context(), reader, cfg)
 		if werr == nil {
@@ -1298,13 +1342,92 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 		// path; the public viewer keeps its CSS overlay as a second line.
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, asset.Filename))
-	w.Header().Set("Content-Type", asset.ContentType)
-	if asset.SizeBytes > 0 {
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", asset.SizeBytes))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, variant.Filename))
+	w.Header().Set("Content-Type", variant.ContentType)
+	if variant.SizeBytes > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", variant.SizeBytes))
 	}
 
 	io.Copy(w, reader)
+}
+
+type publicDownloadSelection struct {
+	StorageKey  string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	Format      string
+}
+
+func publicDownloadVariant(asset *repository.Asset, requestedFormat string) (*publicDownloadSelection, error) {
+	if asset == nil {
+		return nil, fmt.Errorf("asset not found")
+	}
+	format := strings.ToLower(strings.TrimSpace(requestedFormat))
+	if format == "" {
+		format = "original"
+	}
+
+	switch format {
+	case "original":
+		return &publicDownloadSelection{
+			StorageKey:  asset.StorageKey,
+			Filename:    asset.Filename,
+			ContentType: asset.ContentType,
+			SizeBytes:   asset.SizeBytes,
+			Format:      "original",
+		}, nil
+	case "webp":
+		key := firstThumbnailKey(asset.ThumbnailURLs, "display_webp", "thumb_lg_webp")
+		if key == "" {
+			return nil, fmt.Errorf("webp version not available")
+		}
+		return &publicDownloadSelection{
+			StorageKey:  key,
+			Filename:    replaceExt(asset.Filename, ".webp"),
+			ContentType: "image/webp",
+			Format:      "webp",
+		}, nil
+	case "thumbnail":
+		key := firstThumbnailKey(asset.ThumbnailURLs, "thumb_lg_webp", "thumb_lg", "lg", "thumb_md_webp", "thumb_md")
+		if key == "" {
+			return nil, fmt.Errorf("thumbnail not available")
+		}
+		contentType := "image/webp"
+		ext := ".webp"
+		if !strings.HasSuffix(strings.ToLower(key), ".webp") {
+			contentType = asset.ContentType
+			ext = filepath.Ext(asset.Filename)
+			if ext == "" {
+				ext = ".jpg"
+			}
+		}
+		return &publicDownloadSelection{
+			StorageKey:  key,
+			Filename:    "thumb_" + replaceExt(asset.Filename, ext),
+			ContentType: contentType,
+			Format:      "thumbnail",
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported download format")
+	}
+}
+
+func firstThumbnailKey(thumbnails map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if value := thumbnails[key]; value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func replaceExt(filename, ext string) string {
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	if base == "" {
+		base = filename
+	}
+	return base + ext
 }
 
 // supportsWatermarkBaking reports whether the asset's content type can be

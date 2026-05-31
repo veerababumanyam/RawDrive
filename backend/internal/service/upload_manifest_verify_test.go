@@ -234,14 +234,37 @@ func TestVerifyHeaderTrailer_EmptyFormat_Skipped(t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderTrailer_UnknownFormat_Skipped(t *testing.T) {
-	// Unknown formats should not be rejected — the server is not the place
-	// to hard-block novel formats.
+func TestVerifyHeaderTrailer_UnknownFormat_Rejected(t *testing.T) {
+	// Unknown formats fail closed so disguised non-images cannot bypass the
+	// server-side still-image boundary.
 	bytes := []byte("something unrecognized")
 	path := writeTempFile(t, "unknown.xyz", bytes)
 
-	if err := VerifyHeaderTrailer(path, "bmp"); err != nil {
-		t.Fatalf("unknown format should skip, got %v", err)
+	err := VerifyHeaderTrailer(path, "bmp")
+	if !errors.Is(err, ErrScanHashMismatch) {
+		t.Fatalf("unknown format should fail spot-check, got %v", err)
+	}
+}
+
+func TestStillImageFormatFromContentType(t *testing.T) {
+	tests := []struct {
+		contentType string
+		format      string
+		ok          bool
+	}{
+		{"image/jpeg", "jpeg", true},
+		{"image/webp; charset=binary", "webp", true},
+		{"image/x-canon-cr3", "cr3", true},
+		{"application/pdf", "", false},
+		{"video/mp4", "", false},
+	}
+
+	for _, tt := range tests {
+		format, ok := StillImageFormatFromContentType(tt.contentType)
+		if ok != tt.ok || format != tt.format {
+			t.Fatalf("StillImageFormatFromContentType(%q) = (%q, %v), want (%q, %v)",
+				tt.contentType, format, ok, tt.format, tt.ok)
+		}
 	}
 }
 

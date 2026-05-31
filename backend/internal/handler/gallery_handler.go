@@ -112,6 +112,24 @@ func (h *GalleryHandler) validateLinkedEntity(ctx context.Context, workspaceID u
 	return nil
 }
 
+func (h *GalleryHandler) requireGalleryInWorkspace(w http.ResponseWriter, r *http.Request, galleryID uuid.UUID) (*repository.Gallery, uuid.UUID, bool) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return nil, uuid.Nil, false
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	if gallery == nil || gallery.WorkspaceID != workspaceID {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	return gallery, workspaceID, true
+}
+
 // Create handles POST /api/v1/galleries
 func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := getWorkspaceID(r)
@@ -241,13 +259,8 @@ func (h *GalleryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetByID(r.Context(), id)
-	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	if gallery == nil {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	gallery, _, ok := h.requireGalleryInWorkspace(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -262,18 +275,8 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gallery, err := h.gallerySvc.GetByID(r.Context(), id)
-	if err != nil || gallery == nil {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-		return
-	}
-	workspaceID, ok := getWorkspaceID(r)
+	gallery, workspaceID, ok := h.requireGalleryInWorkspace(w, r, id)
 	if !ok {
-		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
-		return
-	}
-	if gallery.WorkspaceID != workspaceID {
-		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
 
@@ -572,6 +575,9 @@ func (h *GalleryHandler) SetFaceDetection(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, id); !ok {
+		return
+	}
 	var input struct {
 		Enabled *bool `json:"enabled"`
 	}
@@ -600,6 +606,9 @@ func (h *GalleryHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, id); !ok {
+		return
+	}
 
 	if err := h.gallerySvc.SoftDelete(r.Context(), id); err != nil {
 		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
@@ -614,6 +623,9 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
 		return
 	}
 
@@ -693,6 +705,9 @@ func (h *GalleryHandler) ReorderAssets(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+		return
+	}
 
 	var input struct {
 		Order []struct {
@@ -733,6 +748,9 @@ func (h *GalleryHandler) RemoveAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+		return
+	}
 	assetID, err := uuid.Parse(chi.URLParam(r, "assetId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
@@ -754,6 +772,9 @@ func (h *GalleryHandler) Timeline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+		return
+	}
 
 	groups, err := h.gallerySvc.GetTimeline(r.Context(), galleryID)
 	if err != nil {
@@ -769,6 +790,9 @@ func (h *GalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
 		return
 	}
 
@@ -798,17 +822,8 @@ func (h *GalleryHandler) TriggerFaceScan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-
-	claims := middleware.JWTClaimsFromContext(r.Context())
-	if claims == nil {
-		http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
-		return
-	}
-
-	wsStr, _ := claims["workspace_id"].(string)
-	workspaceID, err := uuid.Parse(wsStr)
-	if err != nil {
-		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+	_, workspaceID, ok := h.requireGalleryInWorkspace(w, r, galleryID)
+	if !ok {
 		return
 	}
 
@@ -855,10 +870,7 @@ func (h *GalleryHandler) GetFaceScanStatus(w http.ResponseWriter, r *http.Reques
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-
-	claims := middleware.JWTClaimsFromContext(r.Context())
-	if claims == nil {
-		http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
 		return
 	}
 

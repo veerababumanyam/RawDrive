@@ -131,7 +131,7 @@ function BannerCard({ slug, banner }: { slug: string; banner: GalleryBanner }) {
           onClick={handleClick}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0 min-h-[44px] rounded-xl px-5 py-2 text-sm font-semibold bg-accent text-accent-foreground shadow-md hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="shrink-0 min-h-[44px] rounded-xl px-5 py-2 text-sm font-semibold bg-accent text-text-inverse shadow-md hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {banner.cta_label}
         </a>

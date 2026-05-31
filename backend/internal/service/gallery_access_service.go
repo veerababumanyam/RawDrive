@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,11 +19,22 @@ import (
 type GalleryAccessService struct {
 	galleryRepo   *repository.GalleryRepo
 	accessLogRepo *repository.GalleryAccessLogRepo
+	mu            sync.Mutex
+	sessions      map[string]galleryAccessSession
+}
+
+type galleryAccessSession struct {
+	GalleryID uuid.UUID
+	ExpiresAt time.Time
 }
 
 // NewGalleryAccessService creates a new GalleryAccessService.
 func NewGalleryAccessService(gr *repository.GalleryRepo, alr *repository.GalleryAccessLogRepo) *GalleryAccessService {
-	return &GalleryAccessService{galleryRepo: gr, accessLogRepo: alr}
+	return &GalleryAccessService{
+		galleryRepo:   gr,
+		accessLogRepo: alr,
+		sessions:      make(map[string]galleryAccessSession),
+	}
 }
 
 // SetPassword hashes and stores a password for gallery access protection.
@@ -62,8 +74,33 @@ func (s *GalleryAccessService) VerifyPassword(ctx context.Context, galleryID uui
 	if err != nil {
 		return "", fmt.Errorf("gallery access: generate token: %w", err)
 	}
+	s.mu.Lock()
+	s.sessions[token] = galleryAccessSession{
+		GalleryID: galleryID,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	s.mu.Unlock()
 
 	return token, nil
+}
+
+func (s *GalleryAccessService) ValidateSession(ctx context.Context, galleryID uuid.UUID, token string) bool {
+	_ = ctx
+	if token == "" {
+		return false
+	}
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[token]
+	if !ok {
+		return false
+	}
+	if session.ExpiresAt.Before(now) {
+		delete(s.sessions, token)
+		return false
+	}
+	return session.GalleryID == galleryID
 }
 
 // SetAccessMode updates the gallery's access mode.

@@ -97,7 +97,7 @@ export function RegistrationPrompt({
       <div className="mt-4 flex items-center gap-2">
         <a
           href={ctaHref}
-          className="inline-flex items-center justify-center rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-accent-primary-contrast hover:opacity-90"
+          className="inline-flex items-center justify-center rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-text-inverse hover:opacity-90"
         >
           {ctaLabel}
         </a>

@@ -60,7 +60,8 @@ func bulkGetAssetsFromPool(ctx context.Context, pool *pgxpool.Pool, ids []uuid.U
 	rows, err := pool.Query(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		 status, created_at, updated_at, deleted_at
+		 status, processing_error, created_at, updated_at, deleted_at,
+		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
 	)
 	if err != nil {
@@ -73,7 +74,8 @@ func bulkGetAssetsFromPool(ctx context.Context, pool *pgxpool.Pool, ids []uuid.U
 		a := &repository.Asset{}
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
-			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 		); err != nil {
 			return nil, fmt.Errorf("download zip: bulk get assets scan: %w", err)
 		}

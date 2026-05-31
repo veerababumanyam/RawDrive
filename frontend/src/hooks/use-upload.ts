@@ -7,16 +7,23 @@ import { screen } from "@/lib/upload-screening/screen";
 import { sha256HexChunked } from "@/lib/upload-screening/hash";
 import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
+import { canUseScreeningWorker, runScreeningWorker } from "@/lib/upload-screening/worker-client";
 import { authFetch } from "@/lib/api/authFetch";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
+export const MAX_CONCURRENT_UPLOADS = 4;
 
 async function runScreener(
   file: File,
   apiUrl: string,
+  fileId: string,
 ): Promise<ScanManifest> {
   const policyVersion = await activePolicyVersion(apiUrl);
+  if (canUseScreeningWorker()) {
+    return runScreeningWorker(file, policyVersion, DEFAULT_METADATA_BUDGET, fileId);
+  }
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = screen(bytes, {
     metadataBudgetBytes: DEFAULT_METADATA_BUDGET,
@@ -30,6 +37,9 @@ export function useUpload(apiUrl: string, token: string) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
+  const pendingQueue = useRef<UploadItem[]>([]);
+  const activeUploads = useRef(0);
+  const pumpQueue = useRef<() => void>(() => {});
   const pausedRef = useRef(false);
 
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
@@ -54,7 +64,7 @@ export function useUpload(apiUrl: string, token: string) {
       updateItem(item.id, { status: "screening" });
       let manifest: ScanManifest;
       try {
-        manifest = await runScreener(item.file, apiUrl);
+        manifest = await runScreener(item.file, apiUrl, item.id);
       } catch (err) {
         updateItem(item.id, {
           status: "error",
@@ -181,8 +191,28 @@ export function useUpload(apiUrl: string, token: string) {
       });
     } finally {
       abortControllers.current.delete(item.id);
+      activeUploads.current = Math.max(0, activeUploads.current - 1);
+      pumpQueue.current();
     }
   }, [apiUrl, token, updateItem]);
+
+  pumpQueue.current = () => {
+    while (
+      activeUploads.current < MAX_CONCURRENT_UPLOADS &&
+      pendingQueue.current.length > 0 &&
+      !pausedRef.current
+    ) {
+      const next = pendingQueue.current.shift();
+      if (!next) return;
+      activeUploads.current += 1;
+      void chunkedUpload(next);
+    }
+  };
+
+  const enqueueUploads = useCallback((nextItems: UploadItem[]) => {
+    pendingQueue.current.push(...nextItems);
+    pumpQueue.current();
+  }, []);
 
   const addFiles = useCallback((files: File[]) => {
     const newItems: UploadItem[] = files.map((file) => ({
@@ -208,12 +238,11 @@ export function useUpload(apiUrl: string, token: string) {
       return [...active, ...newItems];
     });
 
-    for (const item of newItems) {
-      void chunkedUpload(item);
-    }
-  }, [chunkedUpload]);
+    enqueueUploads(newItems);
+  }, [enqueueUploads]);
 
   const cancel = useCallback((id: string) => {
+    pendingQueue.current = pendingQueue.current.filter((item) => item.id !== id);
     const controller = abortControllers.current.get(id);
     if (controller) controller.abort();
     setItems((prev) => prev.filter((item) => item.id !== id));
@@ -222,9 +251,11 @@ export function useUpload(apiUrl: string, token: string) {
   const retry = useCallback((id: string) => {
     const item = items.find((entry) => entry.id === id);
     if (item) {
-      void chunkedUpload({ ...item, status: "pending", progress: 0 });
+      const retryItem = { ...item, status: "pending" as const, progress: 0 };
+      updateItem(id, { status: "pending", progress: 0, error: undefined });
+      enqueueUploads([retryItem]);
     }
-  }, [chunkedUpload, items]);
+  }, [enqueueUploads, items, updateItem]);
 
   // 2026-05-21: bulk-retry every item in the "error" set so the UI can offer
   // a single "Retry All" button on the persisted-after-failure upload panel.
@@ -232,10 +263,14 @@ export function useUpload(apiUrl: string, token: string) {
   // rejected at the screening stage and the same file would block again.
   const retryAll = useCallback(() => {
     const failed = items.filter((i) => i.status === "error");
-    for (const item of failed) {
-      void chunkedUpload({ ...item, status: "pending", progress: 0 });
-    }
-  }, [chunkedUpload, items]);
+    const retryItems = failed.map((item) => ({ ...item, status: "pending" as const, progress: 0 }));
+    setItems((prev) =>
+      prev.map((item) =>
+        item.status === "error" ? { ...item, status: "pending", progress: 0, error: undefined } : item,
+      ),
+    );
+    enqueueUploads(retryItems);
+  }, [enqueueUploads, items]);
 
   // dismiss(id) removes a non-active item from the queue. Unlike cancel(),
   // it does NOT abort in-flight uploads — it only clears completed / errored
@@ -262,6 +297,7 @@ export function useUpload(apiUrl: string, token: string) {
   }, []);
 
   const cancelAll = useCallback(() => {
+    pendingQueue.current = [];
     abortControllers.current.forEach((controller) => controller.abort());
     abortControllers.current.clear();
     setItems([]);
@@ -275,6 +311,7 @@ export function useUpload(apiUrl: string, token: string) {
   const resumeAll = useCallback(() => {
     pausedRef.current = false;
     setIsPaused(false);
+    pumpQueue.current();
   }, []);
 
   return {

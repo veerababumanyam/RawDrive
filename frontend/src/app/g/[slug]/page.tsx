@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import {
   getPublicGallery,
   getPublicGalleryAlbums,
@@ -56,6 +57,8 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   const { slug } = await params;
   const query = searchParams ? await searchParams : {};
   const albumId = typeof query.album === "string" && query.album ? query.album : undefined;
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("gallery_session")?.value;
   // `ws` is set by middleware.ts when the request arrived via the per-business
   // subdomain `<biz>-<code>.rawdrive.in/<gallery-slug>`. Forwarded to the
   // backend API so the gallery lookup is scoped to that workspace; absence
@@ -64,10 +67,8 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
 
   let gallery;
-  let assets;
   try {
     gallery = await getPublicGallery(slug, ws);
-    assets = await getPublicGalleryAssets(slug, albumId, ws);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
@@ -91,6 +92,40 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
     notFound();
   }
 
+  const hasPassword = gallery.settings?.has_password === true;
+
+  if (hasPassword && !sessionToken) {
+    const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
+    return (
+      <GalleryPasswordGate
+        slug={slug}
+        brandName={branding?.can_customize ? branding.brand_name : undefined}
+        logoUrl={branding?.can_customize ? branding.logo_url : undefined}
+      >
+        <></>
+      </GalleryPasswordGate>
+    );
+  }
+
+  let assets;
+  try {
+    assets = await getPublicGalleryAssets(slug, albumId, ws, sessionToken);
+  } catch (err) {
+    if (hasPassword) {
+      const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
+      return (
+        <GalleryPasswordGate
+          slug={slug}
+          brandName={branding?.can_customize ? branding.brand_name : undefined}
+          logoUrl={branding?.can_customize ? branding.logo_url : undefined}
+        >
+          <></>
+        </GalleryPasswordGate>
+      );
+    }
+    throw err;
+  }
+
   // Fetch products, banners, branding, and the public album list in
   // parallel. Albums are best-effort — getPublicGalleryAlbums swallows
   // errors and returns [] so an album-service outage doesn't blow up
@@ -99,7 +134,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
     listPublicProducts(slug),
     listPublicBanners(slug),
     getPublicGalleryBranding(slug, ws).catch(() => null),
-    getPublicGalleryAlbums(slug, ws),
+    getPublicGalleryAlbums(slug, ws, sessionToken),
   ]);
 
   // For the "All Photos" chip count we need the gallery-wide asset
@@ -107,12 +142,11 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // Re-fetch only when an album filter is active; otherwise reuse the
   // already-loaded `assets` length to avoid a second round-trip.
   const totalAssetCount = albumId
-    ? (await getPublicGalleryAssets(slug, undefined, ws).catch(() => [])).length
+    ? (await getPublicGalleryAssets(slug, undefined, ws, sessionToken).catch(() => [])).length
     : assets.length;
 
-  const hasPassword = gallery.settings?.has_password === true;
-  const studioBrandName = branding?.can_customize ? branding.brand_name : undefined;
-  const studioLogoUrl = branding?.can_customize ? branding.logo_url : undefined;
+  const resolvedStudioBrandName = branding?.can_customize ? branding.brand_name : undefined;
+  const resolvedStudioLogoUrl = branding?.can_customize ? branding.logo_url : undefined;
 
   // Design config saved by the Gallery Design Studio. The public viewer
   // needs this so the share link renders with the cover image, cover
@@ -186,7 +220,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
 
   if (hasPassword) {
     return (
-      <GalleryPasswordGate slug={slug} brandName={studioBrandName} logoUrl={studioLogoUrl}>
+      <GalleryPasswordGate slug={slug} brandName={resolvedStudioBrandName} logoUrl={resolvedStudioLogoUrl}>
         {galleryContent}
       </GalleryPasswordGate>
     );

@@ -21,9 +21,9 @@ export function GalleryPasswordGate({ slug, brandName = "RawDrive", logoUrl, chi
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [unlocked, setUnlocked] = useState(() => {
+  const [unlocked] = useState(() => {
     if (typeof window === "undefined") return false;
-    return sessionStorage.getItem(`gallery_unlocked_${slug}`) === "true";
+    return Boolean(sessionStorage.getItem(`gallery_session_${slug}`));
   });
 
   if (unlocked) return <>{children}</>;
@@ -36,11 +36,21 @@ export function GalleryPasswordGate({ slug, brandName = "RawDrive", logoUrl, chi
       const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/verify-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        sessionStorage.setItem(`gallery_unlocked_${slug}`, "true");
-        setUnlocked(true);
+        const body = await res.json().catch(() => ({}));
+        if (body.token && typeof window !== "undefined") {
+          sessionStorage.setItem(`gallery_session_${slug}`, body.token);
+          const secure = window.location.protocol === "https:" ? "; Secure" : "";
+          document.cookie = `gallery_session=${encodeURIComponent(body.token)}; Path=/; Max-Age=86400; SameSite=Strict${secure}`;
+          const url = new URL(window.location.href);
+          url.searchParams.delete("gallery_session");
+          window.location.replace(url.toString());
+          return;
+        }
+        setError("Something went wrong. Please try again.");
       } else if (res.status === 429) {
         setError("Too many attempts. Please wait a few minutes.");
       } else {
@@ -82,11 +92,11 @@ export function GalleryPasswordGate({ slug, brandName = "RawDrive", logoUrl, chi
               className="input-base w-full text-center"
               autoFocus
             />
-            {error && <p className="text-xs text-danger">{error}</p>}
+            {error && <p className="text-xs text-error">{error}</p>}
             <button
               type="submit"
               disabled={!password || loading}
-              className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-accent-primary text-accent-primary-contrast hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {loading ? "Verifying..." : "Enter Gallery"}
             </button>

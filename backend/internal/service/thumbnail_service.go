@@ -17,6 +17,8 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/rawdrive/backend/internal/storage"
+	_ "golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -122,26 +124,26 @@ type ThumbnailResult struct {
 // GenerateAll creates the WebP derivative set required by the
 // CLAUDE.md / AGENTS.md hardcode law:
 //
-//   "Every uploaded image MUST produce WebP derivatives for in-app display.
-//    Pipeline generates thumb_sm_webp, thumb_md_webp, thumb_lg_webp, and
-//    display_webp (2400px) via cwebp."
+//	"Every uploaded image MUST produce WebP derivatives for in-app display.
+//	 Pipeline generates thumb_sm_webp, thumb_md_webp, thumb_lg_webp, and
+//	 display_webp (2400px) via cwebp."
 //
 // As of this change the worker NO LONGER emits the JPG thumbnail trio
 // (thumb_sm/md/lg). Rationale:
 //
-//   1. WebP at q=82 is 10-40% smaller than JPG at q=80 for photographic
-//      content. The dual generation was paying the cwebp+PNG roundtrip
-//      cost AND the Lanczos resize cost twice per upload for no rendering
-//      benefit — every UI consumer prefers WebP first.
-//   2. Per the storage-proxy public-path split in service.webpStorageKey,
-//      thumb_*_webp variants live under the same public `thumbnails/`
-//      prefix that JPG thumbs used to occupy. Public client galleries
-//      can fetch the WebP variants anonymously, same as they could the
-//      JPG thumbs. No auth-surface regression.
-//   3. Existing assets keep their legacy JPG keys in thumbnail_urls
-//      until they are reprocessed; frontend consumers preserve JPG-as-
-//      fallback so legacy rows still render. New uploads carry only the
-//      4 WebP keys.
+//  1. WebP at q=82 is 10-40% smaller than JPG at q=80 for photographic
+//     content. The dual generation was paying the cwebp+PNG roundtrip
+//     cost AND the Lanczos resize cost twice per upload for no rendering
+//     benefit — every UI consumer prefers WebP first.
+//  2. Per the storage-proxy public-path split in service.webpStorageKey,
+//     thumb_*_webp variants live under the same public `thumbnails/`
+//     prefix that JPG thumbs used to occupy. Public client galleries
+//     can fetch the WebP variants anonymously, same as they could the
+//     JPG thumbs. No auth-surface regression.
+//  3. Existing assets keep their legacy JPG keys in thumbnail_urls
+//     until they are reprocessed; frontend consumers preserve JPG-as-
+//     fallback so legacy rows still render. New uploads carry only the
+//     4 WebP keys.
 //
 // Originals remain preserved on R2 for download per the WebP hardcode
 // law ("Originals are preserved for download only").

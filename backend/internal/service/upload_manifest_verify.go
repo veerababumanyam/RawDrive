@@ -166,12 +166,47 @@ func VerifyHeaderTrailerBytes(head, tail []byte, detectedFormat string) error {
 			return ErrScanHashMismatch
 		}
 	default:
-		// Unknown format — do not reject. The backend is not in the business
-		// of blocking novel formats; that's the client scanner's job.
-		return nil
+		return ErrScanHashMismatch
 	}
 
 	return nil
+}
+
+// StillImageFormatFromContentType returns the canonical still-image format for
+// content types RawDrive accepts in photo galleries. The browser/desktop
+// scanners may support richer validation, but the API must never create upload
+// sessions for generic documents, archives, scripts, videos, or unknown blobs.
+func StillImageFormatFromContentType(contentType string) (string, bool) {
+	ct := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	switch ct {
+	case "image/jpeg", "image/jpg", "image/pjpeg":
+		return "jpeg", true
+	case "image/png", "image/x-png":
+		return "png", true
+	case "image/webp":
+		return "webp", true
+	case "image/gif":
+		return "gif", true
+	case "image/tiff", "image/tif", "image/x-tiff":
+		return "tiff", true
+	case "image/heic", "image/heif", "image/avif":
+		return strings.TrimPrefix(ct, "image/"), true
+	case "image/x-canon-cr2", "image/x-canon-cr3":
+		return strings.TrimPrefix(ct, "image/x-canon-"), true
+	case "image/x-nikon-nef":
+		return "nef", true
+	case "image/x-sony-arw":
+		return "arw", true
+	case "image/x-adobe-dng", "image/x-dng":
+		return "dng", true
+	case "image/x-fuji-raf", "image/x-fujifilm-raf":
+		return "raf", true
+	case "image/x-olympus-orf":
+		return "orf", true
+	case "image/x-panasonic-rw2":
+		return "rw2", true
+	}
+	return "", false
 }
 
 // ─── Format signature helpers (bounded, cheap, stateless) ──────────────────

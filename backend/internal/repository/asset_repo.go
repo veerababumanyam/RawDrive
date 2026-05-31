@@ -13,23 +13,28 @@ import (
 
 // Asset represents a stored file (image, RAW, video).
 type Asset struct {
-	ID            uuid.UUID              `json:"id"`
-	WorkspaceID   uuid.UUID              `json:"workspace_id"`
-	Filename      string                 `json:"filename"`
-	ContentType   string                 `json:"content_type"`
-	SizeBytes     int64                  `json:"size_bytes"`
-	StorageKey    string                 `json:"storage_key"`
-	StorageDriver string                 `json:"storage_driver"`
-	Width         *int                   `json:"width,omitempty"`
-	Height        *int                   `json:"height,omitempty"`
-	Blurhash      *string                `json:"blurhash,omitempty"`
-	ExifData      map[string]interface{} `json:"exif_data"`
-	ThumbnailURLs map[string]string      `json:"thumbnail_urls"`
-	UploadedBy    *uuid.UUID             `json:"uploaded_by,omitempty"`
-	Status        string                 `json:"status"`
-	CreatedAt     time.Time              `json:"created_at"`
-	UpdatedAt     time.Time              `json:"updated_at"`
-	DeletedAt     *time.Time             `json:"deleted_at,omitempty"`
+	ID                uuid.UUID              `json:"id"`
+	WorkspaceID       uuid.UUID              `json:"workspace_id"`
+	Filename          string                 `json:"filename"`
+	ContentType       string                 `json:"content_type"`
+	SizeBytes         int64                  `json:"size_bytes"`
+	StorageKey        string                 `json:"storage_key"`
+	StorageDriver     string                 `json:"storage_driver"`
+	Width             *int                   `json:"width,omitempty"`
+	Height            *int                   `json:"height,omitempty"`
+	Blurhash          *string                `json:"blurhash,omitempty"`
+	ExifData          map[string]interface{} `json:"exif_data"`
+	ThumbnailURLs     map[string]string      `json:"thumbnail_urls"`
+	UploadedBy        *uuid.UUID             `json:"uploaded_by,omitempty"`
+	Status            string                 `json:"status"`
+	ProcessingError   *string                `json:"processing_error,omitempty"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
+	DeletedAt         *time.Time             `json:"deleted_at,omitempty"`
+	EncryptionKeyID   *uuid.UUID             `json:"encryption_key_id,omitempty"`
+	IsEncrypted       bool                   `json:"is_encrypted"`
+	EncryptionAlgo    *string                `json:"encryption_algo,omitempty"`
+	EncryptionVersion int                    `json:"encryption_version"`
 
 	// F-004 (audit 2026-04-10): M16 Tier D upload-scan metadata. These fields
 	// are persisted on Create when the upload came through a path that has a
@@ -91,13 +96,13 @@ func (r *AssetRepo) Create(ctx context.Context, a *Asset) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO assets (id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status,
-		 created_at, updated_at,
+		 created_at, updated_at, encryption_key_id, is_encrypted, encryption_algo, encryption_version,
 		 upload_scan_status, upload_scan_engine, upload_scan_policy_version,
 		 upload_scan_risk_score, upload_scan_findings, upload_scan_manifest_hash)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
 		a.ID, a.WorkspaceID, a.Filename, a.ContentType, a.SizeBytes, a.StorageKey,
 		a.StorageDriver, a.Width, a.Height, a.Blurhash, a.ExifData, a.ThumbnailURLs,
-		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt,
+		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt, a.EncryptionKeyID, a.IsEncrypted, a.EncryptionAlgo, a.EncryptionVersion,
 		a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
 		a.UploadScanRiskScore, a.UploadScanFindings, a.UploadScanManifestHash,
 	)
@@ -113,11 +118,13 @@ func (r *AssetRepo) GetByID(ctx context.Context, id uuid.UUID) (*Asset, error) {
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		 status, created_at, updated_at, deleted_at
+		 status, processing_error, created_at, updated_at, deleted_at,
+		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		 FROM assets WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes, &a.StorageKey,
 		&a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData, &a.ThumbnailURLs,
-		&a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		&a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -147,7 +154,8 @@ func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, er
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		 status, created_at, updated_at, deleted_at
+		 status, processing_error, created_at, updated_at, deleted_at,
+		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`,
 		ids,
 	)
@@ -161,7 +169,8 @@ func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, er
 		a := &Asset{}
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
-			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo get by ids scan: %w", err)
 		}
@@ -182,7 +191,8 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 
 	query := `SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		status, created_at, updated_at, deleted_at
+		status, processing_error, created_at, updated_at, deleted_at,
+		encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		FROM assets WHERE workspace_id = $1 AND deleted_at IS NULL`
 	args := []interface{}{f.WorkspaceID}
 	argIdx := 2
@@ -250,7 +260,8 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 		var a Asset
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
-			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo list scan: %w", err)
 		}
@@ -276,7 +287,8 @@ func (r *AssetRepo) ListByStatus(ctx context.Context, status string, limit int) 
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		 status, created_at, updated_at, deleted_at
+		 status, processing_error, created_at, updated_at, deleted_at,
+		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		 FROM assets WHERE status = $1 AND deleted_at IS NULL
 		 ORDER BY created_at ASC LIMIT $2`,
 		status, limit,
@@ -291,7 +303,8 @@ func (r *AssetRepo) ListByStatus(ctx context.Context, status string, limit int) 
 		var a Asset
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
-			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo list by status scan: %w", err)
 		}
@@ -376,6 +389,26 @@ func (r *AssetRepo) UpdateProcessingError(ctx context.Context, id uuid.UUID, err
 	return nil
 }
 
+// RetryFailedByGallery resets failed processing rows in a gallery so the
+// thumbnail worker can pick them up again on its normal processing poll.
+func (r *AssetRepo) RetryFailedByGallery(ctx context.Context, galleryID, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE assets a
+		 SET status = 'processing', processing_error = NULL, updated_at = now()
+		 FROM gallery_assets ga
+		 WHERE ga.asset_id = a.id
+		   AND ga.gallery_id = $1
+		   AND a.workspace_id = $2
+		   AND a.status = 'error'
+		   AND a.deleted_at IS NULL`,
+		galleryID, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo retry failed by gallery: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // Restore clears the deleted_at timestamp and sets status back to active.
 func (r *AssetRepo) Restore(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,
@@ -393,14 +426,16 @@ func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uui
 	a := &Asset{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key, storage_driver,
-		 width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status,
-		 created_at, updated_at, deleted_at
+		 width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status, processing_error,
+		 created_at, updated_at, deleted_at,
+		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
 		 FROM assets WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
 		id, workspaceID,
 	).Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 		&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash,
-		&a.ExifData, &a.ThumbnailURLs, &a.UploadedBy, &a.Status,
+		&a.ExifData, &a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError,
 		&a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -426,7 +461,8 @@ func (r *AssetRepo) ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, 
 	rows, err := r.pool.Query(ctx,
 		`SELECT a.id, a.workspace_id, a.filename, a.content_type, a.size_bytes, a.storage_key,
 		 a.storage_driver, a.width, a.height, a.blurhash, a.exif_data, a.thumbnail_urls,
-		 a.uploaded_by, a.status, a.created_at, a.updated_at, a.deleted_at,
+		 a.uploaded_by, a.status, a.processing_error, a.created_at, a.updated_at, a.deleted_at,
+		 a.encryption_key_id, a.is_encrypted, a.encryption_algo, a.encryption_version,
 		 COALESCE(a.capture_date::date, a.created_at::date) as group_date
 		 FROM assets a
 		 JOIN gallery_assets ga ON ga.asset_id = a.id
@@ -447,7 +483,8 @@ func (r *AssetRepo) ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, 
 		var groupDate time.Time
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
-			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
 			&groupDate,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo timeline scan: %w", err)

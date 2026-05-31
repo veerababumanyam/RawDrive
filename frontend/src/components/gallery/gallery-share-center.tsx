@@ -218,7 +218,7 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
                     {link.access_count} visits {link.expires_at ? `- expires ${new Date(link.expires_at).toLocaleDateString("en-IN")}` : ""}
                   </p>
                 </div>
-                <button type="button" onClick={() => void revoke(link.id)} className="text-xs text-danger hover:underline">
+                <button type="button" onClick={() => void revoke(link.id)} className="text-xs text-error hover:underline">
                   Revoke
                 </button>
               </div>

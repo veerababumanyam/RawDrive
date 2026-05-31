@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { useDropzone, type FileRejection } from "react-dropzone";
+import { useCallback, useRef, useState } from "react";
+import { useDropzone, type DropEvent, type FileRejection } from "react-dropzone";
 
 interface UploadDropzoneProps {
   onFilesAccepted: (files: File[]) => void;
@@ -16,20 +16,104 @@ const ACCEPTED_TYPES: Record<string, string[]> = {
   "image/tiff": [".tiff", ".tif"],
   "image/webp": [".webp"],
   "image/heic": [".heic", ".heif"],
+  "image/heif": [".heif"],
+  "image/avif": [".avif"],
   "image/x-canon-cr2": [".cr2"],
+  "image/x-canon-cr3": [".cr3"],
   "image/x-nikon-nef": [".nef"],
   "image/x-sony-arw": [".arw"],
   "image/x-adobe-dng": [".dng"],
   "image/x-fuji-raf": [".raf"],
+  "image/x-olympus-orf": [".orf"],
+  "image/x-panasonic-rw2": [".rw2"],
 };
+
+type FileSystemEntryLike = {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+};
+
+type FileSystemFileEntryLike = FileSystemEntryLike & {
+  file: (success: (file: File) => void, error?: (error: DOMException) => void) => void;
+};
+
+type FileSystemDirectoryEntryLike = FileSystemEntryLike & {
+  createReader: () => {
+    readEntries: (
+      success: (entries: FileSystemEntryLike[]) => void,
+      error?: (error: DOMException) => void,
+    ) => void;
+  };
+};
+
+type DataTransferItemWithEntry = DataTransferItem & {
+  webkitGetAsEntry?: () => FileSystemEntryLike | null;
+};
+
+function isDirectoryEntry(entry: FileSystemEntryLike): entry is FileSystemDirectoryEntryLike {
+  return entry.isDirectory;
+}
+
+function isFileEntry(entry: FileSystemEntryLike): entry is FileSystemFileEntryLike {
+  return entry.isFile;
+}
+
+async function readEntry(entry: FileSystemEntryLike): Promise<File[]> {
+  if (isFileEntry(entry)) {
+    return new Promise((resolve, reject) => {
+      entry.file((file) => resolve([file]), reject);
+    });
+  }
+
+  if (!isDirectoryEntry(entry)) {
+    return [];
+  }
+
+  const reader = entry.createReader();
+  const entries: FileSystemEntryLike[] = [];
+  for (;;) {
+    const batch = await new Promise<FileSystemEntryLike[]>((resolve, reject) => {
+      reader.readEntries(resolve, reject);
+    });
+    if (batch.length === 0) break;
+    entries.push(...batch);
+  }
+
+  const nested = await Promise.all(entries.map(readEntry));
+  return nested.flat();
+}
+
+async function getFilesFromEvent(event: DropEvent): Promise<File[]> {
+  const nativeEvent = ("nativeEvent" in event ? event.nativeEvent : event) as Event & {
+    dataTransfer?: DataTransfer;
+  };
+  if (!nativeEvent.dataTransfer) {
+    const target = nativeEvent.target as HTMLInputElement | null;
+    return Array.from(target?.files ?? []);
+  }
+
+  const items = Array.from(nativeEvent.dataTransfer.items ?? []) as DataTransferItemWithEntry[];
+  const entries = items
+    .map((item) => (item.webkitGetAsEntry?.() ?? null) as FileSystemEntryLike | null)
+    .filter((entry): entry is FileSystemEntryLike => entry !== null);
+
+  if (entries.length === 0) {
+    return Array.from(nativeEvent.dataTransfer.files ?? []);
+  }
+
+  const files = await Promise.all(entries.map(readEntry));
+  return files.flat();
+}
 
 export function UploadDropzone({
   onFilesAccepted,
   maxSize = 500 * 1024 * 1024,
-  maxFiles = 100,
+  maxFiles = 2000,
   disabled = false,
 }: UploadDropzoneProps) {
   const [rejections, setRejections] = useState<FileRejection[]>([]);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
@@ -45,6 +129,7 @@ export function UploadDropzone({
     useDropzone({
       onDrop,
       accept: ACCEPTED_TYPES,
+      getFilesFromEvent,
       maxSize,
       maxFiles,
       multiple: true,
@@ -66,6 +151,22 @@ export function UploadDropzone({
         `}
       >
         <input {...getInputProps()} />
+        <input
+          ref={folderInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          // React does not type Chromium's directory picker attributes yet.
+          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+          disabled={disabled}
+          onChange={(event) => {
+            const selected = Array.from(event.currentTarget.files ?? []);
+            if (selected.length > 0) {
+              onFilesAccepted(selected);
+            }
+            event.currentTarget.value = "";
+          }}
+        />
 
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
@@ -82,9 +183,20 @@ export function UploadDropzone({
                 Drag & drop files, or click to browse
               </p>
               <p className="text-xs text-text-secondary">
-                JPEG, PNG, TIFF, RAW (CR2, NEF, ARW, DNG, RAF) — up to{" "}
+                JPEG, PNG, WebP, HEIC, AVIF, TIFF, RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2) — up to{" "}
                 {Math.round(maxSize / 1024 / 1024)}MB per file
               </p>
+              <button
+                type="button"
+                className="rounded-lg border border-border-default bg-surface-elevated px-3 py-2 text-xs font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                disabled={disabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  folderInputRef.current?.click();
+                }}
+              >
+                Select folder
+              </button>
             </>
           )}
         </div>

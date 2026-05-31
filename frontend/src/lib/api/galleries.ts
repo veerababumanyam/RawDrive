@@ -594,9 +594,11 @@ export interface PublicGalleryAlbum {
 // the filter chip strip between the hero and the asset grid. Returns an
 // empty array on any failure (404 / 5xx / network) so the public page
 // degrades gracefully to the All-Photos-only view rather than blowing up.
-export async function getPublicGalleryAlbums(slug: string, ws?: string | null): Promise<PublicGalleryAlbum[]> {
+export async function getPublicGalleryAlbums(slug: string, ws?: string | null, sessionToken?: string | null): Promise<PublicGalleryAlbum[]> {
   try {
-    const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)}`);
+    const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)}`, {
+      headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
+    });
     if (!res.ok) return [];
     const body = await res.json();
     const raw: PublicGalleryAlbum[] = Array.isArray(body) ? body : [];
@@ -610,11 +612,13 @@ export async function getPublicGalleryAlbums(slug: string, ws?: string | null): 
   }
 }
 
-export async function getPublicGalleryAssets(slug: string, albumId?: string, ws?: string | null): Promise<PublicAsset[]> {
+export async function getPublicGalleryAssets(slug: string, albumId?: string, ws?: string | null, sessionToken?: string | null): Promise<PublicAsset[]> {
   const path = albumId
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
     : `/api/v1/public/galleries/${slug}/assets`;
-  const res = await fetch(`${API_BASE}${withWorkspaceScope(path, ws)}`);
+  const res = await fetch(`${API_BASE}${withWorkspaceScope(path, ws)}`, {
+    headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
+  });
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;

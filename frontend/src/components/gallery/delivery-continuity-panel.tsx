@@ -41,7 +41,7 @@ export function DeliveryContinuityPanel({ galleryId, token, selectedCount, total
         <span className="text-[11px] uppercase tracking-[0.14em] text-text-tertiary">Last 30 days</span>
       </div>
       {loadError ? (
-        <p className="text-xs text-danger-primary">{loadError}</p>
+        <p className="text-xs text-error">{loadError}</p>
       ) : (
         <dl className="grid grid-cols-3 gap-3 text-xs">
           <div>

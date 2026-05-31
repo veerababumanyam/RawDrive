@@ -78,9 +78,9 @@ func PersistAssetOrCleanupForTest(
 // scan_manifest JSON fails to decode AFTER CompleteMultipartUpload has
 // assembled the object, finalize must delete the orphaned storage object
 // (mirroring the digest/verify failure paths) rather than leaking it. The
-// seam builds a handler over the supplied store + sessions and a reliable
-// in-memory stream state (non-nil hasher) keyed to the row's storage key so
-// the test can drive the manifest-decode branch with a corrupt manifest.
+// seam builds a handler over the supplied store + sessions and forces the
+// finalize cold path so tests verify the assembled object bytes, not an empty
+// synthetic stream state.
 func FinalizeUploadForTest(
 	store storage.Provider,
 	sessions UploadSessionStore,
@@ -89,5 +89,6 @@ func FinalizeUploadForTest(
 	h := &ChunkedUploadHandler{store: store, sessions: sessions}
 	storageKey, mpID := deriveKeyAndUploadID(row)
 	state := newStreamState(storageKey, mpID, nil)
+	state.hasher = nil
 	return h.finalizeUpload(context.Background(), row, state)
 }

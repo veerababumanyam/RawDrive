@@ -171,12 +171,12 @@ export function PublicGalleryEnhancements({
 
       {/* Face filter indicator (GAL-FR-109 fallback affordance always visible) */}
       {facePinnedAssetIds !== null && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full bg-accent-primary/90 backdrop-blur-sm px-4 py-2 text-xs text-accent-primary-contrast">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full bg-accent-primary/90 backdrop-blur-sm px-4 py-2 text-xs text-text-inverse">
           <span>Showing {facePinnedAssetIds.length} photos matching your face</span>
           <button
             type="button"
             onClick={onFaceFallback}
-            className="rounded-full border border-accent-primary-contrast/30 px-2 py-0.5 hover:bg-accent-primary-contrast/10"
+            className="rounded-full border border-text-inverse/30 px-2 py-0.5 hover:bg-text-inverse/10"
           >
             Browse all
           </button>

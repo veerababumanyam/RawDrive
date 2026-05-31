@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -19,11 +20,50 @@ func NewAlbumHandler(svc *service.AlbumService) *AlbumHandler {
 	return &AlbumHandler{albumSvc: svc}
 }
 
+func (h *AlbumHandler) requireGalleryInWorkspace(w http.ResponseWriter, r *http.Request, galleryID uuid.UUID) (uuid.UUID, bool) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return uuid.Nil, false
+	}
+	matches, err := h.albumSvc.GalleryBelongsToWorkspace(r.Context(), galleryID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return uuid.Nil, false
+	}
+	if !matches {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return uuid.Nil, false
+	}
+	return workspaceID, true
+}
+
+func (h *AlbumHandler) requireAlbumInWorkspace(w http.ResponseWriter, r *http.Request, albumID uuid.UUID) (*repository.Album, uuid.UUID, bool) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return nil, uuid.Nil, false
+	}
+	album, err := h.albumSvc.GetByIDForWorkspace(r.Context(), albumID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	if album == nil {
+		http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	return album, workspaceID, true
+}
+
 // Create handles POST /api/v1/galleries/{galleryId}/albums
 func (h *AlbumHandler) Create(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "galleryId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
 		return
 	}
 
@@ -65,6 +105,9 @@ func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "galleryId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
 		return
 	}
 
@@ -116,13 +159,8 @@ func (h *AlbumHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	album, err := h.albumSvc.GetByID(r.Context(), id)
-	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
-		return
-	}
-	if album == nil {
-		http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+	album, _, ok := h.requireAlbumInWorkspace(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -135,6 +173,9 @@ func (h *AlbumHandler) Breadcrumb(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireAlbumInWorkspace(w, r, id); !ok {
 		return
 	}
 
@@ -155,6 +196,9 @@ func (h *AlbumHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
+	if _, _, ok := h.requireAlbumInWorkspace(w, r, id); !ok {
+		return
+	}
 
 	assets, err := h.albumSvc.ListAssets(r.Context(), id)
 	if err != nil {
@@ -171,6 +215,9 @@ func (h *AlbumHandler) AddAssets(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireAlbumInWorkspace(w, r, id); !ok {
 		return
 	}
 
@@ -215,6 +262,9 @@ func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireAlbumInWorkspace(w, r, id); !ok {
 		return
 	}
 

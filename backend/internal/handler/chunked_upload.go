@@ -120,6 +120,10 @@ type ChunkedUploadHandler struct {
 	// usage.
 	storageAccountingSvc *service.StorageAccounting
 
+	encryptionEnabled bool
+	encryptionAlgo    string
+	encryptionVersion int
+
 	// M40 / Upload Credit Meter: optional upload credit gate. Wired via
 	// WithUploadCredit(). Defaults to a NoopGate so every call site can
 	// be branch-free — ReserveForSession, Consume, and Refund all
@@ -254,6 +258,13 @@ func (h *ChunkedUploadHandler) WithStorageAccounting(
 	return h
 }
 
+func (h *ChunkedUploadHandler) WithEncryptionMetadata(enabled bool, algo string, version int) *ChunkedUploadHandler {
+	h.encryptionEnabled = enabled
+	h.encryptionAlgo = algo
+	h.encryptionVersion = version
+	return h
+}
+
 // RegisterRoutes adds chunked upload routes.
 func (h *ChunkedUploadHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/v1/uploads", h.CreateSession)
@@ -294,8 +305,11 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if strings.HasPrefix(input.ContentType, "video/") {
-		http.Error(w, `{"error":"VIDEO_NOT_ALLOWED","message":"video uploads are not supported in photo galleries"}`, http.StatusUnprocessableEntity)
+	if _, ok := service.StillImageFormatFromContentType(input.ContentType); !ok {
+		respondJSON(w, http.StatusUnprocessableEntity, map[string]interface{}{
+			"error":   "UNSUPPORTED_UPLOAD_TYPE",
+			"message": "photo galleries accept still-image uploads only",
+		})
 		return
 	}
 
@@ -332,37 +346,35 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		input.ChunkSize = 5 * 1024 * 1024 // default 5MB
 	}
 
-	// 2026-05-20: enforce per-workspace plan storage quota BEFORE reserving
-	// an upload credit. Doing this here rather than at finalize means a) we
-	// reject the session up-front so the client can react before chunking
-	// starts, b) we don't burn an upload credit on a session that can never
-	// succeed, c) we don't initiate a multipart upload with B2 (each one
-	// triggers a small per-request charge even when abandoned). CheckQuota
-	// treats workspaces without a seeded quota row as unlimited and
-	// validates `used_bytes + TotalSize <= quota_bytes`. Fail-open on
-	// missing service wiring (unit tests) but fail-closed on DB error —
-	// the previous middleware deliberately fell open here and that was the
-	// behaviour gap that let prod uploads bypass the limit entirely.
+	uploadUUID := uuid.New()
+	uploadID := uploadUUID.String()
+
+	storageReserved := false
 	if h.storageAccountingSvc != nil {
-		allowed, qErr := h.storageAccountingSvc.CheckQuota(r.Context(), workspaceID, input.TotalSize)
-		if qErr != nil {
+		if qErr := h.storageAccountingSvc.ReserveUpload(r.Context(), workspaceID, input.TotalSize); qErr != nil {
+			if errors.Is(qErr, service.ErrStorageQuotaExceeded) {
+				respondJSON(w, http.StatusForbidden, map[string]interface{}{
+					"error":   "storage_quota_exceeded",
+					"message": "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+				})
+				return
+			}
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"error":   "quota_check_failed",
 				"message": "could not verify storage quota; please retry",
 			})
 			return
 		}
-		if !allowed {
-			respondJSON(w, http.StatusForbidden, map[string]interface{}{
-				"error":   "storage_quota_exceeded",
-				"message": "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
-			})
-			return
+		storageReserved = true
+	}
+	releaseStorageReservation := func(reason string) {
+		if storageReserved && h.storageAccountingSvc != nil {
+			if err := h.storageAccountingSvc.ReleaseUploadReservation(r.Context(), workspaceID, input.TotalSize); err != nil {
+				log.Printf("chunked_upload: release storage reservation failed upload=%s reason=%s err=%v", uploadID, reason, err)
+			}
+			storageReserved = false
 		}
 	}
-
-	uploadUUID := uuid.New()
-	uploadID := uploadUUID.String()
 
 	// M40: reserve the upload credit BEFORE any other mandatory-infra
 	// guard. Insufficient balance must reach the user as a 400 without
@@ -397,6 +409,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		EnterpriseUnlimited: enterpriseUnlimited,
 	})
 	if credErr != nil {
+		releaseStorageReservation("credit-reservation-failed")
 		// InsufficientBalanceDetails: surface as 400 with the structured
 		// frontend payload so useUpload can open the recharge modal.
 		var details *credit.InsufficientBalanceDetails
@@ -414,6 +427,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	// LiveGate's reservation will eventually be cleaned up by
 	// ExpireAbandoned after the TTL.
 	if h.sessions == nil {
+		releaseStorageReservation("sessions-store-missing")
 		http.Error(w, `{"error":"upload sessions store not wired"}`, http.StatusInternalServerError)
 		return
 	}
@@ -439,11 +453,13 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	// must upgrade to a MultipartCapable provider.
 	mpc, ok := h.store.(storage.MultipartCapable)
 	if !ok {
+		releaseStorageReservation("multipart-unsupported")
 		http.Error(w, `{"error":"storage backend does not support multipart uploads"}`, http.StatusServiceUnavailable)
 		return
 	}
 	r2UploadID, err := mpc.CreateMultipartUpload(r.Context(), storageKey, input.ContentType)
 	if err != nil {
+		releaseStorageReservation("multipart-create-failed")
 		internalError(w, uploadID, "create_multipart_upload_failed", err)
 		return
 	}
@@ -485,6 +501,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		// Best-effort: abort the R2 multipart we just started so we don't
 		// leak storage state on a DB write failure.
 		_ = mpc.AbortMultipartUpload(r.Context(), storageKey, r2UploadID)
+		releaseStorageReservation("persist-session-failed")
 		internalError(w, uploadID, "persist_upload_session_failed", err)
 		return
 	}
@@ -726,6 +743,14 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 				http.Error(w, `{"error":"SCAN_MANIFEST_INVALID"}`, http.StatusUnprocessableEntity)
 				return
 			}
+			if errors.Is(err, service.ErrScanManifestRequired) {
+				logRefundFailure(uploadID, "scan-manifest-required",
+					h.creditGate.Refund(r.Context(), state.reservation,
+						fmt.Sprintf("refund:%s:manifest-required", uploadID),
+						"scan-manifest-required"))
+				http.Error(w, `{"error":"SCAN_MANIFEST_REQUIRED"}`, http.StatusUnprocessableEntity)
+				return
+			}
 			// Any other finalize error refunds too — user isn't charged for
 			// infra failures (feature-prd.md §4 Decision 3).
 			logRefundFailure(uploadID, "infra-failure",
@@ -803,6 +828,11 @@ func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		internalError(w, uploadID, "delete_session_failed", err)
 		return
 	}
+	if h.storageAccountingSvc != nil {
+		if err := h.storageAccountingSvc.ReleaseUploadReservation(r.Context(), row.WorkspaceID, row.TotalSize); err != nil {
+			log.Printf("chunked_upload: release storage reservation on cancel failed upload=%s err=%v", uploadID, err)
+		}
+	}
 
 	// M40: refund the reservation so the user isn't charged for a
 	// cancelled upload (feature-prd.md §4 Decision 3 refund policy —
@@ -854,6 +884,13 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 	if mpID == "" {
 		return nil, errors.New("session has no R2 multipart upload id")
 	}
+	releaseReservation := func(reason string) {
+		if h.storageAccountingSvc != nil {
+			if err := h.storageAccountingSvc.ReleaseUploadReservation(ctx, row.WorkspaceID, row.TotalSize); err != nil {
+				log.Printf("chunked_upload: release storage reservation after %s upload=%s err=%v", reason, row.TUSUploadID, err)
+			}
+		}
+	}
 
 	mpc, ok := h.store.(storage.MultipartCapable)
 	if !ok {
@@ -888,6 +925,7 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 			// cleanup paths. Best-effort: the Delete outcome does not change
 			// the error returned to the caller.
 			_ = h.store.Delete(ctx, storageKey)
+			releaseReservation("manifest-decode-failure")
 			return nil, fmt.Errorf("decode scan manifest: %w", err)
 		}
 	}
@@ -896,47 +934,54 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 	fullHashHex, head, tail, err := h.resolveFinalizeDigest(ctx, state, storageKey)
 	if err != nil {
 		_ = h.store.Delete(ctx, storageKey)
+		releaseReservation("digest-failure")
 		return nil, fmt.Errorf("compute finalize digest: %w", err)
 	}
 
-	if err := h.verifyManifestAtFinalize(ctx, fullHashHex, head, tail, manifest); err != nil {
+	if err := h.verifyUploadBytesAtFinalize(ctx, row.ContentType, fullHashHex, head, tail, manifest); err != nil {
 		_ = h.store.Delete(ctx, storageKey)
+		releaseReservation("verify-failure")
 		return nil, err
 	}
 
 	// Create the asset row. Tests may pass a nil assetRepo to exercise the
 	// streaming path without a live DB; treat that as an explicit opt-out.
 	asset := &repository.Asset{
-		ID:            uuid.New(),
-		WorkspaceID:   row.WorkspaceID,
-		Filename:      row.Filename,
-		ContentType:   row.ContentType,
-		SizeBytes:     row.TotalSize,
-		StorageKey:    storageKey,
-		StorageDriver: "r2",
-		Status:        "processing",
-		UploadedBy:    uuidPtr(row.UserID),
-		ExifData:      map[string]interface{}{},
-		ThumbnailURLs: map[string]string{},
+		ID:                uuid.New(),
+		WorkspaceID:       row.WorkspaceID,
+		Filename:          row.Filename,
+		ContentType:       row.ContentType,
+		SizeBytes:         row.TotalSize,
+		StorageKey:        storageKey,
+		StorageDriver:     "r2",
+		Status:            "processing",
+		UploadedBy:        uuidPtr(row.UserID),
+		ExifData:          map[string]interface{}{},
+		ThumbnailURLs:     map[string]string{},
+		IsEncrypted:       h.encryptionEnabled,
+		EncryptionVersion: h.encryptionVersion,
+	}
+	if h.encryptionAlgo != "" {
+		asset.EncryptionAlgo = &h.encryptionAlgo
 	}
 	applyScanMetadata(asset, manifest)
 	if h.assetRepo != nil {
 		if err := h.persistAssetOrCleanup(ctx, asset, storageKey, h.assetRepo.Create); err != nil {
+			releaseReservation("asset-persist-failure")
 			return nil, err
 		}
 	}
 
-	// Record workspace storage usage so the dashboard KPI, quota
-	// enforcement, and storage analytics all see live state. Best-effort:
-	// an accounting failure is logged but does not fail the upload. Wired
-	// in wave-7 after UAT surfaced that the chunked finalize path never
-	// updated workspace_storage, so the dashboard showed 0 B used
-	// regardless of how many bytes the user had uploaded. The legacy
-	// UploadService path in service/upload_service.go already did this
-	// correctly; this brings the TUS path into parity.
+	// Move the create-session reservation into durable used_bytes. This keeps
+	// quota enforcement atomic across concurrent TUS sessions while preserving
+	// the dashboard/storage analytics contract from RecordUpload.
 	if h.storageAccountingSvc != nil {
-		if err := h.storageAccountingSvc.RecordUpload(ctx, row.WorkspaceID, row.TotalSize, 0); err != nil {
-			log.Printf("chunked_upload: record usage failed for workspace %s: %v", row.WorkspaceID, err)
+		if err := h.storageAccountingSvc.CommitUploadReservation(ctx, row.WorkspaceID, row.TotalSize, 0); err != nil {
+			_ = h.store.Delete(ctx, storageKey)
+			if h.assetRepo != nil {
+				_ = h.assetRepo.SoftDelete(ctx, asset.ID)
+			}
+			return nil, fmt.Errorf("commit storage reservation: %w", err)
 		}
 	}
 
@@ -1070,6 +1115,32 @@ func (h *ChunkedUploadHandler) verifyManifestAtFinalize(
 		return err
 	}
 	return nil
+}
+
+func (h *ChunkedUploadHandler) verifyUploadBytesAtFinalize(
+	ctx context.Context,
+	contentType string,
+	computedHashHex string,
+	head, tail []byte,
+	manifest *service.UploadScanManifest,
+) error {
+	if manifest != nil && h.validationSvc != nil {
+		return h.verifyManifestAtFinalize(ctx, computedHashHex, head, tail, manifest)
+	}
+
+	format, ok := service.StillImageFormatFromContentType(contentType)
+	if !ok {
+		return service.ErrScanHashMismatch
+	}
+	switch format {
+	case "jpeg", "png", "webp", "gif":
+		return service.VerifyHeaderTrailerBytes(head, tail, format)
+	default:
+		// RAW/HEIC/TIFF/AVIF require the desktop/source-side scanner before
+		// server fallback decoding ships. The API accepts their session only
+		// when a scanner manifest is present; without one, fail closed.
+		return service.ErrScanManifestRequired
+	}
 }
 
 // applyScanMetadata copies verified scan manifest fields onto the asset row.

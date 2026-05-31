@@ -52,12 +52,12 @@ type fakeUploadSessionStore struct {
 	mu   sync.Mutex
 	rows map[string]*repository.UploadSession // keyed by tus_upload_id
 
-	createErr      error
-	getErr         error
-	updateErr      error
-	appendErr      error
-	markErr        error
-	deleteErr      error
+	createErr error
+	getErr    error
+	updateErr error
+	appendErr error
+	markErr   error
+	deleteErr error
 }
 
 func newFakeSessionStore() *fakeUploadSessionStore {
@@ -376,7 +376,7 @@ func (rig *streamingRig) createSession(t *testing.T, filename string, totalSize 
 	t.Helper()
 	body := map[string]interface{}{
 		"filename":     filename,
-		"content_type": "application/octet-stream",
+		"content_type": "image/jpeg",
 		"total_size":   totalSize,
 		"chunk_size":   int64(64), // small chunks for test
 	}
@@ -445,6 +445,8 @@ func TestUploadChunk_SingleChunkFinalizes(t *testing.T) {
 	rig := setupStreamingRig(t)
 
 	payload := bytes.Repeat([]byte("A"), 128)
+	payload[0], payload[1] = 0xFF, 0xD8
+	payload[len(payload)-2], payload[len(payload)-1] = 0xFF, 0xD9
 	uploadID := rig.createSession(t, "photo.bin", int64(len(payload)))
 
 	// Register asset repo stub by setting h internally — the finalize path
@@ -477,8 +479,8 @@ func TestUploadChunk_SingleChunkFinalizes(t *testing.T) {
 func TestUploadChunk_MultiChunkFinalizes(t *testing.T) {
 	rig := setupStreamingRig(t)
 
-	chunk1 := []byte("first-chunk-data")  // 16 bytes
-	chunk2 := []byte("second-chunk-data") // 17 bytes
+	chunk1 := append([]byte{0xFF, 0xD8}, []byte("first-chunk-data")...)
+	chunk2 := append([]byte("second-chunk-data"), 0xFF, 0xD9)
 	total := int64(len(chunk1) + len(chunk2))
 
 	uploadID := rig.createSession(t, "multi.bin", total)
@@ -532,7 +534,8 @@ func TestUploadChunk_PerChunkChecksumMismatch_Rejected(t *testing.T) {
 func TestUploadChunk_PerChunkChecksumMatch_Accepted(t *testing.T) {
 	rig := setupStreamingRig(t)
 
-	chunk := []byte("chunk-with-correct-checksum")
+	chunk := append([]byte{0xFF, 0xD8}, []byte("chunk-with-correct-checksum")...)
+	chunk = append(chunk, 0xFF, 0xD9)
 	uploadID := rig.createSession(t, "checksum-ok.bin", int64(len(chunk)))
 
 	sum := sha256.Sum256(chunk)
@@ -608,7 +611,7 @@ func TestSetTUSHeaders_HasF013Extensions(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"filename":     "headers.bin",
-		"content_type": "application/octet-stream",
+		"content_type": "image/jpeg",
 		"total_size":   int64(64),
 		"chunk_size":   int64(64),
 	})
@@ -663,7 +666,7 @@ func TestFinalizeUpload_HashMismatchProduces422(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"filename":      "liar.bin",
-		"content_type":  "application/octet-stream",
+		"content_type":  "image/jpeg",
 		"total_size":    int64(len(payload)),
 		"chunk_size":    int64(len(payload)),
 		"scan_manifest": manifest,
@@ -684,6 +687,42 @@ func TestFinalizeUpload_HashMismatchProduces422(t *testing.T) {
 		"declared SHA-256 != actual bytes must fail finalize with 422; got %d: %s", rr.Code, rr.Body.String())
 	assert.Contains(t, rr.Body.String(), "SCAN_HASH_MISMATCH",
 		"response body must identify SCAN_HASH_MISMATCH as the cause")
+}
+
+func TestCreateSession_RejectsNonImageContentType(t *testing.T) {
+	rig := setupStreamingRig(t)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"filename":     "invoice.jpg",
+		"content_type": "application/pdf",
+		"total_size":   int64(128),
+		"chunk_size":   int64(64),
+	})
+	req := rig.authedRequest(http.MethodPost, "/api/v1/uploads", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	rig.handler.CreateSession(rr, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+	assert.Contains(t, rr.Body.String(), "UNSUPPORTED_UPLOAD_TYPE")
+	assert.Empty(t, rig.store.uploads, "storage multipart upload must not be created for non-images")
+}
+
+func TestFinalizeUpload_RejectsDisguisedImageWithoutManifest(t *testing.T) {
+	rig := setupStreamingRig(t)
+
+	payload := []byte("%PDF-1.7 not really a jpeg")
+	uploadID := rig.createSession(t, "fake.jpg", int64(len(payload)))
+
+	rr := rig.patchChunk(t, uploadID, 0, payload, "")
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+	assert.Contains(t, rr.Body.String(), "SCAN_HASH_MISMATCH")
+	for key := range rig.store.deleted {
+		assert.True(t, rig.store.deleted[key], "assembled object must be deleted after failed finalize verification")
+		return
+	}
+	t.Fatal("expected disguised object to be deleted")
 }
 
 // Guard against import cycle / silent import drop.

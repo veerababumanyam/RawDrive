@@ -633,7 +633,7 @@ export default function CoverDesignPage() {
             </div>
           )}
           {saveError && (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-error/30 bg-error/10 px-3 py-1.5 text-xs font-medium text-error">
               <svg
                 className="h-3.5 w-3.5"
                 viewBox="0 0 16 16"

@@ -13,6 +13,7 @@ import (
 	"github.com/rawdrive/backend/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/image/tiff"
 )
 
 func TestWebPStorageKey_SplitsThumbnailsVsDerivatives(t *testing.T) {
@@ -137,4 +138,26 @@ func TestGenerateAll_EmitsJPGAndWebPVariants(t *testing.T) {
 	assert.Equal(t, 32, result.Width)
 	assert.Equal(t, 32, result.Height)
 	assert.NotEmpty(t, result.Blurhash)
+}
+
+func TestGenerateAll_DecodesTIFFSources(t *testing.T) {
+	if _, err := exec.LookPath("cwebp"); err != nil {
+		t.Skip("cwebp not on PATH — required for WebP variant generation")
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, 40, 30))
+	for y := 0; y < 30; y++ {
+		for x := 0; x < 40; x++ {
+			img.Set(x, y, color.RGBA{R: 20, G: uint8(x * 3), B: uint8(y * 4), A: 255})
+		}
+	}
+	var src bytes.Buffer
+	require.NoError(t, tiff.Encode(&src, img, nil))
+
+	svc := NewThumbnailService(storage.NewLocalDriver(t.TempDir()))
+	result, err := svc.GenerateAll(context.Background(), "asset-tiff", bytes.NewReader(src.Bytes()))
+	require.NoError(t, err)
+	assert.Equal(t, 40, result.Width)
+	assert.Equal(t, 30, result.Height)
+	assert.Contains(t, result.URLs, "display_webp")
 }

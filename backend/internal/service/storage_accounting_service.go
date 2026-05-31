@@ -96,6 +96,7 @@ type WorkspaceStorage struct {
 	WorkspaceID     uuid.UUID `json:"workspace_id"`
 	UsedBytes       int64     `json:"used_bytes"`
 	DerivativeBytes int64     `json:"derivative_bytes"`
+	ReservedBytes   int64     `json:"reserved_bytes"`
 	TotalBytes      int64     `json:"total_bytes"`
 	QuotaBytes      int64     `json:"quota_bytes"`
 	GraceBytes      int64     `json:"grace_bytes"`
@@ -107,7 +108,7 @@ func (ws *WorkspaceStorage) WarningLevel() string {
 	if ws.QuotaBytes == 0 {
 		return "none"
 	}
-	pct := float64(ws.UsedBytes) / float64(ws.QuotaBytes) * 100
+	pct := float64(ws.UsedBytes+ws.ReservedBytes) / float64(ws.QuotaBytes) * 100
 	if pct >= 95 {
 		return "critical"
 	}
@@ -125,13 +126,14 @@ func (s *StorageAccounting) GetUsage(ctx context.Context, workspaceID uuid.UUID)
 	var planTier string
 	err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(ws.used_bytes, 0), COALESCE(ws.derivative_bytes, 0),
+		        COALESCE(ws.reserved_bytes, 0),
 		        COALESCE(ws.quota_bytes, 0), COALESCE(ws.grace_bytes, 0),
 		        COALESCE(w.plan_tier, 'free')
 		 FROM workspaces w
 		 LEFT JOIN workspace_storage ws ON ws.workspace_id = w.id
 		 WHERE w.id = $1`,
 		workspaceID,
-	).Scan(&ws.UsedBytes, &ws.DerivativeBytes, &ws.QuotaBytes, &ws.GraceBytes, &planTier)
+	).Scan(&ws.UsedBytes, &ws.DerivativeBytes, &ws.ReservedBytes, &ws.QuotaBytes, &ws.GraceBytes, &planTier)
 	if err != nil {
 		return nil, fmt.Errorf("storage accounting: get usage: %w", err)
 	}
@@ -140,7 +142,7 @@ func (s *StorageAccounting) GetUsage(ctx context.Context, workspaceID uuid.UUID)
 	}
 	ws.TotalBytes = ws.UsedBytes + ws.DerivativeBytes
 	if ws.QuotaBytes > 0 {
-		ws.PercentUsed = float64(ws.UsedBytes) / float64(ws.QuotaBytes) * 100
+		ws.PercentUsed = float64(ws.UsedBytes+ws.ReservedBytes) / float64(ws.QuotaBytes) * 100
 	}
 	return ws, nil
 }
@@ -178,7 +180,99 @@ func (s *StorageAccounting) CheckQuota(ctx context.Context, workspaceID uuid.UUI
 	if usage.QuotaBytes == 0 {
 		return true, nil // No quota = unlimited
 	}
-	return (usage.UsedBytes + additionalBytes) <= usage.QuotaBytes, nil
+	return (usage.UsedBytes + usage.ReservedBytes + additionalBytes) <= (usage.QuotaBytes + usage.GraceBytes), nil
+}
+
+// ReserveUpload atomically claims original bytes for an in-flight upload
+// session. This closes the CheckQuota/RecordUpload race where several TUS
+// sessions could all pass a read-only quota check and then finalize beyond the
+// workspace quota. Workspaces without a storage row are seeded from plan_tier.
+func (s *StorageAccounting) ReserveUpload(ctx context.Context, workspaceID uuid.UUID, originalBytes int64) error {
+	if originalBytes <= 0 {
+		return nil
+	}
+	tag, err := s.pool.Exec(ctx,
+		`WITH seeded AS (
+		     INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes, reserved_bytes)
+		     SELECT w.id, 0, 0,
+		            CASE COALESCE(w.plan_tier, 'free')
+		              WHEN 'starter' THEN $3::bigint
+		              WHEN 'professional' THEN $4::bigint
+		              WHEN 'business' THEN $5::bigint
+		              WHEN 'enterprise' THEN $6::bigint
+		              ELSE $7::bigint
+		            END,
+		            0
+		       FROM workspaces w
+		      WHERE w.id = $1
+		     ON CONFLICT (workspace_id) DO NOTHING
+		   )
+		   UPDATE workspace_storage
+		      SET reserved_bytes = reserved_bytes + $2
+		    WHERE workspace_id = $1
+		      AND (
+		        quota_bytes = 0
+		        OR used_bytes + reserved_bytes + $2 <= quota_bytes + grace_bytes
+		      )`,
+		workspaceID,
+		originalBytes,
+		PlanDefaultQuotaBytes("starter"),
+		PlanDefaultQuotaBytes("professional"),
+		PlanDefaultQuotaBytes("business"),
+		PlanDefaultQuotaBytes("enterprise"),
+		PlanDefaultQuotaBytes("free"),
+	)
+	if err != nil {
+		return fmt.Errorf("storage accounting: reserve upload: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrStorageQuotaExceeded
+	}
+	s.cache.invalidate(workspaceID)
+	return nil
+}
+
+// CommitUploadReservation moves previously reserved original bytes into
+// used_bytes after a successful finalize.
+func (s *StorageAccounting) CommitUploadReservation(ctx context.Context, workspaceID uuid.UUID, originalBytes, derivativeBytes int64) error {
+	if originalBytes < 0 || derivativeBytes < 0 {
+		return fmt.Errorf("storage accounting: negative commit")
+	}
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE workspace_storage
+		    SET used_bytes = used_bytes + $2,
+		        derivative_bytes = derivative_bytes + $3,
+		        reserved_bytes = GREATEST(0, reserved_bytes - $2)
+		  WHERE workspace_id = $1`,
+		workspaceID, originalBytes, derivativeBytes,
+	)
+	if err != nil {
+		return fmt.Errorf("storage accounting: commit upload reservation: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("storage accounting: commit upload reservation: workspace storage row not found")
+	}
+	s.cache.invalidate(workspaceID)
+	return nil
+}
+
+// ReleaseUploadReservation returns in-flight bytes to the workspace quota pool
+// when a session is cancelled or fails before finalize.
+func (s *StorageAccounting) ReleaseUploadReservation(ctx context.Context, workspaceID uuid.UUID, originalBytes int64) error {
+	if originalBytes <= 0 {
+		return nil
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE workspace_storage
+		    SET reserved_bytes = GREATEST(0, reserved_bytes - $2)
+		  WHERE workspace_id = $1`,
+		workspaceID, originalBytes,
+	)
+	if err != nil {
+		return fmt.Errorf("storage accounting: release upload reservation: %w", err)
+	}
+	s.cache.invalidate(workspaceID)
+	return nil
 }
 
 // RecordUpload atomically increases storage usage after a successful upload.
@@ -230,9 +324,9 @@ type StorageTypeBreakdown struct {
 
 // StorageAnalytics combines usage, per-gallery, and per-type breakdowns.
 type StorageAnalytics struct {
-	Usage       *WorkspaceStorage       `json:"usage"`
-	TopGalleries []GalleryStorageBreakdown `json:"top_galleries"`
-	TypeBreakdown StorageTypeBreakdown    `json:"type_breakdown"`
+	Usage         *WorkspaceStorage         `json:"usage"`
+	TopGalleries  []GalleryStorageBreakdown `json:"top_galleries"`
+	TypeBreakdown StorageTypeBreakdown      `json:"type_breakdown"`
 }
 
 // GetAnalytics returns full storage analytics for a workspace (cached for 1 hour).

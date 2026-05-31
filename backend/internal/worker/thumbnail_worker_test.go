@@ -5,10 +5,18 @@ package worker
 // exercise lifecycle invariants that need no DB or B2 access.
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 // TestThumbnailWorker_StopIsIdempotent is the F-063 regression: a second
@@ -71,5 +79,137 @@ func TestThumbnailWorker_StopUnblocksStart(t *testing.T) {
 		// Start returned after the stop signal — good.
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start did not return after Stop()")
+	}
+}
+
+type fakeThumbAssetRepo struct {
+	assets        []repository.Asset
+	status        map[uuid.UUID]string
+	processingErr map[uuid.UUID]string
+	thumbnails    map[uuid.UUID]map[string]string
+	dimensions    map[uuid.UUID][2]int
+}
+
+func (f *fakeThumbAssetRepo) ListByStatus(_ context.Context, status string, _ int) ([]repository.Asset, error) {
+	if status != "processing" {
+		return nil, nil
+	}
+	return f.assets, nil
+}
+
+func (f *fakeThumbAssetRepo) UpdateStatus(_ context.Context, id uuid.UUID, status string) error {
+	if f.status == nil {
+		f.status = map[uuid.UUID]string{}
+	}
+	f.status[id] = status
+	return nil
+}
+
+func (f *fakeThumbAssetRepo) UpdateProcessingError(_ context.Context, id uuid.UUID, errMsg string) error {
+	if f.processingErr == nil {
+		f.processingErr = map[uuid.UUID]string{}
+	}
+	f.processingErr[id] = errMsg
+	return nil
+}
+
+func (f *fakeThumbAssetRepo) UpdateThumbnails(_ context.Context, id uuid.UUID, thumbnails map[string]string, _ string) error {
+	if f.thumbnails == nil {
+		f.thumbnails = map[uuid.UUID]map[string]string{}
+	}
+	f.thumbnails[id] = thumbnails
+	return nil
+}
+
+func (f *fakeThumbAssetRepo) UpdateDimensions(_ context.Context, id uuid.UUID, width, height int) error {
+	if f.dimensions == nil {
+		f.dimensions = map[uuid.UUID][2]int{}
+	}
+	f.dimensions[id] = [2]int{width, height}
+	return nil
+}
+
+type fakeThumbStore struct {
+	getErr error
+}
+
+func (f fakeThumbStore) Put(context.Context, string, io.Reader, int64, string) error { return nil }
+func (f fakeThumbStore) Delete(context.Context, string) error                        { return nil }
+func (f fakeThumbStore) PresignURL(context.Context, string, storage.PresignOptions) (string, error) {
+	return "", nil
+}
+func (f fakeThumbStore) HealthCheck() storage.HealthStatus {
+	return storage.HealthStatus{Status: "ok", Driver: "fake"}
+}
+func (f fakeThumbStore) Get(context.Context, string) (io.ReadCloser, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	return io.NopCloser(bytes.NewReader([]byte("image-bytes"))), nil
+}
+
+type fakeThumbnailGenerator struct{}
+
+func (fakeThumbnailGenerator) GenerateAll(context.Context, string, io.Reader) (*service.ThumbnailResult, error) {
+	return &service.ThumbnailResult{
+		URLs:     map[string]string{"display_webp": "derivatives/a/display.webp"},
+		Blurhash: "blur",
+		Width:    1600,
+		Height:   1000,
+	}, nil
+}
+
+type fakeExifExtractor struct {
+	called     bool
+	assetID    uuid.UUID
+	storageKey string
+}
+
+func (f *fakeExifExtractor) ExtractAndStore(_ context.Context, assetID uuid.UUID, storageKey string) error {
+	f.called = true
+	f.assetID = assetID
+	f.storageKey = storageKey
+	return nil
+}
+
+func TestThumbnailWorker_ProcessFailurePersistsReason(t *testing.T) {
+	assetID := uuid.New()
+	repo := &fakeThumbAssetRepo{assets: []repository.Asset{{
+		ID:         assetID,
+		StorageKey: "originals/missing.jpg",
+		Status:     "processing",
+	}}}
+	w := NewThumbnailWorker(repo, fakeThumbnailGenerator{}, fakeThumbStore{getErr: errors.New("b2 object missing")})
+
+	w.processNextBatch(context.Background())
+
+	if repo.status[assetID] != "error" {
+		t.Fatalf("status = %q, want error", repo.status[assetID])
+	}
+	if repo.processingErr[assetID] == "" {
+		t.Fatal("processing error reason was not persisted")
+	}
+}
+
+func TestThumbnailWorker_SuccessExtractsExifBeforeReady(t *testing.T) {
+	assetID := uuid.New()
+	repo := &fakeThumbAssetRepo{}
+	exif := &fakeExifExtractor{}
+	w := NewThumbnailWorker(repo, fakeThumbnailGenerator{}, fakeThumbStore{}).WithExifService(exif)
+	asset := &repository.Asset{
+		ID:          assetID,
+		WorkspaceID: uuid.New(),
+		StorageKey:  "originals/photo.jpg",
+		ContentType: "image/jpeg",
+	}
+
+	if err := w.processOne(context.Background(), asset); err != nil {
+		t.Fatalf("processOne returned error: %v", err)
+	}
+	if !exif.called || exif.assetID != assetID || exif.storageKey != asset.StorageKey {
+		t.Fatalf("EXIF extractor not called with asset/storage key")
+	}
+	if repo.status[assetID] != "ready" {
+		t.Fatalf("status = %q, want ready", repo.status[assetID])
 	}
 }

@@ -12,4 +12,9 @@ describe("useUpload", () => {
     const { useUpload } = await import("../use-upload");
     expect(useUpload.length).toBe(2); // 2 params: apiUrl, token
   });
+
+  it("caps active uploads to a small worker pool", async () => {
+    const { MAX_CONCURRENT_UPLOADS } = await import("../use-upload");
+    expect(MAX_CONCURRENT_UPLOADS).toBe(4);
+  });
 });

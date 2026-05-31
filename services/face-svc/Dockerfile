@@ -18,7 +18,12 @@ FROM python:3.11.15-slim AS runtime
 #
 # Runtime libs (kept in final image):
 #   libgomp1               — OpenMP runtime that onnxruntime threads against.
-#   libglib2.0-0, libsm6,  — minimal X libs opencv-headless still pulls.
+#   libgl1                 — provides libGL.so.1. We pin opencv-python-headless,
+#     but insightface pulls the FULL opencv-python in transitively (both end up
+#     installed), and that cv2 extension links libGL. Without this the sidecar
+#     crashes at boot on `import cv2` with
+#     "ImportError: libGL.so.1: cannot open shared object file".
+#   libglib2.0-0, libsm6,  — minimal X libs the opencv stack still pulls.
 #     libxext6, libxrender1
 #   libjpeg62-turbo,       — image format decoders.
 #     libpng16-16, libwebp7
@@ -32,6 +37,7 @@ FROM python:3.11.15-slim AS runtime
 #     Both removed after pip install to shed ~300 MB from the final image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
+        libgl1 \
         libglib2.0-0 \
         libsm6 \
         libxext6 \

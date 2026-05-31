@@ -15,6 +15,7 @@ import (
 type ProofingHandler struct {
 	proofingSvc *service.ProofingService
 	gallerySvc  *service.GalleryService // optional, for selection limit checks
+	accessSvc   *service.GalleryAccessService
 }
 
 func NewProofingHandler(svc *service.ProofingService) *ProofingHandler {
@@ -24,6 +25,11 @@ func NewProofingHandler(svc *service.ProofingService) *ProofingHandler {
 // WithGalleryService injects the gallery service for selection limit enforcement.
 func (h *ProofingHandler) WithGalleryService(gs *service.GalleryService) *ProofingHandler {
 	h.gallerySvc = gs
+	return h
+}
+
+func (h *ProofingHandler) WithGalleryAccessService(accessSvc *service.GalleryAccessService) *ProofingHandler {
+	h.accessSvc = accessSvc
 	return h
 }
 
@@ -135,15 +141,38 @@ func (h *ProofingHandler) SubmitPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// M22 E74-S1: Selection limit enforcement
+	var galleryID uuid.UUID
+	var maxSelections int
+	var passwordHash *string
 	if h.gallerySvc != nil {
 		gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
-		if err == nil && gallery != nil && gallery.MaxSelections > 0 {
-			existing, _ := h.proofingSvc.CountByGallery(r.Context(), gallery.ID)
-			if existing+len(input.AssetIDs) > gallery.MaxSelections {
+		if err == nil && gallery != nil {
+			galleryID = gallery.ID
+			maxSelections = gallery.MaxSelections
+			passwordHash = gallery.PasswordHash
+		}
+	}
+	if passwordHash != nil && *passwordHash != "" {
+		token := r.Header.Get("X-Gallery-Session")
+		if token == "" {
+			if c, err := r.Cookie("gallery_session"); err == nil {
+				token = c.Value
+			}
+		}
+		if h.accessSvc == nil || !h.accessSvc.ValidateSession(r.Context(), galleryID, token) {
+			http.Error(w, `{"error":"gallery password required"}`, http.StatusUnauthorized)
+			return
+		}
+	}
+
+	// M22 E74-S1: Selection limit enforcement
+	if h.gallerySvc != nil {
+		if galleryID != uuid.Nil && maxSelections > 0 {
+			existing, _ := h.proofingSvc.CountByGallery(r.Context(), galleryID)
+			if existing+len(input.AssetIDs) > maxSelections {
 				respondJSON(w, http.StatusTooManyRequests, map[string]interface{}{
 					"error":   "selection_limit_reached",
-					"limit":   gallery.MaxSelections,
+					"limit":   maxSelections,
 					"current": existing,
 				})
 				return

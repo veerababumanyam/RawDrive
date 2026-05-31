@@ -141,19 +141,19 @@ export function ProductPreview({
     <div className="glass-card rounded-2xl p-6 space-y-5 backdrop-blur-xl border border-white/10">
       {/* Header: type badge + name */}
       <header className="space-y-1">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+        <div className="text-xs uppercase tracking-wide text-text-secondary">
           {productTypeLabel(product.product_type)}
         </div>
         <h3 className="text-xl font-semibold">{product.name}</h3>
         {product.description ? (
-          <p className="text-sm text-muted-foreground">{product.description}</p>
+          <p className="text-sm text-text-secondary">{product.description}</p>
         ) : null}
       </header>
 
       {/* Print size selector — only for print/album products */}
       {isPrintProduct ? (
         <div className="space-y-2">
-          <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <label className="block text-xs font-medium uppercase tracking-wide text-text-secondary">
             Print size
           </label>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Print size">
@@ -171,7 +171,7 @@ export function ProductPreview({
                     "border transition-all duration-200",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                     active
-                      ? "bg-accent/20 border-accent text-accent-foreground shadow-md"
+                      ? "bg-accent/20 border-accent text-accent-primary shadow-md"
                       : "bg-white/5 border-white/10 hover:bg-white/10",
                   ].join(" ")}
                 >
@@ -190,7 +190,7 @@ export function ProductPreview({
 
       {/* Quantity stepper */}
       <div className="flex items-center justify-between gap-4">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <label className="text-xs font-medium uppercase tracking-wide text-text-secondary">
           Quantity
         </label>
         <div className="flex items-center gap-2" role="group" aria-label="Quantity">
@@ -223,7 +223,7 @@ export function ProductPreview({
       {/* Price + add to cart */}
       <footer className="flex items-center justify-between border-t border-white/10 pt-4">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Total</div>
+          <div className="text-xs uppercase tracking-wide text-text-secondary">Total</div>
           <div className="text-2xl font-semibold tabular-nums">
             {formatPaisa(totalPrice, product.price_currency)}
           </div>
@@ -234,7 +234,7 @@ export function ProductPreview({
           disabled={addingToCart || (preflight?.quality === "fail" && isPrintProduct)}
           className={[
             "min-h-[44px] rounded-xl px-5 py-2 text-sm font-semibold",
-            "bg-accent text-accent-foreground shadow-md transition-all duration-200",
+            "bg-accent text-text-inverse shadow-md transition-all duration-200",
             "hover:brightness-110 hover:shadow-lg",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             "disabled:cursor-not-allowed disabled:opacity-50",
@@ -273,7 +273,7 @@ function DPIQualityBadge({
   }
   if (!result) {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+      <div className="flex items-center gap-2 text-xs text-text-secondary" role="status">
         <InfoCircle />
         <span>Checking print quality…</span>
       </div>
@@ -301,9 +301,9 @@ function DPIQualityBadge({
           <div className={`text-xs font-semibold uppercase ${palette.label}`}>
             {result.quality} — {result.effective_dpi} DPI
           </div>
-          <p className="text-xs text-muted-foreground">{result.message}</p>
+          <p className="text-xs text-text-secondary">{result.message}</p>
           {result.shortfall ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-text-secondary">
               Recommended source: {result.required_width_px}×{result.required_height_px}px
             </p>
           ) : null}

@@ -32,6 +32,14 @@ func NewAlbumService(ar *repository.AlbumRepo) *AlbumService {
 	return &AlbumService{albumRepo: ar}
 }
 
+// WithGalleryRepo wires gallery lookup for workspace authorization and smart
+// album resolution. It is intentionally separate from WithFaceResolver so
+// regular album routes can enforce ownership even when face search is disabled.
+func (s *AlbumService) WithGalleryRepo(galleryRepo *repository.GalleryRepo) *AlbumService {
+	s.galleryRepo = galleryRepo
+	return s
+}
+
 // WithFaceResolver wires in a face cluster resolver and the gallery repo
 // needed for workspace lookup. Both must be set together — without the
 // gallery repo, the resolver cannot scope cluster lookups to the correct
@@ -98,6 +106,33 @@ func (s *AlbumService) GetByID(ctx context.Context, id uuid.UUID) (*repository.A
 // ListByGallery returns all albums for a gallery.
 func (s *AlbumService) ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]repository.Album, error) {
 	return s.albumRepo.ListByGallery(ctx, galleryID)
+}
+
+// GalleryBelongsToWorkspace verifies that a gallery id is owned by the
+// request workspace. Handlers use this before any gallery-scoped album action.
+func (s *AlbumService) GalleryBelongsToWorkspace(ctx context.Context, galleryID, workspaceID uuid.UUID) (bool, error) {
+	if s.galleryRepo == nil {
+		return false, fmt.Errorf("album service gallery repo not configured")
+	}
+	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil {
+		return false, err
+	}
+	return gallery != nil && gallery.WorkspaceID == workspaceID, nil
+}
+
+// GetByIDForWorkspace resolves an album only when its parent gallery belongs
+// to the request workspace.
+func (s *AlbumService) GetByIDForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*repository.Album, error) {
+	album, err := s.albumRepo.GetByID(ctx, id)
+	if err != nil || album == nil {
+		return album, err
+	}
+	ok, err := s.GalleryBelongsToWorkspace(ctx, album.GalleryID, workspaceID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return album, nil
 }
 
 // GetBreadcrumb returns the parent chain for breadcrumb navigation.

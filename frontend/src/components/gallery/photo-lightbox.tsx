@@ -197,8 +197,8 @@ export function PhotoLightbox({
         filename = asset.filename.replace(/\.[^.]+$/, ".webp");
         break;
       case "thumbnail":
-        url = asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg || "";
-        filename = "thumb_" + asset.filename;
+        url = asset.thumbnail_urls?.thumb_lg_webp || asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg || "";
+        filename = "thumb_" + asset.filename.replace(/\.[^.]+$/, url.endsWith(".webp") ? ".webp" : "");
         break;
       default:
         url = asset.download_url || asset.storage_key || "";
@@ -229,6 +229,26 @@ export function PhotoLightbox({
     || "";
   const largeUrl = authedStorageUrl(rawLargeUrl, token);
   const exif = asset.exif_data || {};
+  const downloadOptions = [
+    {
+      format: "original" as const,
+      label: `Original (${formatBytes(asset.size_bytes)})`,
+      badge: "Original",
+      available: Boolean(asset.download_url || asset.storage_key),
+    },
+    {
+      format: "webp" as const,
+      label: "Optimized WebP",
+      badge: "WebP",
+      available: Boolean(asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp),
+    },
+    {
+      format: "thumbnail" as const,
+      label: "Thumbnail",
+      badge: "Small",
+      available: Boolean(asset.thumbnail_urls?.thumb_lg_webp || asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg),
+    },
+  ];
 
   const filmstripVisible = (showFilmstrip ?? !!allAssets) && !compareMode && !!allAssets && allAssets.length > 1;
 
@@ -293,21 +313,22 @@ export function PhotoLightbox({
           <div className="relative">
             <GlassIconButton size="sm" label="Download" active={showDownloadMenu} onClick={() => setShowDownloadMenu(s => !s)}><Download /></GlassIconButton>
             {showDownloadMenu && (
-              <div className="absolute right-0 top-11 z-20 w-56 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/10 py-2 shadow-2xl">
-                <button onClick={() => { handleDownloadFormat("original"); setShowDownloadMenu(false); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 rounded-lg mx-1" style={{width: "calc(100% - 8px)"}}>
-                  <span className="text-white/40 text-[10px] font-semibold tracking-wider w-10">ORIG</span>
-                  <span>Original ({formatBytes(asset.size_bytes)})</span>
-                </button>
-                {asset.thumbnail_urls?.display_webp && (
-                  <button onClick={() => { handleDownloadFormat("webp"); setShowDownloadMenu(false); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 rounded-lg mx-1" style={{width: "calc(100% - 8px)"}}>
-                    <span className="text-white/40 text-[10px] font-semibold tracking-wider w-10">WebP</span>
-                    <span>Optimized</span>
+              <div className="absolute right-0 top-11 z-20 w-56 rounded-xl border border-border-default bg-surface-elevated py-2 shadow-elevation-2">
+                {downloadOptions.map((option) => (
+                  <button
+                    key={option.format}
+                    type="button"
+                    disabled={!option.available}
+                    onClick={() => {
+                      handleDownloadFormat(option.format);
+                      setShowDownloadMenu(false);
+                    }}
+                    className="flex min-h-11 w-full items-center gap-3 px-4 py-2 text-sm text-text-primary transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:text-text-tertiary"
+                  >
+                    <span className="w-14 text-xs font-semibold uppercase tracking-wide text-text-tertiary">{option.badge}</span>
+                    <span className="truncate">{option.label}</span>
                   </button>
-                )}
-                <button onClick={() => { handleDownloadFormat("thumbnail"); setShowDownloadMenu(false); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 rounded-lg mx-1" style={{width: "calc(100% - 8px)"}}>
-                  <span className="text-white/40 text-[10px] font-semibold tracking-wider w-10">SMALL</span>
-                  <span>Thumbnail</span>
-                </button>
+                ))}
               </div>
             )}
           </div>

@@ -116,7 +116,7 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
               <button
                 type="button"
                 onClick={grantConsentAndOpenCamera}
-                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-accent-primary-contrast hover:opacity-90"
+                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:opacity-90"
               >
                 I agree — use camera
               </button>
@@ -149,7 +149,7 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
               <button
                 type="button"
                 onClick={captureAndMatch}
-                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-accent-primary-contrast hover:opacity-90"
+                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:opacity-90"
               >
                 Capture &amp; find my photos
               </button>
@@ -184,7 +184,7 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
               <button
                 type="button"
                 onClick={onFallback}
-                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-accent-primary-contrast hover:opacity-90"
+                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:opacity-90"
               >
                 Browse all photos
               </button>

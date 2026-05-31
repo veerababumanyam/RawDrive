@@ -106,14 +106,15 @@ func TestF021_FinalizeValidManifestKeepsObject(t *testing.T) {
 
 	workspaceID := uuid.New()
 	tusUploadID := uuid.New().String()
-	payload := []byte("intact object")
+	payload := append([]byte{0xFF, 0xD8}, []byte("intact object")...)
+	payload = append(payload, 0xFF, 0xD9)
 
 	row := &repository.UploadSession{
 		WorkspaceID: workspaceID,
 		UserID:      uuid.New(),
 		TUSUploadID: tusUploadID,
-		Filename:    "ok.bin",
-		ContentType: "application/octet-stream",
+		Filename:    "ok.jpg",
+		ContentType: "image/jpeg",
 		TotalSize:   int64(len(payload)),
 	}
 	storageKey, _ := handler.DeriveKeyAndUploadIDForTest(row)
@@ -193,11 +194,8 @@ func newAuditRig(t *testing.T, store storage.Provider, sessions *fakeUploadSessi
 }
 
 // createSessionWithTrueHash opens a single-chunk session whose scan_manifest
-// declares the genuine SHA-256 of payload. DetectedFormat "tiff" passes
-// session-create in standard mode (permissive) and hits the default branch in
-// VerifyHeaderTrailerBytes (no header/trailer rejection), so the rolling-hash
-// equality check is the SOLE discriminator at finalize — exactly what F-023
-// needs to detect a double-absorbed chunk.
+// declares the genuine SHA-256 of payload. The payload is a minimal WebP-like
+// byte stream so the server-side spot-check also passes after the hash check.
 func (rig *streamingRig) createSessionWithTrueHash(t *testing.T, filename string, payload []byte) string {
 	t.Helper()
 	sum := sha256.Sum256(payload)
@@ -206,8 +204,8 @@ func (rig *streamingRig) createSessionWithTrueHash(t *testing.T, filename string
 		Engine:         service.ScanEngineBrowserWorker,
 		EngineVersion:  "1.0.0",
 		FileName:       filename,
-		DeclaredType:   "image/tiff",
-		DetectedFormat: "tiff",
+		DeclaredType:   "image/webp",
+		DetectedFormat: "webp",
 		SHA256:         hex.EncodeToString(sum[:]),
 		SizeBytes:      int64(len(payload)),
 		Decision:       "pass",
@@ -215,7 +213,7 @@ func (rig *streamingRig) createSessionWithTrueHash(t *testing.T, filename string
 	}
 	body, _ := json.Marshal(map[string]interface{}{
 		"filename":      filename,
-		"content_type":  "application/octet-stream",
+		"content_type":  "image/webp",
 		"total_size":    int64(len(payload)),
 		"chunk_size":    int64(len(payload)),
 		"scan_manifest": manifest,
@@ -244,8 +242,8 @@ func TestF023_TransientUploadPartFailureThenRetryDoesNotCorruptRollingHash(t *te
 	// payload. If the rolling hash double-absorbs the chunk on retry, the
 	// computed hash will not match and finalize returns 422.
 	rig := newAuditRig(t, failStore, sessions)
-	payload := []byte("chunk-bytes-that-must-be-hashed-exactly-once")
-	uploadID := rig.createSessionWithTrueHash(t, "retry.bin", payload)
+	payload := append([]byte{'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P'}, []byte("chunk-bytes-that-must-be-hashed-exactly-once")...)
+	uploadID := rig.createSessionWithTrueHash(t, "retry.webp", payload)
 
 	// First PATCH: UploadPart fails → 500, NO state mutation, offset unchanged.
 	rr := rig.patchChunk(t, uploadID, 0, payload, "")
@@ -353,6 +351,8 @@ func TestF064_PatchRejectsMismatchedUploadOffsetHeader(t *testing.T) {
 func TestF064_PatchAcceptsMatchingUploadOffsetHeader(t *testing.T) {
 	rig := setupStreamingRig(t)
 	payload := bytes.Repeat([]byte("Z"), 64)
+	payload[0], payload[1] = 0xFF, 0xD8
+	payload[len(payload)-2], payload[len(payload)-1] = 0xFF, 0xD9
 	uploadID := rig.createSession(t, "ok.bin", int64(len(payload)))
 
 	rr := rig.patchChunkRawOffset(t, uploadID, "0", payload)
@@ -439,7 +439,7 @@ func TestF053_CreateSessionPersistFailureDoesNotLeak(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"filename":     "leak.bin",
-		"content_type": "application/octet-stream",
+		"content_type": "image/jpeg",
 		"total_size":   int64(64),
 		"chunk_size":   int64(64),
 	})

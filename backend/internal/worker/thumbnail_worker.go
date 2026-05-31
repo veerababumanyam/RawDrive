@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
@@ -31,17 +32,37 @@ func (f FaceEnqueuerFunc) EnqueueDetection(ctx context.Context, workspaceID uuid
 	return f(ctx, workspaceID, assetIDs, galleryID)
 }
 
+type assetRepository interface {
+	ListByStatus(ctx context.Context, status string, limit int) ([]repository.Asset, error)
+	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateProcessingError(ctx context.Context, id uuid.UUID, errMsg string) error
+	UpdateThumbnails(ctx context.Context, id uuid.UUID, thumbnails map[string]string, blurhash string) error
+	UpdateDimensions(ctx context.Context, id uuid.UUID, width, height int) error
+}
+
+type thumbnailGenerator interface {
+	GenerateAll(ctx context.Context, assetID string, src io.Reader) (*service.ThumbnailResult, error)
+}
+
+type exifExtractor interface {
+	ExtractAndStore(ctx context.Context, assetID uuid.UUID, storageKey string) error
+}
+
 // ThumbnailWorker processes assets that need thumbnails generated.
 type ThumbnailWorker struct {
-	assetRepo     *repository.AssetRepo
-	thumbnailSvc  *service.ThumbnailService
-	store         storage.Provider
-	publisher     Publisher                       // optional — emits asset.ready events when set
-	faceEnqueuer  FaceEnqueuer                    // optional — enqueues face_detection AIJob after ready
-	derivRepo     *repository.AssetDerivativeRepo // optional — persists per-variant size into asset_derivatives
-	accountingSvc *service.StorageAccounting      // optional — increments workspace_storage.derivative_bytes
-	pollInterval  time.Duration
-	stopCh        chan struct{}
+	assetRepo         assetRepository
+	thumbnailSvc      thumbnailGenerator
+	store             storage.Provider
+	exifSvc           exifExtractor
+	publisher         Publisher                       // optional — emits asset.ready events when set
+	faceEnqueuer      FaceEnqueuer                    // optional — enqueues face_detection AIJob after ready
+	derivRepo         *repository.AssetDerivativeRepo // optional — persists per-variant size into asset_derivatives
+	accountingSvc     *service.StorageAccounting      // optional — increments workspace_storage.derivative_bytes
+	encryptionEnabled bool
+	encryptionAlgo    string
+	encryptionVersion int
+	pollInterval      time.Duration
+	stopCh            chan struct{}
 }
 
 // WithPublisher wires an event publisher for asset.ready notifications.
@@ -81,10 +102,23 @@ func (w *ThumbnailWorker) WithStorageAccounting(s *service.StorageAccounting) *T
 	return w
 }
 
+// WithExifService wires EXIF extraction into the live thumbnail pipeline.
+func (w *ThumbnailWorker) WithExifService(s exifExtractor) *ThumbnailWorker {
+	w.exifSvc = s
+	return w
+}
+
+func (w *ThumbnailWorker) WithEncryptionMetadata(enabled bool, algo string, version int) *ThumbnailWorker {
+	w.encryptionEnabled = enabled
+	w.encryptionAlgo = algo
+	w.encryptionVersion = version
+	return w
+}
+
 // NewThumbnailWorker creates a new ThumbnailWorker.
 func NewThumbnailWorker(
-	assetRepo *repository.AssetRepo,
-	thumbnailSvc *service.ThumbnailService,
+	assetRepo assetRepository,
+	thumbnailSvc thumbnailGenerator,
 	store storage.Provider,
 ) *ThumbnailWorker {
 	return &ThumbnailWorker{
@@ -149,6 +183,7 @@ func (w *ThumbnailWorker) processNextBatch(ctx context.Context) {
 	for _, asset := range assets {
 		if err := w.processOne(ctx, &asset); err != nil {
 			log.Printf("thumbnail worker: process %s failed: %v", asset.ID, err)
+			_ = w.assetRepo.UpdateProcessingError(ctx, asset.ID, err.Error())
 			_ = w.assetRepo.UpdateStatus(ctx, asset.ID, "error")
 			continue
 		}
@@ -214,13 +249,18 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 		var newTotal int64
 		for _, v := range result.Variants {
 			d := &repository.AssetDerivative{
-				AssetID:    asset.ID,
-				Variant:    v.Variant,
-				StorageKey: v.StorageKey,
-				Width:      v.Width,
-				Height:     v.Height,
-				SizeBytes:  v.SizeBytes,
-				Format:     v.Format,
+				AssetID:           asset.ID,
+				Variant:           v.Variant,
+				StorageKey:        v.StorageKey,
+				Width:             v.Width,
+				Height:            v.Height,
+				SizeBytes:         v.SizeBytes,
+				Format:            v.Format,
+				IsEncrypted:       w.encryptionEnabled,
+				EncryptionVersion: w.encryptionVersion,
+			}
+			if w.encryptionAlgo != "" {
+				d.EncryptionAlgo = &w.encryptionAlgo
 			}
 			if err := w.derivRepo.Upsert(ctx, d); err != nil {
 				log.Printf("thumbnail worker: derivative upsert %s/%s failed (non-fatal): %v", asset.ID, v.Variant, err)
@@ -240,6 +280,12 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	// Update dimensions if detected
 	if result.Width > 0 && result.Height > 0 {
 		w.updateDimensions(ctx, asset.ID, result.Width, result.Height)
+	}
+
+	if w.exifSvc != nil {
+		if err := w.exifSvc.ExtractAndStore(ctx, asset.ID, asset.StorageKey); err != nil {
+			log.Printf("thumbnail worker: exif extraction %s failed (non-fatal): %v", asset.ID, err)
+		}
 	}
 
 	// Mark as ready

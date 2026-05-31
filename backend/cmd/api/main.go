@@ -353,6 +353,38 @@ func isPublicThumbnailKey(key string) bool {
 	return publicThumbnailKeyRe.MatchString(key)
 }
 
+func storageKeyBelongsToWorkspace(ctx context.Context, pool *pgxpool.Pool, key string, workspaceID string) (bool, error) {
+	if pool == nil {
+		return false, errors.New("database pool not configured")
+	}
+	wsID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return false, nil
+	}
+	var ok bool
+	err = pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			  FROM assets a
+			 WHERE a.storage_key = $1
+			   AND a.workspace_id = $2
+			   AND a.deleted_at IS NULL
+			UNION
+			SELECT 1
+			  FROM asset_derivatives d
+			  JOIN assets a ON a.id = d.asset_id
+			 WHERE d.storage_key = $1
+			   AND a.workspace_id = $2
+			   AND a.deleted_at IS NULL
+		)`,
+		key, wsID,
+	).Scan(&ok)
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 type platformSettingsSMTPReader struct {
 	repo *repository.PlatformSettingsRepo
 }
@@ -756,6 +788,10 @@ func kekRequiredForEnv(appEnv string) bool {
 		// and anything unrecognized → KEK is mandatory (fail closed).
 		return true
 	}
+}
+
+func storageSSERequiredForEnv(appEnv string) bool {
+	return kekRequiredForEnv(appEnv)
 }
 
 func main() {
@@ -1297,6 +1333,9 @@ func main() {
 	if storageCfg.Driver == "local" {
 		log.Fatal("FATAL: STORAGE_DRIVER=local is not allowed. Use Backblaze B2 (s3). Set B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT in environment.")
 	}
+	if storageSSERequiredForEnv(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))) && strings.TrimSpace(storageCfg.SSEMode) == "" {
+		log.Fatalf("FATAL: STORAGE_SSE_MODE is required for APP_ENV=%q. Set STORAGE_SSE_MODE=AES256 or STORAGE_SSE_MODE=SSE-C with STORAGE_SSE_C_KEY.", os.Getenv("APP_ENV"))
+	}
 	storageProvider, err := storage.NewProvider(storageCfg)
 	if err != nil {
 		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT are set.", err)
@@ -1341,22 +1380,29 @@ func main() {
 	// /api/v1/albums/{id}/assets endpoint dispatches smart-album
 	// filters instead of returning the empty manual join table.
 	albumSvc := service.NewAlbumService(albumRepo).
+		WithGalleryRepo(galleryRepo).
 		WithAssetRepo(assetRepo).
 		WithFavoritesRepo(galleryFavoritesRepo)
 
 	// M2 Services
-	exifSvc := service.NewExifService()
-	uploadSvc := service.NewUploadService(storageProvider, assetRepo, exifSvc).WithStorageAccounting(storageAccountingSvc)
+	exifSvc := service.NewExifServiceWithDeps(storageProvider, assetRepo)
+	storageEncrypted := storageCfg.EncryptionEnabled()
+	storageEncryptionAlgo := storageCfg.EncryptionAlgorithm()
+	const storageEncryptionVersion = 1
+	uploadSvc := service.NewUploadService(storageProvider, assetRepo, exifSvc).
+		WithStorageAccounting(storageAccountingSvc).
+		WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion)
 
 	// ──────────────────────── M16 Tier D Upload Screening ──────────────────
 	// Build the validation stack up-front so it can be wired into both the
 	// chunked upload handler (M2) and the asset handler (M2). The services
 	// here depend on sqlDB (the stdlib adapter over the pgx pool).
 	//
-	// Enforcement mode is opt-in via TIER_D_ENFORCE_MODE=1 so we can roll
-	// out in telemetry-only mode first, observe the real reject rate, and
-	// flip the switch once we are confident. Missing env var → telemetry-only.
-	m16EnforceMode := os.Getenv("TIER_D_ENFORCE_MODE") == "1"
+	// Enforcement mode is fail-closed by default. Set
+	// TIER_D_ENFORCE_MODE=0 only for local migration/debugging; production
+	// upload screening must reject bad/missing manifests rather than run as
+	// telemetry-only.
+	m16EnforceMode := os.Getenv("TIER_D_ENFORCE_MODE") != "0"
 	uploadPolicyCatalog := service.NewUploadPolicyCatalog(sqlDB)
 	workspacePolicySvc := service.NewWorkspacePolicyService(sqlDB, nil) // audit log wired below after auditLogSvc
 	// UploadAllowlist: token issue/consume for FP override flow.
@@ -1643,6 +1689,7 @@ func main() {
 		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, uploadSessionsRepo).
 			WithValidation(uploadValidationSvc).
 			WithStorageAccounting(storageAccountingSvc).
+			WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion).
 			WithUploadCredit(uploadCreditGate)
 		chunkedHandler.RegisterRoutes(api)
 
@@ -2484,8 +2531,19 @@ func main() {
 				http.Error(w, `{"error":"unauthenticated"}`, http.StatusUnauthorized)
 				return
 			}
-			if _, err := jwtSvc.ParseAccessToken(r.Context(), tokenStr); err != nil {
+			claims, err := jwtSvc.ParseAccessToken(r.Context(), tokenStr)
+			if err != nil {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+			ok, err := storageKeyBelongsToWorkspace(r.Context(), dbPool, key, claims.WorkspaceID)
+			if err != nil {
+				log.Printf("storage proxy workspace check %q failed: %v", key, err)
+				http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
+				return
+			}
+			if !ok {
+				http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
 				return
 			}
 		}
@@ -2538,7 +2596,9 @@ func main() {
 	thumbWorker := worker.NewThumbnailWorker(assetRepo, thumbnailSvc, storageProvider).
 		WithPublisher(eventBroker).
 		WithDerivativeRepo(assetDerivativeRepo).
-		WithStorageAccounting(storageAccountingSvc)
+		WithStorageAccounting(storageAccountingSvc).
+		WithExifService(exifSvc).
+		WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion)
 	if faceEnqueueAdapter != nil {
 		thumbWorker = thumbWorker.WithFaceEnqueuer(faceEnqueueAdapter)
 	}

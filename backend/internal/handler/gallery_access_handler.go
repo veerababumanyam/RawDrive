@@ -65,7 +65,7 @@ func (h *GalleryAccessHandler) VerifyPassword(w http.ResponseWriter, r *http.Req
 	http.SetCookie(w, &http.Cookie{
 		Name:     "gallery_session",
 		Value:    token,
-		Path:     "/g/" + slug,
+		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   true,

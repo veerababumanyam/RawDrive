@@ -40,19 +40,22 @@ func TestWorkspaceStorage_WarningLevel(t *testing.T) {
 	tests := []struct {
 		name     string
 		used     int64
+		reserved int64
 		quota    int64
 		expected string
 	}{
-		{"no quota", 1000, 0, "none"},
-		{"under 80%", 700, 1000, "none"},
-		{"at 80%", 800, 1000, "warning"},
-		{"at 90%", 900, 1000, "warning"},
-		{"at 95%", 950, 1000, "critical"},
-		{"over 100%", 1100, 1000, "critical"},
+		{"no quota", 1000, 0, 0, "none"},
+		{"under 80%", 700, 0, 1000, "none"},
+		{"at 80%", 800, 0, 1000, "warning"},
+		{"reserved counts toward warning", 700, 100, 1000, "warning"},
+		{"reserved counts toward critical", 850, 100, 1000, "critical"},
+		{"at 90%", 900, 0, 1000, "warning"},
+		{"at 95%", 950, 0, 1000, "critical"},
+		{"over 100%", 1100, 0, 1000, "critical"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ws := WorkspaceStorage{UsedBytes: tt.used, QuotaBytes: tt.quota}
+			ws := WorkspaceStorage{UsedBytes: tt.used, ReservedBytes: tt.reserved, QuotaBytes: tt.quota}
 			assert.Equal(t, tt.expected, ws.WarningLevel())
 		})
 	}

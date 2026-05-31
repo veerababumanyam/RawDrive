@@ -1173,7 +1173,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       ) : (
                         <button onClick={upload.pauseAll} className="text-xs text-text-secondary hover:underline">Pause All</button>
                       )}
-                      <button onClick={upload.cancelAll} className="text-xs text-danger hover:underline">Cancel All</button>
+                      <button onClick={upload.cancelAll} className="text-xs text-error hover:underline">Cancel All</button>
                     </>
                   )}
                   {activeUploadCount === 0 && failedUploadCount > 0 && (
@@ -1240,7 +1240,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     item.status === "needs_desktop" ? "Desktop" : item.status;
                   const statusTone =
                     item.status === "complete" ? "text-success" :
-                    isFailed ? "text-danger" :
+                    isFailed ? "text-error" :
                     item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" :
                     "text-text-secondary";
                   return (
@@ -1270,7 +1270,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         )}
                       </div>
                       {isFailed && item.error && (
-                        <div className="pl-2 text-[10px] text-danger">
+                        <div className="pl-2 text-[10px] text-error">
                           {item.error}
                         </div>
                       )}
@@ -1717,7 +1717,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm"
                           aria-label={`${favoriteCount} guest favorite${favoriteCount === 1 ? "" : "s"}`}
                         >
-                          <svg className="h-3.5 w-3.5 text-accent-danger" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <svg className="h-3.5 w-3.5 text-error" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M12 21s-7-4.5-9.5-9C.5 8.5 2 4 6 4c2 0 3.5 1 4 2 .5-1 2-2 4-2 4 0 5.5 4.5 3.5 8-2.5 4.5-9.5 9-9.5 9z" />
                           </svg>
                           {favoriteCount}
@@ -1787,7 +1787,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                                     <span>{copiedAssetId === entry.asset.id ? "Copied!" : "Share"}</span>
                                   </button>
                                   <button
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-white/[0.06] transition-colors rounded-b-xl"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-error hover:bg-white/[0.06] transition-colors rounded-b-xl"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setOpenMenuAssetId(null);

@@ -69,3 +69,24 @@ func (c Config) Validate() error {
 
 	return nil
 }
+
+// EncryptionEnabled reports whether writes through this config request
+// provider-side object encryption headers.
+func (c Config) EncryptionEnabled() bool {
+	return strings.TrimSpace(c.SSEMode) != ""
+}
+
+// EncryptionAlgorithm returns the stable metadata value stored on assets and
+// derivatives for audit/display. Empty means storage encryption is disabled.
+func (c Config) EncryptionAlgorithm() string {
+	switch strings.TrimSpace(c.SSEMode) {
+	case "AES256":
+		return "SSE-B2-AES256"
+	case "aws:kms":
+		return "SSE-KMS"
+	case "SSE-C":
+		return "SSE-C-AES256"
+	default:
+		return ""
+	}
+}

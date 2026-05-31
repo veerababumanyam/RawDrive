@@ -752,7 +752,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 {/* M19: Selection checkmark overlay */}
                 {isProofing && selectedIds.has(asset.id) && (
                   <div className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-accent-primary flex items-center justify-center shadow-md">
-                    <CheckCircle className="w-5 h-5 text-accent-primary-contrast" />
+                    <CheckCircle className="w-5 h-5 text-text-inverse" />
                   </div>
                 )}
                 {/* Per-tile actions — Favorite + Download.
@@ -959,7 +959,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               <button
                 type="button"
                 onClick={() => setShowSubmit(true)}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-accent-primary text-accent-primary-contrast hover:opacity-90 transition-opacity"
+                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity"
               >
                 Submit Selections
               </button>
@@ -1023,7 +1023,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 type="button"
                 onClick={handleSubmitSelections}
                 disabled={!submitEmail || submitting}
-                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-primary text-accent-primary-contrast hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit"}
               </button>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -15,10 +16,13 @@ import (
 
 // UploadService handles file upload orchestration.
 type UploadService struct {
-	storage    storage.Provider
-	assetRepo  *repository.AssetRepo
-	exifSvc    *ExifService
-	storageSvc *StorageAccounting
+	storage           storage.Provider
+	assetRepo         *repository.AssetRepo
+	exifSvc           *ExifService
+	storageSvc        *StorageAccounting
+	encryptionEnabled bool
+	encryptionAlgo    string
+	encryptionVersion int
 }
 
 // NewUploadService creates a new UploadService.
@@ -29,6 +33,13 @@ func NewUploadService(store storage.Provider, assetRepo *repository.AssetRepo, e
 // WithStorageAccounting attaches the storage accounting service for quota tracking.
 func (s *UploadService) WithStorageAccounting(sa *StorageAccounting) *UploadService {
 	s.storageSvc = sa
+	return s
+}
+
+func (s *UploadService) WithEncryptionMetadata(enabled bool, algo string, version int) *UploadService {
+	s.encryptionEnabled = enabled
+	s.encryptionAlgo = algo
+	s.encryptionVersion = version
 	return s
 }
 
@@ -51,17 +62,23 @@ type UploadResult struct {
 
 // Upload stores a file and creates an asset record.
 func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadResult, error) {
-	// 2026-05-20: enforce per-workspace plan storage quota BEFORE writing to
-	// B2 — otherwise an over-quota user costs us bandwidth + creates an
-	// orphan object that has to be GC'd. CheckQuota returns true for
-	// workspaces without a seeded quota (treated as unlimited) and for any
-	// addition that fits inside `used_bytes + additional <= quota_bytes`.
-	// Returning ErrStorageQuotaExceeded lets handler/asset_handler.go map
-	// this to a 403 with the documented `storage_quota_exceeded` payload.
-	// Best-effort fallback: if the quota service is not wired (e.g. unit
-	// tests pass nil), skip the check rather than fail-closed on infra
-	// misconfiguration — RecordUpload has the same fallback semantics.
+	reservedStorage := false
 	if s.storageSvc != nil {
+		if qErr := s.storageSvc.ReserveUpload(ctx, input.WorkspaceID, input.SizeBytes); qErr != nil {
+			if errors.Is(qErr, ErrStorageQuotaExceeded) {
+				return nil, ErrStorageQuotaExceeded
+			}
+			return nil, fmt.Errorf("upload: quota reserve: %w", qErr)
+		}
+		reservedStorage = true
+	}
+	releaseReservation := func() {
+		if reservedStorage && s.storageSvc != nil {
+			_ = s.storageSvc.ReleaseUploadReservation(ctx, input.WorkspaceID, input.SizeBytes)
+			reservedStorage = false
+		}
+	}
+	if s.storageSvc != nil && !reservedStorage {
 		allowed, qErr := s.storageSvc.CheckQuota(ctx, input.WorkspaceID, input.SizeBytes)
 		if qErr != nil {
 			return nil, fmt.Errorf("upload: quota check: %w", qErr)
@@ -84,34 +101,45 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadR
 	tee := io.TeeReader(input.Body, hasher)
 
 	if err := s.storage.Put(ctx, storageKey, tee, input.SizeBytes, input.ContentType); err != nil {
+		releaseReservation()
 		return nil, fmt.Errorf("upload: store file: %w", err)
 	}
 
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
 	asset := &repository.Asset{
-		ID:            assetID,
-		WorkspaceID:   input.WorkspaceID,
-		Filename:      input.Filename,
-		ContentType:   input.ContentType,
-		SizeBytes:     input.SizeBytes,
-		StorageKey:    storageKey,
-		StorageDriver: "r2",
-		Status:        "processing",
-		UploadedBy:    &input.UploadedBy,
-		ExifData:      map[string]interface{}{},
-		ThumbnailURLs: map[string]string{},
+		ID:                assetID,
+		WorkspaceID:       input.WorkspaceID,
+		Filename:          input.Filename,
+		ContentType:       input.ContentType,
+		SizeBytes:         input.SizeBytes,
+		StorageKey:        storageKey,
+		StorageDriver:     "r2",
+		Status:            "processing",
+		UploadedBy:        &input.UploadedBy,
+		ExifData:          map[string]interface{}{},
+		ThumbnailURLs:     map[string]string{},
+		IsEncrypted:       s.encryptionEnabled,
+		EncryptionVersion: s.encryptionVersion,
+	}
+	if s.encryptionAlgo != "" {
+		asset.EncryptionAlgo = &s.encryptionAlgo
 	}
 
 	if err := s.assetRepo.Create(ctx, asset); err != nil {
 		// Attempt cleanup on failure
 		_ = s.storage.Delete(ctx, storageKey)
+		releaseReservation()
 		return nil, fmt.Errorf("upload: create asset: %w", err)
 	}
 
-	// Record storage usage for quota tracking (best-effort — don't fail upload)
-	if s.storageSvc != nil {
-		_ = s.storageSvc.RecordUpload(ctx, input.WorkspaceID, input.SizeBytes, 0)
+	if reservedStorage && s.storageSvc != nil {
+		if err := s.storageSvc.CommitUploadReservation(ctx, input.WorkspaceID, input.SizeBytes, 0); err != nil {
+			_ = s.storage.Delete(ctx, storageKey)
+			_ = s.assetRepo.SoftDelete(ctx, asset.ID)
+			return nil, fmt.Errorf("upload: commit storage reservation: %w", err)
+		}
+		reservedStorage = false
 	}
 
 	return &UploadResult{

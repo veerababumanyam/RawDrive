@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,13 +12,18 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 )
 
+type processingAssetRepo interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*repository.Asset, error)
+	RetryFailedByGallery(ctx context.Context, galleryID, workspaceID uuid.UUID) (int64, error)
+}
+
 // ProcessingStatusHandler handles asset processing status SSE and REST endpoints.
 type ProcessingStatusHandler struct {
-	assetRepo *repository.AssetRepo
+	assetRepo processingAssetRepo
 }
 
 // NewProcessingStatusHandler creates a new ProcessingStatusHandler.
-func NewProcessingStatusHandler(ar *repository.AssetRepo) *ProcessingStatusHandler {
+func NewProcessingStatusHandler(ar processingAssetRepo) *ProcessingStatusHandler {
 	return &ProcessingStatusHandler{assetRepo: ar}
 }
 
@@ -40,6 +46,7 @@ func (h *ProcessingStatusHandler) GetStatus(w http.ResponseWriter, r *http.Reque
 		"data": map[string]interface{}{
 			"asset_id":          asset.ID,
 			"processing_status": asset.Status,
+			"processing_error":  asset.ProcessingError,
 			"updated_at":        asset.UpdatedAt,
 		},
 	})
@@ -83,13 +90,24 @@ func (h *ProcessingStatusHandler) BulkRetry(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// For now, return the gallery ID — actual NATS publish will be wired in integration
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	retried, err := h.assetRepo.RetryFailedByGallery(r.Context(), galleryID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"retry failed"}`, http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"data": map[string]interface{}{
 			"gallery_id": galleryID,
-			"message":    "bulk retry queued",
+			"retried":    retried,
+			"message":    "failed assets queued for retry",
 		},
 	})
 }
-
