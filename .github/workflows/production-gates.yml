@@ -121,7 +121,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
+      # SARIF uploads to GitHub Code Scanning are intentionally omitted
+      # — this repo does not have GitHub Advanced Security enabled, so
+      # github/codeql-action/upload-sarif@v3 errors with
+      #   ##[error]Code Security must be enabled for this repository
+      #   to use code scanning
+      # which used to cascade-skip gitleaks + trivy. Each scanner
+      # blocks via its own exit code instead. If/when GHAS is enabled,
+      # restore the upload-sarif steps and add:
+      #   security-events: write
+      #   actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,14 +148,22 @@ jobs:
 
       - name: Run semgrep
         id: semgrep
-        # SOC2 CC7.1: SAST findings now block the build.
-        # Was advisory (continue-on-error: true) during rollout.
-        # --config auto pulls the default Semgrep Registry rule packs
-        # (security + best-practice) matched against detected languages.
-        # SARIF output uploads to the Security tab below.
+        # SAST scan — advisory while the existing 6 findings on main
+        # are triaged. To make findings blocking (SOC2 CC7.1 intent),
+        # add `--error` here once the baseline is at zero.
+        # --config p/ci is the Semgrep Registry's deterministic CI pack
+        # (security + best-practice rules curated for build gates). We
+        # previously used --config auto, but `auto` requires --metrics=on
+        # because the auto-config selection is driven by registry
+        # telemetry; running --config auto --metrics=off fails with
+        # "Cannot create auto config when metrics are off". p/ci avoids
+        # both the telemetry requirement and the variable rule-set that
+        # `auto` produces — explicit ruleset = reproducible gate.
+        # SARIF is written to a workflow artifact (Code Scanning is
+        # disabled on this repo — see security: permissions block).
         run: |
           semgrep scan \
-            --config auto \
+            --config p/ci \
             --sarif \
             --output semgrep.sarif \
             --metrics=off \
@@ -155,12 +172,14 @@ jobs:
             --exclude frontend/.next \
             .
 
-      - name: Upload semgrep SARIF
+      - name: Archive semgrep SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: semgrep.sarif
-          category: semgrep
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: ignore
+          retention-days: 30
 
       # gitleaks is BLOCKING by design — secret leakage is exactly the
       # class of finding that should stop a build. No continue-on-error.
@@ -169,6 +188,7 @@ jobs:
       # change in this repo.
       - name: Run gitleaks
         id: gitleaks
+        if: always()
         uses: gitleaks/gitleaks-action@v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -176,14 +196,14 @@ jobs:
           # not personal accounts. Leave unset for personal repos.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
-      # trivy is advisory during rollout. Pinned to a released tag
-      # instead of @master so a compromised upstream main cannot run
-      # arbitrary code in CI with security-events: write permission.
+      # trivy is BLOCKING on CRITICAL/HIGH via exit-code: "1".
+      # Pinned to v0.36.0 (released tag, not @master) so a compromised
+      # upstream main cannot run arbitrary code in CI.
       - name: Run trivy filesystem scan
         id: trivy
-        # SOC2 CC7.1: SCA findings (CRITICAL/HIGH) now block the build.
-        # Was advisory (continue-on-error: true) during rollout.
-        uses: aquasecurity/trivy-action@0.24.0
+        if: always()
+        # SOC2 CC7.1: SCA findings (CRITICAL/HIGH) block the build.
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -194,12 +214,14 @@ jobs:
           # defaults but these are the big ones for this repo.
           skip-dirs: node_modules,_cobolt-output,frontend/.next,backend/vendor
           # exit-code 1 causes the step (and job) to fail when CRITICAL/HIGH
-          # findings are found. SARIF still uploads via the always() step below.
+          # findings are found.
           exit-code: "1"
 
-      - name: Upload trivy SARIF
+      - name: Archive trivy SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy-results.sarif
-          category: trivy
+          name: trivy-sarif
+          path: trivy-results.sarif
+          if-no-files-found: ignore
+          retention-days: 30
