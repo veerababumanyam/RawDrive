@@ -227,7 +227,6 @@ export function SidebarAvatar({
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold text-text-primary">
         {initials}
         {avatarUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={avatarUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         )}
       </div>

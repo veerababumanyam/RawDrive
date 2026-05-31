@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -16,9 +16,19 @@ import {
   setSpendCap,
   validateAIKey,
 } from "../ai";
+import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
 
 beforeEach(() => {
   mockFetch.mockReset();
+  // getFaceClusters routes through authFetch, which reads the in-memory
+  // access-token cache (getStoredAccessToken) rather than its token arg.
+  // Seed the cache so authFetch attaches the Authorization header that the
+  // endpoint assertion below verifies.
+  persistAuthTokens("test-token");
+});
+
+afterEach(() => {
+  clearAuthTokens();
 });
 
 describe("AI API Client", () => {
@@ -33,10 +43,10 @@ describe("AI API Client", () => {
     const result = await getFaceClusters(token);
     expect(result).toHaveLength(1);
     expect(result[0].cluster_name).toBe("Bride");
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/ai/clusters"),
-      expect.objectContaining({ headers: { Authorization: "Bearer test-token" } })
-    );
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/ai/clusters");
+    expect(init.credentials).toBe("include");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-token");
   });
 
   it("getFaceClusters with gallery filter", async () => {

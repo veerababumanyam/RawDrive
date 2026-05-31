@@ -806,8 +806,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                           {/* Favorite */}
                           <button
                             type="button"
-                            role="menuitem"
-                            aria-pressed={favorites.has(asset.id)}
+                            role="menuitemcheckbox"
+                            aria-checked={favorites.has(asset.id)}
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleFavorite(asset.id);

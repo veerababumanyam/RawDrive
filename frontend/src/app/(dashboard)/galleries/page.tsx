@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { listGalleries, createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
+import { createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";

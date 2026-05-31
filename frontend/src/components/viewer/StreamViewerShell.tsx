@@ -60,9 +60,12 @@ export function StreamViewerShell({
 
   switch (initialState) {
     case "scheduled":
+      // DEF-2: never fabricate a timestamp. When scheduled_at is missing,
+      // CountdownView's invalid-date guard shows the calm "Starting soon"
+      // pending state instead of a 00:00:00 countdown.
       return (
         <CountdownView
-          scheduledAt={initialPayload.scheduled_at ?? new Date().toISOString()}
+          scheduledAt={initialPayload.scheduled_at ?? ""}
           brandName={brandName}
         />
       );

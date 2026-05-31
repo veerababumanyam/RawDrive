@@ -27,6 +27,13 @@ vi.mock("@/lib/auth", () => ({
   refreshAuthSession: auth.refreshAuthSession,
 }));
 
+// Pin OAuth availability so these callback-handling tests stay deterministic
+// and the Google button always renders (OBS-2 gating is covered separately in
+// LoginForm.oauthAvailability.test.tsx).
+vi.mock("@/hooks/useOAuthAvailability", () => ({
+  useOAuthAvailability: () => ({ enabled: true, loading: false }),
+}));
+
 import { LoginForm } from "../LoginForm";
 
 describe("LoginForm Google OAuth callback handling", () => {

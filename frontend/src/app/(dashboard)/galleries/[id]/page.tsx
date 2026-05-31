@@ -13,7 +13,6 @@ import {
   listGalleryAlbums,
   listGalleryAssets,
   updateGallery,
-  updateGalleryCover,
   type Gallery,
   type GalleryAlbum,
   type GalleryAsset,
@@ -26,12 +25,11 @@ import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
   assetIsProcessing,
   getAssetPreviewUrl,
-  proofingStatusClasses,
 } from "@/lib/dashboard-ui";
 import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Share, CheckCircle, EllipsisVertical, Trash, XMark } from "@/components/icons";
+import { Share, EllipsisVertical, Trash, XMark } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
@@ -42,10 +40,7 @@ import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 // public-gallery-enhancements still dispatches those events via the
 // FaceID gate (GAL-FR-107/108). If the dashboard ever needs the chip
 // strip back, re-add the import + the JSX render block.
-import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
-import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
-import { SalesContinuityPanel } from "@/components/gallery/sales-continuity-panel";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -148,7 +143,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [editingDesc, setEditingDesc] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
-  const [proofingFilter, setProofingFilter] = useState<string | null>(null);
+  const [proofingFilter] = useState<string | null>(null);
   // Face-filter state: when non-null, only assets whose id is in this
   // set are rendered in the grid. Populated by the rawdrive:face-filter
   // event that FaceFilter dispatches after fetching cluster assets.
@@ -922,14 +917,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     };
     input.click();
   }, [submitFiles]);
-
-  const selectionCounts = useMemo(() => {
-    if (!selections) return {};
-    return selections.reduce<Record<string, number>>((counts, selection) => {
-      counts[selection.status] = (counts[selection.status] || 0) + 1;
-      return counts;
-    }, {});
-  }, [selections]);
 
   if (loading) {
     return (

@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { listStreams, deleteStream, type Stream } from "@/lib/api/streams";
+import { type Stream } from "@/lib/api/streams";
 import { authFetch } from "@/lib/api/authFetch";
-import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Trash } from "@/components/icons";

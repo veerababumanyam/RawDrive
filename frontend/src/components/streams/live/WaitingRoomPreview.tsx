@@ -26,7 +26,6 @@ export function WaitingRoomPreview({ data }: WaitingRoomPreviewProps) {
       <h3 className="mb-3 text-base font-medium text-white/90">Waiting room preview</h3>
       <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-black/40">
         {data?.poster_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={data.poster_url} alt="" className="h-full w-full object-cover" />
         ) : (
           <div

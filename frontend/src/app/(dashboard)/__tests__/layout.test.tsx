@@ -175,7 +175,7 @@ describe("DashboardLayout role-based sidebar", () => {
     expect(screen.getByText("Super Admin")).toBeInTheDocument();
   });
 
-  it("renders DealerSidebar with 6 items for dealer", async () => {
+  it("renders DealerSidebar with 7 items for dealer", async () => {
     setRole("dealer");
     mockUsePathname.mockReturnValue("/dealer");
     renderDashboardLayout();
@@ -183,8 +183,12 @@ describe("DashboardLayout role-based sidebar", () => {
     await waitFor(() => {
       expect(screen.getByText("Dealer Portal")).toBeInTheDocument();
     });
+    // Anchored to avoid matching the header quick-nav link whose
+    // accessible name is "Dealer dashboard overview" (aria-label).
+    expect(screen.getByRole("link", { name: /^Dashboard Overview$/i })).toHaveAttribute("href", "/dealer");
     expect(screen.getByRole("link", { name: /My Territory/i })).toHaveAttribute("href", "/dealer/territory");
     expect(screen.getByRole("link", { name: /Registrations/i })).toHaveAttribute("href", "/dealer/registrations");
+    expect(screen.getByRole("link", { name: /Photographers/i })).toHaveAttribute("href", "/dealer/photographers");
     expect(screen.getByRole("link", { name: /Coupons/i })).toHaveAttribute("href", "/dealer/coupons");
     expect(screen.getByRole("link", { name: /Revenue Share/i })).toHaveAttribute("href", "/dealer/revenue-share");
     expect(screen.getByRole("link", { name: /Payouts/i })).toHaveAttribute("href", "/dealer/payouts");

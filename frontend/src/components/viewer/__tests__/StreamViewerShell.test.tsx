@@ -16,6 +16,15 @@ describe("StreamViewerShell sub-view routing", () => {
     expect(screen.getByTestId("viewer-countdown")).toBeTruthy();
   });
 
+  it("renders the pending state (not a zeroed countdown) for scheduled state with no scheduled_at", () => {
+    const noSchedule = { ...base, scheduled_at: undefined };
+    render(
+      <StreamViewerShell streamId="s1" initialState="scheduled" initialPayload={noSchedule} />,
+    );
+    expect(screen.getByTestId("viewer-countdown-pending")).toBeTruthy();
+    expect(screen.queryByTestId("viewer-countdown")).toBeNull();
+  });
+
   it("renders WaitingRoom for waiting state", () => {
     render(<StreamViewerShell streamId="s1" initialState="waiting_room" initialPayload={base} />);
     expect(screen.getByTestId("viewer-waiting-room")).toBeTruthy();

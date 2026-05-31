@@ -240,7 +240,6 @@ function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email
       >
         {initials}
         {userInfo.avatar_url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={userInfo.avatar_url} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         )}
       </button>
@@ -256,7 +255,6 @@ function UserMenu({ userInfo, role }: { userInfo: { display_name?: string; email
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-container-high text-sm font-bold text-text-primary">
                 {initials}
                 {userInfo.avatar_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={userInfo.avatar_url} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                 )}
               </div>

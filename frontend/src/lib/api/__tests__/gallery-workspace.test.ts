@@ -1,16 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGallery,
   duplicateGallery,
   getGalleryWorkspaceSummary,
   linkGalleryRelationships,
 } from "../galleries";
+import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  // These gallery workspace helpers route through authFetch, which reads
+  // the in-memory access-token cache (getStoredAccessToken) rather than
+  // its token arg. Seed the cache so the Authorization header is attached.
+  persistAuthTokens("token");
+});
+
+afterEach(() => {
+  clearAuthTokens();
 });
 
 describe("gallery workspace API", () => {
@@ -75,10 +84,10 @@ describe("gallery workspace API", () => {
 
     const summary = await getGalleryWorkspaceSummary("token", "gallery-1");
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/galleries/gallery-1/workspace-summary"),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token" }) }),
-    );
+    const [calledUrl, init] = fetchMock.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/galleries/gallery-1/workspace-summary");
+    expect(init.credentials).toBe("include");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer token");
     expect(summary.primary_contact?.name).toBe("Asha Sharma");
   });
 

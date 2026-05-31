@@ -19,7 +19,6 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/api/authFetch";
-import { getStoredAccessToken } from "@/lib/auth";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { CheckCircle, XMark, Plus } from "@/components/icons";
 import { IANA_TIMEZONES, isValidTimezone } from "@/lib/streams/timezones";
@@ -88,15 +87,6 @@ function validate(state: FormState): FieldErrors {
   }
 
   return errs;
-}
-
-function extractStatus(err: unknown): number | null {
-  if (!err || typeof err !== "object") return null;
-  const status = (err as { status?: unknown }).status;
-  if (typeof status === "number") return status;
-  const msg = err instanceof Error ? err.message : "";
-  const m = msg.match(/(\d{3})/);
-  return m ? Number(m[1]) : null;
 }
 
 export interface CreateStreamFormProps {

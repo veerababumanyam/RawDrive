@@ -63,8 +63,20 @@ describe("PublicGalleryGrid", () => {
   it("keeps public download controls available on touch screens", () => {
     render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
 
-    const downloadButton = screen.getByRole("button", { name: "Download" });
-    expect(downloadButton.parentElement).toHaveClass("opacity-100", "sm:opacity-0", "sm:group-hover:opacity-100");
+    // 2026-05-18 visibility revision: per-tile actions moved inside a
+    // "Photo options" overflow menu. Download is no longer a hover-reveal
+    // button parked on the tile — it's a menu item that is always tappable
+    // once the menu is open (no hover-gated opacity classes that hide it on
+    // touch screens). Open the menu, then assert the Download menuitem.
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+
+    const menu = screen.getByRole("menu");
+    const downloadItem = within(menu).getByRole("menuitem", { name: "Download" });
+    expect(downloadItem).toBeInTheDocument();
+    // The menuitem itself is full-width and never carries hover-only
+    // opacity gating, so it stays reachable on touch (no pointer hover).
+    expect(downloadItem).toHaveClass("flex", "w-full", "items-center");
+    expect(downloadItem.className).not.toMatch(/group-hover:opacity/);
   });
 
   it("renders a per-tile favorite toggle alongside the download button", async () => {
@@ -76,25 +88,65 @@ describe("PublicGalleryGrid", () => {
       value: { origin: "https://app.rawdrive.test", search: "" },
       writable: true,
     });
+    mockedAdd.mockClear().mockResolvedValue(undefined);
+    // Mount hydration calls listPublicFavoriteAssetIds and, when it resolves,
+    // replaces local state with the server set. Resolve it to an empty list so
+    // the asset starts unfavorited, and (below) wait for that mount fetch to
+    // settle BEFORE toggling — otherwise the async [] resolution races the
+    // optimistic add and silently wipes it.
+    mockedList.mockClear().mockResolvedValue([]);
 
     render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
 
-    // Two action buttons on the tile: Favorite (default state) and Download.
-    const favoriteButton = screen.getByRole("button", { name: "Add to favorites" });
-    const downloadButton = screen.getByRole("button", { name: "Download" });
-    expect(favoriteButton).toBeInTheDocument();
-    expect(downloadButton).toBeInTheDocument();
-
-    // Clicking the star flips it to the "Remove from favorites" affordance
-    // and fires the public favorites API. Click is wrapped in stopPropagation
-    // so the tile-click lightbox handler must NOT have fired — no dialog open.
-    fireEvent.click(favoriteButton);
+    // Let the mount-time server hydration complete first so its setFavorites([])
+    // can't overwrite the optimistic toggle we perform next.
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Remove from favorites" }),
-      ).toBeInTheDocument();
+      expect(mockedList).toHaveBeenCalledWith(
+        "wedding-gallery",
+        expect.any(String),
+      );
     });
+
+    // 2026-05-18 visibility revision: per-tile Favorite + Download now live
+    // inside a "Photo options" overflow menu rather than as bare buttons on
+    // the tile. Open the menu first, then assert the menu items.
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+
+    const menu = screen.getByRole("menu");
+    // Two action items on the tile menu: Favorite (default state) and Download.
+    // Note the per-tile favorite label is "Add to favorites" / "Remove
+    // favorite" (NOT "Remove from favorites" — that's the lightbox label).
+    // The favorite is a checkable menu item → role="menuitemcheckbox" with
+    // aria-checked (valid ARIA; menuitem does not support aria-pressed).
+    const favoriteItem = within(menu).getByRole("menuitemcheckbox", { name: /add to favorites/i });
+    const downloadItem = within(menu).getByRole("menuitem", { name: "Download" });
+    expect(favoriteItem).toBeInTheDocument();
+    expect(downloadItem).toBeInTheDocument();
+    // Default (unfavorited) state exposes the unchecked affordance.
+    expect(favoriteItem).toHaveAttribute("aria-checked", "false");
+
+    // Clicking the favorite menuitem flips it to the "Remove favorite"
+    // affordance AND fires the public favorites API. The handler calls
+    // stopPropagation so the tile-click lightbox handler must NOT have fired —
+    // no dialog open. The toggle is synchronous (optimistic setFavorites) and
+    // also closes the menu, so re-open it to read the flipped favorite control.
+    fireEvent.click(favoriteItem);
+
+    // The public favorites API fired with the add (POST) path.
+    expect(mockedAdd).toHaveBeenCalledWith(
+      "wedding-gallery",
+      "asset-wide",
+      expect.any(String),
+    );
     expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Re-open the menu — the favorite item now reads "Remove favorite" and
+    // reports aria-checked=true, proving the toggle flipped the visible state.
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+    const reopenedMenu = screen.getByRole("menu");
+    const removeItem = within(reopenedMenu).getByRole("menuitemcheckbox", { name: /remove favorite/i });
+    expect(removeItem).toBeInTheDocument();
+    expect(removeItem).toHaveAttribute("aria-checked", "true");
   });
 
   it("lets fullscreen lightbox images fill the viewport while preserving aspect ratio", () => {
@@ -108,8 +160,18 @@ describe("PublicGalleryGrid", () => {
     const dialog = screen.getByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i });
     const lightboxImage = within(dialog).getByRole("img", { name: "Wedding (42).jpg" });
 
+    // The <img> fills its box and preserves aspect ratio via object-contain.
     expect(lightboxImage).toHaveClass("h-full", "w-full", "object-contain");
-    expect(lightboxImage.parentElement).toHaveClass("absolute", "inset-0", "overflow-auto");
+    // Its immediate parent is the relative full-size wrapper that lets the
+    // watermark overlay track the zoom transform. That wrapper sits inside
+    // the absolutely-positioned, scrollable lightbox viewport, so the image
+    // expands to fill the viewport while staying centered.
+    expect(lightboxImage.parentElement).toHaveClass("relative", "h-full", "w-full");
+    expect(lightboxImage.parentElement?.parentElement).toHaveClass(
+      "absolute",
+      "inset-0",
+      "overflow-auto",
+    );
   });
 
   describe("lightbox client actions", () => {
@@ -144,9 +206,12 @@ describe("PublicGalleryGrid", () => {
       render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
       const dialog = openLightbox();
 
+      // Lightbox GlassIconButtons expose accessible names via their `label`
+      // prop: favorite = "Add to favorites", download = "Download original",
+      // share = "Share photo" (default; flips to "Share link copied" on copy).
       expect(within(dialog).getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: /download original/i })).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: /copy share link/i })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: /share photo/i })).toBeInTheDocument();
     });
 
     it("hides Download when the gallery has downloads disabled", () => {
@@ -162,7 +227,7 @@ describe("PublicGalleryGrid", () => {
       expect(within(dialog).queryByRole("button", { name: /download original/i })).toBeNull();
       // Star + Share still present (those don't depend on download permission).
       expect(within(dialog).getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: /copy share link/i })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: /share photo/i })).toBeInTheDocument();
     });
 
     it("toggles favorite state when the Star button is clicked", () => {
@@ -201,14 +266,19 @@ describe("PublicGalleryGrid", () => {
       render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
       const dialog = openLightbox();
 
-      fireEvent.click(within(dialog).getByRole("button", { name: /copy share link/i }));
+      // The lightbox Share control's default accessible name is "Share photo";
+      // it copies the canonical single-photo deep link to the clipboard.
+      fireEvent.click(within(dialog).getByRole("button", { name: /share photo/i }));
 
       await waitFor(() => {
+        // 2026-05-18: share URLs now point at the dedicated single-photo
+        // route `/g/{slug}/photo/{assetId}`, not the legacy `?asset=` deep link.
         expect(writeText).toHaveBeenCalledWith(
-          "https://app.rawdrive.test/g/wedding-gallery?asset=asset-wide",
+          "https://app.rawdrive.test/g/wedding-gallery/photo/asset-wide",
         );
       });
-      // After the copy resolves the label flips to the copied state.
+      // After the copy resolves the label flips to the copied state
+      // ("Share link copied").
       expect(
         await within(dialog).findByRole("button", { name: /share link copied/i }),
       ).toBeInTheDocument();

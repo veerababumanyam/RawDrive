@@ -21,6 +21,7 @@ import {
   type InitialStateSnapshot,
 } from "@/lib/viewer/api";
 import { StreamViewerShell, type ViewerState } from "@/components/viewer/StreamViewerShell";
+import { StreamUnavailableView } from "@/components/viewer/StreamUnavailableView";
 
 export const dynamic = "force-dynamic";
 
@@ -28,17 +29,22 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-async function loadSnapshot(id: string): Promise<InitialStateSnapshot | null> {
+type SnapshotResult =
+  | { kind: "ok"; snapshot: InitialStateSnapshot }
+  | { kind: "not-found" }
+  | { kind: "unavailable" };
+
+async function loadSnapshot(id: string): Promise<SnapshotResult> {
   try {
-    return await fetchStreamState(id);
+    return { kind: "ok", snapshot: await fetchStreamState(id) };
   } catch (err) {
-    if (err instanceof ViewerApiError && err.status === 404) return null;
-    // For other errors, render a minimal "scheduled/loading" shell rather
-    // than crashing — SSE will reconcile once 35-2 lands.
-    return {
-      state: "scheduled",
-      access_level: "link",
-    };
+    // 404 → the stream link is invalid or gone → branded not-found page.
+    if (err instanceof ViewerApiError && err.status === 404) {
+      return { kind: "not-found" };
+    }
+    // DEF-2: any other error must NOT fabricate a scheduled snapshot (which
+    // rendered a fake 00:00:00 countdown). Surface a calm unavailable state.
+    return { kind: "unavailable" };
   }
 }
 
@@ -46,9 +52,19 @@ export default async function StreamViewerPage({ params }: PageProps) {
   const { id } = await params;
   if (!id) notFound();
 
-  const snapshot = await loadSnapshot(id);
-  if (!snapshot) notFound();
+  const result = await loadSnapshot(id);
 
+  if (result.kind === "not-found") notFound();
+
+  if (result.kind === "unavailable") {
+    return (
+      <main className="min-h-screen w-full bg-surface-canvas px-4 py-8">
+        <StreamUnavailableView />
+      </main>
+    );
+  }
+
+  const { snapshot } = result;
   const requirePin = snapshot.access_level === "pin";
 
   return (

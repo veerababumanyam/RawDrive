@@ -221,6 +221,7 @@ func (h *Handler) WithMFA(store MFAEnrollmentStore, mfaHandler *MFAHandler) *Han
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/oauth/google", h.OAuthGoogle)
+	r.Get("/oauth/google/status", h.OAuthGoogleStatus)
 	r.Get("/oauth/google/callback", h.OAuthGoogleCallback)
 	r.Post("/refresh", h.RefreshToken)
 	r.Post("/logout", h.Logout)
@@ -672,6 +673,13 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+// OAuthGoogleStatus reports whether Google OAuth is configured so the
+// frontend can hide the "Sign in with Google" button instead of letting
+// the user click into a 500 "OAuth not configured". Public, unauthenticated.
+func (h *Handler) OAuthGoogleStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.oauth != nil})
+}
+
 // requiresMFAStepUp reports whether the given user must complete a TOTP
 // step-up before receiving full tokens. It returns true only when MFA is
 // wired (store + handler present), the userID parses, and the user has a
@@ -801,7 +809,12 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken := refreshTokenFromRequest(r, req.RefreshToken)
 	if refreshToken == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		// OBS-1: no refresh credential presented = "no active session", the
+		// normal state for a logged-out visitor whose SPA probes on mount.
+		// Answer 204 so the browser console/network panel does not flag a red
+		// 4xx on every public page load. A *present but invalid* token still
+		// returns 401 from RotateRefreshToken below.
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 

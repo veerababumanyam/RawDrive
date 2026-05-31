@@ -2,6 +2,7 @@
 
 import {
   Home,
+  MapPin,
   PieChart,
   Ticket,
   UserPlus,
@@ -13,7 +14,7 @@ import type { NavGroup } from "./SidebarShell";
 
 /* ------------------------------------------------------------------ */
 /*  Dealer sidebar — PRD §6.2 Dealer navigation profile              */
-/*  6 items: Dashboard, My Territory, Registrations,                  */
+/*  7 items: Dashboard, My Territory, Registrations, Photographers,  */
 /*           Coupons, Revenue Share, Payouts                          */
 /* ------------------------------------------------------------------ */
 
@@ -21,6 +22,7 @@ const groups: NavGroup[] = [
   {
     items: [
       { href: "/dealer", label: "Dashboard Overview", icon: Home },
+      { href: "/dealer/territory", label: "My Territory", icon: MapPin },
       { href: "/dealer/registrations", label: "Registrations", icon: UserPlus },
       { href: "/dealer/photographers", label: "Photographers", icon: Users },
       { href: "/dealer/coupons", label: "Coupons", icon: Ticket },

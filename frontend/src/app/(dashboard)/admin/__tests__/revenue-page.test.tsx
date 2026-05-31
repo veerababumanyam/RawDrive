@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
+// revenue/page.tsx calls useRouter() from next/navigation (for router.refresh()
+// on the Refresh button). Without the app-router context the hook throws
+// "invariant expected app router to be mounted" on every render. Mock only the
+// hook the page imports — useRouter — mirroring the pattern in
+// src/components/auth/__tests__/LoginForm.oauth.test.tsx.
+const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: nav.push,
+    replace: nav.replace,
+    refresh: nav.refresh,
+    prefetch: vi.fn(),
+    back: vi.fn(),
+  }),
+}));
+
 vi.mock("@/lib/api/admin", () => ({
   getRevenueDashboard: vi.fn(),
   getRevenueTimeSeries: vi.fn(),

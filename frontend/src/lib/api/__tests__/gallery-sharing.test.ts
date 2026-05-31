@@ -1,15 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGalleryShareLink,
   listGalleryShareLinks,
   revokeGalleryShareLink,
 } from "../galleries";
+import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  // These gallery share helpers route through authFetch, which reads the
+  // in-memory access-token cache (getStoredAccessToken) rather than its
+  // token arg. Seed the cache so the Authorization header is attached.
+  persistAuthTokens("token");
+});
+
+afterEach(() => {
+  clearAuthTokens();
 });
 
 describe("gallery share API", () => {
@@ -21,10 +30,10 @@ describe("gallery share API", () => {
 
     const links = await listGalleryShareLinks("token", "gallery-1");
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/galleries/gallery-1/share"),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token" }) }),
-    );
+    const [calledUrl, init] = fetchMock.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/galleries/gallery-1/share");
+    expect(init.credentials).toBe("include");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer token");
     expect(links[0].token).toBe("token-1");
   });
 

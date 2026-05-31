@@ -11,14 +11,13 @@
  * then provides a stable getToken() function that always returns a fresh token.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export function useAdminFetch() {
   const [ready, setReady] = useState(false);
-  const attemptRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;

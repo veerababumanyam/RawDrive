@@ -135,7 +135,6 @@ export default function BillingPage() {
     setCreating(true);
     setError(null);
     try {
-      const token = getStoredAccessToken();
       const lineItems: InvoiceLineItem[] = form.lines.map((l) => ({
         description: l.description,
         quantity: l.quantity,

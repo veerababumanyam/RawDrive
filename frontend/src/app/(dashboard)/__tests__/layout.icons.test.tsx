@@ -1,5 +1,5 @@
 import { createElement, type AnchorHTMLAttributes, type ImgHTMLAttributes, type ReactNode } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import DashboardLayout from "../layout";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";

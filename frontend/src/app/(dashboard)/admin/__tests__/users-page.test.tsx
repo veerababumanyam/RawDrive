@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 
 vi.mock("@/lib/api/admin", () => ({
   listUsers: vi.fn(),
@@ -60,10 +60,17 @@ describe("AdminUsersPage", () => {
 
   it("shows state and tier info", async () => {
     render(<AdminUsersPage />);
-    await waitFor(() => {
-      expect(screen.getByText("Karnataka")).toBeTruthy();
-      expect(screen.getByText("Pro")).toBeTruthy();
-    });
+    // "Karnataka" now appears twice: once as Alice's row cell (<span>) and once
+    // as an <option> in the State filter dropdown (filterOptions are derived
+    // from the user rows' state_name values). Scope the assertion to Alice's
+    // table row so we assert the USER'S state, not the filter option. "Pro"
+    // (tier) is not a filter option ("Free"/"Starter"/… are), so it stays an
+    // unambiguous lookup that confirms the tier renders.
+    await waitFor(() => screen.getByText("Alice Sharma"));
+    const aliceRow = screen.getByText("Alice Sharma").closest("tr") as HTMLTableRowElement;
+    expect(aliceRow).not.toBeNull();
+    expect(within(aliceRow).getByText("Karnataka")).toBeTruthy();
+    expect(within(aliceRow).getByText("Pro")).toBeTruthy();
   });
 
   it("renders search input", async () => {

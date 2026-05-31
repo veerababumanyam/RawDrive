@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
 import { useAdminFetch } from "@/hooks/use-admin-fetch";
 import {
   listUsers,

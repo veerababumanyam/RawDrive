@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -166,7 +167,10 @@ func TestRoutes_CredentialEndpointsNotMountedInSubrouter(t *testing.T) {
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "non-credential auth routes should remain in Routes()")
+	// OBS-1: /auth/refresh is still reachable inside the subrouter (proving the
+	// route is mounted in Routes()), but a no-credential probe now answers 204
+	// ("no active session") instead of a noisy 400.
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode, "non-credential auth routes should remain in Routes()")
 }
 
 func TestRegisterHandler_Success(t *testing.T) {
@@ -394,6 +398,45 @@ func TestOAuthGoogle_LoginRedirects(t *testing.T) {
 	assert.Equal(t, http.StatusFound, resp.StatusCode,
 		"login-path OAuth start should 302 to Google")
 	assert.Contains(t, resp.Header.Get("Location"), "accounts.google.com")
+}
+
+// TestOAuthGoogleStatus_EnabledWhenConfigured asserts the public status probe
+// reports enabled==true when an OAuth service is wired (GOOGLE_CLIENT_* present).
+// newOAuthHandler() constructs the handler WITH a non-nil oauth service, so the
+// status endpoint should see h.oauth != nil. No network is touched —
+// InitiateGoogleAuth is never called by the status endpoint (OBS-2).
+func TestOAuthGoogleStatus_EnabledWhenConfigured(t *testing.T) {
+	_, ts := newOAuthHandler()
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/auth/oauth/google/status")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]bool
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.True(t, result["enabled"], "status must report enabled when oauth is configured")
+}
+
+// TestOAuthGoogleStatus_DisabledWhenNil asserts the public status probe reports
+// enabled==false when no OAuth service is wired (h.oauth == nil). setupAuthRouter
+// builds the handler with nil oauth, matching an unconfigured deployment (OBS-2).
+func TestOAuthGoogleStatus_DisabledWhenNil(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/auth/oauth/google/status")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]bool
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.False(t, result["enabled"], "status must report disabled when oauth is nil")
 }
 
 func TestVerifyOTPHandler_Success(t *testing.T) {
@@ -732,6 +775,31 @@ func TestRefreshTokenHandler_InvalidToken(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// TestRefreshTokenHandler_NoTokenReturnsQuietNoContent asserts OBS-1: a probe
+// with NO refresh credential at all (no cookie, no body) is the normal state
+// for a logged-out visitor whose SPA pings /auth/refresh on mount. The handler
+// answers 204 (with an empty body) so the browser console/network panel does
+// not flag a red 4xx on every public page load. A *present but invalid* token
+// still returns 401 (see TestRefreshTokenHandler_InvalidToken).
+func TestRefreshTokenHandler_NoTokenReturnsQuietNoContent(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/refresh", nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Empty(t, body, "204 no-session response must have an empty body")
 }
 
 func TestLogoutHandler_Success(t *testing.T) {
