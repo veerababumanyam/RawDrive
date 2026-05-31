@@ -42,6 +42,8 @@ export function LoginForm() {
 
   const registered = searchParams.get("registered") === "1";
   const oauthAuthenticated = searchParams.get("authenticated") === "1";
+  const oauthMfaRequired = searchParams.get("mfa_required") === "1";
+  const oauthMfaToken = searchParams.get("mfa_token") || "";
   const oauthError = searchParams.get("error");
   const prefilledEmail = searchParams.get("email") || "";
 
@@ -54,6 +56,28 @@ export function LoginForm() {
   }, [prefilledEmail]);
 
   useEffect(() => {
+    if (!oauthMfaRequired) {
+      return;
+    }
+    if (!oauthMfaToken) {
+      setError("Google sign-in could not be completed. Please try again.");
+      router.replace("/login");
+      return;
+    }
+    try {
+      window.sessionStorage.setItem("rawdrive_mfa_token", oauthMfaToken);
+    } catch {
+      setError("This browser blocked secure session storage. Please try again.");
+      router.replace("/login");
+      return;
+    }
+    router.replace("/login/mfa");
+  }, [oauthMfaRequired, oauthMfaToken, router]);
+
+  useEffect(() => {
+    if (oauthMfaRequired) {
+      return;
+    }
     if (!oauthAuthenticated) {
       return;
     }
@@ -76,7 +100,7 @@ export function LoginForm() {
     return () => {
       cancelled = true;
     };
-  }, [oauthAuthenticated, router]);
+  }, [oauthAuthenticated, oauthMfaRequired, router]);
 
   useEffect(() => {
     if (registered) {

@@ -164,3 +164,19 @@ func TestF079_DeployEnvExampleUsesB2NotR2(t *testing.T) {
 		}
 	}
 }
+
+func TestDeployEnvExampleDocumentsGoogleOAuthAndFrontendOrigin(t *testing.T) {
+	root := envRepoRoot(t)
+	content := readEnvFile(t, filepath.Join(root, "deploy", ".env.example"))
+
+	for _, key := range []string{
+		"FRONTEND_URL",
+		"GOOGLE_CLIENT_ID",
+		"GOOGLE_CLIENT_SECRET",
+		"GOOGLE_REDIRECT_URL",
+	} {
+		if !hasActiveAssignment(content, key) {
+			t.Errorf("deploy/.env.example missing required OAuth/frontend var %q", key)
+		}
+	}
+}

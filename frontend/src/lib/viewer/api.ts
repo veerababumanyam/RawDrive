@@ -18,6 +18,13 @@ export interface InitialStateSnapshot {
   replay_status?: "pending" | "ready" | "expired";
 }
 
+type PublicStreamResponse = {
+  status?: string;
+  scheduled_at?: string;
+  pin_required?: boolean;
+  cf_playback_url?: string;
+};
+
 export class ViewerApiError extends Error {
   status: number;
   code?: string;
@@ -29,7 +36,7 @@ export class ViewerApiError extends Error {
 }
 
 export async function verifyPin(streamId: string, pin: string): Promise<ViewerTokenPair> {
-  const res = await fetch(`${API_BASE}/api/v1/public/streams/${encodeURIComponent(streamId)}/pin-verify`, {
+  const res = await fetch(`${API_BASE}/api/v1/public/streams/${encodeURIComponent(streamId)}/verify-pin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pin }),
@@ -42,9 +49,18 @@ export async function verifyPin(streamId: string, pin: string): Promise<ViewerTo
     } catch {
       /* ignore */
     }
-    throw new ViewerApiError(res.status, code === "invalid_pin" ? "Invalid PIN" : `pin-verify failed: ${res.status}`, code);
+    throw new ViewerApiError(res.status, code === "invalid_pin" ? "Invalid PIN" : `verify-pin failed: ${res.status}`, code);
   }
-  return (await res.json()) as ViewerTokenPair;
+  const body = (await res.json()) as Partial<ViewerTokenPair> & { valid?: boolean };
+  if (!body.access_token || !body.refresh_token || !body.expires_in || body.token_type !== "Bearer") {
+    throw new ViewerApiError(503, "viewer session unavailable", "viewer_session_unavailable");
+  }
+  return {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_in: body.expires_in,
+    token_type: body.token_type,
+  };
 }
 
 export async function refreshViewerSession(streamId: string, refreshToken: string): Promise<ViewerTokenPair> {
@@ -75,5 +91,32 @@ export async function fetchStreamState(
   if (!res.ok) {
     throw new ViewerApiError(res.status, `state fetch failed: ${res.status}`);
   }
-  return (await res.json()) as InitialStateSnapshot;
+  return normalizePublicStream(await res.json());
+}
+
+function normalizePublicStream(body: PublicStreamResponse): InitialStateSnapshot {
+  return {
+    state: normalizeStreamState(body.status),
+    access_level: body.pin_required ? "pin" : "link",
+    scheduled_at: body.scheduled_at,
+    playback_url: body.cf_playback_url,
+  };
+}
+
+function normalizeStreamState(status?: string): InitialStateSnapshot["state"] {
+  switch (status) {
+    case "waiting":
+    case "waiting_room":
+      return "waiting_room";
+    case "live":
+      return "live";
+    case "replay":
+    case "vod_ready":
+      return "replay";
+    case "ended":
+      return "ended";
+    case "scheduled":
+    default:
+      return "scheduled";
+  }
 }

@@ -24,6 +24,9 @@ const (
 	AccessLevelOpen       AccessLevel = "open"
 	AccessLevelPIN        AccessLevel = "pin"
 	AccessLevelInviteOnly AccessLevel = "invite_only"
+
+	viewerAccessAudience  = "viewer-access"
+	viewerRefreshAudience = "viewer-refresh"
 )
 
 // IsValid reports whether the access level is one of the allowed values.
@@ -112,7 +115,7 @@ func (s *Service) IssueSession(streamID string, level AccessLevel) (*TokenPair, 
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
 			Subject:   viewerSessionID,
-			Audience:  jwt.ClaimStrings{"viewer-access"},
+			Audience:  jwt.ClaimStrings{viewerAccessAudience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.SlidingTTL)),
@@ -130,7 +133,7 @@ func (s *Service) IssueSession(streamID string, level AccessLevel) (*TokenPair, 
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
 			Subject:   viewerSessionID,
-			Audience:  jwt.ClaimStrings{"viewer-refresh"},
+			Audience:  jwt.ClaimStrings{viewerRefreshAudience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.MaxLifetime)),
@@ -155,7 +158,14 @@ func (s *Service) Parse(tokenStr string) (*Claims, error) {
 		return nil, errors.New("viewer: token must not be empty")
 	}
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithStrictDecoding(),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuer(s.cfg.Issuer),
+		jwt.WithAudience(viewerAccessAudience),
+	)
+	token, err := parser.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("viewer: unexpected signing alg %q", t.Method.Alg())
 		}
@@ -166,6 +176,15 @@ func (s *Service) Parse(tokenStr string) (*Claims, error) {
 	}
 	if !token.Valid {
 		return nil, errors.New("viewer: token is not valid")
+	}
+	if strings.TrimSpace(claims.StreamID) == "" {
+		return nil, errors.New("viewer: stream_id claim is required")
+	}
+	if strings.TrimSpace(claims.ViewerSessionID) == "" {
+		return nil, errors.New("viewer: viewer_session_id claim is required")
+	}
+	if !claims.AccessLevel.IsValid() {
+		return nil, fmt.Errorf("viewer: access level %q is not valid", claims.AccessLevel)
 	}
 	return claims, nil
 }

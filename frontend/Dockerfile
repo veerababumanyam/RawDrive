@@ -11,8 +11,8 @@
 #
 # Uses node:22-bookworm-slim (not alpine) to match the pre-existing
 # Dockerfile and avoid musl-libc compat risk for Next.js's sharp-based
-# image optimization. pnpm-workspace.yaml is copied for its
-# ignoredBuiltDependencies config (sharp, unrs-resolver).
+# image optimization. pnpm-workspace.yaml is copied for its valid workspace
+# declaration plus ignoredBuiltDependencies config (sharp, unrs-resolver).
 
 # ---------- deps stage ----------
 # Pinned to the Node 22 LTS minor-patch for reproducibility.
@@ -32,12 +32,9 @@ RUN npm install -g corepack@latest \
   && corepack prepare pnpm@9.15.9 --activate
 
 # Copy only the manifests first so the deps layer caches across code
-# changes. pnpm-workspace.yaml is intentionally NOT copied — pnpm 9.x
-# rejects workspace files that lack a `packages:` field, which this
-# repo's file has (it's used only to set ignoredBuiltDependencies, a
-# misuse of the workspace file). Installing with --ignore-workspace
-# would also work, but skipping the file entirely is even cleaner.
-COPY package.json pnpm-lock.yaml ./
+# changes. pnpm-workspace.yaml is included because it now has a valid
+# `packages:` declaration and carries ignoredBuiltDependencies.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # ---------- build stage ----------
@@ -46,14 +43,6 @@ FROM deps AS build
 # Copy the rest of the app source. .dockerignore excludes node_modules,
 # .next, coverage, test-results, .env, etc.
 COPY . .
-
-# Remove the misused pnpm-workspace.yaml from the build context.
-# pnpm 9.x rejects workspace files that lack a `packages:` field. The
-# source file is used only to set ignoredBuiltDependencies in a
-# single-package repo, and we've already installed without it in the
-# deps stage. Leaving it in place causes `pnpm build` to fail with
-# "packages field missing or empty".
-RUN rm -f pnpm-workspace.yaml
 
 # Disable Next.js telemetry during CI-style builds
 ENV NEXT_TELEMETRY_DISABLED=1

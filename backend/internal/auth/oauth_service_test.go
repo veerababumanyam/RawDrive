@@ -127,6 +127,33 @@ func TestGoogleOAuth_HandleCallback(t *testing.T) {
 	assert.Equal(t, "http://localhost:3000", returnTo)
 }
 
+func TestGoogleOAuth_StateSurvivesBackendInstanceSwitch(t *testing.T) {
+	profile := &auth.OAuthProfile{
+		Email:       "multi-node@gmail.com",
+		DisplayName: "Multi Node",
+		ProviderID:  "google-id-multi-node",
+	}
+	config := auth.OAuthConfig{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		RedirectURI:  "http://localhost/callback",
+	}
+	store := &mockUserStore{users: map[string]*auth.User{}}
+	firstInstance := auth.NewOAuthService(config, newMockProvider(profile), store)
+	redirectURL, err := firstInstance.InitiateGoogleAuth(context.Background(), "https://rawdrive.in")
+	require.NoError(t, err)
+
+	parsed, err := url.Parse(redirectURL)
+	require.NoError(t, err)
+
+	secondInstance := auth.NewOAuthService(config, newMockProvider(profile), store)
+	user, returnTo, err := secondInstance.HandleGoogleCallback(context.Background(), "valid-code", parsed.Query().Get("state"))
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, "https://rawdrive.in", returnTo)
+	assert.Equal(t, "multi-node@gmail.com", user.Email)
+}
+
 func TestGoogleOAuth_NewUser(t *testing.T) {
 	profile := &auth.OAuthProfile{
 		Email:       "newuser@gmail.com",

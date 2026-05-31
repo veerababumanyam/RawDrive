@@ -64,7 +64,7 @@ EXPOSE 8080
 # pgxpool, subscribe to NATS JetStream, and connect to Valkey on cold start.
 # 20s was cutting it close on fresh VPSes with cold disk cache.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8080/api/v1/health || exit 1
+  CMD curl -fsS http://127.0.0.1:8080/health || exit 1
 
 # Default command is the API. The migrate service overrides with
 # `command: ["/usr/local/bin/migrate"]` in docker-compose.prod-app.yml.

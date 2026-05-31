@@ -89,7 +89,7 @@ func RegisterM8Routes(r chi.Router, deps M8Dependencies) {
 
 // RegisterM8PublicRoutes registers public M8 routes (no auth required).
 func RegisterM8PublicRoutes(r chi.Router, deps M8Dependencies) {
-	streamHandler := NewStreamHandler(deps.StreamService)
+	streamHandler := NewStreamHandler(deps.StreamService, deps.ViewerJWT)
 	desktopHandler := NewDesktopHandler(deps.DesktopService)
 
 	// Public stream viewer (no auth — viewers don't need accounts).

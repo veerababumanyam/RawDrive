@@ -106,7 +106,7 @@ export default function AdminRevenuePage() {
   }, [router, loadData]);
 
   useEffect(() => {
-    loadData();
+    void Promise.resolve().then(loadData);
   }, [loadData]);
 
   // Memoize data arrays so DataTable doesn't re-render on every parent render

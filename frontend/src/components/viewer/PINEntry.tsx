@@ -4,7 +4,7 @@
  * PINEntry — story 35-1 T2.
  *
  * Public viewer PIN gate. Accepts a 4–8 digit PIN, exchanges it for a
- * short-lived viewer-session JWT pair via `/api/v1/public/streams/{id}/pin-verify`,
+ * short-lived viewer-session JWT pair via `/api/v1/public/streams/{id}/verify-pin`,
  * and hands the pair to the parent via `onAuthenticated`. Persistence is the
  * parent's job (so the shell can remount the state machine in the same tick).
  *

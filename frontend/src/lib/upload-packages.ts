@@ -58,33 +58,38 @@ export function useUploadPackages(open: boolean): UploadPackagesState {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setState({ packages: [], loading: true, error: null });
 
-    const token = typeof window !== "undefined" ? getStoredAccessToken() : "";
+    async function loadPackages() {
+      setState({ packages: [], loading: true, error: null });
+      const token = typeof window !== "undefined" ? getStoredAccessToken() : "";
 
-    fetch(`${API_BASE}/api/v1/uploads/packages`, {
-      headers: {
-        Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: "include",
-    })
-      .then(async (res) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/uploads/packages`, {
+          headers: {
+            Accept: "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: "include",
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as UploadPackageCatalogueResponse;
-      })
-      .then((data) => {
+        const data = (await res.json()) as UploadPackageCatalogueResponse;
         if (cancelled) return;
         setState({
           packages: Array.isArray(data?.packages) ? data.packages : [],
           loading: false,
           error: null,
         });
-      })
-      .catch((err: Error) => {
+      } catch (err) {
         if (cancelled) return;
-        setState({ packages: [], loading: false, error: err.message });
-      });
+        setState({
+          packages: [],
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed to load upload packages",
+        });
+      }
+    }
+
+    void loadPackages();
 
     return () => {
       cancelled = true;

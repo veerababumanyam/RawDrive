@@ -251,13 +251,10 @@ export function useInstallPrompt(): UseInstallPromptResult {
   // value itself is read from the cache, not from local state, so two
   // mounted consumers see the same deferred prompt.
   const [, setTick] = useState(0);
-  const [isStandalone, setIsStandalone] = useState<boolean>(false);
-  const [dismissedActive, setDismissedActive] = useState<boolean>(false);
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => detectStandalone());
+  const [dismissedActive, setDismissedActive] = useState<boolean>(() => withinDismissCooldown());
 
   useEffect(() => {
-    setIsStandalone(detectStandalone());
-    setDismissedActive(withinDismissCooldown());
-
     const onBeforeInstallPrompt = (e: Event) => {
       // Prevent Chrome's default mini-infobar so we own the UX.
       e.preventDefault();
@@ -293,7 +290,9 @@ export function useInstallPrompt(): UseInstallPromptResult {
     // (e.g. on a route where the layout was lazy-loaded). The cache
     // holds the prior dispatch; trigger a render so the consumer
     // picks it up immediately.
-    if (deferredPromptCache) setTick((n) => n + 1);
+    if (deferredPromptCache) {
+      queueMicrotask(() => setTick((n) => n + 1));
+    }
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt as EventListener);

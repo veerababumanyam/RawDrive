@@ -40,28 +40,40 @@ export default function SubscriptionPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setError("Not authenticated");
-      setLoading(false);
-      return;
+    let cancelled = false;
+
+    async function loadSubscription() {
+      const token = getStoredAccessToken();
+      if (!token) {
+        if (!cancelled) {
+          setError("Not authenticated");
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/workspace/subscription`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const nextData = (await response.json()) as SubscriptionData;
+        if (!cancelled) {
+          setData(nextData);
+          setLoading(false);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load subscription");
+          setLoading(false);
+        }
+      }
     }
 
-    fetch(`${API_BASE}/api/v1/workspace/subscription`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<SubscriptionData>;
-      })
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Failed to load subscription");
-        setLoading(false);
-      });
+    void loadSubscription();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const tierLabel = data ? (TIER_LABELS[data.plan_tier] ?? data.plan_tier) : "";

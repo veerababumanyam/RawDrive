@@ -13,16 +13,22 @@ import (
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/streaming/viewer"
 )
 
 // StreamHandler handles live stream HTTP endpoints.
 type StreamHandler struct {
-	svc *service.StreamService
+	svc       *service.StreamService
+	viewerJWT *viewer.Service
 }
 
 // NewStreamHandler creates a new StreamHandler.
-func NewStreamHandler(svc *service.StreamService) *StreamHandler {
-	return &StreamHandler{svc: svc}
+func NewStreamHandler(svc *service.StreamService, viewerJWT ...*viewer.Service) *StreamHandler {
+	h := &StreamHandler{svc: svc}
+	if len(viewerJWT) > 0 {
+		h.viewerJWT = viewerJWT[0]
+	}
+	return h
 }
 
 // Create handles POST /api/v1/streams
@@ -149,20 +155,20 @@ func (h *StreamHandler) GetPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	publicStream := map[string]any{
-		"id":                    stream.ID,
-		"title":                 stream.Title,
-		"description":           stream.Description,
-		"status":                stream.Status,
-		"scheduled_at":          stream.ScheduledAt,
-		"started_at":            stream.StartedAt,
-		"ended_at":              stream.EndedAt,
-		"max_quality":           stream.MaxQuality,
-		"chat_enabled":          stream.ChatEnabled,
+		"id":                     stream.ID,
+		"title":                  stream.Title,
+		"description":            stream.Description,
+		"status":                 stream.Status,
+		"scheduled_at":           stream.ScheduledAt,
+		"started_at":             stream.StartedAt,
+		"ended_at":               stream.EndedAt,
+		"max_quality":            stream.MaxQuality,
+		"chat_enabled":           stream.ChatEnabled,
 		"chat_slow_mode_seconds": stream.ChatSlowModeSecs,
-		"peak_viewers":          stream.PeakViewers,
-		"total_views":           stream.TotalViews,
-		"duration_seconds":      stream.DurationSeconds,
-		"pin_required":          pinRequired,
+		"peak_viewers":           stream.PeakViewers,
+		"total_views":            stream.TotalViews,
+		"duration_seconds":       stream.DurationSeconds,
+		"pin_required":           pinRequired,
 	}
 	if includePlayback {
 		publicStream["cf_playback_url"] = stream.CFPlaybackURL
@@ -359,7 +365,12 @@ func (h *StreamHandler) UpdateChatSettings(w http.ResponseWriter, r *http.Reques
 	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// VerifyPin handles POST /api/v1/streams/{id}/verify-pin (public)
+// VerifyPin handles POST /api/v1/public/streams/{id}/verify-pin.
+//
+// On success it returns the legacy `{valid:true}` field plus the viewer-session
+// JWT pair required by PIN-protected playback, chat, viewer-count, replay, and
+// SSE routes. Invalid PINs return 401 so callers can distinguish "bad code"
+// from transport/server failures without leaking the stored hash state.
 func (h *StreamHandler) VerifyPin(w http.ResponseWriter, r *http.Request) {
 	streamID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -378,5 +389,25 @@ func (h *StreamHandler) VerifyPin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"stream not found"}`, http.StatusNotFound)
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]bool{"valid": valid})
+	if !valid {
+		http.Error(w, `{"error":"invalid_pin"}`, http.StatusUnauthorized)
+		return
+	}
+	if h.viewerJWT == nil {
+		respondJSON(w, http.StatusOK, map[string]bool{"valid": true})
+		return
+	}
+	pair, err := h.viewerJWT.IssueSession(streamID.String(), viewer.AccessLevelPIN)
+	if err != nil {
+		log.Printf("VerifyPin: issue viewer session for stream %s: %v", streamID, err)
+		http.Error(w, `{"error":"viewer_session_unavailable"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"valid":         true,
+		"access_token":  pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"expires_in":    pair.ExpiresIn,
+		"token_type":    pair.TokenType,
+	})
 }

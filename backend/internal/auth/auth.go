@@ -2,14 +2,19 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -641,6 +646,12 @@ type OAuthService struct {
 	states   map[string]string
 }
 
+type oauthStatePayload struct {
+	Nonce     string `json:"n"`
+	ReturnTo  string `json:"r"`
+	ExpiresAt int64  `json:"e"`
+}
+
 func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore) *OAuthService {
 	return &OAuthService{
 		config:   config,
@@ -663,9 +674,17 @@ func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) 
 	}
 	state := fmt.Sprintf("%x", stateBytes)
 
-	s.mu.Lock()
-	s.states[state] = returnTo
-	s.mu.Unlock()
+	if signedState, err := s.signState(oauthStatePayload{
+		Nonce:     state,
+		ReturnTo:  returnTo,
+		ExpiresAt: time.Now().UTC().Add(10 * time.Minute).Unix(),
+	}); err == nil && signedState != "" {
+		state = signedState
+	} else {
+		s.mu.Lock()
+		s.states[state] = returnTo
+		s.mu.Unlock()
+	}
 
 	query := url.Values{
 		"client_id":     []string{s.config.ClientID},
@@ -685,13 +704,7 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 		return nil, "", errors.New("oauth service not fully configured")
 	}
 
-	s.mu.Lock()
-	returnTo, ok := s.states[state]
-	if ok {
-		delete(s.states, state)
-	}
-	s.mu.Unlock()
-
+	returnTo, ok := s.consumeState(state)
 	if !ok {
 		return nil, "", errors.New("invalid oauth state")
 	}
@@ -751,6 +764,78 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 
 	_ = s.store.LinkOAuth(ctx, created.ID, "google", profile.ProviderID)
 	return created, returnTo, nil
+}
+
+func (s *OAuthService) stateSigningKey() []byte {
+	if s.config.ClientSecret == "" {
+		return nil
+	}
+	return []byte(s.config.ClientSecret)
+}
+
+func (s *OAuthService) signState(payload oauthStatePayload) (string, error) {
+	key := s.stateSigningKey()
+	if len(key) == 0 {
+		return "", nil
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	encodedBody := base64.RawURLEncoding.EncodeToString(body)
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(encodedBody))
+	sig := mac.Sum(nil)
+	return encodedBody + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+func (s *OAuthService) consumeState(state string) (string, bool) {
+	if returnTo, ok := s.consumeSignedState(state); ok {
+		return returnTo, true
+	}
+
+	s.mu.Lock()
+	returnTo, ok := s.states[state]
+	if ok {
+		delete(s.states, state)
+	}
+	s.mu.Unlock()
+	return returnTo, ok
+}
+
+func (s *OAuthService) consumeSignedState(state string) (string, bool) {
+	key := s.stateSigningKey()
+	if len(key) == 0 {
+		return "", false
+	}
+
+	parts := strings.Split(state, ".")
+	if len(parts) != 2 {
+		return "", false
+	}
+
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(parts[0]))
+	expectedSig := mac.Sum(nil)
+
+	actualSig, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || !hmac.Equal(actualSig, expectedSig) {
+		return "", false
+	}
+
+	body, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", false
+	}
+	var payload oauthStatePayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", false
+	}
+	if payload.ExpiresAt < time.Now().UTC().Unix() {
+		return "", false
+	}
+	return payload.ReturnTo, true
 }
 
 // ──────────────────────────── Password Service ────────────────────────────

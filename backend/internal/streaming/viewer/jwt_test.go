@@ -18,10 +18,10 @@ import (
 // during bootstrap.
 func testConfig() viewer.Config {
 	return viewer.Config{
-		SigningKey:   []byte("test-viewer-signing-key-32-bytes-XX"),
-		SlidingTTL:   15 * time.Minute,
-		MaxLifetime:  4 * time.Hour,
-		Issuer:       "rawdrive-viewer",
+		SigningKey:  []byte("test-viewer-signing-key-32-bytes-XX"),
+		SlidingTTL:  15 * time.Minute,
+		MaxLifetime: 4 * time.Hour,
+		Issuer:      "rawdrive-viewer",
 	}
 }
 
@@ -88,6 +88,15 @@ func TestParse_RejectsWrongSigningKey(t *testing.T) {
 
 	_, err = svc2.Parse(pair.AccessToken)
 	assert.Error(t, err, "token signed with different key must not verify")
+}
+
+func TestParse_RejectsRefreshTokenAsAccessToken(t *testing.T) {
+	svc := viewer.NewService(testConfig())
+	pair, err := svc.IssueSession(uuid.NewString(), viewer.AccessLevelPIN)
+	require.NoError(t, err)
+
+	_, err = svc.Parse(pair.RefreshToken)
+	assert.Error(t, err, "refresh tokens must not authorize viewer access routes")
 }
 
 func TestParse_EmptyTokenReturnsError(t *testing.T) {

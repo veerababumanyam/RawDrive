@@ -10,14 +10,26 @@ type AccessTokenClaims = {
   state_id?: string;
 };
 
-function clearLegacyStoredTokens() {
+function getBrowserStorage(name: "localStorage" | "sessionStorage"): Storage | null {
   if (typeof window === "undefined") {
-    return;
+    return null;
   }
+  try {
+    return window[name] ?? null;
+  } catch {
+    return null;
+  }
+}
 
-  for (const storage of [window.localStorage, window.sessionStorage]) {
+function clearLegacyStoredTokens() {
+  for (const storage of [getBrowserStorage("localStorage"), getBrowserStorage("sessionStorage")]) {
+    if (!storage) continue;
     for (const key of LEGACY_TOKEN_KEYS) {
-      storage.removeItem(key);
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Storage can throw in private-mode browsers or test environments.
+      }
     }
   }
 }
