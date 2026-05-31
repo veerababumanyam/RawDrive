@@ -672,9 +672,9 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                 Pick a folder to start watching
               </p>
               <p className="max-w-sm text-xs text-text-tertiary">
-                Point your camera's tethered output folder here. New photos
-                appear within 2 seconds. Everything stays on your device —
-                nothing uploads.
+                Point your camera&apos;s tethered output folder here. New
+                photos appear within 2 seconds. Everything stays on your
+                device — nothing uploads.
               </p>
             </div>
             <button
