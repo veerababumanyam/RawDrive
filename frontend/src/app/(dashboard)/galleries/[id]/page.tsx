@@ -8,6 +8,7 @@ import {
   addAlbumAssets,
   addAssetToGallery,
   createGalleryAlbum,
+  deleteAlbum,
   galleryPublicUrl,
   getGallery,
   listGalleryAlbums,
@@ -21,6 +22,7 @@ import { listProofingSelections, createComment, type ProofingSelection } from "@
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
+import { TetheredShootingPanel } from "@/components/gallery/tethered-shooting-panel";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
   assetIsProcessing,
@@ -293,6 +295,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setAlbumAssetIdsByAlbum({});
     }
   }, [id]);
+
+  const handleDeleteAlbum = useCallback(async (albumId: string) => {
+    const t = getStoredAccessToken();
+    if (!t) return;
+    try {
+      await deleteAlbum(t, albumId);
+      // If the deleted album was active, clear the filter.
+      setActiveAlbum((prev) => (prev === albumId ? null : prev));
+      await refreshAlbums();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete sub-gallery");
+    }
+  }, [refreshAlbums]);
 
   // E71-S1: Fetch albums for this gallery
   useEffect(() => {
@@ -1044,20 +1059,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={gallery.is_published ? "status-badge status-badge--success" : "status-badge status-badge--neutral"}>
-              {gallery.is_published ? "Published" : "Unpublished"}
-            </span>
-            {/* Inline Publish / Unpublish toggle. Previously the only
-                publish affordance was the read-only status badge plus a
-                Publish Checklist that listed blockers without ever
-                offering the action — users had no way to flip the
-                is_published flag from this screen. Now the button sits
-                next to the status badge, calls the same updateGallery
-                endpoint used for title/description edits, and re-renders
-                with the new flag on success. The Share button next to
-                "All Photos" already enforces is_published before copying
-                a link, so this is the missing primary action that
-                unblocks the share flow. */}
+            {/* Single publish-state toggle button — shows current state
+                and acts as the action. Collapsed from the previous two-
+                element layout (status badge + separate action button). */}
             <button
               type="button"
               disabled={publishing}
@@ -1080,12 +1084,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 publishing
                   ? "bg-surface-container-high text-text-tertiary cursor-wait"
                   : gallery.is_published
-                  ? "border border-border-default text-text-secondary hover:bg-surface-container-low hover:text-text-primary"
+                  ? "status-badge status-badge--success hover:opacity-80"
                   : "bg-accent text-text-inverse hover:bg-accent-hover",
               )}
-              title={gallery.is_published ? "Unpublish — client links will stop working" : "Publish — clients will be able to view this gallery"}
+              title={gallery.is_published ? "Click to unpublish — client links will stop working" : "Click to publish — clients will be able to view this gallery"}
             >
-              {publishing ? "Saving…" : gallery.is_published ? "Unpublish" : "Publish"}
+              {publishing ? "Saving…" : gallery.is_published ? "✓ Published" : "Publish"}
             </button>
           </div>
         </div>
@@ -1581,6 +1585,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           label={`Show QR code for ${album.name} share link`}
                           filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
                         />
+                        {/* Delete — hidden for smart/utility albums (Favorites, Videos, face clusters) */}
+                        {!album.smart_filter && (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteAlbum(album.id)}
+                            className="flex items-center justify-center px-1.5 py-1.5 text-text-tertiary transition-colors hover:bg-feedback-error/10 hover:text-feedback-error"
+                            title={`Delete ${album.name}`}
+                            aria-label={`Delete sub-gallery ${album.name}`}
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1837,6 +1853,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 }}
               />
             )}
+
+            <TetheredShootingPanel galleryId={id} apiUrl={apiUrl} />
           </div>
         </section>
 

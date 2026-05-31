@@ -3,14 +3,14 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
+import { createGallery, deleteGallery, updateGallery, type Gallery } from "@/lib/api/galleries";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Grid, ListBullet, Trash, Share, XMark } from "@/components/icons";
+import { Camera, Grid, ListBullet, Trash, Share, XMark } from "@/components/icons";
 
 export default function GalleriesPage() {
   const searchParams = useSearchParams();
@@ -38,6 +38,11 @@ export default function GalleriesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // ID of the gallery whose share link was just copied — cleared after 1.5s.
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Gallery ID currently being published/unpublished — prevents double-clicks
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  // M23: tethering toggle state — persists while the create panel is open.
+  const [tetheringMode, setTetheringMode] = useState(false);
+  const [tetherDir, setTetherDir] = useState("");
 
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
@@ -174,12 +179,16 @@ export default function GalleriesPage() {
         gallery_type: newType,
         primary_contact_id: linkedContactId || undefined,
         project_id: linkedProjectId || undefined,
+        tethering_enabled: tetheringMode,
+        tether_directory: tetheringMode && tetherDir.trim() ? tetherDir.trim() : null,
       });
       setShowCreate(false);
       setNewTitle("");
       setNewType("proofing");
       setLinkedContactId("");
       setLinkedProjectId("");
+      setTetheringMode(false);
+      setTetherDir("");
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create gallery");
@@ -268,6 +277,18 @@ export default function GalleriesPage() {
             className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary min-h-[44px] flex-1 min-w-0 sm:flex-none sm:w-48 lg:w-64"
             aria-label="Search galleries"
           />
+          <GlassIconButton
+            onClick={() => {
+              setTetheringMode((v) => !v);
+              if (!showCreate) setShowCreate(true);
+            }}
+            variant={tetheringMode ? "accent" : "glass"}
+            active={tetheringMode}
+            label={tetheringMode ? "Tethering enabled — click to disable" : "Enable tethering"}
+            size="md"
+          >
+            <Camera />
+          </GlassIconButton>
           <button
             onClick={() => setShowCreate(true)}
             className="shrink-0 whitespace-nowrap rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] inline-flex items-center justify-center gap-1"
@@ -372,6 +393,29 @@ export default function GalleriesPage() {
                 <option value="delivery">Delivery — final hand-off</option>
               </select>
             </div>
+            {/* M23: tethering directory — visible when the tethering toggle is on */}
+            {tetheringMode && (
+              <div className="rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-accent-primary shrink-0" />
+                  <span className="text-xs font-medium text-accent-primary uppercase tracking-wider">
+                    Tethering enabled
+                  </span>
+                </div>
+                <label className="text-xs text-text-tertiary">Watch directory</label>
+                <input
+                  type="text"
+                  value={tetherDir}
+                  onChange={(e) => setTetherDir(e.target.value)}
+                  placeholder="/Users/you/Camera Imports"
+                  className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                  aria-label="Local directory for tethered camera output"
+                />
+                <p className="text-xs text-text-tertiary">
+                  The RawDrive desktop app watches this folder and auto-uploads every new shot into this gallery.
+                </p>
+              </div>
+            )}
             <div className="rounded-xl border border-border-default bg-surface-sunken/40 p-4">
               <label className="text-xs text-text-tertiary uppercase tracking-wider">Linked client</label>
               <select
@@ -427,6 +471,8 @@ export default function GalleriesPage() {
                 setLinkedProjectId("");
                 setNewClientName("");
                 setNewClientEmail("");
+                setTetheringMode(false);
+                setTetherDir("");
               }}
               className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
               disabled={creating}
@@ -636,27 +682,49 @@ export default function GalleriesPage() {
                           ? "archived"
                           : "unpublished";
                       const label =
-                        publishState === "published" ? "Published"
+                        publishState === "published" ? "✓ Published"
                         : publishState === "archived" ? "Archived"
                         : "Unpublished";
                       const badgeClass =
                         publishState === "published"
                           ? "status-badge status-badge--success"
                           : "status-badge status-badge--neutral";
+                      const isPublishing = publishingId === g.id;
                       return (
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            setFilterStatus((prev) => prev === publishState ? null : publishState);
+                            if (publishState === "archived") {
+                              // Archived galleries can't be toggled here — click filters instead
+                              setFilterStatus((prev) => prev === publishState ? null : publishState);
+                              return;
+                            }
+                            const t = getStoredAccessToken();
+                            if (!t || isPublishing) return;
+                            setPublishingId(g.id);
+                            try {
+                              const updated = await updateGallery(t, g.id, { is_published: !g.is_published });
+                              setGalleries((prev) => prev.map((x) => x.id === g.id ? { ...x, is_published: updated.is_published } : x));
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Failed to update gallery");
+                            } finally {
+                              setPublishingId(null);
+                            }
                           }}
+                          disabled={isPublishing}
                           className={cn(
                             badgeClass,
-                            "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
+                            publishState !== "archived" && "hover:opacity-75 transition-opacity",
+                            "disabled:opacity-50",
                           )}
-                          title={`Filter: ${label.toLowerCase()} galleries`}
+                          title={
+                            publishState === "archived" ? "Filter: archived galleries"
+                            : publishState === "published" ? "Click to unpublish"
+                            : "Click to publish"
+                          }
                         >
-                          {label}
+                          {isPublishing ? "Saving…" : label}
                         </button>
                       );
                     })()}

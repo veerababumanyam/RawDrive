@@ -104,3 +104,11 @@ export const Wrench = (p: IconProps) => <Icon {...p}><path d="M14.7 6.3a4 4 0 01
 
 // People / Face — used by FaceFilter
 export const FaceCircle = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="9" /><circle cx="9" cy="10" r="0.5" fill="currentColor" /><circle cx="15" cy="10" r="0.5" fill="currentColor" /><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" /></Icon>;
+
+// Camera — used by tethering toggle
+export const Camera = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 3h6l2 2h3a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1h3L9 3z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+);

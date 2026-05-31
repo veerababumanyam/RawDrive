@@ -140,15 +140,17 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := getUserID(r)
 
 	var input struct {
-		Title            string `json:"title"`
-		Description      string `json:"description"`
-		GalleryType      string `json:"gallery_type"`
-		ContactID        string `json:"contact_id"`
-		PrimaryContactID string `json:"primary_contact_id"`
-		ProjectID        string `json:"project_id"`
-		EventID          string `json:"event_id"`
-		DealID           string `json:"deal_id"`
-		InvoiceID        string `json:"invoice_id"`
+		Title            string  `json:"title"`
+		Description      string  `json:"description"`
+		GalleryType      string  `json:"gallery_type"`
+		ContactID        string  `json:"contact_id"`
+		PrimaryContactID string  `json:"primary_contact_id"`
+		ProjectID        string  `json:"project_id"`
+		EventID          string  `json:"event_id"`
+		DealID           string  `json:"deal_id"`
+		InvoiceID        string  `json:"invoice_id"`
+		TetheringEnabled bool    `json:"tethering_enabled"`
+		TetherDirectory  *string `json:"tether_directory"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -219,6 +221,8 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		EventID:          eventID,
 		DealID:           dealID,
 		InvoiceID:        invoiceID,
+		TetheringEnabled: input.TetheringEnabled,
+		TetherDirectory:  input.TetherDirectory,
 	})
 	if err != nil {
 		http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)

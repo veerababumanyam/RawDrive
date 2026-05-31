@@ -47,6 +47,9 @@ type CreateGalleryInput struct {
 	EventID          *uuid.UUID
 	DealID           *uuid.UUID
 	InvoiceID        *uuid.UUID
+	// M23: camera tethering (migration 133).
+	TetheringEnabled bool
+	TetherDirectory  *string
 }
 
 // SetFaceDetectionEnabled toggles the privacy opt-out flag for face
@@ -90,6 +93,8 @@ func (s *GalleryService) Create(ctx context.Context, input CreateGalleryInput) (
 		InvoiceID:        input.InvoiceID,
 		Settings:         map[string]interface{}{},
 		WatermarkConfig:  map[string]interface{}{},
+		TetheringEnabled: input.TetheringEnabled,
+		TetherDirectory:  input.TetherDirectory,
 	}
 	if err := s.galleryRepo.Create(ctx, g); err != nil {
 		return nil, err

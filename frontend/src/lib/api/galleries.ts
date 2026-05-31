@@ -39,6 +39,9 @@ export interface Gallery {
   faceid_enabled?: boolean;
   face_detection_enabled?: boolean;
   settings?: Record<string, unknown>;
+  // M23: camera tethering (migration 133).
+  tethering_enabled?: boolean;
+  tether_directory?: string | null;
   // Populated by list endpoint via LEFT JOIN on assets — used for card thumbnails
   cover_thumbnails?: Record<string, string>;
   // M19: Gallery Enhancement Suite (F-009)
@@ -341,6 +344,8 @@ export async function createGallery(
     title: string;
     description?: string;
     gallery_type?: string;
+    tethering_enabled?: boolean;
+    tether_directory?: string | null;
   } & GalleryRelationshipPayload,
 ): Promise<Gallery> {
   const res = await authFetch(`/api/v1/galleries`, {
@@ -521,6 +526,11 @@ export async function addAlbumAssets(_token: string, albumId: string, assetIds: 
     body: JSON.stringify({ asset_ids: assetIds }),
   });
   if (!res.ok) throw new Error(`Failed to add album assets: ${res.status}`);
+}
+
+export async function deleteAlbum(_token: string, albumId: string): Promise<void> {
+  const res = await authFetch(`/api/v1/albums/${albumId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to delete album: ${res.status}`);
 }
 
 export async function getPublicGallery(slug: string, ws?: string | null): Promise<Gallery> {

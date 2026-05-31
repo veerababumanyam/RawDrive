@@ -6,17 +6,26 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
 
 // DesktopHandler handles desktop companion app HTTP endpoints.
 type DesktopHandler struct {
-	svc *service.DesktopService
+	svc         *service.DesktopService
+	galleryRepo *repository.GalleryRepo // optional; nil → tethered-galleries endpoint returns 501
 }
 
 // NewDesktopHandler creates a new DesktopHandler.
 func NewDesktopHandler(svc *service.DesktopService) *DesktopHandler {
 	return &DesktopHandler{svc: svc}
+}
+
+// WithGalleryRepo injects the gallery repo so the desktop handler can serve
+// tethered-gallery metadata. Optional; the route degrades to 501 when nil.
+func (h *DesktopHandler) WithGalleryRepo(repo *repository.GalleryRepo) *DesktopHandler {
+	h.galleryRepo = repo
+	return h
 }
 
 // RegisterSession handles POST /api/v1/desktop/sessions
@@ -156,6 +165,29 @@ func (h *DesktopHandler) SyncStatus(w http.ResponseWriter, r *http.Request) {
 		"endpoint": "sync-status",
 		"message":  "Desktop sync status — returns list of already-uploaded file hashes",
 	})
+}
+
+// TetheredGalleries handles GET /api/v1/desktop/tethered-galleries.
+//
+// Returns every gallery in the authenticated workspace that has
+// tethering_enabled=true, including the tether_directory path so the desktop
+// companion app knows which folders to watch.
+func (h *DesktopHandler) TetheredGalleries(w http.ResponseWriter, r *http.Request) {
+	if h.galleryRepo == nil {
+		http.Error(w, `{"error":"tethering not configured"}`, http.StatusNotImplemented)
+		return
+	}
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+	galleries, err := h.galleryRepo.ListTethered(r.Context(), workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, galleries)
 }
 
 // DesktopDownloadInfo handles GET /api/v1/desktop/download (public)

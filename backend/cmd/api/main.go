@@ -2374,6 +2374,7 @@ func main() {
 			DesktopService: desktopSvc,
 			ViewerJWT:      viewerJWT,
 			PINRateLimiter: pinLimiter,
+			GalleryRepo:    galleryRepo, // M23: tethered-galleries endpoint
 		}
 		handler.RegisterM8Routes(api, m8Deps)
 		log.Println("M8: Live Streaming, Video, Desktop routes registered")
