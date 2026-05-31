@@ -23,10 +23,68 @@ import (
 // what enforces ownership, not handler-level auth checks.
 type GalleryFavoritesHandler struct {
 	svc *service.GalleryFavoritesService
+	// galleryResolver enforces tenant ownership on the owner-side aggregation
+	// route via guardGalleryWorkspace. Nil-safe: when unwired the guard fails
+	// closed. Unused by the public (slug-addressed) endpoints.
+	galleryResolver *service.GalleryService
+
+	// S4-G6 (integration audit 2026-05-31): the public favorites endpoints
+	// used to skip the gallery password / access-mode gate entirely — a guest
+	// could heart (and via ListForSession enumerate) assets of a
+	// password-protected / private gallery without ever satisfying the gate.
+	// gate, when wired, applies the same gateGalleryAccess check the asset
+	// listing surfaces use before any favorite read/write. Nil-safe: when
+	// unwired (older constructions/tests) the endpoints behave as before.
+	gate *publicGalleryGate
+}
+
+// publicGalleryGate bundles the two services needed to run the shared
+// gateGalleryAccess check from a slug-addressed handler that does not already
+// hold the gallery object.
+type publicGalleryGate struct {
+	gallerySvc *service.GalleryService
+	accessSvc  *service.GalleryAccessService
+	shareSvc   *service.ShareLinkService
 }
 
 func NewGalleryFavoritesHandler(svc *service.GalleryFavoritesService) *GalleryFavoritesHandler {
 	return &GalleryFavoritesHandler{svc: svc}
+}
+
+// WithGalleryResolver injects the gallery resolver used by guardGalleryWorkspace
+// to enforce tenant ownership before serving the owner-side aggregation route.
+// Chainable; tolerates a nil resolver (the guard fails closed when nil).
+func (h *GalleryFavoritesHandler) WithGalleryResolver(gs *service.GalleryService) *GalleryFavoritesHandler {
+	h.galleryResolver = gs
+	return h
+}
+
+// WithAccessGate wires the gallery password / access-mode / share gate onto the
+// public favorites endpoints (S4-G6). Chainable; nil-safe.
+func (h *GalleryFavoritesHandler) WithAccessGate(gs *service.GalleryService, as *service.GalleryAccessService, ss *service.ShareLinkService) *GalleryFavoritesHandler {
+	if gs != nil && as != nil {
+		h.gate = &publicGalleryGate{gallerySvc: gs, accessSvc: as, shareSvc: ss}
+	}
+	return h
+}
+
+// passesAccessGate resolves the slug and applies the shared gallery access
+// gate. Returns false (and writes the response) when the gallery is missing,
+// unpublished, expired, or its protection (password / private / share) is not
+// satisfied. When no gate is wired it returns true so legacy constructions
+// behave unchanged.
+func (h *GalleryFavoritesHandler) passesAccessGate(w http.ResponseWriter, r *http.Request, slug string) bool {
+	if h.gate == nil || h.gate.gallerySvc == nil {
+		return true
+	}
+	gallery, err := h.gate.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "favorite operation failed"})
+		return false
+	}
+	pg := NewPublicGalleryHandler(h.gate.gallerySvc, nil, h.gate.shareSvc).
+		WithGalleryAccessService(h.gate.accessSvc)
+	return pg.gateGalleryAccess(w, r, gallery)
 }
 
 // ───────────────────────── Public endpoints ─────────────────────────
@@ -42,6 +100,12 @@ func (h *GalleryFavoritesHandler) Add(w http.ResponseWriter, r *http.Request) {
 	assetID, err := uuid.Parse(assetIDStr)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid asset id"})
+		return
+	}
+
+	// S4-G6: enforce the gallery password / access-mode / share gate before
+	// touching favorites on a protected gallery.
+	if !h.passesAccessGate(w, r, slug) {
 		return
 	}
 
@@ -74,6 +138,11 @@ func (h *GalleryFavoritesHandler) Remove(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// S4-G6: gate before mutating favorites on a protected gallery.
+	if !h.passesAccessGate(w, r, slug) {
+		return
+	}
+
 	if err := h.svc.RemoveFavoriteBySlug(r.Context(), slug, assetID, sessionID); err != nil {
 		h.writeServiceError(w, err)
 		return
@@ -90,6 +159,11 @@ func (h *GalleryFavoritesHandler) Remove(w http.ResponseWriter, r *http.Request)
 func (h *GalleryFavoritesHandler) ListForSession(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	sessionID := r.URL.Query().Get("session")
+
+	// S4-G6: gate before enumerating favorites on a protected gallery.
+	if !h.passesAccessGate(w, r, slug) {
+		return
+	}
 
 	ids, err := h.svc.ListSessionBySlug(r.Context(), slug, sessionID)
 	if err != nil {
@@ -119,6 +193,11 @@ func (h *GalleryFavoritesHandler) Summarize(w http.ResponseWriter, r *http.Reque
 	galleryID, err := uuid.Parse(galleryIDStr)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid gallery id"})
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 

@@ -8,9 +8,11 @@ describe("useUpload", () => {
     expect(typeof mod.useUpload).toBe("function");
   });
 
-  it("useUpload returns a function that accepts apiUrl and token", async () => {
+  it("useUpload accepts apiUrl, token, and an optional destination binding", async () => {
     const { useUpload } = await import("../use-upload");
-    expect(useUpload.length).toBe(2); // 2 params: apiUrl, token
+    // S3-G4: the third param is the optional { galleryId, albumId } destination
+    // so CreateSession can bind the upload to a gallery for server-side linking.
+    expect(useUpload.length).toBe(3); // apiUrl, token, destination?
   });
 
   it("caps active uploads to a small worker pool", async () => {

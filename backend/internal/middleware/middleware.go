@@ -282,6 +282,12 @@ func isNoRows(err error) bool {
 
 // ──────────────────────────── State Check Middleware ────────────────────────────
 
+// sentinelPendingOnboarding mirrors the "pending-onboarding" value the auth
+// layer stamps into the workspace_id / state_id claims for a session whose
+// user has not yet completed onboarding. RequireState treats it as "no real
+// state" so such sessions cannot reach state-gated routes.
+const sentinelPendingOnboarding = "pending-onboarding"
+
 func RequireState(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip onboarding routes
@@ -297,7 +303,12 @@ func RequireState(next http.Handler) http.Handler {
 		}
 
 		stateID, _ := claims["state_id"].(string)
-		if stateID == "" {
+		// AREA-CUSTOMER-2 (audit 2026-05-31): reject BOTH the empty string
+		// and the "pending-onboarding" sentinel. An un-onboarded session
+		// carries state_id="pending-onboarding" (not ""), so checking only
+		// the empty string let pending sessions slip through to state-gated
+		// routes. The sentinel is the canonical "no real state yet" marker.
+		if stateID == "" || stateID == sentinelPendingOnboarding {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

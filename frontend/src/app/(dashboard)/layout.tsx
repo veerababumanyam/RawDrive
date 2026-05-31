@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import { HeaderClock } from "@/components/layout/HeaderClock";
 import { PwaInstallBanner, PwaInstallHeaderButton } from "@/components/pwa/install-banner";
+import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import {
   AdminSidebar,
   DealerSidebar,
@@ -449,6 +450,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
+      {/* S5-G1: persistent read-only banner for admin impersonation sessions.
+          Self-hides for normal sessions; when active it sets
+          data-impersonation on <html> so mutating controls dim + disable. */}
+      <ImpersonationBanner />
       {/* Role-specific sidebar — completely different component per role */}
       <RoleSidebar role={role} userInfo={userInfo} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
 

@@ -141,8 +141,14 @@ func (s *AlbumService) GetBreadcrumb(ctx context.Context, albumID uuid.UUID) ([]
 }
 
 // AddAsset adds an asset to an album.
-func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID uuid.UUID, position int) error {
-	return s.albumRepo.AddAsset(ctx, albumID, assetID, position)
+//
+// workspaceID is the caller's workspace (resolved by the handler's album
+// ownership guard). The repo enforces, at the DB level, that the asset belongs
+// to the same workspace as the album's parent gallery, so a caller cannot link
+// a foreign asset id into its own album and read it back (cross-tenant
+// exfiltration).
+func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID, workspaceID uuid.UUID, position int) error {
+	return s.albumRepo.AddAsset(ctx, albumID, assetID, workspaceID, position)
 }
 
 // ListAssets returns the asset rows that belong to an album.

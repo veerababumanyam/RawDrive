@@ -66,7 +66,10 @@ describe("F-089: gallery detail page reads the access token once per mount", () 
     );
     expect(source).toMatch(/const token = tokenRef\.current;/);
 
-    // And that snapshot must be the value handed to the upload hook.
-    expect(source).toMatch(/const upload = useUpload\(apiUrl, token\);/);
+    // And that snapshot must be the value handed to the upload hook. The hook
+    // now also takes a third destination arg (S3-G4 server-side gallery
+    // binding), so allow trailing args after `token` while still pinning that
+    // the once-per-mount `token` snapshot is what feeds useUpload.
+    expect(source).toMatch(/const upload = useUpload\(apiUrl, token(,| \)|\))/);
   });
 });

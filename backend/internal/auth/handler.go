@@ -664,11 +664,16 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 		returnTo = sanitizeFrontendOrigin(os.Getenv("FRONTEND_URL"))
 	}
 
-	url, err := h.oauth.InitiateGoogleAuth(r.Context(), returnTo)
+	url, nonce, err := h.oauth.InitiateGoogleAuth(r.Context(), returnTo)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to initiate OAuth"})
 		return
 	}
+
+	// S1-G3 / AREA-AUTH-2: bind the state to this browser. The callback
+	// requires the state's nonce to equal this cookie, so a captured/replayed
+	// state value is useless from any other client (single-use within TTL).
+	setOAuthStateCookie(w, r, nonce)
 
 	http.Redirect(w, r, url, http.StatusFound)
 }
@@ -721,7 +726,14 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state)
+	// S1-G3 / AREA-AUTH-2: read the nonce set at initiate time and clear the
+	// cookie immediately so the state cannot be reused within its TTL (the
+	// signed state alone is otherwise replayable). HandleGoogleCallback
+	// rejects the request when this nonce does not match the state's nonce.
+	cookieNonce := oauthStateNonceFromRequest(r)
+	clearOAuthStateCookie(w, r)
+
+	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state, cookieNonce)
 	if err != nil {
 		http.Redirect(
 			w,
@@ -771,12 +783,16 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+		// S5-G2: never put the MFA challenge token in the redirect query string
+		// (it lands in browser history, referrers, and server access logs).
+		// Carry it in a short-lived HttpOnly cookie instead and signal only the
+		// step-up requirement in the URL.
+		setMFAChallengeCookie(w, r, mfaToken)
 		http.Redirect(
 			w,
 			r,
 			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{
 				"mfa_required": "1",
-				"mfa_token":    mfaToken,
 				"challenge":    "totp",
 			}),
 			http.StatusFound,
@@ -954,6 +970,63 @@ func refreshTokenFromRequest(r *http.Request, fallback string) string {
 		}
 	}
 	return strings.TrimSpace(fallback)
+}
+
+// oauthStateCookieName carries the per-request OAuth state nonce that binds the
+// signed state to the browser that initiated the flow (S1-G3 / AREA-AUTH-2).
+// SameSite=Lax is required (Strict would drop the cookie on Google's
+// cross-site GET redirect back to the callback). MaxAge mirrors the 10-minute
+// signed-state TTL so a stale cookie cannot outlive the state it guards.
+const oauthStateCookieName = "oauth_state"
+
+func setOAuthStateCookie(w http.ResponseWriter, r *http.Request, nonce string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    nonce,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   10 * 60,
+	})
+}
+
+func clearOAuthStateCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+}
+
+func oauthStateNonceFromRequest(r *http.Request) string {
+	if cookie, err := r.Cookie(oauthStateCookieName); err == nil {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return ""
+}
+
+// mfaChallengeCookieName carries the short-lived MFA challenge (mfa_token) on
+// the OAuth step-up path so it never appears in the redirect query string
+// (S5-G2). SameSite=Lax so it survives the cross-site redirect to the frontend
+// step-up page; HttpOnly so page JS cannot read it. MaxAge is intentionally
+// short — the challenge token itself is short-lived and single-use.
+const mfaChallengeCookieName = "mfa_token"
+
+func setMFAChallengeCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     mfaChallengeCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   5 * 60,
+	})
 }
 
 func refreshCookieSecure(r *http.Request) bool {

@@ -94,6 +94,15 @@ func (r *testWSRepo) Create(_ context.Context, ws *workspace.Workspace) (*worksp
 	return ws, nil
 }
 
+// CreateWithBootstrap mirrors Create for the in-memory test repo (the atomic
+// workspace+members+quota co-creation has no DB analogue here; quotaBytes is
+// not modelled). Added when workspace.Repository gained CreateWithBootstrap
+// (audit AREA-CUSTOMER-3).
+func (r *testWSRepo) CreateWithBootstrap(_ context.Context, ws *workspace.Workspace, _ int64) (*workspace.Workspace, error) {
+	r.workspaces[ws.ID] = ws
+	return ws, nil
+}
+
 func (r *testWSRepo) GetByID(_ context.Context, id string) (*workspace.Workspace, error) {
 	ws, ok := r.workspaces[id]
 	if !ok {

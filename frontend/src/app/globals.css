@@ -1131,3 +1131,26 @@ body[data-chrome="marketing"] {
   text-align: center;
   padding: 4rem 1.5rem 5rem;
 }
+
+/* --- S5-G1 impersonation read-only mode --------------------------------- */
+/* ImpersonationBanner sets data-impersonation="true" on <html> for an admin
+   impersonation session (mutations are 403'd server-side). The banner is
+   fixed at the top (z-60), so shift the fixed dashboard header down by its
+   height to keep both visible. Theme-agnostic: uses token surfaces only. */
+html[data-impersonation="true"] body {
+  --impersonation-banner-height: 2.5rem;
+}
+
+html[data-impersonation="true"] header {
+  top: var(--impersonation-banner-height, 2.5rem);
+}
+
+/* Any control a surface tags as a mutating action (data-mutation) is visually
+   disabled and non-interactive while impersonating, so the read-only state is
+   obvious before a click. Surfaces opt in by adding data-mutation to their
+   create/edit/delete affordances. */
+html[data-impersonation="true"] [data-mutation] {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}

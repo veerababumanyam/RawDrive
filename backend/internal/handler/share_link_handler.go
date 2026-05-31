@@ -104,6 +104,12 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31): enforced after cheap
+	// input validation so overlong input is still rejected before any service work.
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+		return
+	}
+
 	createInput := service.CreateShareLinkInput{
 		GalleryID:       galleryID,
 		PIN:             pin,
@@ -241,6 +247,11 @@ func (h *ShareLinkHandler) ListByGallery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+		return
+	}
+
 	links, err := h.shareSvc.ListByGallery(r.Context(), galleryID)
 	if err != nil {
 		http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
@@ -300,8 +311,24 @@ func (h *ShareLinkHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.shareSvc.Revoke(r.Context(), linkID); err != nil {
+	// tenant-ownership guard (integration audit 2026-05-31): the URL carries a
+	// child (link) id, not a gallery id, so guardGalleryWorkspace can't be called
+	// directly. We scope the revoke to the caller's workspace via the link's
+	// owning gallery atomically in the UPDATE; 0 rows affected ⇒ 404 (matching
+	// the guard's cross-tenant contract so foreign-link existence is not leaked).
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	affected, err := h.shareSvc.RevokeInWorkspace(r.Context(), linkID, workspaceID)
+	if err != nil {
 		http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if affected == 0 {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 

@@ -275,6 +275,13 @@ interface Props {
   // rather than a typed interface so settings-side schema additions
   // (font, color, use_logo) flow through without a Props change.
   watermark?: Record<string, unknown> | null;
+  // S4-G1: the gallery-session token (password- or share-PIN-scoped) minted
+  // after a successful unlock. When set, it is appended as `?gs=` to every
+  // protected image URL so cross-origin <img> requests authenticate without
+  // relying on the SameSite=Strict gallery_session cookie. Undefined for open
+  // (public/unlisted, non-password) galleries, where the bytes serve
+  // anonymously and no token is needed.
+  gallerySessionToken?: string | null;
 }
 
 // Bound the studio's columns value into the responsive scale the public
@@ -419,7 +426,7 @@ function WatermarkOverlay({
   );
 }
 
-export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null, watermark = null }: Props) {
+export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null, watermark = null, gallerySessionToken = null }: Props) {
   // Memoize the resolved watermark display state. Returns null when
   // disabled / misconfigured so the render path can short-circuit to
   // a plain <img>. Keeping the derivation in one place means the
@@ -709,6 +716,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
               asset.thumbnail_urls?.lg ||
               asset.thumbnail_urls?.md ||
               asset.thumbnail_urls?.sm,
+              null,
+              gallerySessionToken,
             );
             return (
               <div
@@ -1058,6 +1067,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           photo.thumbnail_urls?.display_webp ||
           Object.values(photo.thumbnail_urls || {})[0] ||
           "",
+          null,
+          gallerySessionToken,
         );
         return (
           <div
@@ -1211,6 +1222,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     a.thumbnail_urls?.thumb_md ||
                     Object.values(a.thumbnail_urls || {})[0] ||
                     "",
+                    null,
+                    gallerySessionToken,
                   );
                   return (
                     <button

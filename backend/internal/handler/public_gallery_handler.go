@@ -52,6 +52,23 @@ type PublicGalleryHandler struct {
 	// enrichment path degrades to the previous per-ID lookups, so behaviour is
 	// unchanged for callers that never wired a batch source.
 	assetBatch publicAssetBatchSource
+
+	// shareSession is the narrow seam tryBindShareSession (S4-G2) uses to
+	// validate + commit a share link. Defaults to the concrete shareSvc; a test
+	// can override it via WithShareSessionSource to assert expired/wrong-PIN/
+	// exhausted links yield no session.
+	shareSession shareSessionSource
+}
+
+// shareSessionSource is the subset of ShareLinkService the public handler needs
+// to bind a verified share link to a durable gallery session (S4-G2):
+//   - GalleryIDForToken: confirm the token is bound to THIS gallery.
+//   - ValidateAccess: authoritative expiry + PIN + max_access_count pre-flight.
+//   - TrackAccess: atomically commit the access (enforces the cap concurrently).
+type shareSessionSource interface {
+	GalleryIDForToken(ctx context.Context, token string) (uuid.UUID, error)
+	ValidateAccess(ctx context.Context, token, credential string) (bool, error)
+	TrackAccess(ctx context.Context, token string) (int, error)
 }
 
 // publicAssetBatchSource is the narrow bulk-read seam the public list
@@ -105,7 +122,22 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 }
 
 func NewPublicGalleryHandler(gs *service.GalleryService, as *service.AssetService, ss *service.ShareLinkService) *PublicGalleryHandler {
-	return &PublicGalleryHandler{gallerySvc: gs, assetSvc: as, shareSvc: ss}
+	h := &PublicGalleryHandler{gallerySvc: gs, assetSvc: as, shareSvc: ss}
+	// Default the share-session seam to the concrete service. A nil *ShareLinkService
+	// stored in an interface is still non-nil, so tryBindShareSession guards on
+	// the underlying shareSvc being nil before invoking it.
+	if ss != nil {
+		h.shareSession = ss
+	}
+	return h
+}
+
+// WithShareSessionSource overrides the share-link seam tryBindShareSession uses
+// (S4-G2). Primarily a test seam so expired/wrong-PIN/exhausted share links can
+// be exercised without a DB; production uses the concrete ShareLinkService.
+func (h *PublicGalleryHandler) WithShareSessionSource(src shareSessionSource) *PublicGalleryHandler {
+	h.shareSession = src
+	return h
 }
 
 // WithWatermarkService wires the optional watermark baker used by
@@ -151,21 +183,171 @@ func (h *PublicGalleryHandler) WithGalleryAccessService(accessSvc *service.Galle
 	return h
 }
 
-func (h *PublicGalleryHandler) requirePublicGallerySession(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) bool {
-	if gallery == nil || gallery.PasswordHash == nil || *gallery.PasswordHash == "" {
-		return true
+// gallerySessionToken pulls the gallery-session token off the request from the
+// header (fetch callers) or the cookie (browser). Empty when neither present.
+func gallerySessionToken(r *http.Request) string {
+	if t := r.Header.Get("X-Gallery-Session"); t != "" {
+		return t
 	}
-	token := r.Header.Get("X-Gallery-Session")
+	if c, err := r.Cookie("gallery_session"); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+// hasValidGallerySession reports whether the request carries a gallery-session
+// token (password- or share-scoped) valid for this gallery on ANY node (S4-G4/E).
+func (h *PublicGalleryHandler) hasValidGallerySession(r *http.Request, gallery *repository.Gallery) bool {
+	if h.accessSvc == nil || gallery == nil {
+		return false
+	}
+	return h.accessSvc.ValidateSession(r.Context(), gallery.ID, gallerySessionToken(r))
+}
+
+// tryBindShareSession handles the share-link first-touch (S4-G2). When the
+// request carries ?share=<token> for THIS gallery, it runs the authoritative
+// ShareLinkService.ValidateAccess (expiry + PIN + max_access_count) and, on
+// success, atomically commits the access via TrackAccess, mints a durable
+// share-scoped gallery session, and writes it as the gallery_session cookie so
+// subsequent asset/album/byte requests carry it. Returns true only when a valid
+// share session was established. An expired / wrong-PIN / exhausted link yields
+// false (and never mints a session), so it cannot unlock the gallery.
+//
+// The optional ?share_pin / ?pin query param (or X-Share-PIN header) supplies
+// the PIN credential without a separate verify round-trip; the dedicated
+// POST /share/{token}/verify endpoint remains for clients that prefer it.
+func (h *PublicGalleryHandler) tryBindShareSession(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) bool {
+	if h.shareSession == nil || h.accessSvc == nil || gallery == nil {
+		return false
+	}
+	token := r.URL.Query().Get("share")
 	if token == "" {
-		if c, err := r.Cookie("gallery_session"); err == nil {
-			token = c.Value
+		token = r.Header.Get("X-Share-Token")
+	}
+	if token == "" {
+		return false
+	}
+
+	// Bind the share token to THIS gallery — a share token for gallery A must
+	// never unlock gallery B even if the slug is swapped in the URL (S4-G2).
+	boundGallery, err := h.shareSession.GalleryIDForToken(r.Context(), token)
+	if err != nil || boundGallery != gallery.ID {
+		return false
+	}
+
+	credential := r.URL.Query().Get("share_pin")
+	if credential == "" {
+		credential = r.URL.Query().Get("pin")
+	}
+	if credential == "" {
+		credential = r.Header.Get("X-Share-PIN")
+	}
+
+	// Authoritative gate: expiry, PIN/email credential, and max_access_count
+	// pre-flight all live in ValidateAccess.
+	ok, err := h.shareSession.ValidateAccess(r.Context(), token, credential)
+	if err != nil || !ok {
+		return false
+	}
+	// Commit the access atomically (enforces max_access_count under concurrency).
+	if _, err := h.shareSession.TrackAccess(r.Context(), token); err != nil {
+		return false
+	}
+
+	sessionToken, err := h.accessSvc.IssueShareSession(gallery.ID, token)
+	if err != nil {
+		return false
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "gallery_session",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+		MaxAge:   86400,
+	})
+	// Surface the freshly-minted token to non-browser callers via a response
+	// header so they can attach X-Gallery-Session on follow-up requests.
+	w.Header().Set("X-Gallery-Session", sessionToken)
+	return true
+}
+
+// gateGalleryAccess is the single authorization gate for every public gallery
+// read surface that serves gallery content (slug listings, album listings,
+// downloads) and the storage byte path (via main.go). It closes the
+// "public delivery is not actually gated" cluster from the 2026-05-31
+// integration audit:
+//
+//   - S4-G3: enforces access_mode server-side. 'private'/'invite-only' require
+//     a verified share-link/invite session; 'unlisted' & 'public' are reachable
+//     by direct slug (unlisted is just excluded from discovery surfaces, which
+//     this handler never exposes anyway).
+//   - S4-G1/G2: a password-protected gallery requires a valid password session;
+//     a gallery reached via a share link requires a valid (non-expired, correct
+//     PIN, non-exhausted) share session. Both are the SAME durable session
+//     primitive (S4-G4/E) so every node agrees.
+//
+// CRITICAL CONSTRAINT (regression guard): a published, non-expired, non-password
+// gallery whose access_mode is 'public' or 'unlisted' MUST still serve to
+// anonymous clients — that is the normal delivery case. Only password / share /
+// private galleries are gated.
+//
+// Returns true when the request may proceed. On denial it has already written
+// the response (404 for unpublished/expired/not-found-shape, 401/403 for
+// missing session) and returns false.
+func (h *PublicGalleryHandler) gateGalleryAccess(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) bool {
+	if gallery == nil {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return false
+	}
+	if !gallery.IsPublished {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return false
+	}
+	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
+		http.Error(w, `{"error":"gallery expired"}`, http.StatusGone)
+		return false
+	}
+
+	// First-touch share link: validate + bind a durable share session.
+	hasShareSession := h.tryBindShareSession(w, r, gallery)
+	// Existing session (password- or share-scoped) presented on the request.
+	hasSession := hasShareSession || h.hasValidGallerySession(r, gallery)
+
+	passwordProtected := gallery.PasswordHash != nil && *gallery.PasswordHash != ""
+	mode := strings.ToLower(strings.TrimSpace(gallery.AccessMode))
+
+	// S4-G3: private / invite-only galleries are NEVER served without a
+	// verified session, regardless of password state.
+	if mode == "private" || mode == "invite-only" {
+		if hasSession {
+			return true
 		}
+		http.Error(w, `{"error":"gallery access requires a valid share link or invite"}`, http.StatusForbidden)
+		return false
 	}
-	if h.accessSvc != nil && h.accessSvc.ValidateSession(r.Context(), gallery.ID, token) {
-		return true
+
+	// S4-G1/G2: password-protected public/unlisted galleries require a session.
+	if passwordProtected {
+		if hasSession {
+			return true
+		}
+		http.Error(w, `{"error":"gallery password required"}`, http.StatusUnauthorized)
+		return false
 	}
-	http.Error(w, `{"error":"gallery password required"}`, http.StatusUnauthorized)
-	return false
+
+	// Normal delivery case: published, non-expired, non-password,
+	// public/unlisted (or legacy empty mode) — anonymous access allowed.
+	return true
+}
+
+// requirePublicGallerySession is retained as a thin alias over gateGalleryAccess
+// for call sites that already verified published/expiry upstream; it now applies
+// the full access_mode + password + share gate (S4-G1/G2/G3). Callers that pass
+// a gallery already known to be published get the same answer.
+func (h *PublicGalleryHandler) requirePublicGallerySession(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) bool {
+	return h.gateGalleryAccess(w, r, gallery)
 }
 
 // WithFaceClient enables the public Photo Search endpoint. Nil-safe:
@@ -255,6 +437,30 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 			"expired":    true,
 			"expired_at": gallery.ExpiresAt,
 			"title":      gallery.Title,
+		})
+		return
+	}
+
+	// S4-G2/G3 (audit 2026-05-31): if the request carries ?share=<token> for
+	// this gallery, validate + bind a durable share session here so the share
+	// landing page (which calls GetBySlug first) establishes the session that
+	// the asset/album/byte paths then require. Best-effort — an invalid/expired
+	// share link simply doesn't establish a session and the gating below kicks
+	// in. tryBindShareSession only mints on success.
+	hasSession := h.tryBindShareSession(w, r, gallery) || h.hasValidGallerySession(r, gallery)
+
+	// S4-G3: private / invite-only galleries return only a minimal "locked"
+	// shell to anonymous clients — never the cover thumbnails or full settings
+	// that the asset surfaces leak through. The viewer renders an invite/share
+	// prompt from this. With a valid session the full payload is returned.
+	mode := strings.ToLower(strings.TrimSpace(gallery.AccessMode))
+	if (mode == "private" || mode == "invite-only") && !hasSession {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"id":           gallery.ID.String(),
+			"title":        gallery.Title,
+			"access_mode":  gallery.AccessMode,
+			"access_gated": true,
+			"has_password": gallery.PasswordHash != nil && *gallery.PasswordHash != "",
 		})
 		return
 	}
@@ -840,6 +1046,11 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
 	}
+	// S4-G5: face-match leaks photo identities on protected galleries unless
+	// the gallery's password/access-mode/share gate is satisfied first.
+	if !h.gateGalleryAccess(w, r, gallery) {
+		return
+	}
 
 	// Per-gallery FaceID opt-in — feature is off by default so studios must
 	// explicitly enable it in gallery settings.
@@ -949,6 +1160,11 @@ func (h *PublicGalleryHandler) ListPeople(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
 	}
+	// S4-G5: people listing leaks identities on protected galleries unless the
+	// password/access-mode/share gate is satisfied first.
+	if !h.gateGalleryAccess(w, r, gallery) {
+		return
+	}
 	if h.faceRepo == nil {
 		// Treat unwired faceRepo as "feature unavailable" rather than 500
 		// so the public viewer can degrade gracefully.
@@ -1005,6 +1221,11 @@ func (h *PublicGalleryHandler) ListPersonPhotos(w http.ResponseWriter, r *http.R
 	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	// S4-G5: person-photos enumeration is gated by the gallery's
+	// password/access-mode/share protection.
+	if !h.gateGalleryAccess(w, r, gallery) {
 		return
 	}
 	if h.faceRepo == nil {
@@ -1066,6 +1287,11 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	// S4-G5: photo-search returns matched photo IDs — gate it behind the
+	// gallery's password/access-mode/share protection.
+	if !h.gateGalleryAccess(w, r, gallery) {
 		return
 	}
 

@@ -62,6 +62,12 @@ type CreateWorkspaceInput struct {
 
 type Repository interface {
 	Create(ctx context.Context, ws *Workspace) (*Workspace, error)
+	// CreateWithBootstrap atomically co-creates the workspace + its Owner
+	// workspace_members row + its workspace_storage quota row in one
+	// transaction (AREA-CUSTOMER-3 / AREA-CUSTOMER-1, audit 2026-05-31).
+	// quotaBytes is resolved from the plan tier by the caller to avoid an
+	// import cycle on the service package.
+	CreateWithBootstrap(ctx context.Context, ws *Workspace, quotaBytes int64) (*Workspace, error)
 	GetByID(ctx context.Context, id string) (*Workspace, error)
 	// Issue #5: case-insensitive lookup used by the onboarding
 	// adapter to recover the existing row when Create returned
@@ -79,6 +85,13 @@ type StorageBucket interface {
 
 type Service interface {
 	Create(ctx context.Context, input CreateWorkspaceInput) (*Workspace, error)
+	// CreateWithBootstrap is the SINGLE canonical workspace-creation path
+	// (AREA-CUSTOMER-1, audit 2026-05-31). It atomically co-creates the
+	// workspace + Owner membership + storage quota rows (via the repo's
+	// transactional CreateWithBootstrap), then provisions the storage
+	// bucket and publishes the workspace.created event. quotaBytes is the
+	// plan-resolved quota supplied by the caller.
+	CreateWithBootstrap(ctx context.Context, input CreateWorkspaceInput, quotaBytes int64) (*Workspace, error)
 	GetByID(ctx context.Context, id string) (*Workspace, error)
 	// GetByOwnerAndName is the recovery seam for Issue #5; see
 	// Repository.GetByOwnerAndName for the case-insensitivity contract.
@@ -101,7 +114,10 @@ func generateID() string {
 	return fmt.Sprintf("%x", b)
 }
 
-func (s *service) Create(ctx context.Context, input CreateWorkspaceInput) (*Workspace, error) {
+// newWorkspaceFromInput normalizes a CreateWorkspaceInput into a Workspace
+// (defaulting name to business name and plan tier to "free"). Shared by
+// Create and CreateWithBootstrap so both paths apply identical defaults.
+func newWorkspaceFromInput(input CreateWorkspaceInput) *Workspace {
 	name := input.Name
 	if strings.TrimSpace(name) == "" {
 		name = input.BusinessName
@@ -112,7 +128,7 @@ func (s *service) Create(ctx context.Context, input CreateWorkspaceInput) (*Work
 		planTier = "free"
 	}
 
-	ws := &Workspace{
+	return &Workspace{
 		ID:           generateID(),
 		Name:         name,
 		StateID:      input.StateID,
@@ -120,23 +136,55 @@ func (s *service) Create(ctx context.Context, input CreateWorkspaceInput) (*Work
 		BusinessName: input.BusinessName,
 		PlanTier:     planTier,
 	}
+}
+
+// provisionAndPublish runs the post-commit external side effects shared by
+// Create and CreateWithBootstrap: bucket provisioning (hard prerequisite)
+// and the best-effort workspace.created event.
+func (s *service) provisionAndPublish(ctx context.Context, created *Workspace) error {
+	if err := s.bucket.ProvisionBucket(ctx, created.ID); err != nil {
+		return err
+	}
+	data, _ := json.Marshal(map[string]string{
+		"workspace_id": created.ID,
+		"name":         created.Name,
+	})
+	_ = s.pub.Publish(ctx, "workspace.created", data)
+	return nil
+}
+
+func (s *service) Create(ctx context.Context, input CreateWorkspaceInput) (*Workspace, error) {
+	ws := newWorkspaceFromInput(input)
 
 	created, err := s.repo.Create(ctx, ws)
 	if err != nil {
 		return nil, err
 	}
 
-	// Provision storage bucket
-	if err := s.bucket.ProvisionBucket(ctx, created.ID); err != nil {
+	if err := s.provisionAndPublish(ctx, created); err != nil {
 		return nil, err
 	}
 
-	// Publish workspace.created event
-	data, _ := json.Marshal(map[string]string{
-		"workspace_id": created.ID,
-		"name":         created.Name,
-	})
-	_ = s.pub.Publish(ctx, "workspace.created", data)
+	return created, nil
+}
+
+// CreateWithBootstrap is the single canonical workspace-creation path
+// (AREA-CUSTOMER-1, audit 2026-05-31). The workspace + Owner membership +
+// storage quota rows are co-created atomically in one DB transaction by the
+// repo; only after that commits do we provision the storage bucket and
+// publish the event. The DB invariant (no workspace without membership +
+// quota) therefore holds even if the bucket/event side effects later fail.
+func (s *service) CreateWithBootstrap(ctx context.Context, input CreateWorkspaceInput, quotaBytes int64) (*Workspace, error) {
+	ws := newWorkspaceFromInput(input)
+
+	created, err := s.repo.CreateWithBootstrap(ctx, ws, quotaBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.provisionAndPublish(ctx, created); err != nil {
+		return nil, err
+	}
 
 	return created, nil
 }

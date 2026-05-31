@@ -33,7 +33,20 @@ async function runScreener(
   return buildManifest({ file, policyVersion, sha256, result });
 }
 
-export function useUpload(apiUrl: string, token: string) {
+// Destination binding for server-side gallery linkage (S3-G4 / S3-G5).
+// When `galleryId` is supplied, CreateSession sends it (and `albumId`, if a
+// sub-album is the active upload target) so the backend links the finalized
+// asset into the gallery itself — idempotently, with a deterministic
+// sort_order — at finalize time. The legacy client-side addAssetToGallery
+// call is then redundant and removed at the call site. Both fields are read
+// fresh at request time from a ref so a user switching the active sub-album
+// mid-batch binds subsequent uploads to wherever they are looking.
+export interface UploadDestination {
+  galleryId?: string;
+  albumId?: string | null;
+}
+
+export function useUpload(apiUrl: string, token: string, destination?: UploadDestination) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
@@ -41,6 +54,13 @@ export function useUpload(apiUrl: string, token: string) {
   const activeUploads = useRef(0);
   const pumpQueue = useRef<() => void>(() => {});
   const pausedRef = useRef(false);
+
+  // Keep the latest destination in a ref so chunkedUpload (a stable callback)
+  // reads the CURRENT gallery/album at the moment each session is created,
+  // without re-creating the callback (and tearing the queue) on every album
+  // toggle.
+  const destinationRef = useRef<UploadDestination | undefined>(destination);
+  destinationRef.current = destination;
 
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems((prev) =>
@@ -93,18 +113,30 @@ export function useUpload(apiUrl: string, token: string) {
 
       updateItem(item.id, { status: "uploading", scanManifest: manifest });
 
+      // S3-G4 / S3-G5: bind the session to its destination gallery (and
+      // sub-album, when one is the active upload target) so the backend links
+      // the finalized asset server-side. Read from the ref at request time so
+      // a mid-batch album switch routes subsequent uploads correctly. Omitted
+      // keys leave the session as a plain workspace upload (legacy behaviour).
+      const dest = destinationRef.current;
+      const createBody: Record<string, unknown> = {
+        filename: item.file.name,
+        content_type: item.file.type || "application/octet-stream",
+        total_size: item.file.size,
+        chunk_size: CHUNK_SIZE,
+        scan_manifest: manifest,
+      };
+      if (dest?.galleryId) {
+        createBody.gallery_id = dest.galleryId;
+        if (dest.albumId) createBody.album_id = dest.albumId;
+      }
+
       const createRes = await authFetch("/api/v1/uploads", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          filename: item.file.name,
-          content_type: item.file.type || "application/octet-stream",
-          total_size: item.file.size,
-          chunk_size: CHUNK_SIZE,
-          scan_manifest: manifest,
-        }),
+        body: JSON.stringify(createBody),
         signal: controller.signal,
       });
 
@@ -137,6 +169,22 @@ export function useUpload(apiUrl: string, token: string) {
             error:
               errorBody.message ??
               "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+          });
+          return;
+        }
+        // S3-G4: the server validates the destination gallery/album belongs to
+        // the caller's workspace at CreateSession and returns 404
+        // {"error":"gallery not found"} / "album not found" when it does not.
+        // Surface this as a real error row instead of a bare status code so the
+        // photographer learns the link target was rejected (e.g. a stale album
+        // id) rather than the upload silently landing unlinked.
+        if (createRes.status === 404 && (errorBody.error === "gallery not found" || errorBody.error === "album not found")) {
+          updateItem(item.id, {
+            status: "error",
+            error:
+              errorBody.error === "album not found"
+                ? "Couldn't link this upload to the selected sub-gallery (it may have been deleted). Try again."
+                : "Couldn't link this upload to this gallery (it may have been deleted). Try again.",
           });
           return;
         }

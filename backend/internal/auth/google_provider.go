@@ -92,10 +92,11 @@ func (p *GoogleProvider) GetProfile(ctx context.Context, token *OAuthToken) (*OA
 	}
 
 	var payload struct {
-		Sub     string `json:"sub"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		Sub           string `json:"sub"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return nil, err
@@ -103,11 +104,19 @@ func (p *GoogleProvider) GetProfile(ctx context.Context, token *OAuthToken) (*OA
 	if payload.Email == "" || payload.Sub == "" {
 		return nil, fmt.Errorf("google userinfo response missing required fields")
 	}
+	// S1-G1 / AREA-AUTH-4: an unverified Google email proves nothing about
+	// ownership. Refuse it here so it can never reach the callback's
+	// link/create logic. Returning an error makes OAuthGoogleCallback redirect
+	// with an error param rather than minting a session.
+	if !payload.EmailVerified {
+		return nil, fmt.Errorf("google account email is not verified")
+	}
 
 	return &OAuthProfile{
-		Email:       payload.Email,
-		DisplayName: payload.Name,
-		AvatarURL:   payload.Picture,
-		ProviderID:  payload.Sub,
+		Email:         payload.Email,
+		DisplayName:   payload.Name,
+		AvatarURL:     payload.Picture,
+		ProviderID:    payload.Sub,
+		EmailVerified: payload.EmailVerified,
 	}, nil
 }

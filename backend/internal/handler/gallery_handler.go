@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -629,7 +630,8 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+	_, workspaceID, ok := h.requireGalleryInWorkspace(w, r, galleryID)
+	if !ok {
 		return
 	}
 
@@ -648,7 +650,11 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.gallerySvc.AddAsset(r.Context(), galleryID, assetID, input.SortOrder); err != nil {
+	if err := h.gallerySvc.AddAsset(r.Context(), galleryID, assetID, workspaceID, input.SortOrder); err != nil {
+		if errors.Is(err, repository.ErrAssetNotInWorkspace) {
+			http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
+			return
+		}
 		http.Error(w, `{"error":"add asset failed"}`, http.StatusInternalServerError)
 		return
 	}

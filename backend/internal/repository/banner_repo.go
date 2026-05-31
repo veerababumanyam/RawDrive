@@ -132,6 +132,28 @@ func (r *BannerRepo) Update(ctx context.Context, b *GalleryBanner) error {
 	return nil
 }
 
+// UpdateInWorkspace overwrites a banner atomically scoped to its owning
+// workspace. The workspace_id predicate makes the ownership check and the
+// write a single statement (no TOCTOU). Returns the number of rows affected;
+// 0 means the banner does not exist OR belongs to another workspace — callers
+// treat both as not-found so cross-tenant existence is never disclosed.
+func (r *BannerRepo) UpdateInWorkspace(ctx context.Context, b *GalleryBanner, workspaceID uuid.UUID) (int64, error) {
+	b.UpdatedAt = time.Now().UTC()
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE gallery_banners SET
+		   title=$2, body=$3, cta_label=$4, cta_url=$5, coupon_code=$6,
+		   background_color=$7, text_color=$8, active_from=$9,
+		   active_until=$10, is_active=$11, updated_at=$12
+		 WHERE id=$1 AND workspace_id=$13`,
+		b.ID, b.Title, b.Body, b.CTALabel, b.CTAURL, b.CouponCode,
+		b.BackgroundColor, b.TextColor, b.ActiveFrom, b.ActiveUntil,
+		b.IsActive, b.UpdatedAt, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("banner repo update in workspace: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // Delete removes a banner row outright. This is a hard delete; the soft
 // variant is UPDATE ... SET is_active=false.
 func (r *BannerRepo) Delete(ctx context.Context, id uuid.UUID) error {
@@ -140,6 +162,20 @@ func (r *BannerRepo) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("banner repo delete: %w", err)
 	}
 	return nil
+}
+
+// DeleteInWorkspace hard-deletes a banner atomically scoped to its owning
+// workspace. The workspace_id predicate fuses the ownership check with the
+// delete (no TOCTOU). Returns the number of rows affected; 0 means the banner
+// does not exist OR belongs to another workspace — callers treat both as
+// not-found so cross-tenant existence is never disclosed.
+func (r *BannerRepo) DeleteInWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`DELETE FROM gallery_banners WHERE id=$1 AND workspace_id=$2`, id, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("banner repo delete in workspace: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // bannerSelectCols is the shared SELECT prefix to keep Scan in sync.

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -217,7 +218,8 @@ func (h *AlbumHandler) AddAssets(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, _, ok := h.requireAlbumInWorkspace(w, r, id); !ok {
+	_, workspaceID, ok := h.requireAlbumInWorkspace(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -240,13 +242,20 @@ func (h *AlbumHandler) AddAssets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	added := 0
+	skipped := 0
 	for i, rawID := range rawIDs {
 		assetID, err := uuid.Parse(rawID)
 		if err != nil {
 			http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
 			return
 		}
-		if err := h.albumSvc.AddAsset(r.Context(), id, assetID, i); err != nil {
+		if err := h.albumSvc.AddAsset(r.Context(), id, assetID, workspaceID, i); err != nil {
+			// Cross-workspace / missing asset: skip-and-count rather than
+			// abort the whole batch, and never link foreign data.
+			if errors.Is(err, repository.ErrAssetNotInWorkspace) {
+				skipped++
+				continue
+			}
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
@@ -254,7 +263,7 @@ func (h *AlbumHandler) AddAssets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"added": added})
+	json.NewEncoder(w).Encode(map[string]interface{}{"added": added, "skipped": skipped})
 }
 
 // Delete handles DELETE /api/v1/albums/{id}

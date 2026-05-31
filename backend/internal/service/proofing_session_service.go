@@ -105,6 +105,28 @@ func (s *ProofingSessionService) SetColorLabel(ctx context.Context, selectionID 
 	return s.proofingRepo.UpdateColorLabel(ctx, selectionID, label)
 }
 
+// SetStarRatingInWorkspace validates the rating and applies it only when the
+// selection's owning gallery belongs to the workspace. Returns rows affected
+// (0 ⇒ not found / cross-tenant; caller responds 404).
+func (s *ProofingSessionService) SetStarRatingInWorkspace(ctx context.Context, selectionID uuid.UUID, rating int, workspaceID uuid.UUID) (int64, error) {
+	if rating < 1 || rating > 5 {
+		return 0, fmt.Errorf("star rating must be between 1 and 5, got %d", rating)
+	}
+	return s.proofingRepo.UpdateStarRatingInWorkspace(ctx, selectionID, rating, workspaceID)
+}
+
+// SetColorLabelInWorkspace validates the label and applies it only when the
+// selection's owning gallery belongs to the workspace.
+func (s *ProofingSessionService) SetColorLabelInWorkspace(ctx context.Context, selectionID uuid.UUID, label string, workspaceID uuid.UUID) (int64, error) {
+	validLabels := map[string]bool{
+		"red": true, "orange": true, "yellow": true, "green": true, "blue": true, "purple": true, "none": true,
+	}
+	if !validLabels[label] {
+		return 0, fmt.Errorf("invalid color label: %s", label)
+	}
+	return s.proofingRepo.UpdateColorLabelInWorkspace(ctx, selectionID, label, workspaceID)
+}
+
 // CreateDefaultSessions creates the system default selection lists for a gallery.
 func (s *ProofingSessionService) CreateDefaultSessions(ctx context.Context, galleryID uuid.UUID) error {
 	defaults := []struct {

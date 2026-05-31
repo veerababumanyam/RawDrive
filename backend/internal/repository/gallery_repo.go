@@ -55,6 +55,16 @@ type Gallery struct {
 	//   face_detection_enabled M3 E8-S1 — face cluster pipeline opt-out. DEFAULT true.
 	FaceIDEnabled        bool `json:"faceid_enabled"`
 	FaceDetectionEnabled bool `json:"face_detection_enabled"`
+	// AccessMode (migration 041) controls public discoverability/reachability:
+	//   public      — reachable by slug AND eligible for discovery surfaces.
+	//   unlisted     — reachable by direct slug only; excluded from discovery.
+	//   private      — requires a verified share-link / invite session to view.
+	//   invite-only  — same gate as private (requires a verified session).
+	// Defaults to 'private' at the DB level (migration 041). Read into the
+	// struct so the public resolve path can enforce it server-side (S4-G3,
+	// integration audit 2026-05-31) — previously it was write-only and every
+	// mode was served identically to 'public'.
+	AccessMode string `json:"access_mode"`
 	// M23: Camera tethering fields (migration 133).
 	// TetheringEnabled: desktop app watches TetherDirectory and auto-uploads.
 	// TetherDirectory: opaque path string stored at the API level; actual FS
@@ -218,7 +228,7 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
-		 faceid_enabled, face_detection_enabled,
+		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
 		 tethering_enabled, tether_directory
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
@@ -226,7 +236,7 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
-		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
 		&g.TetheringEnabled, &g.TetherDirectory,
 	)
 	if err == pgx.ErrNoRows {
@@ -248,7 +258,7 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
-		 faceid_enabled, face_detection_enabled,
+		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
 		 tethering_enabled, tether_directory
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
@@ -256,7 +266,7 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
-		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
 		&g.TetheringEnabled, &g.TetherDirectory,
 	)
 	if err == pgx.ErrNoRows {

@@ -61,6 +61,22 @@ func TestUploadSession_FieldsSet(t *testing.T) {
 	assert.Equal(t, "m-12345", *s.R2MultipartUploadID)
 }
 
+// TestUploadSession_GalleryAlbumFields covers the S3-G4 / AREA-UPLOADER-3
+// destination fields: they default to nil (legacy client-link flow) and round-
+// trip when set so finalize can link the asset server-side.
+func TestUploadSession_GalleryAlbumFields(t *testing.T) {
+	s := UploadSession{}
+	assert.Nil(t, s.GalleryID, "gallery_id defaults to nil (no server-side link)")
+	assert.Nil(t, s.AlbumID, "album_id defaults to nil")
+
+	gID := uuid.New()
+	aID := uuid.New()
+	s.GalleryID = &gID
+	s.AlbumID = &aID
+	assert.Equal(t, gID, *s.GalleryID)
+	assert.Equal(t, aID, *s.AlbumID)
+}
+
 func TestUploadSessionsRepo_CreateValidation(t *testing.T) {
 	repo := NewUploadSessionsRepo(nil)
 	ctx := t.Context()

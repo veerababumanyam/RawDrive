@@ -20,6 +20,105 @@ func NewPgRepo(pool *pgxpool.Pool) *PgRepo {
 	return &PgRepo{pool: pool}
 }
 
+// CreateWithBootstrap co-creates the workspace row, its Owner
+// workspace_members row, and its workspace_storage quota row inside a
+// SINGLE pgx transaction (AREA-CUSTOMER-3 / AREA-CUSTOMER-1, audit
+// 2026-05-31). Either all three rows are committed together or none are:
+// a workspace can NEVER exist without its membership + quota rows.
+//
+// Idempotency: the members and storage inserts use ON CONFLICT DO NOTHING /
+// DO UPDATE so a partial-failure retry of onboarding does not error, but
+// the function still VERIFIES (via affected-row / existence checks inside
+// the tx) that both rows are present before committing. If the workspace
+// insert raises the migration-096 (owner_id, lower(name)) unique violation
+// the typed ErrDuplicateName sentinel is surfaced so the onboarding adapter
+// can run its recovery path.
+//
+// quotaBytes is supplied by the caller (resolved from the plan tier via
+// service.PlanDefaultQuotaBytes) to avoid an import cycle between the
+// workspace and service packages.
+func (r *PgRepo) CreateWithBootstrap(ctx context.Context, ws *Workspace, quotaBytes int64) (*Workspace, error) {
+	if ws.BusinessProfileSlug == "" {
+		ws.BusinessProfileSlug = resolveBusinessProfileSlug(ws.Name)
+	}
+	if ws.BusinessUniqueCode == "" {
+		code, err := generateUniqueBusinessCode(ctx, r)
+		if err == nil {
+			ws.BusinessUniqueCode = code
+		}
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("workspace bootstrap begin tx: %w", err)
+	}
+	// Rollback is a no-op once Commit succeeds; safe to always defer.
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// 1. workspace row
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO workspaces (name, state_id, owner_id, plan_tier, business_profile_slug, business_unique_code)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id`,
+		ws.Name, ws.StateID, ws.OwnerID, ws.PlanTier, ws.BusinessProfileSlug, ws.BusinessUniqueCode,
+	).Scan(&ws.ID); err != nil {
+		if isDuplicateOwnerName(err) {
+			return nil, ErrDuplicateName
+		}
+		return nil, fmt.Errorf("workspace bootstrap insert workspace: %w", err)
+	}
+
+	// 2. Owner membership row. ON CONFLICT DO NOTHING keeps re-runs safe;
+	//    the existence check below guarantees the row is actually present
+	//    before we commit, so a missing 'Owner' role (0 rows inserted)
+	//    cannot silently leave the workspace member-less.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO workspace_members (workspace_id, user_id, role_id)
+		 VALUES ($1, $2, (SELECT id FROM roles WHERE name = 'Owner'))
+		 ON CONFLICT DO NOTHING`,
+		ws.ID, ws.OwnerID,
+	); err != nil {
+		return nil, fmt.Errorf("workspace bootstrap insert member: %w", err)
+	}
+	var memberExists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2)`,
+		ws.ID, ws.OwnerID,
+	).Scan(&memberExists); err != nil {
+		return nil, fmt.Errorf("workspace bootstrap verify member: %w", err)
+	}
+	if !memberExists {
+		return nil, fmt.Errorf("workspace bootstrap: owner membership row not created (missing 'Owner' role?)")
+	}
+
+	// 3. Storage quota row. The dashboard storage widget reads this table
+	//    directly (never mocked), so it MUST exist for every workspace.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 0, 0, $2)
+		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2
+		 WHERE workspace_storage.quota_bytes = 0`,
+		ws.ID, quotaBytes,
+	); err != nil {
+		return nil, fmt.Errorf("workspace bootstrap insert storage: %w", err)
+	}
+	var storageExists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM workspace_storage WHERE workspace_id = $1)`,
+		ws.ID,
+	).Scan(&storageExists); err != nil {
+		return nil, fmt.Errorf("workspace bootstrap verify storage: %w", err)
+	}
+	if !storageExists {
+		return nil, fmt.Errorf("workspace bootstrap: storage quota row not created")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("workspace bootstrap commit: %w", err)
+	}
+	return ws, nil
+}
+
 func (r *PgRepo) Create(ctx context.Context, ws *Workspace) (*Workspace, error) {
 	// Populate business-subdomain identity (migration 121) if the caller
 	// hasn't supplied them. Failure to generate a unique code is non-fatal:

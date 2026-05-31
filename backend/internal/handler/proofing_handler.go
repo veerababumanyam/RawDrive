@@ -40,6 +40,11 @@ func (h *ProofingHandler) ListByGallery(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+		return
+	}
+
 	selections, err := h.proofingSvc.ListByGallery(r.Context(), galleryID)
 	if err != nil {
 		http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
@@ -58,6 +63,10 @@ func (h *ProofingHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
 		return
 	}
 	selections, err := h.proofingSvc.ListByGallery(r.Context(), galleryID)
@@ -106,8 +115,24 @@ func (h *ProofingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.proofingSvc.UpdateStatus(r.Context(), selectionID, input.Status); err != nil {
+	// tenant-ownership guard (integration audit 2026-05-31). The URL carries a
+	// selection id, not a gallery id, so guardGalleryWorkspace cannot be called
+	// directly. Instead the update is scoped to the caller's workspace via the
+	// selection's owning gallery in a single atomic statement: 0 rows affected
+	// means the selection does not exist or belongs to another tenant -> 404.
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	rows, err := h.proofingSvc.UpdateStatusInWorkspace(r.Context(), selectionID, input.Status, workspaceID)
+	if err != nil {
 		http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if rows == 0 {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 

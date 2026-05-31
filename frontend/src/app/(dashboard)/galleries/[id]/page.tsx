@@ -6,7 +6,6 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { bulkAssetAction, getAsset, type Asset } from "@/lib/api/assets";
 import {
   addAlbumAssets,
-  addAssetToGallery,
   createGalleryAlbum,
   deleteAlbum,
   galleryPublicUrl,
@@ -521,7 +520,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     tokenRef.current = getStoredAccessToken();
   }
   const token = tokenRef.current;
-  const upload = useUpload(apiUrl, token);
+  // S3-G4 / S3-G5: bind every upload session to THIS gallery (and the active
+  // sub-album, when one is selected) so the backend links the finalized asset
+  // into the gallery server-side — idempotent, deterministic sort_order — at
+  // finalize. The destination object updates as the user switches albums; the
+  // hook reads it live via a ref so a mid-batch switch routes correctly.
+  const uploadDestination = useMemo(
+    () => ({ galleryId: id, albumId: activeAlbum }),
+    [id, activeAlbum],
+  );
+  const upload = useUpload(apiUrl, token, uploadDestination);
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
 
   // Upload completion toast — fires when the active upload count
@@ -770,12 +778,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   }, [activeAlbum]);
   const albumLinkedAssetIdsRef = useRef<Set<string>>(new Set());
 
-  // Link each newly-completed upload to this gallery, then attach it to
-  // the active sub-album (if any), then reload the asset + album views.
-  // The "active sub-album" semantic is: photos land wherever the user is
-  // currently looking. If they kicked off the upload from inside the
-  // Favorites chip, the resulting assets show up in Favorites without
-  // needing a separate drag-into-album step.
+  // S3-G4 / S3-G5: the gallery link is now performed SERVER-SIDE at finalize
+  // (the upload session was bound to gallery_id in CreateSession), so the
+  // formerly-required client addAssetToGallery loop is gone — keeping it would
+  // be a redundant idempotent no-op. What still must happen client-side is the
+  // sub-album membership push (the backend validates album_id but does not add
+  // the asset to the album table) and reloading the asset + album views so the
+  // freshly-linked photos appear. The "active sub-album" semantic is unchanged:
+  // photos land wherever the user is currently looking, so an upload kicked off
+  // from inside the Favorites chip shows up in Favorites without a manual
+  // drag-into-album step.
   useEffect(() => {
     const t = getStoredAccessToken();
     if (!t || !id) return;
@@ -793,13 +805,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       for (const item of toLink) {
         if (!item.assetId) continue;
-        try {
-          await addAssetToGallery(t, id, item.assetId, 0);
-          linkedAssetIdsRef.current.add(item.assetId);
-          newlyAddedAssetIds.push(item.assetId);
-        } catch (err) {
-          console.warn("Failed to link asset to gallery:", err);
-        }
+        // Server-side finalize already linked this asset into the gallery.
+        // Track it locally (de-dup guard) and queue it for album membership +
+        // the post-batch reload below.
+        linkedAssetIdsRef.current.add(item.assetId);
+        newlyAddedAssetIds.push(item.assetId);
       }
 
       // Push the just-linked assets into the active sub-album. Skipped
@@ -1065,6 +1075,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <button
               type="button"
               disabled={publishing}
+              // S5-G1: marks this as a mutating control so it visually disables
+              // under an impersonation (read-only) session — the server would
+              // 403 the updateGallery call anyway.
+              data-mutation
               onClick={async () => {
                 const t = getStoredAccessToken();
                 if (!t) return;

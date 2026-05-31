@@ -60,6 +60,28 @@ func TestStateCheck_NullState(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rr.Code, "null/empty state should return 403")
 }
 
+// AREA-CUSTOMER-2 (audit 2026-05-31): an un-onboarded session carries
+// state_id="pending-onboarding" (the sentinel), NOT the empty string.
+// RequireState must reject the sentinel too, otherwise a pending session
+// reaches state-gated routes.
+func TestStateCheck_PendingOnboardingSentinel(t *testing.T) {
+	handler := middleware.RequireState(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files", nil)
+	ctx := middleware.WithJWTClaims(req.Context(), map[string]interface{}{
+		"state_id":     "pending-onboarding",
+		"workspace_id": "pending-onboarding",
+	})
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusForbidden, rr.Code,
+		"pending-onboarding sentinel must be rejected, not just the empty string")
+}
+
 func TestStateCheck_AfterAuth(t *testing.T) {
 	// State check should work after auth middleware has set claims
 	authMiddleware := middleware.TenantContext(&mockDBContext{}, &mockAuditLog{})

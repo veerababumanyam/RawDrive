@@ -688,7 +688,7 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 		DisplayName: "OAuth User",
 		ProviderID:  "google-oauth-test",
 	}
-	oauthSvc, state := newAuthorizedService(t, newMockProvider(profile), &mockUserStore{users: map[string]*auth.User{}})
+	oauthSvc, state, nonce := newAuthorizedService(t, newMockProvider(profile), &mockUserStore{users: map[string]*auth.User{}})
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
 
 	ts := newTestServer(handler)
@@ -697,7 +697,12 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Get(ts.URL + "/auth/oauth/google/callback?code=valid-code&state=" + url.QueryEscape(state))
+	// S1-G3: the callback now requires the oauth_state cookie nonce to match the
+	// state's nonce, so the test must present the cookie the initiate step set.
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: nonce})
+	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

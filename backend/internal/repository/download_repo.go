@@ -87,6 +87,22 @@ func (r *DownloadRepo) GetJob(ctx context.Context, id uuid.UUID) (*DownloadJob, 
 	return job, nil
 }
 
+// GetJobInWorkspace returns a download job by ID only when it belongs to the
+// given workspace. Scoping the lookup by workspace_id in the WHERE clause makes
+// the ownership check atomic (TOCTOU-free) — a cross-tenant job_id simply
+// matches no row and returns pgx.ErrNoRows, which the handler maps to 404.
+func (r *DownloadRepo) GetJobInWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*DownloadJob, error) {
+	job := &DownloadJob{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, gallery_id, workspace_id, requested_by_name, requested_by_email, requested_by_user_id, asset_ids, variant, status, progress, total_assets, download_url, file_size_bytes, error_message, expires_at, created_at, completed_at
+		 FROM download_jobs WHERE id = $1 AND workspace_id = $2`, id, workspaceID,
+	).Scan(&job.ID, &job.GalleryID, &job.WorkspaceID, &job.RequestedByName, &job.RequestedByEmail, &job.RequestedByUserID, &job.AssetIDs, &job.Variant, &job.Status, &job.Progress, &job.TotalAssets, &job.DownloadURL, &job.FileSizeBytes, &job.ErrorMessage, &job.ExpiresAt, &job.CreatedAt, &job.CompletedAt)
+	if err != nil {
+		return nil, fmt.Errorf("download job get: %w", err)
+	}
+	return job, nil
+}
+
 // UpdateJobStatus updates a download job's status and progress.
 func (r *DownloadRepo) UpdateJobStatus(ctx context.Context, id uuid.UUID, status string, progress int, downloadURL string, fileSizeBytes int64) error {
 	_, err := r.pool.Exec(ctx,

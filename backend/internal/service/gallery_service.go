@@ -202,8 +202,13 @@ func (s *GalleryService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 }
 
 // AddAsset adds an asset to a gallery and auto-sets cover if none.
-func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID uuid.UUID, sortOrder int) error {
-	if err := s.galleryAssetRepo.Add(ctx, galleryID, assetID, sortOrder); err != nil {
+//
+// workspaceID is the caller's workspace (resolved by the handler's gallery
+// ownership guard). The repo enforces, at the DB level, that the asset belongs
+// to the same workspace as the gallery, so a caller cannot link a foreign
+// asset id into its own gallery and read it back (cross-tenant exfiltration).
+func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID, sortOrder int) error {
+	if err := s.galleryAssetRepo.Add(ctx, galleryID, assetID, workspaceID, sortOrder); err != nil {
 		return err
 	}
 	// Auto-set cover if gallery has no cover

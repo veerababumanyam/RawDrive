@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
@@ -16,11 +19,28 @@ import (
 )
 
 // GalleryAccessService handles gallery access control: passwords, PINs, access modes, and audit logging.
+//
+// S4-G4 / E (integration audit 2026-05-31): gallery access sessions used to be
+// stored in a per-process in-memory map, so a client verified on app1 got 401
+// on app2 (2-node prod) and every session dropped on deploy/restart. Sessions
+// are now minted as stateless HMAC-signed tokens (mirroring the streaming
+// viewer JWT and OAuth-state HMAC patterns) that any node can verify with the
+// shared signing key — no shared store, no sticky sessions. The legacy
+// in-memory map is retained ONLY as a fallback for constructions that never
+// wire a signing key (e.g. older tests); production always wires the key so
+// every node agrees on session validity.
 type GalleryAccessService struct {
 	galleryRepo   *repository.GalleryRepo
 	accessLogRepo *repository.GalleryAccessLogRepo
-	mu            sync.Mutex
-	sessions      map[string]galleryAccessSession
+
+	// signingKey, when non-nil, switches session minting/validation to the
+	// stateless HMAC-signed path. Loaded from platform_settings at boot.
+	signingKey []byte
+	sessionTTL time.Duration
+
+	// Legacy in-memory fallback. Only used when signingKey is nil.
+	mu       sync.Mutex
+	sessions map[string]galleryAccessSession
 }
 
 type galleryAccessSession struct {
@@ -28,13 +48,51 @@ type galleryAccessSession struct {
 	ExpiresAt time.Time
 }
 
-// NewGalleryAccessService creates a new GalleryAccessService.
+// gallerySessionScope distinguishes how a session was obtained. Both scopes
+// satisfy "the gallery's protection is met", but recording the scope lets
+// callers reason about share-link-specific gates (PIN/expiry/access-count are
+// enforced at verify time, not on every read, so the scope is informational
+// for now and future-proofs share-only surfaces).
+type gallerySessionScope string
+
+const (
+	gallerySessionScopePassword gallerySessionScope = "password"
+	gallerySessionScopeShare    gallerySessionScope = "share"
+
+	gallerySessionIssuer   = "rawdrive-gallery"
+	gallerySessionAudience = "gallery-session"
+)
+
+// gallerySessionClaims is the decoded body of a signed gallery-session token.
+// GalleryID binds the token to one gallery; ShareToken (optional) records the
+// share link that minted it for share-scoped sessions.
+type gallerySessionClaims struct {
+	GalleryID  string              `json:"gallery_id"`
+	Scope      gallerySessionScope `json:"scope"`
+	ShareToken string              `json:"share_token,omitempty"`
+	jwt.RegisteredClaims
+}
+
+// NewGalleryAccessService creates a new GalleryAccessService. Without a signing
+// key it falls back to the legacy in-memory session map (single-node only).
 func NewGalleryAccessService(gr *repository.GalleryRepo, alr *repository.GalleryAccessLogRepo) *GalleryAccessService {
 	return &GalleryAccessService{
 		galleryRepo:   gr,
 		accessLogRepo: alr,
+		sessionTTL:    24 * time.Hour,
 		sessions:      make(map[string]galleryAccessSession),
 	}
+}
+
+// WithSessionSigningKey enables stateless HMAC-signed gallery-session tokens so
+// sessions survive restarts and are valid on every node (S4-G4/E). Returns the
+// receiver for chained construction. A key shorter than 32 bytes is rejected
+// (caller should load a 32-byte key from platform_settings).
+func (s *GalleryAccessService) WithSessionSigningKey(key []byte) *GalleryAccessService {
+	if len(key) >= 32 {
+		s.signingKey = key
+	}
+	return s
 }
 
 // SetPassword hashes and stores a password for gallery access protection.
@@ -50,7 +108,7 @@ func (s *GalleryAccessService) SetPassword(ctx context.Context, galleryID uuid.U
 }
 
 // VerifyPassword checks a plain password against the gallery's stored hash.
-// Returns a session token on success.
+// Returns a durable, node-portable session token on success (S4-G4/E).
 func (s *GalleryAccessService) VerifyPassword(ctx context.Context, galleryID uuid.UUID, password string) (string, error) {
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil {
@@ -69,7 +127,52 @@ func (s *GalleryAccessService) VerifyPassword(ctx context.Context, galleryID uui
 		return "", fmt.Errorf("invalid password")
 	}
 
-	// Generate session token
+	return s.issueSession(galleryID, gallerySessionScopePassword, "")
+}
+
+// IssueShareSession mints a gallery-session token for a client who reached the
+// gallery via a verified share link (S4-G2). The caller MUST have already run
+// ShareLinkService.ValidateAccess + TrackAccess for `shareToken` before calling
+// this — this method only binds the verified share to a durable session that
+// the slug/asset/byte paths require. The session is bound to galleryID so a
+// share token for gallery A cannot unlock gallery B.
+func (s *GalleryAccessService) IssueShareSession(galleryID uuid.UUID, shareToken string) (string, error) {
+	return s.issueSession(galleryID, gallerySessionScopeShare, shareToken)
+}
+
+// issueSession mints a session token. Stateless HMAC path when a signing key is
+// wired; legacy in-memory map otherwise.
+func (s *GalleryAccessService) issueSession(galleryID uuid.UUID, scope gallerySessionScope, shareToken string) (string, error) {
+	ttl := s.sessionTTL
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+
+	if len(s.signingKey) >= 32 {
+		now := time.Now().UTC()
+		claims := &gallerySessionClaims{
+			GalleryID:  galleryID.String(),
+			Scope:      scope,
+			ShareToken: shareToken,
+			RegisteredClaims: jwt.RegisteredClaims{
+				Issuer:    gallerySessionIssuer,
+				Subject:   galleryID.String(),
+				Audience:  jwt.ClaimStrings{gallerySessionAudience},
+				IssuedAt:  jwt.NewNumericDate(now),
+				NotBefore: jwt.NewNumericDate(now),
+				ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+				ID:        uuid.NewString(),
+			},
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signed, err := token.SignedString(s.signingKey)
+		if err != nil {
+			return "", fmt.Errorf("gallery access: sign session: %w", err)
+		}
+		return signed, nil
+	}
+
+	// Legacy single-node fallback.
 	token, err := generateSecureToken(32)
 	if err != nil {
 		return "", fmt.Errorf("gallery access: generate token: %w", err)
@@ -77,18 +180,29 @@ func (s *GalleryAccessService) VerifyPassword(ctx context.Context, galleryID uui
 	s.mu.Lock()
 	s.sessions[token] = galleryAccessSession{
 		GalleryID: galleryID,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ExpiresAt: time.Now().Add(ttl),
 	}
 	s.mu.Unlock()
-
 	return token, nil
 }
 
+// ValidateSession reports whether `token` is a currently-valid session for
+// `galleryID`. Works on any node when the HMAC path is active.
 func (s *GalleryAccessService) ValidateSession(ctx context.Context, galleryID uuid.UUID, token string) bool {
 	_ = ctx
 	if token == "" {
 		return false
 	}
+
+	if len(s.signingKey) >= 32 {
+		claims, err := s.parseSession(token)
+		if err != nil {
+			return false
+		}
+		return claims.GalleryID == galleryID.String()
+	}
+
+	// Legacy in-memory fallback.
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -101,6 +215,74 @@ func (s *GalleryAccessService) ValidateSession(ctx context.Context, galleryID uu
 		return false
 	}
 	return session.GalleryID == galleryID
+}
+
+// GalleryIDFromSession returns the gallery a valid session token is bound to,
+// WITHOUT requiring the caller to already know which gallery. The storage byte
+// path (S4-G1) needs this: it has a session token from cookie/header but must
+// learn which gallery it unlocks to check asset membership. Returns uuid.Nil +
+// false when the token is empty, malformed, expired, or (legacy fallback) not
+// found. Works on any node when the HMAC path is active.
+func (s *GalleryAccessService) GalleryIDFromSession(ctx context.Context, token string) (uuid.UUID, bool) {
+	_ = ctx
+	if token == "" {
+		return uuid.Nil, false
+	}
+
+	if len(s.signingKey) >= 32 {
+		claims, err := s.parseSession(token)
+		if err != nil {
+			return uuid.Nil, false
+		}
+		gid, err := uuid.Parse(claims.GalleryID)
+		if err != nil {
+			return uuid.Nil, false
+		}
+		return gid, true
+	}
+
+	// Legacy in-memory fallback.
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[token]
+	if !ok {
+		return uuid.Nil, false
+	}
+	if session.ExpiresAt.Before(now) {
+		delete(s.sessions, token)
+		return uuid.Nil, false
+	}
+	return session.GalleryID, true
+}
+
+func (s *GalleryAccessService) parseSession(tokenStr string) (*gallerySessionClaims, error) {
+	if strings.TrimSpace(tokenStr) == "" {
+		return nil, errors.New("gallery access: empty token")
+	}
+	claims := &gallerySessionClaims{}
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuer(gallerySessionIssuer),
+		jwt.WithAudience(gallerySessionAudience),
+	)
+	token, err := parser.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("gallery access: unexpected signing alg %q", t.Method.Alg())
+		}
+		return s.signingKey, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !token.Valid {
+		return nil, errors.New("gallery access: token not valid")
+	}
+	if strings.TrimSpace(claims.GalleryID) == "" {
+		return nil, errors.New("gallery access: gallery_id claim required")
+	}
+	return claims, nil
 }
 
 // SetAccessMode updates the gallery's access mode.

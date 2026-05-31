@@ -31,9 +31,12 @@ interface Props {
   photo: PublicAsset;
   gallery: Gallery;
   branding: GalleryBranding | null;
+  // S4-G1: gallery-session token (when the gallery is gated) appended as `?gs=`
+  // to the protected image bytes so the cross-origin <img> authenticates.
+  gallerySessionToken?: string | null;
 }
 
-export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
+export function SinglePhotoView({ slug, photo, gallery, branding, gallerySessionToken = null }: Props) {
   const [shareCopied, setShareCopied] = useState(false);
   const [zoom, setZoom] = useState(1);
 
@@ -48,6 +51,8 @@ export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
     photo.thumbnail_urls?.display_webp ||
     Object.values(photo.thumbnail_urls || {})[0] ||
     "",
+    null,
+    gallerySessionToken,
   );
 
   const brandName = branding?.can_customize ? branding.brand_name : null;

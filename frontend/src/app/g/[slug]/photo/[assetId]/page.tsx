@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import {
   getPublicGallery,
   getPublicGalleryAssets,
@@ -41,12 +42,17 @@ function PhotoUnavailable({ title, body }: { title: string; body: string }) {
 
 export default async function PublicSinglePhotoPage({ params }: Props) {
   const { slug, assetId } = await params;
+  // S4-G1: forward the gallery-session cookie (when present) so a gated
+  // gallery's asset listing + protected image bytes resolve for a recipient
+  // who already unlocked the gallery shell in this browser.
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("gallery_session")?.value ?? null;
 
   let gallery;
   let assets;
   try {
-    gallery = await getPublicGallery(slug);
-    assets = await getPublicGalleryAssets(slug);
+    gallery = await getPublicGallery(slug, undefined, sessionToken);
+    assets = await getPublicGalleryAssets(slug, undefined, undefined, sessionToken);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
@@ -83,7 +89,15 @@ export default async function PublicSinglePhotoPage({ params }: Props) {
 
   const branding = await getPublicGalleryBranding(slug).catch(() => null);
 
-  return <SinglePhotoView slug={slug} photo={photo} gallery={gallery} branding={branding} />;
+  return (
+    <SinglePhotoView
+      slug={slug}
+      photo={photo}
+      gallery={gallery}
+      branding={branding}
+      gallerySessionToken={sessionToken}
+    />
+  );
 }
 
 export async function generateMetadata({ params }: Props) {

@@ -95,6 +95,12 @@ func (h *GalleryAccessHandler) SetPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31): enforced after cheap
+	// input validation so overlong input is still rejected before any service work.
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+		return
+	}
+
 	if err := h.accessSvc.SetPassword(r.Context(), galleryID, input.Password); err != nil {
 		http.Error(w, `{"error":"failed to set password"}`, http.StatusInternalServerError)
 		return
@@ -108,6 +114,11 @@ func (h *GalleryAccessHandler) SetAccessMode(w http.ResponseWriter, r *http.Requ
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
 		return
 	}
 
@@ -135,6 +146,11 @@ func (h *GalleryAccessHandler) ViewAsClient(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+		return
+	}
+
 	token, err := h.accessSvc.CreateViewAsClientToken(r.Context(), galleryID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create client view token"}`, http.StatusInternalServerError)
@@ -149,6 +165,11 @@ func (h *GalleryAccessHandler) GetAccessLogs(w http.ResponseWriter, r *http.Requ
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
 		return
 	}
 
@@ -175,6 +196,11 @@ func (h *GalleryAccessHandler) SetProofingDeadline(w http.ResponseWriter, r *htt
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
 		return
 	}
 

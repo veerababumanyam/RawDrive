@@ -14,6 +14,9 @@ type ProofingSessionHandler struct {
 	sessionSvc *service.ProofingSessionService
 	commentSvc *service.ProofingCommentService
 	approvalSvc *service.AlbumApprovalService
+	// galleryResolver enforces tenant ownership on gallery-scoped routes via
+	// guardGalleryWorkspace. Nil-safe: when unwired the guard fails closed.
+	galleryResolver *service.GalleryService
 }
 
 // NewProofingSessionHandler creates a new ProofingSessionHandler.
@@ -21,11 +24,24 @@ func NewProofingSessionHandler(ss *service.ProofingSessionService, cs *service.P
 	return &ProofingSessionHandler{sessionSvc: ss, commentSvc: cs, approvalSvc: as}
 }
 
+// WithGalleryResolver injects the gallery resolver used by guardGalleryWorkspace
+// to enforce tenant ownership before serving gallery-scoped routes. Chainable;
+// tolerates a nil resolver (the guard fails closed when the resolver is nil).
+func (h *ProofingSessionHandler) WithGalleryResolver(gs *service.GalleryService) *ProofingSessionHandler {
+	h.galleryResolver = gs
+	return h
+}
+
 // CreateSession handles POST /galleries/{id}/proofing/sessions
 func (h *ProofingSessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -61,6 +77,11 @@ func (h *ProofingSessionHandler) ListSessions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+		return
+	}
+
 	sessions, err := h.sessionSvc.ListSessions(r.Context(), galleryID)
 	if err != nil {
 		http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
@@ -75,6 +96,20 @@ func (h *ProofingSessionHandler) UpdateSession(w http.ResponseWriter, r *http.Re
 	sessionID, err := uuid.Parse(chi.URLParam(r, "sessionId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid session id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31). The URL carries a
+	// session id, not a gallery id, so resolve the session's owning gallery and
+	// enforce that it belongs to the caller's workspace via guardGalleryWorkspace.
+	// A missing session (lookup error) is treated as cross-tenant/not-found (404)
+	// so a foreign session's existence is never disclosed.
+	session, err := h.sessionSvc.GetSession(r.Context(), sessionID)
+	if err != nil || session == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, session.GalleryID); !ok {
 		return
 	}
 
@@ -103,6 +138,18 @@ func (h *ProofingSessionHandler) DeleteSession(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31). Resolve the session's
+	// owning gallery and enforce that it belongs to the caller's workspace before
+	// deleting. A missing session is treated as cross-tenant/not-found (404).
+	session, err := h.sessionSvc.GetSession(r.Context(), sessionID)
+	if err != nil || session == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, session.GalleryID); !ok {
+		return
+	}
+
 	if err := h.sessionSvc.DeleteSession(r.Context(), sessionID); err != nil {
 		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
 		return
@@ -113,9 +160,22 @@ func (h *ProofingSessionHandler) DeleteSession(w http.ResponseWriter, r *http.Re
 
 // SetStarRating handles PATCH /galleries/{id}/proofing/selections/{selId}/rating
 func (h *ProofingSessionHandler) SetStarRating(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
 	selID, err := uuid.Parse(chi.URLParam(r, "selId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid selection id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31). Validates the gallery
+	// {id} path belongs to the caller's workspace.
+	_, workspaceID, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID)
+	if !ok {
 		return
 	}
 
@@ -127,8 +187,16 @@ func (h *ProofingSessionHandler) SetStarRating(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.sessionSvc.SetStarRating(r.Context(), selID, input.Rating); err != nil {
+	// Scope the selection mutation to the workspace too: the gallery {id} guard
+	// alone does not stop a foreign selId being updated under an owned gallery id.
+	// 0 rows ⇒ selection missing or cross-tenant ⇒ 404.
+	rows, err := h.sessionSvc.SetStarRatingInWorkspace(r.Context(), selID, input.Rating, workspaceID)
+	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	if rows == 0 {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 
@@ -137,9 +205,22 @@ func (h *ProofingSessionHandler) SetStarRating(w http.ResponseWriter, r *http.Re
 
 // SetColorLabel handles PATCH /galleries/{id}/proofing/selections/{selId}/label
 func (h *ProofingSessionHandler) SetColorLabel(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
 	selID, err := uuid.Parse(chi.URLParam(r, "selId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid selection id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31). Validates the gallery
+	// {id} path belongs to the caller's workspace.
+	_, workspaceID, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID)
+	if !ok {
 		return
 	}
 
@@ -151,8 +232,15 @@ func (h *ProofingSessionHandler) SetColorLabel(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.sessionSvc.SetColorLabel(r.Context(), selID, input.Label); err != nil {
+	// Scope the selection mutation to the workspace too (see SetStarRating).
+	// 0 rows ⇒ selection missing or cross-tenant ⇒ 404.
+	rows, err := h.sessionSvc.SetColorLabelInWorkspace(r.Context(), selID, input.Label, workspaceID)
+	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	if rows == 0 {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 
@@ -164,6 +252,11 @@ func (h *ProofingSessionHandler) CreateComment(w http.ResponseWriter, r *http.Re
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -223,6 +316,11 @@ func (h *ProofingSessionHandler) GetComments(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+		return
+	}
+
 	assetIDStr := r.URL.Query().Get("asset_id")
 	assetID, err := uuid.Parse(assetIDStr)
 	if err != nil {
@@ -244,6 +342,11 @@ func (h *ProofingSessionHandler) SubmitAlbumApproval(w http.ResponseWriter, r *h
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -292,6 +395,11 @@ func (h *ProofingSessionHandler) ListAlbumApprovals(w http.ResponseWriter, r *ht
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 

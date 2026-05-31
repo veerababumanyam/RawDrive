@@ -325,6 +325,24 @@ func (r *AssetRepo) UpdateDimensions(ctx context.Context, id uuid.UUID, width, h
 	return nil
 }
 
+// ExistsByStorageKey reports whether a non-deleted asset row already exists for
+// the given storage key. AREA-UPLOADER-6 (P2a): finalizeUpload treats
+// MarkCompleted as best-effort, so a session can have a fully-persisted asset
+// while completed_at is still NULL. The upload-session cleanup sweeper uses
+// this to avoid aborting/deleting a session whose object was actually finalized
+// (the asset exists) but whose completion stamp failed to persist.
+func (r *AssetRepo) ExistsByStorageKey(ctx context.Context, storageKey string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM assets WHERE storage_key = $1 AND deleted_at IS NULL)`,
+		storageKey,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("asset repo exists by storage key: %w", err)
+	}
+	return exists, nil
+}
+
 // SoftDelete marks an asset as deleted (sets deleted_at and status).
 func (r *AssetRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	now := time.Now()
@@ -387,6 +405,65 @@ func (r *AssetRepo) UpdateProcessingError(ctx context.Context, id uuid.UUID, err
 		return fmt.Errorf("asset repo update processing error: %w", err)
 	}
 	return nil
+}
+
+// RequeueRetryableFailedAssets resets assets stuck in status='error' back to
+// 'processing' (incrementing processing_attempts) so the thumbnail worker
+// re-picks them up, bounded by maxAttempts. AREA-UPLOADER-2: derivative
+// generation is best-effort and out-of-band; a transient failure (cwebp blip,
+// storage read error) otherwise leaves the asset permanently broken because
+// nothing ever retries it. Only rows that have NOT exhausted their retries and
+// are NOT already permanently failed are re-queued. Returns the number
+// re-queued. A small batch limit keeps a backlog from being re-queued all at
+// once (the thumbnail worker drains them on its 1s poll).
+func (r *AssetRepo) RequeueRetryableFailedAssets(ctx context.Context, maxAttempts, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE assets
+		    SET status = 'processing',
+		        processing_attempts = processing_attempts + 1,
+		        processing_error = NULL,
+		        updated_at = now()
+		  WHERE id IN (
+		      SELECT id FROM assets
+		       WHERE status = 'error'
+		         AND failed_permanently_at IS NULL
+		         AND processing_attempts < $1
+		         AND deleted_at IS NULL
+		       ORDER BY updated_at ASC
+		       LIMIT $2
+		  )`,
+		maxAttempts, limit,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo requeue retryable failed: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// MarkExhaustedAssetsPermanentlyFailed stamps failed_permanently_at on assets
+// that remain in status='error' after exhausting maxAttempts retries.
+// AREA-UPLOADER-2: this is the explicit terminal/dead-letter state — a non-null
+// failed_permanently_at lets the gallery UI and metrics surface "derivative
+// generation failed" instead of the asset being silently stuck. Returns the
+// number newly marked. Idempotent: rows already stamped are excluded.
+func (r *AssetRepo) MarkExhaustedAssetsPermanentlyFailed(ctx context.Context, maxAttempts int) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE assets
+		    SET failed_permanently_at = now(),
+		        updated_at = now()
+		  WHERE status = 'error'
+		    AND failed_permanently_at IS NULL
+		    AND processing_attempts >= $1
+		    AND deleted_at IS NULL`,
+		maxAttempts,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo mark exhausted permanently failed: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // RetryFailedByGallery resets failed processing rows in a gallery so the

@@ -51,6 +51,15 @@ export interface Gallery {
   download_enabled?: boolean;
   sort_preference?: string;
   whatsapp_template?: string;
+  // S4-G3 locked-shell fields. When a private/invite-only gallery is requested
+  // without a valid session, GET /public/galleries/{slug} returns ONLY a
+  // minimal shell: { id, title, access_mode, access_gated:true, has_password }.
+  // `access_mode` is also present on the full payload (the gallery's configured
+  // access mode). The viewer renders a locked state from these instead of a
+  // broken empty grid.
+  access_mode?: "public" | "unlisted" | "private" | "invite-only" | string;
+  access_gated?: boolean;
+  has_password?: boolean;
 }
 
 /**
@@ -533,8 +542,14 @@ export async function deleteAlbum(_token: string, albumId: string): Promise<void
   if (!res.ok) throw new Error(`Failed to delete album: ${res.status}`);
 }
 
-export async function getPublicGallery(slug: string, ws?: string | null): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)}`);
+export async function getPublicGallery(slug: string, ws?: string | null, sessionToken?: string | null): Promise<Gallery> {
+  // Forward the gallery-session token (when present) so a private/invite-only
+  // gallery returns its FULL payload to a session-holder instead of the S4-G3
+  // locked shell ({ access_gated: true, ... }). Sent as the X-Gallery-Session
+  // header — this is a server-side fetch so CORS exposure rules don't apply.
+  const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)}`, {
+    headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
+  });
   if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
   return res.json();
 }

@@ -20,7 +20,8 @@ import (
 // ──────────────────────────── Mock Service ────────────────────────────
 
 type mockWorkspaceService struct {
-	workspaces map[string]*workspace.Workspace
+	workspaces         map[string]*workspace.Workspace
+	lastBootstrapQuota int64
 }
 
 func newMockWorkspaceService() *mockWorkspaceService {
@@ -36,6 +37,22 @@ func (m *mockWorkspaceService) Create(_ context.Context, input workspace.CreateW
 		BusinessName: input.BusinessName,
 	}
 	m.workspaces[ws.ID] = ws
+	return ws, nil
+}
+
+// CreateWithBootstrap records the resolved quota so tests can confirm the
+// handler routed creation through the atomic co-create path with a valid
+// (free-tier) quota rather than the legacy storage-less Create.
+func (m *mockWorkspaceService) CreateWithBootstrap(_ context.Context, input workspace.CreateWorkspaceInput, quotaBytes int64) (*workspace.Workspace, error) {
+	ws := &workspace.Workspace{
+		ID:           "ws-new-123",
+		Name:         input.Name,
+		StateID:      input.StateID,
+		OwnerID:      input.OwnerID,
+		BusinessName: input.BusinessName,
+	}
+	m.workspaces[ws.ID] = ws
+	m.lastBootstrapQuota = quotaBytes
 	return ws, nil
 }
 
@@ -91,7 +108,7 @@ func TestCreateWorkspaceHandler_Success(t *testing.T) {
 	claims := map[string]interface{}{
 		"sub":          "user-1",
 		"workspace_id": "ws-default",
-		"state_id":     "MH",
+		"state_id":     "24", // numeric state id (onboarded user)
 		"role":         "Owner",
 	}
 
@@ -111,6 +128,65 @@ func TestCreateWorkspaceHandler_Success(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.NotEmpty(t, result["id"])
 	assert.Equal(t, "My Workspace", result["name"])
+
+	// AREA-CUSTOMER-1: creation must route through the atomic co-create
+	// path (CreateWithBootstrap), not the legacy storage-less Create. The
+	// free-tier default quota (1 GiB) must be passed.
+	assert.Equal(t, int64(1<<30), svc.lastBootstrapQuota,
+		"handler must co-create the storage quota row via CreateWithBootstrap")
+}
+
+// AREA-CUSTOMER-2: an un-onboarded session carries state_id="pending-onboarding".
+// The workspaces.state_id column is INTEGER, so the handler must reject this
+// with 400 BEFORE any DB insert — never garbage the INT column.
+func TestCreateWorkspaceHandler_PendingOnboardingSentinel(t *testing.T) {
+	svc := newMockWorkspaceService()
+	claims := map[string]interface{}{
+		"sub":          "user-1",
+		"workspace_id": "pending-onboarding",
+		"state_id":     "pending-onboarding",
+		"role":         "Owner",
+	}
+
+	ts := newWSTestServer(svc, claims)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/workspace/", map[string]string{
+		"name":          "My Workspace",
+		"business_name": "TestCo",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
+		"pending-onboarding sentinel must be rejected with 400, not inserted")
+	assert.Empty(t, svc.workspaces, "no workspace may be created for a pending-onboarding session")
+}
+
+// AREA-CUSTOMER-2: any non-numeric state_id (the column is INTEGER) must be
+// rejected with 400 rather than attempting a corrupt insert.
+func TestCreateWorkspaceHandler_NonNumericState(t *testing.T) {
+	svc := newMockWorkspaceService()
+	claims := map[string]interface{}{
+		"sub":          "user-1",
+		"workspace_id": "ws-default",
+		"state_id":     "MH", // 2-letter code is NOT a valid INT state id
+		"role":         "Owner",
+	}
+
+	ts := newWSTestServer(svc, claims)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/workspace/", map[string]string{
+		"name":          "My Workspace",
+		"business_name": "TestCo",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
+		"non-numeric state_id must be rejected with 400")
+	assert.Empty(t, svc.workspaces)
 }
 
 func TestCreateWorkspaceHandler_NoAuth(t *testing.T) {
@@ -227,6 +303,10 @@ func TestGetWorkspaceHandler_InternalError(t *testing.T) {
 type errorWorkspaceService struct{}
 
 func (e *errorWorkspaceService) Create(_ context.Context, _ workspace.CreateWorkspaceInput) (*workspace.Workspace, error) {
+	return nil, errors.New("db error")
+}
+
+func (e *errorWorkspaceService) CreateWithBootstrap(_ context.Context, _ workspace.CreateWorkspaceInput, _ int64) (*workspace.Workspace, error) {
 	return nil, errors.New("db error")
 }
 

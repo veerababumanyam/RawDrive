@@ -353,6 +353,165 @@ func isPublicThumbnailKey(key string) bool {
 	return publicThumbnailKeyRe.MatchString(key)
 }
 
+// thumbnailKeyAssetIDRe extracts the asset UUID embedded in a derivative key
+// shaped thumbnails/<assetID>/<variant>.webp. The thumbnail pipeline always
+// names derivatives with the owning asset's id (see thumbnail_service.go), so
+// the path segment is the authoritative asset→gallery linkage we resolve on the
+// byte path. (S4-G1.)
+var thumbnailKeyAssetIDRe = regexp.MustCompile(`^thumbnails/([0-9a-fA-F-]{36})/(?:thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
+
+// thumbnailAssetID returns the asset UUID a public thumbnail key belongs to, or
+// uuid.Nil + false when the key is not a thumbnail key shape.
+func thumbnailAssetID(key string) (uuid.UUID, bool) {
+	m := thumbnailKeyAssetIDRe.FindStringSubmatch(key)
+	if len(m) != 2 {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(m[1])
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// thumbnailGalleryProtection is the per-gallery protection snapshot the byte
+// path needs to decide whether a thumbnail may be served. One row per gallery
+// that contains the asset.
+type thumbnailGalleryProtection struct {
+	galleryID         uuid.UUID
+	published         bool
+	expired           bool
+	passwordProtected bool
+	accessMode        string
+}
+
+// loadThumbnailGalleryProtection resolves every gallery that contains the asset
+// behind a thumbnail key, with the protection fields the byte gate needs. The
+// asset→gallery linkage is via gallery_assets; an asset may belong to more than
+// one gallery, so all are returned and the caller serves if ANY of them grants
+// access (mirrors the existing "asset belongs to this gallery" download check,
+// generalised across galleries). (S4-G1.)
+func loadThumbnailGalleryProtection(ctx context.Context, pool *pgxpool.Pool, assetID uuid.UUID) ([]thumbnailGalleryProtection, error) {
+	if pool == nil {
+		return nil, errors.New("database pool not configured")
+	}
+	rows, err := pool.Query(ctx, `
+		SELECT g.id,
+		       g.is_published,
+		       (g.expires_at IS NOT NULL AND g.expires_at < now()) AS expired,
+		       (g.password_hash IS NOT NULL AND g.password_hash <> '') AS password_protected,
+		       COALESCE(g.access_mode, 'private') AS access_mode
+		  FROM gallery_assets ga
+		  JOIN galleries g ON g.id = ga.gallery_id
+		 WHERE ga.asset_id = $1
+		   AND g.deleted_at IS NULL`,
+		assetID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []thumbnailGalleryProtection
+	for rows.Next() {
+		var p thumbnailGalleryProtection
+		if err := rows.Scan(&p.galleryID, &p.published, &p.expired, &p.passwordProtected, &p.accessMode); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// thumbnailServableAnonymously reports whether a protection row represents a
+// gallery that anyone may pull thumbnails from: published, not expired, no
+// password, and a discoverable/direct access mode (public or unlisted, or the
+// legacy empty value). This is the REGRESSION-GUARD path — the normal public
+// gallery delivery case must keep working for anonymous clients. (S4-G1.)
+func thumbnailServableAnonymously(p thumbnailGalleryProtection) bool {
+	if !p.published || p.expired || p.passwordProtected {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(p.accessMode)) {
+	case "public", "unlisted", "":
+		return true
+	default: // private, invite-only
+		return false
+	}
+}
+
+// authorizeThumbnailByte decides whether the request may receive the bytes for a
+// public-shaped thumbnail key. It closes S4-G1 (anonymous byte serving on key
+// shape alone) by binding the asset to its gallery(ies) and enforcing the SAME
+// protection rules the slug/asset listing surfaces enforce:
+//
+//   - serve anonymously ONLY when some gallery containing the asset is
+//     published + non-expired + non-password + public/unlisted (the normal
+//     public-gallery delivery case — kept working);
+//   - otherwise require a valid gallery-session token (password- or
+//     share-scoped, see gallery_access_service.go) whose bound gallery actually
+//     contains this asset and is itself published + non-expired.
+//
+// Returns true when the bytes may be served. Fails closed on any lookup error.
+func authorizeThumbnailByte(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	accessSvc *service.GalleryAccessService,
+	r *http.Request,
+	assetID uuid.UUID,
+) bool {
+	protections, err := loadThumbnailGalleryProtection(ctx, pool, assetID)
+	if err != nil {
+		log.Printf("storage proxy: thumbnail protection lookup for asset %s failed: %v", assetID, err)
+		return false
+	}
+	if len(protections) == 0 {
+		// Orphan derivative (no gallery membership) — not a public delivery
+		// surface; fail closed.
+		return false
+	}
+
+	// Normal public delivery: any open gallery containing the asset.
+	for _, p := range protections {
+		if thumbnailServableAnonymously(p) {
+			return true
+		}
+	}
+
+	// Protected: require a session bound to a gallery that (a) contains this
+	// asset and (b) is published + non-expired. The token is read from the
+	// header, the gallery_session cookie, or a ?gallery_session=/?gs= query
+	// param so <img src> tags can authenticate without a custom header.
+	if accessSvc == nil {
+		return false
+	}
+	token := r.Header.Get("X-Gallery-Session")
+	if token == "" {
+		if c, err := r.Cookie("gallery_session"); err == nil {
+			token = c.Value
+		}
+	}
+	if token == "" {
+		token = r.URL.Query().Get("gallery_session")
+	}
+	if token == "" {
+		token = r.URL.Query().Get("gs")
+	}
+	if token == "" {
+		return false
+	}
+	boundGallery, ok := accessSvc.GalleryIDFromSession(ctx, token)
+	if !ok {
+		return false
+	}
+	for _, p := range protections {
+		if p.galleryID == boundGallery && p.published && !p.expired {
+			return true
+		}
+	}
+	return false
+}
+
 func storageKeyBelongsToWorkspace(ctx context.Context, pool *pgxpool.Pool, key string, workspaceID string) (bool, error) {
 	if pool == nil {
 		return false, errors.New("database pool not configured")
@@ -481,52 +640,43 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 	// Update user's state_id in DB
 	_, _ = o.pool.Exec(ctx, `UPDATE users SET state_id = $1 WHERE id = $2`, stateID, userID)
 
-	// Create workspace with the resolved integer state ID
-	ws, err := o.wsSvc.Create(ctx, workspace.CreateWorkspaceInput{
+	// AREA-CUSTOMER-3 (audit 2026-05-31): co-create the workspace, its
+	// Owner workspace_members row, and its workspace_storage quota row
+	// ATOMICALLY in a single transaction. Previously the members and
+	// storage inserts were fire-and-forget (`_, _ = o.pool.Exec(...)`),
+	// so onboarding could advance to step=complete with a workspace that
+	// had no quota row (dashboard storage widget degraded) or no
+	// membership. CreateWithBootstrap returns an error if any of the
+	// three rows fail or are not present after the inserts; the error
+	// propagates up to onboarding.SetProfile, which then does NOT advance
+	// the step — the user can retry.
+	quotaBytes := service.PlanDefaultQuotaBytes(planTier)
+	ws, err := o.wsSvc.CreateWithBootstrap(ctx, workspace.CreateWorkspaceInput{
 		Name:         businessName,
 		StateID:      stateIDStr,
 		OwnerID:      userID,
 		BusinessName: businessName,
 		PlanTier:     planTier,
-	})
+	}, quotaBytes)
 	if err != nil {
-		// Issue #5 + onboarding.go:164-169 caveat: if a previous
-		// onboarding attempt succeeded at the workspace insert but
-		// failed before advancing to step=complete (e.g., the
-		// workspace_members write below or the profile upsert),
-		// the user retries and migration 096 raises a unique
-		// violation here. The right behavior is idempotent recovery
-		// — fetch the prior row's ID and continue rather than
-		// surfacing a duplicate-name error to a user who is just
-		// retrying their own onboarding.
+		// Issue #5 + onboarding.go caveat: if a previous onboarding
+		// attempt committed the workspace transaction but failed before
+		// advancing to step=complete (e.g. a profile upsert error after
+		// commit), the user retries and migration 096 raises a unique
+		// violation here. The right behavior is idempotent recovery —
+		// fetch the prior row's ID and continue. Because the prior
+		// attempt's CreateWithBootstrap was atomic, that recovered
+		// workspace is guaranteed to already carry its membership +
+		// quota rows, so no separate backfill is needed.
 		if errors.Is(err, workspace.ErrDuplicateName) {
 			existing, lookupErr := o.wsSvc.GetByOwnerAndName(ctx, userID, businessName)
 			if lookupErr == nil && existing != nil {
-				ws = existing
-			} else {
-				return "", err
+				return existing.ID, nil
 			}
-		} else {
 			return "", err
 		}
+		return "", err
 	}
-
-	// Ensure workspace_members row exists (for AuthLookup to find)
-	_, _ = o.pool.Exec(ctx,
-		`INSERT INTO workspace_members (workspace_id, user_id, role_id)
-		 VALUES ($1, $2, (SELECT id FROM roles WHERE name = 'Owner'))
-		 ON CONFLICT DO NOTHING`,
-		ws.ID, userID)
-
-	// Initialize storage quota based on the chosen plan tier so the
-	// storage settings page shows a meaningful limit immediately.
-	quotaBytes := service.PlanDefaultQuotaBytes(planTier)
-	_, _ = o.pool.Exec(ctx,
-		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
-		 VALUES ($1, 0, 0, $2)
-		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2
-		 WHERE workspace_storage.quota_bytes = 0`,
-		ws.ID, quotaBytes)
 
 	return ws.ID, nil
 }
@@ -609,6 +759,42 @@ func newViewerService(signingKey []byte) *viewer.Service {
 		SlidingTTL:  15 * time.Minute,
 		MaxLifetime: 4 * time.Hour,
 	})
+}
+
+// buildGallerySessionSigningKey loads (or, on first boot, generates + persists)
+// the HMAC signing key used to mint durable gallery-access session tokens
+// (S4-G4/E, integration audit 2026-05-31). It mirrors buildViewerJWTService:
+// the key is hex-encoded, 32 bytes (256 bits), KEK-encrypted at rest by the
+// F-005 platform_settings envelope, and independent of the main auth + viewer
+// JWT keys so it rotates on its own cadence. Returning the raw key (not a
+// service) lets the caller wire it onto the already-constructed
+// GalleryAccessService via WithSessionSigningKey.
+func buildGallerySessionSigningKey(ctx context.Context, repo *repository.PlatformSettingsRepo) ([]byte, error) {
+	const (
+		category = "auth"
+		key      = "gallery_session_signing_key"
+	)
+
+	row, err := repo.GetByKey(ctx, category, key)
+	if err == nil && row != nil && len(strings.TrimSpace(row.Value)) > 0 {
+		raw, decErr := decodeHexKey(row.Value)
+		if decErr != nil {
+			return nil, fmt.Errorf("gallery-session signing key in platform_settings is corrupt: %w", decErr)
+		}
+		return raw, nil
+	}
+
+	// First boot — generate, persist, return.
+	raw, genErr := generateRandomKey(32)
+	if genErr != nil {
+		return nil, fmt.Errorf("generate gallery-session signing key: %w", genErr)
+	}
+	if upErr := repo.Upsert(ctx, category, key, encodeHexKey(raw), true,
+		"S4-G4/E gallery-access session signing key (HS256, 256 bits) — durable, node-portable client sessions", nil); upErr != nil {
+		return nil, fmt.Errorf("persist gallery-session signing key: %w", upErr)
+	}
+	log.Println("S4-G4/E: generated and persisted gallery-session signing key")
+	return raw, nil
 }
 
 // newAdminWorkspaceService constructs the admin workspace service with its
@@ -1268,6 +1454,9 @@ func main() {
 	// When unset (default), RequireMFA is NOT mounted — zero behavioral change.
 	r.Group(func(pr chi.Router) {
 		pr.Use(middleware.JWTAuth(jwtSvc))
+		// S5-G1 (audit HIGH): block writes from impersonated sessions on the
+		// workspace/team tenant surface. After JWTAuth so the claim is in context.
+		pr.Use(middleware.RejectImpersonationWrites)
 		pr.Use(middleware.TenantContext(dbCtx, auditLog))
 		pr.Use(middleware.RequireState)
 		if os.Getenv("MFA_ENFORCE_PHOTOGRAPHERS") == "1" {
@@ -1298,6 +1487,9 @@ func main() {
 	profileHandler := handler.NewProfileHandler(userSvc)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.JWTAuth(jwtSvc))
+		// S5-G1 (audit HIGH): profile PUT is a tenant write — block it under an
+		// impersonation token. After JWTAuth so the claim is populated.
+		r.Use(middleware.RejectImpersonationWrites)
 		r.Get("/api/v1/users/profile", profileHandler.GetProfile)
 		r.Put("/api/v1/users/profile", profileHandler.UpdateProfile)
 	})
@@ -1440,6 +1632,17 @@ func main() {
 	proofingCommentRepo := repository.NewProofingCommentRepo(dbPool)
 	albumApprovalRepo := repository.NewAlbumApprovalRepo(dbPool)
 	galleryAccessSvc := service.NewGalleryAccessService(galleryRepo, accessLogRepo)
+	// S4-G4/E: mint durable, node-portable gallery-access sessions via an
+	// HMAC-signed token so a client verified on app1 stays valid on app2 and
+	// survives deploys/restarts (the old in-memory session map did neither).
+	// Fail-soft: if the key can't be loaded we log and fall back to the legacy
+	// in-memory map rather than breaking gallery password verification.
+	if gsKey, gsErr := buildGallerySessionSigningKey(context.Background(), platformSettingsRepo); gsErr != nil {
+		log.Printf("WARNING: gallery-session signing key unavailable (%v) — falling back to per-process in-memory sessions (single-node only)", gsErr)
+	} else {
+		galleryAccessSvc = galleryAccessSvc.WithSessionSigningKey(gsKey)
+		log.Println("S4-G4/E: gallery-access sessions are HMAC-signed and node-portable")
+	}
 	proofingSessionSvc := service.NewProofingSessionService(proofingSessionRepo, proofingRepo)
 	proofingCommentSvc := service.NewProofingCommentService(proofingCommentRepo)
 	albumApprovalSvc := service.NewAlbumApprovalService(albumApprovalRepo)
@@ -1556,6 +1759,14 @@ func main() {
 	// SOC2 CC6.3: MFA enforcement gated behind MFA_ENFORCE_PHOTOGRAPHERS=1.
 	r.Group(func(api chi.Router) {
 		api.Use(middleware.JWTAuth(jwtSvc))
+		// S5-G1 (audit HIGH): impersonated admin sessions are read-only. Mounted
+		// AFTER JWTAuth so the "impersonation" claim is populated in context, and
+		// covering the full tenant API surface (galleries, uploads, assets,
+		// proofing, etc.). Admin endpoints under this group carry their own
+		// RequirePlatformRole("super_admin"/"admin") guards and are reached with the
+		// admin's REAL token (impersonation=false), so they are unaffected; an
+		// impersonation token (target tenant's platform_role) can't reach them anyway.
+		api.Use(middleware.RejectImpersonationWrites)
 		api.Use(middleware.TenantContext(dbCtx, auditLog))
 		// M41 FR-UCRT-07: resolve workspaces.plan_tier for the tenant and
 		// stash it on the request context. Runs after TenantContext so
@@ -1690,7 +1901,12 @@ func main() {
 			WithValidation(uploadValidationSvc).
 			WithStorageAccounting(storageAccountingSvc).
 			WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion).
-			WithUploadCredit(uploadCreditGate)
+			WithUploadCredit(uploadCreditGate).
+			// S3-G4 / AREA-UPLOADER-3: server-side gallery linkage. CreateSession
+			// validates an optional gallery_id (+ album_id) against the caller's
+			// workspace and persists it; finalize links the asset itself so the
+			// association never depends on a post-finalize client call.
+			WithGalleryLinkage(galleryRepo, albumRepo, galleryAssetRepo)
 		chunkedHandler.RegisterRoutes(api)
 
 		// M40: balance endpoint for the <UploadCreditPill>. Mirrors
@@ -1826,8 +2042,37 @@ func main() {
 		// state and upload_sessions rows indefinitely. Polls every 15
 		// minutes and aborts each expired session's R2 multipart upload
 		// before deleting the DB row.
-		uploadSessionCleanupWorker := worker.NewUploadSessionCleanupWorker(uploadSessionsRepo, storageProvider)
+		uploadSessionCleanupWorker := worker.NewUploadSessionCleanupWorker(uploadSessionsRepo, storageProvider).
+			// AREA-UPLOADER-5: release leaked reserved_bytes for expired,
+			// never-finalized sessions before deleting their rows.
+			WithStorageAccounting(storageAccountingSvc).
+			// AREA-UPLOADER-6: skip aborting sessions that were actually
+			// finalized but whose completed_at stamp failed to persist.
+			WithAssetExistence(assetRepo)
 		workerRegistry.Register("upload-session-cleanup", uploadSessionCleanupWorker)
+
+		// AREA-UPLOADER-2: register the derivative-retry / dead-letter sweep so
+		// assets whose WebP generation failed are bounded-retried and, once
+		// exhausted, parked in an observable terminal state instead of being
+		// silently stuck with broken thumbnails. Always registered (no flag) —
+		// it is a pure recovery backstop with a 5-minute cadence.
+		derivativeRetryWorker := worker.NewDerivativeRetryWorker(assetRepo)
+		workerRegistry.Register("derivative-retry", derivativeRetryWorker)
+
+		// AREA-UPLOADER-1: register the upload-credit expiry sweeper so dropped
+		// Consume/Refund reservations (tab closed after reserve, transient
+		// settle failure) are refunded back to the balance instead of
+		// permanently double-charging. Only wire it when the credit meter is
+		// enabled — when the meter is off no reserve entries are ever posted,
+		// so there is nothing to expire. ExpireAbandoned is idempotent, so the
+		// hourly cadence is safe across restarts and multi-pod deploys.
+		if strings.EqualFold(os.Getenv("UPLOAD_CREDIT_METER_ENABLED"), "true") {
+			uploadCreditExpiryWorker := worker.NewUploadCreditExpiryWorker(uploadCreditSvc)
+			workerRegistry.Register("upload-credit-expiry", uploadCreditExpiryWorker)
+			log.Println("AREA-UPLOADER-1: upload credit expiry worker ENABLED (poll=1h, ttl=24h)")
+		} else {
+			log.Println("AREA-UPLOADER-1: upload credit expiry worker disabled (credit meter off)")
+		}
 
 		log.Println("M2: routes registered")
 
@@ -2509,16 +2754,25 @@ func main() {
 			http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 			return
 		}
-		// Public gallery access: derivative thumbnails are safe to serve
-		// anonymously because they are the exact bytes a visitor already
-		// receives from a /g/{slug} client gallery. Originals, downloads,
-		// ZIPs and BYOS prefixes still require a bearer token. The bypass is
-		// gated behind a STRICT key shape (thumbnails/<uuid>/<variant>.webp)
-		// rather than a loose "thumbnails/" prefix, so no other object can
-		// ever be lexically smuggled past the auth check. This is what
-		// unlocked the public gallery grid during UAT — otherwise anonymous
-		// visitors hit 401 on every <img src>.
-		isPublicThumbnail := isPublicThumbnailKey(key)
+		// Public gallery access: derivative thumbnails MAY be served
+		// anonymously, but ONLY after we confirm the asset's gallery is
+		// actually openly delivered (S4-G1, integration audit 2026-05-31).
+		//
+		// Previously the strict key shape (thumbnails/<uuid>/<variant>.webp)
+		// alone was sufficient to bypass auth — so anyone who learned/guessed
+		// an asset UUID could pull full thumbnails of password-protected,
+		// unpublished, expired, or private galleries. authorizeThumbnailByte
+		// now resolves the asset → its gallery(ies) and serves only when a
+		// containing gallery is published + non-expired + non-password +
+		// public/unlisted, OR the request carries a valid gallery-session
+		// token (password/share scoped) bound to a containing published
+		// gallery. The normal public-gallery delivery case (published, open,
+		// no password) still serves anonymously — that path is exercised by
+		// the public grid/lightbox and must not break.
+		isPublicThumbnail := false
+		if assetID, isThumb := thumbnailAssetID(key); isThumb {
+			isPublicThumbnail = authorizeThumbnailByte(r.Context(), dbPool, galleryAccessSvc, r, assetID)
+		}
 
 		if !isPublicThumbnail {
 			// Verify JWT — accept Bearer header OR ?token=... for <img src>.

@@ -98,9 +98,32 @@ func (s *ShareLinkService) ListByGallery(ctx context.Context, galleryID uuid.UUI
 	return s.repo.ListByGallery(ctx, galleryID)
 }
 
+// GalleryIDForToken returns the gallery a share token points at, WITHOUT any
+// expiry/PIN/access-count validation. It exists so the public gallery handler
+// can confirm a share token is bound to the gallery it is unlocking (S4-G2)
+// before running the authoritative ValidateAccess. Returns uuid.Nil + error
+// when the token is unknown. Validation of expiry/PIN/cap stays the job of
+// ValidateAccess + TrackAccess — this is purely the gallery-binding lookup.
+func (s *ShareLinkService) GalleryIDForToken(ctx context.Context, token string) (uuid.UUID, error) {
+	sl, err := s.repo.GetByToken(ctx, token)
+	if err != nil || sl == nil {
+		return uuid.Nil, fmt.Errorf("share link not found")
+	}
+	return sl.GalleryID, nil
+}
+
 // Revoke revokes a share link.
 func (s *ShareLinkService) Revoke(ctx context.Context, id uuid.UUID) error {
 	return s.repo.Revoke(ctx, id)
+}
+
+// RevokeInWorkspace revokes a share link only when it belongs to a gallery
+// owned by the given workspace. It returns the number of rows affected; 0 means
+// the link is absent, already revoked, or owned by another tenant (handlers
+// must treat 0 as 404). The ownership scoping is enforced atomically in the
+// repository UPDATE (integration audit 2026-05-31).
+func (s *ShareLinkService) RevokeInWorkspace(ctx context.Context, linkID, workspaceID uuid.UUID) (int64, error) {
+	return s.repo.RevokeInWorkspace(ctx, linkID, workspaceID)
 }
 
 // ──────────────────────── Access Mode Enforcement (ISS-002) ────────────────────────

@@ -77,7 +77,12 @@ func (h *BannerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid_json", "invalid json body")
 		return
 	}
-	banner, err := h.svc.Update(r.Context(), bannerID, in)
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		respondError(w, http.StatusBadRequest, "missing_workspace_id", "missing workspace_id")
+		return
+	}
+	banner, err := h.svc.Update(r.Context(), bannerID, workspaceID, in)
 	if err != nil {
 		respondBannerError(w, err)
 		return
@@ -92,8 +97,13 @@ func (h *BannerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid_banner_id", "invalid banner id")
 		return
 	}
-	if err := h.svc.Delete(r.Context(), bannerID); err != nil {
-		respondError(w, http.StatusInternalServerError, "banner_delete_failed", err.Error())
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		respondError(w, http.StatusBadRequest, "missing_workspace_id", "missing workspace_id")
+		return
+	}
+	if err := h.svc.Delete(r.Context(), bannerID, workspaceID); err != nil {
+		respondBannerError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

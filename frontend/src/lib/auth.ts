@@ -8,6 +8,12 @@ type AccessTokenClaims = {
   role?: string;
   platform_role?: string;
   state_id?: string;
+  // S5-G1: true only for an admin-minted impersonation access token. The
+  // backend marks the whole session read-only (mutations 403) when set, so the
+  // UI reads this to show a persistent banner + disable mutating controls
+  // instead of letting the admin hit surprise 403s. Absent/false on every
+  // normal token.
+  impersonation?: boolean;
 };
 
 function getBrowserStorage(name: "localStorage" | "sessionStorage"): Storage | null {
@@ -77,6 +83,15 @@ export function getStoredAccessTokenClaims(): AccessTokenClaims | null {
 export function getStoredWorkspaceId() {
   const claims = getStoredAccessTokenClaims();
   return claims?.workspace_id ?? "";
+}
+
+// S5-G1: true when the active session is an admin impersonation session. The
+// backend rejects every mutating request on such a token with 403, so the UI
+// must surface a read-only banner and visually disable mutating controls. Reads
+// the `impersonation` claim off the current access token; false (read-write)
+// for any normal session and when no token is present.
+export function isImpersonatingSession(): boolean {
+  return getStoredAccessTokenClaims()?.impersonation === true;
 }
 
 export async function refreshAuthSession(apiBase = "") {

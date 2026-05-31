@@ -13,6 +13,8 @@ import { PublicGalleryGrid } from "@/components/gallery/public-gallery-grid";
 import { PublicGalleryProducts } from "@/components/gallery/public-gallery-products";
 import { PublicGalleryBanners } from "@/components/gallery/public-gallery-banners";
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
+import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
+import { SharePinGate } from "@/components/gallery/share-pin-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
 import { readPublicDesignConfig, readPublicCoverThumbnails } from "@/lib/gallery-design-config";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
@@ -20,7 +22,7 @@ import { readEmbeddedVideos } from "@/lib/embedded-videos";
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ album?: string; ws?: string }>;
+  searchParams?: Promise<{ album?: string; ws?: string; share?: string }>;
 }
 
 function PublicGalleryUnavailable({
@@ -65,10 +67,14 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // means the request hit the apex `/g/<slug>` route and falls back to the
   // unscoped legacy lookup.
   const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
+  // S4-G2: a share-link landing arrives as /g/{slug}?share=<token>. When the
+  // link is PIN-gated and no session cookie exists yet, we render the PIN gate
+  // (which mints the session and reloads). The bare token alone never unlocks.
+  const shareToken = typeof query.share === "string" && query.share ? query.share : undefined;
 
   let gallery;
   try {
-    gallery = await getPublicGallery(slug, ws);
+    gallery = await getPublicGallery(slug, ws, sessionToken);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
@@ -90,6 +96,37 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
       );
     }
     notFound();
+  }
+
+  // S4-G3: the backend returns a minimal locked shell ({ access_gated: true,
+  // access_mode, has_password }) for a private / invite-only gallery viewed
+  // without a valid session. Render a real locked state instead of falling
+  // through to an empty grid. If the visitor arrived via a PIN-gated share
+  // link (?share=<token>), offer the PIN gate so they can unlock in place.
+  if (gallery.access_gated === true) {
+    const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
+    const brandName = branding?.can_customize ? branding.brand_name : undefined;
+    const logoUrl = branding?.can_customize ? branding.logo_url : undefined;
+    if (shareToken) {
+      return (
+        <SharePinGate
+          slug={slug}
+          shareToken={shareToken}
+          ws={ws}
+          brandName={brandName}
+          logoUrl={logoUrl}
+        />
+      );
+    }
+    const mode = (gallery.access_mode || "").toLowerCase();
+    return (
+      <GalleryLockedShell
+        variant={mode === "invite-only" ? "invite-only" : "private"}
+        title={gallery.title}
+        brandName={brandName}
+        logoUrl={logoUrl}
+      />
+    );
   }
 
   const hasPassword = gallery.settings?.has_password === true;
@@ -202,6 +239,10 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
           downloadEnabled={gallery.download_enabled !== false}
           design={designConfig}
           watermark={gallery.watermark_config as Record<string, unknown> | null}
+          // S4-G1: when a session exists (password- or share-PIN-scoped), pass
+          // it so protected image bytes carry ?gs=<token> for cross-origin
+          // <img> requests. Undefined for open galleries (anonymous bytes).
+          gallerySessionToken={sessionToken ?? null}
         />
       </div>
 

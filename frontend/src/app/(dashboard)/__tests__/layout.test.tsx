@@ -42,6 +42,10 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessTokenClaims: () => mockGetStoredAccessTokenClaims(),
   getStoredPlatformRole: () => mockGetStoredPlatformRole(),
   refreshAuthSession: vi.fn(async () => "test-token"),
+  // S5-G1: the layout now mounts ImpersonationBanner, which reads these. Tests
+  // exercise normal (non-impersonation) sessions, so the banner stays hidden.
+  isImpersonatingSession: vi.fn(() => false),
+  logoutAuthSession: vi.fn(async () => {}),
 }));
 
 /* ------------------------------------------------------------------ */

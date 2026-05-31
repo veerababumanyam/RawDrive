@@ -128,3 +128,52 @@ describe("dashboard UI asset URLs", () => {
     ).toContain("thumb_md_webp.webp");
   });
 });
+
+describe("getStorageBackedUrl — gallery-session (?gs=) channel (S4-G1)", () => {
+  // The public viewer fetches protected gallery bytes cross-origin (the
+  // /storage/* path is NOT proxied by the Next rewrites, so <img> requests go
+  // straight to the API origin). The httpOnly gallery_session cookie is
+  // SameSite=Strict on the API origin and never rides a cross-origin <img>,
+  // so the session token MUST be appended as ?gs= for protected bytes to
+  // authenticate. These tests lock that contract.
+
+  it("appends the gallery-session token as ?gs= for storage paths", () => {
+    expect(
+      getStorageBackedUrl("/storage/derivatives/asset-1/display_webp.webp", null, "gs-token"),
+    ).toBe("http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?gs=gs-token");
+  });
+
+  it("URL-encodes the gallery-session token", () => {
+    expect(
+      getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp", null, "a/b+c=="),
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp?gs=a%2Fb%2Bc%3D%3D");
+  });
+
+  it("omits ?gs= when no session token is supplied (open gallery, anonymous bytes)", () => {
+    expect(getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp")).toBe(
+      "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp",
+    );
+    expect(getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp", null, null)).toBe(
+      "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp",
+    );
+  });
+
+  it("can carry BOTH the dashboard JWT (?token=) and the gallery session (?gs=)", () => {
+    expect(
+      getStorageBackedUrl("/storage/derivatives/asset-1/display_webp.webp", "jwt-token", "gs-token"),
+    ).toBe(
+      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?token=jwt-token&gs=gs-token",
+    );
+  });
+
+  it("never appends ?gs= to non-storage, data, blob, or external URLs", () => {
+    expect(getStorageBackedUrl("/api/v1/public/galleries/x/branding", null, "gs-token")).toBe(
+      "/api/v1/public/galleries/x/branding",
+    );
+    expect(getStorageBackedUrl("data:image/webp;base64,abc", null, "gs-token")).toBe(
+      "data:image/webp;base64,abc",
+    );
+    const external = "https://example.r2.cloudflarestorage.com/p.webp?sig=abc";
+    expect(getStorageBackedUrl(external, null, "gs-token")).toBe(external);
+  });
+});

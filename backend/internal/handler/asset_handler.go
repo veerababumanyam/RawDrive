@@ -25,11 +25,24 @@ type AssetHandler struct {
 	assetSvc      *service.AssetService
 	uploadSvc     *service.UploadService
 	validationSvc service.UploadManifestValidation
+	// assetRepo enforces tenant ownership on asset-id-addressed routes via
+	// guardAssetWorkspace (workspace-scoped asset lookup). Nil-safe: when
+	// unwired the guard fails closed.
+	assetRepo *repository.AssetRepo
 }
 
 // NewAssetHandler creates a new AssetHandler.
 func NewAssetHandler(assetSvc *service.AssetService, uploadSvc *service.UploadService) *AssetHandler {
 	return &AssetHandler{assetSvc: assetSvc, uploadSvc: uploadSvc}
+}
+
+// WithAssetRepo injects the workspace-scoped asset resolver used by
+// guardAssetWorkspace to enforce tenant ownership before serving
+// asset-id-addressed routes. Chainable; tolerates a nil repo (the guard fails
+// closed when the resolver is nil).
+func (h *AssetHandler) WithAssetRepo(ar *repository.AssetRepo) *AssetHandler {
+	h.assetRepo = ar
+	return h
 }
 
 // WithValidation wires the M16 Tier D upload manifest validator onto the
@@ -72,13 +85,9 @@ func (h *AssetHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := h.assetSvc.GetByID(r.Context(), id)
-	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	if asset == nil {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	// tenant-ownership guard (integration audit 2026-05-31)
+	asset, _, ok := guardAssetWorkspace(w, r, h.assetRepo, id)
+	if !ok {
 		return
 	}
 
@@ -186,9 +195,9 @@ func (h *AssetHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := h.assetSvc.GetByID(r.Context(), id)
-	if err != nil || asset == nil {
-		http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
+	// tenant-ownership guard (integration audit 2026-05-31)
+	asset, _, ok := guardAssetWorkspace(w, r, h.assetRepo, id)
+	if !ok {
 		return
 	}
 
@@ -242,6 +251,11 @@ func (h *AssetHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardAssetWorkspace(w, r, h.assetRepo, id); !ok {
 		return
 	}
 

@@ -8,9 +8,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
 )
+
+// storageReservationReleaser is the narrow surface the cleanup worker needs to
+// return leaked reserved_bytes to a workspace quota pool. *service.StorageAccounting
+// satisfies it via ReleaseUploadReservation. Declared here (not imported as the
+// concrete type) so the worker package does not depend on internal/service and
+// tests can stub it.
+//
+// AREA-UPLOADER-5: ReserveUpload adds reserved_bytes at CreateSession time. The
+// cleanup worker previously aborted the multipart + deleted the row but never
+// released the reservation, so every abandoned session permanently eroded the
+// workspace's available quota.
+type storageReservationReleaser interface {
+	ReleaseUploadReservation(ctx context.Context, workspaceID uuid.UUID, originalBytes int64) error
+}
+
+// assetExistenceChecker is the narrow surface the worker needs to detect a
+// session that was actually finalized but whose completed_at stamp failed to
+// persist (AREA-UPLOADER-6 / P2a). *repository.AssetRepo satisfies it.
+type assetExistenceChecker interface {
+	ExistsByStorageKey(ctx context.Context, storageKey string) (bool, error)
+}
 
 // UploadSessionCleanupWorker sweeps expired chunked-upload sessions and
 // releases the R2 multipart state they're holding.
@@ -31,6 +54,8 @@ import (
 type UploadSessionCleanupWorker struct {
 	repo         *repository.UploadSessionsRepo
 	store        storage.Provider
+	accounting   storageReservationReleaser // AREA-UPLOADER-5: release leaked reserved_bytes
+	assets       assetExistenceChecker      // AREA-UPLOADER-6: detect finalized-but-unstamped sessions
 	batchSize    int
 	pollInterval time.Duration
 	stopCh       chan struct{}
@@ -51,6 +76,25 @@ func NewUploadSessionCleanupWorker(
 		pollInterval: 15 * time.Minute,
 		stopCh:       make(chan struct{}),
 	}
+}
+
+// WithStorageAccounting wires the storage-reservation releaser so the sweeper
+// returns leaked reserved_bytes for each expired NON-completed session before
+// deleting its row (AREA-UPLOADER-5). Without it the worker still aborts +
+// deletes, but reserved_bytes is not reclaimed. Returns the same worker for
+// chainable construction.
+func (w *UploadSessionCleanupWorker) WithStorageAccounting(acc storageReservationReleaser) *UploadSessionCleanupWorker {
+	w.accounting = acc
+	return w
+}
+
+// WithAssetExistence wires the asset-existence checker so the sweeper can
+// recognise a session that was actually finalized but whose completed_at stamp
+// failed to persist (AREA-UPLOADER-6) and skip the abort that would corrupt the
+// already-completed object. Returns the same worker for chainable construction.
+func (w *UploadSessionCleanupWorker) WithAssetExistence(a assetExistenceChecker) *UploadSessionCleanupWorker {
+	w.assets = a
+	return w
 }
 
 // Start runs the polling loop. Returns when ctx is cancelled or Stop is
@@ -99,26 +143,60 @@ func (w *UploadSessionCleanupWorker) sweep(ctx context.Context) {
 	if len(sessions) == 0 {
 		return
 	}
+	w.sweepSessions(ctx, sessions, w.repo.Delete, w.repo.MarkCompleted)
+}
 
+// sweepSessions runs the per-row cleanup logic for a batch of expired sessions.
+// It is split out of sweep() so the abort/release/rescue branching can be unit-
+// tested with injected delete/markCompleted callbacks instead of a live repo.
+// deleteFn deletes the session row; markCompletedFn stamps completed_at on a
+// finalized-but-unstamped session.
+func (w *UploadSessionCleanupWorker) sweepSessions(
+	ctx context.Context,
+	sessions []repository.UploadSession,
+	deleteFn func(ctx context.Context, tusUploadID string) error,
+	markCompletedFn func(ctx context.Context, tusUploadID string) error,
+) {
 	mpc, hasMultipart := w.store.(storage.MultipartCapable)
-	if !hasMultipart {
-		// Storage backend does not support multipart (test fakes, etc.).
-		// We can still delete the DB rows — there is nothing to abort on
-		// the storage side.
-		for _, s := range sessions {
-			if err := w.repo.Delete(ctx, s.TUSUploadID); err != nil {
-				log.Printf("upload session cleanup worker: delete %s: %v", s.TUSUploadID, err)
-			}
-		}
-		log.Printf("upload session cleanup worker: swept %d rows (storage backend not multipart-capable)", len(sessions))
-		return
-	}
 
 	aborted := 0
 	deleted := 0
+	released := 0
+	rescued := 0
 	for _, s := range sessions {
 		storageKey := deriveStorageKey(s)
-		if s.R2MultipartUploadID != nil && *s.R2MultipartUploadID != "" {
+
+		// AREA-UPLOADER-6 (P2a): a session reaches this sweep only when
+		// completed_at IS NULL (ListExpired filters on it). But finalizeUpload
+		// treats MarkCompleted as best-effort, so the asset row can already
+		// exist while the completion stamp never persisted. Aborting such a
+		// session's multipart would clobber an already-completed object. Before
+		// treating the session as abandoned, re-check for a finalized asset by
+		// storage_key; if one exists, stamp the session completed (so it leaves
+		// the expired set) and skip the abort + reservation release entirely —
+		// the storage was already committed to used_bytes at finalize.
+		if w.assets != nil {
+			exists, err := w.assets.ExistsByStorageKey(ctx, storageKey)
+			if err != nil {
+				log.Printf("upload session cleanup worker: asset existence check %s (key=%s): %v", s.TUSUploadID, storageKey, err)
+				// Fail safe: leave the row for the next sweep rather than
+				// risk aborting a finalized object on a transient check error.
+				continue
+			}
+			if exists {
+				if markCompletedFn != nil {
+					if err := markCompletedFn(ctx, s.TUSUploadID); err != nil {
+						log.Printf("upload session cleanup worker: mark completed (finalized-but-unstamped) %s: %v", s.TUSUploadID, err)
+						continue
+					}
+				}
+				rescued++
+				continue
+			}
+		}
+
+		// Genuinely abandoned: abort the multipart (if any + supported).
+		if hasMultipart && s.R2MultipartUploadID != nil && *s.R2MultipartUploadID != "" {
 			if err := mpc.AbortMultipartUpload(ctx, storageKey, *s.R2MultipartUploadID); err != nil {
 				// Log and continue. An already-aborted or already-
 				// completed upload returns a benign error from R2; a real
@@ -129,13 +207,31 @@ func (w *UploadSessionCleanupWorker) sweep(ctx context.Context) {
 			}
 			aborted++
 		}
-		if err := w.repo.Delete(ctx, s.TUSUploadID); err != nil {
+
+		// AREA-UPLOADER-5 (P1a): release the storage reservation BEFORE
+		// deleting the row, so the leaked reserved_bytes is returned to the
+		// workspace quota pool. ReserveUpload added it at CreateSession; nothing
+		// else releases it for an abandoned (never-finalized) session. A
+		// release failure leaves the row in place so the next sweep retries —
+		// we must not delete the only record of the reservation while the
+		// release is still owed.
+		if w.accounting != nil && s.TotalSize > 0 {
+			if err := w.accounting.ReleaseUploadReservation(ctx, s.WorkspaceID, s.TotalSize); err != nil {
+				log.Printf("upload session cleanup worker: release reservation %s ws=%s bytes=%d: %v",
+					s.TUSUploadID, s.WorkspaceID, s.TotalSize, err)
+				continue
+			}
+			released++
+		}
+
+		if err := deleteFn(ctx, s.TUSUploadID); err != nil {
 			log.Printf("upload session cleanup worker: delete %s: %v", s.TUSUploadID, err)
 			continue
 		}
 		deleted++
 	}
-	log.Printf("upload session cleanup worker: sweep complete (aborted=%d, deleted=%d, batch=%d)", aborted, deleted, len(sessions))
+	log.Printf("upload session cleanup worker: sweep complete (aborted=%d, released=%d, rescued=%d, deleted=%d, batch=%d)",
+		aborted, released, rescued, deleted, len(sessions))
 }
 
 // deriveStorageKey mirrors the key-building logic in

@@ -42,6 +42,12 @@ type User struct {
 	Email       string
 	DisplayName string
 	AvatarURL   string
+	// EmailVerified reports whether the local account has completed email
+	// activation. The Google callback uses this to decide whether it is safe
+	// to auto-link an existing local account: linking to an *unverified*
+	// local account would let an attacker who pre-registered the victim's
+	// email (without ever verifying it) take it over via Google (S1-G1).
+	EmailVerified bool
 }
 
 type OAuthToken struct {
@@ -53,6 +59,11 @@ type OAuthProfile struct {
 	DisplayName string
 	AvatarURL   string
 	ProviderID  string
+	// EmailVerified mirrors Google's userinfo "email_verified" claim. The
+	// callback REJECTS the sign-in when this is false: an unverified Google
+	// email proves nothing about ownership and must never be allowed to
+	// auto-link to (or create) a local account (S1-G1 / AREA-AUTH-4).
+	EmailVerified bool
 }
 
 // ──────────────────────────── Interfaces ────────────────────────────
@@ -68,6 +79,12 @@ type OAuthProvider interface {
 
 type UserStore interface {
 	FindByEmail(ctx context.Context, email string) (*User, error)
+	// FindByProviderSubject resolves the local account already linked to a
+	// given (provider, provider_subject) pair. Returns (nil, nil) when no
+	// link exists. This is the PRIMARY identity resolution for repeat OAuth
+	// logins (S1-G2 / AREA-AUTH-3): once a Google identity has been linked,
+	// the stable Google "sub" — not the mutable email — decides who logs in.
+	FindByProviderSubject(ctx context.Context, provider, providerSubject string) (*User, error)
 	Create(ctx context.Context, u *User) (*User, error)
 	LinkOAuth(ctx context.Context, userID, provider, providerID string) error
 	// BackfillProfile updates empty display name and/or avatar URL, e.g.
@@ -75,6 +92,12 @@ type UserStore interface {
 	// profile provides data they did not enter during registration.
 	// Either field may be empty to skip that update.
 	BackfillProfile(ctx context.Context, userID, displayName, avatarURL string) error
+	// MarkEmailVerified flips users.email_verified to TRUE. The Google
+	// callback calls this when it creates a new account from a Google-verified
+	// identity so the resulting local account is born already activated
+	// (it has proven email ownership via Google, so the email-OTP step is
+	// not required for the OAuth-created account).
+	MarkEmailVerified(ctx context.Context, userID string) error
 }
 
 type SecurityNotifier interface {
@@ -267,7 +290,14 @@ type TokenClaims struct {
 	// OR an active grace window (users.mfa_grace_until).
 	// Zero value (false) is the safe default for legacy tokens without the claim.
 	MFAVerified bool
-	ExpiresAt   time.Time
+	// S5-G1 (audit HIGH): Impersonation is true iff this access token was minted
+	// by an admin impersonating a tenant (AdminUserService.ImpersonateUser).
+	// Middleware (RejectImpersonationWrites) gates mutating HTTP methods on this
+	// flag so impersonated sessions are truly read-only. Zero value (false) is the
+	// safe default for every normal login/refresh token — it is set in exactly one
+	// place (ImpersonateUser) and omitted/false everywhere else.
+	Impersonation bool
+	ExpiresAt     time.Time
 }
 
 type RefreshTokenInfo struct {
@@ -350,6 +380,7 @@ func (s *jwtService) GenerateAccessToken(ctx context.Context, claims TokenClaims
 		"platform_role": claims.PlatformRole,
 		"state_id":      claims.StateID,
 		"mfa_verified":  claims.MFAVerified,            // F-007 (M17 wave 1): second-factor state for mandatory-MFA roles
+		"impersonation": claims.Impersonation,          // S5-G1: read-only admin-impersonation marker (false for normal tokens)
 		"iss":           jwtIssuer,                     // F-103: bind issuer
 		"aud":           jwt.ClaimStrings{jwtAudience}, // F-103: bind audience
 		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
@@ -396,14 +427,19 @@ func (s *jwtService) ParseAccessToken(ctx context.Context, tokenStr string) (*To
 	// optional fields above.
 	mfaVerified, _ := mapClaims["mfa_verified"].(bool)
 
+	// S5-G1: impersonation is optional — legacy/normal tokens without the claim
+	// parse as false (read-write). Only admin-minted impersonation tokens set it.
+	impersonation, _ := mapClaims["impersonation"].(bool)
+
 	return &TokenClaims{
-		Sub:          mapClaims["sub"].(string),
-		WorkspaceID:  mapClaims["workspace_id"].(string),
-		Role:         mapClaims["role"].(string),
-		PlatformRole: platformRole,
-		StateID:      mapClaims["state_id"].(string),
-		MFAVerified:  mfaVerified,
-		ExpiresAt:    expiresAt,
+		Sub:           mapClaims["sub"].(string),
+		WorkspaceID:   mapClaims["workspace_id"].(string),
+		Role:          mapClaims["role"].(string),
+		PlatformRole:  platformRole,
+		StateID:       mapClaims["state_id"].(string),
+		MFAVerified:   mfaVerified,
+		Impersonation: impersonation,
+		ExpiresAt:     expiresAt,
 	}, nil
 }
 
@@ -600,6 +636,7 @@ func (s *jwtService) generateAccessTokenUnlocked(claims TokenClaims) (string, er
 		"platform_role": claims.PlatformRole,
 		"state_id":      claims.StateID,
 		"mfa_verified":  claims.MFAVerified,            // F-007 (M17 wave 1): carried from caller (RotateRefreshToken sets false until wave 2 adds session-level persistence)
+		"impersonation": claims.Impersonation,          // S5-G1: carried from caller; refresh rotation never sets it true (impersonation tokens are non-refreshable access tokens)
 		"iss":           jwtIssuer,                     // F-103: bind issuer
 		"aud":           jwt.ClaimStrings{jwtAudience}, // F-103: bind audience
 		"exp":           now.Add(s.config.AccessTokenExpiry).Unix(),
@@ -661,24 +698,32 @@ func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore
 	}
 }
 
-func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) (string, error) {
+// InitiateGoogleAuth builds the Google authorization URL and returns it along
+// with the per-request state nonce. The caller (OAuthGoogleCallback's sibling
+// OAuthGoogle handler) stores the returned nonce in an HttpOnly, SameSite=Lax
+// "oauth_state" cookie and requires the callback's state nonce to equal it
+// (S1-G3 / AREA-AUTH-2). This binds the state to the originating browser and
+// makes a leaked/replayed state value useless from any other client without
+// needing external state storage.
+func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) (authURL string, nonce string, err error) {
 	_ = ctx
 
 	if s.config.ClientID == "" {
-		return "", fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_ID not set")
+		return "", "", fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_ID not set")
 	}
 
-	stateBytes := make([]byte, 16)
-	if _, err := rand.Read(stateBytes); err != nil {
-		return "", err
+	nonceBytes := make([]byte, 16)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return "", "", err
 	}
-	state := fmt.Sprintf("%x", stateBytes)
+	nonce = fmt.Sprintf("%x", nonceBytes)
+	state := nonce
 
-	if signedState, err := s.signState(oauthStatePayload{
-		Nonce:     state,
+	if signedState, signErr := s.signState(oauthStatePayload{
+		Nonce:     nonce,
 		ReturnTo:  returnTo,
 		ExpiresAt: time.Now().UTC().Add(10 * time.Minute).Unix(),
-	}); err == nil && signedState != "" {
+	}); signErr == nil && signedState != "" {
 		state = signedState
 	} else {
 		s.mu.Lock()
@@ -696,17 +741,42 @@ func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) 
 		"prompt":        []string{"consent"},
 	}
 
-	return "https://accounts.google.com/o/oauth2/v2/auth?" + query.Encode(), nil
+	return "https://accounts.google.com/o/oauth2/v2/auth?" + query.Encode(), nonce, nil
 }
 
-func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state string) (*User, string, error) {
+// HandleGoogleCallback completes the Google OAuth login. cookieNonce is the
+// value the OAuthGoogle handler stashed in the HttpOnly "oauth_state" cookie at
+// initiate time; the state's embedded nonce must equal it or the callback is
+// rejected as a replayed/forged state (S1-G3 / AREA-AUTH-2).
+//
+// Identity resolution order (S1-G2 / AREA-AUTH-3):
+//  1. by (provider, provider_subject) — the stable Google "sub". A repeat
+//     login always lands here, so a later email change at Google (or an
+//     attacker reusing a victim's email) can never re-point the link.
+//  2. by email — first-time linking only. An existing local account is
+//     auto-linked ONLY when it is already email-verified; auto-linking to an
+//     UNVERIFIED local account would hand it to an attacker who pre-registered
+//     the victim's email and never activated it (S1-G1 / AREA-AUTH-4).
+//  3. otherwise create a fresh account, born email-verified (Google proved
+//     ownership).
+func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state, cookieNonce string) (*User, string, error) {
 	if s.provider == nil || s.store == nil {
 		return nil, "", errors.New("oauth service not fully configured")
 	}
 
-	returnTo, ok := s.consumeState(state)
+	returnTo, nonce, ok := s.consumeStateWithNonce(state)
 	if !ok {
 		return nil, "", errors.New("invalid oauth state")
+	}
+	// Bind the state to the browser that initiated the flow. The signed-state
+	// path carries a nonce; require it to match the cookie set at initiate
+	// time so a captured/replayed state value is useless from any other client.
+	// (The unsigned in-memory fallback path returns an empty nonce and is not
+	// reachable in production, where ClientSecret is always set.)
+	if nonce != "" {
+		if cookieNonce == "" || subtle.ConstantTimeCompare([]byte(nonce), []byte(cookieNonce)) != 1 {
+			return nil, returnTo, errors.New("oauth state nonce mismatch")
+		}
 	}
 
 	token, err := s.provider.ExchangeCode(ctx, code)
@@ -718,43 +788,48 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 	if err != nil {
 		return nil, returnTo, fmt.Errorf("get profile failed: %w", err)
 	}
+	// Defense in depth: GetProfile already rejects unverified Google emails,
+	// but never trust a profile that slips through with EmailVerified=false.
+	if !profile.EmailVerified {
+		return nil, returnTo, errors.New("google account email is not verified")
+	}
 
+	// (1) Resolve by the stable provider subject first.
+	if linked, lookupErr := s.store.FindByProviderSubject(ctx, "google", profile.ProviderID); lookupErr != nil {
+		return nil, returnTo, lookupErr
+	} else if linked != nil {
+		s.backfillProfile(ctx, linked, profile)
+		return linked, returnTo, nil
+	}
+
+	// (2) Fall back to email for first-time linking.
 	existing, err := s.store.FindByEmail(ctx, profile.Email)
 	if err != nil {
 		return nil, returnTo, err
 	}
-
 	if existing != nil {
+		// Only auto-link to an already-verified local account. Refusing the
+		// unverified case defeats the pre-registration account-takeover (S1-G1).
+		if !existing.EmailVerified {
+			return nil, returnTo, errors.New("cannot link Google to an unverified local account")
+		}
 		_ = s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID)
-		// Backfill display name and avatar from Google profile if the user
-		// registered via email without providing them.
-		backfillName := ""
-		if existing.DisplayName == "" && profile.DisplayName != "" {
-			backfillName = profile.DisplayName
-			existing.DisplayName = profile.DisplayName
-		}
-		backfillAvatar := ""
-		if existing.AvatarURL == "" && profile.AvatarURL != "" {
-			backfillAvatar = profile.AvatarURL
-			existing.AvatarURL = profile.AvatarURL
-		}
-		if backfillName != "" || backfillAvatar != "" {
-			_ = s.store.BackfillProfile(ctx, existing.ID, backfillName, backfillAvatar)
-		}
+		s.backfillProfile(ctx, existing, profile)
 		return existing, returnTo, nil
 	}
 
-	// Create new user
+	// (3) Create a new user from the Google-verified identity.
 	idBytes := make([]byte, 16)
 	if _, err := rand.Read(idBytes); err != nil {
 		return nil, returnTo, err
 	}
 
 	newUser := &User{
-		ID:          fmt.Sprintf("%x", idBytes),
-		Email:       profile.Email,
-		DisplayName: profile.DisplayName,
-		AvatarURL:   profile.AvatarURL,
+		ID:            fmt.Sprintf("%x", idBytes),
+		Email:         profile.Email,
+		DisplayName:   profile.DisplayName,
+		AvatarURL:     profile.AvatarURL,
+		EmailVerified: true,
 	}
 
 	created, err := s.store.Create(ctx, newUser)
@@ -762,8 +837,30 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 		return nil, returnTo, err
 	}
 
+	// Born verified: Google proved email ownership, so the local account is
+	// activated without the email-OTP step.
+	_ = s.store.MarkEmailVerified(ctx, created.ID)
 	_ = s.store.LinkOAuth(ctx, created.ID, "google", profile.ProviderID)
 	return created, returnTo, nil
+}
+
+// backfillProfile fills in an existing account's empty display name / avatar
+// from the Google profile. Either field may already be set, in which case it
+// is left untouched. No-op when nothing needs backfilling.
+func (s *OAuthService) backfillProfile(ctx context.Context, existing *User, profile *OAuthProfile) {
+	backfillName := ""
+	if existing.DisplayName == "" && profile.DisplayName != "" {
+		backfillName = profile.DisplayName
+		existing.DisplayName = profile.DisplayName
+	}
+	backfillAvatar := ""
+	if existing.AvatarURL == "" && profile.AvatarURL != "" {
+		backfillAvatar = profile.AvatarURL
+		existing.AvatarURL = profile.AvatarURL
+	}
+	if backfillName != "" || backfillAvatar != "" {
+		_ = s.store.BackfillProfile(ctx, existing.ID, backfillName, backfillAvatar)
+	}
 }
 
 func (s *OAuthService) stateSigningKey() []byte {
@@ -790,29 +887,34 @@ func (s *OAuthService) signState(payload oauthStatePayload) (string, error) {
 	return encodedBody + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-func (s *OAuthService) consumeState(state string) (string, bool) {
-	if returnTo, ok := s.consumeSignedState(state); ok {
-		return returnTo, true
+// consumeStateWithNonce validates the OAuth state and returns the returnTo,
+// the embedded nonce, and whether the state was accepted. The signed-state
+// path returns the nonce so the caller can enforce the HttpOnly cookie binding
+// (S1-G3). The unsigned in-memory fallback returns an empty nonce (no binding
+// available); it exists only for the no-ClientSecret dev path.
+func (s *OAuthService) consumeStateWithNonce(state string) (returnTo string, nonce string, ok bool) {
+	if rt, n, signedOK := s.consumeSignedState(state); signedOK {
+		return rt, n, true
 	}
 
 	s.mu.Lock()
-	returnTo, ok := s.states[state]
-	if ok {
+	rt, found := s.states[state]
+	if found {
 		delete(s.states, state)
 	}
 	s.mu.Unlock()
-	return returnTo, ok
+	return rt, "", found
 }
 
-func (s *OAuthService) consumeSignedState(state string) (string, bool) {
+func (s *OAuthService) consumeSignedState(state string) (returnTo string, nonce string, ok bool) {
 	key := s.stateSigningKey()
 	if len(key) == 0 {
-		return "", false
+		return "", "", false
 	}
 
 	parts := strings.Split(state, ".")
 	if len(parts) != 2 {
-		return "", false
+		return "", "", false
 	}
 
 	mac := hmac.New(sha256.New, key)
@@ -821,21 +923,21 @@ func (s *OAuthService) consumeSignedState(state string) (string, bool) {
 
 	actualSig, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil || !hmac.Equal(actualSig, expectedSig) {
-		return "", false
+		return "", "", false
 	}
 
 	body, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	var payload oauthStatePayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", false
+		return "", "", false
 	}
 	if payload.ExpiresAt < time.Now().UTC().Unix() {
-		return "", false
+		return "", "", false
 	}
-	return payload.ReturnTo, true
+	return payload.ReturnTo, payload.Nonce, true
 }
 
 // ──────────────────────────── Password Service ────────────────────────────
