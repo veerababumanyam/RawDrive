@@ -122,6 +122,26 @@ describe("screen() format dispatcher", () => {
     expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
   });
 
+  it("allows a JPEG with benign trailing data past EOI (camera Multi-Picture Format)", () => {
+    // Regression for the 2026-05-31 upload-blocked bug: real Nikon/Sony JPEGs
+    // append an MPF preview / second image after the primary EOI. Such trailing
+    // bytes carry no archive signature and must NOT block the upload.
+    const jpeg = makeMinimalJpeg();
+    // A second SOI..EOI image-ish blob (no archive magic) appended after EOI.
+    const trailer = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x08, 0x4d, 0x50, 0x46, 0x30, 0xff, 0xd9]);
+    const combined = new Uint8Array(jpeg.length + trailer.length);
+    combined.set(jpeg, 0);
+    combined.set(trailer, jpeg.length);
+
+    const result = screen(combined, { declaredType: "image/jpeg" });
+    expect(result.detectedFormat).toBe("jpeg");
+    expect(result.decision).toBe("pass"); // benign trailer is allowed (low-severity warning only)
+    // It is still surfaced as a low-severity warning, never a blocking finding.
+    const appended = result.findings.find((f) => f.category === "appended_payload");
+    expect(appended?.severity).toBe("low");
+    expect(result.findings.some((f) => f.severity === "high")).toBe(false);
+  });
+
   it("flags a PNG with appended RAR payload", () => {
     const png = makeMinimalPng();
     const rarHeader = new Uint8Array([

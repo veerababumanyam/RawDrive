@@ -154,21 +154,46 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
     return block("jpeg", cfg.declaredType, findings);
   }
 
-  // Any non-padding bytes past EOI are appended payload.
+  // Bytes past the primary EOI. Real-world camera JPEGs routinely carry
+  // BENIGN trailing data — most commonly a Multi-Picture Format (MPF) preview
+  // / second image that the camera appends after the primary image's EOI,
+  // plus assorted EXIF/MPF index padding. The pre-2026-05-31 behaviour flagged
+  // ALL non-padding trailing bytes as a high-severity "appended_payload" and
+  // blocked the upload, which rejected the overwhelming majority of unmodified
+  // DSLR/mirrorless photos (observed: 38 of 39 wedding JPEGs blocked).
+  //
+  // The actual threat here is a POLYGLOT — an archive or executable appended
+  // after EOI — and scanForArchiveSignatures already detects those. So we only
+  // BLOCK when the trailer contains an archive signature; otherwise we record a
+  // low-severity warning (surfaced in the UI, never blocking) and allow the
+  // upload. The Tier-D backend gate still re-screens server-side.
   if (eoiOffset < bytes.byteLength) {
     const trailing = bytes.byteLength - eoiOffset;
-    const nonZeroPad = hasNonPaddingTrailer(bytes, eoiOffset);
-    if (nonZeroPad) {
-      findings.push({
-        category: "appended_payload",
-        severity: "high",
-        offset: eoiOffset,
-        message: `${trailing} bytes of appended payload past JPEG EOI`,
-      });
-      // Also scan the trailing region for archive signatures.
-      findings.push(
-        ...scanForArchiveSignatures(bytes, eoiOffset, bytes.byteLength)
+    if (hasNonPaddingTrailer(bytes, eoiOffset)) {
+      const archiveFindings = scanForArchiveSignatures(
+        bytes,
+        eoiOffset,
+        bytes.byteLength
       );
+      if (archiveFindings.length > 0) {
+        // Genuine polyglot: image + appended archive. Reject.
+        findings.push({
+          category: "appended_payload",
+          severity: "high",
+          offset: eoiOffset,
+          message: `${trailing} bytes of appended payload past JPEG EOI containing archive signature(s)`,
+        });
+        findings.push(...archiveFindings);
+      } else {
+        // Benign trailing data (camera Multi-Picture Format preview / padding).
+        // Allowed — recorded as a low-severity warning, not a block.
+        findings.push({
+          category: "appended_payload",
+          severity: "low",
+          offset: eoiOffset,
+          message: `${trailing} bytes of trailing data past JPEG EOI (no archive signature — typical of camera Multi-Picture Format; allowed)`,
+        });
+      }
     }
   }
 
