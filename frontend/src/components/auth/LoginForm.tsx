@@ -61,17 +61,30 @@ export function LoginForm() {
     if (!oauthMfaRequired) {
       return;
     }
-    if (!oauthMfaToken) {
-      setError("Google sign-in could not be completed. Please try again.");
-      router.replace("/login");
-      return;
-    }
-    try {
-      window.sessionStorage.setItem("rawdrive_mfa_token", oauthMfaToken);
-    } catch {
-      setError("This browser blocked secure session storage. Please try again.");
-      router.replace("/login");
-      return;
+    // PR #57 / S5-G2: the OAuth-MFA path no longer carries mfa_token in the
+    // redirect URL — the backend stashes it in an HttpOnly mfa_token cookie
+    // that the SameSite=Lax browser will replay on POST /auth/verify-totp.
+    // The frontend only needs to know an MFA flow is in progress so the
+    // MFAVerifyForm doesn't bounce back to /login looking for a sessionStorage
+    // token. The legacy password-then-MFA path keeps the sessionStorage path.
+    if (oauthMfaToken) {
+      try {
+        window.sessionStorage.setItem("rawdrive_mfa_token", oauthMfaToken);
+      } catch {
+        setError("This browser blocked secure session storage. Please try again.");
+        router.replace("/login");
+        return;
+      }
+    } else {
+      try {
+        window.sessionStorage.setItem("rawdrive_mfa_flow", "oauth");
+      } catch {
+        // sessionStorage unavailable — MFAVerifyForm's "no challenge" guard
+        // will send the user back to /login from there. Surface a hint here.
+        setError("This browser blocked secure session storage. Please try again.");
+        router.replace("/login");
+        return;
+      }
     }
     router.replace("/login/mfa");
   }, [oauthMfaRequired, oauthMfaToken, router]);

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -399,7 +400,26 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req mfaVerifyTOTPRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MFAToken == "" || req.Code == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if req.Code == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code required"})
+		return
+	}
+	// PR #57 / S5-G2: the OAuth-MFA path no longer carries the challenge token
+	// in the redirect URL (it would land in history/referrers/access logs).
+	// The OAuth callback instead writes mfa_token into an HttpOnly,
+	// SameSite=Lax cookie (see setMFAChallengeCookie in handler.go). The
+	// password-then-MFA path still sends mfa_token in the JSON body. Honor
+	// the body value first (back-compat), then fall back to the cookie.
+	if req.MFAToken == "" {
+		if c, err := r.Cookie(mfaChallengeCookieName); err == nil {
+			req.MFAToken = strings.TrimSpace(c.Value)
+		}
+	}
+	if req.MFAToken == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and code required"})
 		return
 	}
