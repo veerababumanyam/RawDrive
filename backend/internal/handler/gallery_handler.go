@@ -441,6 +441,17 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if musicPresent {
+		if err := h.gallerySvc.ValidateGalleryMusic(r.Context(), workspaceID, musicAssetID); err != nil {
+			if errors.Is(err, service.ErrMusicAssetNotFound) || errors.Is(err, service.ErrMusicAssetNotAudio) {
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
 	if err := h.gallerySvc.Update(r.Context(), gallery); err != nil {
 		http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
 		return

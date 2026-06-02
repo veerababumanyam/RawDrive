@@ -213,3 +213,46 @@ func TestThumbnailWorker_SuccessExtractsExifBeforeReady(t *testing.T) {
 		t.Fatalf("status = %q, want ready", repo.status[assetID])
 	}
 }
+
+func TestThumbnailWorker_NonImageAssetSkipsDerivativesAndMarksReady(t *testing.T) {
+	assetID := uuid.New()
+	repo := &fakeThumbAssetRepo{}
+	w := NewThumbnailWorker(repo, fakeThumbnailGenerator{}, fakeThumbStore{getErr: errors.New("storage should not be read")})
+	asset := &repository.Asset{
+		ID:          assetID,
+		WorkspaceID: uuid.New(),
+		StorageKey:  "originals/music.mp3",
+		ContentType: "audio/mpeg",
+	}
+
+	if err := w.processOne(context.Background(), asset); err != nil {
+		t.Fatalf("processOne returned error: %v", err)
+	}
+	if repo.status[assetID] != "ready" {
+		t.Fatalf("status = %q, want ready", repo.status[assetID])
+	}
+	if repo.processingErr[assetID] != "" {
+		t.Fatalf("processing error = %q, want empty", repo.processingErr[assetID])
+	}
+	if len(repo.thumbnails[assetID]) != 0 {
+		t.Fatalf("audio asset should not get thumbnails, got %#v", repo.thumbnails[assetID])
+	}
+}
+
+func TestShouldSkipDerivativeProcessing_PreservesUnknownContentTypes(t *testing.T) {
+	cases := []struct {
+		contentType string
+		want        bool
+	}{
+		{"audio/mpeg", true},
+		{" application/pdf ", true},
+		{"image/jpeg", false},
+		{"IMAGE/PNG", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := shouldSkipDerivativeProcessing(tc.contentType); got != tc.want {
+			t.Fatalf("shouldSkipDerivativeProcessing(%q) = %v, want %v", tc.contentType, got, tc.want)
+		}
+	}
+}

@@ -26,12 +26,18 @@ const Icon = (props: IconProps & { children: React.ReactNode }) => (
 // Navigation
 export const ChevronLeft = (p: IconProps) => <Icon {...p}><path d="M15 19l-7-7 7-7" /></Icon>;
 export const ChevronRight = (p: IconProps) => <Icon {...p}><path d="M9 5l7 7-7 7" /></Icon>;
+export const Home = (p: IconProps) => <Icon {...p}><path d="M3 10.5L12 3l9 7.5M5.25 9v10.5a.75.75 0 00.75.75H9.75v-6h4.5v6H18a.75.75 0 00.75-.75V9" /></Icon>;
+export const FolderOpen = (p: IconProps) => <Icon {...p}><path d="M3.75 6.75a1.5 1.5 0 011.5-1.5h3.879a1.5 1.5 0 011.06.44l1.122 1.12a1.5 1.5 0 001.06.44h4.879a1.5 1.5 0 011.5 1.5v1.5M3.75 9.75h15.69a1.5 1.5 0 011.47 1.79l-1.2 6A1.5 1.5 0 0118.24 18.75H5.76a1.5 1.5 0 01-1.47-1.21l-1.2-6A1.5 1.5 0 013.75 9.75z" /></Icon>;
+export const Menu = (p: IconProps) => <Icon {...p}><path d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></Icon>;
 
 // Actions
 export const XMark = (p: IconProps) => <Icon {...p}><path d="M6 18L18 6M6 6l12 12" /></Icon>;
 export const Plus = (p: IconProps) => <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>;
+export const Check = (p: IconProps) => <Icon {...p}><path d="M4 12l5 5L20 6" /></Icon>;
 export const Pencil = (p: IconProps) => <Icon {...p}><path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /><path d="M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></Icon>;
 export const Download = (p: IconProps) => <Icon {...p}><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></Icon>;
+export const ArrowUpTray = (p: IconProps) => <Icon {...p}><path d="M12 3v12" /><path d="M7 8l5-5 5 5" /><path d="M5 21h14" /></Icon>;
+export const CreditCard = (p: IconProps) => <Icon {...p}><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></Icon>;
 export const Trash = (p: IconProps) => <Icon {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" /></Icon>;
 export const Expand = (p: IconProps) => <Icon {...p}><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></Icon>;
 export const Compress = (p: IconProps) => <Icon {...p}><path d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" /></Icon>;
@@ -48,6 +54,9 @@ export const InfoCircle = (p: IconProps) => <Icon {...p}><path d="M13 16h-1v-4h-
 // Communication
 export const ChatBubble = (p: IconProps) => <Icon {...p}><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></Icon>;
 export const Envelope = (p: IconProps) => <Icon {...p}><path d="M4 6h16v12H4V6z" /><path d="M4 7l8 6 8-6" /></Icon>;
+export const Bell = (p: IconProps) => <Icon {...p}><path d="M14.857 17.082a23.85 23.85 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022 23.85 23.85 0 005.454 1.31m6.715 0a24.255 24.255 0 01-6.715 0m6.715 0a3 3 0 11-6.715 0" /></Icon>;
+export const User = (p: IconProps) => <Icon {...p}><path d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" /></Icon>;
+export const LogOut = (p: IconProps) => <Icon {...p}><path d="M15.75 9V5.25A1.5 1.5 0 0014.25 3.75h-7.5A1.5 1.5 0 005.25 5.25v13.5a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5V15M18 15l3-3m0 0l-3-3m3 3H9" /></Icon>;
 
 // Proofing
 export const CheckCircle = (p: IconProps) => <Icon {...p}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></Icon>;

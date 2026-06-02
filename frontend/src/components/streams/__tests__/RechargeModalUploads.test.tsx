@@ -139,6 +139,9 @@ describe("RechargeModal — uploads tab", () => {
 
     // Coming-soon notice is visible so the user knows why there's no CTA.
     expect(screen.getByTestId("upload-order-init-unavailable")).toBeDefined();
+    expect(screen.getByTestId("upload-order-init-unavailable")).toHaveTextContent(
+      "Upload credit checkout is unavailable because the order endpoint is not live yet.",
+    );
   });
 
   it("honours initialSurface prop", async () => {

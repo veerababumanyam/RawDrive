@@ -118,6 +118,45 @@ func TestCreateSession_NoTermsGate_IsNoop(t *testing.T) {
 	assert.NotContains(t, rr.Body.String(), "TERMS_NOT_ACCEPTED")
 }
 
+func TestAssetUpload_TermsNotAccepted_Blocks(t *testing.T) {
+	h := handler.NewAssetHandler(nil, nil).
+		WithTermsGate(&stubTermsGate{accepted: false, version: "tos-privacy/2026-04"})
+
+	req := newAssetUploadRequest(t, nil, uuid.New(), uuid.New())
+	rr := httptest.NewRecorder()
+	h.Upload(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code,
+		"unaccepted terms must block direct asset upload; body: %s", rr.Body.String())
+	assert.Contains(t, rr.Body.String(), "TERMS_NOT_ACCEPTED")
+	assert.Contains(t, rr.Body.String(), "tos-privacy/2026-04")
+}
+
+func TestAssetUpload_TermsAccepted_PassesGate(t *testing.T) {
+	h := handler.NewAssetHandler(nil, nil).
+		WithTermsGate(&stubTermsGate{accepted: true, version: "tos-privacy/2026-04"})
+
+	req := newCreateSessionRequest(t, uuid.New(), uuid.New(), nil)
+	rr := httptest.NewRecorder()
+	h.Upload(rr, req)
+
+	assert.NotEqual(t, http.StatusForbidden, rr.Code,
+		"accepted user must pass the direct upload terms gate; body: %s", rr.Body.String())
+	assert.NotContains(t, rr.Body.String(), "TERMS_NOT_ACCEPTED")
+}
+
+func TestAssetUpload_TermsGateError_FailsClosed(t *testing.T) {
+	h := handler.NewAssetHandler(nil, nil).
+		WithTermsGate(&stubTermsGate{err: termsGateBoomErr{}})
+
+	req := newAssetUploadRequest(t, nil, uuid.New(), uuid.New())
+	rr := httptest.NewRecorder()
+	h.Upload(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code, "body: %s", rr.Body.String())
+	assert.NotContains(t, rr.Body.String(), "TERMS_NOT_ACCEPTED")
+}
+
 // ─── Terms endpoint (real service + in-memory store) ───────────────────────────
 
 type fakeHandlerTermsStore struct {

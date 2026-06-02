@@ -72,6 +72,36 @@ function renderDashboardLayout() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.includes("/api/v1/auth/me")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          display_name: "Studio User",
+          email: "studio@example.test",
+          plan_tier: "pro",
+        }),
+      } as Response;
+    }
+    if (url.includes("/api/v1/uploads/balance")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          available_credits: 2500,
+          low_balance: false,
+          low_balance_threshold: 100,
+        }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ packages: [] }),
+    } as Response;
+  }));
   mockUsePathname.mockReturnValue("/galleries");
   setRole("photographer");
 });
@@ -122,6 +152,27 @@ describe("DashboardLayout header", () => {
     renderDashboardLayout();
     const bell = await screen.findByRole("link", { name: "Notifications" });
     expect(bell).toBeInTheDocument();
+  });
+
+  it("shows upload-credit balance and recharge entry point for studio roles", async () => {
+    setRole("photographer");
+    renderDashboardLayout();
+
+    expect(await screen.findByTestId("upload-credit-pill-button")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-credit-pill-credits")).toHaveTextContent("2,500 credits");
+    });
+  });
+
+  it("does not mount the upload-credit pill for admin roles", async () => {
+    setRole("admin");
+    mockUsePathname.mockReturnValue("/admin/dashboard");
+    renderDashboardLayout();
+
+    await waitFor(() => {
+      expect(screen.getByText("Dashboard content")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("upload-credit-pill")).toBeNull();
   });
 });
 

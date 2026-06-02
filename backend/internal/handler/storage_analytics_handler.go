@@ -73,12 +73,15 @@ func (h *StorageAnalyticsHandler) GetUsage(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"data": map[string]interface{}{
-			"used_bytes":       usage.UsedBytes,
-			"derivative_bytes": usage.DerivativeBytes,
-			"total_bytes":      usage.TotalBytes,
-			"quota_bytes":      usage.QuotaBytes,
-			"percent_used":     usage.PercentUsed,
-			"warning_level":    usage.WarningLevel(),
+			"used_bytes":            usage.UsedBytes,
+			"derivative_bytes":      usage.DerivativeBytes,
+			"reserved_bytes":        usage.ReservedBytes,
+			"total_bytes":           usage.TotalBytes,
+			"quota_bytes":           usage.QuotaBytes,
+			"grace_bytes":           usage.GraceBytes,
+			"effective_quota_bytes": usage.QuotaBytes + usage.GraceBytes,
+			"percent_used":          usage.PercentUsed,
+			"warning_level":         usage.WarningLevel(),
 		},
 	})
 }

@@ -18,12 +18,17 @@ var (
 	ErrMusicRepoUnwired   = errors.New("music validation unavailable: asset repo not wired")
 )
 
+type galleryAssetSource interface {
+	GetByIDAndWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*repository.Asset, error)
+	ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, limit int) ([]repository.TimelineGroup, error)
+}
+
 // GalleryService handles gallery business logic.
 type GalleryService struct {
 	galleryRepo      *repository.GalleryRepo
 	galleryAssetRepo *repository.GalleryAssetRepo
 	coverSvc         *GalleryCoverService
-	assetRepo        *repository.AssetRepo
+	assetRepo        galleryAssetSource
 	albumSvc         *AlbumService
 }
 
@@ -34,6 +39,10 @@ func NewGalleryService(gr *repository.GalleryRepo, gar *repository.GalleryAssetR
 
 // WithAssetRepo attaches the asset repo for timeline queries.
 func (s *GalleryService) WithAssetRepo(ar *repository.AssetRepo) *GalleryService {
+	if ar == nil {
+		s.assetRepo = nil
+		return s
+	}
 	s.assetRepo = ar
 	return s
 }
@@ -219,6 +228,20 @@ func (s *GalleryService) SetGalleryMusic(ctx context.Context, galleryID, workspa
 	if musicAssetID == nil {
 		return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", nil)
 	}
+	if err := s.ValidateGalleryMusic(ctx, workspaceID, musicAssetID); err != nil {
+		return err
+	}
+	return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", *musicAssetID)
+}
+
+// ValidateGalleryMusic verifies that a requested music asset belongs to the
+// workspace and is an audio file without mutating the gallery. Handlers call it
+// before saving other settings so an invalid music_asset_id cannot partially
+// persist unrelated gallery edits.
+func (s *GalleryService) ValidateGalleryMusic(ctx context.Context, workspaceID uuid.UUID, musicAssetID *uuid.UUID) error {
+	if musicAssetID == nil {
+		return nil
+	}
 	if s.assetRepo == nil {
 		return ErrMusicRepoUnwired
 	}
@@ -232,7 +255,7 @@ func (s *GalleryService) SetGalleryMusic(ctx context.Context, galleryID, workspa
 	if !strings.HasPrefix(strings.ToLower(asset.ContentType), "audio/") {
 		return ErrMusicAssetNotAudio
 	}
-	return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", *musicAssetID)
+	return nil
 }
 
 // SoftDelete deletes a gallery (soft).

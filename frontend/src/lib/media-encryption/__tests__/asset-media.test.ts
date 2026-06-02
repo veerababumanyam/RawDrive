@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, pickAssetMedia } from "../asset-media";
+import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, pickAssetMedia, pickAssetMediaCandidates } from "../asset-media";
 
 describe("asset media selection", () => {
   it("uses WebP derivatives for gallery grids and never falls back to originals", () => {
@@ -51,6 +51,25 @@ describe("asset media selection", () => {
 
     expect(picked?.variant).toBe("future_webp");
     expect(picked?.key).toBe("future/future.webp");
+  });
+
+  it("recognizes WebP storage-key variants even when thumbnail map keys are legacy names", () => {
+    const candidates = pickAssetMediaCandidates(
+      {
+        filename: "legacy-key.jpg",
+        thumbnail_urls: {
+          thumb_md: "thumbnails/legacy/thumb_md.webp?token=abc",
+          sm: "thumbnails/legacy/sm.jpg",
+          encrypted_preview: "derivatives/legacy/display.webp.enc?token=abc",
+        },
+      },
+      GRID_VARIANTS,
+    );
+
+    const picked = candidates[0];
+    expect(picked?.variant).toBe("thumb_md");
+    expect(picked?.key).toBe("thumbnails/legacy/thumb_md.webp?token=abc");
+    expect(candidates.map((candidate) => candidate.variant)).toContain("encrypted_preview");
   });
 
   it("uses the smallest WebP derivative first for filmstrip thumbnails", () => {

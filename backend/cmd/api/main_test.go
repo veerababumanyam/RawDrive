@@ -148,6 +148,7 @@ func TestF035_IsPublicThumbnailKey(t *testing.T) {
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_sm_webp.webp", true},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_md_webp.webp", true},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_lg_webp.webp", true},
+		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/display_webp.webp", true},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_sm.webp", true},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_md.webp", true},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_lg.webp", true},
@@ -155,7 +156,7 @@ func TestF035_IsPublicThumbnailKey(t *testing.T) {
 		// Originals and other prefixes must NOT be treated as public.
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/original.jpg", false},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/original.webp", false},
-		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/display_webp.webp", false},
+		{"derivatives/123e4567-e89b-12d3-a456-426614174000/display_webp.webp", false},
 		{"derivatives/123e4567-e89b-12d3-a456-426614174000/display.webp", false},
 		{"thumbnails/short-id/thumb_sm.webp", false},
 		{"thumbnails/123e4567-e89b-12d3-a456-426614174000/thumb_sm.png", false},

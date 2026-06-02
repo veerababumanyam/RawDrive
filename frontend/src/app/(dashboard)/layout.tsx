@@ -1,23 +1,19 @@
 "use client";
 
-import type { ReactNode, SVGProps } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-// F-090: the dashboard shell previously pulled nine glyphs from
-// `lucide-react`, mixing a second icon system into the liquid-glass UI and
-// adding lucide to this client-bundled shell. The SF-Symbols barrel at
-// `@/components/icons` is the project's single icon source (24x24 viewBox,
-// 1.5px stroke, round caps), but it does not yet export every glyph this
-// shell needs. To remove the lucide import from the shell without editing
-// the shared barrel (owned elsewhere / edited in parallel), the three glyphs
-// that already exist are imported from the barrel and the remaining six are
-// declared locally below in the identical SF-Symbols style. If/when the
-// barrel gains these glyphs, swap these locals for barrel imports.
 import {
-  Search,
-  XMark as X,
+  Bell,
+  FolderOpen,
   Gear as Settings,
+  Home,
+  LogOut,
+  Menu,
+  Search,
+  User,
+  XMark as X,
 } from "@/components/icons";
 import {
   getStoredAccessToken,
@@ -31,63 +27,14 @@ import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import { HeaderClock } from "@/components/layout/HeaderClock";
 import { PwaInstallBanner, PwaInstallHeaderButton } from "@/components/pwa/install-banner";
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
+import { UploadCreditPill } from "@/components/streams/UploadCreditPill";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   AdminSidebar,
   DealerSidebar,
   StudioSidebar,
   ClientSidebar,
 } from "@/components/layout/navigation";
-
-/* ------------------------------------------------------------------ */
-/*  Local SF-Symbols glyphs (F-090)                                   */
-/*                                                                    */
-/*  These six icons are not yet exported by the shared barrel at      */
-/*  @/components/icons, so they are declared here in the identical    */
-/*  SF-Symbols aesthetic (24x24 viewBox, 1.5px stroke, round caps)    */
-/*  to keep this client-bundled shell free of `lucide-react`. Move    */
-/*  them into the barrel when it is widened.                          */
-/* ------------------------------------------------------------------ */
-
-type ShellIconProps = SVGProps<SVGSVGElement>;
-
-const shellIconDefaults: ShellIconProps = {
-  width: 24,
-  height: 24,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-const ShellIcon = (props: ShellIconProps & { children: ReactNode }) => (
-  <svg {...shellIconDefaults} {...props}>{props.children}</svg>
-);
-
-const Home = (p: ShellIconProps) => (
-  <ShellIcon {...p}><path d="M3 10.5L12 3l9 7.5M5.25 9v10.5a.75.75 0 00.75.75H9.75v-6h4.5v6H18a.75.75 0 00.75-.75V9" /></ShellIcon>
-);
-
-const FolderOpen = (p: ShellIconProps) => (
-  <ShellIcon {...p}><path d="M3.75 6.75a1.5 1.5 0 011.5-1.5h3.879a1.5 1.5 0 011.06.44l1.122 1.12a1.5 1.5 0 001.06.44h4.879a1.5 1.5 0 011.5 1.5v1.5M3.75 9.75h15.69a1.5 1.5 0 011.47 1.79l-1.2 6A1.5 1.5 0 0118.24 18.75H5.76a1.5 1.5 0 01-1.47-1.21l-1.2-6A1.5 1.5 0 013.75 9.75z" /></ShellIcon>
-);
-
-const Bell = (p: ShellIconProps) => (
-  <ShellIcon {...p}><path d="M14.857 17.082a23.85 23.85 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022 23.85 23.85 0 005.454 1.31m6.715 0a24.255 24.255 0 01-6.715 0m6.715 0a3 3 0 11-6.715 0" /></ShellIcon>
-);
-
-const User = (p: ShellIconProps) => (
-  <ShellIcon {...p}><path d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" /></ShellIcon>
-);
-
-const LogOut = (p: ShellIconProps) => (
-  <ShellIcon {...p}><path d="M15.75 9V5.25A1.5 1.5 0 0014.25 3.75h-7.5A1.5 1.5 0 005.25 5.25v13.5a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5V15M18 15l3-3m0 0l-3-3m3 3H9" /></ShellIcon>
-);
-
-const Menu = (p: ShellIconProps) => (
-  <ShellIcon {...p}><path d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></ShellIcon>
-);
 
 /* ------------------------------------------------------------------ */
 /*  Role-specific header quick-nav items                              */
@@ -140,6 +87,10 @@ function getSearchPlaceholder(role: string) {
     default:
       return "Search galleries, clients, or files...";
   }
+}
+
+function roleShowsUploadCredits(role: string): boolean {
+  return role === "photographer" || role === "team_member" || role === "assistant" || role === "studio_manager";
 }
 
 /* ------------------------------------------------------------------ */
@@ -460,14 +411,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Header bar — offset from sidebar on desktop */}
       <header className="bg-surface border-b border-border fixed right-0 top-0 z-40 grid h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 transition-[width] duration-200 ease-out lg:w-[calc(100%-var(--sidebar-width))] lg:grid-cols-[minmax(0,1fr)_minmax(18rem,32rem)_minmax(0,1fr)] lg:px-6">
         {/* Mobile hamburger — opens sidebar drawer on < lg screens */}
-        <button
+        <GlassIconButton
           type="button"
           onClick={() => setSidebarOpen((prev) => !prev)}
-          aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-accent lg:hidden"
+          label={sidebarOpen ? "Close navigation" : "Open navigation"}
+          size="sm"
+          variant="ghost"
+          className="bg-surface-container-high text-text-secondary hover:bg-surface-container-highest hover:text-accent lg:hidden"
         >
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        </GlassIconButton>
         <nav className="hidden min-w-0 items-center gap-2 lg:flex" aria-label="Workspace quick navigation">
           {headerNavItems.map((item) => {
             const Icon = item.icon;
@@ -522,6 +475,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               installed. Sits next to the bell so it's a peer of the
               other ambient header actions, not a CTA. */}
           <PwaInstallHeaderButton />
+          {roleShowsUploadCredits(role) && <UploadCreditPill className="hidden sm:inline-flex" />}
           <ThemeToggleButton />
           <a
             href="/notifications"

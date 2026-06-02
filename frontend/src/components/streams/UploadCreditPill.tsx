@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { ArrowUpTray } from "@/components/icons";
 import { useUploadCreditBalance } from "@/hooks/useUploadCreditBalance";
 import { RechargeModal } from "./RechargeModal";
 
@@ -60,22 +61,7 @@ export function UploadCreditPill({ className }: UploadCreditPillProps) {
           className="px-3 w-auto rounded-full"
         >
           <span className="flex items-center gap-1.5 text-xs font-medium">
-            {/* Inline arrow-up-tray icon so we don't add a new icon dep.
-                Pairs visually with the streaming pill's credit-card glyph
-                next to it in the app shell without being a copy of it. */}
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4"
-            >
-              <path d="M12 3v12" />
-              <path d="M7 8l5-5 5 5" />
-              <path d="M5 21h14" />
-            </svg>
+            <ArrowUpTray className="h-4 w-4" />
             <span data-testid="upload-credit-pill-credits">{display}</span>
           </span>
         </GlassIconButton>

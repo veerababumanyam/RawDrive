@@ -45,8 +45,8 @@ type AssetReadyPayload struct {
 //     never fail the worker's core job (asset processing).
 //   - No panic on encode failure; we fail-soft with an error log.
 //
-// The subject `asset.ready` is matched by EventBroker prefix matching, so
-// subscribers using pattern `asset` or `asset.ready` both receive it.
+// The subject is workspace-scoped so SSE subscribers can only receive events
+// from their own tenant.
 func PublishAssetReady(ctx context.Context, p Publisher, assetID, workspaceID uuid.UUID) {
 	if p == nil {
 		return
@@ -59,7 +59,8 @@ func PublishAssetReady(ctx context.Context, p Publisher, assetID, workspaceID uu
 		log.Printf("worker event: marshal asset.ready: %v", err)
 		return
 	}
-	if err := p.Publish(ctx, "asset.ready", body); err != nil {
+	subject := "asset.ready." + workspaceID.String()
+	if err := p.Publish(ctx, subject, body); err != nil {
 		log.Printf("worker event: publish asset.ready: %v", err)
 	}
 }

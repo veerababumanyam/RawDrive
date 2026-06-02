@@ -45,15 +45,34 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		sseError(w, http.StatusUnauthorized, "missing subject")
 		return
 	}
+	if claims.WorkspaceID == "" {
+		sseError(w, http.StatusUnauthorized, "missing workspace")
+		return
+	}
 
 	channelsParam := r.URL.Query().Get("channels")
 	if channelsParam == "" {
 		sseError(w, http.StatusBadRequest, "channels parameter required")
 		return
 	}
-	patterns := strings.Split(channelsParam, ",")
-	for i := range patterns {
-		patterns[i] = strings.TrimSpace(patterns[i])
+	requested := strings.Split(channelsParam, ",")
+	patterns := make([]string, 0, len(requested))
+	for _, raw := range requested {
+		switch strings.TrimSpace(raw) {
+		case "chat", "chat.message":
+			patterns = append(patterns, "chat.message."+claims.WorkspaceID)
+		case "asset", "asset.ready":
+			patterns = append(patterns, "asset.ready."+claims.WorkspaceID)
+		case "":
+			continue
+		default:
+			sseError(w, http.StatusBadRequest, "unsupported channel")
+			return
+		}
+	}
+	if len(patterns) == 0 {
+		sseError(w, http.StatusBadRequest, "channels parameter required")
+		return
 	}
 
 	flusher, ok := w.(http.Flusher)
@@ -87,11 +106,7 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			// Extract base event type: "chat.message.{id}" -> "chat.message"
-			eventType := evt.Subject
-			if idx := strings.LastIndex(eventType, "."); idx > 0 {
-				eventType = eventType[:idx]
-			}
+			eventType := sseEventType(evt.Subject)
 			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, evt.Data)
 			flusher.Flush()
 		case <-heartbeat.C:
@@ -99,4 +114,17 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func sseEventType(subject string) string {
+	if strings.HasPrefix(subject, "chat.message.") {
+		return "chat.message"
+	}
+	if strings.HasPrefix(subject, "asset.ready.") {
+		return "asset"
+	}
+	if idx := strings.LastIndex(subject, "."); idx > 0 {
+		return subject[:idx]
+	}
+	return subject
 }

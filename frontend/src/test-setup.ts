@@ -55,16 +55,30 @@ function createMemoryStorage(): Storage {
   };
 }
 
+function hasStorageShape(value: unknown): value is Storage {
+  if (!value || typeof value !== "object") return false;
+  const storage = value as Partial<Storage>;
+  return (
+    typeof storage.clear === "function" &&
+    typeof storage.getItem === "function" &&
+    typeof storage.key === "function" &&
+    typeof storage.removeItem === "function" &&
+    typeof storage.setItem === "function" &&
+    typeof storage.length === "number"
+  );
+}
+
 if (typeof window !== "undefined") {
   for (const name of ["localStorage", "sessionStorage"] as const) {
     try {
-      if (window[name]) continue;
+      if (hasStorageShape(window[name])) continue;
     } catch {
       // Define a test-safe replacement below.
     }
+    const storage = createMemoryStorage();
     Object.defineProperty(window, name, {
       configurable: true,
-      value: createMemoryStorage(),
+      get: () => storage,
     });
   }
 }

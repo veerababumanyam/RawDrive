@@ -73,4 +73,40 @@ describe("TermsAcceptanceModal", () => {
     expect(onCancel).toHaveBeenCalled();
     expect(mockedLegal.acceptTerms).not.toHaveBeenCalled();
   });
+
+  it("reloads terms and resets acceptance state when replayed after close", async () => {
+    const replayedTerms = {
+      ...sampleTerms,
+      version: "tos-privacy/2026-06",
+      text: "Updated terms for replayed upload.",
+    };
+    mockedLegal.getCurrentTerms
+      .mockResolvedValueOnce(sampleTerms)
+      .mockResolvedValueOnce(replayedTerms);
+    const onAccepted = vi.fn();
+
+    const { rerender } = render(
+      <TermsAcceptanceModal open token="t" onAccepted={onAccepted} onCancel={vi.fn()} />,
+    );
+    await screen.findByText("You warrant you own all uploaded content.");
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole("checkbox")).toBeChecked();
+
+    rerender(<TermsAcceptanceModal open={false} token="t" onAccepted={onAccepted} onCancel={vi.fn()} />);
+    rerender(<TermsAcceptanceModal open token="t" onAccepted={onAccepted} onCancel={vi.fn()} />);
+
+    await screen.findByText("Updated terms for replayed upload.");
+    const checkbox = screen.getByRole("checkbox");
+    const acceptBtn = screen.getByRole("button", { name: /accept & continue/i });
+    expect(checkbox).not.toBeChecked();
+    expect(acceptBtn).toBeDisabled();
+
+    fireEvent.click(checkbox);
+    fireEvent.click(acceptBtn);
+
+    await waitFor(() => {
+      expect(mockedLegal.acceptTerms).toHaveBeenCalledWith("t", "tos-privacy/2026-06");
+    });
+    expect(mockedLegal.getCurrentTerms).toHaveBeenCalledTimes(2);
+  });
 });

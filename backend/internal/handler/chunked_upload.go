@@ -1200,7 +1200,7 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 
 	// Create the asset row. Tests may pass a nil assetRepo to exercise the
 	// streaming path without a live DB; treat that as an explicit opt-out.
-	assetStatus := "processing"
+	assetStatus := service.InitialAssetStatus(row.ContentType)
 	assetIsEncrypted := h.encryptionEnabled
 	assetEncryptionVersion := h.encryptionVersion
 	var assetEncryptionAlgo *string

@@ -13,7 +13,7 @@ import (
 // non-thumbnail keys (originals, downloads, BYOS prefixes).
 func TestThumbnailAssetID_ExtractsAssetUUID(t *testing.T) {
 	id := uuid.New()
-	for _, variant := range []string{"thumb_sm", "thumb_md", "thumb_lg", "display"} {
+	for _, variant := range []string{"thumb_sm_webp", "thumb_md_webp", "thumb_lg_webp", "display_webp", "thumb_sm", "thumb_md", "thumb_lg", "display"} {
 		key := "thumbnails/" + id.String() + "/" + variant + ".webp"
 		got, ok := thumbnailAssetID(key)
 		if !ok || got != id {
@@ -24,6 +24,7 @@ func TestThumbnailAssetID_ExtractsAssetUUID(t *testing.T) {
 	for _, bad := range []string{
 		"originals/" + id.String() + "/photo.jpg",
 		"thumbnails/" + id.String() + "/display.jpg", // not webp
+		"derivatives/" + id.String() + "/display_webp.webp",
 		"thumbnails/not-a-uuid/display.webp",
 		"downloads/" + id.String() + ".zip",
 		"byos/tenant/thumbnails/" + id.String() + "/display.webp",

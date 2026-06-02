@@ -21,6 +21,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	// when it is wired (nil-safe — pre-M16 callers continue to work).
 	assetHandler := NewAssetHandler(deps.AssetService, deps.UploadService).
 		WithValidation(deps.UploadValidationSvc).
+		WithTermsGate(deps.TermsGate).
 		WithAssetRepo(deps.AssetRepo)
 	galleryHandler := NewGalleryHandler(deps.GalleryService)
 	if deps.Pool != nil {
@@ -637,6 +638,9 @@ type M2Dependencies struct {
 	ConsentSvc *service.ConsentService
 	// M16 dependencies (nil-safe)
 	UploadValidationSvc service.UploadManifestValidation
+	// Migration 144: hard upload gate for both chunked and direct multipart
+	// uploads. Satisfied by *service.TermsService.
+	TermsGate TermsGate
 	// M21 dependencies (nil-safe)
 	FaceSvc *ai.FaceService
 	JobRepo *ai.JobRepo

@@ -43,8 +43,9 @@ func TestPublishAssetReady_EmitsCorrectSubjectAndPayload(t *testing.T) {
 	if len(p.subjects) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(p.subjects))
 	}
-	if p.subjects[0] != "asset.ready" {
-		t.Errorf("subject: want asset.ready, got %q", p.subjects[0])
+	wantSubject := "asset.ready." + workspaceID.String()
+	if p.subjects[0] != wantSubject {
+		t.Errorf("subject: want %s, got %q", wantSubject, p.subjects[0])
 	}
 
 	var body struct {

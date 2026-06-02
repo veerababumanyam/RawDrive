@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -192,6 +193,15 @@ func (w *ThumbnailWorker) processNextBatch(ctx context.Context) {
 
 // processOne generates thumbnails for a single asset.
 func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asset) error {
+	if shouldSkipDerivativeProcessing(asset.ContentType) {
+		if err := w.assetRepo.UpdateStatus(ctx, asset.ID, "ready"); err != nil {
+			return fmt.Errorf("mark non-image ready: %w", err)
+		}
+		PublishAssetReady(ctx, w.publisher, asset.ID, asset.WorkspaceID)
+		log.Printf("thumbnail worker: skipped non-image asset %s content_type=%q", asset.ID, asset.ContentType)
+		return nil
+	}
+
 	// Download the original file
 	reader, err := w.store.Get(ctx, asset.StorageKey)
 	if err != nil {
@@ -322,7 +332,15 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 // for video/PDF/other non-image assets that arrive through the same pipeline.
 // Match prefix "image/" — same predicate the search_worker uses for auto-tag.
 func isImageContentType(ct string) bool {
-	return len(ct) >= 6 && ct[:6] == "image/"
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(ct)), "image/")
+}
+
+// shouldSkipDerivativeProcessing returns true for known non-image assets. Empty
+// or unknown content types keep the old decode path, preserving derivatives for
+// image uploads whose browser did not supply a MIME type.
+func shouldSkipDerivativeProcessing(ct string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(ct))
+	return normalized != "" && !strings.HasPrefix(normalized, "image/")
 }
 
 func (w *ThumbnailWorker) updateDimensions(ctx context.Context, id uuid.UUID, width, height int) {

@@ -87,11 +87,10 @@ func NewStorageAccounting(pool *pgxpool.Pool) *StorageAccounting {
 
 // WorkspaceStorage represents current storage usage for a workspace.
 //
-// 2026-05-21: TotalBytes = UsedBytes + DerivativeBytes. This is the
-// authoritative number to render on dashboards because B2 charges for the
-// whole footprint (originals + WebP variants), not just originals. Quota
-// enforcement still keys on UsedBytes only — changing that is a separate
-// policy decision and is intentionally out of scope for this change.
+// TotalBytes = UsedBytes + DerivativeBytes. This is the authoritative storage
+// footprint because B2 charges for originals plus WebP variants. ReservedBytes
+// are in-flight originals and count toward quota decisions while the upload is
+// open.
 type WorkspaceStorage struct {
 	WorkspaceID     uuid.UUID `json:"workspace_id"`
 	UsedBytes       int64     `json:"used_bytes"`
@@ -103,12 +102,24 @@ type WorkspaceStorage struct {
 	PercentUsed     float64   `json:"percent_used"`
 }
 
+func (ws *WorkspaceStorage) billableBytes() int64 {
+	return ws.UsedBytes + ws.DerivativeBytes + ws.ReservedBytes
+}
+
+func (ws *WorkspaceStorage) effectiveQuotaBytes() int64 {
+	if ws.QuotaBytes == 0 {
+		return 0
+	}
+	return ws.QuotaBytes + ws.GraceBytes
+}
+
 // WarningLevel returns the storage warning level.
 func (ws *WorkspaceStorage) WarningLevel() string {
-	if ws.QuotaBytes == 0 {
+	limit := ws.effectiveQuotaBytes()
+	if limit == 0 {
 		return "none"
 	}
-	pct := float64(ws.UsedBytes+ws.ReservedBytes) / float64(ws.QuotaBytes) * 100
+	pct := float64(ws.billableBytes()) / float64(limit) * 100
 	if pct >= 95 {
 		return "critical"
 	}
@@ -141,8 +152,8 @@ func (s *StorageAccounting) GetUsage(ctx context.Context, workspaceID uuid.UUID)
 		ws.QuotaBytes = PlanDefaultQuotaBytes(planTier)
 	}
 	ws.TotalBytes = ws.UsedBytes + ws.DerivativeBytes
-	if ws.QuotaBytes > 0 {
-		ws.PercentUsed = float64(ws.UsedBytes+ws.ReservedBytes) / float64(ws.QuotaBytes) * 100
+	if limit := ws.effectiveQuotaBytes(); limit > 0 {
+		ws.PercentUsed = float64(ws.billableBytes()) / float64(limit) * 100
 	}
 	return ws, nil
 }
@@ -180,7 +191,7 @@ func (s *StorageAccounting) CheckQuota(ctx context.Context, workspaceID uuid.UUI
 	if usage.QuotaBytes == 0 {
 		return true, nil // No quota = unlimited
 	}
-	return (usage.UsedBytes + usage.ReservedBytes + additionalBytes) <= (usage.QuotaBytes + usage.GraceBytes), nil
+	return (usage.TotalBytes + usage.ReservedBytes + additionalBytes) <= (usage.QuotaBytes + usage.GraceBytes), nil
 }
 
 // ReserveUpload atomically claims original bytes for an in-flight upload
@@ -212,7 +223,7 @@ func (s *StorageAccounting) ReserveUpload(ctx context.Context, workspaceID uuid.
 		    WHERE workspace_id = $1
 		      AND (
 		        quota_bytes = 0
-		        OR used_bytes + reserved_bytes + $2 <= quota_bytes + grace_bytes
+		        OR used_bytes + derivative_bytes + reserved_bytes + $2 <= quota_bytes + grace_bytes
 		      )`,
 		workspaceID,
 		originalBytes,

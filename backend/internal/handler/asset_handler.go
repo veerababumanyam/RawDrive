@@ -25,6 +25,7 @@ type AssetHandler struct {
 	assetSvc      *service.AssetService
 	uploadSvc     *service.UploadService
 	validationSvc service.UploadManifestValidation
+	termsGate     TermsGate
 	// assetRepo enforces tenant ownership on asset-id-addressed routes via
 	// guardAssetWorkspace (workspace-scoped asset lookup). Nil-safe: when
 	// unwired the guard fails closed.
@@ -51,6 +52,14 @@ func (h *AssetHandler) WithAssetRepo(ar *repository.AssetRepo) *AssetHandler {
 // Pass nil to disable validation (legacy behaviour).
 func (h *AssetHandler) WithValidation(validationSvc service.UploadManifestValidation) *AssetHandler {
 	h.validationSvc = validationSvc
+	return h
+}
+
+// WithTermsGate wires the same upload Terms-of-Service gate used by the
+// chunked upload path onto direct multipart uploads. Nil leaves legacy/test
+// wiring unchanged.
+func (h *AssetHandler) WithTermsGate(g TermsGate) *AssetHandler {
+	h.termsGate = g
 	return h
 }
 
@@ -107,6 +116,22 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, `{"error":"missing user_id"}`, http.StatusUnauthorized)
 		return
+	}
+
+	if h.termsGate != nil {
+		accepted, activeVersion, err := h.termsGate.HasAcceptedActive(r.Context(), userID)
+		if err != nil {
+			internalError(w, "", "terms_check_failed", err)
+			return
+		}
+		if !accepted {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"error":         "TERMS_NOT_ACCEPTED",
+				"message":       "You must accept the Terms of Service before uploading.",
+				"terms_version": activeVersion,
+			})
+			return
+		}
 	}
 
 	if err := r.ParseMultipartForm(500 << 20); err != nil { // 500MB max

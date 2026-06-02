@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { Check, XMark } from "@/components/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatINR, type PublicStreamingPackage } from "@/lib/streaming-packages";
 import { useUploadPackages, type UploadPackage } from "@/lib/upload-packages";
@@ -155,25 +156,17 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
                 : "Pick a credit pack to keep uploads flowing."}
             </p>
           </div>
-          {/* Token-surface close button. `GlassIconButton`'s variants
-              are all tuned for dark backdrops (text-white on low-alpha
-              white fills), which renders near-invisible on the light
-              liquid-glass theme's near-white modal surface. This uses
-              the same semantic-token pattern as the dashboard header's
-              notification bell, so the button has guaranteed contrast
-              on liquid-glass / liquid-glass-dark / midnight. */}
-          <button
+          <GlassIconButton
             type="button"
-            aria-label="Close recharge modal"
-            title="Close recharge modal"
+            label="Close recharge modal"
+            size="sm"
+            variant="ghost"
             onClick={onClose}
             data-testid="recharge-close"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="shrink-0 bg-surface-container-high text-text-secondary hover:bg-surface-container-highest hover:text-text-primary"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="h-5 w-5">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+            <XMark />
+          </GlassIconButton>
         </header>
 
         {/* M41 FR-UCRT-10: tab switcher between streaming minutes and upload
@@ -256,10 +249,11 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
                 backend slice ships. */}
             <div
               data-testid="upload-order-init-unavailable"
-              className="rounded-lg border border-white/10 bg-surface-muted p-3 text-xs text-content-secondary"
+              role="status"
+              className="rounded-lg border border-border-subtle bg-surface-sunken p-3 text-xs text-text-secondary"
             >
-              Upload credit checkout is coming soon. Admin-initiated grants are available today
-              from Admin → Workspaces → Grant credits.
+              Upload credit checkout is unavailable because the order endpoint is not live yet.
+              Admin-initiated grants are available today from Admin → Workspaces → Grant credits.
             </div>
           </div>
         )}
@@ -358,9 +352,7 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
               disabled={!selectedPackageId || submitting}
               data-testid="recharge-submit"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12l5 5L20 6" />
-              </svg>
+              <Check />
             </GlassIconButton>
           )}
         </footer>

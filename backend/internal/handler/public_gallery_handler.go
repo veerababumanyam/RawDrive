@@ -23,7 +23,7 @@ import (
 
 // PublicGalleryHandler handles public gallery viewing (no auth).
 type PublicGalleryHandler struct {
-	gallerySvc *service.GalleryService
+	gallerySvc publicGalleryResolver
 	assetSvc   *service.AssetService
 	shareSvc   *service.ShareLinkService
 	albumSvc   *service.AlbumService
@@ -59,6 +59,12 @@ type PublicGalleryHandler struct {
 	// can override it via WithShareSessionSource to assert expired/wrong-PIN/
 	// exhausted links yield no session.
 	shareSession shareSessionSource
+}
+
+type publicGalleryResolver interface {
+	GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error)
+	GetByBusinessSubdomainAndSlug(ctx context.Context, subdomain, slug string) (*repository.Gallery, error)
+	ListAssets(ctx context.Context, galleryID uuid.UUID) ([]repository.GalleryAsset, error)
 }
 
 // shareSessionSource is the subset of ShareLinkService the public handler needs
@@ -122,7 +128,7 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	return assets, rows.Err()
 }
 
-func NewPublicGalleryHandler(gs *service.GalleryService, as *service.AssetService, ss *service.ShareLinkService) *PublicGalleryHandler {
+func NewPublicGalleryHandler(gs publicGalleryResolver, as *service.AssetService, ss *service.ShareLinkService) *PublicGalleryHandler {
 	h := &PublicGalleryHandler{gallerySvc: gs, assetSvc: as, shareSvc: ss}
 	// Default the share-session seam to the concrete service. A nil *ShareLinkService
 	// stored in an interface is still non-nil, so tryBindShareSession guards on
@@ -477,6 +483,10 @@ func publicStudioSubdomainURL(subdomain string) string {
 	return "https://" + subdomain + ".rawdrive.in"
 }
 
+const publicStudioSafeGalleryPredicate = `
+		  AND (g.password_hash IS NULL OR g.password_hash = '')
+		  AND LOWER(COALESCE(NULLIF(BTRIM(g.access_mode), ''), 'private')) = 'public'`
+
 // GetStudioLanding handles GET /api/v1/public/studios/{subdomain}.
 // It exposes public-safe business profile fields plus published gallery cards
 // for the workspace encoded in `<business_profile_slug>-<business_unique_code>`.
@@ -636,7 +646,7 @@ func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context,
 		  AND g.is_published = true
 		  AND (g.status IS NULL OR g.status <> 'archived')
 		  AND g.archived_at IS NULL
-		  AND (g.expires_at IS NULL OR g.expires_at > now())
+		  AND (g.expires_at IS NULL OR g.expires_at > now())`+publicStudioSafeGalleryPredicate+`
 		ORDER BY COALESCE(g.published_at, g.created_at) DESC, g.created_at DESC
 		LIMIT 60`,
 		workspaceID,
@@ -1107,6 +1117,9 @@ func (h *PublicGalleryHandler) GetBranding(w http.ResponseWriter, r *http.Reques
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 		return
 	}
+	if !h.gateGalleryAccess(w, r, gallery) {
+		return
+	}
 
 	tier := h.lookupWorkspaceTier(r.Context(), gallery.WorkspaceID)
 	workspaceBranding := h.lookupWorkspaceBranding(r.Context(), gallery.WorkspaceID)
@@ -1215,14 +1228,17 @@ func (h *PublicGalleryHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Re
 		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
 		return
 	}
-	if h.assetSvc == nil || h.pool == nil {
-		http.Error(w, `{"error":"branding logo unavailable"}`, http.StatusServiceUnavailable)
-		return
-	}
 
 	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
 		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
+	}
+	if !h.gateGalleryAccess(w, r, gallery) {
+		return
+	}
+	if h.assetSvc == nil || h.pool == nil {
+		http.Error(w, `{"error":"branding logo unavailable"}`, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1278,10 +1294,6 @@ func (h *PublicGalleryHandler) GetGalleryMusic(w http.ResponseWriter, r *http.Re
 		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
 		return
 	}
-	if h.assetSvc == nil || h.pool == nil {
-		http.Error(w, `{"error":"gallery music unavailable"}`, http.StatusServiceUnavailable)
-		return
-	}
 
 	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil {
@@ -1291,6 +1303,10 @@ func (h *PublicGalleryHandler) GetGalleryMusic(w http.ResponseWriter, r *http.Re
 	// Full public access gate — handles nil/unpublished (404), expiry (410),
 	// and private/password/access-mode session requirements.
 	if !h.gateGalleryAccess(w, r, gallery) {
+		return
+	}
+	if h.assetSvc == nil || h.pool == nil {
+		http.Error(w, `{"error":"gallery music unavailable"}`, http.StatusServiceUnavailable)
 		return
 	}
 	if gallery.MusicAssetID == nil {

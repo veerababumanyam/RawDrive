@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { CreditCard } from "@/components/icons";
 import { useCreditBalance } from "@/hooks/useCreditBalance";
 import { RechargeModal } from "./RechargeModal";
 
@@ -44,10 +45,7 @@ export function CreditPill({ className }: CreditPillProps) {
           className="px-3 w-auto rounded-full"
         >
           <span className="flex items-center gap-1.5 text-xs font-medium">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <rect x="3" y="6" width="18" height="12" rx="2" />
-              <path d="M3 10h18" />
-            </svg>
+            <CreditCard className="h-4 w-4" />
             <span data-testid="credit-pill-minutes">{display}</span>
           </span>
         </GlassIconButton>

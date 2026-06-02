@@ -53,7 +53,9 @@ func NewTermsRepo(pool *pgxpool.Pool) *TermsRepo {
 	return &TermsRepo{pool: pool}
 }
 
-// GetActiveVersion returns the single non-revoked terms version, newest first.
+// GetActiveVersion returns the newest non-revoked terms version that is already
+// effective. Future-dated terms can be published ahead of time without gating
+// uploads until their effective_at timestamp arrives.
 // Returns ErrNotFound when no active version is seeded.
 func (r *TermsRepo) GetActiveVersion(ctx context.Context) (*TermsVersion, error) {
 	row := r.pool.QueryRow(ctx, `
@@ -61,7 +63,8 @@ func (r *TermsRepo) GetActiveVersion(ctx context.Context) (*TermsVersion, error)
 		       effective_at, published_at, revoked_at, COALESCE(notes, '')
 		FROM terms_versions
 		WHERE revoked_at IS NULL
-		ORDER BY published_at DESC
+		  AND effective_at <= now()
+		ORDER BY effective_at DESC, published_at DESC
 		LIMIT 1`)
 
 	var v TermsVersion

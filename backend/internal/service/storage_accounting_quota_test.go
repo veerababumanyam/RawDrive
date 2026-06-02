@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -16,13 +18,13 @@ func TestPlanDefaultQuotaBytes(t *testing.T) {
 		tier string
 		want int64
 	}{
-		{"free", 1 << 30},                  // 1 GB
-		{"starter", 30 * (1 << 30)},        // 30 GB
-		{"professional", 300 * (1 << 30)},  // 300 GB
-		{"business", 3 * (1 << 40)},        // 3 TB
-		{"enterprise", 6 * (1 << 40)},      // 6 TB
-		{"", 1 << 30},                      // unknown -> free
-		{"garbage-tier", 1 << 30},          // unknown -> free
+		{"free", 1 << 30},                 // 1 GB
+		{"starter", 30 * (1 << 30)},       // 30 GB
+		{"professional", 300 * (1 << 30)}, // 300 GB
+		{"business", 3 * (1 << 40)},       // 3 TB
+		{"enterprise", 6 * (1 << 40)},     // 6 TB
+		{"", 1 << 30},                     // unknown -> free
+		{"garbage-tier", 1 << 30},         // unknown -> free
 	}
 	for _, c := range cases {
 		got := PlanDefaultQuotaBytes(c.tier)
@@ -50,6 +52,24 @@ func TestErrStorageQuotaExceededIsSentinel(t *testing.T) {
 	other := errors.New("unrelated error")
 	if errors.Is(other, ErrStorageQuotaExceeded) {
 		t.Error("errors.Is must not match an unrelated error")
+	}
+}
+
+func TestEffectiveQuotaPathsIncludeDerivativesReservedAndGrace(t *testing.T) {
+	body, err := os.ReadFile("storage_accounting_service.go")
+	if err != nil {
+		t.Fatalf("read storage accounting service: %v", err)
+	}
+	source := string(body)
+	for _, fragment := range []string{
+		"used_bytes + derivative_bytes + reserved_bytes + $2 <= quota_bytes + grace_bytes",
+		"reserved_bytes = reserved_bytes + $2",
+		"ws.PercentUsed = float64(ws.billableBytes()) / float64(limit) * 100",
+		"usage.TotalBytes + usage.ReservedBytes + additionalBytes",
+	} {
+		if !strings.Contains(source, fragment) {
+			t.Fatalf("effective quota path must contain %q", fragment)
+		}
 	}
 }
 

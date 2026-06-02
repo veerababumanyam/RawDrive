@@ -1,5 +1,5 @@
 import { createElement, type AnchorHTMLAttributes, type ImgHTMLAttributes, type ReactNode } from "react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import DashboardLayout from "../layout";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
@@ -11,8 +11,7 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
  * (Bell, FolderOpen, Home, LogOut, Menu, Search, Settings, User, X) and
  * rendered them in its header (quick-nav, global search, notifications) and
  * user menu. The fix moves the icons layout.tsx itself renders to the
- * project's SF-Symbols system — the shared barrel at `@/components/icons`
- * plus a few locally-declared SF-Symbols glyphs in the shell.
+ * project's SF-Symbols system — the shared barrel at `@/components/icons`.
  *
  * Detection is behavioural, not a source string-match: every glyph
  * `lucide-react` renders carries a `lucide` CSS class on its <svg> root
@@ -81,6 +80,31 @@ function renderDashboardLayout() {
     </ThemeProvider>,
   );
 }
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.includes("/api/v1/auth/me")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          display_name: "Studio User",
+          email: "studio@example.test",
+          plan_tier: "pro",
+        }),
+      } as Response;
+    }
+    if (url.includes("/api/v1/uploads/balance")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ available_credits: 500, low_balance: false }),
+      } as Response;
+    }
+    return { ok: true, status: 200, json: async () => ({ packages: [] }) } as Response;
+  }));
+});
 
 function hasLucideClass(svg: Element): boolean {
   return (svg.getAttribute("class") ?? "").split(/\s+/).includes("lucide");

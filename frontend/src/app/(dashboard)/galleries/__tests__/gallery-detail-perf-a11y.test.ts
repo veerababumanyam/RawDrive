@@ -127,6 +127,25 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("setShowUploadDialog(true)");
   });
 
+  it("gates uploads on terms acceptance and replays the stashed batch after acceptance", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false)");
+    expect(source).toContain("const [termsModalOpen, setTermsModalOpen] = useState(false)");
+    expect(source).toContain("const termsNeedsAcceptanceRef = useRef(false)");
+    expect(source).toContain("const pendingUploadRef = useRef<{ files: File[]; options?: { source?: \"manual\" | \"tethered\" } } | null>(null)");
+    expect(source).toContain("getTermsStatus(token)");
+    expect(source).toContain("onTermsRequired: openTermsModal");
+    expect(source).toContain("if (termsNeedsAcceptanceRef.current) {");
+    expect(source).toContain("pendingUploadRef.current = { files, options }");
+    expect(source).toContain("setTermsModalOpen(true)");
+    expect(source).toContain("termsNeedsAcceptanceRef.current = false");
+    expect(source).toContain("pendingUploadRef.current = null");
+    expect(source).toContain("submitFiles(pending.files, pending.options)");
+    expect(source).toContain("<TermsAcceptanceModal");
+    expect(source).toContain("onAccepted={handleTermsAccepted}");
+  });
+
   it("shows only completed backend WebP as the upload dropzone background", () => {
     const source = readDetailPage();
 

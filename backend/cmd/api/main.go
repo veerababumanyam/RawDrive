@@ -385,7 +385,7 @@ func registerStreamingRechargeRoutes(api, public chi.Router, h *streamingrecharg
 // New uploads write WebP variants with the canonical *_webp names
 // (thumb_sm_webp/thumb_md_webp/thumb_lg_webp). Keep the legacy spellings too
 // so pre-M41 rows that already lived under thumbnails/ continue to render.
-var publicThumbnailKeyRe = regexp.MustCompile(`^thumbnails/[0-9a-fA-F-]{36}/(thumb_sm_webp|thumb_md_webp|thumb_lg_webp|thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
+var publicThumbnailKeyRe = regexp.MustCompile(`^thumbnails/[0-9a-fA-F-]{36}/(thumb_sm_webp|thumb_md_webp|thumb_lg_webp|display_webp|thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
 
 // validateStorageKey rejects storage-proxy keys that attempt path traversal or
 // absolute-path escapes before they ever reach the storage provider. B2/S3 use
@@ -421,7 +421,7 @@ func isPublicThumbnailKey(key string) bool {
 // names derivatives with the owning asset's id (see thumbnail_service.go), so
 // the path segment is the authoritative asset→gallery linkage we resolve on the
 // byte path. (S4-G1.)
-var thumbnailKeyAssetIDRe = regexp.MustCompile(`^thumbnails/([0-9a-fA-F-]{36})/(?:thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
+var thumbnailKeyAssetIDRe = regexp.MustCompile(`^thumbnails/([0-9a-fA-F-]{36})/(?:thumb_sm_webp|thumb_md_webp|thumb_lg_webp|display_webp|thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
 
 // thumbnailAssetID returns the asset UUID a public thumbnail key belongs to, or
 // uuid.Nil + false when the key is not a thumbnail key shape.
@@ -1983,6 +1983,8 @@ func main() {
 			// both the direct multipart upload path (AssetHandler.Upload)
 			// and the chunked upload path (ChunkedUploadHandler.CreateSession).
 			UploadValidationSvc: uploadValidationSvc,
+			// Migration 144 terms gate applies to both upload entry points.
+			TermsGate: termsSvc,
 			// M13 deferred-FR closure (GAL-FR-115 branding, GAL-FR-107/108 FaceID).
 			// ai.NewFaceRepo is stateless — constructing it twice (here and in
 			// the AI init block below) is safe and keeps this block self-contained.

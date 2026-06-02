@@ -27,6 +27,7 @@ import { SinglePhotoView } from "@/components/gallery/single-photo-view";
 
 interface Props {
   params: Promise<{ slug: string; assetId: string }>;
+  searchParams?: Promise<{ ws?: string }>;
 }
 
 function PhotoUnavailable({ title, body }: { title: string; body: string }) {
@@ -40,8 +41,10 @@ function PhotoUnavailable({ title, body }: { title: string; body: string }) {
   );
 }
 
-export default async function PublicSinglePhotoPage({ params }: Props) {
+export default async function PublicSinglePhotoPage({ params, searchParams }: Props) {
   const { slug, assetId } = await params;
+  const query = searchParams ? await searchParams : {};
+  const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
   // S4-G1: forward the gallery-session cookie (when present) so a gated
   // gallery's asset listing + protected image bytes resolve for a recipient
   // who already unlocked the gallery shell in this browser.
@@ -51,8 +54,8 @@ export default async function PublicSinglePhotoPage({ params }: Props) {
   let gallery;
   let assets;
   try {
-    gallery = await getPublicGallery(slug, undefined, sessionToken);
-    assets = await getPublicGalleryAssets(slug, undefined, undefined, sessionToken);
+    gallery = await getPublicGallery(slug, ws, sessionToken);
+    assets = await getPublicGalleryAssets(slug, undefined, ws, sessionToken);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
@@ -87,7 +90,7 @@ export default async function PublicSinglePhotoPage({ params }: Props) {
     );
   }
 
-  const branding = await getPublicGalleryBranding(slug).catch(() => null);
+  const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
 
   return (
     <SinglePhotoView
@@ -100,12 +103,14 @@ export default async function PublicSinglePhotoPage({ params }: Props) {
   );
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata({ params, searchParams }: Props) {
   const { slug, assetId } = await params;
+  const query = searchParams ? await searchParams : {};
+  const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
   try {
     const [gallery, branding] = await Promise.all([
-      getPublicGallery(slug),
-      getPublicGalleryBranding(slug).catch(() => null),
+      getPublicGallery(slug, ws),
+      getPublicGalleryBranding(slug, ws).catch(() => null),
     ]);
     const brandName = branding?.can_customize ? branding.brand_name : "RawDrive";
     return {

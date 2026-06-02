@@ -36,6 +36,14 @@ func NewMessagingHandler(repo *repository.MessagingRepo, modRepo *repository.Mod
 	return &MessagingHandler{repo: repo, modRepo: modRepo, events: events}
 }
 
+func (h *MessagingHandler) requireChannelInWorkspace(r *http.Request, channelID, workspaceID uuid.UUID) bool {
+	if h.repo == nil {
+		return false
+	}
+	ch, err := h.repo.GetChannel(r.Context(), channelID)
+	return err == nil && ch.WorkspaceID == workspaceID
+}
+
 func (h *MessagingHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	wsID, ok := getWorkspaceID(r)
 	if !ok {
@@ -113,9 +121,18 @@ func (h *MessagingHandler) CreateChannel(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *MessagingHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace"}`, http.StatusBadRequest)
+		return
+	}
 	channelID, err := uuid.Parse(chi.URLParam(r, "channelId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+	if !h.requireChannelInWorkspace(r, channelID, wsID) {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
 	}
 	limit := 50
@@ -146,6 +163,10 @@ func (h *MessagingHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	channelID, err := uuid.Parse(chi.URLParam(r, "channelId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+	if !h.requireChannelInWorkspace(r, channelID, wsID) {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
 	}
 	var req struct {
@@ -187,7 +208,8 @@ func (h *MessagingHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	// GAP-001 fix: Publish SSE event for real-time delivery
 	if h.events != nil {
 		eventData, _ := json.Marshal(msg)
-		if err := h.events.Publish(r.Context(), "chat.message."+channelID.String(), eventData); err != nil {
+		subject := fmt.Sprintf("chat.message.%s.%s", wsID.String(), channelID.String())
+		if err := h.events.Publish(r.Context(), subject, eventData); err != nil {
 			log.Printf("messaging: failed to publish chat.message event: %v", err)
 		}
 	}
@@ -214,6 +236,11 @@ func (h *MessagingHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
+	wsID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace"}`, http.StatusBadRequest)
+		return
+	}
 	id, err := uuid.Parse(chi.URLParam(r, "messageId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
@@ -222,6 +249,10 @@ func (h *MessagingHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
 	// Verify sender ownership
 	msg, err := h.repo.GetMessage(r.Context(), id)
 	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+	if msg.WorkspaceID != wsID {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}
@@ -249,6 +280,11 @@ func (h *MessagingHandler) DeleteMessage(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
+	wsID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace"}`, http.StatusBadRequest)
+		return
+	}
 	id, err := uuid.Parse(chi.URLParam(r, "messageId"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
@@ -257,6 +293,10 @@ func (h *MessagingHandler) DeleteMessage(w http.ResponseWriter, r *http.Request)
 	// Verify sender ownership
 	msg, err := h.repo.GetMessage(r.Context(), id)
 	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+	if msg.WorkspaceID != wsID {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}

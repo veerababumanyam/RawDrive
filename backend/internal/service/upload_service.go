@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
@@ -58,6 +59,17 @@ type UploadResult struct {
 	Asset      *repository.Asset
 	StorageKey string
 	SHA256     string
+}
+
+// InitialAssetStatus returns the first processing state for a newly persisted
+// asset. Raster photo uploads need the derivative worker; non-image uploads
+// such as slideshow audio are already usable once stored and must not be fed
+// into the image thumbnail pipeline.
+func InitialAssetStatus(contentType string) string {
+	if strings.HasPrefix(strings.ToLower(contentType), "image/") {
+		return "processing"
+	}
+	return "ready"
 }
 
 // Upload stores a file and creates an asset record.
@@ -115,7 +127,7 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadR
 		SizeBytes:         input.SizeBytes,
 		StorageKey:        storageKey,
 		StorageDriver:     "r2",
-		Status:            "processing",
+		Status:            InitialAssetStatus(input.ContentType),
 		UploadedBy:        &input.UploadedBy,
 		ExifData:          map[string]interface{}{},
 		ThumbnailURLs:     map[string]string{},

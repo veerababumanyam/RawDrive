@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 import { acceptTerms, getCurrentTerms, type TermsCurrent } from "@/lib/api/legal";
+import { XMark } from "@/components/icons";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 
 interface TermsAcceptanceModalProps {
   open: boolean;
@@ -102,21 +104,16 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
               Before you upload, please review and accept how content and copyright are handled on RawDrive.
             </p>
           </div>
-          {/* Token-surface close button (mirrors RechargeModal): GlassIconButton
-              variants are tuned for dark backdrops and render near-invisible on
-              the light liquid-glass modal surface, so this uses semantic tokens
-              for guaranteed contrast across all three themes. */}
-          <button
+          <GlassIconButton
             type="button"
-            aria-label="Close"
-            title="Close"
+            label="Close terms modal"
+            size="sm"
+            variant="ghost"
             onClick={onCancel}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="shrink-0 bg-surface-container-high text-text-secondary hover:bg-surface-container-highest hover:text-text-primary"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="h-5 w-5">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+            <XMark />
+          </GlassIconButton>
         </header>
 
         {/* Operative terms text — scrollable so the user can read the full
