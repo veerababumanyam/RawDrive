@@ -1,17 +1,6 @@
-# Disaster Recovery from R2 Backup
+# Disaster Recovery from B2 Backup
 
-> **SUPERSEDED 2026-05-18:** RawDrive switched its managed storage and backup
-> destination from Cloudflare R2 to Backblaze B2. This document remains for
-> historical reference of the April 2026 bootstrap procedure.
-> **Follow-up needed (not yet written):** `disaster-recovery-from-b2.md` —
-> the same procedure adapted for the B2 endpoint
-> (`https://s3.us-east-005.backblazeb2.com`), the new `B2_KEY_ID` /
-> `B2_APPLICATION_KEY` credentials, and the production bucket name.
-> Until that doc lands, treat the steps below as the operational template,
-> swapping every R2 reference for the B2 equivalent. The BOOTSTRAP-KNOWN-ISSUES
-> R2-creds-DEAD warning is also obsolete — R2 is no longer in the data path.
-
-**When to use:** Both `.46` primary AND `.44` replica are gone. You need to restore from the nightly backup (now on B2) to a fresh VPS.
+**When to use:** Both `.46` primary AND `.44` replica are gone. You need to restore from the nightly encrypted Backblaze B2 backup to a fresh VPS.
 
 **RTO:** 30–60 minutes.
 **RPO:** ≤24 hours (age of last nightly dump).
@@ -41,17 +30,17 @@ do
 done
 ```
 
-### 3. Configure rclone with CURRENT (not dead) R2 credentials
+### 3. Configure rclone with Backblaze B2 credentials
 
 ```bash
 ssh root@<NEW_IP> 'cat > /root/.config/rclone/rclone.conf' <<RCLONE
-[r2]
+[b2]
 type = s3
-provider = Cloudflare
-access_key_id = <CURRENT_R2_KEY>
-secret_access_key = <CURRENT_R2_SECRET>
-endpoint = https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
-region = auto
+provider = Other
+access_key_id = <B2_KEY_ID>
+secret_access_key = <B2_APPLICATION_KEY>
+endpoint = <B2_ENDPOINT>
+region = <B2_REGION>
 acl = private
 RCLONE
 ssh root@<NEW_IP> 'chmod 600 /root/.config/rclone/rclone.conf'
@@ -60,8 +49,8 @@ ssh root@<NEW_IP> 'chmod 600 /root/.config/rclone/rclone.conf'
 ### 4. Pull the latest encrypted backup
 
 ```bash
-LATEST=$(ssh root@<NEW_IP> 'rclone lsf r2:rawdrive-backups/daily/ --include "*.dump.gpg" | sort | tail -1')
-ssh root@<NEW_IP> "rclone cat r2:rawdrive-backups/daily/$LATEST > /tmp/restore.dump.gpg"
+LATEST=$(ssh root@<NEW_IP> 'rclone lsf b2:rawdrive-backups/daily/ --include "*.dump.gpg" | sort | tail -1')
+ssh root@<NEW_IP> "rclone cat b2:rawdrive-backups/daily/$LATEST > /tmp/restore.dump.gpg"
 ```
 
 ### 5. Decrypt with the backup passphrase
@@ -87,8 +76,8 @@ Follow `postgres-failover.md` Step 3 with the new VPS IP.
 ### 8. Verify
 
 ```bash
-curl -fsS https://api.rawdrive.in/health
-# Expected: {"status":"ok"}
+curl -fsS https://api.rawdrive.in/health/deep
+# Expected: {"status":"healthy", ...}
 ```
 
 ### 9. Cleanup and start new replication

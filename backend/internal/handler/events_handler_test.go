@@ -1,6 +1,10 @@
 package handler
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestSSEEventType_MapsWorkspaceScopedSubjectsToClientEvents(t *testing.T) {
 	tests := []struct {
@@ -18,5 +22,19 @@ func TestSSEEventType_MapsWorkspaceScopedSubjectsToClientEvents(t *testing.T) {
 				t.Fatalf("sseEventType(%q) = %q, want %q", tt.subject, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEventsHandlerAuthDoesNotReadBearerTokenFromQuery(t *testing.T) {
+	source, err := os.ReadFile("events_handler.go")
+	if err != nil {
+		t.Fatalf("read events_handler.go: %v", err)
+	}
+	body := string(source)
+	if !strings.Contains(body, "auth.AccessTokenFromRequest") {
+		t.Fatal("events stream must authenticate via Authorization/cookie helper")
+	}
+	if strings.Contains(body, `r.URL.Query().Get("token")`) {
+		t.Fatal("events stream must not accept bearer access tokens from query strings")
 	}
 }

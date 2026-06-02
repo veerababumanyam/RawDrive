@@ -35,23 +35,42 @@ describe("BusinessProfilePage studio identity", () => {
     render(<BusinessProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Business Profile" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Business Profile" }),
+      ).toBeInTheDocument();
     });
 
     expect(screen.getByLabelText(/public brand name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/brand accent color/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/show studio branding on public galleries/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /upload studio logo/i })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /kaveri stories logo preview/i })).toHaveAttribute(
+    expect(
+      screen.getByLabelText(/show studio branding on public galleries/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /upload studio logo/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: /kaveri stories logo preview/i }),
+    ).toHaveAttribute(
       "src",
-      expect.stringContaining("/storage/workspaces/logo.webp?token=token"),
+      expect.stringContaining("/storage/workspaces/logo.webp"),
     );
-    expect(screen.getByRole("link", { name: "https://kaveri-stories-a1b2c3d4.rawdrive.in" })).toHaveAttribute(
-      "href",
-      "https://kaveri-stories-a1b2c3d4.rawdrive.in",
-    );
+    expect(
+      screen
+        .getByRole("img", { name: /kaveri stories logo preview/i })
+        .getAttribute("src"),
+    ).not.toContain("token=");
+    expect(
+      screen.getByRole("link", {
+        name: "https://kaveri-stories-a1b2c3d4.rawdrive.in",
+      }),
+    ).toHaveAttribute("href", "https://kaveri-stories-a1b2c3d4.rawdrive.in");
 
-    for (const preview of ["Gallery preview", "Invoice preview", "Email signature", "Share card"]) {
+    for (const preview of [
+      "Gallery preview",
+      "Invoice preview",
+      "Email signature",
+      "Share card",
+    ]) {
       expect(screen.getByText(preview)).toBeInTheDocument();
     }
   });

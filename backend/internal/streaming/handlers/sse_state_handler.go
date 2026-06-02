@@ -37,12 +37,11 @@ type SSEStateFeatureFlag interface {
 
 // SSEStateHandler serves GET /api/v1/public/streams/{streamID}/state.
 //
-// Wire note: EventSource (the browser API) cannot set Authorization headers,
-// so the viewer access JWT is accepted both via the Authorization header
-// (for server-to-server probes) and via ?access_token=<jwt> query param.
-// The handler validates the token against the stream id in the URL, subscribes
-// to the in-process StatePusher, and forwards state events + heartbeats until
-// the request context is cancelled.
+// Wire note: the RawDrive frontend uses fetch-based SSE so the viewer access
+// JWT stays in the Authorization header instead of the URL. The handler
+// validates the token against the stream id in the URL, subscribes to the
+// in-process StatePusher, and forwards state events + heartbeats until the
+// request context is cancelled.
 type SSEStateHandler struct {
 	Parser ViewerTokenParser
 	Pusher SSEStatePusher
@@ -137,9 +136,7 @@ func (h *SSEStateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// extractViewerToken pulls the viewer access JWT from either the
-// Authorization header or the ?access_token= query param. EventSource in
-// browsers cannot set headers, so the query-param fallback is required.
+// extractViewerToken pulls the viewer access JWT from the Authorization header.
 func extractViewerToken(r *http.Request) string {
 	if auth := r.Header.Get("Authorization"); auth != "" {
 		const prefix = "Bearer "
@@ -147,7 +144,7 @@ func extractViewerToken(r *http.Request) string {
 			return strings.TrimSpace(auth[len(prefix):])
 		}
 	}
-	return strings.TrimSpace(r.URL.Query().Get("access_token"))
+	return ""
 }
 
 // writeSSEEvent serialises a StateEvent into the SSE wire format.

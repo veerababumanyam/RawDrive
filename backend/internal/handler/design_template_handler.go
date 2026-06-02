@@ -20,6 +20,16 @@ func NewDesignTemplateHandler(svc *service.DesignTemplateService) *DesignTemplat
 	return &DesignTemplateHandler{svc: svc}
 }
 
+func designTemplateWorkspaceID(r *http.Request) (uuid.UUID, bool) {
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims == nil {
+		return uuid.Nil, false
+	}
+	wsIDStr, _ := claims["workspace_id"].(string)
+	wsID, err := uuid.Parse(wsIDStr)
+	return wsID, err == nil && wsID != uuid.Nil
+}
+
 // CreateTemplate handles POST /api/v1/galleries/templates.
 func (h *DesignTemplateHandler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.JWTClaimsFromContext(r.Context())
@@ -28,9 +38,17 @@ func (h *DesignTemplateHandler) CreateTemplate(w http.ResponseWriter, r *http.Re
 		return
 	}
 	wsIDStr, _ := claims["workspace_id"].(string)
-	wsID, _ := uuid.Parse(wsIDStr)
+	wsID, err := uuid.Parse(wsIDStr)
+	if err != nil || wsID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 	userIDStr, _ := claims["user_id"].(string)
-	userID, _ := uuid.Parse(userIDStr)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil || userID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		Name        string                 `json:"name"`
@@ -55,13 +73,11 @@ func (h *DesignTemplateHandler) CreateTemplate(w http.ResponseWriter, r *http.Re
 
 // ListTemplates handles GET /api/v1/galleries/templates.
 func (h *DesignTemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.JWTClaimsFromContext(r.Context())
-	if claims == nil {
+	wsID, ok := designTemplateWorkspaceID(r)
+	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	wsIDStr, _ := claims["workspace_id"].(string)
-	wsID, _ := uuid.Parse(wsIDStr)
 
 	templates, err := h.svc.ListTemplates(r.Context(), wsID)
 	if err != nil {
@@ -75,13 +91,19 @@ func (h *DesignTemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Req
 
 // GetTemplate handles GET /api/v1/galleries/templates/{id}.
 func (h *DesignTemplateHandler) GetTemplate(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := designTemplateWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid template ID"}`, http.StatusBadRequest)
 		return
 	}
 
-	t, err := h.svc.GetTemplate(r.Context(), id)
+	t, err := h.svc.GetTemplateForWorkspace(r.Context(), wsID, id)
 	if err != nil {
 		http.Error(w, `{"error":"failed to get template"}`, http.StatusInternalServerError)
 		return
@@ -97,6 +119,12 @@ func (h *DesignTemplateHandler) GetTemplate(w http.ResponseWriter, r *http.Reque
 
 // UpdateTemplate handles PUT /api/v1/galleries/templates/{id}.
 func (h *DesignTemplateHandler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := designTemplateWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid template ID"}`, http.StatusBadRequest)
@@ -113,7 +141,7 @@ func (h *DesignTemplateHandler) UpdateTemplate(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.svc.UpdateTemplate(r.Context(), id, req.Name, req.Description, req.Config); err != nil {
+	if err := h.svc.UpdateTemplateForWorkspace(r.Context(), wsID, id, req.Name, req.Description, req.Config); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
@@ -124,13 +152,19 @@ func (h *DesignTemplateHandler) UpdateTemplate(w http.ResponseWriter, r *http.Re
 
 // DeleteTemplate handles DELETE /api/v1/galleries/templates/{id}.
 func (h *DesignTemplateHandler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := designTemplateWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid template ID"}`, http.StatusBadRequest)
 		return
 	}
 
-	if err := h.svc.DeleteTemplate(r.Context(), id); err != nil {
+	if err := h.svc.DeleteTemplateForWorkspace(r.Context(), wsID, id); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
@@ -141,13 +175,19 @@ func (h *DesignTemplateHandler) DeleteTemplate(w http.ResponseWriter, r *http.Re
 
 // RestoreTemplate handles POST /api/v1/galleries/templates/{id}/restore.
 func (h *DesignTemplateHandler) RestoreTemplate(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := designTemplateWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid template ID"}`, http.StatusBadRequest)
 		return
 	}
 
-	if err := h.svc.RestoreTemplate(r.Context(), id); err != nil {
+	if err := h.svc.RestoreTemplateForWorkspace(r.Context(), wsID, id); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
@@ -158,6 +198,12 @@ func (h *DesignTemplateHandler) RestoreTemplate(w http.ResponseWriter, r *http.R
 
 // ApplyTemplate handles POST /api/v1/galleries/{id}/apply-template.
 func (h *DesignTemplateHandler) ApplyTemplate(w http.ResponseWriter, r *http.Request) {
+	wsID, ok := designTemplateWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery ID"}`, http.StatusBadRequest)
@@ -177,7 +223,7 @@ func (h *DesignTemplateHandler) ApplyTemplate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.svc.ApplyTemplate(r.Context(), galleryID, templateID); err != nil {
+	if err := h.svc.ApplyTemplateForWorkspace(r.Context(), wsID, galleryID, templateID); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}

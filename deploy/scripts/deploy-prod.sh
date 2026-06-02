@@ -54,7 +54,7 @@ SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_H
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="docker-compose.prod-app.yml"
 DEPLOY_DIR="/opt/rawdrive/app/deploy"
-HEALTH_URL="http://127.0.0.1:8080/health"
+HEALTH_URL="http://127.0.0.1:8080/health/deep"
 HEALTH_RETRIES=30
 HEALTH_INTERVAL=5
 

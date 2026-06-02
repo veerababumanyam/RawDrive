@@ -157,6 +157,17 @@ func refreshCookieFromResponse(t *testing.T, resp *http.Response) *http.Cookie {
 	return nil
 }
 
+func accessCookieFromResponse(t *testing.T, resp *http.Response) *http.Cookie {
+	t.Helper()
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == auth.AccessTokenCookieName {
+			return cookie
+		}
+	}
+	t.Fatalf("expected %s cookie in response", auth.AccessTokenCookieName)
+	return nil
+}
+
 func oauthStateCookie(value string) *http.Cookie {
 	return &http.Cookie{
 		Name:  "rawdrive_oauth_state",
@@ -651,6 +662,10 @@ func TestVerifyOTPHandler_Success(t *testing.T) {
 	assert.NotEmpty(t, result["access_token"])
 	assert.Empty(t, result["refresh_token"], "refresh token must not be returned in JSON")
 	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
+	accessCookie := accessCookieFromResponse(t, resp)
+	assert.Equal(t, result["access_token"], accessCookie.Value)
+	assert.True(t, accessCookie.HttpOnly)
+	assert.Equal(t, http.SameSiteStrictMode, accessCookie.SameSite)
 }
 
 func TestVerifyOTPHandler_WrongCode(t *testing.T) {
@@ -1117,6 +1132,7 @@ func TestRefreshTokenHandler_Success(t *testing.T) {
 	assert.NotEmpty(t, result["access_token"])
 	assert.Empty(t, result["refresh_token"], "rotated refresh token must stay in HttpOnly cookie")
 	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
+	assert.Equal(t, result["access_token"], accessCookieFromResponse(t, resp).Value)
 }
 
 func TestRefreshTokenHandler_LegacyBodyFallbackDoesNotReturnRefreshToken(t *testing.T) {
@@ -1201,6 +1217,7 @@ func TestLogoutHandler_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	assert.Equal(t, -1, refreshCookieFromResponse(t, resp).MaxAge)
+	assert.Equal(t, -1, accessCookieFromResponse(t, resp).MaxAge)
 }
 
 // ─────────────────────────── F-011: MFA preserved across post-onboarding refresh ───────────────────────────

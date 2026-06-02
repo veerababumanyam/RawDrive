@@ -1221,7 +1221,7 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		ContentType:       row.ContentType,
 		SizeBytes:         row.TotalSize,
 		StorageKey:        storageKey,
-		StorageDriver:     "r2",
+		StorageDriver:     "s3",
 		Status:            assetStatus,
 		UploadedBy:        uuidPtr(row.UserID),
 		ExifData:          sourceMetadata,

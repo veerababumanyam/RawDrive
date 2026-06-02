@@ -17,6 +17,12 @@ func TestStorageProxyScopesAuthenticatedKeysToWorkspace(t *testing.T) {
 	if !strings.Contains(handler, "claims, err := jwtSvc.ParseAccessToken") {
 		t.Fatalf("storage proxy must retain parsed JWT claims instead of discarding them")
 	}
+	if !strings.Contains(handler, "auth.AccessTokenFromRequest") {
+		t.Fatalf("storage proxy must read bearer tokens from Authorization/cookie helper")
+	}
+	if strings.Contains(handler, `r.URL.Query().Get("token")`) {
+		t.Fatalf("storage proxy must not accept bearer access tokens from query strings")
+	}
 	if !strings.Contains(handler, "storageKeyBelongsToWorkspace") {
 		t.Fatalf("storage proxy must verify authenticated object keys belong to claims.WorkspaceID")
 	}

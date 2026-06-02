@@ -38,15 +38,10 @@ import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url
 //      back to other workspace pages stays one click away.
 
 // Storage paths returned by the owner asset endpoint (e.g. display_webp.webp)
-// are JWT-protected — see dashboard-ui.ts getStorageBackedUrl. The browser
-// can't attach an Authorization header to a plain <img src>, so we pre-bake
-// the access token into the URL as a `?token=` query param at the page
-// boundary. The public viewer doesn't need this because thumb_*_webp variants
-// live under the public storage prefix and display_webp is only fetched
-// inside the lightbox via authenticated fetches. For the owner preview we
-// bake every variant so all surfaces (hero cover, grid tiles, lightbox) work
-// without modifying the shared Hero/Grid components.
-function bakeStorageTokens(
+// may be bare storage keys. Normalize them through getStorageBackedUrl so all
+// surfaces (hero cover, grid tiles, lightbox) receive API /storage/* URLs while
+// auth rides on the HttpOnly access-token cookie.
+function normalizeStorageUrls(
   urls: Record<string, string> | undefined | null,
   token: string,
 ): Record<string, string> {
@@ -73,7 +68,7 @@ function mapAssetToPublic(
     width: a.width,
     height: a.height,
     blurhash: a.blurhash,
-    thumbnail_urls: bakeStorageTokens(a.thumbnail_urls, token),
+    thumbnail_urls: normalizeStorageUrls(a.thumbnail_urls, token),
     is_encrypted: a.is_encrypted,
     media_encryption: a.media_encryption,
     sort_order: record.sort_order,
@@ -112,10 +107,12 @@ export default function GalleryPreviewPage({
   // here. Without this, the hero falls through to picking display_webp from
   // the asset list, which 401s in the broken-image-hides-overlay pattern
   // that hid the design title + subtitle in the first reported bug.
-  const [resolvedCoverThumbnails, setResolvedCoverThumbnails] = useState<
-    Record<string, string> | null
-  >(null);
-  const [resolvedCoverAsset, setResolvedCoverAsset] = useState<PublicAsset | null>(null);
+  const [resolvedCoverThumbnails, setResolvedCoverThumbnails] = useState<Record<
+    string,
+    string
+  > | null>(null);
+  const [resolvedCoverAsset, setResolvedCoverAsset] =
+    useState<PublicAsset | null>(null);
   const [branding, setBranding] = useState<GalleryBranding | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,11 +177,10 @@ export default function GalleryPreviewPage({
           typeof galleryRow.settings === "object" &&
           (galleryRow.settings as Record<string, unknown>)["design_config"]
             ? (
-                ((galleryRow.settings as Record<string, unknown>)[
+                (galleryRow.settings as Record<string, unknown>)[
                   "design_config"
-                ] as { cover?: { assetId?: string } } | undefined)?.cover
-                  ?.assetId
-              )
+                ] as { cover?: { assetId?: string } } | undefined
+              )?.cover?.assetId
             : undefined;
         const coverAssetId = designAssetId || galleryRow.cover_asset_id;
         if (coverAssetId) {
@@ -205,7 +201,7 @@ export default function GalleryPreviewPage({
               if (!cancelled) {
                 setResolvedCoverAsset(mappedCoverAsset);
                 setResolvedCoverThumbnails(
-                  bakeStorageTokens(coverAsset.thumbnail_urls, token),
+                  normalizeStorageUrls(coverAsset.thumbnail_urls, token),
                 );
               }
             } catch {
@@ -230,7 +226,9 @@ export default function GalleryPreviewPage({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load gallery.");
+          setError(
+            err instanceof Error ? err.message : "Failed to load gallery.",
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -270,9 +268,16 @@ export default function GalleryPreviewPage({
   if (error || !gallery) {
     return (
       <div className="surface-panel mx-auto mt-6 max-w-2xl space-y-3 p-6 text-center">
-        <h1 className="text-lg font-semibold text-text-primary">Can&apos;t preview gallery</h1>
-        <p className="text-sm text-text-secondary">{error || "Gallery not found."}</p>
-        <Link href="/galleries" className="btn-primary inline-block px-4 py-2 text-sm">
+        <h1 className="text-lg font-semibold text-text-primary">
+          Can&apos;t preview gallery
+        </h1>
+        <p className="text-sm text-text-secondary">
+          {error || "Gallery not found."}
+        </p>
+        <Link
+          href="/galleries"
+          className="btn-primary inline-block px-4 py-2 text-sm"
+        >
           Back to galleries
         </Link>
       </div>

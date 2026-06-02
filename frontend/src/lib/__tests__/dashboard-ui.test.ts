@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { assetIsProcessing, getAssetPreviewUrl, getStorageBackedUrl } from "../dashboard-ui";
+import {
+  assetIsProcessing,
+  getAssetPreviewUrl,
+  getStorageBackedUrl,
+} from "../dashboard-ui";
 
 describe("assetIsProcessing — gallery skeleton predicate", () => {
   // Locks the predicate used by gallery/[id]/page.tsx to choose
@@ -36,8 +40,12 @@ describe("assetIsProcessing — gallery skeleton predicate", () => {
     // Worker writes thumbnail_urls and status in two separate UPDATEs;
     // a listing fetch can land between them. Empty-thumbs is the
     // load-bearing signal.
-    expect(assetIsProcessing({ status: "ready", thumbnail_urls: {} })).toBe(true);
-    expect(assetIsProcessing({ status: "ready", thumbnail_urls: null })).toBe(true);
+    expect(assetIsProcessing({ status: "ready", thumbnail_urls: {} })).toBe(
+      true,
+    );
+    expect(assetIsProcessing({ status: "ready", thumbnail_urls: null })).toBe(
+      true,
+    );
     expect(assetIsProcessing({ status: "ready" })).toBe(true);
   });
 
@@ -61,31 +69,55 @@ describe("assetIsProcessing — gallery skeleton predicate", () => {
 });
 
 describe("dashboard UI asset URLs", () => {
-  it("prefixes backend storage paths and appends the session token", () => {
-    expect(getStorageBackedUrl("/storage/workspaces/w1/photo.webp", "jwt-token")).toBe(
-      "http://localhost:8080/storage/workspaces/w1/photo.webp?token=jwt-token",
+  it("prefixes backend storage paths without appending bearer access tokens", () => {
+    expect(
+      getStorageBackedUrl("/storage/workspaces/w1/photo.webp", "jwt-token"),
+    ).toBe("http://localhost:8080/storage/workspaces/w1/photo.webp");
+  });
+
+  it("converts bare derivative storage keys into backend storage URLs", () => {
+    expect(
+      getStorageBackedUrl("derivatives/asset-1/display_webp.webp", "jwt-token"),
+    ).toBe(
+      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp",
     );
   });
 
-  it("converts bare derivative storage keys into authenticated backend storage URLs", () => {
-    expect(getStorageBackedUrl("derivatives/asset-1/display_webp.webp", "jwt-token")).toBe(
-      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?token=jwt-token",
-    );
+  it("strips legacy bearer query params from storage URLs", () => {
+    expect(
+      getStorageBackedUrl(
+        "thumbnails/abc/thumb.webp?token=legacy&v=1",
+        "jwt-token",
+      ),
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb.webp?v=1");
+    expect(
+      getStorageBackedUrl(
+        "/storage/thumbnails/abc/thumb.webp?access_token=legacy",
+      ),
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb.webp");
   });
 
   it("does not rewrite app-relative non-storage URLs", () => {
-    expect(getStorageBackedUrl("/api/v1/public/galleries/wedding/branding/logo", "jwt-token")).toBe(
-      "/api/v1/public/galleries/wedding/branding/logo",
-    );
+    expect(
+      getStorageBackedUrl(
+        "/api/v1/public/galleries/wedding/branding/logo",
+        "jwt-token",
+      ),
+    ).toBe("/api/v1/public/galleries/wedding/branding/logo");
   });
 
   it("does not rewrite data or blob URLs", () => {
-    expect(getStorageBackedUrl("data:image/webp;base64,abc", "jwt-token")).toBe("data:image/webp;base64,abc");
-    expect(getStorageBackedUrl("blob:http://localhost/photo", "jwt-token")).toBe("blob:http://localhost/photo");
+    expect(getStorageBackedUrl("data:image/webp;base64,abc", "jwt-token")).toBe(
+      "data:image/webp;base64,abc",
+    );
+    expect(
+      getStorageBackedUrl("blob:http://localhost/photo", "jwt-token"),
+    ).toBe("blob:http://localhost/photo");
   });
 
   it("does not rewrite external presigned URLs", () => {
-    const url = "https://example.r2.cloudflarestorage.com/photo.webp?signature=abc";
+    const url =
+      "https://example.r2.cloudflarestorage.com/photo.webp?signature=abc";
 
     expect(getStorageBackedUrl(url, "jwt-token")).toBe(url);
   });
@@ -101,7 +133,7 @@ describe("dashboard UI asset URLs", () => {
         },
         "jwt-token",
       ),
-    ).toBe("http://localhost:8080/storage/workspaces/w1/photo-small.webp?token=jwt-token");
+    ).toBe("http://localhost:8080/storage/workspaces/w1/photo-small.webp");
   });
 
   it("prefers thumb_md_webp over thumb_sm_webp for gallery tile size", () => {
@@ -148,7 +180,7 @@ describe("dashboard UI asset URLs", () => {
         },
         "jwt-token",
       ),
-    ).toBe("http://localhost:8080/storage/thumbnails/abc/custom-preview.webp?token=jwt-token");
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/custom-preview.webp");
   });
 });
 
@@ -162,40 +194,56 @@ describe("getStorageBackedUrl — gallery-session (?gs=) channel (S4-G1)", () =>
 
   it("appends the gallery-session token as ?gs= for storage paths", () => {
     expect(
-      getStorageBackedUrl("/storage/derivatives/asset-1/display_webp.webp", null, "gs-token"),
-    ).toBe("http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?gs=gs-token");
+      getStorageBackedUrl(
+        "/storage/derivatives/asset-1/display_webp.webp",
+        null,
+        "gs-token",
+      ),
+    ).toBe(
+      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?gs=gs-token",
+    );
   });
 
   it("URL-encodes the gallery-session token", () => {
     expect(
       getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp", null, "a/b+c=="),
-    ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp?gs=a%2Fb%2Bc%3D%3D");
+    ).toBe(
+      "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp?gs=a%2Fb%2Bc%3D%3D",
+    );
   });
 
   it("omits ?gs= when no session token is supplied (open gallery, anonymous bytes)", () => {
     expect(getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp")).toBe(
       "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp",
     );
-    expect(getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp", null, null)).toBe(
-      "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp",
-    );
+    expect(
+      getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp", null, null),
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp");
   });
 
-  it("can carry BOTH the dashboard JWT (?token=) and the gallery session (?gs=)", () => {
+  it("ignores the dashboard JWT argument but can carry the gallery session (?gs=)", () => {
     expect(
-      getStorageBackedUrl("/storage/derivatives/asset-1/display_webp.webp", "jwt-token", "gs-token"),
+      getStorageBackedUrl(
+        "/storage/derivatives/asset-1/display_webp.webp",
+        "jwt-token",
+        "gs-token",
+      ),
     ).toBe(
-      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?token=jwt-token&gs=gs-token",
+      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?gs=gs-token",
     );
   });
 
   it("never appends ?gs= to non-storage, data, blob, or external URLs", () => {
-    expect(getStorageBackedUrl("/api/v1/public/galleries/x/branding", null, "gs-token")).toBe(
-      "/api/v1/public/galleries/x/branding",
-    );
-    expect(getStorageBackedUrl("data:image/webp;base64,abc", null, "gs-token")).toBe(
-      "data:image/webp;base64,abc",
-    );
+    expect(
+      getStorageBackedUrl(
+        "/api/v1/public/galleries/x/branding",
+        null,
+        "gs-token",
+      ),
+    ).toBe("/api/v1/public/galleries/x/branding");
+    expect(
+      getStorageBackedUrl("data:image/webp;base64,abc", null, "gs-token"),
+    ).toBe("data:image/webp;base64,abc");
     const external = "https://example.r2.cloudflarestorage.com/p.webp?sig=abc";
     expect(getStorageBackedUrl(external, null, "gs-token")).toBe(external);
   });

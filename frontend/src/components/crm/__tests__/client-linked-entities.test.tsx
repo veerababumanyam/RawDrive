@@ -17,15 +17,16 @@ describe("GalleryList", () => {
   it("renders linked galleries with navigation and counts", () => {
     render(<GalleryList galleries={galleries} token="jwt-token" />);
 
-    expect(screen.getByRole("link", { name: /anika \+ rohan/i })).toHaveAttribute(
-      "href",
-      "/galleries/gallery-1",
-    );
+    expect(
+      screen.getByRole("link", { name: /anika \+ rohan/i }),
+    ).toHaveAttribute("href", "/galleries/gallery-1");
     expect(screen.getByText("128 photos")).toBeInTheDocument();
     expect(screen.getByText("published")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /anika \+ rohan cover/i })).toHaveAttribute(
+    expect(
+      screen.getByRole("img", { name: /anika \+ rohan cover/i }),
+    ).toHaveAttribute(
       "src",
-      "/storage/thumbs/gallery-1.webp?token=jwt-token",
+      "http://localhost:8080/storage/thumbs/gallery-1.webp",
     );
   });
 

@@ -63,7 +63,9 @@ describe("PhotoLightbox", () => {
 
     fireEvent.click(deleteButton);
 
-    expect(onDeleteRequest).toHaveBeenCalledWith(expect.objectContaining({ id: "asset-delete" }));
+    expect(onDeleteRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "asset-delete" }),
+    );
   });
 
   it("does not render the low-contrast keyboard shortcut footer", () => {
@@ -85,14 +87,18 @@ describe("PhotoLightbox", () => {
     const originalCreateElement = document.createElement.bind(document);
     const createElementSpy = vi
       .spyOn(document, "createElement")
-      .mockImplementation((tagName: string, options?: ElementCreationOptions) => {
-        const element = originalCreateElement(tagName, options);
-        if (tagName.toLowerCase() === "a") {
-          anchors.push(element as HTMLAnchorElement);
-          vi.spyOn(element as HTMLAnchorElement, "click").mockImplementation(() => {});
-        }
-        return element;
-      });
+      .mockImplementation(
+        (tagName: string, options?: ElementCreationOptions) => {
+          const element = originalCreateElement(tagName, options);
+          if (tagName.toLowerCase() === "a") {
+            anchors.push(element as HTMLAnchorElement);
+            vi.spyOn(element as HTMLAnchorElement, "click").mockImplementation(
+              () => {},
+            );
+          }
+          return element;
+        },
+      );
 
     try {
       render(
@@ -107,12 +113,14 @@ describe("PhotoLightbox", () => {
         />,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: /download original/i }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /download original/i }),
+      );
 
       await waitFor(() => expect(anchors).toHaveLength(1));
       expect(anchors[0].download).toBe("DSC_7305.JPG");
       expect(anchors[0].href).toContain("/storage/originals/asset-delete.jpg");
-      expect(anchors[0].href).toContain("token=test-token");
+      expect(anchors[0].href).not.toContain("token=");
       expect(screen.queryByText(/optimized webp/i)).toBeNull();
       expect(screen.queryByText(/thumbnail/i)).toBeNull();
     } finally {

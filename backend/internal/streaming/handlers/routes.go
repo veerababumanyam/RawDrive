@@ -12,14 +12,14 @@ import "github.com/go-chi/chi/v5"
 // being off collapses to 404 without panicking on missing deps.
 type Dependencies struct {
 	// Photographer-facing (authed).
-	Console        *ConsoleHandler
-	StreamCreate   *StreamCreateHandler
-	CreditBalance  *CreditBalanceHandler
-	IngestReveal   *IngestRevealHandler
-	Invite         *InviteHandler
-	LiveConsole    *LiveConsoleHandler
-	Preflight      *PreflightHandler
-	Analytics      *AnalyticsHandler
+	Console       *ConsoleHandler
+	StreamCreate  *StreamCreateHandler
+	CreditBalance *CreditBalanceHandler
+	IngestReveal  *IngestRevealHandler
+	Invite        *InviteHandler
+	LiveConsole   *LiveConsoleHandler
+	Preflight     *PreflightHandler
+	Analytics     *AnalyticsHandler
 
 	// Public (no auth on transport; viewer-session JWT inside handler).
 	PublicShortlink *PublicShortlinkHandler
@@ -93,8 +93,8 @@ func RegisterPublicRoutes(r chi.Router, deps Dependencies) {
 	}
 	if deps.SSEState != nil {
 		// Story 35-2 — viewer SSE state channel. Auth = viewer-session JWT
-		// parsed inside the handler (EventSource accepts the token via
-		// ?access_token= query param since it cannot set headers).
+		// parsed inside the handler from Authorization (frontend uses
+		// fetch-based SSE so the token never enters the URL).
 		r.Get("/api/v1/public/streams/{streamID}/state", deps.SSEState.ServeHTTP)
 	}
 }

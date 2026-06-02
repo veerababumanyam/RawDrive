@@ -319,6 +319,6 @@ func (h *WorkspaceProfileHandler) logoMetadataForAsset(ctx context.Context, work
 		"content_type":   contentType,
 		"size_bytes":     sizeBytes,
 		"storage_key":    storageKey,
-		"storage_driver": "r2",
+		"storage_driver": "s3",
 	}, storageKey, nil
 }

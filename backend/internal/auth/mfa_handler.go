@@ -500,6 +500,7 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
 		return
 	}
+	setAccessTokenCookie(w, r, h.jwt, accessToken)
 	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, mfaVerifyTOTPResponse{
@@ -638,6 +639,7 @@ func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
 		return
 	}
+	setAccessTokenCookie(w, r, h.jwt, accessToken)
 	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, mfaVerifyTOTPResponse{

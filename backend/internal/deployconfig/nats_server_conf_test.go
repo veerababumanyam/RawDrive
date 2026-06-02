@@ -8,10 +8,12 @@
 // could publish/subscribe JetStream subjects, and the cluster port 6222
 // was likewise unauthenticated. The fix adds a client `authorization`
 // block and a `cluster.authorization` block, both interpolating their
-// secret from the nats-server process environment ($NATS_CLIENT_TOKEN
+// secret from the nats-server process environment ($NATS_AUTH_TOKEN
 // and $NATS_CLUSTER_SEED) so no credential is hardcoded in the committed
 // file. These tests fail if either auth block is removed or if a literal
-// secret is hardcoded back in.
+// secret is hardcoded back in. NATS cluster authorization uses
+// user/password auth; `token` is only valid for the client authorization
+// block.
 package deployconfig_test
 
 import (
@@ -54,16 +56,17 @@ func TestF036_NATSClientAuthorizationBlockPresent(t *testing.T) {
 	// A top-level (client) authorization block must exist. The cluster
 	// block has its OWN nested authorization block; we assert on both
 	// occurrences below, but here we require at least one token-based
-	// authorization block bound to the client env var.
-	clientAuth := regexp.MustCompile(`(?s)authorization\s*\{[^}]*token:\s*\$NATS_CLIENT_TOKEN[^}]*\}`)
+	// authorization block bound to the same env var the Go client uses.
+	clientAuth := regexp.MustCompile(`(?s)authorization\s*\{[^}]*token:\s*\$NATS_AUTH_TOKEN[^}]*\}`)
 	assert.Regexp(t, clientAuth, conf,
-		"client port must have an authorization{ token: $NATS_CLIENT_TOKEN } block (F-036)")
+		"client port must have an authorization{ token: $NATS_AUTH_TOKEN } block (F-036)")
 }
 
 // TestF036_NATSClusterAuthorizationConsumesSeed asserts the cluster block
 // finally consumes NATS_CLUSTER_SEED (the audit noted the variable was
 // referenced only in a comment and .env.example, never in any config
-// directive). The cluster authorization token must interpolate the seed.
+// directive). Cluster authorization must use the seed as a route password,
+// and explicit routes must carry the same env reference for outbound auth.
 func TestF036_NATSClusterAuthorizationConsumesSeed(t *testing.T) {
 	conf := natsServerConf(t)
 
@@ -74,6 +77,12 @@ func TestF036_NATSClusterAuthorizationConsumesSeed(t *testing.T) {
 		"cluster block must contain an authorization block (F-036)")
 	assert.Contains(t, loc, "$NATS_CLUSTER_SEED",
 		"cluster authorization must interpolate $NATS_CLUSTER_SEED — the seed must actually be consumed, not just documented (F-036)")
+	assert.Regexp(t, regexp.MustCompile(`(?s)authorization\s*\{[^}]*user:\s*rawdrive_route[^}]*password:\s*\$NATS_CLUSTER_SEED[^}]*\}`), loc,
+		"cluster authorization must use supported user/password auth, not unsupported token auth")
+	assert.Regexp(t, regexp.MustCompile(`nats-route://rawdrive_route:\$NATS_CLUSTER_SEED@`), loc,
+		"explicit cluster routes must include route credentials for outbound route auth")
+	assert.NotRegexp(t, regexp.MustCompile(`(?s)cluster\s*\{[^}]*token:`), loc,
+		"cluster.authorization must not use token auth; NATS route auth supports user/password here")
 }
 
 // braceBlock returns the substring spanning the brace-balanced block that
@@ -110,15 +119,15 @@ func braceBlock(conf, keyword string) string {
 func TestF036_NATSConfHasNoHardcodedSecret(t *testing.T) {
 	conf := natsServerConf(t)
 
-	// Any `token:` line must be followed by a $-prefixed env reference,
-	// never a quoted string or bare literal. Catches an accidental
-	// `token: "abc123"` or `token: deadbeef` regression.
-	tokenLines := regexp.MustCompile(`(?m)^\s*token:\s*(\S+)`)
+	// Any secret-bearing directive must be followed by a $-prefixed env
+	// reference, never a quoted string or bare literal. Catches an
+	// accidental `token: "abc123"` or `password: deadbeef` regression.
+	tokenLines := regexp.MustCompile(`(?m)^\s*(token|password):\s*(\S+)`)
 	matches := tokenLines.FindAllStringSubmatch(conf, -1)
-	require.NotEmpty(t, matches, "expected at least one token: directive")
+	require.NotEmpty(t, matches, "expected at least one secret-bearing directive")
 
 	for _, m := range matches {
-		val := m[1]
+		val := m[2]
 		assert.True(t, len(val) > 0 && val[0] == '$',
 			"token value %q must be an env-var reference ($VAR), never a hardcoded secret (credentials invariant)", val)
 	}

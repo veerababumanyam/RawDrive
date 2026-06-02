@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Nightly Postgres backup → symmetric-GPG-encrypted → Cloudflare R2 via rclone.
+# Nightly Postgres backup → symmetric-GPG-encrypted → Backblaze B2 via rclone.
 # Runs on .46 via cron 0 2 * * *.
 # Exits non-zero on any failure so cron mails root.
 #
-# Security: the R2 API keys in the doc grant read access to this bucket, so
-# an attacker with leaked R2 creds would otherwise walk out with a plaintext
+# Security: the B2 API keys in the doc grant read access to this bucket, so
+# an attacker with leaked B2 creds would otherwise walk out with a plaintext
 # DB dump. Symmetric GPG with a passphrase stored ONLY in
 # /opt/rawdrive/app/.env (BACKUP_GPG_PASSPHRASE) provides a second lock —
-# stealing R2 creds alone is not enough to read the backups.
+# stealing B2 creds alone is not enough to read the backups.
 
 set -euo pipefail
 
 BACKUP_DIR=/opt/rawdrive/backups
-RCLONE_REMOTE="r2:rawdrive-backups"
-RETAIN_DAYS=7  # local only — R2 lifecycle handles longer retention
+RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE:-b2:rawdrive-backups}"
+RETAIN_DAYS=7  # local only — B2 lifecycle handles longer retention
 
 : "${BACKUP_GPG_PASSPHRASE:?BACKUP_GPG_PASSPHRASE not set — source /opt/rawdrive/app/.env before running}"
 
@@ -47,7 +47,7 @@ if [ "$SIZE" -lt 1024 ]; then
 fi
 log "encrypted dump size: $SIZE bytes"
 
-log "uploading to R2: $RCLONE_REMOTE/daily/"
+log "uploading to B2: $RCLONE_REMOTE/daily/"
 rclone copy "$DUMP" "$RCLONE_REMOTE/daily/" --progress
 
 log "verifying remote copy exists"

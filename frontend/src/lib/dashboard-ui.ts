@@ -76,10 +76,15 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
  * and status in two separate UPDATEs, leaving a brief window where a
  * listing fetch could return status="ready" with no thumbnails.
  */
-export function assetIsProcessing(asset: {
-  status?: string;
-  thumbnail_urls?: Record<string, string> | null;
-} | null | undefined): boolean {
+export function assetIsProcessing(
+  asset:
+    | {
+        status?: string;
+        thumbnail_urls?: Record<string, string> | null;
+      }
+    | null
+    | undefined,
+): boolean {
   if (!asset) return true;
   if (asset.status && asset.status !== "ready") return true;
   const thumbs = asset.thumbnail_urls;
@@ -87,34 +92,22 @@ export function assetIsProcessing(asset: {
 }
 
 /**
- * Build an absolute, optionally-authenticated URL for a `/storage/*` byte.
+ * Build an absolute URL for a `/storage/*` byte.
  *
- * Two independent auth tokens can be attached, because the storage proxy on
- * the Go API accepts both:
+ * Dashboard storage auth is cookie/header based: auth handlers set an HttpOnly
+ * access-token cookie for browser subresource requests, while fetch callers can
+ * still use Authorization. Do not append bearer access tokens to storage URLs.
  *
- *   - `token`              → dashboard JWT, appended as `?token=` for the
- *                            owner/workspace-authenticated surfaces.
- *   - `gallerySessionToken`→ S4-G1: the gallery-session token (password- or
- *                            share-PIN-scoped) appended as `?gs=`. REQUIRED for
- *                            protected gallery bytes when the page and the API
- *                            are on different origins (the default split-origin
- *                            deployment): the httpOnly `gallery_session` cookie
- *                            is `SameSite=Strict` on the API origin, so a
- *                            cross-origin <img> request never carries it. The
- *                            `?gs=` query param is the same-origin-independent
- *                            channel the storage proxy reads (see
- *                            cmd/api/main.go authorizeThumbnailByte). For a
- *                            truly same-origin deployment the cookie suffices
- *                            and `gs` is harmlessly redundant.
- *
- * Only ONE of the two should generally be present for a given surface: the
- * dashboard uses `token`; the public viewer uses `gallerySessionToken`.
+ * Public protected-gallery bytes may still carry `gallerySessionToken` as
+ * `?gs=`; that is a gallery-session credential, not the dashboard bearer JWT
+ * this helper's `token` argument used to leak into URLs.
  */
 export function getStorageBackedUrl(
   url: string | undefined | null,
   token?: string | null,
   gallerySessionToken?: string | null,
 ): string {
+  void token;
   if (!url) return "";
 
   if (
@@ -130,15 +123,21 @@ export function getStorageBackedUrl(
     return url;
   }
 
-  const storagePath = url.startsWith("/storage/") ? url : `/storage/${url.replace(/^\/+/, "")}`;
+  const storagePath = url.startsWith("/storage/")
+    ? url
+    : `/storage/${url.replace(/^\/+/, "")}`;
   let absoluteUrl = `${API_BASE}${storagePath}`;
   if (!absoluteUrl.includes("/storage/")) {
     return absoluteUrl;
   }
 
-  if (token && !absoluteUrl.includes("token=")) {
-    const sep = absoluteUrl.includes("?") ? "&" : "?";
-    absoluteUrl = `${absoluteUrl}${sep}token=${encodeURIComponent(token)}`;
+  try {
+    const parsed = new URL(absoluteUrl);
+    parsed.searchParams.delete("token");
+    parsed.searchParams.delete("access_token");
+    absoluteUrl = parsed.toString();
+  } catch {
+    // Keep the best-effort storage URL if URL parsing is unavailable.
   }
 
   if (gallerySessionToken && !absoluteUrl.includes("gs=")) {
@@ -184,7 +183,9 @@ export function getAssetPreviewUrl(
   return getStorageBackedUrl(chosen, token);
 }
 
-function hasWebPDisplayVariant(variants: Record<string, string> | null | undefined): boolean {
+function hasWebPDisplayVariant(
+  variants: Record<string, string> | null | undefined,
+): boolean {
   return Boolean(firstWebPVariant(variants ?? {}));
 }
 

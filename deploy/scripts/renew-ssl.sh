@@ -19,14 +19,14 @@ case "$MODE" in
         docker run --rm \
             -v /etc/letsencrypt:/etc/letsencrypt \
             -v /var/www/certbot:/var/www/certbot \
-            certbot/certbot:latest \
+            certbot/certbot:v5.2.2 \
             renew --webroot --webroot-path=/var/www/certbot --non-interactive
         ;;
     dns-01)
         docker run --rm \
             -v /etc/letsencrypt:/etc/letsencrypt \
             -v /etc/letsencrypt/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro \
-            certbot/certbot:latest \
+            certbot/certbot:v5.2.2 \
             renew --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini --non-interactive
         ;;
     *)

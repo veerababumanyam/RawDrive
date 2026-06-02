@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { listChannels, getMessages, sendMessage, createChannelAuth, type Channel, type Message } from "@/lib/api/messaging";
+import {
+  listChannels,
+  getMessages,
+  sendMessage,
+  createChannelAuth,
+  type Channel,
+  type Message,
+} from "@/lib/api/messaging";
 import {
   listInquiries,
   getInquiryMessages,
@@ -20,21 +27,18 @@ type Tab = "channels" | "inquiries";
 // `javascript:`/`data:` URL that would otherwise execute in the recipient's
 // dashboard origin when the Attachment <a href> is clicked (stored XSS).
 // We use a positive allowlist (https only) — backend storage links are https.
-export function safeAttachmentUrl(url: string | undefined | null): string | null {
+export function safeAttachmentUrl(
+  url: string | undefined | null,
+): string | null {
   if (typeof url !== "string") return null;
   return url.startsWith("https:") ? url : null;
 }
 
 // buildEventStreamUrl assembles the SSE EventSource URL for the chat channel.
-// The JWT access token MUST be URL-encoded (encodeURIComponent) before being
-// placed in the query string — EventSource does not support an Authorization
-// header, so a query-param token is unavoidable, but an un-encoded token can
-// corrupt the query string if the token format ever gains reserved characters
-// and leaks the raw token verbatim into proxy/access logs. This mirrors the
-// encoding already done in use-asset-ready-subscription.ts. `channels=chat` is
-// a static literal and needs no encoding.
-export function buildEventStreamUrl(apiBase: string, token: string): string {
-  return `${apiBase}/api/v1/events/stream?token=${encodeURIComponent(token)}&channels=chat`;
+// Browser auth rides on the HttpOnly access-token cookie; bearer access tokens
+// must not be placed in the query string.
+export function buildEventStreamUrl(apiBase: string): string {
+  return `${apiBase}/api/v1/events/stream?channels=chat`;
 }
 
 function formatTime(iso: string) {
@@ -47,7 +51,10 @@ function formatTime(iso: string) {
 }
 
 function formatShortTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 // ─── InquiryConversation ─────────────────────────────────────────────────────
@@ -127,13 +134,26 @@ function InquiryConversation({
           aria-label="Back to inquiries"
           className="md:hidden h-8 w-8 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-sunken/40 transition-colors"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text-primary truncate">{otherName}</p>
-          <p className="text-xs text-text-secondary capitalize">{inquiry.status} · {formatTime(inquiry.created_at)}</p>
+          <p className="text-sm font-semibold text-text-primary truncate">
+            {otherName}
+          </p>
+          <p className="text-xs text-text-secondary capitalize">
+            {inquiry.status} · {formatTime(inquiry.created_at)}
+          </p>
         </div>
       </div>
 
@@ -145,9 +165,11 @@ function InquiryConversation({
           time={inquiry.created_at}
           isMine={isSender}
           initials={initials(isSender ? "Me" : inquiry.from_user_name, "Me")}
-          extra={inquiry.event_date
-            ? `Event: ${new Date(inquiry.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
-            : undefined}
+          extra={
+            inquiry.event_date
+              ? `Event: ${new Date(inquiry.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+              : undefined
+          }
         />
 
         {/* Thread messages */}
@@ -183,7 +205,10 @@ function InquiryConversation({
             value={msgText}
             onChange={(e) => setMsgText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
             }}
             placeholder="Type a message…"
             rows={1}
@@ -218,20 +243,30 @@ function ChatBubble({
 }) {
   return (
     <div className={`flex gap-2.5 ${isMine ? "flex-row-reverse" : ""}`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-medium ${
-        isMine ? "bg-accent/20 text-accent" : "bg-surface-container-low text-text-secondary"
-      }`}>
+      <div
+        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-medium ${
+          isMine
+            ? "bg-accent/20 text-accent"
+            : "bg-surface-container-low text-text-secondary"
+        }`}
+      >
         {initials}
       </div>
-      <div className={`max-w-[75%] sm:max-w-sm flex flex-col ${isMine ? "items-end" : "items-start"}`}>
-        <div className={`rounded-2xl px-4 py-2.5 text-sm ${
-          isMine
-            ? "bg-accent text-text-inverse rounded-tr-sm"
-            : "bg-surface-container-low text-text-primary rounded-tl-sm"
-        }`}>
+      <div
+        className={`max-w-[75%] sm:max-w-sm flex flex-col ${isMine ? "items-end" : "items-start"}`}
+      >
+        <div
+          className={`rounded-2xl px-4 py-2.5 text-sm ${
+            isMine
+              ? "bg-accent text-text-inverse rounded-tr-sm"
+              : "bg-surface-container-low text-text-primary rounded-tl-sm"
+          }`}
+        >
           <p className="whitespace-pre-wrap break-words">{body}</p>
         </div>
-        <p className="text-xs text-text-tertiary mt-1">{formatShortTime(time)}</p>
+        <p className="text-xs text-text-tertiary mt-1">
+          {formatShortTime(time)}
+        </p>
         {extra && <p className="text-xs text-text-secondary mt-0.5">{extra}</p>}
       </div>
     </div>
@@ -242,7 +277,10 @@ function ChatBubble({
 
 export default function MessagesPage() {
   const token = getStoredAccessToken();
-  const currentUserID = typeof window !== "undefined" ? (getStoredAccessTokenClaims()?.sub ?? "") : "";
+  const currentUserID =
+    typeof window !== "undefined"
+      ? (getStoredAccessTokenClaims()?.sub ?? "")
+      : "";
   const [tab, setTab] = useState<Tab>("channels");
 
   // Channels state
@@ -261,7 +299,8 @@ export default function MessagesPage() {
   // Inquiries state
   const [inquiries, setInquiries] = useState<MarketplaceInquiry[]>([]);
   const [inquiriesLoading, setInquiriesLoading] = useState(false);
-  const [selectedInquiry, setSelectedInquiry] = useState<MarketplaceInquiry | null>(null);
+  const [selectedInquiry, setSelectedInquiry] =
+    useState<MarketplaceInquiry | null>(null);
 
   useEffect(() => {
     listChannels(token)
@@ -269,7 +308,10 @@ export default function MessagesPage() {
         setChannels(chs);
         if (chs.length > 0) setActiveChannel(chs[0].id);
       })
-      .catch((err) => { setError(err?.message || "Failed to load channels"); setChannels([]); })
+      .catch((err) => {
+        setError(err?.message || "Failed to load channels");
+        setChannels([]);
+      })
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -277,13 +319,19 @@ export default function MessagesPage() {
     if (!activeChannel) return;
     getMessages(token, activeChannel)
       .then(setMessages)
-      .catch((err) => { setError(err?.message || "Failed to load messages"); setMessages([]); });
+      .catch((err) => {
+        setError(err?.message || "Failed to load messages");
+        setMessages([]);
+      });
   }, [activeChannel, token]);
 
   useEffect(() => {
     if (!token) return;
     const es = new EventSource(
-      buildEventStreamUrl(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080", token)
+      buildEventStreamUrl(
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080",
+      ),
+      { withCredentials: true },
     );
     es.addEventListener("chat.message", (e) => {
       const msg: Message = JSON.parse(e.data);
@@ -291,7 +339,9 @@ export default function MessagesPage() {
         setMessages((prev) => [...prev, msg]);
       }
     });
-    es.onerror = () => { /* EventSource auto-reconnects */ };
+    es.onerror = () => {
+      /* EventSource auto-reconnects */
+    };
     return () => es.close();
   }, [token, activeChannel]);
 
@@ -304,7 +354,11 @@ export default function MessagesPage() {
     setInquiriesLoading(true);
     listInquiries(token)
       .then(setInquiries)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load inquiries"))
+      .catch((err: unknown) =>
+        setError(
+          err instanceof Error ? err.message : "Failed to load inquiries",
+        ),
+      )
       .finally(() => setInquiriesLoading(false));
   }, [tab, token]);
 
@@ -329,7 +383,10 @@ export default function MessagesPage() {
       <div className="flex h-full">
         <div className="w-72 border-r border-border-default p-4 space-y-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-10 bg-surface-sunken rounded-lg animate-pulse" />
+            <div
+              key={i}
+              className="h-10 bg-surface-sunken rounded-lg animate-pulse"
+            />
           ))}
         </div>
         <div className="flex-1 p-4">
@@ -373,10 +430,14 @@ export default function MessagesPage() {
         {tab === "channels" ? (
           <>
             {/* Channel sidebar — hidden on mobile when a channel is active (future) */}
-            <aside className="w-full md:w-72 md:shrink-0 border-r border-border-default bg-white/[0.02] flex flex-col
-              hidden md:flex">
+            <aside
+              className="w-full md:w-72 md:shrink-0 border-r border-border-default bg-white/[0.02] flex flex-col
+              hidden md:flex"
+            >
               <div className="p-4 border-b border-border-default flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-text-primary">Channels</h2>
+                <h2 className="text-sm font-semibold text-text-primary">
+                  Channels
+                </h2>
                 <button
                   type="button"
                   onClick={() => setShowNewChannel((v) => !v)}
@@ -396,13 +457,20 @@ export default function MessagesPage() {
                     setCreatingChannel(true);
                     setError(null);
                     try {
-                      const ch = await createChannelAuth({ name, channel_type: "group" });
+                      const ch = await createChannelAuth({
+                        name,
+                        channel_type: "group",
+                      });
                       setChannels((prev) => [ch, ...prev]);
                       setActiveChannel(ch.id);
                       setNewChannelName("");
                       setShowNewChannel(false);
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to create channel");
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "Failed to create channel",
+                      );
                     } finally {
                       setCreatingChannel(false);
                     }
@@ -427,7 +495,9 @@ export default function MessagesPage() {
               )}
               <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
                 {channels.length === 0 ? (
-                  <div className="text-center py-8 text-text-secondary text-sm">No channels yet</div>
+                  <div className="text-center py-8 text-text-secondary text-sm">
+                    No channels yet
+                  </div>
                 ) : (
                   channels.map((ch) => (
                     <button
@@ -456,7 +526,9 @@ export default function MessagesPage() {
                 <>
                   <div className="px-5 py-3 border-b border-border-default flex items-center justify-between shrink-0">
                     <h3 className="text-sm font-semibold text-text-primary">
-                      # {channels.find((c) => c.id === activeChannel)?.name || "Channel"}
+                      #{" "}
+                      {channels.find((c) => c.id === activeChannel)?.name ||
+                        "Channel"}
                     </h3>
                   </div>
 
@@ -479,17 +551,31 @@ export default function MessagesPage() {
                                 {msg.sender_id.slice(0, 8)}
                               </span>
                               <span className="text-xs text-text-secondary">
-                                {new Date(msg.inserted_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                                {new Date(msg.inserted_at).toLocaleTimeString(
+                                  "en-IN",
+                                  { hour: "2-digit", minute: "2-digit" },
+                                )}
                               </span>
                               {msg.edited_at && (
-                                <span className="text-xs text-text-secondary">(edited)</span>
+                                <span className="text-xs text-text-secondary">
+                                  (edited)
+                                </span>
                               )}
                             </div>
-                            <p className="text-sm text-text-secondary mt-0.5">{msg.body}</p>
+                            <p className="text-sm text-text-secondary mt-0.5">
+                              {msg.body}
+                            </p>
                             {(() => {
-                              const href = safeAttachmentUrl(msg.attachment_url);
+                              const href = safeAttachmentUrl(
+                                msg.attachment_url,
+                              );
                               return href ? (
-                                <a href={href} className="text-xs text-accent underline mt-1 block" target="_blank" rel="noopener noreferrer">
+                                <a
+                                  href={href}
+                                  className="text-xs text-accent underline mt-1 block"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
                                   Attachment
                                 </a>
                               ) : null;
@@ -535,19 +621,26 @@ export default function MessagesPage() {
             {/* Inquiry list sidebar
                 Mobile: full width, hidden when an inquiry is open
                 Desktop: fixed width, always visible */}
-            <aside className={`
+            <aside
+              className={`
               border-r border-border-default flex flex-col
               w-full md:w-72 md:shrink-0
               ${selectedInquiry ? "hidden md:flex" : "flex"}
-            `}>
+            `}
+            >
               <div className="p-4 border-b border-border-default shrink-0">
-                <h2 className="text-sm font-semibold text-text-primary">Marketplace Inquiries</h2>
+                <h2 className="text-sm font-semibold text-text-primary">
+                  Marketplace Inquiries
+                </h2>
               </div>
               <nav className="flex-1 overflow-y-auto">
                 {inquiriesLoading ? (
                   <div className="p-4 space-y-2">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 bg-surface-sunken rounded-lg animate-pulse" />
+                      <div
+                        key={i}
+                        className="h-14 bg-surface-sunken rounded-lg animate-pulse"
+                      />
                     ))}
                   </div>
                 ) : inquiries.length === 0 ? (
@@ -558,7 +651,9 @@ export default function MessagesPage() {
                   inquiries.map((inq) => {
                     const isSender = inq.from_user_id === currentUserID;
                     const otherName = isSender
-                      ? (inq.to_user_name ?? inq.to_user_email ?? "Photographer")
+                      ? (inq.to_user_name ??
+                        inq.to_user_email ??
+                        "Photographer")
                       : (inq.from_user_name ?? inq.from_user_email ?? "Client");
                     return (
                       <button
@@ -572,16 +667,28 @@ export default function MessagesPage() {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-text-primary truncate">{otherName}</p>
-                          <span className={`status-badge shrink-0 capitalize ${
-                            inq.status === "replied" ? "status-badge--success" :
-                            inq.status === "declined" ? "status-badge--error" :
-                            "status-badge--neutral"
-                          }`}>
-                            {isSender ? (inq.status === "replied" ? "replied" : "sent") : inq.status}
+                          <p className="text-sm font-medium text-text-primary truncate">
+                            {otherName}
+                          </p>
+                          <span
+                            className={`status-badge shrink-0 capitalize ${
+                              inq.status === "replied"
+                                ? "status-badge--success"
+                                : inq.status === "declined"
+                                  ? "status-badge--error"
+                                  : "status-badge--neutral"
+                            }`}
+                          >
+                            {isSender
+                              ? inq.status === "replied"
+                                ? "replied"
+                                : "sent"
+                              : inq.status}
                           </span>
                         </div>
-                        <p className="text-xs text-text-secondary mt-0.5 truncate">{inq.message}</p>
+                        <p className="text-xs text-text-secondary mt-0.5 truncate">
+                          {inq.message}
+                        </p>
                       </button>
                     );
                   })
@@ -592,10 +699,12 @@ export default function MessagesPage() {
             {/* Conversation pane
                 Mobile: full width, hidden when no inquiry selected
                 Desktop: flex-1, always visible */}
-            <div className={`
+            <div
+              className={`
               flex-col flex-1 min-w-0
               ${selectedInquiry ? "flex" : "hidden md:flex"}
-            `}>
+            `}
+            >
               {selectedInquiry ? (
                 <InquiryConversation
                   key={selectedInquiry.id}

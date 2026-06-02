@@ -27,7 +27,7 @@ WORKDIR /app
 # (matches frontend/pnpm-lock.yaml) while picking up every 9.5.x-9.15.x
 # fix. This version MUST stay in sync with the `packageManager` field in
 # frontend/package.json so local dev and CI resolve the identical pnpm.
-RUN npm install -g corepack@latest \
+RUN npm install -g corepack@0.35.0 \
   && corepack enable \
   && corepack prepare pnpm@9.15.9 --activate
 

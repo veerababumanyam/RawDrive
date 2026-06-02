@@ -27,12 +27,13 @@ func NewEventsHandler(broker *EventBroker, jwtSvc auth.JWTService) *EventsHandle
 	return &EventsHandler{broker: broker, jwtSvc: jwtSvc}
 }
 
-// Stream handles GET /events/stream?token={jwt}&channels=chat
-// Auth is via query param because EventSource doesn't support custom headers.
+// Stream handles GET /events/stream?channels=chat.
+// Browser EventSource authenticates with the HttpOnly access-token cookie;
+// server-to-server clients may use Authorization: Bearer.
 func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
-	tokenStr := r.URL.Query().Get("token")
+	tokenStr := auth.AccessTokenFromRequest(r)
 	if tokenStr == "" {
-		sseError(w, http.StatusUnauthorized, "missing token parameter")
+		sseError(w, http.StatusUnauthorized, "missing access token")
 		return
 	}
 

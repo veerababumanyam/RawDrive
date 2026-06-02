@@ -1,9 +1,24 @@
 "use client";
 
-import type { ProfileInvoice, ProfileDeal, ProfileEvent, ProfileGallery, ProfileProject } from "@/lib/api/crm";
+import type {
+  ProfileInvoice,
+  ProfileDeal,
+  ProfileEvent,
+  ProfileGallery,
+  ProfileProject,
+} from "@/lib/api/crm";
 import { cn } from "@/lib/utils";
-import { invoiceStatusClasses, calendarEventClasses } from "@/lib/dashboard-ui";
-import { DEAL_STAGE_CLASS, PROJECT_STATUS_CLASS, getDealStageLabel, getProjectStatusLabel } from "@/lib/crm-taxonomy";
+import {
+  invoiceStatusClasses,
+  calendarEventClasses,
+  getStorageBackedUrl,
+} from "@/lib/dashboard-ui";
+import {
+  DEAL_STAGE_CLASS,
+  PROJECT_STATUS_CLASS,
+  getDealStageLabel,
+  getProjectStatusLabel,
+} from "@/lib/crm-taxonomy";
 
 /**
  * Tabbed lists of invoices, projects, and bookings linked to a client.
@@ -32,13 +47,11 @@ function formatDatetime(iso: string): string {
   });
 }
 
-function authedStorageUrl(url: string | undefined | null, token: string | null): string {
-  if (!url) return "";
-  if (!token) return url;
-  if (!url.includes("/storage/")) return url;
-  if (url.includes("token=")) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}token=${encodeURIComponent(token)}`;
+function authedStorageUrl(
+  url: string | undefined | null,
+  token: string | null,
+): string {
+  return getStorageBackedUrl(url, token);
 }
 
 // ---- Gallery List ----
@@ -84,9 +97,12 @@ export function GalleryList({ galleries, token }: GalleryListProps) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-text-primary text-sm truncate">{gallery.title}</p>
+                <p className="font-medium text-text-primary text-sm truncate">
+                  {gallery.title}
+                </p>
                 <p className="text-xs text-text-tertiary mt-1">
-                  {gallery.photo_count} {gallery.photo_count === 1 ? "photo" : "photos"}
+                  {gallery.photo_count}{" "}
+                  {gallery.photo_count === 1 ? "photo" : "photos"}
                 </p>
               </div>
               <span className="status-badge status-badge--accent capitalize">
@@ -125,14 +141,19 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-text-primary text-sm">{inv.invoice_number}</p>
-              <p className="text-xs text-text-tertiary mt-1">{formatDate(inv.created_at)}</p>
+              <p className="font-medium text-text-primary text-sm">
+                {inv.invoice_number}
+              </p>
+              <p className="text-xs text-text-tertiary mt-1">
+                {formatDate(inv.created_at)}
+              </p>
             </div>
             <div className="text-right">
               <span
                 className={cn(
                   "capitalize",
-                  invoiceStatusClasses[inv.status] || "status-badge status-badge--neutral",
+                  invoiceStatusClasses[inv.status] ||
+                    "status-badge status-badge--neutral",
                 )}
               >
                 {inv.status.replace("_", " ")}
@@ -140,11 +161,12 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
               <p className="text-sm font-medium text-text-primary mt-1">
                 {formatPaisa(inv.total_paisa)}
               </p>
-              {inv.amount_paid_paisa > 0 && inv.amount_paid_paisa < inv.total_paisa && (
-                <p className="text-xs text-text-tertiary">
-                  Paid: {formatPaisa(inv.amount_paid_paisa)}
-                </p>
-              )}
+              {inv.amount_paid_paisa > 0 &&
+                inv.amount_paid_paisa < inv.total_paisa && (
+                  <p className="text-xs text-text-tertiary">
+                    Paid: {formatPaisa(inv.amount_paid_paisa)}
+                  </p>
+                )}
             </div>
           </div>
         </a>
@@ -178,13 +200,19 @@ export function ProjectList({ projects }: ProjectListProps) {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-text-primary text-sm">{project.name}</p>
+              <p className="font-medium text-text-primary text-sm">
+                {project.name}
+              </p>
               <div className="flex items-center gap-2 mt-1">
                 {project.project_type && (
-                  <span className="text-xs text-text-tertiary capitalize">{project.project_type.replaceAll("_", " ")}</span>
+                  <span className="text-xs text-text-tertiary capitalize">
+                    {project.project_type.replaceAll("_", " ")}
+                  </span>
                 )}
                 {project.event_date && (
-                  <span className="text-xs text-text-tertiary">{formatDate(project.event_date)}</span>
+                  <span className="text-xs text-text-tertiary">
+                    {formatDate(project.event_date)}
+                  </span>
                 )}
               </div>
             </div>
@@ -192,7 +220,8 @@ export function ProjectList({ projects }: ProjectListProps) {
               <span
                 className={cn(
                   "capitalize",
-                  PROJECT_STATUS_CLASS[project.status] || "status-badge status-badge--neutral",
+                  PROJECT_STATUS_CLASS[project.status] ||
+                    "status-badge status-badge--neutral",
                 )}
               >
                 {getProjectStatusLabel(project.status)}
@@ -230,13 +259,19 @@ export function DealList({ deals }: DealListProps) {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-text-primary text-sm">{deal.title}</p>
+              <p className="font-medium text-text-primary text-sm">
+                {deal.title}
+              </p>
               <div className="flex items-center gap-2 mt-1">
                 {deal.event_type && (
-                  <span className="text-xs text-text-tertiary capitalize">{deal.event_type}</span>
+                  <span className="text-xs text-text-tertiary capitalize">
+                    {deal.event_type}
+                  </span>
                 )}
                 {deal.event_date && (
-                  <span className="text-xs text-text-tertiary">{formatDate(deal.event_date)}</span>
+                  <span className="text-xs text-text-tertiary">
+                    {formatDate(deal.event_date)}
+                  </span>
                 )}
               </div>
             </div>
@@ -244,7 +279,8 @@ export function DealList({ deals }: DealListProps) {
               <span
                 className={cn(
                   "capitalize",
-                  DEAL_STAGE_CLASS[deal.stage] || "status-badge status-badge--neutral",
+                  DEAL_STAGE_CLASS[deal.stage] ||
+                    "status-badge status-badge--neutral",
                 )}
               >
                 {getDealStageLabel(deal.stage)}
@@ -284,20 +320,25 @@ export function BookingList({ events }: BookingListProps) {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-text-primary text-sm">{evt.title}</p>
+              <p className="font-medium text-text-primary text-sm">
+                {evt.title}
+              </p>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs text-text-tertiary">
                   {formatDatetime(evt.start_at)}
                 </span>
                 {evt.location && (
-                  <span className="text-xs text-text-tertiary">{evt.location}</span>
+                  <span className="text-xs text-text-tertiary">
+                    {evt.location}
+                  </span>
                 )}
               </div>
             </div>
             <span
               className={cn(
                 "capitalize",
-                calendarEventClasses[evt.event_type] || "status-badge status-badge--neutral",
+                calendarEventClasses[evt.event_type] ||
+                  "status-badge status-badge--neutral",
               )}
             >
               {evt.event_type}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,17 @@ func TestSSEState_Unauthenticated_401(t *testing.T) {
 	}
 }
 
+func TestSSEState_DoesNotReadViewerTokenFromQuery(t *testing.T) {
+	source, err := os.ReadFile("sse_state_handler.go")
+	if err != nil {
+		t.Fatalf("read sse_state_handler.go: %v", err)
+	}
+	body := string(source)
+	if strings.Contains(body, `r.URL.Query().Get("access_token")`) {
+		t.Fatal("viewer SSE state must not accept bearer access tokens from query strings")
+	}
+}
+
 func TestSSEState_InvalidToken_401(t *testing.T) {
 	streamID := uuid.New()
 	h := &SSEStateHandler{
@@ -119,7 +131,9 @@ func TestSSEState_InvalidToken_401(t *testing.T) {
 	srv := httptest.NewServer(mountSSE(h))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/v1/public/streams/" + streamID.String() + "/state?access_token=bogus")
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state", nil)
+	req.Header.Set("Authorization", "Bearer bogus")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -142,7 +156,9 @@ func TestSSEState_StreamIDMismatch_404(t *testing.T) {
 	srv := httptest.NewServer(mountSSE(h))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/v1/public/streams/" + streamID.String() + "/state?access_token=ok")
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state", nil)
+	req.Header.Set("Authorization", "Bearer ok")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -162,7 +178,9 @@ func TestSSEState_FeatureFlagOff_404(t *testing.T) {
 	srv := httptest.NewServer(mountSSE(h))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/v1/public/streams/" + streamID.String() + "/state?access_token=ok")
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state", nil)
+	req.Header.Set("Authorization", "Bearer ok")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -186,7 +204,8 @@ func TestSSEState_Success_WritesConnectedEvent_AndHoldsOpen(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET",
-		srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state?access_token=ok", nil)
+		srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state", nil)
+	req.Header.Set("Authorization", "Bearer ok")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET: %v", err)
@@ -284,7 +303,8 @@ func TestSSEState_LastEventID_ForwardedToPusher(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req, _ := http.NewRequestWithContext(ctx, "GET",
-		srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state?access_token=ok", nil)
+		srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state", nil)
+	req.Header.Set("Authorization", "Bearer ok")
 	req.Header.Set("Last-Event-ID", "evt-42")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -323,7 +343,8 @@ func TestSSEState_ContextCancel_Cleanup(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req, _ := http.NewRequestWithContext(ctx, "GET",
-		srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state?access_token=ok", nil)
+		srv.URL+"/api/v1/public/streams/"+streamID.String()+"/state", nil)
+	req.Header.Set("Authorization", "Bearer ok")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET: %v", err)

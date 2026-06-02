@@ -79,20 +79,34 @@ if [ "$PULL" = true ]; then
     build_args+=(--pull)
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+    KNOWN_HOSTS="$DEPLOY_KNOWN_HOSTS"
+elif [ -f "$SCRIPT_DIR/../known_hosts" ]; then
+    KNOWN_HOSTS="$SCRIPT_DIR/../known_hosts"
+else
+    KNOWN_HOSTS="$HOME/.ssh/known_hosts"
+fi
+SSH=(ssh)
+if [ -n "${SSH_KEY:-}" ]; then
+    SSH+=(-i "$SSH_KEY")
+fi
+SSH+=(-o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" -o ConnectTimeout=10)
+
 echo "==> pushing source to $NODE_IP"
 tar "${tar_excludes[@]}" -cf - . \
-    | ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" 'tar -xf - -C /opt/rawdrive/app'
+    | "${SSH[@]}" "root@$NODE_IP" 'tar -xf - -C /opt/rawdrive/app'
 
 echo "==> building images on $NODE_IP"
-ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" \
+"${SSH[@]}" "root@$NODE_IP" \
     "cd /opt/rawdrive/app/deploy && docker compose -f docker-compose.prod-app.yml build ${build_args[*]}"
 
 echo "==> rolling up (respects dependency order: pgbouncer -> migrate -> backend -> frontend -> nginx)"
-ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" \
+"${SSH[@]}" "root@$NODE_IP" \
     'cd /opt/rawdrive/app/deploy && docker compose -f docker-compose.prod-app.yml up -d'
 
 echo "==> verifying health"
-ssh ${SSH_KEY:+-i "$SSH_KEY"} "root@$NODE_IP" 'curl -fsS http://127.0.0.1:8080/health' \
+"${SSH[@]}" "root@$NODE_IP" 'curl -fsS http://127.0.0.1:8080/health/deep' \
     || { echo "backend health check failed on $NODE_IP"; exit 2; }
 
 echo "==> deploy complete: $NODE_IP"

@@ -587,6 +587,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setAccessTokenCookie(w, r, h.jwt, accessToken)
 	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, VerifyOTPResponse{
@@ -663,6 +664,7 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
 	}
+	setAccessTokenCookie(w, r, h.jwt, accessToken)
 	setRefreshTokenCookie(w, r, refreshToken)
 
 	writeJSON(w, http.StatusOK, VerifyOTPResponse{
@@ -967,6 +969,7 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	setAccessTokenCookie(w, r, h.jwt, newAccess)
 	setRefreshTokenCookie(w, r, newRefresh)
 
 	writeJSON(w, http.StatusOK, RefreshResponse{
@@ -981,6 +984,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken := refreshTokenFromRequest(r, req.RefreshToken)
+	clearAccessTokenCookie(w, r)
 	clearRefreshTokenCookie(w, r)
 	if refreshToken == "" {
 		w.WriteHeader(http.StatusNoContent)
@@ -1038,9 +1042,28 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
-const refreshTokenCookieName = "refresh_token"
-const oauthStateCookieName = "rawdrive_oauth_state"
-const mfaChallengeCookieName = "rawdrive_mfa_challenge"
+const (
+	AccessTokenCookieName  = "rawdrive_access_token"
+	refreshTokenCookieName = "refresh_token"
+	oauthStateCookieName   = "rawdrive_oauth_state"
+	mfaChallengeCookieName = "rawdrive_mfa_challenge"
+)
+
+func AccessTokenFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			return strings.TrimSpace(parts[1])
+		}
+	}
+	if cookie, err := r.Cookie(AccessTokenCookieName); err == nil {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return ""
+}
 
 func setOAuthStateCookie(w http.ResponseWriter, r *http.Request, value string, expiresAt time.Time) {
 	maxAge := int(time.Until(expiresAt).Seconds())
@@ -1106,6 +1129,38 @@ func mfaChallengeTokenFromRequest(r *http.Request, fallback string) string {
 		return strings.TrimSpace(cookie.Value)
 	}
 	return ""
+}
+
+func setAccessTokenCookie(w http.ResponseWriter, r *http.Request, jwtSvc JWTService, token string) {
+	maxAge := int((15 * time.Minute).Seconds())
+	if jwtSvc != nil {
+		if claims, err := jwtSvc.ParseAccessToken(r.Context(), token); err == nil && claims != nil && !claims.ExpiresAt.IsZero() {
+			if seconds := int(time.Until(claims.ExpiresAt).Seconds()); seconds > 0 {
+				maxAge = seconds
+			}
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   maxAge,
+	})
+}
+
+func clearAccessTokenCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
 }
 
 func setRefreshTokenCookie(w http.ResponseWriter, r *http.Request, token string) {

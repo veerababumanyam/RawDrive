@@ -11,6 +11,7 @@ import { useAssetReadySubscription } from "../use-asset-ready-subscription";
 
 interface FakeEventSourceMethods {
   url: string;
+  options?: EventSourceInit;
   listeners: Map<string, ((evt: MessageEvent) => void)[]>;
   closed: boolean;
   addEventListener: (type: string, fn: (evt: MessageEvent) => void) => void;
@@ -24,12 +25,14 @@ let openCount = 0;
 
 class FakeEventSource {
   url: string;
+  options?: EventSourceInit;
   listeners = new Map<string, ((evt: MessageEvent) => void)[]>();
   closed = false;
   onerror: ((this: EventSource, ev: Event) => unknown) | null = null;
 
-  constructor(url: string) {
+  constructor(url: string, options?: EventSourceInit) {
     this.url = url;
+    this.options = options;
     openCount += 1;
     lastEventSource = this as unknown as FakeEventSourceMethods;
   }
@@ -97,7 +100,8 @@ describe("useAssetReadySubscription", () => {
     expect(openCount).toBe(1);
     expect(lastEventSource?.url).toMatch(/\/api\/v1\/events\/stream\?/);
     expect(lastEventSource?.url).toMatch(/channels=asset.ready/);
-    expect(lastEventSource?.url).toMatch(/token=jwt-token/);
+    expect(lastEventSource?.url).not.toContain("token=");
+    expect(lastEventSource?.options?.withCredentials).toBe(true);
   });
 
   it("does NOT reconnect when the pending set changes (refs hold the snapshot)", () => {
@@ -187,7 +191,10 @@ describe("useAssetReadySubscription", () => {
     );
 
     act(() => {
-      fireAssetReady({ asset_id: "different-gallery-asset", workspace_id: "ws-1" });
+      fireAssetReady({
+        asset_id: "different-gallery-asset",
+        workspace_id: "ws-1",
+      });
     });
     expect(onReady).not.toHaveBeenCalled();
   });
@@ -209,9 +216,7 @@ describe("useAssetReadySubscription", () => {
     expect(onReady).not.toHaveBeenCalled();
   });
 
-  it("URL-encodes the token (handles tokens containing reserved chars)", () => {
-    // JWT body uses base64url, but the signature portion can include +
-    // and / in some libs. We must not break SSE auth on those tokens.
+  it("does not place reserved-character tokens in the SSE URL", () => {
     renderHook(() =>
       useAssetReadySubscription({
         apiBase: "http://localhost:8081",
@@ -220,6 +225,8 @@ describe("useAssetReadySubscription", () => {
         onAssetReady: () => {},
       }),
     );
-    expect(lastEventSource?.url).toContain("token=abc%2Fdef%2Bghi%3D");
+    expect(lastEventSource?.url).toBe(
+      "http://localhost:8081/api/v1/events/stream?channels=asset.ready",
+    );
   });
 });

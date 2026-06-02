@@ -150,7 +150,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 			r.Post("/{id}/apply-template", templateHandler.ApplyTemplate)
 		}
 		if deps.DesignCollabSvc != nil {
-			collabHandler := NewDesignCollabHandler(deps.DesignCollabSvc)
+			collabHandler := NewDesignCollabHandler(deps.DesignCollabSvc).WithGalleryResolver(deps.GalleryService)
 			r.Post("/{id}/collab/join", collabHandler.JoinSession)
 			r.Post("/{id}/collab/leave", collabHandler.LeaveSession)
 			r.Post("/{id}/collab/lock", collabHandler.AcquireLock)

@@ -126,7 +126,7 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadR
 		ContentType:       input.ContentType,
 		SizeBytes:         input.SizeBytes,
 		StorageKey:        storageKey,
-		StorageDriver:     "r2",
+		StorageDriver:     "s3",
 		Status:            InitialAssetStatus(input.ContentType),
 		UploadedBy:        &input.UploadedBy,
 		ExifData:          map[string]interface{}{},

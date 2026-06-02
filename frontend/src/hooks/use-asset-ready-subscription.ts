@@ -76,13 +76,12 @@ export function useAssetReadySubscription({
 
   useEffect(() => {
     if (!hasPending || !token) return;
-    if (typeof window === "undefined" || typeof EventSource === "undefined") return;
+    if (typeof window === "undefined" || typeof EventSource === "undefined")
+      return;
 
-    const url = `${apiBase}/api/v1/events/stream?token=${encodeURIComponent(
-      token,
-    )}&channels=${encodeURIComponent(SSE_CHANNEL)}`;
+    const url = `${apiBase}/api/v1/events/stream?channels=${encodeURIComponent(SSE_CHANNEL)}`;
 
-    const es = new EventSource(url);
+    const es = new EventSource(url, { withCredentials: true });
 
     const handler = (event: MessageEvent) => {
       let payload: AssetReadyPayload | null = null;

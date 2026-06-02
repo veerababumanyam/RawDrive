@@ -592,7 +592,7 @@ func TestMigration035_PlatformRoleIndex(t *testing.T) {
 	assert.Equal(t, "idx_users_platform_role", indexName)
 }
 
-func TestMigration036_TestUsersSeeded(t *testing.T) {
+func TestMigration148_KnownPasswordSeedUsersLocked(t *testing.T) {
 	migrator := newMigrator(t)
 	require.NoError(t, migrator.Up())
 
@@ -600,26 +600,26 @@ func TestMigration036_TestUsersSeeded(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		email        string
-		platformRole string
-		displayName  string
+		email string
 	}{
-		{"superadmin@rawdrive.test", "super_admin", "Super Admin"},
-		{"admin@rawdrive.test", "admin", "Platform Admin"},
-		{"dealer@rawdrive.test", "dealer", "Test Dealer"},
+		{"superadmin@rawdrive.test"},
+		{"admin@rawdrive.test"},
+		{"dealer@rawdrive.test"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.email, func(t *testing.T) {
-			var role, name string
-			var verified bool
+			var role, passwordHash string
+			var verified, mustChangePassword bool
 			err := pool.QueryRow(ctx,
-				`SELECT platform_role, display_name, email_verified FROM users WHERE email = $1`,
-				tt.email).Scan(&role, &name, &verified)
-			require.NoError(t, err, "seeded user %s should exist", tt.email)
-			assert.Equal(t, tt.platformRole, role)
-			assert.Equal(t, tt.displayName, name)
-			assert.True(t, verified, "seeded user should be email_verified")
+				`SELECT platform_role, password_hash, email_verified, must_change_password
+				 FROM users WHERE email = $1`,
+				tt.email).Scan(&role, &passwordHash, &verified, &mustChangePassword)
+			require.NoError(t, err, "historical seeded user %s should still exist for non-destructive lock", tt.email)
+			assert.Equal(t, "photographer", role, "historical test user should be demoted")
+			assert.Equal(t, "!F148-LOCKED-KNOWN-PROD-SEED", passwordHash)
+			assert.False(t, verified, "historical test user should not remain email_verified")
+			assert.True(t, mustChangePassword, "historical test user should be forced through reset if recovered")
 		})
 	}
 }
@@ -676,12 +676,33 @@ func TestMigration036_SeedIdempotent(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 
-	// Verify our 3 seeded users exist with correct platform roles
+	// Verify the historical seed users still exist, but only in locked form.
 	var count int
 	err := pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM users WHERE email IN ('superadmin@rawdrive.test', 'admin@rawdrive.test', 'dealer@rawdrive.test')`).Scan(&count)
+		`SELECT COUNT(*) FROM users
+		 WHERE email IN ('superadmin@rawdrive.test', 'admin@rawdrive.test', 'dealer@rawdrive.test')
+		   AND password_hash = '!F148-LOCKED-KNOWN-PROD-SEED'
+		   AND platform_role = 'photographer'`).Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 3, count, "should have exactly 3 seeded role test users")
+	assert.Equal(t, 3, count, "should have exactly 3 locked historical role test users")
+}
+
+func TestMigration149_FaceClusterEmbeddingDimension(t *testing.T) {
+	migrator := newMigrator(t)
+	require.NoError(t, migrator.Up())
+
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var embeddingType string
+	err := pool.QueryRow(ctx,
+		`SELECT format_type(a.atttypid, a.atttypmod)
+		 FROM pg_attribute a
+		 WHERE a.attrelid = 'public.face_clusters'::regclass
+		   AND a.attname = 'embedding'
+		   AND NOT a.attisdropped`).Scan(&embeddingType)
+	require.NoError(t, err)
+	assert.Equal(t, "vector(512)", embeddingType)
 }
 
 func TestMigration035_ValidPlatformRoles(t *testing.T) {

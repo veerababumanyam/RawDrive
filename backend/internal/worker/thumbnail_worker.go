@@ -218,9 +218,9 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	// Persist bare storage keys (no host, no scheme). The frontend's
 	// `getStorageBackedUrl()` in dashboard-ui.ts takes a bare key like
 	// "thumbnails/<id>/thumb_md.jpg" and resolves it to
-	// "${NEXT_PUBLIC_API_URL}/storage/thumbnails/<id>/thumb_md.jpg?token=<jwt>"
-	// at render time — meaning the *browser* picks the host, not the
-	// worker. Storing absolute URLs here was a long-standing footgun:
+	// "${NEXT_PUBLIC_API_URL}/storage/thumbnails/<id>/thumb_md.jpg"
+	// at render time; auth rides on cookies/headers, and the *browser*
+	// picks the host, not the worker. Storing absolute URLs here was a long-standing footgun:
 	// the previous code defaulted to PUBLIC_API_URL=https://api.rawdrive.in
 	// when the env var was unset, baking a production host into local
 	// dev databases. Every <img src> then short-circuited through

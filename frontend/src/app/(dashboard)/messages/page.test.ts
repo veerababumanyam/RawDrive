@@ -11,7 +11,8 @@ import { buildEventStreamUrl, safeAttachmentUrl } from "./page";
 
 describe("safeAttachmentUrl — XSS scheme allowlist (F-051)", () => {
   it("passes through a normal https backend storage URL", () => {
-    const url = "https://f000.backblazeb2.com/file/rawdrive/attachments/abc.pdf";
+    const url =
+      "https://f000.backblazeb2.com/file/rawdrive/attachments/abc.pdf";
     expect(safeAttachmentUrl(url)).toBe(url);
   });
 
@@ -50,42 +51,18 @@ describe("safeAttachmentUrl — XSS scheme allowlist (F-051)", () => {
   });
 });
 
-// Regression guard for F-097: the JWT access token was interpolated raw into
-// the SSE EventSource URL (`?token=${token}`), unlike use-asset-ready-
-// subscription.ts which already wraps the token in encodeURIComponent. An
-// un-encoded token can corrupt the query string if the token format ever gains
-// reserved characters, and leaks the raw token verbatim into proxy/access logs.
-// buildEventStreamUrl is the single URL builder the channels SSE effect uses —
-// it must URL-encode the token.
+// Regression guard: bearer access tokens must never be interpolated into the
+// SSE EventSource URL. Browser auth for this dashboard stream rides on the
+// HttpOnly access-token cookie; buildEventStreamUrl should only select the
+// channel.
 
-describe("buildEventStreamUrl — JWT query-param encoding (F-097)", () => {
+describe("buildEventStreamUrl — no bearer token in query string", () => {
   const apiBase = "http://localhost:8080";
 
-  it("URL-encodes a token containing reserved characters", () => {
-    // Tokens are normally base64url (no reserved chars), but the encoding must
-    // hold if the format ever changes — this is the exact case raw
-    // interpolation would mangle.
-    const token = "a.b+c/d= e&f";
-    const url = buildEventStreamUrl(apiBase, token);
+  it("builds a token-free chat stream URL", () => {
+    const url = buildEventStreamUrl(apiBase);
 
-    expect(url).toContain(`token=${encodeURIComponent(token)}`);
-    // The raw token must NOT appear unescaped in the query string.
-    expect(url).not.toContain(`token=${token}`);
-    // The static channel literal is unaffected and still present.
-    expect(url).toContain("&channels=chat");
-  });
-
-  it("leaves a normal base64url JWT round-trip intact", () => {
-    const token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig-_value";
-    const url = buildEventStreamUrl(apiBase, token);
-
-    expect(url).toBe(
-      `${apiBase}/api/v1/events/stream?token=${encodeURIComponent(token)}&channels=chat`,
-    );
-    // A decoded query param must reproduce the original token exactly.
-    const decoded = decodeURIComponent(
-      new URL(url).searchParams.get("token") ?? "",
-    );
-    expect(decoded).toBe(token);
+    expect(url).toBe(`${apiBase}/api/v1/events/stream?channels=chat`);
+    expect(url).not.toContain("token=");
   });
 });

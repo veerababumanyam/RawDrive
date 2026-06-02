@@ -59,7 +59,7 @@ ssh root@187.127.142.42 'docker run --rm --network host -e PGPASSWORD=<POSTGRES_
 
 ### 5. Re-establish replication (recover from failover)
 
-Once you have a replacement server for `.46`, run the `disaster-recovery-from-r2.md` runbook to bring it back as a new replica of `.44`. Or if `.46` is recoverable, use `pg_basebackup` from `.44`.
+Once you have a replacement server for `.46`, run the B2 restore procedure in `disaster-recovery-from-r2.md` to bring it back as a new replica of `.44`. Or if `.46` is recoverable, use `pg_basebackup` from `.44`.
 
 ## Rollback / fail-back procedure
 
@@ -75,5 +75,5 @@ If `.46` comes back healthy and you want to restore it as primary:
 ## What this runbook does NOT cover
 
 - Automated failover (Patroni/Stolon). Out of scope for 3-node deployment.
-- Asynchronous write loss reconciliation. If your app writes critical data and the primary dies mid-commit, those writes are gone. Use the `disaster-recovery-from-r2.md` runbook to restore from the nightly backup if data integrity must be recovered.
+- Asynchronous write loss reconciliation. If your app writes critical data and the primary dies mid-commit, those writes are gone. Use the B2 restore procedure in `disaster-recovery-from-r2.md` to restore from the nightly backup if data integrity must be recovered.
 - DNS changes. Neither app node's public IP changes during this procedure — Cloudflare DNS stays pointed at `.42` and `.44` throughout.

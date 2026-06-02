@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -28,8 +29,9 @@ type CollabProfileLookup interface {
 
 // DesignCollabHandler handles collaborative editing endpoints.
 type DesignCollabHandler struct {
-	svc      *service.DesignCollabService
-	profiles CollabProfileLookup
+	svc        *service.DesignCollabService
+	profiles   CollabProfileLookup
+	gallerySvc *service.GalleryService
 }
 
 // NewDesignCollabHandler creates a new DesignCollabHandler. Display-name/avatar
@@ -47,6 +49,14 @@ func (h *DesignCollabHandler) WithProfileLookup(p CollabProfileLookup) *DesignCo
 	return h
 }
 
+// WithGalleryResolver attaches a gallery resolver so collaboration endpoints
+// can reject cross-workspace gallery IDs before touching in-memory presence or
+// locks. Nil keeps lightweight unit tests on the historical behavior.
+func (h *DesignCollabHandler) WithGalleryResolver(s *service.GalleryService) *DesignCollabHandler {
+	h.gallerySvc = s
+	return h
+}
+
 // resolveDisplay returns the display name and avatar for a user id, using the
 // optional profile lookup. Display fields are never sourced from JWT claims
 // because the access token does not carry them.
@@ -57,9 +67,44 @@ func (h *DesignCollabHandler) resolveDisplay(ctx context.Context, userID string)
 	return h.profiles.DisplayProfile(ctx, userID)
 }
 
+func (h *DesignCollabHandler) authorizeGalleryAccess(w http.ResponseWriter, r *http.Request, galleryID string) bool {
+	if h.gallerySvc == nil {
+		return true
+	}
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return false
+	}
+	wsIDStr, _ := claims["workspace_id"].(string)
+	wsID, err := uuid.Parse(wsIDStr)
+	if err != nil || wsID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return false
+	}
+	id, err := uuid.Parse(galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery ID"}`, http.StatusBadRequest)
+		return false
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"failed to validate gallery"}`, http.StatusInternalServerError)
+		return false
+	}
+	if gallery == nil || gallery.WorkspaceID != wsID {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return false
+	}
+	return true
+}
+
 // JoinSession handles POST /api/v1/galleries/{id}/collab/join.
 func (h *DesignCollabHandler) JoinSession(w http.ResponseWriter, r *http.Request) {
 	galleryID := chi.URLParam(r, "id")
+	if !h.authorizeGalleryAccess(w, r, galleryID) {
+		return
+	}
 	claims := middleware.JWTClaimsFromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -88,6 +133,9 @@ func (h *DesignCollabHandler) JoinSession(w http.ResponseWriter, r *http.Request
 // LeaveSession handles POST /api/v1/galleries/{id}/collab/leave.
 func (h *DesignCollabHandler) LeaveSession(w http.ResponseWriter, r *http.Request) {
 	galleryID := chi.URLParam(r, "id")
+	if !h.authorizeGalleryAccess(w, r, galleryID) {
+		return
+	}
 	claims := middleware.JWTClaimsFromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -102,6 +150,9 @@ func (h *DesignCollabHandler) LeaveSession(w http.ResponseWriter, r *http.Reques
 // AcquireLock handles POST /api/v1/galleries/{id}/collab/lock.
 func (h *DesignCollabHandler) AcquireLock(w http.ResponseWriter, r *http.Request) {
 	galleryID := chi.URLParam(r, "id")
+	if !h.authorizeGalleryAccess(w, r, galleryID) {
+		return
+	}
 	claims := middleware.JWTClaimsFromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -131,6 +182,9 @@ func (h *DesignCollabHandler) AcquireLock(w http.ResponseWriter, r *http.Request
 // ReleaseLock handles DELETE /api/v1/galleries/{id}/collab/lock/{sectionId}.
 func (h *DesignCollabHandler) ReleaseLock(w http.ResponseWriter, r *http.Request) {
 	galleryID := chi.URLParam(r, "id")
+	if !h.authorizeGalleryAccess(w, r, galleryID) {
+		return
+	}
 	sectionID := chi.URLParam(r, "sectionId")
 	claims := middleware.JWTClaimsFromContext(r.Context())
 	if claims == nil {
@@ -146,6 +200,9 @@ func (h *DesignCollabHandler) ReleaseLock(w http.ResponseWriter, r *http.Request
 // SSEStream handles GET /api/v1/galleries/{id}/collab/stream — Server-Sent Events.
 func (h *DesignCollabHandler) SSEStream(w http.ResponseWriter, r *http.Request) {
 	galleryID := chi.URLParam(r, "id")
+	if !h.authorizeGalleryAccess(w, r, galleryID) {
+		return
+	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {

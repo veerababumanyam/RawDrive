@@ -4,7 +4,7 @@
 
 - Backend tests pass with Docker available: `npm run test:backend`.
 - Frontend gates pass: `npm run lint`, `npm run test:frontend`, `npm run build`.
-- Dependency gates pass: `pnpm --dir frontend audit --audit-level high` and `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` from `backend/`.
+- Dependency gates pass: `pnpm --dir frontend audit --audit-level high` and `go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...` from `backend/`.
 - Dockerized E2E passes inside the project Playwright service after the API and frontend are running.
 - Backend and frontend container images build from `backend/Dockerfile` and `frontend/Dockerfile`.
 

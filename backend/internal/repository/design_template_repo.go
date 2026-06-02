@@ -56,10 +56,23 @@ func (r *DesignTemplateRepo) Create(ctx context.Context, t *DesignTemplate) erro
 
 // GetByID retrieves a template by ID (excludes soft-deleted).
 func (r *DesignTemplateRepo) GetByID(ctx context.Context, id uuid.UUID) (*DesignTemplate, error) {
+	return r.GetByIDForWorkspace(ctx, id, uuid.Nil)
+}
+
+// GetByIDForWorkspace retrieves a template by ID within a workspace. A nil
+// workspace preserves the historical internal helper behavior; HTTP handlers
+// should always pass the caller workspace.
+func (r *DesignTemplateRepo) GetByIDForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*DesignTemplate, error) {
 	t := &DesignTemplate{}
+	where := `id = $1 AND deleted_at IS NULL`
+	args := []interface{}{id}
+	if workspaceID != uuid.Nil {
+		where = `id = $1 AND workspace_id = $2 AND deleted_at IS NULL`
+		args = append(args, workspaceID)
+	}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, name, description, config, preview_url, is_default, created_by, created_at, updated_at
-		 FROM gallery_design_templates WHERE id = $1 AND deleted_at IS NULL`, id,
+		 FROM gallery_design_templates WHERE `+where, args...,
 	).Scan(&t.ID, &t.WorkspaceID, &t.Name, &t.Description, &t.Config, &t.PreviewURL, &t.IsDefault, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -98,8 +111,8 @@ func (r *DesignTemplateRepo) Update(ctx context.Context, t *DesignTemplate) erro
 	t.UpdatedAt = time.Now()
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE gallery_design_templates SET name=$1, description=$2, config=$3, preview_url=$4, updated_at=$5
-		 WHERE id=$6 AND deleted_at IS NULL`,
-		t.Name, t.Description, t.Config, t.PreviewURL, t.UpdatedAt, t.ID,
+		 WHERE id=$6 AND workspace_id=$7 AND deleted_at IS NULL`,
+		t.Name, t.Description, t.Config, t.PreviewURL, t.UpdatedAt, t.ID, t.WorkspaceID,
 	)
 	if err != nil {
 		return fmt.Errorf("design template update: %w", err)
@@ -112,8 +125,19 @@ func (r *DesignTemplateRepo) Update(ctx context.Context, t *DesignTemplate) erro
 
 // SoftDelete marks a template as deleted (30-day recovery window).
 func (r *DesignTemplateRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	return r.SoftDeleteForWorkspace(ctx, id, uuid.Nil)
+}
+
+// SoftDeleteForWorkspace marks a template as deleted within a workspace.
+func (r *DesignTemplateRepo) SoftDeleteForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) error {
+	where := `id = $1 AND deleted_at IS NULL`
+	args := []interface{}{id}
+	if workspaceID != uuid.Nil {
+		where = `id = $1 AND workspace_id = $2 AND deleted_at IS NULL`
+		args = append(args, workspaceID)
+	}
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE gallery_design_templates SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`, id,
+		`UPDATE gallery_design_templates SET deleted_at = now() WHERE `+where, args...,
 	)
 	if err != nil {
 		return fmt.Errorf("design template delete: %w", err)
@@ -126,8 +150,19 @@ func (r *DesignTemplateRepo) SoftDelete(ctx context.Context, id uuid.UUID) error
 
 // Restore recovers a soft-deleted template.
 func (r *DesignTemplateRepo) Restore(ctx context.Context, id uuid.UUID) error {
+	return r.RestoreForWorkspace(ctx, id, uuid.Nil)
+}
+
+// RestoreForWorkspace recovers a soft-deleted template within a workspace.
+func (r *DesignTemplateRepo) RestoreForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) error {
+	where := `id = $1 AND deleted_at IS NOT NULL`
+	args := []interface{}{id}
+	if workspaceID != uuid.Nil {
+		where = `id = $1 AND workspace_id = $2 AND deleted_at IS NOT NULL`
+		args = append(args, workspaceID)
+	}
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE gallery_design_templates SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL`, id,
+		`UPDATE gallery_design_templates SET deleted_at = NULL WHERE `+where, args...,
 	)
 	if err != nil {
 		return fmt.Errorf("design template restore: %w", err)

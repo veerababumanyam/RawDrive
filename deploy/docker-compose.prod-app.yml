@@ -19,7 +19,8 @@ services:
     container_name: deploy-migrate-1
     command: ["/usr/local/bin/migrate"]
     env_file:
-      - /opt/rawdrive/app/.env
+      - path: /opt/rawdrive/app/.env
+        required: false
     restart: "no"
     depends_on: []
     # F-116: one-shot migration runner — small, but capped so a pathological
@@ -86,7 +87,8 @@ services:
     restart: unless-stopped
     command: ["/usr/local/bin/api"]
     env_file:
-      - /opt/rawdrive/app/.env
+      - path: /opt/rawdrive/app/.env
+        required: false
     ports:
       - "8080:8080"  # exposed for peer failover from the OTHER app node
     depends_on:
@@ -106,9 +108,8 @@ services:
         reservations:
           memory: 512M
     healthcheck:
-      # Backend's health endpoint is /health (not /api/v1/health — that's
-      # a plan doc typo). Confirmed via backend/cmd/api/main.go:1245.
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      # Readiness checks dependencies, not just process liveness.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/deep"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -134,7 +135,8 @@ services:
     container_name: deploy-frontend-1
     restart: unless-stopped
     env_file:
-      - /opt/rawdrive/app/.env
+      - path: /opt/rawdrive/app/.env
+        required: false
     ports:
       - "3000:3000"  # exposed for peer failover
     depends_on:
@@ -173,7 +175,8 @@ services:
     restart: unless-stopped
     command: ["/usr/local/bin/api", "--mode=worker"]
     env_file:
-      - /opt/rawdrive/app/.env
+      - path: /opt/rawdrive/app/.env
+        required: false
     depends_on:
       backend:
         condition: service_healthy
@@ -198,16 +201,17 @@ services:
     image: nats:2.11-alpine
     container_name: deploy-nats-1
     restart: unless-stopped
-    # nats-server.conf references $NATS_CLIENT_TOKEN and $NATS_CLUSTER_SEED via
+    # nats-server.conf references $NATS_AUTH_TOKEN and $NATS_CLUSTER_SEED via
     # process-env interpolation at boot, so the container needs those vars in
     # its environment. Compose-level ${NATS_NODE_NAME} below is interpolated
     # at parse-time from /opt/rawdrive/app/.env (compose's working dir) and is
     # a separate mechanism; the env_file below is what propagates the secrets
     # into the running nats-server process. Without it nats-server fails with
-    # "variable reference for 'NATS_CLIENT_TOKEN' can not be found" and
+    # "variable reference for 'NATS_AUTH_TOKEN' can not be found" and
     # crashloops, leaving every backend NATS publisher dead in the water.
     env_file:
-      - /opt/rawdrive/app/.env
+      - path: /opt/rawdrive/app/.env
+        required: false
     command:
       - -c
       - /etc/nats/nats-server.conf
@@ -217,9 +221,11 @@ services:
       - nats_data:/data
       - ./nats/nats-server.conf:/etc/nats/nats-server.conf:ro
     ports:
-      - "4222:4222"
-      - "6222:6222"
-      - "8222:8222"
+      # Scope NATS to this node's peer IP so Docker's iptables publishing
+      # does not expose client, cluster, or monitoring ports on every NIC.
+      - "${NATS_BIND_IP}:4222:4222"
+      - "${NATS_BIND_IP}:6222:6222"
+      - "${NATS_BIND_IP}:8222:8222"
     # F-116: cap JetStream memory so a consumer pile-up can't grow unbounded
     # and OOM the shared host. NATS also enforces store/memory limits in its
     # own config; this is the hard backstop.

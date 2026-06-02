@@ -43,6 +43,11 @@ func (s *DesignTemplateService) GetTemplate(ctx context.Context, id uuid.UUID) (
 	return s.templateRepo.GetByID(ctx, id)
 }
 
+// GetTemplateForWorkspace retrieves a template by ID scoped to a workspace.
+func (s *DesignTemplateService) GetTemplateForWorkspace(ctx context.Context, workspaceID, id uuid.UUID) (*repository.DesignTemplate, error) {
+	return s.templateRepo.GetByIDForWorkspace(ctx, id, workspaceID)
+}
+
 // ListTemplates retrieves all templates for a workspace.
 func (s *DesignTemplateService) ListTemplates(ctx context.Context, workspaceID uuid.UUID) ([]repository.DesignTemplate, error) {
 	return s.templateRepo.ListByWorkspace(ctx, workspaceID)
@@ -50,7 +55,12 @@ func (s *DesignTemplateService) ListTemplates(ctx context.Context, workspaceID u
 
 // UpdateTemplate modifies an existing template.
 func (s *DesignTemplateService) UpdateTemplate(ctx context.Context, id uuid.UUID, name, description string, config map[string]interface{}) error {
-	t, err := s.templateRepo.GetByID(ctx, id)
+	return s.UpdateTemplateForWorkspace(ctx, uuid.Nil, id, name, description, config)
+}
+
+// UpdateTemplateForWorkspace modifies an existing template within a workspace.
+func (s *DesignTemplateService) UpdateTemplateForWorkspace(ctx context.Context, workspaceID, id uuid.UUID, name, description string, config map[string]interface{}) error {
+	t, err := s.templateRepo.GetByIDForWorkspace(ctx, id, workspaceID)
 	if err != nil {
 		return err
 	}
@@ -72,14 +82,30 @@ func (s *DesignTemplateService) DeleteTemplate(ctx context.Context, id uuid.UUID
 	return s.templateRepo.SoftDelete(ctx, id)
 }
 
+// DeleteTemplateForWorkspace soft-deletes a template within a workspace.
+func (s *DesignTemplateService) DeleteTemplateForWorkspace(ctx context.Context, workspaceID, id uuid.UUID) error {
+	return s.templateRepo.SoftDeleteForWorkspace(ctx, id, workspaceID)
+}
+
 // RestoreTemplate recovers a soft-deleted template.
 func (s *DesignTemplateService) RestoreTemplate(ctx context.Context, id uuid.UUID) error {
 	return s.templateRepo.Restore(ctx, id)
 }
 
+// RestoreTemplateForWorkspace recovers a soft-deleted template within a workspace.
+func (s *DesignTemplateService) RestoreTemplateForWorkspace(ctx context.Context, workspaceID, id uuid.UUID) error {
+	return s.templateRepo.RestoreForWorkspace(ctx, id, workspaceID)
+}
+
 // ApplyTemplate applies a template's config to a gallery's design_config.
 func (s *DesignTemplateService) ApplyTemplate(ctx context.Context, galleryID, templateID uuid.UUID) error {
-	t, err := s.templateRepo.GetByID(ctx, templateID)
+	return s.ApplyTemplateForWorkspace(ctx, uuid.Nil, galleryID, templateID)
+}
+
+// ApplyTemplateForWorkspace applies a template only when both template and
+// gallery belong to the caller's workspace.
+func (s *DesignTemplateService) ApplyTemplateForWorkspace(ctx context.Context, workspaceID, galleryID, templateID uuid.UUID) error {
+	t, err := s.templateRepo.GetByIDForWorkspace(ctx, templateID, workspaceID)
 	if err != nil {
 		return err
 	}
@@ -100,6 +126,16 @@ func (s *DesignTemplateService) ApplyTemplate(ctx context.Context, galleryID, te
 	designConfig.Template = &TemplateRef{
 		ID:   templateID,
 		Name: t.Name,
+	}
+
+	if workspaceID != uuid.Nil {
+		gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
+		if err != nil {
+			return err
+		}
+		if gallery == nil || gallery.WorkspaceID != workspaceID {
+			return fmt.Errorf("gallery not found: %s", galleryID)
+		}
 	}
 
 	return updateGalleryDesignConfig(ctx, s.galleryRepo, galleryID, &designConfig)

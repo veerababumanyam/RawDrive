@@ -10,7 +10,7 @@ package handler
 //
 // Contract:
 //   GET /health/deep  →  200 if all components healthy
-//                        503 if any critical component is down
+//                        503 if any configured component is degraded/down
 //   Body: { "status": "healthy|degraded|unhealthy",
 //           "components": {
 //             "database":  {"status": "healthy", "latency_ms": 2},
@@ -41,9 +41,9 @@ type ValkeyPinger interface {
 
 // HealthHandler runs deep dependency probes.
 type HealthHandler struct {
-	pool    *pgxpool.Pool
-	store   storage.Provider
-	valkey  ValkeyPinger
+	pool   *pgxpool.Pool
+	store  storage.Provider
+	valkey ValkeyPinger
 }
 
 // NewHealthHandler constructs a HealthHandler. store and valkey may be nil.
@@ -97,7 +97,8 @@ func (h *HealthHandler) Deep(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Storage probe — optional. "disabled" doesn't degrade status.
+	// Storage probe — optional only when no provider is configured. If a
+	// provider exists, object storage is critical for uploads/downloads.
 	if h.store == nil {
 		resp.Components["storage"] = ComponentHealth{Status: "disabled"}
 	} else {
@@ -110,13 +111,11 @@ func (h *HealthHandler) Deep(w http.ResponseWriter, r *http.Request) {
 		latency := time.Since(start).Milliseconds()
 		if err != nil && !isExpectedNotFound(err) {
 			resp.Components["storage"] = ComponentHealth{
-				Status:    "degraded",
+				Status:    "unhealthy",
 				LatencyMs: latency,
 				Error:     err.Error(),
 			}
-			if overall == "healthy" {
-				overall = "degraded"
-			}
+			overall = "unhealthy"
 		} else {
 			resp.Components["storage"] = ComponentHealth{
 				Status:    "healthy",
@@ -125,20 +124,18 @@ func (h *HealthHandler) Deep(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Valkey probe — optional.
+	// Valkey probe — optional only when no client is configured.
 	if h.valkey == nil {
 		resp.Components["valkey"] = ComponentHealth{Status: "disabled"}
 	} else {
 		start := time.Now()
 		if err := h.valkey.Ping(ctx); err != nil {
 			resp.Components["valkey"] = ComponentHealth{
-				Status:    "degraded",
+				Status:    "unhealthy",
 				LatencyMs: time.Since(start).Milliseconds(),
 				Error:     err.Error(),
 			}
-			if overall == "healthy" {
-				overall = "degraded"
-			}
+			overall = "unhealthy"
 		} else {
 			resp.Components["valkey"] = ComponentHealth{
 				Status:    "healthy",
@@ -149,7 +146,7 @@ func (h *HealthHandler) Deep(w http.ResponseWriter, r *http.Request) {
 
 	resp.Status = overall
 	status := http.StatusOK
-	if overall == "unhealthy" {
+	if overall != "healthy" {
 		status = http.StatusServiceUnavailable
 	}
 	respondJSON(w, status, resp)

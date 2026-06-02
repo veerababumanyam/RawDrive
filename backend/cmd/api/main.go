@@ -2899,9 +2899,9 @@ func main() {
 	//   - works identically for R2 (HTTPS) and MinIO (HTTP)
 	//   - lets the thumbnail worker emit stable /storage/{key} URLs
 	//     that never expire
-	// Query-param token fallback lets <img src> tags authenticate
-	// without a custom header — the Authorization header form is
-	// preserved for fetch() callers that already set it.
+	// <img src> tags authenticate via the HttpOnly access-token cookie
+	// issued by the auth handlers. Fetch callers can still use the
+	// Authorization header directly.
 	r.Get("/storage/*", func(w http.ResponseWriter, r *http.Request) {
 		key := chi.URLParam(r, "*")
 		// F-035 (audit 2026-05-30): sanitize the raw URL key BEFORE any
@@ -2936,13 +2936,10 @@ func main() {
 		}
 
 		if !isPublicThumbnail {
-			// Verify JWT — accept Bearer header OR ?token=... for <img src>.
-			tokenStr := ""
-			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-				tokenStr = strings.TrimPrefix(h, "Bearer ")
-			} else if q := r.URL.Query().Get("token"); q != "" {
-				tokenStr = q
-			}
+			// Verify JWT — accept Bearer header or the HttpOnly
+			// rawdrive_access_token cookie. Do not read bearer tokens from
+			// query strings; storage URLs land in browser/proxy logs.
+			tokenStr := auth.AccessTokenFromRequest(r)
 			if tokenStr == "" {
 				http.Error(w, `{"error":"unauthenticated"}`, http.StatusUnauthorized)
 				return

@@ -20,15 +20,35 @@
  * pass a single-item array.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import type { Asset } from "@/lib/api/assets";
 import type { Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
-  ChevronLeft, ChevronRight, XMark, Download, Expand, Compress,
-  ZoomIn, ZoomOut, InfoCircle, ChatBubble, CheckCircle, ThumbsUp, XCircle, Trash,
+  ChevronLeft,
+  ChevronRight,
+  XMark,
+  Download,
+  Expand,
+  Compress,
+  ZoomIn,
+  ZoomOut,
+  InfoCircle,
+  ChatBubble,
+  CheckCircle,
+  ThumbsUp,
+  XCircle,
+  Trash,
 } from "@/components/icons";
 import { WatermarkOverlay } from "./watermark-overlay";
 import { FaceBoxesOverlay } from "./face-boxes-overlay";
@@ -37,7 +57,13 @@ import { Filmstrip } from "./filmstrip";
 import { CompareMode } from "./compare-mode";
 import { useTouchGestures } from "@/hooks/use-touch-gestures";
 import { useScrollRestore } from "@/hooks/use-scroll-restore";
-import { FILMSTRIP_VARIANTS, LIGHTBOX_VARIANTS, originalManifest, variantManifest, assetUsesClientMediaEncryption } from "@/lib/media-encryption/asset-media";
+import {
+  FILMSTRIP_VARIANTS,
+  LIGHTBOX_VARIANTS,
+  originalManifest,
+  variantManifest,
+  assetUsesClientMediaEncryption,
+} from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 
@@ -49,12 +75,18 @@ interface PhotoLightboxProps {
   hasPrev: boolean;
   hasNext: boolean;
   isProofing?: boolean;
-  onProofingAction?: (assetId: string, action: "select" | "approve" | "reject") => void;
+  onProofingAction?: (
+    assetId: string,
+    action: "select" | "approve" | "reject",
+  ) => void;
   comments?: LightboxComment[];
-  onComment?: (assetId: string, comment: string) => Promise<LightboxComment | void> | LightboxComment | void;
+  onComment?: (
+    assetId: string,
+    comment: string,
+  ) => Promise<LightboxComment | void> | LightboxComment | void;
   // M13 deferred-FR additions — all optional so existing callers still work.
-  allAssets?: Asset[];     // powers filmstrip and compare mode (GAL-FR-093, 092)
-  gallery?: Gallery;       // powers watermark overlay (GAL-FR-088)
+  allAssets?: Asset[]; // powers filmstrip and compare mode (GAL-FR-093, 092)
+  gallery?: Gallery; // powers watermark overlay (GAL-FR-088)
   showFilmstrip?: boolean; // default true when allAssets provided
   onDeleteRequest?: (asset: Asset) => void;
   /** Jump to a specific asset by ID — enables random-access filmstrip nav.
@@ -85,8 +117,8 @@ function formatBytes(bytes: number): string {
  * paths, absolute http(s) URLs, data/blob URIs. Delegates to
  * `getStorageBackedUrl` so every consumer goes through the same path
  * constructor — bare keys get the `/storage/` prefix + API_BASE host
- * + JWT token; non-storage URLs pass through unchanged. Idempotent
- * with respect to a token query already on the URL.
+ * while non-storage URLs pass through unchanged. Browser subresource auth
+ * rides on the HttpOnly access-token cookie.
  *
  * Bug history (2026-05-18): the previous implementation only added
  * the token to URLs that ALREADY contained `/storage/`, so bare keys
@@ -96,7 +128,10 @@ function formatBytes(bytes: number): string {
  * derivatives/...` 404s instead of `localhost:8081/storage/
  * derivatives/...`.
  */
-function authedStorageUrl(url: string | undefined | null, token: string | null): string {
+function authedStorageUrl(
+  url: string | undefined | null,
+  token: string | null,
+): string {
   return getStorageBackedUrl(url, token);
 }
 
@@ -136,33 +171,55 @@ function BurstSiblingThumb({
       {media.loading ? (
         <div className="h-full w-full animate-pulse bg-white/5" />
       ) : media.src && !imageFailed ? (
-        <img src={media.src} alt={sibling.filename} className="h-full w-full object-cover" onError={handleImageError} />
+        <img
+          src={media.src}
+          alt={sibling.filename}
+          className="h-full w-full object-cover"
+          onError={handleImageError}
+        />
       ) : (
         <div className="h-full w-full bg-white/5" />
       )}
       {sibling.burst_is_top_pick && (
-        <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent-primary" title="Top pick" />
+        <div
+          className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent-primary"
+          title="Top pick"
+        />
       )}
     </div>
   );
 }
 
 export function PhotoLightbox({
-  asset, onClose, onPrev, onNext, hasPrev, hasNext,
-  isProofing = false, onProofingAction, comments = [], onComment,
-  allAssets, gallery, showFilmstrip, onDeleteRequest, onJumpTo,
+  asset,
+  onClose,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+  isProofing = false,
+  onProofingAction,
+  comments = [],
+  onComment,
+  allAssets,
+  gallery,
+  showFilmstrip,
+  onDeleteRequest,
+  onJumpTo,
 }: PhotoLightboxProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
-  const [optimisticComments, setOptimisticComments] = useState<LightboxComment[]>([]);
+  const [optimisticComments, setOptimisticComments] = useState<
+    LightboxComment[]
+  >([]);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState("");
   const [zoom, setZoom] = useState(1);
-  const [showFaces, setShowFaces] = useState(false);              // GAL-FR-089
-  const [compareMode, setCompareMode] = useState(false);          // GAL-FR-092
-  const [burstExpanded, setBurstExpanded] = useState(false);      // GAL-FR-094
+  const [showFaces, setShowFaces] = useState(false); // GAL-FR-089
+  const [compareMode, setCompareMode] = useState(false); // GAL-FR-092
+  const [burstExpanded, setBurstExpanded] = useState(false); // GAL-FR-094
   const [chromeVisible, setChromeVisible] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -209,7 +266,8 @@ export function PhotoLightbox({
   }, [compareMode, allAssets, asset.id]);
 
   const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) containerRef.current?.requestFullscreen?.();
+    if (!document.fullscreenElement)
+      containerRef.current?.requestFullscreen?.();
     else document.exitFullscreen?.();
   }, []);
 
@@ -229,58 +287,123 @@ export function PhotoLightbox({
     setChromeVisible(true);
     clearChromeTimer();
     if (isFullscreen) {
-      chromeTimerRef.current = setTimeout(() => setChromeVisible(false), FULLSCREEN_CHROME_IDLE_MS);
+      chromeTimerRef.current = setTimeout(
+        () => setChromeVisible(false),
+        FULLSCREEN_CHROME_IDLE_MS,
+      );
     }
   }, [clearChromeTimer, isFullscreen]);
 
-  const lightboxPointerHandlers = useMemo(() => ({
-    ...touchHandlers,
-    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
-      touchHandlers.onPointerDown(e);
-      if (isFullscreen && !chromeVisible) resetChromeTimer();
-    },
-    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
-      touchHandlers.onPointerMove(e);
-      if (isFullscreen) resetChromeTimer();
-    },
-  }), [chromeVisible, isFullscreen, resetChromeTimer, touchHandlers]);
+  const lightboxPointerHandlers = useMemo(
+    () => ({
+      ...touchHandlers,
+      onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+        touchHandlers.onPointerDown(e);
+        if (isFullscreen && !chromeVisible) resetChromeTimer();
+      },
+      onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+        touchHandlers.onPointerMove(e);
+        if (isFullscreen) resetChromeTimer();
+      },
+    }),
+    [chromeVisible, isFullscreen, resetChromeTimer, touchHandlers],
+  );
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
-    resetChromeTimer();
-    switch (e.key) {
-      case "Escape":
-        if (compareMode) setCompareMode(false);
-        else if (isFullscreen) document.exitFullscreen?.();
-        else onClose();
-        break;
-      case "ArrowLeft": if (hasPrev && onPrev) onPrev(); break;
-      case "PageUp": if (hasPrev && onPrev) onPrev(); break;
-      case "ArrowRight": if (hasNext && onNext) onNext(); break;
-      case "PageDown": if (hasNext && onNext) onNext(); break;
-      case "Home":
-        if (allAssets?.[0] && onJumpTo) onJumpTo(allAssets[0].id);
-        break;
-      case "End":
-        if (allAssets?.length && onJumpTo) onJumpTo(allAssets[allAssets.length - 1].id);
-        break;
-      case "f": case "F": toggleFullscreen(); break;
-      case "i": case "I": setShowInfo(s => !s); break;
-      case "c": case "C": setShowComments(s => !s); break;
-      case "b": case "B": setShowFaces(s => !s); break; // "boxes"
-      case "+": case "=": setZoom(z => Math.min(z + 0.25, 3)); break;
-      case "-": setZoom(z => Math.max(z - 0.25, 0.5)); break;
-      case "0": setZoom(1); break;
-      case "1": if (isProofing) onProofingAction?.(asset.id, "select"); break;
-      case "2": if (isProofing) onProofingAction?.(asset.id, "approve"); break;
-      case "3": if (isProofing) onProofingAction?.(asset.id, "reject"); break;
-    }
-  }, [allAssets, onJumpTo, onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, compareMode, isProofing, asset.id, onProofingAction, resetChromeTimer, toggleFullscreen]);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLInputElement
+      )
+        return;
+      resetChromeTimer();
+      switch (e.key) {
+        case "Escape":
+          if (compareMode) setCompareMode(false);
+          else if (isFullscreen) document.exitFullscreen?.();
+          else onClose();
+          break;
+        case "ArrowLeft":
+          if (hasPrev && onPrev) onPrev();
+          break;
+        case "PageUp":
+          if (hasPrev && onPrev) onPrev();
+          break;
+        case "ArrowRight":
+          if (hasNext && onNext) onNext();
+          break;
+        case "PageDown":
+          if (hasNext && onNext) onNext();
+          break;
+        case "Home":
+          if (allAssets?.[0] && onJumpTo) onJumpTo(allAssets[0].id);
+          break;
+        case "End":
+          if (allAssets?.length && onJumpTo)
+            onJumpTo(allAssets[allAssets.length - 1].id);
+          break;
+        case "f":
+        case "F":
+          toggleFullscreen();
+          break;
+        case "i":
+        case "I":
+          setShowInfo((s) => !s);
+          break;
+        case "c":
+        case "C":
+          setShowComments((s) => !s);
+          break;
+        case "b":
+        case "B":
+          setShowFaces((s) => !s);
+          break; // "boxes"
+        case "+":
+        case "=":
+          setZoom((z) => Math.min(z + 0.25, 3));
+          break;
+        case "-":
+          setZoom((z) => Math.max(z - 0.25, 0.5));
+          break;
+        case "0":
+          setZoom(1);
+          break;
+        case "1":
+          if (isProofing) onProofingAction?.(asset.id, "select");
+          break;
+        case "2":
+          if (isProofing) onProofingAction?.(asset.id, "approve");
+          break;
+        case "3":
+          if (isProofing) onProofingAction?.(asset.id, "reject");
+          break;
+      }
+    },
+    [
+      allAssets,
+      onJumpTo,
+      onClose,
+      onPrev,
+      onNext,
+      hasPrev,
+      hasNext,
+      isFullscreen,
+      compareMode,
+      isProofing,
+      asset.id,
+      onProofingAction,
+      resetChromeTimer,
+      toggleFullscreen,
+    ],
+  );
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", handleKeyDown); document.body.style.overflow = ""; };
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
   }, [handleKeyDown]);
 
   useEffect(() => {
@@ -306,12 +429,21 @@ export function PhotoLightbox({
     return clearChromeTimer;
   }, [clearChromeTimer, isFullscreen, resetChromeTimer]);
 
-  const handleDownloadFormat = async (format: "original" | "webp" | "thumbnail") => {
-    let url: string; let filename: string; let variant = "original";
+  const handleDownloadFormat = async (
+    format: "original" | "webp" | "thumbnail",
+  ) => {
+    let url: string;
+    let filename: string;
+    let variant = "original";
     switch (format) {
       case "webp":
-        variant = asset.thumbnail_urls?.display_webp ? "display_webp" : "thumb_lg_webp";
-        url = asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp || "";
+        variant = asset.thumbnail_urls?.display_webp
+          ? "display_webp"
+          : "thumb_lg_webp";
+        url =
+          asset.thumbnail_urls?.display_webp ||
+          asset.thumbnail_urls?.thumb_lg_webp ||
+          "";
         filename = asset.filename.replace(/\.[^.]+$/, ".webp");
         break;
       case "thumbnail":
@@ -326,17 +458,29 @@ export function PhotoLightbox({
     if (!url) return;
     url = authedStorageUrl(url, token);
     if (assetUsesClientMediaEncryption(asset)) {
-      const manifest = variant === "original" ? originalManifest(asset) : variantManifest(asset, variant);
+      const manifest =
+        variant === "original"
+          ? originalManifest(asset)
+          : variantManifest(asset, variant);
       if (!manifest) return;
       const res = await fetch(url, { credentials: "same-origin" });
       if (!res.ok) return;
-      const plain = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
+      const plain = await decryptBlobWithAvailableMediaKeys(
+        await res.blob(),
+        manifest,
+      );
       const objectUrl = URL.createObjectURL(plain);
-      const a = document.createElement("a"); a.href = objectUrl; a.download = filename; a.click();
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      a.click();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       return;
     }
-    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
   };
 
   const handleSubmitComment = async () => {
@@ -355,11 +499,15 @@ export function PhotoLightbox({
         created_at: new Date().toISOString(),
       };
       setOptimisticComments((current) =>
-        current.some((item) => item.id === comment.id) ? current : [...current, comment],
+        current.some((item) => item.id === comment.id)
+          ? current
+          : [...current, comment],
       );
       setCommentText("");
     } catch (err) {
-      setCommentError(err instanceof Error ? err.message : "Failed to post comment.");
+      setCommentError(
+        err instanceof Error ? err.message : "Failed to post comment.",
+      );
     } finally {
       setCommentSubmitting(false);
     }
@@ -380,23 +528,33 @@ export function PhotoLightbox({
     const byId = new Map<string, LightboxComment>();
     for (const comment of comments) byId.set(comment.id, comment);
     for (const comment of optimisticComments) byId.set(comment.id, comment);
-    return Array.from(byId.values()).sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    return Array.from(byId.values()).sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
   }, [comments, optimisticComments]);
 
-  const filmstripVisible = (showFilmstrip ?? !!allAssets) && !compareMode && !!allAssets && allAssets.length > 1;
+  const filmstripVisible =
+    (showFilmstrip ?? !!allAssets) &&
+    !compareMode &&
+    !!allAssets &&
+    allAssets.length > 1;
   const fullscreenChromeClass =
-    isFullscreen && !chromeVisible ? "pointer-events-none opacity-0" : "opacity-100";
+    isFullscreen && !chromeVisible
+      ? "pointer-events-none opacity-0"
+      : "opacity-100";
 
-  const handleLightboxSurfaceClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return;
-    if (isFullscreen && !chromeVisible) {
-      resetChromeTimer();
-      return;
-    }
-    onClose();
-  }, [chromeVisible, isFullscreen, onClose, resetChromeTimer]);
+  const handleLightboxSurfaceClick = useCallback(
+    (e: MouseEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      if (isFullscreen && !chromeVisible) {
+        resetChromeTimer();
+        return;
+      }
+      onClose();
+    },
+    [chromeVisible, isFullscreen, onClose, resetChromeTimer],
+  );
 
   return (
     <div
@@ -409,7 +567,6 @@ export function PhotoLightbox({
       aria-label={`Photo: ${asset.filename}`}
       {...lightboxPointerHandlers}
     >
-
       {/* ─── Top Toolbar ─── */}
       <div
         className={`${isFullscreen ? "absolute left-0 right-0 top-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 items-center justify-between px-4 py-3 transition-opacity duration-300`}
@@ -424,9 +581,19 @@ export function PhotoLightbox({
               ~half the iPhone width and pushed the trailing buttons
               (Fullscreen, divider, Close) off-screen — users had no
               visible exit. */}
-          <span className="font-medium truncate max-w-[120px] sm:max-w-[400px]">{asset.filename}</span>
-          {asset.width && asset.height && <span className="hidden sm:inline text-white/40 text-xs">{asset.width} x {asset.height}</span>}
-          {zoom !== 1 && <span className="text-white/40 text-xs">{Math.round(zoom * 100)}%</span>}
+          <span className="font-medium truncate max-w-[120px] sm:max-w-[400px]">
+            {asset.filename}
+          </span>
+          {asset.width && asset.height && (
+            <span className="hidden sm:inline text-white/40 text-xs">
+              {asset.width} x {asset.height}
+            </span>
+          )}
+          {zoom !== 1 && (
+            <span className="text-white/40 text-xs">
+              {Math.round(zoom * 100)}%
+            </span>
+          )}
           {asset.burst_is_top_pick && (
             <span className="hidden sm:inline rounded-full bg-accent-primary/20 border border-accent-primary/30 px-2 py-0.5 text-[10px] font-semibold text-accent-primary uppercase tracking-wider">
               Top pick
@@ -436,15 +603,29 @@ export function PhotoLightbox({
         <div className="flex shrink-0 items-center gap-1.5">
           {/* Zoom buttons hidden on mobile — touch devices have native
               pinch-to-zoom and the buttons crowded out the Close exit. */}
-          <GlassIconButton size="sm" label="Zoom out (-)" className="hidden sm:inline-flex" onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}><ZoomOut /></GlassIconButton>
-          <GlassIconButton size="sm" label="Zoom in (+)" className="hidden sm:inline-flex" onClick={() => setZoom(z => Math.min(z + 0.25, 3))}><ZoomIn /></GlassIconButton>
+          <GlassIconButton
+            size="sm"
+            label="Zoom out (-)"
+            className="hidden sm:inline-flex"
+            onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
+          >
+            <ZoomOut />
+          </GlassIconButton>
+          <GlassIconButton
+            size="sm"
+            label="Zoom in (+)"
+            className="hidden sm:inline-flex"
+            onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
+          >
+            <ZoomIn />
+          </GlassIconButton>
           <div className="hidden sm:block w-px h-6 bg-white/10 mx-1" />
           {asset.face_boxes && asset.face_boxes.length > 0 && (
             <GlassIconButton
               size="sm"
               label={showFaces ? "Hide faces (B)" : "Show faces (B)"}
               active={showFaces}
-              onClick={() => setShowFaces(s => !s)}
+              onClick={() => setShowFaces((s) => !s)}
             >
               {/* Square outline icon reused from CheckCircle as face marker */}
               <CheckCircle />
@@ -455,14 +636,28 @@ export function PhotoLightbox({
               size="sm"
               label={compareMode ? "Exit compare" : "Compare with next"}
               active={compareMode}
-              onClick={() => setCompareMode(s => !s)}
+              onClick={() => setCompareMode((s) => !s)}
             >
               {/* Reuses ChevronRight as "split" marker */}
               <ChevronRight />
             </GlassIconButton>
           )}
-          <GlassIconButton size="sm" label="Comments (C)" active={showComments} onClick={() => setShowComments(s => !s)}><ChatBubble /></GlassIconButton>
-          <GlassIconButton size="sm" label="Info (I)" active={showInfo} onClick={() => setShowInfo(s => !s)}><InfoCircle /></GlassIconButton>
+          <GlassIconButton
+            size="sm"
+            label="Comments (C)"
+            active={showComments}
+            onClick={() => setShowComments((s) => !s)}
+          >
+            <ChatBubble />
+          </GlassIconButton>
+          <GlassIconButton
+            size="sm"
+            label="Info (I)"
+            active={showInfo}
+            onClick={() => setShowInfo((s) => !s)}
+          >
+            <InfoCircle />
+          </GlassIconButton>
           <GlassIconButton
             size="sm"
             label="Download original"
@@ -484,14 +679,30 @@ export function PhotoLightbox({
           {/* Fullscreen toggle hidden on mobile — phone browsers already
               render the image at viewport size and the button was crowding
               out the Close (X) exit. */}
-          <GlassIconButton size="sm" label={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"} className="hidden sm:inline-flex" onClick={toggleFullscreen}>{isFullscreen ? <Compress /> : <Expand />}</GlassIconButton>
+          <GlassIconButton
+            size="sm"
+            label={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
+            className="hidden sm:inline-flex"
+            onClick={toggleFullscreen}
+          >
+            {isFullscreen ? <Compress /> : <Expand />}
+          </GlassIconButton>
           <div className="hidden sm:block w-px h-6 bg-white/10 mx-1" />
-          <GlassIconButton size="sm" variant="ghost" label="Close (Esc)" onClick={onClose}><XMark /></GlassIconButton>
+          <GlassIconButton
+            size="sm"
+            variant="ghost"
+            label="Close (Esc)"
+            onClick={onClose}
+          >
+            <XMark />
+          </GlassIconButton>
         </div>
       </div>
 
       {/* ─── Main Content ─── */}
-      <div className={`${isFullscreen ? "relative flex-1" : "flex min-h-0 flex-1"} overflow-hidden`}>
+      <div
+        className={`${isFullscreen ? "relative flex-1" : "flex min-h-0 flex-1"} overflow-hidden`}
+      >
         {/* Image/video area */}
         <div
           className={`${isFullscreen ? "absolute inset-0 p-2" : "relative flex-1 p-4"} flex min-h-0 min-w-0 items-center justify-center overflow-hidden`}
@@ -499,7 +710,11 @@ export function PhotoLightbox({
         >
           {compareMode && compareRight ? (
             // GAL-FR-092: compare mode takes over the main area.
-            <CompareMode left={asset} right={compareRight} onExit={() => setCompareMode(false)} />
+            <CompareMode
+              left={asset}
+              right={compareRight}
+              onExit={() => setCompareMode(false)}
+            />
           ) : (
             <>
               {hasPrev && !compareMode && (
@@ -507,7 +722,10 @@ export function PhotoLightbox({
                   size="lg"
                   label="Previous (Left arrow)"
                   className={`${fullscreenChromeClass} absolute left-4 z-10 transition-opacity duration-300`}
-                  onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPrev?.();
+                  }}
                 >
                   <ChevronLeft />
                 </GlassIconButton>
@@ -516,8 +734,20 @@ export function PhotoLightbox({
               {isVideo(asset) ? (
                 // GAL-FR-095: video playback with poster, controls, trim.
                 <VideoPlayer
-                  src={authedStorageUrl(asset.download_url || (asset.storage_key ? `/storage/${asset.storage_key}` : ""), token)}
-                  poster={authedStorageUrl(asset.poster_url || asset.thumbnail_urls?.thumb_lg_webp || asset.thumbnail_urls?.thumb_md_webp || asset.thumbnail_urls?.thumb_sm_webp, token)}
+                  src={authedStorageUrl(
+                    asset.download_url ||
+                      (asset.storage_key
+                        ? `/storage/${asset.storage_key}`
+                        : ""),
+                    token,
+                  )}
+                  poster={authedStorageUrl(
+                    asset.poster_url ||
+                      asset.thumbnail_urls?.thumb_lg_webp ||
+                      asset.thumbnail_urls?.thumb_md_webp ||
+                      asset.thumbnail_urls?.thumb_sm_webp,
+                    token,
+                  )}
                   showTrim={isProofing}
                   className="flex h-full w-full items-center justify-center"
                 />
@@ -543,7 +773,10 @@ export function PhotoLightbox({
                   {/* GAL-FR-088 — watermark overlay */}
                   <WatermarkOverlay config={gallery?.watermark_config} />
                   {/* GAL-FR-089 — face bounding boxes */}
-                  <FaceBoxesOverlay boxes={asset.face_boxes} visible={showFaces} />
+                  <FaceBoxesOverlay
+                    boxes={asset.face_boxes}
+                    visible={showFaces}
+                  />
                 </div>
               )}
 
@@ -552,7 +785,10 @@ export function PhotoLightbox({
                   size="lg"
                   label="Next (Right arrow)"
                   className={`${fullscreenChromeClass} absolute right-4 z-10 transition-opacity duration-300`}
-                  onClick={(e) => { e.stopPropagation(); onNext?.(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNext?.();
+                  }}
                 >
                   <ChevronRight />
                 </GlassIconButton>
@@ -564,30 +800,69 @@ export function PhotoLightbox({
         {/* Comments sidebar */}
         {showComments && (
           <div className="w-80 shrink-0 border-l border-white/10 bg-black/60 backdrop-blur-xl flex flex-col">
-            <div className="p-4 border-b border-white/10"><h3 className="text-sm font-semibold text-white">Comments</h3></div>
+            <div className="p-4 border-b border-white/10">
+              <h3 className="text-sm font-semibold text-white">Comments</h3>
+            </div>
             <div className="flex-1 overflow-y-auto p-4">
               {displayedComments.length === 0 ? (
-                <p className="text-sm text-white/30 text-center py-8">No comments yet</p>
+                <p className="text-sm text-white/30 text-center py-8">
+                  No comments yet
+                </p>
               ) : (
                 <div className="space-y-3">
                   {displayedComments.map((comment) => (
-                    <article key={comment.id} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2">
+                    <article
+                      key={comment.id}
+                      className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2"
+                    >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-xs font-semibold text-white/80">{comment.author_name || "Studio"}</p>
-                        <time className="shrink-0 text-[10px] text-white/35" dateTime={comment.created_at}>
-                          {new Date(comment.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        <p className="truncate text-xs font-semibold text-white/80">
+                          {comment.author_name || "Studio"}
+                        </p>
+                        <time
+                          className="shrink-0 text-[10px] text-white/35"
+                          dateTime={comment.created_at}
+                        >
+                          {new Date(comment.created_at).toLocaleTimeString(
+                            "en-IN",
+                            { hour: "2-digit", minute: "2-digit" },
+                          )}
                         </time>
                       </div>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-white/70">{comment.body}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-white/70">
+                        {comment.body}
+                      </p>
                     </article>
                   ))}
                 </div>
               )}
             </div>
             <div className="p-4 border-t border-white/10">
-              {commentError && <p role="alert" className="mb-2 text-xs text-feedback-error">{commentError}</p>}
-              <textarea value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSubmitComment(); } }} placeholder="Add a comment..." className="w-full resize-none rounded-xl border border-white/15 bg-white/5 backdrop-blur-sm px-3 py-2 text-sm text-white placeholder-white/25 focus:border-white/30 focus:outline-none" rows={2} />
-              <button onClick={() => void handleSubmitComment()} disabled={!commentText.trim() || commentSubmitting} className="mt-2 w-full rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 py-2 text-sm font-medium text-white hover:bg-white/18 disabled:opacity-30 transition-all">{commentSubmitting ? "Posting..." : "Post"}</button>
+              {commentError && (
+                <p role="alert" className="mb-2 text-xs text-feedback-error">
+                  {commentError}
+                </p>
+              )}
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSubmitComment();
+                  }
+                }}
+                placeholder="Add a comment..."
+                className="w-full resize-none rounded-xl border border-white/15 bg-white/5 backdrop-blur-sm px-3 py-2 text-sm text-white placeholder-white/25 focus:border-white/30 focus:outline-none"
+                rows={2}
+              />
+              <button
+                onClick={() => void handleSubmitComment()}
+                disabled={!commentText.trim() || commentSubmitting}
+                className="mt-2 w-full rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 py-2 text-sm font-medium text-white hover:bg-white/18 disabled:opacity-30 transition-all"
+              >
+                {commentSubmitting ? "Posting..." : "Post"}
+              </button>
             </div>
           </div>
         )}
@@ -598,10 +873,11 @@ export function PhotoLightbox({
         <div className="px-4 shrink-0">
           <button
             type="button"
-            onClick={() => setBurstExpanded(s => !s)}
+            onClick={() => setBurstExpanded((s) => !s)}
             className="text-xs text-white/50 hover:text-white/80 transition-colors"
           >
-            {burstExpanded ? "Hide" : "Show"} burst ({burstSiblings.length} photos)
+            {burstExpanded ? "Hide" : "Show"} burst ({burstSiblings.length}{" "}
+            photos)
           </button>
           {burstExpanded && (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
@@ -661,9 +937,30 @@ export function PhotoLightbox({
           {/* Proofing toolbar */}
           {isProofing && (
             <div className="mb-3 flex items-center justify-center gap-4">
-              <GlassIconButton size="lg" variant="accent" label="Select (1)" onClick={() => onProofingAction?.(asset.id, "select")}><CheckCircle /></GlassIconButton>
-              <GlassIconButton size="lg" variant="success" label="Approve (2)" onClick={() => onProofingAction?.(asset.id, "approve")}><ThumbsUp /></GlassIconButton>
-              <GlassIconButton size="lg" variant="danger" label="Reject (3)" onClick={() => onProofingAction?.(asset.id, "reject")}><XCircle /></GlassIconButton>
+              <GlassIconButton
+                size="lg"
+                variant="accent"
+                label="Select (1)"
+                onClick={() => onProofingAction?.(asset.id, "select")}
+              >
+                <CheckCircle />
+              </GlassIconButton>
+              <GlassIconButton
+                size="lg"
+                variant="success"
+                label="Approve (2)"
+                onClick={() => onProofingAction?.(asset.id, "approve")}
+              >
+                <ThumbsUp />
+              </GlassIconButton>
+              <GlassIconButton
+                size="lg"
+                variant="danger"
+                label="Reject (3)"
+                onClick={() => onProofingAction?.(asset.id, "reject")}
+              >
+                <XCircle />
+              </GlassIconButton>
             </div>
           )}
 
@@ -671,30 +968,91 @@ export function PhotoLightbox({
           {showInfo && (
             <div className="mx-auto max-w-2xl rounded-2xl bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] px-6 py-4 text-white shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.2)]">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">File info</h3>
-                <span className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
-                  asset.status === "ready" ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20" :
-                  asset.status === "failed" ? "bg-feedback-error/15 text-feedback-error/70 border-feedback-error/20" :
-                  "bg-feedback-warning/15 text-feedback-warning/70 border-feedback-warning/20"
-                }`}>{asset.status}</span>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">
+                  File info
+                </h3>
+                <span
+                  className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
+                    asset.status === "ready"
+                      ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20"
+                      : asset.status === "failed"
+                        ? "bg-feedback-error/15 text-feedback-error/70 border-feedback-error/20"
+                        : "bg-feedback-warning/15 text-feedback-warning/70 border-feedback-warning/20"
+                  }`}
+                >
+                  {asset.status}
+                </span>
               </div>
               <p className="text-sm text-white/60">
-                {asset.filename}{" — "}
-                {asset.width && asset.height ? `${asset.width} x ${asset.height} px` : "Dimensions unknown"}{" "}
+                {asset.filename}
+                {" — "}
+                {asset.width && asset.height
+                  ? `${asset.width} x ${asset.height} px`
+                  : "Dimensions unknown"}{" "}
                 — {formatBytes(asset.size_bytes)} — {asset.content_type}
               </p>
               {Object.keys(exif).length > 0 ? (
                 <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
-                  {exif.camera_make ? <div><span className="text-white/35">Camera</span> <span className="text-white/70">{String(exif.camera_make)} {String(exif.camera_model || "")}</span></div> : null}
-                  {exif.focal_length ? <div><span className="text-white/35">Focal</span> <span className="text-white/70">{String(exif.focal_length)}mm</span></div> : null}
-                  {exif.exposure_time ? <div><span className="text-white/35">Shutter</span> <span className="text-white/70">{String(exif.exposure_time)}</span></div> : null}
-                  {exif.f_number ? <div><span className="text-white/35">Aperture</span> <span className="text-white/70">f/{String(exif.f_number)}</span></div> : null}
-                  {exif.iso ? <div><span className="text-white/35">ISO</span> <span className="text-white/70">{String(exif.iso)}</span></div> : null}
-                  {exif.date_taken ? <div><span className="text-white/35">Taken</span> <span className="text-white/70">{String(exif.date_taken)}</span></div> : null}
-                  {exif.lens_model ? <div className="sm:col-span-2"><span className="text-white/35">Lens</span> <span className="text-white/70">{String(exif.lens_model)}</span></div> : null}
+                  {exif.camera_make ? (
+                    <div>
+                      <span className="text-white/35">Camera</span>{" "}
+                      <span className="text-white/70">
+                        {String(exif.camera_make)}{" "}
+                        {String(exif.camera_model || "")}
+                      </span>
+                    </div>
+                  ) : null}
+                  {exif.focal_length ? (
+                    <div>
+                      <span className="text-white/35">Focal</span>{" "}
+                      <span className="text-white/70">
+                        {String(exif.focal_length)}mm
+                      </span>
+                    </div>
+                  ) : null}
+                  {exif.exposure_time ? (
+                    <div>
+                      <span className="text-white/35">Shutter</span>{" "}
+                      <span className="text-white/70">
+                        {String(exif.exposure_time)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {exif.f_number ? (
+                    <div>
+                      <span className="text-white/35">Aperture</span>{" "}
+                      <span className="text-white/70">
+                        f/{String(exif.f_number)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {exif.iso ? (
+                    <div>
+                      <span className="text-white/35">ISO</span>{" "}
+                      <span className="text-white/70">{String(exif.iso)}</span>
+                    </div>
+                  ) : null}
+                  {exif.date_taken ? (
+                    <div>
+                      <span className="text-white/35">Taken</span>{" "}
+                      <span className="text-white/70">
+                        {String(exif.date_taken)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {exif.lens_model ? (
+                    <div className="sm:col-span-2">
+                      <span className="text-white/35">Lens</span>{" "}
+                      <span className="text-white/70">
+                        {String(exif.lens_model)}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
-                <p className="mt-3 text-xs text-white/25 border-t border-white/8 pt-3">No EXIF metadata available for this file.</p>
+                <p className="mt-3 text-xs text-white/25 border-t border-white/8 pt-3">
+                  No EXIF metadata available for this file.
+                </p>
               )}
             </div>
           )}

@@ -60,7 +60,7 @@ npm run test:backend
 
 # 4. Dependency vulnerability scan.
 (cd frontend && pnpm audit --audit-level high)
-(cd backend && go run golang.org/x/vuln/cmd/govulncheck@latest ./...)
+(cd backend && go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...)
 
 # 5. Confirm the working tree is on the commit you intend to ship.
 git status
@@ -276,7 +276,7 @@ If the deploy applied a destructive migration, **code rollback alone is
 not enough** — the old code does not understand the new schema. You
 must:
 
-1. Restore from the most recent R2 backup: see `disaster-recovery-from-r2.md`.
+1. Restore from the most recent B2 backup: see `disaster-recovery-from-r2.md`.
 2. Replay any non-destructive writes that occurred between the backup
    and the bad deploy.
 3. Roll back the code as in § 8a.
