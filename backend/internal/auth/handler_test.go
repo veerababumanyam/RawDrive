@@ -922,6 +922,58 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
 }
 
+func TestOAuthGoogleCallback_UnactivatedAccountRedirectIncludesActivationEmail(t *testing.T) {
+	t.Setenv("FRONTEND_URL", "http://localhost:3000")
+
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+
+	email := "inactive@example.com"
+	profile := &auth.OAuthProfile{
+		Email:         email,
+		EmailVerified: true,
+		DisplayName:   "Inactive User",
+		ProviderID:    "google-inactive",
+	}
+	store := &mockUserStore{users: map[string]*auth.User{
+		email: {ID: "inactive-uuid", Email: email, EmailVerified: false},
+	}}
+	oauthSvc, state, cookieValue := newAuthorizedService(t, newMockProvider(profile), store)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(oauthStateCookie(cookieValue))
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusFound, resp.StatusCode)
+	location, err := url.Parse(resp.Header.Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "http", location.Scheme)
+	assert.Equal(t, "localhost:3000", location.Host)
+	assert.Equal(t, "/login", location.Path)
+	assert.Equal(t, string(auth.OAuthErrAccountNotActivated), location.Query().Get("error"))
+	assert.Equal(t, email, location.Query().Get("email"))
+}
+
 func TestOAuthGoogleCallback_InvalidClientRedirectsConfigUnavailable(t *testing.T) {
 	t.Setenv("FRONTEND_URL", "http://localhost:3000")
 

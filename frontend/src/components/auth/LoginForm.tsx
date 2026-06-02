@@ -52,7 +52,7 @@ function friendlyOAuthError(code: string | null, reason?: string | null) {
     case "oauth_email_unverified":
       return "Google could not confirm that email address. Use your password or another Google account.";
     case "oauth_account_not_activated":
-      return "This RawDrive account is registered but not activated. Activate it with the OTP from registration, then sign in.";
+      return "This RawDrive account is registered but not activated. Activate it to continue.";
     case "oauth_google_link_conflict":
       return "That Google account is already linked to another RawDrive account.";
     case "oauth_rawdrive_link_conflict":
@@ -92,6 +92,7 @@ export function LoginForm() {
   const oauthErrorReason = searchParams.get("reason");
   const sessionExpired = searchParams.get("session_expired") === "1";
   const prefilledEmail = searchParams.get("email") || "";
+  const activationEmail = oauthError === "oauth_account_not_activated" ? prefilledEmail : "";
 
   const googleStartUrl = useMemo(() => getGoogleOAuthStartUrl(API_BASE), []);
 
@@ -252,6 +253,15 @@ export function LoginForm() {
         >
           {error}
         </div>
+      ) : null}
+
+      {activationEmail ? (
+        <Link
+          href={`/activate?email=${encodeURIComponent(activationEmail)}`}
+          className="surface-button w-full text-sm font-semibold"
+        >
+          Activate account
+        </Link>
       ) : null}
 
       {oauthEnabled && (

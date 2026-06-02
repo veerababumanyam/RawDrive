@@ -828,6 +828,7 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state, stateCookie)
 	if err != nil {
 		errorCode := "oauth_failed"
+		redirectParams := map[string]string{"error": errorCode}
 		var oauthErr *OAuthCallbackError
 		if errors.As(err, &oauthErr) {
 			switch oauthErr.Code {
@@ -842,12 +843,16 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 				OAuthErrConfigUnavailable:
 				errorCode = string(oauthErr.Code)
 			}
+			redirectParams["error"] = errorCode
+			if oauthErr.Code == OAuthErrAccountNotActivated {
+				redirectParams["email"] = strings.TrimSpace(oauthErr.Details["email"])
+			}
 		}
 		log.Printf("auth.OAuthGoogleCallback: failed code=%s err=%v", errorCode, err)
 		http.Redirect(
 			w,
 			r,
-			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": errorCode}),
+			buildFrontendLoginRedirect(returnTo, fallbackOrigin, redirectParams),
 			http.StatusFound,
 		)
 		return

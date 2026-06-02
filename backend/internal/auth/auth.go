@@ -792,8 +792,9 @@ const (
 )
 
 type OAuthCallbackError struct {
-	Code OAuthErrorCode
-	Err  error
+	Code    OAuthErrorCode
+	Err     error
+	Details map[string]string
 }
 
 func (e *OAuthCallbackError) Error() string {
@@ -815,6 +816,10 @@ func (e *OAuthCallbackError) Unwrap() error {
 
 func oauthError(code OAuthErrorCode, err error) error {
 	return &OAuthCallbackError{Code: code, Err: err}
+}
+
+func oauthErrorWithDetails(code OAuthErrorCode, err error, details map[string]string) error {
+	return &OAuthCallbackError{Code: code, Err: err, Details: details}
 }
 
 var (
@@ -986,7 +991,11 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state, co
 		// pre-registered the victim's email and never activated it (S1-G1 /
 		// AREA-AUTH-4).
 		if !existing.EmailVerified {
-			return nil, returnTo, oauthError(OAuthErrAccountNotActivated, errors.New("local account email is not activated"))
+			return nil, returnTo, oauthErrorWithDetails(
+				OAuthErrAccountNotActivated,
+				errors.New("local account email is not activated"),
+				map[string]string{"email": profile.Email},
+			)
 		}
 		if err := s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID); err != nil {
 			switch {

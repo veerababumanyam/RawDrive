@@ -114,12 +114,14 @@ describe("LoginForm Google OAuth callback handling", () => {
   });
 
   it("explains when Google sign-in hits an unactivated RawDrive account", () => {
-    nav.params = new URLSearchParams("error=oauth_account_not_activated");
+    nav.params = new URLSearchParams("error=oauth_account_not_activated&email=photo%40rawdrive.test");
 
     const { getByRole } = render(<LoginForm />);
 
     expect(getByRole("alert").textContent).toContain("registered but not activated");
-    expect(getByRole("alert").textContent).toContain("OTP");
+    expect(getByRole("link", { name: /activate account/i }).getAttribute("href")).toBe(
+      "/activate?email=photo%40rawdrive.test",
+    );
   });
 
   it("keeps the existing message when the Google account belongs to another RawDrive account", () => {

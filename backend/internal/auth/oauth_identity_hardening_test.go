@@ -44,6 +44,7 @@ func TestOAuthHardening_UnverifiedLocalAccountNotTakenOver(t *testing.T) {
 	var oauthErr *auth.OAuthCallbackError
 	require.True(t, errors.As(err, &oauthErr), "expected OAuthCallbackError")
 	assert.Equal(t, auth.OAuthErrAccountNotActivated, oauthErr.Code)
+	assert.Equal(t, "victim@gmail.com", oauthErr.Details["email"])
 }
 
 // TestOAuthHardening_VerifiedLocalAccountStillLinks is the negative control for
