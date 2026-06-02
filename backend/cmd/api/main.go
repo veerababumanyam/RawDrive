@@ -2350,8 +2350,12 @@ func main() {
 		// Log-only providers are safe for dev / CI; production can replace
 		// them via the same With* chain without touching handlers.
 		pdfSvc := service.NewPDFService()
+		// WhatsApp delivery disabled in production (ops, 2026-06-02): no WhatsApp
+		// Business API provider is configured and the log-only stub sent nothing
+		// real. Unregistering the provider makes the whatsapp channel a silent
+		// no-op (the delivery service skips channels with no registered provider),
+		// while email (SMTP) + push + in-app continue to deliver.
 		notifDeliverySvc := service.NewNotificationDeliveryService(notificationRepo).
-			WithProvider(service.LogWhatsAppProvider{}).
 			WithProvider(service.LogPushProvider{})
 		if notificationEmailSender != nil {
 			notifDeliverySvc.WithProvider(smtpNotificationEmailProvider{sender: notificationEmailSender})
@@ -2373,7 +2377,7 @@ func main() {
 		}
 		notifDispatcher := handler.NewNotificationDispatcher(notifDeliverySvc, ownerLookup)
 		publicLeadDispatcher = notifDispatcher
-		log.Println("M4: notification delivery service wired (log-only email/push/whatsapp providers)")
+		log.Println("M4: notification delivery service wired (email via SMTP + log-only push; WhatsApp disabled per ops 2026-06-02)")
 
 		// M4 routes (public lead form is registered inside RegisterM4Routes without auth)
 		handler.RegisterM4Routes(api, handler.M4Dependencies{
