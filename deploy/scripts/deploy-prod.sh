@@ -39,7 +39,7 @@ set -euo pipefail
 
 APP1_IP="187.127.142.42"
 APP2_IP="187.127.142.44"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/rawdrive_hostinger}"
 # Pinned known-hosts file for strict host-key verification. Env override first,
 # then the repo-committed deploy/known_hosts, then the operator's default.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

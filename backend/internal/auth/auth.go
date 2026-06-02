@@ -780,12 +780,15 @@ type OAuthStart struct {
 type OAuthErrorCode string
 
 const (
-	OAuthErrStateInvalid      OAuthErrorCode = "oauth_state_invalid"
-	OAuthErrStateExpired      OAuthErrorCode = "oauth_state_expired"
-	OAuthErrTokenInvalid      OAuthErrorCode = "oauth_token_invalid"
-	OAuthErrEmailUnverified   OAuthErrorCode = "oauth_email_unverified"
-	OAuthErrAccountConflict   OAuthErrorCode = "oauth_account_conflict"
-	OAuthErrConfigUnavailable OAuthErrorCode = "oauth_config_unavailable"
+	OAuthErrStateInvalid         OAuthErrorCode = "oauth_state_invalid"
+	OAuthErrStateExpired         OAuthErrorCode = "oauth_state_expired"
+	OAuthErrTokenInvalid         OAuthErrorCode = "oauth_token_invalid"
+	OAuthErrEmailUnverified      OAuthErrorCode = "oauth_email_unverified"
+	OAuthErrAccountConflict      OAuthErrorCode = "oauth_account_conflict"
+	OAuthErrAccountNotActivated  OAuthErrorCode = "oauth_account_not_activated"
+	OAuthErrGoogleLinkConflict   OAuthErrorCode = "oauth_google_link_conflict"
+	OAuthErrRawDriveLinkConflict OAuthErrorCode = "oauth_rawdrive_link_conflict"
+	OAuthErrConfigUnavailable    OAuthErrorCode = "oauth_config_unavailable"
 )
 
 type OAuthCallbackError struct {
@@ -814,7 +817,11 @@ func oauthError(code OAuthErrorCode, err error) error {
 	return &OAuthCallbackError{Code: code, Err: err}
 }
 
-var ErrOAuthAccountConflict = errors.New("oauth account conflict")
+var (
+	ErrOAuthAccountConflict      = errors.New("oauth account conflict")
+	ErrOAuthGoogleLinkConflict   = errors.New("oauth google identity linked to another account")
+	ErrOAuthRawDriveLinkConflict = errors.New("oauth account already linked to another google identity")
+)
 
 func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore) *OAuthService {
 	return &OAuthService{
@@ -979,10 +986,15 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state, co
 		// pre-registered the victim's email and never activated it (S1-G1 /
 		// AREA-AUTH-4).
 		if !existing.EmailVerified {
-			return nil, returnTo, oauthError(OAuthErrAccountConflict, errors.New("local account email is not activated"))
+			return nil, returnTo, oauthError(OAuthErrAccountNotActivated, errors.New("local account email is not activated"))
 		}
 		if err := s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID); err != nil {
-			if errors.Is(err, ErrOAuthAccountConflict) {
+			switch {
+			case errors.Is(err, ErrOAuthGoogleLinkConflict):
+				return nil, returnTo, oauthError(OAuthErrGoogleLinkConflict, err)
+			case errors.Is(err, ErrOAuthRawDriveLinkConflict):
+				return nil, returnTo, oauthError(OAuthErrRawDriveLinkConflict, err)
+			case errors.Is(err, ErrOAuthAccountConflict):
 				return nil, returnTo, oauthError(OAuthErrAccountConflict, err)
 			}
 			return nil, returnTo, err
@@ -1018,7 +1030,12 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state, co
 	// activated without the email-OTP step.
 	_ = s.store.MarkEmailVerified(ctx, created.ID)
 	if err := s.store.LinkOAuth(ctx, created.ID, "google", profile.ProviderID); err != nil {
-		if errors.Is(err, ErrOAuthAccountConflict) {
+		switch {
+		case errors.Is(err, ErrOAuthGoogleLinkConflict):
+			return nil, returnTo, oauthError(OAuthErrGoogleLinkConflict, err)
+		case errors.Is(err, ErrOAuthRawDriveLinkConflict):
+			return nil, returnTo, oauthError(OAuthErrRawDriveLinkConflict, err)
+		case errors.Is(err, ErrOAuthAccountConflict):
 			return nil, returnTo, oauthError(OAuthErrAccountConflict, err)
 		}
 		return nil, returnTo, err

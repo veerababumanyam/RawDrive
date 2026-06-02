@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/rawdrive/backend/internal/auth"
@@ -146,10 +147,17 @@ func (m *mockUserStore) LinkOAuth(ctx context.Context, userID, provider, provide
 	}
 	oauthKey := provider + ":" + providerID
 	if existingUserID, ok := m.oauthLinks[oauthKey]; ok && existingUserID != userID {
-		return auth.ErrOAuthAccountConflict
+		return auth.ErrOAuthGoogleLinkConflict
 	}
 	if existingUserID, ok := m.links[linkKey(provider, providerID)]; ok && existingUserID != userID {
-		return auth.ErrOAuthAccountConflict
+		return auth.ErrOAuthGoogleLinkConflict
+	}
+	for existingKey, existingUserID := range m.links {
+		if existingUserID == userID &&
+			strings.HasPrefix(existingKey, provider+"|") &&
+			existingKey != linkKey(provider, providerID) {
+			return auth.ErrOAuthRawDriveLinkConflict
+		}
 	}
 	// Write both indexes so FindByOAuth and FindByProviderSubject stay in sync.
 	m.oauthLinks[oauthKey] = userID
@@ -316,6 +324,61 @@ func TestGoogleOAuth_AccountLinking(t *testing.T) {
 	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	require.NoError(t, err)
 	assert.Equal(t, "link-uuid", user.ID, "should link Google to existing account")
+}
+
+func TestGoogleOAuth_GoogleIdentityLinkedElsewhereGetsSpecificCode(t *testing.T) {
+	profile := &auth.OAuthProfile{
+		Email:         "existing@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Existing User",
+		ProviderID:    "google-id-owned-elsewhere",
+	}
+	provider := newMockProvider(profile)
+	store := &mockUserStore{
+		users: map[string]*auth.User{
+			"existing@gmail.com": {ID: "existing-uuid", Email: "existing@gmail.com", EmailVerified: true},
+			"other@gmail.com":    {ID: "other-uuid", Email: "other@gmail.com", EmailVerified: true},
+		},
+		oauthLinks: map[string]string{
+			"google:google-id-owned-elsewhere": "other-uuid",
+		},
+	}
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
+
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
+
+	require.Error(t, err)
+	assert.Nil(t, user)
+	var oauthErr *auth.OAuthCallbackError
+	require.ErrorAs(t, err, &oauthErr)
+	assert.Equal(t, auth.OAuthErrGoogleLinkConflict, oauthErr.Code)
+}
+
+func TestGoogleOAuth_RawDriveAccountLinkedToDifferentGoogleGetsSpecificCode(t *testing.T) {
+	profile := &auth.OAuthProfile{
+		Email:         "existing@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Existing User",
+		ProviderID:    "google-id-current",
+	}
+	provider := newMockProvider(profile)
+	store := &mockUserStore{
+		users: map[string]*auth.User{
+			"existing@gmail.com": {ID: "existing-uuid", Email: "existing@gmail.com", EmailVerified: true},
+		},
+		links: map[string]string{
+			linkKey("google", "google-id-stale"): "existing-uuid",
+		},
+	}
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
+
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
+
+	require.Error(t, err)
+	assert.Nil(t, user)
+	var oauthErr *auth.OAuthCallbackError
+	require.ErrorAs(t, err, &oauthErr)
+	assert.Equal(t, auth.OAuthErrRawDriveLinkConflict, oauthErr.Code)
 }
 
 func TestGoogleOAuth_RevokedConsent(t *testing.T) {

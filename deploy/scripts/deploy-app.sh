@@ -87,6 +87,7 @@ elif [ -f "$SCRIPT_DIR/../known_hosts" ]; then
 else
     KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 fi
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/rawdrive_hostinger}"
 SSH=(ssh)
 if [ -n "${SSH_KEY:-}" ]; then
     SSH+=(-i "$SSH_KEY")

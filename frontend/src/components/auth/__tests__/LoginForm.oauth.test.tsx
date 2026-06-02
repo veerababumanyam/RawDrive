@@ -113,6 +113,36 @@ describe("LoginForm Google OAuth callback handling", () => {
     expect(getByRole("alert").textContent).toContain("Use your password");
   });
 
+  it("explains when Google sign-in hits an unactivated RawDrive account", () => {
+    nav.params = new URLSearchParams("error=oauth_account_not_activated");
+
+    const { getByRole } = render(<LoginForm />);
+
+    expect(getByRole("alert").textContent).toContain("registered but not activated");
+    expect(getByRole("alert").textContent).toContain("OTP");
+  });
+
+  it("keeps the existing message when the Google account belongs to another RawDrive account", () => {
+    nav.params = new URLSearchParams("error=oauth_google_link_conflict");
+
+    const { getByRole } = render(<LoginForm />);
+
+    expect(getByRole("alert").textContent).toBe(
+      "That Google account is already linked to another RawDrive account.",
+    );
+  });
+
+  it("explains when the RawDrive account already has a different Google link", () => {
+    nav.params = new URLSearchParams("error=oauth_rawdrive_link_conflict");
+
+    const { getByRole } = render(<LoginForm />);
+
+    expect(getByRole("alert").textContent).toContain(
+      "already linked to a different Google account",
+    );
+    expect(getByRole("alert").textContent).toContain("reset the Google link");
+  });
+
   it("renders a friendly expired-state message without refreshing", async () => {
     nav.params = new URLSearchParams("error=oauth_state_expired&state=sensitive");
 

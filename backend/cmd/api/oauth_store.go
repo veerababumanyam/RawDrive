@@ -170,9 +170,10 @@ func (s *oauthUserStore) LinkOAuth(ctx context.Context, userID, provider, provid
 	// When the insert is a no-op (RowsAffected == 0) we still resolve WHO owns
 	// the conflicting link: a re-link by the SAME user is idempotent success,
 	// but a different user (or a different subject already bound to this
-	// account) is a genuine account-takeover attempt and surfaces as
-	// auth.ErrOAuthAccountConflict so the callback rejects it (S1-G2 defense in
-	// depth at the application layer, on top of the DB constraints).
+	// account) is a genuine account-takeover attempt and surfaces as a typed
+	// OAuth link conflict so the callback can explain which side is already
+	// linked (S1-G2 defense in depth at the application layer, on top of the
+	// DB constraints).
 	tag, err := s.db.Exec(ctx, `
 		INSERT INTO user_auth_methods (user_id, provider, provider_subject)
 		VALUES ($1, $2, $3)
@@ -195,7 +196,7 @@ func (s *oauthUserStore) LinkOAuth(ctx context.Context, userID, provider, provid
 		if linkedUserID == userID {
 			return nil
 		}
-		return auth.ErrOAuthAccountConflict
+		return auth.ErrOAuthGoogleLinkConflict
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
@@ -208,7 +209,7 @@ func (s *oauthUserStore) LinkOAuth(ctx context.Context, userID, provider, provid
 		WHERE user_id = $1 AND provider = $2
 	`, userID, provider).Scan(&linkedSubject)
 	if err == nil && linkedSubject != providerID {
-		return auth.ErrOAuthAccountConflict
+		return auth.ErrOAuthRawDriveLinkConflict
 	}
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err

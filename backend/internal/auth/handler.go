@@ -833,7 +833,13 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			switch oauthErr.Code {
 			case OAuthErrStateInvalid, OAuthErrStateExpired:
 				errorCode = string(oauthErr.Code)
-			case OAuthErrEmailUnverified, OAuthErrAccountConflict, OAuthErrTokenInvalid, OAuthErrConfigUnavailable:
+			case OAuthErrEmailUnverified,
+				OAuthErrAccountNotActivated,
+				OAuthErrGoogleLinkConflict,
+				OAuthErrRawDriveLinkConflict,
+				OAuthErrAccountConflict,
+				OAuthErrTokenInvalid,
+				OAuthErrConfigUnavailable:
 				errorCode = string(oauthErr.Code)
 			}
 		}

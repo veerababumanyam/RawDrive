@@ -132,7 +132,9 @@ node tools/cobolt-sync-tokens.js sync   # after editing design-tokens.json
 ```
 
 ### Deploy (Production)
-- Hostinger: 3 KVM VPSes (`.42`/`.44` app tier, `.46` db).
+- Hostinger: 3 KVM VPSes (`.42`/`.44` app tier, `.46` db). Full IPs: `187.127.142.42` / `.44` / `.46`.
+- **SSH access:** root login uses the dedicated deploy key `~/.ssh/rawdrive_hostinger` (ed25519 fingerprint `SHA256:IJch3VFzuGuz6kk41q/kbPOYPlt9l/rq+AaROpmGZS8`). The deploy scripts default `SSH_KEY` to this path. **Do NOT use `~/.ssh/id_ed25519`** — that is the local GitHub/default identity and is no longer authorized on the nodes. Leave all pre-existing team keys on the nodes in place.
+- Host keys for all three nodes are pinned in `deploy/known_hosts` (deploy runs `StrictHostKeyChecking=yes`). If a node is rebuilt, re-verify fingerprints out-of-band before updating that file — never seed blind.
 - Rolling deploy via `deploy/scripts/deploy-prod.ps1` — app1 first, then app2.
 - Never bypass the script; never deploy directly to `.46`.
 

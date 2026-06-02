@@ -12,7 +12,9 @@ export function ActivateForm() {
   const email = searchParams.get("email") || "";
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   if (!email) {
     return (
@@ -28,6 +30,7 @@ export function ActivateForm() {
 
     setLoading(true);
     setError("");
+    setNotice("");
 
     try {
       const response = await fetch(`${API_BASE}/auth/verify-otp`, {
@@ -52,11 +55,52 @@ export function ActivateForm() {
     }
   }
 
+  async function handleResendOtp() {
+    setResendLoading(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || "Could not send a new activation code.");
+        return;
+      }
+
+      setNotice(payload.message || "If this account is unverified, a new activation code has been sent.");
+    } catch {
+      setError("Network error. Please confirm the API server is running.");
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
   return (
     <div className="mt-8 space-y-6">
       {error ? (
-        <div className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error"
+        >
           {error}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-2xl border border-feedback-success/20 bg-feedback-success/10 px-4 py-3 text-sm text-feedback-success"
+        >
+          {notice}
         </div>
       ) : null}
 
@@ -92,19 +136,29 @@ export function ActivateForm() {
       <button
         type="button"
         onClick={() => void handleVerifyOtp()}
-        disabled={loading || otpCode.length < 6}
+        disabled={loading || resendLoading || otpCode.length < 6}
         className="btn-primary w-full py-4 font-headline text-base disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? "Activating..." : "Verify & Activate"}
       </button>
 
+      <button
+        type="button"
+        onClick={() => void handleResendOtp()}
+        disabled={loading || resendLoading}
+        className="surface-button w-full text-sm font-semibold"
+      >
+        {resendLoading ? "Sending..." : "Send new activation code"}
+      </button>
+
       <div className="text-center">
-         <button 
-           type="button" 
-           onClick={() => router.push('/login')} 
-           className="text-sm font-semibold text-text-tertiary transition-colors hover:text-text-primary">
-            Back to login
-         </button>
+        <button
+          type="button"
+          onClick={() => router.push("/login")}
+          className="text-sm font-semibold text-text-tertiary transition-colors hover:text-text-primary"
+        >
+          Back to login
+        </button>
       </div>
     </div>
   );

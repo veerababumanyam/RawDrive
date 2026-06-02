@@ -51,8 +51,14 @@ function friendlyOAuthError(code: string | null, reason?: string | null) {
       return "That Google sign-in link expired. Start again from this page.";
     case "oauth_email_unverified":
       return "Google could not confirm that email address. Use your password or another Google account.";
-    case "oauth_account_conflict":
+    case "oauth_account_not_activated":
+      return "This RawDrive account is registered but not activated. Activate it with the OTP from registration, then sign in.";
+    case "oauth_google_link_conflict":
       return "That Google account is already linked to another RawDrive account.";
+    case "oauth_rawdrive_link_conflict":
+      return "This RawDrive account is already linked to a different Google account. Use password login or contact support to reset the Google link.";
+    case "oauth_account_conflict":
+      return "This Google sign-in conflicts with an existing RawDrive account. Use password login or contact support.";
     case "oauth_refresh_failed":
       return friendlyOAuthRefreshFailure(reason ?? null);
     case "oauth_storage_blocked":

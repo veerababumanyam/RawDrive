@@ -43,7 +43,7 @@ func TestOAuthHardening_UnverifiedLocalAccountNotTakenOver(t *testing.T) {
 	assert.Nil(t, user, "no session may be issued for the takeover attempt")
 	var oauthErr *auth.OAuthCallbackError
 	require.True(t, errors.As(err, &oauthErr), "expected OAuthCallbackError")
-	assert.Equal(t, auth.OAuthErrAccountConflict, oauthErr.Code)
+	assert.Equal(t, auth.OAuthErrAccountNotActivated, oauthErr.Code)
 }
 
 // TestOAuthHardening_VerifiedLocalAccountStillLinks is the negative control for
