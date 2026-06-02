@@ -293,6 +293,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 			upgradeOrderID.String(), userID, billingInterval,
 		)
 		if err != nil {
+			log.Printf("subscription upgrade: persist phonepe order failed: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist upgrade order"})
 			return
 		}
@@ -321,6 +322,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise, rzpOrderID, userID, billingInterval,
 	)
 	if err != nil {
+		log.Printf("subscription upgrade: persist razorpay order failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist upgrade order"})
 		return
 	}
