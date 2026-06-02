@@ -99,6 +99,7 @@ export default async function PublicSinglePhotoPage({ params, searchParams }: Pr
       gallery={gallery}
       branding={branding}
       gallerySessionToken={sessionToken}
+      workspaceScope={ws ?? null}
     />
   );
 }

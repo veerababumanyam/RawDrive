@@ -22,6 +22,19 @@ export type RechargeProvider = "phonepe" | "razorpay";
 // the pricing UX ship ahead of the full checkout flow.
 export type RechargeSurface = "streaming" | "uploads";
 
+type RazorpayRechargeOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  name: string;
+  description: string;
+  handler: () => void;
+  modal?: { ondismiss?: () => void };
+};
+
+type RazorpayConstructor = new (options: RazorpayRechargeOptions) => { open(): void };
+
 export type RechargeModalProps = {
   open: boolean;
   onClose: () => void;
@@ -49,6 +62,7 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
   const [provider, setProvider] = useState<RechargeProvider>("phonepe");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
 
   // Dismiss on Escape — complements the visible close button so the modal
   // meets the "cancelable dialog" expectation (WCAG + HIG). Listener is
@@ -95,6 +109,7 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
     if (!selectedPackageId) return;
     setSubmitting(true);
     setError(null);
+    setCheckoutNotice(null);
     try {
       const token = typeof window !== "undefined" ? getStoredAccessToken() : "";
       const res = await fetch(`${API_BASE}/api/v1/streaming/recharge`, {
@@ -107,17 +122,33 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
         credentials: "include",
         body: JSON.stringify({ package_id: selectedPackageId, provider }),
       });
-      const data = (await res.json().catch(() => ({}))) as { redirect_url?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        provider?: RechargeProvider;
+        checkout_url?: string;
+        redirect_url?: string;
+        amount_paise?: number;
+        currency?: string;
+        error?: string;
+      };
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
-      const url = data.redirect_url || "";
-      if (!url.startsWith("https:")) {
-        throw new Error("Invalid redirect URL");
-      }
+      const url = data.checkout_url || data.redirect_url || "";
       if (onRedirect) {
         onRedirect(url);
-      } else if (typeof window !== "undefined") {
+        return;
+      }
+      if (provider === "razorpay" && url.startsWith("razorpay://checkout")) {
+        await openRazorpayRecharge(url, data.amount_paise || 0, data.currency || "INR", () => {
+          setCheckoutNotice("Payment received. Your streaming balance will update after provider confirmation.");
+          onClose();
+        });
+        return;
+      }
+      if (!url.startsWith("https:")) {
+        throw new Error("Invalid checkout URL");
+      }
+      if (typeof window !== "undefined") {
         window.location.assign(url);
       }
     } catch (err) {
@@ -331,6 +362,11 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
             {error}
           </div>
         )}
+        {checkoutNotice && surface === "streaming" && (
+          <div data-testid="recharge-notice" className="rounded-lg border border-feedback-success/30 bg-feedback-success/10 p-3 text-sm">
+            {checkoutNotice}
+          </div>
+        )}
 
         <footer className="flex items-center justify-end gap-2">
           {/* Labeled text "Cancel" matches the NewUserDialog convention
@@ -359,6 +395,69 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
       </div>
     </div>
   );
+}
+
+async function openRazorpayRecharge(
+  checkoutURL: string,
+  amountPaise: number,
+  currency: string,
+  onSuccess: () => void,
+) {
+  if (typeof window === "undefined") {
+    throw new Error("Razorpay checkout is available only in the browser");
+  }
+  const parsed = new URL(checkoutURL);
+  const key = parsed.searchParams.get("key_id") || "";
+  const orderID = parsed.searchParams.get("order_id") || "";
+  if (!key || !orderID || amountPaise <= 0) {
+    throw new Error("Razorpay checkout details missing");
+  }
+  await loadRazorpayScript();
+  const Razorpay = (window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay;
+  if (!Razorpay) {
+    throw new Error("Razorpay checkout failed to load");
+  }
+  const rzp = new Razorpay({
+    key,
+    amount: amountPaise,
+    currency,
+    order_id: orderID,
+    name: "RawDrive",
+    description: "Streaming recharge",
+    handler: onSuccess,
+  });
+  rzp.open();
+}
+
+function loadRazorpayScript(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if ((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay) return Promise.resolve();
+  const existing = document.getElementById("razorpay-checkout-js");
+  if (existing) {
+    return waitForRazorpay();
+  }
+  const script = document.createElement("script");
+  script.id = "razorpay-checkout-js";
+  script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  script.async = true;
+  document.head.appendChild(script);
+  return waitForRazorpay();
+}
+
+function waitForRazorpay(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = window.setTimeout(() => {
+      window.clearInterval(poll);
+      reject(new Error("Razorpay script timeout"));
+    }, 8000);
+    const poll = window.setInterval(() => {
+      if ((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay) {
+        window.clearTimeout(deadline);
+        window.clearInterval(poll);
+        resolve();
+      }
+    }, 100);
+  });
 }
 
 export default RechargeModal;

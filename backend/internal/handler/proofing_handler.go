@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -16,6 +17,7 @@ type ProofingHandler struct {
 	proofingSvc *service.ProofingService
 	gallerySvc  *service.GalleryService // optional, for selection limit checks
 	accessSvc   *service.GalleryAccessService
+	shareSvc    *service.ShareLinkService
 }
 
 func NewProofingHandler(svc *service.ProofingService) *ProofingHandler {
@@ -30,6 +32,11 @@ func (h *ProofingHandler) WithGalleryService(gs *service.GalleryService) *Proofi
 
 func (h *ProofingHandler) WithGalleryAccessService(accessSvc *service.GalleryAccessService) *ProofingHandler {
 	h.accessSvc = accessSvc
+	return h
+}
+
+func (h *ProofingHandler) WithShareLinkService(shareSvc *service.ShareLinkService) *ProofingHandler {
+	h.shareSvc = shareSvc
 	return h
 }
 
@@ -128,6 +135,10 @@ func (h *ProofingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.proofingSvc.UpdateStatusInWorkspace(r.Context(), selectionID, input.Status, workspaceID)
 	if err != nil {
+		if errors.Is(err, service.ErrProofingInvalidStatus) {
+			http.Error(w, `{"error":"invalid status"}`, http.StatusBadRequest)
+			return
+		}
 		http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -166,48 +177,46 @@ func (h *ProofingHandler) SubmitPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var galleryID uuid.UUID
-	var maxSelections int
-	var passwordHash *string
-	if h.gallerySvc != nil {
-		gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
-		if err == nil && gallery != nil {
-			galleryID = gallery.ID
-			maxSelections = gallery.MaxSelections
-			passwordHash = gallery.PasswordHash
-		}
-	}
-	if passwordHash != nil && *passwordHash != "" {
-		token := r.Header.Get("X-Gallery-Session")
-		if token == "" {
-			if c, err := r.Cookie("gallery_session"); err == nil {
-				token = c.Value
-			}
-		}
-		if h.accessSvc == nil || !h.accessSvc.ValidateSession(r.Context(), galleryID, token) {
-			http.Error(w, `{"error":"gallery password required"}`, http.StatusUnauthorized)
-			return
-		}
+	if h.gallerySvc == nil {
+		http.Error(w, `{"error":"proofing unavailable"}`, http.StatusInternalServerError)
+		return
 	}
 
-	// M22 E74-S1: Selection limit enforcement
-	if h.gallerySvc != nil {
-		if galleryID != uuid.Nil && maxSelections > 0 {
-			existing, _ := h.proofingSvc.CountByGallery(r.Context(), galleryID)
-			if existing+len(input.AssetIDs) > maxSelections {
-				respondJSON(w, http.StatusTooManyRequests, map[string]interface{}{
-					"error":   "selection_limit_reached",
-					"limit":   maxSelections,
-					"current": existing,
-				})
-				return
-			}
-		}
+	publicGate := NewPublicGalleryHandler(h.gallerySvc, nil, h.shareSvc).
+		WithGalleryAccessService(h.accessSvc)
+
+	gallery, err := publicGate.resolveGalleryForRequest(r, slug)
+	if err != nil {
+		http.Error(w, `{"error":"gallery lookup failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if gallery == nil {
+		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+		return
 	}
 
-	if err := h.proofingSvc.SubmitPublicBySlug(r.Context(), slug, input.AssetIDs, input.ClientName, input.ClientEmail, input.Note); err != nil {
+	if !publicGate.gateGalleryAccess(w, r, gallery) {
+		return
+	}
+
+	if err := h.proofingSvc.SubmitPublicForGallery(r.Context(), gallery, input.AssetIDs, input.ClientName, input.ClientEmail, input.Note); err != nil {
 		if err.Error() == "gallery not found" || err.Error() == "gallery is not published" {
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+			return
+		}
+		if err.Error() == "gallery has expired" {
+			http.Error(w, `{"error":"gallery expired"}`, http.StatusGone)
+			return
+		}
+		if errors.Is(err, service.ErrProofingSelectionLimitExceeded) {
+			respondJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+				"error": "selection_limit_reached",
+				"limit": gallery.MaxSelections,
+			})
+			return
+		}
+		if errors.Is(err, service.ErrProofingAssetNotInGallery) {
+			http.Error(w, `{"error":"asset not in gallery"}`, http.StatusBadRequest)
 			return
 		}
 		http.Error(w, `{"error":"submission failed"}`, http.StatusInternalServerError)

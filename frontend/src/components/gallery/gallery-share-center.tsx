@@ -10,6 +10,10 @@ import {
   type GalleryShareLink,
 } from "@/lib/api/galleries";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
+import {
+  appendStoredGalleryKeyFragment,
+  setUrlSearchParamBeforeFragment,
+} from "@/lib/media-encryption/share-url";
 
 interface GalleryShareCenterProps {
   gallery: Gallery;
@@ -40,10 +44,12 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
   // Without workspace identity in props this helper falls back to /g/<slug>
   // (legacy apex). When this component is eventually wired, pass workspace
   // identity to galleryPublicUrl as the (dashboard) gallery page does.
+  const galleryId = gallery.id;
+  const gallerySlug = gallery.slug;
   const publicUrl = useMemo(() => {
-    if (!gallery.slug) return "";
-    return galleryPublicUrl(gallery);
-  }, [gallery.slug]);
+    if (!gallerySlug) return "";
+    return appendStoredGalleryKeyFragment(galleryPublicUrl({ slug: gallerySlug }), galleryId);
+  }, [galleryId, gallerySlug]);
   const legacyUrl = ""; // unused in the orphan state — keep variable for JSX below
 
   useEffect(() => {
@@ -96,7 +102,7 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
         channel,
       });
       setLinks((current) => [created, ...current]);
-      const shareUrl = `${publicUrl}?share=${created.token}`;
+      const shareUrl = setUrlSearchParamBeforeFragment(publicUrl, "share", created.token);
       if (channel === "copy") {
         await navigator.clipboard.writeText(shareUrl).catch(() => undefined);
       }

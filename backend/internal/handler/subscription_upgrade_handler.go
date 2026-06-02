@@ -19,6 +19,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -27,48 +28,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rawdrive/backend/internal/middleware"
+	"github.com/rawdrive/backend/internal/service"
 )
-
-// planQuotaBytes maps canonical tier slugs to storage quota in bytes.
-// Keep in sync with service.PlanDefaultQuotaBytes and frontend/src/lib/tokens.ts.
-var planQuotaBytes = map[string]int64{
-	"free":         1 << 30,         // 1 GB
-	"starter":      30 * (1 << 30),  // 30 GB
-	"professional": 300 * (1 << 30), // 300 GB
-	"business":     3 * (1 << 40),   // 3 TB
-	"enterprise":   6 * (1 << 40),   // 6 TB
-}
-
-// planDefaultQuota returns the quota bytes for a tier, defaulting to 1 GB.
-func planDefaultQuota(tier string) int64 {
-	if q, ok := planQuotaBytes[tier]; ok {
-		return q
-	}
-	return 1 << 30
-}
-
-// planPricePaise maps canonical tier slugs to monthly prices in paise (INR×100).
-var planPricePaise = map[string]int64{
-	"starter":      9900,   // ₹99
-	"professional": 29900,  // ₹299
-	"business":     299900, // ₹2,999
-	"enterprise":   599900, // ₹5,999
-}
-
-// planAnnualPricePaise maps canonical tier slugs to annual prices in paise (INR×100).
-// Keep in sync with pricingPlans[*].annualPrice in frontend/src/lib/tokens.ts.
-var planAnnualPricePaise = map[string]int64{
-	"starter":      99000,   // ₹990
-	"professional": 299000,  // ₹2,990
-	"business":     2999000, // ₹29,990
-	"enterprise":   5999000, // ₹59,990
-}
 
 // validTierOrder defines the valid promotion path; a workspace can only move
 // to a different paid tier (not free).
-var validUpgradeTiers = map[string]bool{
-	"starter": true, "professional": true, "business": true, "enterprise": true,
-}
+func validUpgradeTier(tier string) bool { return service.IsPaidPlanTier(tier) }
 
 // RazorpayUpgradeConfig holds the credentials for the subscription upgrade flow.
 // Populated from env vars: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET.
@@ -79,6 +44,10 @@ type RazorpayUpgradeConfig struct {
 	BaseURL       string // default: https://api.razorpay.com
 }
 
+type paymentSettingsReader interface {
+	Get(ctx context.Context, category, key string) (string, bool, error)
+}
+
 // SubscriptionUpgradeHandler creates orders for plan-tier upgrades and
 // processes the resulting payment confirmations. Supports two providers
 // in parallel — Razorpay (modal-based Checkout SDK) and PhonePe v2
@@ -87,10 +56,14 @@ type RazorpayUpgradeConfig struct {
 // and the other will still serve as long as the user picks the
 // configured one.
 type SubscriptionUpgradeHandler struct {
-	db            *pgxpool.Pool
-	rzp           RazorpayUpgradeConfig
-	phonepe       *PhonePeV2Client // nil when PHONEPE_* env vars are unset
-	publicBaseURL string           // for building the PhonePe redirect-back URL
+	db                     *pgxpool.Pool
+	rzp                    RazorpayUpgradeConfig
+	phonepe                *PhonePeV2Client // nil when PHONEPE_* env vars are unset
+	publicBaseURL          string           // for building the PhonePe redirect-back URL
+	phonepeWebhookUsername string
+	phonepeWebhookPassword string
+	paymentSettings        paymentSettingsReader
+	storageAccounting      *service.StorageAccounting
 }
 
 // NewSubscriptionUpgradeHandler always returns a handler. When credentials are
@@ -121,12 +94,9 @@ func NewSubscriptionUpgradeHandlerFromEnv(db *pgxpool.Pool) *SubscriptionUpgrade
 	clientID := firstNonEmptyEnv("PHONEPE_CLIENT_ID", "PHONEPE_CLIENTID")
 	clientSecret := firstNonEmptyEnv("PHONEPE_CLIENT_SECRET", "PHONEPE_SECRET")
 	clientVersion := firstNonEmptyEnv("PHONEPE_CLIENT_VERSION", "PHONEPE_VERSION")
-	baseURL := firstNonEmptyEnv("PHONEPE_BASE_URL")
+	baseURL := firstNonEmptyEnv("PHONEPE_V2_BASE_URL", "PHONEPE_BASE_URL")
 	if baseURL == "" {
-		// Default to the sandbox host so local dev works against test
-		// creds without needing an extra env var. Production deploys
-		// MUST set PHONEPE_BASE_URL explicitly to the live host.
-		baseURL = "https://api-preprod.phonepe.com/apis/pg-sandbox"
+		baseURL = defaultPhonePeV2BaseURL()
 	}
 	// PhonePe production splits auth onto a separate host
 	// (api.phonepe.com/apis/identity-manager) while pay+status stay on
@@ -134,7 +104,10 @@ func NewSubscriptionUpgradeHandlerFromEnv(db *pgxpool.Pool) *SubscriptionUpgrade
 	// fall back to BaseURL inside the client (sandbox behavior).
 	// Discovered live 2026-05-19 when prod returned 400
 	// "Api Mapping Not Found" on the /v1/oauth/token call.
-	authBaseURL := firstNonEmptyEnv("PHONEPE_AUTH_BASE_URL")
+	authBaseURL := firstNonEmptyEnv("PHONEPE_V2_AUTH_BASE_URL", "PHONEPE_AUTH_BASE_URL")
+	if authBaseURL == "" {
+		authBaseURL = defaultPhonePeV2AuthBaseURL(baseURL)
+	}
 	h.phonepe = NewPhonePeV2Client(PhonePeV2Config{
 		ClientID:      clientID,
 		ClientSecret:  clientSecret,
@@ -143,9 +116,29 @@ func NewSubscriptionUpgradeHandlerFromEnv(db *pgxpool.Pool) *SubscriptionUpgrade
 		AuthBaseURL:   authBaseURL,
 	})
 	h.publicBaseURL = firstNonEmptyEnv("PUBLIC_BASE_URL", "FRONTEND_URL")
-	if h.publicBaseURL == "" {
-		h.publicBaseURL = "http://localhost:3001"
-	}
+	h.phonepeWebhookUsername = firstNonEmptyEnv("PHONEPE_WEBHOOK_USERNAME")
+	h.phonepeWebhookPassword = firstNonEmptyEnv("PHONEPE_WEBHOOK_PASSWORD")
+	return h
+}
+
+// NewSubscriptionUpgradeHandlerFromSettings reads payment configuration from
+// platform_settings first, then environment variables. Missing credentials
+// leave the relevant provider disabled; the request handler returns 503 for
+// that provider instead of substituting fake defaults.
+func NewSubscriptionUpgradeHandlerFromSettings(ctx context.Context, db *pgxpool.Pool, settings paymentSettingsReader) *SubscriptionUpgradeHandler {
+	h := NewSubscriptionUpgradeHandler(db, RazorpayUpgradeConfig{})
+	h.paymentSettings = settings
+	cfg := h.currentPaymentConfig(ctx)
+	h.rzp = cfg.rzp
+	h.phonepe = cfg.phonepe
+	h.publicBaseURL = cfg.publicBaseURL
+	h.phonepeWebhookUsername = cfg.phonepeWebhookUsername
+	h.phonepeWebhookPassword = cfg.phonepeWebhookPassword
+	return h
+}
+
+func (h *SubscriptionUpgradeHandler) WithStorageAccounting(storageAccounting *service.StorageAccounting) *SubscriptionUpgradeHandler {
+	h.storageAccounting = storageAccounting
 	return h
 }
 
@@ -158,12 +151,158 @@ func firstNonEmptyEnv(keys ...string) string {
 	return ""
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func defaultPhonePeV2BaseURL() string {
+	return "https://api.phonepe.com/apis/pg"
+}
+
+func defaultPhonePeV2AuthBaseURL(baseURL string) string {
+	if strings.Contains(strings.TrimRight(baseURL, "/"), "api.phonepe.com/apis/pg") {
+		return "https://api.phonepe.com/apis/identity-manager"
+	}
+	return ""
+}
+
+type subscriptionPaymentConfig struct {
+	rzp                    RazorpayUpgradeConfig
+	phonepe                *PhonePeV2Client
+	publicBaseURL          string
+	phonepeWebhookUsername string
+	phonepeWebhookPassword string
+}
+
+func (h *SubscriptionUpgradeHandler) currentPaymentConfig(ctx context.Context) subscriptionPaymentConfig {
+	if h.paymentSettings == nil {
+		return subscriptionPaymentConfig{
+			rzp:                    h.rzp,
+			phonepe:                h.phonepe,
+			publicBaseURL:          h.publicBaseURL,
+			phonepeWebhookUsername: h.phonepeWebhookUsername,
+			phonepeWebhookPassword: h.phonepeWebhookPassword,
+		}
+	}
+
+	read := func(key string, envNames ...string) string {
+		if h.paymentSettings != nil {
+			if value, ok, err := h.paymentSettings.Get(ctx, "payments", key); err != nil {
+				log.Printf("payments settings: failed to read %s: %v", key, err)
+			} else if ok && strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		}
+		return firstNonEmptyEnv(envNames...)
+	}
+
+	rzp := RazorpayUpgradeConfig{
+		KeyID:         read("razorpay_key_id", "RAZORPAY_KEY_ID"),
+		KeySecret:     read("razorpay_key_secret", "RAZORPAY_KEY_SECRET"),
+		WebhookSecret: read("razorpay_webhook_secret", "RAZORPAY_WEBHOOK_SECRET"),
+		BaseURL:       read("razorpay_base_url", "RAZORPAY_BASE_URL"),
+	}
+	if rzp.BaseURL == "" {
+		rzp.BaseURL = "https://api.razorpay.com"
+	}
+
+	baseURL := read("phonepe_v2_base_url", "PHONEPE_V2_BASE_URL", "PHONEPE_BASE_URL")
+	if baseURL == "" {
+		baseURL = defaultPhonePeV2BaseURL()
+	}
+	authBaseURL := firstNonEmpty(
+		read("phonepe_v2_auth_base_url", "PHONEPE_V2_AUTH_BASE_URL"),
+		read("phonepe_auth_base_url", "PHONEPE_AUTH_BASE_URL"),
+	)
+	if authBaseURL == "" {
+		authBaseURL = defaultPhonePeV2AuthBaseURL(baseURL)
+	}
+	phonepe := NewPhonePeV2Client(PhonePeV2Config{
+		ClientID:      firstNonEmpty(read("phonepe_client_id", "PHONEPE_CLIENT_ID"), read("phonepe_clientid", "PHONEPE_CLIENTID")),
+		ClientSecret:  firstNonEmpty(read("phonepe_client_secret", "PHONEPE_CLIENT_SECRET"), read("phonepe_secret", "PHONEPE_SECRET")),
+		ClientVersion: firstNonEmpty(read("phonepe_client_version", "PHONEPE_CLIENT_VERSION"), read("phonepe_version", "PHONEPE_VERSION")),
+		BaseURL:       baseURL,
+		AuthBaseURL:   authBaseURL,
+	})
+
+	return subscriptionPaymentConfig{
+		rzp:     rzp,
+		phonepe: phonepe,
+		publicBaseURL: firstNonEmpty(
+			read("public_base_url", "PUBLIC_BASE_URL"),
+			read("frontend_url", "FRONTEND_URL"),
+			read("callback_base_url", "PAYMENT_CALLBACK_BASE_URL"),
+		),
+		phonepeWebhookUsername: read("phonepe_webhook_username", "PHONEPE_WEBHOOK_USERNAME"),
+		phonepeWebhookPassword: read("phonepe_webhook_password", "PHONEPE_WEBHOOK_PASSWORD"),
+	}
+}
+
+func (cfg subscriptionPaymentConfig) razorpayConfigured() bool {
+	return cfg.rzp.KeyID != "" && cfg.rzp.KeySecret != "" && cfg.rzp.WebhookSecret != ""
+}
+
+func (cfg subscriptionPaymentConfig) phonepeConfigured() bool {
+	return cfg.phonepe != nil &&
+		strings.TrimSpace(cfg.publicBaseURL) != ""
+}
+
+func (cfg subscriptionPaymentConfig) phonepeWebhookConfigured() bool {
+	return strings.TrimSpace(cfg.phonepeWebhookUsername) != "" &&
+		strings.TrimSpace(cfg.phonepeWebhookPassword) != ""
+}
+
+func isStrictUpgrade(fromTier, toTier string) bool {
+	fromRank, fromKnown := service.PlanTierRank(strings.TrimSpace(fromTier))
+	toRank, toKnown := service.PlanTierRank(strings.TrimSpace(toTier))
+	return fromKnown && toKnown && toRank > fromRank
+}
+
 func (h *SubscriptionUpgradeHandler) configured() bool {
-	return h.rzp.KeyID != "" && h.rzp.KeySecret != "" && h.rzp.WebhookSecret != ""
+	return h.currentPaymentConfig(context.Background()).razorpayConfigured()
 }
 
 func (h *SubscriptionUpgradeHandler) phonepeConfigured() bool {
-	return h.phonepe != nil
+	return h.currentPaymentConfig(context.Background()).phonepeConfigured()
+}
+
+func (h *SubscriptionUpgradeHandler) phonepeWebhookConfigured() bool {
+	return h.currentPaymentConfig(context.Background()).phonepeWebhookConfigured()
+}
+
+type paymentProviderAvailability struct {
+	ID         string `json:"id"`
+	Configured bool   `json:"configured"`
+}
+
+type paymentProvidersResponse struct {
+	Providers       []paymentProviderAvailability `json:"providers"`
+	DefaultProvider string                        `json:"default_provider,omitempty"`
+}
+
+func (h *SubscriptionUpgradeHandler) PaymentProviders(w http.ResponseWriter, r *http.Request) {
+	cfg := h.currentPaymentConfig(r.Context())
+	razorpayConfigured := cfg.razorpayConfigured()
+	phonepeConfigured := cfg.phonepeConfigured()
+	defaultProvider := ""
+	switch {
+	case razorpayConfigured:
+		defaultProvider = "razorpay"
+	case phonepeConfigured:
+		defaultProvider = "phonepe"
+	}
+	writeJSON(w, http.StatusOK, paymentProvidersResponse{
+		DefaultProvider: defaultProvider,
+		Providers: []paymentProviderAvailability{
+			{ID: "razorpay", Configured: razorpayConfigured},
+			{ID: "phonepe", Configured: phonepeConfigured},
+		},
+	})
 }
 
 // ── Upgrade ─────────────────────────────────────────────────────────────────
@@ -196,6 +335,7 @@ type upgradeResponse struct {
 }
 
 func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Request) {
+	cfg := h.currentPaymentConfig(r.Context())
 	wsID := middleware.WorkspaceIDFromContext(r.Context())
 	if wsID == "" || wsID == "pending-onboarding" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace required"})
@@ -207,7 +347,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 		return
 	}
-	if !validUpgradeTiers[body.ToTier] {
+	if !validUpgradeTier(body.ToTier) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid to_tier"})
 		return
 	}
@@ -216,13 +356,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	if billingInterval != "annual" {
 		billingInterval = "monthly"
 	}
-	var amountPaise int64
-	var ok bool
-	if billingInterval == "annual" {
-		amountPaise, ok = planAnnualPricePaise[body.ToTier]
-	} else {
-		amountPaise, ok = planPricePaise[body.ToTier]
-	}
+	amountPaise, ok := service.PlanPricePaise(body.ToTier, billingInterval)
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no price for tier"})
 		return
@@ -234,12 +368,12 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	}
 	switch provider {
 	case "razorpay":
-		if !h.configured() {
+		if !cfg.razorpayConfigured() {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "razorpay not configured"})
 			return
 		}
 	case "phonepe":
-		if !h.phonepeConfigured() {
+		if !cfg.phonepeConfigured() {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe not configured"})
 			return
 		}
@@ -256,19 +390,33 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not read workspace"})
 		return
 	}
+	if !isStrictUpgrade(fromTier, body.ToTier) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "target tier must be higher than current tier"})
+		return
+	}
 
 	upgradeOrderID := uuid.New()
 	userID := userIDFromSubscriptionCtx(r)
 
 	if provider == "phonepe" {
+		if strings.TrimSpace(cfg.publicBaseURL) == "" {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment callback base URL not configured"})
+			return
+		}
 		// PhonePe expects a redirectUrl on its side; the user is
-		// bounced there after paying so the frontend can fire
-		// /verify?provider=phonepe with the merchantOrderId echoed in
-		// the URL.
-		redirectURL := strings.TrimRight(h.publicBaseURL, "/") +
-			"/settings/plans/payment-callback?provider=phonepe&order_id=" +
-			upgradeOrderID.String()
-		phResult, err := h.phonepe.CreateOrder(r.Context(), CreateOrderInput{
+		// bounced there after paying so the frontend can fire /verify
+		// with the merchantOrderId echoed in the URL. Tier/interval are
+		// carried back only for UX so a failed or expired hosted checkout
+		// can restart the same purchase without making the user rebuild
+		// the selection from the plans grid.
+		callbackQuery := url.Values{}
+		callbackQuery.Set("provider", "phonepe")
+		callbackQuery.Set("order_id", upgradeOrderID.String())
+		callbackQuery.Set("tier", body.ToTier)
+		callbackQuery.Set("interval", billingInterval)
+		redirectURL := strings.TrimRight(cfg.publicBaseURL, "/") +
+			"/settings/plans/payment-callback?" + callbackQuery.Encode()
+		phResult, err := cfg.phonepe.CreateOrder(r.Context(), CreateOrderInput{
 			MerchantOrderID: upgradeOrderID.String(),
 			AmountPaise:     amountPaise,
 			RedirectURL:     redirectURL,
@@ -276,8 +424,8 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 			WorkspaceID:     wsID,
 			ToTier:          body.ToTier,
 			// PhoneNumber left blank — not collected on upgrade form.
-			// PhonePe's hosted page prompts the user. The Python SDK
-			// requires the field to be present; empty string is fine.
+			// The official SDK omits prefillUserLoginDetails when the
+			// value is unknown; PhonePe prompts on the hosted page.
 		})
 		if err != nil {
 			log.Printf("phonepe.CreateOrder failed: %v", err)
@@ -309,7 +457,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Razorpay path — unchanged from pre-2026-05-18 behaviour.
-	rzpOrderID, err := h.createRazorpayOrder(r.Context(), amountPaise, upgradeOrderID.String())
+	rzpOrderID, err := h.createRazorpayOrder(r.Context(), cfg.rzp, amountPaise, upgradeOrderID.String())
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment provider unavailable"})
 		return
@@ -330,7 +478,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		UpgradeOrderID:  upgradeOrderID.String(),
 		Provider:        "razorpay",
 		RazorpayOrderID: rzpOrderID,
-		RazorpayKeyID:   h.rzp.KeyID,
+		RazorpayKeyID:   cfg.rzp.KeyID,
 		AmountPaise:     amountPaise,
 		Currency:        "INR",
 	})
@@ -373,11 +521,14 @@ type verifyPaymentRequest struct {
 }
 
 type verifyPaymentResponse struct {
-	Status   string `json:"status"`
-	PlanTier string `json:"plan_tier"`
+	Status            string `json:"status"`
+	PlanTier          string `json:"plan_tier"`
+	ProviderState     string `json:"provider_state,omitempty"`
+	ProviderErrorCode string `json:"provider_error_code,omitempty"`
 }
 
 func (h *SubscriptionUpgradeHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	cfg := h.currentPaymentConfig(r.Context())
 	wsID := middleware.WorkspaceIDFromContext(r.Context())
 	if wsID == "" || wsID == "pending-onboarding" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace required"})
@@ -398,11 +549,11 @@ func (h *SubscriptionUpgradeHandler) Verify(w http.ResponseWriter, r *http.Reque
 	}
 
 	if provider == "phonepe" {
-		h.verifyPhonePe(w, r, wsID, body)
+		h.verifyPhonePe(w, r, wsID, body, cfg)
 		return
 	}
 
-	if !h.configured() {
+	if !cfg.razorpayConfigured() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "razorpay not configured"})
 		return
 	}
@@ -417,7 +568,7 @@ func (h *SubscriptionUpgradeHandler) Verify(w http.ResponseWriter, r *http.Reque
 	//   checkout: HMAC-SHA256(order_id + "|" + payment_id, KEY_SECRET)
 	// Mixing them up silently rejects every payment with "invalid signature",
 	// so the comment is here to keep future edits from drifting.
-	expected := hmacSHA256Hex(body.RazorpayOrderID+"|"+body.RazorpayPaymentID, h.rzp.KeySecret)
+	expected := hmacSHA256Hex(body.RazorpayOrderID+"|"+body.RazorpayPaymentID, cfg.rzp.KeySecret)
 	if !hmac.Equal([]byte(expected), []byte(body.RazorpaySignature)) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
 		return
@@ -481,8 +632,8 @@ func hmacSHA256Hex(message, key string) string {
 // localhost dev this interactive path is the only thing that updates the
 // plan_tier.
 
-func (h *SubscriptionUpgradeHandler) verifyPhonePe(w http.ResponseWriter, r *http.Request, wsID string, body verifyPaymentRequest) {
-	if !h.phonepeConfigured() {
+func (h *SubscriptionUpgradeHandler) verifyPhonePe(w http.ResponseWriter, r *http.Request, wsID string, body verifyPaymentRequest, cfg subscriptionPaymentConfig) {
+	if !cfg.phonepeConfigured() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe not configured"})
 		return
 	}
@@ -494,10 +645,11 @@ func (h *SubscriptionUpgradeHandler) verifyPhonePe(w http.ResponseWriter, r *htt
 	// Ownership check — prevent cross-workspace replay.
 	var orderWsID uuid.UUID
 	var orderProvider string
+	var orderAmountPaise int64
 	err := h.db.QueryRow(r.Context(),
-		`SELECT workspace_id, provider FROM subscription_upgrade_orders WHERE id::text = $1`,
+		`SELECT workspace_id, provider, amount_paise FROM subscription_upgrade_orders WHERE id::text = $1`,
 		body.MerchantOrderID,
-	).Scan(&orderWsID, &orderProvider)
+	).Scan(&orderWsID, &orderProvider, &orderAmountPaise)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "order not found"})
 		return
@@ -511,7 +663,7 @@ func (h *SubscriptionUpgradeHandler) verifyPhonePe(w http.ResponseWriter, r *htt
 		return
 	}
 
-	status, err := h.phonepe.FetchOrderStatus(r.Context(), body.MerchantOrderID)
+	status, err := cfg.phonepe.FetchOrderStatus(r.Context(), body.MerchantOrderID)
 	if err != nil {
 		log.Printf("phonepe.FetchOrderStatus failed for order %s: %v", body.MerchantOrderID, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not query payment status"})
@@ -519,15 +671,34 @@ func (h *SubscriptionUpgradeHandler) verifyPhonePe(w http.ResponseWriter, r *htt
 	}
 	switch status.State {
 	case "COMPLETED":
-		// fall through to apply
+		if status.Amount != orderAmountPaise {
+			log.Printf("phonepe amount mismatch for order %s: provider=%d db=%d", body.MerchantOrderID, status.Amount, orderAmountPaise)
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "payment amount mismatch"})
+			return
+		}
+		if status.PrimaryTransaction == "" {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "payment transaction missing"})
+			return
+		}
 	case "PENDING":
-		writeJSON(w, http.StatusAccepted, verifyPaymentResponse{Status: "pending", PlanTier: ""})
+		writeJSON(w, http.StatusAccepted, verifyPaymentResponse{
+			Status:            "pending",
+			PlanTier:          "",
+			ProviderState:     status.State,
+			ProviderErrorCode: firstNonEmpty(status.DetailedErrorCode, status.ErrorCode),
+		})
 		return
 	default:
 		// FAILED, EXPIRED, etc. — mark the row failed but don't change the plan.
 		// The plan tier is intentionally left unchanged.
+		log.Printf("phonepe order %s returned non-success state=%s error=%s", body.MerchantOrderID, status.State, firstNonEmpty(status.DetailedErrorCode, status.ErrorCode))
 		markUpgradeOrderFailed(r.Context(), h.db, body.MerchantOrderID)
-		writeJSON(w, http.StatusOK, verifyPaymentResponse{Status: "failed", PlanTier: ""})
+		writeJSON(w, http.StatusOK, verifyPaymentResponse{
+			Status:            "failed",
+			PlanTier:          "",
+			ProviderState:     status.State,
+			ProviderErrorCode: firstNonEmpty(status.DetailedErrorCode, status.ErrorCode),
+		})
 		return
 	}
 
@@ -564,7 +735,7 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 	err = tx.QueryRow(ctx, `
 		UPDATE subscription_upgrade_orders
 		   SET status = 'paid', provider_payment_id = $1, updated_at = NOW()
-		 WHERE id::text = $2 AND provider = 'phonepe' AND status = 'pending'
+		 WHERE id::text = $2 AND provider = 'phonepe' AND status IN ('pending', 'failed')
 		RETURNING workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly')`,
 		transactionID, merchantOrderID,
 	).Scan(&wsID, &toTier, &amountPaise, &billingIntervalPP)
@@ -583,7 +754,7 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
 		 VALUES ($1, 0, 0, $2)
 		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
-		wsID, planDefaultQuota(toTier),
+		wsID, service.PlanDefaultQuotaBytes(toTier),
 	); err != nil {
 		return fmt.Errorf("update storage quota: %w", err)
 	}
@@ -606,7 +777,17 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 	); err != nil {
 		return fmt.Errorf("insert subscription: %w", err)
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	h.invalidateStorageAnalytics(wsID)
+	return nil
+}
+
+func (h *SubscriptionUpgradeHandler) invalidateStorageAnalytics(workspaceID uuid.UUID) {
+	if h.storageAccounting != nil {
+		h.storageAccounting.InvalidateAnalytics(workspaceID)
+	}
 }
 
 // orderExecer is the minimal surface markUpgradeOrderFailed needs from the DB
@@ -651,10 +832,128 @@ func markUpgradeOrderFailed(ctx context.Context, db orderExecer, orderID string)
 	}
 }
 
-// ── Webhook ──────────────────────────────────────────────────────────────────
+// ── PhonePe Webhook ──────────────────────────────────────────────────────────
+
+type phonePeSubscriptionCallback struct {
+	Event   string                          `json:"event,omitempty"`
+	Data    phonePeSubscriptionCallbackData `json:"data"`
+	Payload phonePeSubscriptionCallbackData `json:"payload,omitempty"`
+}
+
+type phonePeSubscriptionCallbackData struct {
+	MerchantOrderID string `json:"merchantOrderId"`
+	State           string `json:"state"`
+	Amount          int64  `json:"amount"`
+	PaymentDetails  []struct {
+		TransactionID string `json:"transactionId"`
+	} `json:"paymentDetails"`
+}
+
+func (cb phonePeSubscriptionCallback) paymentData() phonePeSubscriptionCallbackData {
+	if cb.Data.MerchantOrderID != "" || cb.Data.State != "" || cb.Data.Amount > 0 {
+		return cb.Data
+	}
+	return cb.Payload
+}
+
+func (h *SubscriptionUpgradeHandler) PhonePeWebhook(w http.ResponseWriter, r *http.Request) {
+	cfg := h.currentPaymentConfig(r.Context())
+	if cfg.phonepe == nil || !cfg.phonepeWebhookConfigured() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe webhook not configured"})
+		return
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read body failed"})
+		return
+	}
+	if !verifyPhonePeWebhookAuthorization(r.Header.Get("Authorization"), cfg.phonepeWebhookUsername, cfg.phonepeWebhookPassword) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
+		return
+	}
+	var cb phonePeSubscriptionCallback
+	if err := json.Unmarshal(raw, &cb); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	data := cb.paymentData()
+	merchantOrderID := strings.TrimSpace(data.MerchantOrderID)
+	if merchantOrderID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing merchant_order_id"})
+		return
+	}
+
+	state := strings.ToUpper(strings.TrimSpace(data.State))
+	switch state {
+	case "COMPLETED":
+		status, err := cfg.phonepe.FetchOrderStatus(r.Context(), merchantOrderID)
+		if err != nil {
+			log.Printf("phonepe webhook: status fetch failed for order %s: %v", merchantOrderID, err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not query payment status"})
+			return
+		}
+		if status.State != "COMPLETED" {
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "pending"})
+			return
+		}
+		var orderAmountPaise int64
+		var orderProvider string
+		if err := h.db.QueryRow(r.Context(),
+			`SELECT provider, amount_paise FROM subscription_upgrade_orders WHERE id::text = $1`,
+			merchantOrderID,
+		).Scan(&orderProvider, &orderAmountPaise); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "order not found"})
+			return
+		}
+		if orderProvider != "phonepe" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "order was not initiated via phonepe"})
+			return
+		}
+		if status.Amount != orderAmountPaise {
+			log.Printf("phonepe webhook amount mismatch for order %s: provider=%d db=%d", merchantOrderID, status.Amount, orderAmountPaise)
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "payment amount mismatch"})
+			return
+		}
+		if status.PrimaryTransaction == "" {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "payment transaction missing"})
+			return
+		}
+		if err := h.applyPhonePePayment(r.Context(), merchantOrderID, status.PrimaryTransaction); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "apply failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	case "PENDING", "":
+		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
+	default:
+		markUpgradeOrderFailed(r.Context(), h.db, merchantOrderID)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "failed"})
+	}
+}
+
+func (h *SubscriptionUpgradeHandler) verifyPhonePeWebhookAuthorization(authorization string) bool {
+	return verifyPhonePeWebhookAuthorization(authorization, h.phonepeWebhookUsername, h.phonepeWebhookPassword)
+}
+
+func verifyPhonePeWebhookAuthorization(authorization, username, password string) bool {
+	auth := strings.TrimSpace(authorization)
+	if strings.HasPrefix(strings.ToLower(auth), "sha256 ") {
+		auth = strings.TrimSpace(auth[len("sha256 "):])
+	}
+	expected := phonePeCallbackHash(username, password)
+	return hmac.Equal([]byte(expected), []byte(auth))
+}
+
+func phonePeCallbackHash(username, password string) string {
+	sum := sha256.Sum256([]byte(username + ":" + password))
+	return hex.EncodeToString(sum[:])
+}
+
+// ── Razorpay Webhook ────────────────────────────────────────────────────────
 
 func (h *SubscriptionUpgradeHandler) Webhook(w http.ResponseWriter, r *http.Request) {
-	if !h.configured() {
+	cfg := h.currentPaymentConfig(r.Context())
+	if !cfg.razorpayConfigured() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment gateway not configured"})
 		return
 	}
@@ -666,7 +965,7 @@ func (h *SubscriptionUpgradeHandler) Webhook(w http.ResponseWriter, r *http.Requ
 
 	// Verify HMAC-SHA256(rawBody, webhookSecret) == X-Razorpay-Signature.
 	sig := r.Header.Get("X-Razorpay-Signature")
-	if !verifyRazorpaySignature(raw, sig, h.rzp.WebhookSecret) {
+	if !verifyRazorpaySignature(raw, sig, cfg.rzp.WebhookSecret) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
 		return
 	}
@@ -743,7 +1042,7 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
 		 VALUES ($1, 0, 0, $2)
 		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
-		wsID, planDefaultQuota(toTier),
+		wsID, service.PlanDefaultQuotaBytes(toTier),
 	); err != nil {
 		return fmt.Errorf("update storage quota: %w", err)
 	}
@@ -772,7 +1071,11 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 		return fmt.Errorf("insert subscription: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	h.invalidateStorageAnalytics(wsID)
+	return nil
 }
 
 // ── Razorpay helpers ─────────────────────────────────────────────────────────
@@ -788,7 +1091,7 @@ type rzpOrderResp struct {
 	ID string `json:"id"`
 }
 
-func (h *SubscriptionUpgradeHandler) createRazorpayOrder(ctx context.Context, amountPaise int64, receipt string) (string, error) {
+func (h *SubscriptionUpgradeHandler) createRazorpayOrder(ctx context.Context, cfg RazorpayUpgradeConfig, amountPaise int64, receipt string) (string, error) {
 	payload, _ := json.Marshal(rzpOrderReq{
 		Amount:   amountPaise,
 		Currency: "INR",
@@ -796,11 +1099,11 @@ func (h *SubscriptionUpgradeHandler) createRazorpayOrder(ctx context.Context, am
 		Notes:    map[string]string{"source": "subscription_upgrade", "receipt": receipt},
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(h.rzp.BaseURL, "/")+"/v1/orders", bytes.NewReader(payload))
+		strings.TrimRight(cfg.BaseURL, "/")+"/v1/orders", bytes.NewReader(payload))
 	if err != nil {
 		return "", err
 	}
-	req.SetBasicAuth(h.rzp.KeyID, h.rzp.KeySecret)
+	req.SetBasicAuth(cfg.KeyID, cfg.KeySecret)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 15 * time.Second}

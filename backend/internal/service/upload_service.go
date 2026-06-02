@@ -149,6 +149,7 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadR
 		if err := s.storageSvc.CommitUploadReservation(ctx, input.WorkspaceID, input.SizeBytes, 0); err != nil {
 			_ = s.storage.Delete(ctx, storageKey)
 			_ = s.assetRepo.SoftDelete(ctx, asset.ID)
+			releaseReservation()
 			return nil, fmt.Errorf("upload: commit storage reservation: %w", err)
 		}
 		reservedStorage = false

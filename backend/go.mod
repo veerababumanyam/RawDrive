@@ -3,6 +3,7 @@ module github.com/rawdrive/backend
 go 1.26.3
 
 require (
+	github.com/PhonePe/phonepe-pg-sdk-go v1.0.0
 	github.com/aws/aws-sdk-go-v2 v1.41.9
 	github.com/aws/aws-sdk-go-v2/config v1.32.20
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.19

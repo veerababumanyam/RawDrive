@@ -1275,6 +1275,7 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 			if h.assetRepo != nil {
 				_ = h.assetRepo.SoftDelete(ctx, asset.ID)
 			}
+			releaseReservation("reservation-commit-failure")
 			return nil, fmt.Errorf("commit storage reservation: %w", err)
 		}
 	}

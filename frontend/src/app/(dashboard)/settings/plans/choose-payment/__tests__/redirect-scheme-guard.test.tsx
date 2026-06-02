@@ -8,12 +8,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 // (open redirect / XSS). This mirrors the existing guard in
 // components/streams/RechargeModal.tsx.
 //
-// The PhonePe *tile* is currently hidden (PHONEPE_ENABLED = false), but the
-// guard lives in the startPayment() PhonePe branch, which fires whenever the
-// backend response has provider === "phonepe" — independent of which tile the
-// user clicked. So we click the rendered Razorpay tile and have the mocked
-// /upgrade endpoint answer with provider: "phonepe", exercising the exact code
-// path under test.
+// PhonePe is visible in the payment picker; clicking it exercises the guarded
+// redirect branch directly.
 
 const pushMock = vi.fn();
 
@@ -31,7 +27,7 @@ import ChoosePaymentPage from "../page";
 
 // Build a fetch stub whose /upgrade response carries a PhonePe order with the
 // supplied redirect_url.
-function stubUpgradeFetch(redirectUrl: string) {
+function stubUpgradeFetch(redirectUrl: string, phonePeConfigured = true) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -39,6 +35,19 @@ function stubUpgradeFetch(redirectUrl: string) {
         : input instanceof URL
           ? input.toString()
           : (input as Request).url;
+    if (url.includes("/workspace/subscription/payment-providers")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          default_provider: "razorpay",
+          providers: [
+            { id: "razorpay", configured: true },
+            { id: "phonepe", configured: phonePeConfigured },
+          ],
+        }),
+      } as unknown as Response;
+    }
     if (url.includes("/workspace/subscription/upgrade")) {
       return {
         ok: true,
@@ -80,15 +89,28 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
 
     render(<ChoosePaymentPage />);
 
-    // The only visible payment tile is Razorpay (PhonePe tile is gated off).
-    // Clicking it triggers startPayment(); the mocked /upgrade answers with a
-    // PhonePe order, driving the guarded branch.
     const payButton = await screen.findByRole("button", {
-      name: /pay .* with razorpay/i,
+      name: /pay .* with phonepe/i,
     });
     fireEvent.click(payButton);
 
     // Guard must reject the URL: error banner shown, no navigation.
+    await waitFor(() => {
+      expect(screen.getByText("Invalid payment redirect URL")).toBeInTheDocument();
+    });
+    expect(assignSpy).not.toHaveBeenCalled();
+  });
+
+  it("does NOT navigate to a non-PhonePe https redirect_url", async () => {
+    vi.stubGlobal("fetch", stubUpgradeFetch("https://evil.example/pay/abc123"));
+
+    render(<ChoosePaymentPage />);
+
+    const payButton = await screen.findByRole("button", {
+      name: /pay .* with phonepe/i,
+    });
+    fireEvent.click(payButton);
+
     await waitFor(() => {
       expect(screen.getByText("Invalid payment redirect URL")).toBeInTheDocument();
     });
@@ -101,7 +123,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     render(<ChoosePaymentPage />);
 
     const payButton = await screen.findByRole("button", {
-      name: /pay .* with razorpay/i,
+      name: /pay .* with phonepe/i,
     });
     fireEvent.click(payButton);
 
@@ -111,5 +133,17 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     expect(
       screen.queryByText("Invalid payment redirect URL"),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps PhonePe visible but disabled when the backend reports it is not configured", async () => {
+    vi.stubGlobal("fetch", stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123", false));
+
+    render(<ChoosePaymentPage />);
+
+    await screen.findByRole("button", {
+      name: /pay .* with razorpay/i,
+    });
+    expect(screen.getByText("Not configured")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /phonepe not configured/i })).toBeDisabled();
   });
 });

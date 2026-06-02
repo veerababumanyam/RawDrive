@@ -30,14 +30,20 @@ var ValidTransitions = map[LifecycleState][]LifecycleState{
 
 // AssetLifecycleService manages asset state transitions.
 type AssetLifecycleService struct {
-	assetRepo *repository.AssetRepo
-	coverSvc  *GalleryCoverService
-	storageSvc *StorageAccounting
+	assetRepo      *repository.AssetRepo
+	derivativeRepo *repository.AssetDerivativeRepo
+	coverSvc       *GalleryCoverService
+	storageSvc     *StorageAccounting
 }
 
 // NewAssetLifecycleService creates a new AssetLifecycleService.
 func NewAssetLifecycleService(ar *repository.AssetRepo, cs *GalleryCoverService, ss *StorageAccounting) *AssetLifecycleService {
 	return &AssetLifecycleService{assetRepo: ar, coverSvc: cs, storageSvc: ss}
+}
+
+func (s *AssetLifecycleService) WithDerivativeRepo(repo *repository.AssetDerivativeRepo) *AssetLifecycleService {
+	s.derivativeRepo = repo
+	return s
 }
 
 // CanTransition checks if the state transition is valid.
@@ -92,6 +98,9 @@ func (s *AssetLifecycleService) Transition(ctx context.Context, input Transition
 		if err := s.assetRepo.SoftDelete(ctx, input.AssetID); err != nil {
 			return fmt.Errorf("lifecycle: soft delete: %w", err)
 		}
+		if err := s.recordDelete(ctx, asset); err != nil {
+			return err
+		}
 		// Recalculate gallery cover if this asset was the cover
 		s.recalcCoversForAsset(ctx, input.AssetID)
 		return nil
@@ -101,6 +110,9 @@ func (s *AssetLifecycleService) Transition(ctx context.Context, input Transition
 			// Restore — clears deleted_at and sets status to active
 			if err := s.assetRepo.Restore(ctx, input.AssetID); err != nil {
 				return fmt.Errorf("lifecycle: restore: %w", err)
+			}
+			if err := s.recordRestore(ctx, asset); err != nil {
+				return err
 			}
 			return nil
 		}
@@ -113,6 +125,45 @@ func (s *AssetLifecycleService) Transition(ctx context.Context, input Transition
 		}
 	}
 
+	return nil
+}
+
+func (s *AssetLifecycleService) assetDerivativeBytes(ctx context.Context, assetID uuid.UUID) (int64, error) {
+	if s.derivativeRepo == nil {
+		return 0, nil
+	}
+	total, err := s.derivativeRepo.TotalSizeByAsset(ctx, assetID)
+	if err != nil {
+		return 0, fmt.Errorf("lifecycle: derivative size lookup: %w", err)
+	}
+	return total, nil
+}
+
+func (s *AssetLifecycleService) recordDelete(ctx context.Context, asset *repository.Asset) error {
+	if s.storageSvc == nil || asset == nil {
+		return nil
+	}
+	derivativeBytes, err := s.assetDerivativeBytes(ctx, asset.ID)
+	if err != nil {
+		return err
+	}
+	if err := s.storageSvc.RecordDelete(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
+		return fmt.Errorf("lifecycle: storage delete accounting: %w", err)
+	}
+	return nil
+}
+
+func (s *AssetLifecycleService) recordRestore(ctx context.Context, asset *repository.Asset) error {
+	if s.storageSvc == nil || asset == nil {
+		return nil
+	}
+	derivativeBytes, err := s.assetDerivativeBytes(ctx, asset.ID)
+	if err != nil {
+		return err
+	}
+	if err := s.storageSvc.RecordUpload(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
+		return fmt.Errorf("lifecycle: storage restore accounting: %w", err)
+	}
 	return nil
 }
 

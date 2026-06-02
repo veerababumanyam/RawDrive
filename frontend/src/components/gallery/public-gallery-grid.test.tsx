@@ -147,6 +147,9 @@ describe("PublicGalleryGrid — F-087 success banner uses a semantic token", () 
     fireEvent.click(screen.getByText("Submit Selections"));
 
     // Fill the required email, then submit.
+    fireEvent.change(screen.getByPlaceholderText("Your name *"), {
+      target: { value: "Anika Rao" },
+    });
     fireEvent.change(screen.getByPlaceholderText("Your email *"), {
       target: { value: "client@example.com" },
     });
@@ -178,5 +181,42 @@ describe("PublicGalleryGrid — F-087 success banner uses a semantic token", () 
 
     // Defense in depth: no element in the whole tree carries a green primitive.
     expect(container.querySelector('[class*="bg-green-"]')).toBeNull();
+  });
+
+  it("sends the gallery-session token when submitting protected-gallery proofing selections", async () => {
+    const { container } = render(
+      <PublicGalleryGrid
+        slug="proof"
+        assets={makeAssets(3)}
+        galleryType="proofing"
+        maxSelections={5}
+        gallerySessionToken="gs-token"
+        workspaceScope="studio-a1b2c3d4"
+      />,
+    );
+
+    const firstTile = within(container).getAllByRole("button")[0];
+    fireEvent.click(firstTile);
+    fireEvent.click(screen.getByText("Submit Selections"));
+    fireEvent.change(screen.getByPlaceholderText("Your name *"), {
+      target: { value: "Anika Rao" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Your email *"), {
+      target: { value: "client@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "http://localhost:8080/api/v1/public/galleries/proof/proof?ws=studio-a1b2c3d4",
+        expect.objectContaining({
+          credentials: "include",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+            "X-Gallery-Session": "gs-token",
+          }),
+        }),
+      );
+    });
   });
 });

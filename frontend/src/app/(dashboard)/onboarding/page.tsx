@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
 import { pricingPlans } from "@/lib/tokens";
@@ -26,7 +26,7 @@ declare global {
   }
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 type IndianState = {
   id: number;
@@ -58,8 +58,9 @@ const PLAN_HIGHLIGHTS: Record<string, string[]> = {
   enterprise: ["6TB storage · unlimited galleries", "White-label + custom integrations", "SLA + 24/7 dedicated support"],
 };
 
-export default function OnboardingPage() {
+function OnboardingPageContent() {
   const searchParams = useSearchParams();
+  const planParam = searchParams?.get("plan") ?? null;
   const [step, setStep] = useState<Step>("state_selection");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -165,11 +166,11 @@ export default function OnboardingPage() {
     try {
       plan = window.sessionStorage.getItem("rawdrive_pending_plan");
     } catch { /* ignore */ }
-    if (!plan) plan = searchParams.get("plan");
+    if (!plan) plan = planParam;
     if (plan && ONBOARDING_PLANS.some((p) => p.id === plan)) {
       setSelectedPlan(plan);
     }
-  }, [searchParams]);
+  }, [planParam]);
 
   // Step 1: submit state
   async function handleStateSubmit(e: React.FormEvent) {
@@ -684,5 +685,21 @@ export default function OnboardingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-10">
+          <div className="glass-surface rounded-2xl p-8 text-center text-sm text-text-secondary">
+            Loading onboarding…
+          </div>
+        </div>
+      }
+    >
+      <OnboardingPageContent />
+    </Suspense>
   );
 }

@@ -21,6 +21,7 @@ import {
   readPublicCoverThumbnails,
 } from "@/lib/gallery-design-config";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
 
 // Owner-facing preview of the public gallery. Renders the saved Design
 // Studio output (same Hero + Grid components the public /g/[slug] route
@@ -249,8 +250,8 @@ export default function GalleryPreviewPage({
 
   const publicUrl = useMemo(() => {
     if (!gallery?.slug || !origin) return "";
-    return `${origin}/g/${gallery.slug}`;
-  }, [gallery?.slug, origin]);
+    return appendStoredGalleryKeyFragment(`${origin}/g/${gallery.slug}`, id);
+  }, [gallery?.slug, id, origin]);
 
   const designConfig = useMemo(
     () => (gallery ? readPublicDesignConfig(gallery.settings) : null),

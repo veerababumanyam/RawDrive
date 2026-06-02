@@ -68,7 +68,7 @@ function friendlySessionExpired(active: boolean) {
 
 export function LoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -218,7 +218,7 @@ export function LoginForm() {
       }
 
       persistAuthTokens(payload.access_token);
-      window.location.assign(getPostLoginPath());
+      router.push(getPostLoginPath());
     } catch {
       setError(LOGIN_NETWORK_ERROR);
     } finally {

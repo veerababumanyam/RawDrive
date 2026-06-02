@@ -17,7 +17,7 @@ func NewPgDBContext(pool *pgxpool.Pool) *PgDBContext {
 	return &PgDBContext{pool: pool}
 }
 
-// SetWorkspaceID sets the app.workspace_id session variable for RLS enforcement.
+// SetWorkspaceID sets the workspace session variables used by RLS policies.
 //
 // F-009 (audit 2026-04-10): this function used to interpolate workspaceID
 // directly into the SQL string via fmt.Sprintf, which was a textbook SQL
@@ -28,7 +28,10 @@ func NewPgDBContext(pool *pgxpool.Pool) *PgDBContext {
 // argument accepts a placeholder, so this is a drop-in replacement.
 func (d *PgDBContext) SetWorkspaceID(ctx context.Context, workspaceID string) error {
 	_, err := d.pool.Exec(ctx,
-		"SELECT set_config('app.workspace_id', $1, false)", workspaceID,
+		`SELECT
+			set_config('app.workspace_id', $1, false),
+			set_config('app.current_workspace_id', $1, false)`,
+		workspaceID,
 	)
 	if err != nil {
 		return fmt.Errorf("set workspace context: %w", err)

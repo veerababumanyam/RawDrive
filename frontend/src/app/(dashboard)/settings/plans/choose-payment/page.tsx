@@ -15,10 +15,12 @@
 // Adding a third provider (Stripe, Cashfree, …) is one entry in the
 // PROVIDERS array below.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, CreditCard, Loader2, Lock, ShieldCheck, Smartphone } from "lucide-react";
+import { CreditCard, Loader2, Lock, ShieldCheck, Smartphone } from "lucide-react";
+import { ChevronLeft } from "@/components/icons";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { getStoredAccessToken } from "@/lib/auth";
 import { pricingPlans } from "@/lib/tokens";
 
@@ -38,22 +40,6 @@ interface ProviderDescriptor {
   accentClass: string;
 }
 
-// 2026-05-19: PhonePe is hidden from the subscription payment picker
-// while the upstream PhonePe v2 Standard Checkout integration is broken
-// on the merchant-risk-engine side (INTERNAL_SECURITY_BLOCK_1 / TXN_BLOCKED
-// — escalated with PhonePe support, not a code defect on our side). When
-// PhonePe support restores the merchant's payment surface, flip this flag
-// back to true to restore the tile. The backend create-order route +
-// payment-callback handler for provider="phonepe" are intentionally left
-// wired so the path can be re-enabled without code changes.
-const PHONEPE_ENABLED = false;
-
-// All known providers. Render-time filter below uses PHONEPE_ENABLED to
-// hide the PhonePe tile while keeping the descriptor in one place — when
-// the gate flips back to true the user-facing UI returns to its prior
-// two-tile layout without further edits.
-//
-// Order matters: rendered top-to-bottom on mobile, left-to-right on desktop.
 const ALL_PROVIDERS: ProviderDescriptor[] = [
   {
     id: "razorpay",
@@ -79,9 +65,17 @@ const ALL_PROVIDERS: ProviderDescriptor[] = [
   },
 ];
 
-const PROVIDERS: ProviderDescriptor[] = ALL_PROVIDERS.filter(
-  (p) => p.id !== "phonepe" || PHONEPE_ENABLED,
-);
+type ProviderAvailability = Record<ProviderId, boolean>;
+
+interface PaymentProvidersResponse {
+  providers?: Array<{ id: string; configured: boolean }>;
+  default_provider?: ProviderId;
+}
+
+const NO_PROVIDERS: ProviderAvailability = {
+  razorpay: false,
+  phonepe: false,
+};
 
 // Minimal Razorpay types (no @types/razorpay needed).
 interface RazorpayOptions {
@@ -116,9 +110,9 @@ interface UpgradeOrderResponse {
   phonepe_order_id?: string;
 }
 
-export default function ChoosePaymentPage() {
+function ChoosePaymentContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const tier = searchParams.get("tier") ?? "";
   const interval = searchParams.get("interval") === "annual" ? "annual" : "monthly";
 
@@ -132,20 +126,62 @@ export default function ChoosePaymentPage() {
   const [lastUsed, setLastUsed] = useState<ProviderId | null>(null);
   const [processing, setProcessing] = useState<ProviderId | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [providersError, setProvidersError] = useState("");
+  const [providerAvailability, setProviderAvailability] = useState<ProviderAvailability>(NO_PROVIDERS);
   const rzpScriptLoaded = useRef(false);
+
+  const providers = ALL_PROVIDERS;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const v = window.localStorage.getItem("rawdrive-payment-provider");
       if (v === "razorpay" || v === "phonepe") {
-        // Only restore the "last used" hint if the provider is still
-        // visible. A user whose previous attempt was PhonePe (now
-        // hidden, see PHONEPE_ENABLED above) gets no badge instead of
-        // a "Last used" hint pointing at a tile that no longer exists.
-        if (PROVIDERS.some((p) => p.id === v)) setLastUsed(v);
+        setLastUsed(providerAvailability[v] ? v : null);
       }
     } catch { /* private mode — non-critical */ }
+  }, [providerAvailability]);
+
+  useEffect(() => {
+    let active = true;
+    const token = getStoredAccessToken();
+    if (!token) {
+      setProvidersLoading(false);
+      setProvidersError("Session expired — please log in again.");
+      return;
+    }
+    fetch(`${API_BASE}/api/v1/workspace/subscription/payment-providers`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        const json = (await res.json().catch(() => ({}))) as PaymentProvidersResponse & { error?: string };
+        if (!active) return;
+        if (!res.ok) {
+          setProviderAvailability(NO_PROVIDERS);
+          setProvidersError(json.error || `Could not check payment providers (HTTP ${res.status})`);
+          return;
+        }
+        const next: ProviderAvailability = { ...NO_PROVIDERS };
+        for (const provider of json.providers ?? []) {
+          if (provider.id === "razorpay" || provider.id === "phonepe") {
+            next[provider.id] = provider.configured;
+          }
+        }
+        setProviderAvailability(next);
+        setProvidersError("");
+      })
+      .catch((err) => {
+        if (!active) return;
+        setProviderAvailability(NO_PROVIDERS);
+        setProvidersError(err instanceof Error ? err.message : "Could not check payment providers");
+      })
+      .finally(() => {
+        if (active) setProvidersLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Load Razorpay checkout script eagerly so the modal opens fast when the
@@ -196,6 +232,9 @@ export default function ChoosePaymentPage() {
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
+        if (res.status === 503) {
+          setProviderAvailability((prev) => ({ ...prev, [provider]: false }));
+        }
         throw new Error(err.error ?? `HTTP ${res.status}`);
       }
       const order = (await res.json()) as UpgradeOrderResponse;
@@ -206,7 +245,7 @@ export default function ChoosePaymentPage() {
         // components/streams/RechargeModal.tsx. Blocks javascript:/data:/http:
         // payloads in case the backend response is misconfigured or tampered
         // with (open redirect / XSS defense-in-depth) before window.location.
-        if (!order.redirect_url.startsWith("https:")) {
+        if (!isAllowedPhonePeRedirect(order.redirect_url)) {
           throw new Error("Invalid payment redirect URL");
         }
         try {
@@ -284,7 +323,7 @@ export default function ChoosePaymentPage() {
       setErrorMsg(err instanceof Error ? err.message : "Could not start payment. Please try again.");
       setProcessing(null);
     }
-  }, [plan, persistChoice, router]);
+  }, [interval, plan, persistChoice, router]);
 
   // Invalid / missing tier — bounce back to /settings/plans.
   if (!plan) {
@@ -294,13 +333,13 @@ export default function ChoosePaymentPage() {
           <p className="text-sm text-text-secondary">
             That plan isn&apos;t available. Choose a plan first.
           </p>
-          <Link
-            href="/settings/plans"
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to plans
-          </Link>
+        <Link
+          href="/settings/plans"
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back to plans
+        </Link>
         </div>
       </div>
     );
@@ -311,19 +350,22 @@ export default function ChoosePaymentPage() {
     : (plan.monthlyPrice as number);
   const periodLabel = interval === "annual" ? "yr" : "mo";
   const billingNote = interval === "annual" ? "Billed annually · Cancel anytime" : "Billed monthly · Cancel anytime";
-  // GST is shown as a note for transparency. The actual GST inclusion is
-  // backend-owned; the displayed price is what the user will be charged this cycle.
+  // GST is backend-owned; keep this copy aligned with the order amount the
+  // upgrade endpoint returns.
   return (
     <div className="max-w-4xl mx-auto space-y-8 p-8">
       {/* Header */}
       <header className="flex items-center gap-3">
-        <Link
-          href="/settings/plans"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-accent"
-          aria-label="Back to plans"
+        <GlassIconButton
+          type="button"
+          label="Back to plans"
+          variant="ghost"
+          size="md"
+          className="bg-surface-container-high text-text-secondary hover:bg-surface-container-highest hover:text-accent"
+          onClick={() => router.push("/settings/plans")}
         >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+          <ChevronLeft />
+        </GlassIconButton>
         <div>
           <h1 className="font-headline text-2xl font-extrabold tracking-tight text-text-primary">
             Choose Payment Method
@@ -354,7 +396,7 @@ export default function ChoosePaymentPage() {
               ₹{displayPrice.toLocaleString("en-IN")}
               <span className="text-sm font-medium text-text-tertiary"> / {periodLabel}</span>
             </p>
-            <p className="text-[11px] text-text-tertiary">incl. 18% GST</p>
+            <p className="text-[11px] text-text-tertiary">18% GST applicable at checkout</p>
           </div>
         </div>
       </section>
@@ -366,18 +408,39 @@ export default function ChoosePaymentPage() {
         </div>
       )}
 
+      {providersLoading && (
+        <div className="surface-panel p-5 text-sm text-text-secondary">
+          Checking available payment methods…
+        </div>
+      )}
+
+      {!providersLoading && providersError && (
+        <div className="rounded-xl border border-feedback-error/30 bg-feedback-error/10 px-5 py-4 text-sm text-feedback-error">
+          {providersError}
+        </div>
+      )}
+
+      {!providersLoading && !providersError && !Object.values(providerAvailability).some(Boolean) && (
+        <div className="surface-panel p-5 text-sm text-text-secondary">
+          Payments are not configured yet. Contact support to complete this upgrade.
+        </div>
+      )}
+
       {/* Payment method cards */}
+      {!providersLoading && (
       <section aria-label="Payment methods" className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {PROVIDERS.map((provider) => {
+        {providers.map((provider) => {
           const Icon = provider.icon;
+          const isConfigured = providerAvailability[provider.id] && !providersError;
           const isProcessing = processing === provider.id;
           const isOtherProcessing = processing !== null && processing !== provider.id;
+          const isUnavailable = !isConfigured;
           return (
             <button
               key={provider.id}
               type="button"
               onClick={() => startPayment(provider.id)}
-              disabled={isProcessing || isOtherProcessing}
+              disabled={isProcessing || isOtherProcessing || isUnavailable}
               aria-busy={isProcessing}
               className={[
                 "group relative flex flex-col gap-4 rounded-2xl border bg-surface-container-low p-6 text-left transition-all",
@@ -389,6 +452,11 @@ export default function ChoosePaymentPage() {
               {lastUsed === provider.id && (
                 <span className="absolute -top-2.5 right-4 inline-flex items-center rounded-full bg-surface-container-highest border border-border-default px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
                   Last used
+                </span>
+              )}
+              {isUnavailable && (
+                <span className="absolute -top-2.5 right-4 inline-flex items-center rounded-full bg-surface-container-highest border border-border-default px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                  Not configured
                 </span>
               )}
 
@@ -420,14 +488,20 @@ export default function ChoosePaymentPage() {
                 ))}
               </ul>
 
-              <div className="mt-auto flex items-center justify-between gap-3 pt-2">
+              <div className="mt-auto flex flex-col items-stretch gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-xs text-text-tertiary">
-                  {provider.flow === "modal" ? "Opens secure popup" : "Redirects to PhonePe"}
+                  {isUnavailable
+                    ? "Unavailable right now"
+                    : provider.flow === "modal"
+                      ? "Opens secure popup"
+                      : "Redirects to PhonePe"}
                 </span>
                 <span
                   className={[
-                    "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-opacity",
-                    "bg-accent text-text-inverse group-hover:opacity-90",
+                    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-opacity",
+                    isUnavailable
+                      ? "bg-surface-container-high text-text-tertiary"
+                      : "bg-accent text-text-inverse group-hover:opacity-90",
                     isProcessing ? "opacity-100" : "",
                   ].join(" ")}
                 >
@@ -439,7 +513,9 @@ export default function ChoosePaymentPage() {
                   ) : (
                     <>
                       <Lock className="h-3.5 w-3.5" />
-                      Pay ₹{displayPrice.toLocaleString("en-IN")} with {provider.name}
+                      {isUnavailable
+                        ? `${provider.name} not configured`
+                        : `Pay ₹${displayPrice.toLocaleString("en-IN")} with ${provider.name}`}
                     </>
                   )}
                 </span>
@@ -448,6 +524,7 @@ export default function ChoosePaymentPage() {
           );
         })}
       </section>
+      )}
 
       {/* Trust line */}
       <footer className="flex items-center justify-center gap-2 text-xs text-text-tertiary">
@@ -455,5 +532,31 @@ export default function ChoosePaymentPage() {
         Payments are encrypted and processed by RBI-licensed providers. Your card details never touch RawDrive servers.
       </footer>
     </div>
+  );
+}
+
+function isAllowedPhonePeRedirect(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "https:" &&
+      (parsed.hostname === "phonepe.com" || parsed.hostname.endsWith(".phonepe.com"));
+  } catch {
+    return false;
+  }
+}
+
+export default function ChoosePaymentPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-4xl mx-auto space-y-8 p-8">
+          <div className="surface-panel p-6 text-sm text-text-secondary">
+            Loading payment methods…
+          </div>
+        </div>
+      }
+    >
+      <ChoosePaymentContent />
+    </Suspense>
   );
 }

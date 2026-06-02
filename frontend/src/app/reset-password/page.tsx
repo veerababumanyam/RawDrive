@@ -11,6 +11,7 @@ import { resetPassword } from "@/lib/api/auth";
 function ResetPasswordInner() {
   const router = useRouter();
   const search = useSearchParams();
+  const emailParam = search?.get("email") ?? "";
   const [email, setEmail] = useState("");
   const [otp, setOTP] = useState("");
   const [password, setPassword] = useState("");
@@ -19,9 +20,8 @@ function ResetPasswordInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const prefilled = search?.get("email");
-    if (prefilled) setEmail(prefilled);
-  }, [search]);
+    if (emailParam) setEmail(emailParam);
+  }, [emailParam]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

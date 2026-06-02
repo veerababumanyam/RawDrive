@@ -199,6 +199,12 @@ func gallerySessionToken(r *http.Request) string {
 	if c, err := r.Cookie("gallery_session"); err == nil {
 		return c.Value
 	}
+	if t := r.URL.Query().Get("gallery_session"); t != "" {
+		return t
+	}
+	if t := r.URL.Query().Get("gs"); t != "" {
+		return t
+	}
 	return ""
 }
 

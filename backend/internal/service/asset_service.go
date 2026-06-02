@@ -13,13 +13,25 @@ import (
 
 // AssetService handles asset business logic.
 type AssetService struct {
-	assetRepo *repository.AssetRepo
-	storage   storage.Provider
+	assetRepo      *repository.AssetRepo
+	derivativeRepo *repository.AssetDerivativeRepo
+	storage        storage.Provider
+	storageSvc     *StorageAccounting
 }
 
 // NewAssetService creates a new AssetService.
 func NewAssetService(assetRepo *repository.AssetRepo, store storage.Provider) *AssetService {
 	return &AssetService{assetRepo: assetRepo, storage: store}
+}
+
+func (s *AssetService) WithStorageAccounting(sa *StorageAccounting) *AssetService {
+	s.storageSvc = sa
+	return s
+}
+
+func (s *AssetService) WithDerivativeRepo(repo *repository.AssetDerivativeRepo) *AssetService {
+	s.derivativeRepo = repo
+	return s
 }
 
 // AssetWithURL is an asset with a presigned download URL.
@@ -93,6 +105,9 @@ func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
 		return err
 	}
+	if err := s.recordDelete(ctx, asset); err != nil {
+		return err
+	}
 
 	// Async storage cleanup would happen via worker; for now just mark deleted
 	return nil
@@ -111,6 +126,27 @@ func (s *AssetService) SoftDeleteForWorkspace(ctx context.Context, id, workspace
 
 	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
 		return err
+	}
+	if err := s.recordDelete(ctx, asset); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *AssetService) recordDelete(ctx context.Context, asset *repository.Asset) error {
+	if s.storageSvc == nil || asset == nil {
+		return nil
+	}
+	derivativeBytes := int64(0)
+	if s.derivativeRepo != nil {
+		total, err := s.derivativeRepo.TotalSizeByAsset(ctx, asset.ID)
+		if err != nil {
+			return fmt.Errorf("asset delete: derivative size lookup: %w", err)
+		}
+		derivativeBytes = total
+	}
+	if err := s.storageSvc.RecordDelete(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
+		return fmt.Errorf("asset delete: storage accounting: %w", err)
 	}
 	return nil
 }

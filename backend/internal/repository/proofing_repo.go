@@ -41,7 +41,7 @@ func (r *ProofingRepo) Create(ctx context.Context, ps *ProofingSelection) error 
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO proofing_selections (id, gallery_id, asset_id, client_name, client_email, status, note, created_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		 ON CONFLICT (gallery_id, asset_id, client_email) DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note`,
+		 ON CONFLICT (gallery_id, asset_id, client_email) DO UPDATE SET client_name = EXCLUDED.client_name, status = EXCLUDED.status, note = EXCLUDED.note`,
 		ps.ID, ps.GalleryID, ps.AssetID, ps.ClientName, ps.ClientEmail, ps.Status, ps.Note, ps.CreatedAt,
 	)
 	if err != nil {
@@ -141,6 +141,50 @@ func (r *ProofingRepo) CountByGalleryAndClient(ctx context.Context, galleryID uu
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("proofing count: %w", err)
+	}
+	return count, nil
+}
+
+// CountExistingByGalleryClientAndAssets returns how many of the requested
+// assets already have selections for this client in this gallery. Used by the
+// service to make max_selections count only new picks; re-submitting an
+// existing pick updates its note/status without consuming another slot.
+func (r *ProofingRepo) CountExistingByGalleryClientAndAssets(ctx context.Context, galleryID uuid.UUID, clientEmail string, assetIDs []uuid.UUID) (int, error) {
+	if len(assetIDs) == 0 {
+		return 0, nil
+	}
+	var count int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(DISTINCT asset_id)
+		   FROM proofing_selections
+		  WHERE gallery_id = $1
+		    AND client_email = $2
+		    AND asset_id = ANY($3)`,
+		galleryID, clientEmail, assetIDs,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("proofing count existing requested assets: %w", err)
+	}
+	return count, nil
+}
+
+// CountAssetsInGallery returns how many distinct requested asset IDs are linked
+// to the gallery. Public proofing submissions call this before writing rows so
+// a visitor cannot attach arbitrary/cross-gallery assets to a selection export.
+func (r *ProofingRepo) CountAssetsInGallery(ctx context.Context, galleryID uuid.UUID, assetIDs []uuid.UUID) (int, error) {
+	if len(assetIDs) == 0 {
+		return 0, nil
+	}
+	var count int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(DISTINCT asset_id)
+		   FROM gallery_assets
+		  WHERE gallery_id = $1
+		    AND asset_id = ANY($2)`,
+		galleryID, assetIDs,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("proofing count gallery asset membership: %w", err)
 	}
 	return count, nil
 }

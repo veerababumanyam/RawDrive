@@ -37,6 +37,9 @@ function toLocalInput(d: Date): string {
 
 export default function CalendarPage() {
   const searchParams = useSearchParams();
+  const createRequested = searchParams?.get("create") === "true";
+  const clientParam = searchParams?.get("client") ?? "";
+  const projectParam = searchParams?.get("project") ?? "";
   const [currentDate, setCurrentDate] = useState(new Date());
   const token = getStoredAccessToken();
 
@@ -157,9 +160,9 @@ export default function CalendarPage() {
   }, [token]);
 
   useEffect(() => {
-    if (searchParams.get("create") !== "true") return;
-    const clientId = searchParams.get("client") || "";
-    const projectId = searchParams.get("project") || "";
+    if (!createRequested) return;
+    const clientId = clientParam;
+    const projectId = projectParam;
     const base = new Date();
     const endBase = new Date(base.getTime() + 2 * 60 * 60 * 1000);
     setForm((current) => ({
@@ -170,7 +173,7 @@ export default function CalendarPage() {
       end_at: toLocalInput(endBase),
     }));
     setShowCreate(true);
-  }, [searchParams]);
+  }, [clientParam, createRequested, projectParam]);
 
   const openCreate = (defaultDay?: number) => {
     const base = defaultDay

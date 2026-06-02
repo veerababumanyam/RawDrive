@@ -62,13 +62,13 @@ type razorpayOrderRequest struct {
 }
 
 type razorpayOrderResponse struct {
-	ID         string `json:"id"`     // order_id
-	Amount     int64  `json:"amount"`
-	Currency   string `json:"currency"`
-	Status     string `json:"status"`
-	Receipt    string `json:"receipt"`
-	CreatedAt  int64  `json:"created_at"`
-	ShortURL   string `json:"short_url"` // hosted-link URL when present
+	ID        string `json:"id"` // order_id
+	Amount    int64  `json:"amount"`
+	Currency  string `json:"currency"`
+	Status    string `json:"status"`
+	Receipt   string `json:"receipt"`
+	CreatedAt int64  `json:"created_at"`
+	ShortURL  string `json:"short_url"` // hosted-link URL when present
 }
 
 // InitiateOrder calls /v1/orders. CheckoutURL falls back to a placeholder
@@ -143,14 +143,14 @@ func (p *RazorpayProvider) VerifyWebhookSignature(rawBody []byte, headers map[st
 
 // Razorpay webhook envelope (only the fields we read).
 type razorpayWebhookBody struct {
-	Event   string `json:"event"`   // "payment.captured" | "payment.failed" | ...
+	Event   string `json:"event"` // "payment.captured" | "payment.failed" | ...
 	Payload struct {
 		Payment struct {
 			Entity struct {
-				ID       string `json:"id"`        // payment id (pay_xxx)
-				OrderID  string `json:"order_id"`  // order id (order_xxx) — matches what we created
+				ID       string `json:"id"`       // payment id (pay_xxx)
+				OrderID  string `json:"order_id"` // order id (order_xxx) — matches what we created
 				Amount   int64  `json:"amount"`
-				Status   string `json:"status"`    // "captured" | "failed"
+				Status   string `json:"status"` // "captured" | "failed"
 				Currency string `json:"currency"`
 			} `json:"entity"`
 		} `json:"payment"`
@@ -170,8 +170,10 @@ func (p *RazorpayProvider) ParseCallback(rawBody []byte) (*CallbackPayload, erro
 
 	status := CallbackPending
 	switch strings.ToLower(pe.Status) {
-	case "captured", "authorized":
+	case "captured":
 		status = CallbackSuccess
+	case "authorized":
+		status = CallbackPending
 	case "failed":
 		status = CallbackFailed
 	}

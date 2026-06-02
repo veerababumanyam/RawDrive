@@ -1754,7 +1754,9 @@ func main() {
 		m16EnforceMode,
 	)
 	log.Printf("M16 Tier D: upload screening service initialized (enforce=%v)", m16EnforceMode)
-	assetSvc := service.NewAssetService(assetRepo, storageProvider)
+	assetSvc := service.NewAssetService(assetRepo, storageProvider).
+		WithStorageAccounting(storageAccountingSvc).
+		WithDerivativeRepo(assetDerivativeRepo)
 	thumbnailSvc := service.NewThumbnailService(storageProvider)
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
 	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo).WithAlbumService(albumSvc)
@@ -1853,7 +1855,8 @@ func main() {
 	consentSvc := service.NewConsentService(consentRepo, consentEmitter)
 
 	// M11 Services: Lifecycle
-	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc)
+	lifecycleSvc := service.NewAssetLifecycleService(assetRepo, coverSvc, storageAccountingSvc).
+		WithDerivativeRepo(assetDerivativeRepo)
 
 	// Worker registry (declared at main scope so closures can register workers)
 	workerRegistry := worker.NewRegistry()
@@ -1991,8 +1994,13 @@ func main() {
 			Pool:       dbPool,
 			FaceRepo:   ai.NewFaceRepo(dbPool),
 			FaceClient: earlyFaceClient, // nil when FACE_SVC_URL unset → endpoint returns 503
-			// Subscription upgrade payments via Razorpay. Nil when env vars absent.
-			SubscriptionUpgradeHandler: handler.NewSubscriptionUpgradeHandlerFromEnv(dbPool),
+			// Subscription upgrade payments via Razorpay/PhonePe. Credentials
+			// resolve from platform_settings first, then environment fallback.
+			SubscriptionUpgradeHandler: handler.NewSubscriptionUpgradeHandlerFromSettings(
+				context.Background(),
+				dbPool,
+				&platformSettingsSMTPReader{repo: platformSettingsRepo},
+			).WithStorageAccounting(storageAccountingSvc),
 			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
 			// JobRepo is stateless (same pattern as FaceRepo).
 			FaceSvc: nil,
@@ -2112,12 +2120,10 @@ func main() {
 		}
 		api.Post("/api/v1/uploads/purchases/{id}/refund", uploadRefundHandler.Refund)
 
-		// M41 FR-UCRT-05: PhonePe upload webhook. The route lives INSIDE the
-		// authenticated api subrouter so every handler here shares the same
-		// CORS/rate-limit/access-log posture. The webhook bypasses tenant
-		// auth via a pre-verified X-VERIFY signature — the handler itself
-		// is the source of trust, not the JWT. The PhonePe provider is
-		// constructed lazily from env vars so a deploy without PhonePe
+		// M41 FR-UCRT-05: PhonePe upload webhook. Provider callbacks carry no
+		// JWT, so this route must live on the outer router; the handler's
+		// X-VERIFY signature check is the source of trust. The PhonePe provider
+		// is constructed lazily from env vars so a deploy without PhonePe
 		// credentials wires the handler with a nil Verifier, which returns
 		// 503 on every request (rather than 500 or silent success).
 		var phonepeWebhookHandler *uploadhandlers.PhonePeUploadWebhookHandler
@@ -2139,7 +2145,7 @@ func main() {
 		if phonepeWebhookHandler == nil {
 			phonepeWebhookHandler = &uploadhandlers.PhonePeUploadWebhookHandler{} // nil deps → 503
 		}
-		api.Post("/api/v1/webhooks/phonepe/uploads", phonepeWebhookHandler.Handle)
+		r.Post("/api/v1/webhooks/phonepe/uploads", phonepeWebhookHandler.Handle)
 
 		// M41 FR-UCRT-06: Razorpay upload webhook. Same failure-closed
 		// posture as the PhonePe sibling — missing env vars leave the
@@ -2166,7 +2172,7 @@ func main() {
 		if razorpayWebhookHandler == nil {
 			razorpayWebhookHandler = &uploadhandlers.RazorpayUploadWebhookHandler{}
 		}
-		api.Post("/api/v1/webhooks/razorpay/uploads", razorpayWebhookHandler.Handle)
+		r.Post("/api/v1/webhooks/razorpay/uploads", razorpayWebhookHandler.Handle)
 
 		// M41 FR-UCRT-04: upload monthly grant worker. Opt-in behind the
 		// UPLOAD_CREDIT_MONTHLY_GRANT_ENABLED flag. When enabled, the
@@ -2384,6 +2390,7 @@ func main() {
 			NotificationRepo:       notificationRepo,
 			PDFService:             pdfSvc,
 			NotificationDispatcher: notifDispatcher,
+			PaymentSettings:        platformSettingsRepo,
 		})
 
 		log.Println("M4: Business Operations routes registered (CRM, Billing, Contracts, Calendar, Notifications, GST Reports, ICS Export, CSV Import, Payment Links)")

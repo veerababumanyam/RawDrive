@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/api/admin", () => ({
   getSystemMetrics: vi.fn(),
+  listPlatformSettings: vi.fn(),
+  savePlatformSetting: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { getSystemMetrics } from "@/lib/api/admin";
+import { getSystemMetrics, listPlatformSettings, savePlatformSetting } from "@/lib/api/admin";
 import AdminSystemPage from "../system/page";
 
 const mockMetrics = vi.mocked(getSystemMetrics);
+const mockListPlatformSettings = vi.mocked(listPlatformSettings);
+const mockSavePlatformSetting = vi.mocked(savePlatformSetting);
 
 const sampleMetrics = {
   api_latency_p50_ms: 12,
@@ -30,6 +34,8 @@ const sampleMetrics = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockMetrics.mockResolvedValue(sampleMetrics);
+  mockListPlatformSettings.mockResolvedValue([]);
+  mockSavePlatformSetting.mockResolvedValue({ status: "saved" });
 });
 
 describe("AdminSystemPage", () => {
@@ -118,6 +124,34 @@ describe("AdminSystemPage", () => {
     render(<AdminSystemPage />);
     await waitFor(() => {
       expect(mockMetrics).toHaveBeenCalledWith("test-token");
+    });
+  });
+
+  it("renders payment gateway settings", async () => {
+    render(<AdminSystemPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Payment Gateways")).toBeTruthy();
+      expect(screen.getByText("PhonePe Standard Checkout V2")).toBeTruthy();
+    });
+  });
+
+  it("saves PhonePe settings through platform settings API", async () => {
+    render(<AdminSystemPage />);
+    const input = await screen.findByLabelText(/PhonePe Client ID/i);
+
+    fireEvent.change(input, { target: { value: "pp-client" } });
+    fireEvent.click(screen.getByRole("button", { name: /save payment settings/i }));
+
+    await waitFor(() => {
+      expect(mockSavePlatformSetting).toHaveBeenCalledWith(
+        "test-token",
+        "payments",
+        "phonepe_client_id",
+        expect.objectContaining({
+          value: "pp-client",
+          is_secret: false,
+        }),
+      );
     });
   });
 });

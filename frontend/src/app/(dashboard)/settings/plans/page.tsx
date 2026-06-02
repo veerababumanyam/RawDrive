@@ -39,7 +39,7 @@ function tierIndex(tier: string): number {
 // plan purchase.
 function PlansPageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const upgradeTo = searchParams.get("upgrade_to") ?? "";
   // Set when the user returns from a successful payment (chooser page
   // redirects here with ?success=1&tier=...).

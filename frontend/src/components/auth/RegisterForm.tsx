@@ -90,11 +90,11 @@ const planTagline: Record<SelfServePlanId, string> = {
 export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const planParam = searchParams?.get("plan")?.toLowerCase() ?? "";
 
   const initialPlan: SelfServePlanId = useMemo(() => {
-    const raw = searchParams.get("plan")?.toLowerCase() ?? "";
-    return isSelfServePlan(raw) ? raw : "starter";
-  }, [searchParams]);
+    return isSelfServePlan(planParam) ? planParam : "starter";
+  }, [planParam]);
 
   const [plan, setPlan] = useState<SelfServePlanId>(initialPlan);
   const [fullName, setFullName] = useState("");

@@ -16,7 +16,7 @@ const adminNav = [
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
 
   return (
     <div>

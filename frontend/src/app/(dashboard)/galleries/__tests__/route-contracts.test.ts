@@ -79,7 +79,7 @@ describe("gallery route contracts", () => {
     expect(source).toContain("mailto:");
     expect(source).toContain("https://wa.me/?text=");
     expect(source).toContain("Publish this gallery before sharing client links.");
-    expect(source).toContain("getStoredExportedMediaKey(galleryKeyId(gallery.id))");
+    expect(source).toContain("appendStoredGalleryKeyFragment(base, gallery.id)");
   });
 
   it("keeps owner preview actions inside the dashboard preview route", () => {

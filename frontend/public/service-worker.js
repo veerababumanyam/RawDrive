@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v3";
+const VERSION = "m15-v4";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-`;
@@ -106,13 +106,13 @@ async function handleGalleryAsset(request, url) {
   // Background refresh — fire and forget
   const refresh = fetch(request)
     .then(async (response) => {
-      if (response.ok) {
+      if (response.ok || response.type === "opaque") {
         await cache.put(request, response.clone());
         await enforceLRUQuota(cacheName);
       }
       return response;
     })
-    .catch(() => cached);
+    .catch(() => cached || new Response("", { status: 504, statusText: "Gateway Timeout" }));
 
   // Return cached immediately if present, otherwise wait for network
   return cached || refresh;
@@ -244,7 +244,11 @@ async function fetchNoStore(request) {
   try {
     return await fetch(new Request(request, { cache: "no-store" }));
   } catch {
-    return fetch(request);
+    try {
+      return await fetch(request);
+    } catch {
+      return new Response("", { status: 504, statusText: "Gateway Timeout" });
+    }
   }
 }
 

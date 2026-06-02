@@ -99,6 +99,16 @@ export interface SystemMetrics {
   uptime_seconds: number;
 }
 
+export interface PlatformSetting {
+  id: string;
+  category: string;
+  key: string;
+  value: string;
+  is_secret: boolean;
+  description?: string;
+  updated_at: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   actor_id: string;
@@ -402,6 +412,21 @@ export async function exportRevenue(token: string, params?: Record<string, strin
 
 export async function getSystemMetrics(token: string): Promise<SystemMetrics> {
   return get(token, "/system/metrics");
+}
+
+// ── Platform Settings ──
+
+export async function listPlatformSettings(token: string, category: string): Promise<PlatformSetting[]> {
+  return get(token, `/settings/${encodeURIComponent(category)}`);
+}
+
+export async function savePlatformSetting(
+  token: string,
+  category: string,
+  key: string,
+  body: { value: string; is_secret: boolean; description?: string },
+): Promise<{ status: string }> {
+  return put(token, `/settings/${encodeURIComponent(category)}/${encodeURIComponent(key)}`, body);
 }
 
 // ── Audit Logs ──

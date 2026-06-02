@@ -22,6 +22,20 @@ import { authFetch } from "@/lib/api/authFetch";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+function gallerySessionHeaders(gallerySessionToken?: string | null): Record<string, string> {
+  return gallerySessionToken ? { "X-Gallery-Session": gallerySessionToken } : {};
+}
+
+function publicFavoritesUrl(slug: string, assetId?: string, workspaceScope?: string | null): URL {
+  const encodedSlug = encodeURIComponent(slug);
+  const path = assetId
+    ? `/api/v1/public/galleries/${encodedSlug}/favorites/${encodeURIComponent(assetId)}`
+    : `/api/v1/public/galleries/${encodedSlug}/favorites`;
+  const url = new URL(`${API_BASE}${path}`);
+  if (workspaceScope) url.searchParams.set("ws", workspaceScope);
+  return url;
+}
+
 export interface GalleryFavoriteByAsset {
   asset_id: string;
   count: number;
@@ -41,15 +55,18 @@ export async function addPublicFavorite(
   slug: string,
   assetId: string,
   guestSessionId: string,
+  gallerySessionToken?: string | null,
+  workspaceScope?: string | null,
 ): Promise<void> {
-  const res = await fetch(
-    `${API_BASE}/api/v1/public/galleries/${encodeURIComponent(slug)}/favorites/${encodeURIComponent(assetId)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guest_session_id: guestSessionId }),
+  const res = await fetch(publicFavoritesUrl(slug, assetId, workspaceScope).toString(), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...gallerySessionHeaders(gallerySessionToken),
     },
-  );
+    body: JSON.stringify({ guest_session_id: guestSessionId }),
+  });
   // Idempotent on the server side — 201 on first call, also 201 on re-favorite.
   // Anything other than 2xx surfaces an error so the caller can fall back to
   // localStorage-only mode and tell the user the toggle didn't sync.
@@ -62,13 +79,17 @@ export async function removePublicFavorite(
   slug: string,
   assetId: string,
   guestSessionId: string,
+  gallerySessionToken?: string | null,
+  workspaceScope?: string | null,
 ): Promise<void> {
-  const url = new URL(
-    `${API_BASE}/api/v1/public/galleries/${encodeURIComponent(slug)}/favorites/${encodeURIComponent(assetId)}`,
-  );
+  const url = publicFavoritesUrl(slug, assetId, workspaceScope);
   url.searchParams.set("session", guestSessionId);
 
-  const res = await fetch(url.toString(), { method: "DELETE" });
+  const res = await fetch(url.toString(), {
+    method: "DELETE",
+    credentials: "include",
+    headers: gallerySessionHeaders(gallerySessionToken),
+  });
   // 204 on success; 204 also when the favorite didn't exist (idempotent).
   if (!res.ok) {
     throw new Error(`Failed to unfavorite: ${res.status}`);
@@ -78,13 +99,16 @@ export async function removePublicFavorite(
 export async function listPublicFavoriteAssetIds(
   slug: string,
   guestSessionId: string,
+  gallerySessionToken?: string | null,
+  workspaceScope?: string | null,
 ): Promise<string[]> {
-  const url = new URL(
-    `${API_BASE}/api/v1/public/galleries/${encodeURIComponent(slug)}/favorites`,
-  );
+  const url = publicFavoritesUrl(slug, undefined, workspaceScope);
   url.searchParams.set("session", guestSessionId);
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), {
+    credentials: "include",
+    headers: gallerySessionHeaders(gallerySessionToken),
+  });
   if (!res.ok) {
     throw new Error(`Failed to list favorites: ${res.status}`);
   }

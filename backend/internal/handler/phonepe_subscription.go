@@ -40,15 +40,16 @@ package handler
 //   BaseURL — preserves sandbox + dev-environment behavior.
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
+
+	phonepemodels "github.com/PhonePe/phonepe-pg-sdk-go/common/models"
+	phonepetypes "github.com/PhonePe/phonepe-pg-sdk-go/common/types"
+	phoneperequest "github.com/PhonePe/phonepe-pg-sdk-go/payments/v2/models/request"
+	"github.com/PhonePe/phonepe-pg-sdk-go/payments/v2/standardcheckout"
 )
 
 // PhonePeV2Config holds the OAuth client credentials for the v2 API.
@@ -68,14 +69,12 @@ type PhonePeV2Config struct {
 }
 
 // PhonePeV2Client is a thin client around PhonePe v2 Standard Checkout.
-// Token is cached in-memory with TTL; per-instance only (multi-instance
-// prod should swap in a Redis-backed cache).
+// The official SDK owns OAuth token refresh, request headers, response
+// parsing, and callback validation semantics; this wrapper keeps RawDrive's
+// env/platform_settings resolution isolated from the rest of the handler.
 type PhonePeV2Client struct {
-	cfg PhonePeV2Config
-
-	mu          sync.Mutex
-	cachedToken string
-	expiresAt   time.Time
+	cfg      PhonePeV2Config
+	checkout *standardcheckout.StandardCheckoutClient
 }
 
 // NewPhonePeV2Client constructs a client. Returns nil if any required
@@ -88,138 +87,44 @@ func NewPhonePeV2Client(cfg PhonePeV2Config) *PhonePeV2Client {
 	if cfg.ClientVersion == "" {
 		cfg.ClientVersion = "1"
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 15 * time.Second}
+	clientVersion, err := strconv.Atoi(strings.TrimSpace(cfg.ClientVersion))
+	if err != nil || clientVersion <= 0 {
+		return nil
 	}
-	return &PhonePeV2Client{cfg: cfg}
+	checkout, err := standardcheckout.GetInstance(
+		strings.TrimSpace(cfg.ClientID),
+		strings.TrimSpace(cfg.ClientSecret),
+		clientVersion,
+		phonePeSDKEnv(cfg),
+		false,
+	)
+	if err != nil {
+		return nil
+	}
+	if cfg.HTTPClient != nil {
+		checkout.HttpClient = cfg.HTTPClient
+		if checkout.TokenService != nil {
+			checkout.TokenService.HttpClient = cfg.HTTPClient
+		}
+	}
+	return &PhonePeV2Client{cfg: cfg, checkout: checkout}
 }
 
-// ── OAuth ───────────────────────────────────────────────────────────────────
-
-type phonepeTokenResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	// PhonePe returns an absolute epoch timestamp (seconds) for expiry,
-	// not a relative duration. We pin the cache slightly before that to
-	// avoid edge-of-window failures.
-	ExpiresAt int64 `json:"expires_at"`
-	IssuedAt  int64 `json:"issued_at"`
-	// Some envs return Expires (seconds) as an alternative — keep both
-	// to be tolerant of either shape.
-	Expires int64 `json:"expires_in"`
-}
-
-// fetchToken returns a cached or freshly-issued OAuth token. Refreshes
-// 60s before declared expiry to absorb clock skew + retry budget.
-func (c *PhonePeV2Client) fetchToken(ctx context.Context) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.cachedToken != "" && time.Now().Before(c.expiresAt) {
-		return c.cachedToken, nil
-	}
-
-	form := strings.NewReader(fmt.Sprintf(
-		"client_id=%s&client_version=%s&client_secret=%s&grant_type=client_credentials",
-		c.cfg.ClientID, c.cfg.ClientVersion, c.cfg.ClientSecret,
-	))
-	authBase := c.cfg.AuthBaseURL
+func phonePeSDKEnv(cfg PhonePeV2Config) phonepetypes.Env {
+	pgBase := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	authBase := strings.TrimRight(strings.TrimSpace(cfg.AuthBaseURL), "/")
 	if authBase == "" {
-		authBase = c.cfg.BaseURL
+		authBase = pgBase
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(authBase, "/")+"/v1/oauth/token", form)
-	if err != nil {
-		return "", fmt.Errorf("phonepe: token build req: %w", err)
+	eventsBase := "http://localhost"
+	return phonepetypes.Env{
+		PgHostURL:     pgBase,
+		OAuthHostURL:  authBase,
+		EventsHostURL: eventsBase,
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.cfg.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("phonepe: token http: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("phonepe: token http %d: %s", resp.StatusCode, string(body))
-	}
-	var tok phonepeTokenResponse
-	if err := json.Unmarshal(body, &tok); err != nil {
-		return "", fmt.Errorf("phonepe: token parse: %w", err)
-	}
-	if tok.AccessToken == "" {
-		return "", fmt.Errorf("phonepe: token empty: %s", string(body))
-	}
-	// Compute expiry: prefer ExpiresAt epoch, fall back to Expires
-	// relative seconds, finally fall back to a conservative 30 min.
-	var exp time.Time
-	switch {
-	case tok.ExpiresAt > 0:
-		exp = time.Unix(tok.ExpiresAt, 0)
-	case tok.Expires > 0:
-		exp = time.Now().Add(time.Duration(tok.Expires) * time.Second)
-	default:
-		exp = time.Now().Add(30 * time.Minute)
-	}
-	// Refresh 60s early to avoid edge-of-window failures.
-	c.cachedToken = tok.AccessToken
-	c.expiresAt = exp.Add(-60 * time.Second)
-	return c.cachedToken, nil
 }
 
 // ── Create Order ────────────────────────────────────────────────────────────
-
-type phonepeMerchantURLs struct {
-	RedirectURL string `json:"redirectUrl"`
-}
-
-type phonepePaymentFlow struct {
-	Type         string              `json:"type"`
-	Message      string              `json:"message,omitempty"`
-	MerchantURLs phonepeMerchantURLs `json:"merchantUrls"`
-}
-
-// phonepeMetaInfo — user-defined fields PhonePe surfaces back in
-// webhooks + status responses. Per the official Python SDK example
-// (StandardCheckoutPayRequest.build_request with meta_info=MetaInfo(...)),
-// providing this is expected for the checkout UI to render functional
-// payment instruments. Without it the merchant's checkout page can
-// fall through to a degraded "placeholder QR" render.
-type phonepeMetaInfo struct {
-	UDF1 string `json:"udf1,omitempty"`
-	UDF2 string `json:"udf2,omitempty"`
-	UDF3 string `json:"udf3,omitempty"`
-}
-
-// phonepePrefillUserLoginDetails seeds the user's mobile number on
-// PhonePe's checkout page. The Python SDK's PrefillUserLoginDetails
-// model always includes this field. When the merchant config requires
-// a user identity for UPI Collect to render, the absence of this field
-// breaks the QR widget (verified 2026-05-19 — checkout page rendered
-// placeholder QR with paymentDetails:[] across multiple orders).
-type phonepePrefillUserLoginDetails struct {
-	PhoneNumber string `json:"phoneNumber"`
-}
-
-type phonepePayRequest struct {
-	MerchantOrderID         string                          `json:"merchantOrderId"`
-	Amount                  int64                           `json:"amount"`      // paise
-	ExpireAfter             int                             `json:"expireAfter"` // seconds; SDK default 3600
-	MetaInfo                *phonepeMetaInfo                `json:"metaInfo,omitempty"`
-	PaymentFlow             phonepePaymentFlow              `json:"paymentFlow"`
-	PrefillUserLoginDetails *phonepePrefillUserLoginDetails `json:"prefillUserLoginDetails,omitempty"`
-	DisablePaymentRetry     bool                            `json:"disablePaymentRetry,omitempty"`
-}
-
-type phonepePayResponse struct {
-	OrderID     string `json:"orderId"`
-	RedirectURL string `json:"redirectUrl"`
-	ExpireAt    int64  `json:"expireAt"`
-	State       string `json:"state"`
-	// Error shape — included when status>=400 to bubble up the message.
-	Code    string `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-}
 
 // PhonePeOrderResult is what the handler returns to the frontend so it
 // can window.location.assign() to PhonePe.
@@ -230,15 +135,10 @@ type PhonePeOrderResult struct {
 	ExpireAt        int64  `json:"expire_at"`         // epoch seconds
 }
 
-// CreateOrderInput is the input bundle for /checkout/v2/pay. Mirrors
-// the field set the official PhonePe Python SDK's
-// StandardCheckoutPayRequest.build_request() accepts — keeping our
-// wire format matched to what PhonePe expects from a "standard"
-// SDK-shaped request, which is what the merchant config is tested
-// against. UDF1/UDF2/PhoneNumber are optional from the caller's
-// perspective but are always serialized into the request body
-// (empty-string for PhoneNumber when unknown — required-present per
-// the SDK shape).
+// CreateOrderInput is the input bundle for PhonePe Standard Checkout v2.
+// UDF1/UDF2 are included when present so callbacks/status responses carry
+// useful routing context. PhoneNumber is optional and omitted when unknown,
+// matching the official SDK's pointer field behavior.
 type CreateOrderInput struct {
 	MerchantOrderID string
 	AmountPaise     int64
@@ -246,73 +146,47 @@ type CreateOrderInput struct {
 	Message         string
 	WorkspaceID     string // surfaces as udf1
 	ToTier          string // surfaces as udf2
-	PhoneNumber     string // empty string is acceptable; PhonePe asks user on the page
+	PhoneNumber     string
 }
 
 // CreateOrder calls /checkout/v2/pay and returns the redirect URL.
 // merchantOrderID must be unique per workspace+order and is the key we
 // use to look up our subscription_upgrade_orders row on callback.
 func (c *PhonePeV2Client) CreateOrder(ctx context.Context, in CreateOrderInput) (*PhonePeOrderResult, error) {
-	token, err := c.fetchToken(ctx)
-	if err != nil {
-		return nil, err
+	if c == nil || c.checkout == nil {
+		return nil, fmt.Errorf("phonepe: checkout client not configured")
 	}
 	message := in.Message
 	if message == "" {
 		message = "RawDrive plan upgrade"
 	}
-	reqBody := phonepePayRequest{
-		MerchantOrderID: in.MerchantOrderID,
-		Amount:          in.AmountPaise,
-		// 1 hour — matches the PhonePe Python SDK's default
-		// expire_after=3600. Shorter windows (we used 1200 previously)
-		// can correlate with degraded checkout-UI renders on some
-		// merchant configs; the SDK ships with 3600 for a reason.
-		ExpireAfter: 3600,
-		MetaInfo: &phonepeMetaInfo{
-			UDF1: in.WorkspaceID,
-			UDF2: in.ToTier,
-		},
-		PaymentFlow: phonepePaymentFlow{
-			Type:    "PG_CHECKOUT",
-			Message: message,
-			MerchantURLs: phonepeMerchantURLs{
-				RedirectURL: in.RedirectURL,
-			},
-		},
-		// Always include — the Python SDK does. Empty phoneNumber is
-		// acceptable; PhonePe prompts the user on their page when
-		// blank. The presence of the field itself is what matters.
-		PrefillUserLoginDetails: &phonepePrefillUserLoginDetails{
-			PhoneNumber: in.PhoneNumber,
-		},
-		DisablePaymentRetry: true,
+	expireAfter := int64(3600)
+	redirectURL := strings.TrimSpace(in.RedirectURL)
+	metaInfo := &phonepemodels.MetaInfo{
+		Udf1: in.WorkspaceID,
+		Udf2: in.ToTier,
 	}
-	payload, _ := json.Marshal(reqBody)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(c.cfg.BaseURL, "/")+"/checkout/v2/pay", bytes.NewReader(payload))
+	var prefill *phoneperequest.PrefillUserLoginDetails
+	if strings.TrimSpace(in.PhoneNumber) != "" {
+		prefill = phoneperequest.NewPrefillUserLoginDetails(strings.TrimSpace(in.PhoneNumber))
+	}
+	payRequest := phoneperequest.NewStandardCheckoutPayRequest(
+		in.MerchantOrderID,
+		in.AmountPaise,
+		&redirectURL,
+		metaInfo,
+		&message,
+		&expireAfter,
+		nil,
+		nil,
+		prefill,
+	)
+	out, err := c.checkout.Pay(ctx, payRequest)
 	if err != nil {
-		return nil, fmt.Errorf("phonepe: pay build req: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "O-Bearer "+token)
-
-	resp, err := c.cfg.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("phonepe: pay http: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("phonepe: pay http %d: %s", resp.StatusCode, string(body))
-	}
-	var out phonepePayResponse
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("phonepe: pay parse: %w", err)
+		return nil, fmt.Errorf("phonepe: pay: %w", err)
 	}
 	if out.RedirectURL == "" {
-		return nil, fmt.Errorf("phonepe: pay empty redirect: state=%q code=%q msg=%q", out.State, out.Code, out.Message)
+		return nil, fmt.Errorf("phonepe: pay empty redirect: state=%q", out.State)
 	}
 	return &PhonePeOrderResult{
 		MerchantOrderID: in.MerchantOrderID,
@@ -324,59 +198,45 @@ func (c *PhonePeV2Client) CreateOrder(ctx context.Context, in CreateOrderInput) 
 
 // ── Status ──────────────────────────────────────────────────────────────────
 
-type phonepeStatusResponse struct {
-	OrderID         string `json:"orderId"`
-	State           string `json:"state"` // COMPLETED, FAILED, PENDING
-	Amount          int64  `json:"amount"`
-	PaymentDetails []struct {
-		TransactionID string `json:"transactionId"`
-		State         string `json:"state"`
-		Amount        int64  `json:"amount"`
-	} `json:"paymentDetails"`
-	// Error shape
-	Code    string `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
 // PhonePeStatus is the normalised view of an order's payment state.
 type PhonePeStatus struct {
-	State              string // COMPLETED | FAILED | PENDING (PhonePe's canonical values)
-	Amount             int64
-	PrimaryTransaction string // first paymentDetails[].transactionId — what we persist as provider_payment_id
+	State                           string // COMPLETED | FAILED | PENDING (PhonePe's canonical values)
+	Amount                          int64
+	ErrorCode                       string
+	DetailedErrorCode               string
+	PrimaryTransaction              string // first paymentDetails[].transactionId — what we persist as provider_payment_id
+	PrimaryTransactionState         string
+	PrimaryTransactionErrorCode     string
+	PrimaryTransactionDetailedError string
 }
 
 // FetchOrderStatus calls /checkout/v2/order/{merchantOrderId}/status.
 // Returns the canonical state plus the primary transaction id (if any).
 func (c *PhonePeV2Client) FetchOrderStatus(ctx context.Context, merchantOrderID string) (*PhonePeStatus, error) {
-	token, err := c.fetchToken(ctx)
+	if c == nil || c.checkout == nil {
+		return nil, fmt.Errorf("phonepe: checkout client not configured")
+	}
+	out, err := c.checkout.GetOrderStatus(ctx, merchantOrderID, true)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("phonepe: status: %w", err)
 	}
-	url := fmt.Sprintf("%s/checkout/v2/order/%s/status",
-		strings.TrimRight(c.cfg.BaseURL, "/"), merchantOrderID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("phonepe: status build req: %w", err)
+	res := &PhonePeStatus{
+		State:             strings.ToUpper(strings.TrimSpace(out.State)),
+		Amount:            out.Amount,
+		ErrorCode:         strings.TrimSpace(out.ErrorCode),
+		DetailedErrorCode: strings.TrimSpace(out.DetailedErrorCode),
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "O-Bearer "+token)
-
-	resp, err := c.cfg.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("phonepe: status http: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("phonepe: status http %d: %s", resp.StatusCode, string(body))
-	}
-	var out phonepeStatusResponse
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("phonepe: status parse: %w", err)
-	}
-	res := &PhonePeStatus{State: strings.ToUpper(strings.TrimSpace(out.State)), Amount: out.Amount}
 	if len(out.PaymentDetails) > 0 {
-		res.PrimaryTransaction = out.PaymentDetails[0].TransactionID
+		res.PrimaryTransaction = strings.TrimSpace(out.PaymentDetails[0].TransactionID)
+		res.PrimaryTransactionState = strings.ToUpper(strings.TrimSpace(out.PaymentDetails[0].State))
+		res.PrimaryTransactionErrorCode = strings.TrimSpace(out.PaymentDetails[0].ErrorCode)
+		res.PrimaryTransactionDetailedError = strings.TrimSpace(out.PaymentDetails[0].DetailedErrorCode)
+		if res.ErrorCode == "" {
+			res.ErrorCode = res.PrimaryTransactionErrorCode
+		}
+		if res.DetailedErrorCode == "" {
+			res.DetailedErrorCode = res.PrimaryTransactionDetailedError
+		}
 	}
 	return res, nil
 }

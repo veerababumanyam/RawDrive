@@ -1,6 +1,6 @@
 import { authFetch } from "./authFetch";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 void API_BASE;
 
 export interface Invoice {

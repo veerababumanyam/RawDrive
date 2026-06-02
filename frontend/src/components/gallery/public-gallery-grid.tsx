@@ -29,8 +29,12 @@ import type { PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest, variantManifest } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
-import { appendGalleryKeyFragment, readGalleryKeyFromHash } from "@/lib/media-encryption/media-crypto";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
+import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
+import {
+  appendCurrentGalleryKeyFragment,
+  setUrlSearchParamBeforeFragment,
+} from "@/lib/media-encryption/share-url";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress, Star, Share, EllipsisVertical } from "@/components/icons";
 import {
@@ -38,6 +42,7 @@ import {
   listPublicFavoriteAssetIds,
   removePublicFavorite,
 } from "@/lib/api/favorites";
+import { submitPublicProofing } from "@/lib/api/proofing";
 
 // API base mirrors what dashboard-ui.ts and lib/api/galleries.ts use. The
 // public asset download endpoint lives on the Go API (port 8081 in dev)
@@ -129,7 +134,7 @@ function PublicAssetTileImage({
   }
   return (
     <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
-      {media.error || "Image unavailable"}
+      {publicMediaErrorMessage(media.error) || "Image unavailable"}
     </div>
   );
 }
@@ -151,7 +156,7 @@ function PublicLightboxImage({
     return <p className="text-sm text-white/40">Decrypting photo...</p>;
   }
   if (!media.src) {
-    return <p className="text-sm text-white/40">{media.error || "Image unavailable"}</p>;
+    return <p className="text-sm text-white/40">{publicMediaErrorMessage(media.error) || "Image unavailable"}</p>;
   }
   return (
     <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
@@ -235,9 +240,21 @@ function PublicFilmstripThumb({
   );
 }
 
-async function downloadPublicAsset(slug: string, asset: PublicAsset, format: PublicDownloadFormat): Promise<void> {
+async function downloadPublicAsset(
+  slug: string,
+  asset: PublicAsset,
+  format: PublicDownloadFormat,
+  gallerySessionToken?: string | null,
+  workspaceScope?: string | null,
+): Promise<void> {
   const url = new URL(`${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`);
   url.searchParams.set("format", format);
+  if (workspaceScope) {
+    url.searchParams.set("ws", workspaceScope);
+  }
+  if (gallerySessionToken) {
+    url.searchParams.set("gs", gallerySessionToken);
+  }
   if (!assetUsesClientMediaEncryption(asset)) {
     window.open(url.toString(), "_blank");
     return;
@@ -292,7 +309,11 @@ function getOrCreateGuestSessionId(): string {
 //
 // localStorage key is gallery-scoped so a guest visiting two galleries
 // on one device sees the right favorites per gallery.
-function useGalleryFavorites(slug: string) {
+function useGalleryFavorites(
+  slug: string,
+  gallerySessionToken?: string | null,
+  workspaceScope?: string | null,
+) {
   const storageKey = `rawdrive-favorites-${slug}`;
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
 
@@ -323,7 +344,10 @@ function useGalleryFavorites(slug: string) {
 
     // Authoritative read from the server. Replaces local seed when
     // it lands. Failures are silent — localStorage state stays as-is.
-    void listPublicFavoriteAssetIds(slug, sessionId)
+    const loadFavorites = gallerySessionToken || workspaceScope
+      ? listPublicFavoriteAssetIds(slug, sessionId, gallerySessionToken, workspaceScope)
+      : listPublicFavoriteAssetIds(slug, sessionId);
+    void loadFavorites
       .then((ids) => {
         if (cancelled) return;
         const next = new Set(ids);
@@ -338,7 +362,7 @@ function useGalleryFavorites(slug: string) {
       });
 
     return () => { cancelled = true; };
-  }, [slug, storageKey]);
+  }, [gallerySessionToken, slug, storageKey, workspaceScope]);
 
   const toggle = useCallback(
     (assetId: string) => {
@@ -371,12 +395,16 @@ function useGalleryFavorites(slug: string) {
       // Fire-and-forget server sync. Optimistic UI already updated.
       // Failure is silent so a brief network blip doesn't snap the
       // Star back to its previous state — next mount re-syncs.
-      const op = wasFavorited
-        ? removePublicFavorite(slug, assetId, sessionId)
-        : addPublicFavorite(slug, assetId, sessionId);
+      const op = gallerySessionToken || workspaceScope
+        ? (wasFavorited
+            ? removePublicFavorite(slug, assetId, sessionId, gallerySessionToken, workspaceScope)
+            : addPublicFavorite(slug, assetId, sessionId, gallerySessionToken, workspaceScope))
+        : (wasFavorited
+            ? removePublicFavorite(slug, assetId, sessionId)
+            : addPublicFavorite(slug, assetId, sessionId));
       void op.catch(() => { /* sync failed; local state retained */ });
     },
-    [favorites, slug, storageKey],
+    [favorites, gallerySessionToken, slug, storageKey, workspaceScope],
   );
 
   return { favorites, toggle };
@@ -397,12 +425,11 @@ function useGalleryFavorites(slug: string) {
 //
 // Falls back to a relative path on SSR where window.location.origin is
 // undefined.
-function buildAssetShareUrl(slug: string, assetId: string): string {
+function buildAssetShareUrl(slug: string, assetId: string, workspaceScope?: string | null): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const url = `${origin}/g/${slug}/photo/${assetId}`;
+  const url = setUrlSearchParamBeforeFragment(`${origin}/g/${slug}/photo/${assetId}`, "ws", workspaceScope);
   if (typeof window === "undefined") return url;
-  const key = readGalleryKeyFromHash(window.location.hash);
-  return key ? appendGalleryKeyFragment(url, key) : url;
+  return appendCurrentGalleryKeyFragment(url);
 }
 
 // Web Share API + clipboard fallback. Returns the verdict so the caller
@@ -478,6 +505,10 @@ interface Props {
   // (public/unlisted, non-password) galleries, where the bytes serve
   // anonymously and no token is needed.
   gallerySessionToken?: string | null;
+  // Optional workspace subdomain scope (`?ws=`) from per-business public URLs.
+  // Public proofing, favorites, and downloads must preserve it so every
+  // follow-up API call targets the same workspace-scoped gallery as the page.
+  workspaceScope?: string | null;
 }
 
 // Bound the studio's columns value into the responsive scale the public
@@ -633,6 +664,7 @@ export function PublicGalleryGrid({
   design = null,
   watermark = null,
   gallerySessionToken = null,
+  workspaceScope = null,
 }: Props) {
   // Memoize the resolved watermark display state. Returns null when
   // disabled / misconfigured so the render path can short-circuit to
@@ -690,7 +722,7 @@ export function PublicGalleryGrid({
   // Client-side favorite store + "share link copied" feedback. The
   // feedback flag is local to the lightbox toolbar — flips true for ~1.6s
   // after the share button's clipboard write succeeds, then resets.
-  const { favorites, toggle: toggleFavorite } = useGalleryFavorites(slug);
+  const { favorites, toggle: toggleFavorite } = useGalleryFavorites(slug, gallerySessionToken, workspaceScope);
   const [favoriteNotice, setFavoriteNotice] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
   // Per-tile share-copied feedback. Keyed by asset id so only the tile the
@@ -754,6 +786,7 @@ export function PublicGalleryGrid({
   const [submitEmail, setSubmitEmail] = useState("");
   const [submitNote, setSubmitNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const toggleSelection = useCallback((assetId: string) => {
@@ -770,23 +803,34 @@ export function PublicGalleryGrid({
   }, [maxSelections]);
 
   const handleSubmitSelections = async () => {
-    if (selectedIds.size === 0 || !submitEmail) return;
+    const clientName = submitName.trim();
+    const clientEmail = submitEmail.trim();
+    if (selectedIds.size === 0 || !clientName || !clientEmail) return;
     setSubmitting(true);
+    setSubmitError("");
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const res = await fetch(`${apiBase}/api/v1/public/galleries/${slug}/proof`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await submitPublicProofing(
+        slug,
+        {
           asset_ids: Array.from(selectedIds),
-          client_name: submitName,
-          client_email: submitEmail,
+          client_name: clientName,
+          client_email: clientEmail,
           note: submitNote,
-        }),
-      });
-      if (res.ok) {
-        setSubmitted(true);
-        setShowSubmit(false);
+        },
+        gallerySessionToken,
+        workspaceScope,
+      );
+      setSubmitted(true);
+      setShowSubmit(false);
+      setSelectedIds(new Set());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Submission failed.";
+      if (message === "selection_limit_reached") {
+        setSubmitError("You have reached the selection limit for this gallery.");
+      } else if (message === "gallery password required") {
+        setSubmitError("Please unlock the gallery again before submitting selections.");
+      } else {
+        setSubmitError(message);
       }
     } finally {
       setSubmitting(false);
@@ -1084,7 +1128,7 @@ export function PublicGalleryGrid({
                             role="menuitem"
                             onClick={async (e) => {
                               e.stopPropagation();
-                              const url = buildAssetShareUrl(slug, asset.id);
+                              const url = buildAssetShareUrl(slug, asset.id, workspaceScope);
                               const result = await shareOrCopy(url, asset.filename);
                               if (result === "copy-fallback") {
                                 setTileShareCopiedId(asset.id);
@@ -1110,7 +1154,7 @@ export function PublicGalleryGrid({
                               role="menuitem"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void downloadPublicAsset(slug, asset, format);
+                                void downloadPublicAsset(slug, asset, format, gallerySessionToken, workspaceScope);
                                 setTileMenuOpenId(null);
                               }}
                               className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
@@ -1228,10 +1272,11 @@ export function PublicGalleryGrid({
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Your name"
+                placeholder="Your name *"
                 value={submitName}
                 onChange={(e) => setSubmitName(e.target.value)}
                 className="input-base w-full"
+                required
               />
               <input
                 type="email"
@@ -1248,6 +1293,11 @@ export function PublicGalleryGrid({
                 rows={3}
                 className="input-base w-full resize-none"
               />
+              {submitError && (
+                <p role="alert" className="rounded-lg border border-feedback-error/20 bg-feedback-error/10 px-3 py-2 text-sm text-feedback-error">
+                  {submitError}
+                </p>
+              )}
             </div>
             <div className="flex gap-2 mt-4">
               <button
@@ -1260,7 +1310,7 @@ export function PublicGalleryGrid({
               <button
                 type="button"
                 onClick={handleSubmitSelections}
-                disabled={!submitEmail || submitting}
+                disabled={!submitName.trim() || !submitEmail.trim() || submitting}
                 className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit"}
@@ -1330,7 +1380,7 @@ export function PublicGalleryGrid({
                     size="sm"
                     label={publicDownloadLabel(format)}
                     onClick={() => {
-                      void downloadPublicAsset(slug, photo, format);
+                      void downloadPublicAsset(slug, photo, format, gallerySessionToken, workspaceScope);
                     }}
                   >
                     <Download />
@@ -1346,7 +1396,7 @@ export function PublicGalleryGrid({
                     // API on mobile, clipboard on desktop, suppressed
                     // toast on user-cancel). URL points to the new
                     // single-photo route — see buildAssetShareUrl notes.
-                    const url = buildAssetShareUrl(slug, photo.id);
+                    const url = buildAssetShareUrl(slug, photo.id, workspaceScope);
                     const result = await shareOrCopy(url, photo.filename);
                     if (result === "copy-fallback") {
                       setShareCopied(true);

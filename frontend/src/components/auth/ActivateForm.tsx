@@ -8,7 +8,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export function ActivateForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const email = searchParams.get("email") || "";
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,7 +44,7 @@ export function ActivateForm() {
       }
 
       persistAuthTokens(payload.access_token);
-      window.location.assign(getPostLoginPath());
+      router.push(getPostLoginPath());
     } catch {
       setError("Network error. Please confirm the API server is running.");
     } finally {

@@ -14,6 +14,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -63,16 +66,16 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 // ─── Public ───────────────────────────────────────────────────────────
 
 type publicPackage struct {
-	ID                   uuid.UUID `json:"id"`
-	Code                 string    `json:"code"`
-	Name                 string    `json:"name"`
-	Tier                 string    `json:"tier"`
-	Minutes              int       `json:"minutes"`
-	MaxConcurrentViewers int       `json:"max_concurrent_viewers"`
-	ReplayTTLDays        int       `json:"replay_ttl_days"`
-	PricePaise           int64     `json:"price_paise"`
-	BaseRatePaisePerMin  int64     `json:"base_rate_paise_per_min"`
-	OverageRatePaisePerMin int64   `json:"overage_rate_paise_per_min"`
+	ID                     uuid.UUID `json:"id"`
+	Code                   string    `json:"code"`
+	Name                   string    `json:"name"`
+	Tier                   string    `json:"tier"`
+	Minutes                int       `json:"minutes"`
+	MaxConcurrentViewers   int       `json:"max_concurrent_viewers"`
+	ReplayTTLDays          int       `json:"replay_ttl_days"`
+	PricePaise             int64     `json:"price_paise"`
+	BaseRatePaisePerMin    int64     `json:"base_rate_paise_per_min"`
+	OverageRatePaisePerMin int64     `json:"overage_rate_paise_per_min"`
 }
 
 // ListPublicPackages lists global (workspace_id IS NULL) packages with their
@@ -112,13 +115,13 @@ func (h *Handler) ListPublicPackages(w http.ResponseWriter, r *http.Request) {
 // ─── Workspace-auth ───────────────────────────────────────────────────
 
 type createRechargeRequest struct {
-	PackageID    string `json:"package_id"`
-	Provider     string `json:"provider,omitempty"`     // "phonepe" | "razorpay" | omit
-	RedirectURL  string `json:"redirect_url,omitempty"`
-	CallbackURL  string `json:"callback_url,omitempty"` // override; default derived from settings
-	BuyerName    string `json:"buyer_name,omitempty"`
-	BuyerEmail   string `json:"buyer_email,omitempty"`
-	BuyerPhone   string `json:"buyer_phone,omitempty"`
+	PackageID   string `json:"package_id"`
+	Provider    string `json:"provider,omitempty"` // "phonepe" | "razorpay" | omit
+	RedirectURL string `json:"redirect_url,omitempty"`
+	CallbackURL string `json:"callback_url,omitempty"` // override; default derived from settings
+	BuyerName   string `json:"buyer_name,omitempty"`
+	BuyerEmail  string `json:"buyer_email,omitempty"`
+	BuyerPhone  string `json:"buyer_phone,omitempty"`
 }
 
 // CreateRecharge initiates a payment with the chosen provider.
@@ -141,6 +144,18 @@ func (h *Handler) CreateRecharge(w http.ResponseWriter, r *http.Request) {
 	prov := Name(body.Provider)
 	if prov == "" {
 		prov = NamePhonePe
+	}
+	if body.CallbackURL != "" {
+		writeError(w, http.StatusBadRequest, "invalid_callback_url", "callback_url is server-managed")
+		return
+	}
+	if body.RedirectURL != "" && !isAllowedRechargeReturnURL(r, body.RedirectURL) {
+		writeError(w, http.StatusBadRequest, "invalid_redirect_url", "redirect_url must match the app origin")
+		return
+	}
+	body.CallbackURL = defaultRechargeCallbackURL(r, prov)
+	if body.RedirectURL == "" {
+		body.RedirectURL = defaultRechargeReturnURL(r)
 	}
 
 	user := userIDFromCtx(r)
@@ -199,6 +214,7 @@ func (h *Handler) ListMyOrders(w http.ResponseWriter, r *http.Request) {
 			&providerPaymentID, &o.Status, &checkoutURL, &o.CreatedAt); scanErr == nil {
 			o.ProviderPaymentID = providerPaymentID
 			o.CheckoutURL = checkoutURL
+			o.RedirectURL = checkoutURL
 			out = append(out, o)
 		}
 	}
@@ -224,16 +240,20 @@ func (h *Handler) GetMyBalance(w http.ResponseWriter, r *http.Request) {
 		paise, minutes = 0, 0
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"workspace_id":     wsID,
-		"balance_paise":    paise,
-		"balance_minutes":  minutes,
+		"workspace_id":    wsID,
+		"balance_paise":   paise,
+		"balance_minutes": minutes,
 	})
 }
 
 // ─── Webhooks ─────────────────────────────────────────────────────────
 
-func (h *Handler) PhonePeWebhook(w http.ResponseWriter, r *http.Request)  { h.handleWebhook(w, r, NamePhonePe) }
-func (h *Handler) RazorpayWebhook(w http.ResponseWriter, r *http.Request) { h.handleWebhook(w, r, NameRazorpay) }
+func (h *Handler) PhonePeWebhook(w http.ResponseWriter, r *http.Request) {
+	h.handleWebhook(w, r, NamePhonePe)
+}
+func (h *Handler) RazorpayWebhook(w http.ResponseWriter, r *http.Request) {
+	h.handleWebhook(w, r, NameRazorpay)
+}
 
 func (h *Handler) handleWebhook(w http.ResponseWriter, r *http.Request, provider Name) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20)) // 1MB cap
@@ -347,4 +367,80 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]any{"error": code, "message": message})
+}
+
+func defaultRechargeCallbackURL(r *http.Request, provider Name) string {
+	base := firstHTTPOrigin(
+		os.Getenv("PAYMENT_CALLBACK_BASE_URL"),
+		os.Getenv("PUBLIC_BASE_URL"),
+		requestOrigin(r),
+	)
+	return strings.TrimRight(base, "/") + "/api/v1/webhooks/" + string(provider) + "/streaming"
+}
+
+func defaultRechargeReturnURL(r *http.Request) string {
+	base := firstHTTPOrigin(
+		os.Getenv("FRONTEND_URL"),
+		os.Getenv("PUBLIC_BASE_URL"),
+		headerOrigin(r.Header.Get("Referer")),
+		requestOrigin(r),
+	)
+	return strings.TrimRight(base, "/") + "/dashboard?payment=streaming_recharge"
+}
+
+func firstHTTPOrigin(values ...string) string {
+	for _, value := range values {
+		if origin := headerOrigin(value); origin != "" {
+			return origin
+		}
+	}
+	return "http://localhost:3000"
+}
+
+func headerOrigin(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+func requestOrigin(r *http.Request) string {
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	proto := r.Header.Get("X-Forwarded-Proto")
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+	return proto + "://" + host
+}
+
+func isHTTPURL(raw string) bool {
+	return headerOrigin(raw) != ""
+}
+
+func isAllowedRechargeReturnURL(r *http.Request, raw string) bool {
+	target := headerOrigin(raw)
+	if target == "" {
+		return false
+	}
+	for _, allowed := range []string{
+		os.Getenv("FRONTEND_URL"),
+		os.Getenv("PUBLIC_BASE_URL"),
+		requestOrigin(r),
+	} {
+		if headerOrigin(allowed) == target {
+			return true
+		}
+	}
+	return false
 }

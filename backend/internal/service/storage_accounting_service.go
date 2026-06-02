@@ -56,24 +56,6 @@ func (c *analyticsCache) invalidate(workspaceID uuid.UUID) {
 	delete(c.entries, workspaceID)
 }
 
-// PlanDefaultQuotaBytes returns the storage quota (in bytes) for a given plan tier.
-// This is the single source of truth for plan quotas in the backend — keep in sync
-// with pricingPlans in frontend/src/lib/tokens.ts.
-func PlanDefaultQuotaBytes(tier string) int64 {
-	switch tier {
-	case "starter":
-		return 30 * (1 << 30) // 30 GB
-	case "professional":
-		return 300 * (1 << 30) // 300 GB
-	case "business":
-		return 3 * (1 << 40) // 3 TB
-	case "enterprise":
-		return 6 * (1 << 40) // 6 TB
-	default: // "free" and any unknown tier
-		return 1 << 30 // 1 GB
-	}
-}
-
 // StorageAccounting tracks per-workspace storage usage with quota enforcement.
 type StorageAccounting struct {
 	pool  *pgxpool.Pool
@@ -455,5 +437,16 @@ func (s *StorageAccounting) SetQuota(ctx context.Context, workspaceID uuid.UUID,
 	if err != nil {
 		return fmt.Errorf("storage accounting: set quota: %w", err)
 	}
+	s.InvalidateAnalytics(workspaceID)
 	return nil
+}
+
+// InvalidateAnalytics drops the in-process cached storage analytics for a
+// workspace after quota/usage changes made outside this service's normal
+// write path, such as subscription payment settlement.
+func (s *StorageAccounting) InvalidateAnalytics(workspaceID uuid.UUID) {
+	if s == nil || s.cache == nil {
+		return
+	}
+	s.cache.invalidate(workspaceID)
 }

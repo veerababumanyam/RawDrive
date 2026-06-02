@@ -22,8 +22,12 @@ import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Download, Share, XCircle, ZoomIn, ZoomOut } from "@/components/icons";
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
 import { LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest, variantManifest } from "@/lib/media-encryption/asset-media";
-import { appendGalleryKeyFragment, readGalleryKeyFromHash } from "@/lib/media-encryption/media-crypto";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
+import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
+import {
+  appendCurrentGalleryKeyFragment,
+  setUrlSearchParamBeforeFragment,
+} from "@/lib/media-encryption/share-url";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { WatermarkOverlay } from "./watermark-overlay";
 
@@ -75,9 +79,17 @@ interface Props {
   // S4-G1: gallery-session token (when the gallery is gated) appended as `?gs=`
   // to the protected image bytes so the cross-origin <img> authenticates.
   gallerySessionToken?: string | null;
+  workspaceScope?: string | null;
 }
 
-export function SinglePhotoView({ slug, photo, gallery, branding, gallerySessionToken = null }: Props) {
+export function SinglePhotoView({
+  slug,
+  photo,
+  gallery,
+  branding,
+  gallerySessionToken = null,
+  workspaceScope = null,
+}: Props) {
   const [shareCopied, setShareCopied] = useState(false);
   const [zoom, setZoom] = useState(1);
 
@@ -102,14 +114,19 @@ export function SinglePhotoView({ slug, photo, gallery, branding, gallerySession
   const watermarkConfig = wm && wm.enabled === true ? wm : undefined;
 
   const plainShareUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/g/${slug}/photo/${photo.id}`
+    ? setUrlSearchParamBeforeFragment(`${window.location.origin}/g/${slug}/photo/${photo.id}`, "ws", workspaceScope)
     : "";
-  const currentKey = typeof window !== "undefined" ? readGalleryKeyFromHash(window.location.hash) : null;
-  const shareUrl = currentKey ? appendGalleryKeyFragment(plainShareUrl, currentKey) : plainShareUrl;
+  const shareUrl = appendCurrentGalleryKeyFragment(plainShareUrl);
 
   async function handleDownload(format: PublicDownloadFormat) {
     const url = new URL(`${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`);
     url.searchParams.set("format", format);
+    if (workspaceScope) {
+      url.searchParams.set("ws", workspaceScope);
+    }
+    if (gallerySessionToken) {
+      url.searchParams.set("gs", gallerySessionToken);
+    }
     if (!assetUsesClientMediaEncryption(photo)) {
       window.open(url.toString(), "_self");
       return;
@@ -256,7 +273,9 @@ export function SinglePhotoView({ slug, photo, gallery, branding, gallerySession
         ) : (
           <div className="text-center">
             <XCircle className="mx-auto mb-2 h-8 w-8 text-text-tertiary" />
-            <p className="text-sm text-text-secondary">{media.loading ? "Decrypting photo..." : media.error || "Image unavailable"}</p>
+            <p className="text-sm text-text-secondary">
+              {media.loading ? "Decrypting photo..." : publicMediaErrorMessage(media.error) || "Image unavailable"}
+            </p>
           </div>
         )}
       </main>

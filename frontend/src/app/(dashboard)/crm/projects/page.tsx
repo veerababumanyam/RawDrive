@@ -35,6 +35,8 @@ function emptyForm() {
 
 export default function ProjectsPage() {
   const searchParams = useSearchParams();
+  const createRequested = searchParams?.get("create") === "true";
+  const clientParam = searchParams?.get("client") ?? "";
   const [token] = useState(() => getStoredAccessToken());
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -62,11 +64,11 @@ export default function ProjectsPage() {
   }, [token, refreshTick]);
 
   useEffect(() => {
-    if (searchParams.get("create") !== "true") return;
-    const clientId = searchParams.get("client") || "";
+    if (!createRequested) return;
+    const clientId = clientParam;
     setForm((current) => ({ ...current, contact_id: clientId || current.contact_id }));
     setShowCreate(true);
-  }, [searchParams]);
+  }, [clientParam, createRequested]);
 
   const summary = useMemo(() => {
     const activeProjects = projects.filter((project) => !["archived", "cancelled", "lost"].includes(project.status));

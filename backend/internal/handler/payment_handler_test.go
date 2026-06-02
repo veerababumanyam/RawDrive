@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -31,10 +32,14 @@ type fakePaymentRepo struct {
 	listResult  []repository.Payment
 	listErr     error
 	createCalls int
+	lastPayment repository.Payment
 }
 
-func (f *fakePaymentRepo) Create(_ context.Context, _ *repository.Payment) error {
+func (f *fakePaymentRepo) Create(_ context.Context, p *repository.Payment) error {
 	f.createCalls++
+	if p != nil {
+		f.lastPayment = *p
+	}
 	return f.createErr
 }
 
@@ -188,6 +193,15 @@ func paymentLinkRequest(invoiceID uuid.UUID) *http.Request {
 	return req.WithContext(ctx)
 }
 
+func recordPaymentRequest(invoiceID, workspaceID uuid.UUID, body string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/payments", strings.NewReader(body))
+	ctx := middleware.WithWorkspaceID(req.Context(), workspaceID.String())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", invoiceID.String())
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	return req.WithContext(ctx)
+}
+
 // readPaymentLink decodes the "payment_link" field from a JSON response body.
 func readPaymentLink(t *testing.T, body []byte) string {
 	t.Helper()
@@ -197,6 +211,16 @@ func readPaymentLink(t *testing.T, body []byte) string {
 	}
 	link, _ := resp["payment_link"].(string)
 	return link
+}
+
+func paymentLinkQuery(t *testing.T, body []byte) url.Values {
+	t.Helper()
+	link := readPaymentLink(t, body)
+	parsed, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("parse payment link: %v", err)
+	}
+	return parsed.Query()
 }
 
 // TestF104UPIPayeeAddressFromSettings is the core regression for F-104: the UPI
@@ -218,16 +242,16 @@ func TestF104UPIPayeeAddressFromSettings(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	link := readPaymentLink(t, rr.Body.Bytes())
-	if !strings.Contains(link, "pa=studio@okhdfcbank") {
-		t.Fatalf("expected configured PA in link, got %q", link)
+	query := paymentLinkQuery(t, rr.Body.Bytes())
+	if query.Get("pa") != "studio@okhdfcbank" {
+		t.Fatalf("expected configured PA in link, got %q", query.Get("pa"))
 	}
 	// Regression guard: the previously hardcoded literal must never appear.
-	if strings.Contains(link, "rawdrive@upi") {
-		t.Fatalf("hardcoded UPI PA leaked into link: %q", link)
+	if strings.Contains(readPaymentLink(t, rr.Body.Bytes()), "rawdrive%40upi") {
+		t.Fatalf("hardcoded UPI PA leaked into link: %q", readPaymentLink(t, rr.Body.Bytes()))
 	}
-	if !strings.Contains(link, "am=150.00") {
-		t.Fatalf("expected formatted amount in link, got %q", link)
+	if query.Get("am") != "150.00" {
+		t.Fatalf("expected formatted amount in link, got %q", query.Get("am"))
 	}
 }
 
@@ -248,12 +272,12 @@ func TestF104UPIPayeeAddressFromEnv(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	link := readPaymentLink(t, rr.Body.Bytes())
-	if !strings.Contains(link, "pa=env@okaxis") {
-		t.Fatalf("expected env PA in link, got %q", link)
+	query := paymentLinkQuery(t, rr.Body.Bytes())
+	if query.Get("pa") != "env@okaxis" {
+		t.Fatalf("expected env PA in link, got %q", query.Get("pa"))
 	}
-	if strings.Contains(link, "rawdrive@upi") {
-		t.Fatalf("hardcoded UPI PA leaked into link: %q", link)
+	if strings.Contains(readPaymentLink(t, rr.Body.Bytes()), "rawdrive%40upi") {
+		t.Fatalf("hardcoded UPI PA leaked into link: %q", readPaymentLink(t, rr.Body.Bytes()))
 	}
 }
 
@@ -299,8 +323,132 @@ func TestF104SettingsPrecedesEnv(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
+	query := paymentLinkQuery(t, rr.Body.Bytes())
+	if query.Get("pa") != "db@okicici" {
+		t.Fatalf("expected platform_settings PA to win, got %q", query.Get("pa"))
+	}
+}
+
+func TestRecordPaymentRequiresWorkspaceOwnedInvoice(t *testing.T) {
+	ws := uuid.New()
+	invoiceID := uuid.New()
+	payments := &fakePaymentRepo{}
+	h := &PaymentHandler{
+		paymentRepo: payments,
+		invoiceRepo: &fakeInvoiceRepo{
+			getErr: errors.New("not found in this workspace"),
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	h.RecordPayment(rr, recordPaymentRequest(invoiceID, ws, `{"amount_paisa":1000}`))
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-owned invoice, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if payments.createCalls != 0 {
+		t.Fatalf("payment insert must not run for non-owned invoice; calls=%d", payments.createCalls)
+	}
+}
+
+func TestRecordPaymentRejectsOverpaymentAndFullyPaidInvoice(t *testing.T) {
+	ws := uuid.New()
+	invoiceID := uuid.New()
+
+	t.Run("overpayment", func(t *testing.T) {
+		payments := &fakePaymentRepo{}
+		h := &PaymentHandler{
+			paymentRepo: payments,
+			invoiceRepo: &fakeInvoiceRepo{
+				invoice: repository.Invoice{TotalPaisa: 10000, AmountPaidPaisa: 7500},
+			},
+		}
+		rr := httptest.NewRecorder()
+		h.RecordPayment(rr, recordPaymentRequest(invoiceID, ws, `{"amount_paisa":3000}`))
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for overpayment, got %d: %s", rr.Code, rr.Body.String())
+		}
+		if payments.createCalls != 0 {
+			t.Fatalf("payment insert must not run for overpayment; calls=%d", payments.createCalls)
+		}
+	})
+
+	t.Run("already paid", func(t *testing.T) {
+		payments := &fakePaymentRepo{}
+		h := &PaymentHandler{
+			paymentRepo: payments,
+			invoiceRepo: &fakeInvoiceRepo{
+				invoice: repository.Invoice{TotalPaisa: 10000, AmountPaidPaisa: 10000},
+			},
+		}
+		rr := httptest.NewRecorder()
+		h.RecordPayment(rr, recordPaymentRequest(invoiceID, ws, `{"amount_paisa":100}`))
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for paid invoice, got %d: %s", rr.Code, rr.Body.String())
+		}
+		if payments.createCalls != 0 {
+			t.Fatalf("payment insert must not run for paid invoice; calls=%d", payments.createCalls)
+		}
+	})
+}
+
+func TestRecordPaymentUsesOwnedInvoiceProjectAndSyncs(t *testing.T) {
+	ws := uuid.New()
+	invoiceID := uuid.New()
+	projectID := uuid.New()
+	payments := &fakePaymentRepo{totalPaid: 10000}
+	invoices := &fakeInvoiceRepo{
+		invoice: repository.Invoice{
+			ProjectID:       &projectID,
+			TotalPaisa:      10000,
+			AmountPaidPaisa: 1000,
+		},
+	}
+	h := &PaymentHandler{paymentRepo: payments, invoiceRepo: invoices}
+
+	rr := httptest.NewRecorder()
+	h.RecordPayment(rr, recordPaymentRequest(invoiceID, ws, `{"amount_paisa":9000}`))
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if payments.createCalls != 1 {
+		t.Fatalf("payment insert calls=%d, want 1", payments.createCalls)
+	}
+	if payments.lastPayment.ProjectID == nil || *payments.lastPayment.ProjectID != projectID {
+		t.Fatalf("payment project_id = %v, want invoice project %s", payments.lastPayment.ProjectID, projectID)
+	}
+	if invoices.lastStatus != "paid" || invoices.lastAmountPaisa != 10000 {
+		t.Fatalf("invoice sync = (%q,%d), want (paid,10000)", invoices.lastStatus, invoices.lastAmountPaisa)
+	}
+}
+
+func TestPaymentLinkEncodesUPIQueryValues(t *testing.T) {
+	invoiceNumber := "INV 2026/27 #001"
+	h := (&PaymentHandler{
+		invoiceRepo: &fakeInvoiceRepo{invoice: repository.Invoice{
+			InvoiceNumber: invoiceNumber,
+			TotalPaisa:    12345,
+		}},
+	}).WithSettingsResolver(&fakeSettingsResolver{values: map[string]string{
+		"payments/upi_pa": "studio@okhdfcbank",
+	}})
+
+	rr := httptest.NewRecorder()
+	h.GeneratePaymentLink(rr, paymentLinkRequest(uuid.New()))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
 	link := readPaymentLink(t, rr.Body.Bytes())
-	if !strings.Contains(link, "pa=db@okicici") {
-		t.Fatalf("expected platform_settings PA to win, got %q", link)
+	parsed, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("parse payment link: %v", err)
+	}
+	if got := parsed.Query().Get("tn"); got != invoiceNumber {
+		t.Fatalf("tn query decoded to %q, want %q (link=%q)", got, invoiceNumber, link)
+	}
+	if strings.Contains(link, " ") || strings.Contains(link, "#001") {
+		t.Fatalf("payment link query must be encoded, got %q", link)
 	}
 }

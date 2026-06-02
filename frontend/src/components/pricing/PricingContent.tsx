@@ -21,7 +21,7 @@ const faqItems = [
   },
   {
     q: "Is GST included in the pricing?",
-    a: "Prices shown are exclusive of GST. 18% GST will be added at checkout as per Indian tax regulations.",
+    a: "Prices shown match the checkout total for the selected billing cycle; GST is included where applicable.",
   },
   {
     q: "Do you offer refunds?",
@@ -180,7 +180,7 @@ export function PricingContent() {
                   ))}
                 </ul>
                 <Link
-                  href={plan.id === "enterprise" ? "/register?plan=enterprise" : "/register"}
+                  href={`/register?plan=${encodeURIComponent(plan.id)}&interval=${isAnnual ? "annual" : "monthly"}`}
                   className={`mt-6 inline-flex items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
                     plan.popular
                       ? "bg-accent text-text-inverse hover:bg-accent-hover"

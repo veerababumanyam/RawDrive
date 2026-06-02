@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/go-chi/chi/v5"
@@ -132,17 +133,30 @@ func (h *PaymentHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
-	p.WorkspaceID = workspaceID
-	p.InvoiceID = invoiceID
-	if p.ProjectID == nil {
-		if inv, invErr := h.invoiceRepo.GetByID(r.Context(), workspaceID, invoiceID); invErr == nil {
-			p.ProjectID = inv.ProjectID
-		}
-	}
-
 	if p.AmountPaisa <= 0 {
 		http.Error(w, `{"error":"amount must be positive"}`, http.StatusBadRequest)
 		return
+	}
+
+	inv, err := h.invoiceRepo.GetByID(r.Context(), workspaceID, invoiceID)
+	if err != nil {
+		http.Error(w, `{"error":"invoice not found"}`, http.StatusNotFound)
+		return
+	}
+	outstanding := inv.TotalPaisa - inv.AmountPaidPaisa
+	if outstanding <= 0 {
+		http.Error(w, `{"error":"invoice already fully paid"}`, http.StatusBadRequest)
+		return
+	}
+	if p.AmountPaisa > outstanding {
+		http.Error(w, `{"error":"payment exceeds outstanding amount"}`, http.StatusBadRequest)
+		return
+	}
+
+	p.WorkspaceID = workspaceID
+	p.InvoiceID = invoiceID
+	if p.ProjectID == nil {
+		p.ProjectID = inv.ProjectID
 	}
 
 	// Default method when the client didn't send one. The DB
@@ -236,12 +250,18 @@ func (h *PaymentHandler) GeneratePaymentLink(w http.ResponseWriter, r *http.Requ
 	// Generate UPI payment link (dev stub — production uses Razorpay)
 	amountRupees := float64(outstanding) / 100.0
 	log.Printf("[payment-link] Generated for invoice %s, amount: ₹%.2f", inv.InvoiceNumber, amountRupees)
+	query := url.Values{}
+	query.Set("pa", upiPA)
+	query.Set("pn", "RawDrive")
+	query.Set("am", fmt.Sprintf("%.2f", amountRupees))
+	query.Set("cu", "INR")
+	query.Set("tn", inv.InvoiceNumber)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"invoice_id":     invoiceID.String(),
 		"invoice_number": inv.InvoiceNumber,
 		"amount_paisa":   outstanding,
-		"payment_link":   "upi://pay?pa=" + upiPA + "&pn=RawDrive&am=" + fmt.Sprintf("%.2f", amountRupees) + "&cu=INR&tn=" + inv.InvoiceNumber,
+		"payment_link":   "upi://pay?" + query.Encode(),
 		"provider":       "upi_stub",
 		"note":           "Production will use Razorpay payment links",
 	})

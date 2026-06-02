@@ -48,6 +48,51 @@ func TestCORSProductionAllowsConfiguredFrontendURL(t *testing.T) {
 	assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
 }
 
+func TestCORSNonProductionAllowsLoopbackOrigins(t *testing.T) {
+	t.Setenv("APP_ENV", "uat")
+	t.Setenv("GO_ENV", "")
+	t.Setenv("FRONTEND_URL", "https://uat.rawdrive.in")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, origin := range []string{
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+		"http://[::1]:3000",
+	} {
+		req := httptest.NewRequest(http.MethodOptions, "/storage/thumbnails/asset/thumb.webp", nil)
+		req.Header.Set("Origin", origin)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		assert.Equal(t, origin, rec.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
+	}
+}
+
+func TestCORSNonProductionRejectsLoopbackPrefixSpoof(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("GO_ENV", "")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/assets", nil)
+	req.Header.Set("Origin", "http://localhost.evil.test:3000")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Credentials"))
+}
+
 // Resumable chunked uploads (backend/internal/handler/chunked_upload.go)
 // PATCH with Upload-Offset + Upload-Length and the Tus-Resumable version
 // marker. The browser preflight for that request must accept those

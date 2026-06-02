@@ -189,6 +189,39 @@ describe("LoginForm Google OAuth callback handling", () => {
     });
   });
 
+  it("keeps password sessions alive by navigating without a hard reload", async () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      writable: true,
+      value: { ...window.location, assign } as unknown as Location,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "access-token" }),
+      }),
+    );
+
+    const { getByLabelText, getByRole } = render(<LoginForm />);
+
+    fireEvent.change(getByLabelText(/email address/i), {
+      target: { value: "photographer@example.com" },
+    });
+    fireEvent.change(getByLabelText(/password/i), {
+      target: { value: "Password123!" },
+    });
+    fireEvent.click(getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() => {
+      expect(auth.persistAuthTokens).toHaveBeenCalledWith("access-token");
+      expect(nav.push).toHaveBeenCalledWith("/dashboard");
+    });
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("announces in-app browser Google recovery instructions", () => {
     auth.isAndroidWebView.mockReturnValue(true);
 

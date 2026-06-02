@@ -27,11 +27,11 @@ import (
 // Errors are sentinel values so handlers can map them to HTTP statuses
 // without string-matching.
 var (
-	ErrGalleryFavoritesNotFound        = errors.New("gallery not found")
-	ErrGalleryFavoritesNotPublished    = errors.New("gallery is not published")
-	ErrGalleryFavoritesExpired         = errors.New("gallery has expired")
-	ErrGalleryFavoritesMissingSession  = errors.New("guest_session_id is required")
-	ErrGalleryFavoritesInvalidAssetID  = errors.New("invalid asset id")
+	ErrGalleryFavoritesNotFound       = errors.New("gallery not found")
+	ErrGalleryFavoritesNotPublished   = errors.New("gallery is not published")
+	ErrGalleryFavoritesExpired        = errors.New("gallery has expired")
+	ErrGalleryFavoritesMissingSession = errors.New("guest_session_id is required")
+	ErrGalleryFavoritesInvalidAssetID = errors.New("invalid asset id")
 )
 
 type GalleryFavoritesService struct {
@@ -51,28 +51,29 @@ func (s *GalleryFavoritesService) AddFavoriteBySlug(
 	assetID uuid.UUID,
 	guestSessionID string,
 ) error {
-	if strings.TrimSpace(guestSessionID) == "" {
-		return ErrGalleryFavoritesMissingSession
-	}
-
 	gallery, err := s.galleryRepo.GetBySlug(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("favorites: lookup gallery by slug: %w", err)
 	}
-	if gallery == nil {
-		return ErrGalleryFavoritesNotFound
-	}
-	if !gallery.IsPublished {
-		return ErrGalleryFavoritesNotPublished
-	}
-	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
-		return ErrGalleryFavoritesExpired
-	}
+	return s.AddFavorite(ctx, gallery, assetID, guestSessionID)
+}
 
+// AddFavorite is called by public handlers that already resolved the gallery,
+// including workspace-scoped public URLs. It enforces publish/expiry/session
+// rules before idempotently writing the favorite.
+func (s *GalleryFavoritesService) AddFavorite(
+	ctx context.Context,
+	gallery *repository.Gallery,
+	assetID uuid.UUID,
+	guestSessionID string,
+) error {
+	if err := s.validatePublicFavoriteRequest(gallery, guestSessionID); err != nil {
+		return err
+	}
 	return s.favRepo.Upsert(ctx, &repository.GalleryFavorite{
 		GalleryID:      gallery.ID,
 		AssetID:        assetID,
-		GuestSessionID: guestSessionID,
+		GuestSessionID: strings.TrimSpace(guestSessionID),
 	})
 }
 
@@ -84,13 +85,56 @@ func (s *GalleryFavoritesService) RemoveFavoriteBySlug(
 	assetID uuid.UUID,
 	guestSessionID string,
 ) error {
-	if strings.TrimSpace(guestSessionID) == "" {
-		return ErrGalleryFavoritesMissingSession
-	}
-
 	gallery, err := s.galleryRepo.GetBySlug(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("favorites: lookup gallery by slug: %w", err)
+	}
+	return s.RemoveFavorite(ctx, gallery, assetID, guestSessionID)
+}
+
+// RemoveFavorite is the public DELETE counterpart for a pre-resolved gallery.
+func (s *GalleryFavoritesService) RemoveFavorite(
+	ctx context.Context,
+	gallery *repository.Gallery,
+	assetID uuid.UUID,
+	guestSessionID string,
+) error {
+	if err := s.validatePublicFavoriteRequest(gallery, guestSessionID); err != nil {
+		return err
+	}
+	return s.favRepo.Delete(ctx, gallery.ID, assetID, strings.TrimSpace(guestSessionID))
+}
+
+// ListSessionBySlug is the public GET — returns the asset IDs this guest
+// session has favorited so the frontend can repaint Star button state.
+func (s *GalleryFavoritesService) ListSessionBySlug(
+	ctx context.Context,
+	slug string,
+	guestSessionID string,
+) ([]uuid.UUID, error) {
+	gallery, err := s.galleryRepo.GetBySlug(ctx, slug)
+	if err != nil {
+		return nil, fmt.Errorf("favorites: lookup gallery by slug: %w", err)
+	}
+	return s.ListSession(ctx, gallery, guestSessionID)
+}
+
+// ListSession returns a guest session's favorite asset IDs for a pre-resolved
+// public gallery.
+func (s *GalleryFavoritesService) ListSession(
+	ctx context.Context,
+	gallery *repository.Gallery,
+	guestSessionID string,
+) ([]uuid.UUID, error) {
+	if err := s.validatePublicFavoriteRequest(gallery, guestSessionID); err != nil {
+		return nil, err
+	}
+	return s.favRepo.ListSessionAssetIDs(ctx, gallery.ID, strings.TrimSpace(guestSessionID))
+}
+
+func (s *GalleryFavoritesService) validatePublicFavoriteRequest(gallery *repository.Gallery, guestSessionID string) error {
+	if strings.TrimSpace(guestSessionID) == "" {
+		return ErrGalleryFavoritesMissingSession
 	}
 	if gallery == nil {
 		return ErrGalleryFavoritesNotFound
@@ -101,36 +145,7 @@ func (s *GalleryFavoritesService) RemoveFavoriteBySlug(
 	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
 		return ErrGalleryFavoritesExpired
 	}
-
-	return s.favRepo.Delete(ctx, gallery.ID, assetID, guestSessionID)
-}
-
-// ListSessionBySlug is the public GET — returns the asset IDs this guest
-// session has favorited so the frontend can repaint Star button state.
-func (s *GalleryFavoritesService) ListSessionBySlug(
-	ctx context.Context,
-	slug string,
-	guestSessionID string,
-) ([]uuid.UUID, error) {
-	if strings.TrimSpace(guestSessionID) == "" {
-		return nil, ErrGalleryFavoritesMissingSession
-	}
-
-	gallery, err := s.galleryRepo.GetBySlug(ctx, slug)
-	if err != nil {
-		return nil, fmt.Errorf("favorites: lookup gallery by slug: %w", err)
-	}
-	if gallery == nil {
-		return nil, ErrGalleryFavoritesNotFound
-	}
-	if !gallery.IsPublished {
-		return nil, ErrGalleryFavoritesNotPublished
-	}
-	if gallery.ExpiresAt != nil && gallery.ExpiresAt.Before(time.Now().UTC()) {
-		return nil, ErrGalleryFavoritesExpired
-	}
-
-	return s.favRepo.ListSessionAssetIDs(ctx, gallery.ID, guestSessionID)
+	return nil
 }
 
 // SummarizeByID is the owner endpoint. Takes a gallery ID directly (the

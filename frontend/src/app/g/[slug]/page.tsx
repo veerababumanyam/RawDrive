@@ -271,6 +271,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
           // it so protected image bytes carry ?gs=<token> for cross-origin
           // <img> requests. Undefined for open galleries (anonymous bytes).
           gallerySessionToken={sessionToken ?? null}
+          workspaceScope={ws ?? null}
         />
       </div>
 

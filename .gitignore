@@ -22,6 +22,8 @@
 # .codex/.cobolt-backups/) stay out of the repo. .codex/config.toml is
 # already tracked from before this entry; gitignore does not un-track.
 .codex/
+# Agent debug/verification screenshots (local-only, never product code).
+.codex-artifacts/
 # Cobolt-managed pre-edit backups (local-only).
 .cobolt-backups/
 

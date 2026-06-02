@@ -25,7 +25,7 @@ const OTP_EXPIRY_MINUTES = 15;
 
 function ForgotPasswordForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);

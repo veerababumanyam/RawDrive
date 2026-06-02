@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -20,9 +21,11 @@ func CORS(next http.Handler) http.Handler {
 			appEnv := strings.ToLower(os.Getenv("APP_ENV"))
 			goEnv := strings.ToLower(os.Getenv("GO_ENV"))
 			isProduction := appEnv == "production" || appEnv == "prod" || goEnv == "production" || goEnv == "prod"
-			if !isProduction && (goEnv == "development" || goEnv == "dev" || appEnv == "development" || appEnv == "dev" || (goEnv == "" && appEnv == "")) {
-				// Dev: allow any localhost origin
-				if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
+			if !isProduction {
+				// Non-prod local work often runs the Next.js dev server on a
+				// different port than the Go API. Parse the host instead of
+				// prefix-matching so localhost.evil is not accidentally allowed.
+				if isLoopbackOrigin(origin) {
 					allowedOrigin = origin
 				}
 			}
@@ -60,4 +63,16 @@ func CORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isLoopbackOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }

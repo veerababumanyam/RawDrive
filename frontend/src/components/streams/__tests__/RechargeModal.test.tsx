@@ -38,7 +38,7 @@ function stubFetch(handlers: { packages?: { ok: boolean; body: unknown }; rechar
       return { ok: h.ok, status: h.ok ? 200 : 500, json: async () => h.body } as unknown as Response;
     }
     if (url.includes("/streaming/recharge")) {
-      const h = handlers.recharge ?? { ok: true, body: { order_id: "o-1", redirect_url: "https://checkout.example/123" } };
+      const h = handlers.recharge ?? { ok: true, body: { order_id: "o-1", checkout_url: "https://checkout.example/123" } };
       return { ok: h.ok, status: h.status ?? (h.ok ? 200 : 400), json: async () => h.body } as unknown as Response;
     }
     return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
@@ -67,7 +67,7 @@ describe("RechargeModal", () => {
 
   it("submits selected package and calls onRedirect with the URL", async () => {
     vi.stubGlobal("fetch", stubFetch({
-      recharge: { ok: true, body: { order_id: "o-42", redirect_url: "https://checkout.example/42" } },
+      recharge: { ok: true, body: { order_id: "o-42", checkout_url: "https://checkout.example/42" } },
     }));
     const onRedirect = vi.fn();
     const onClose = vi.fn();
@@ -80,6 +80,23 @@ describe("RechargeModal", () => {
 
     await waitFor(() => {
       expect(onRedirect).toHaveBeenCalledWith("https://checkout.example/42");
+    });
+  });
+
+  it("falls back to redirect_url for older recharge responses", async () => {
+    vi.stubGlobal("fetch", stubFetch({
+      recharge: { ok: true, body: { order_id: "o-43", redirect_url: "https://checkout.example/43" } },
+    }));
+    const onRedirect = vi.fn();
+
+    render(<RechargeModal open onClose={() => {}} onRedirect={onRedirect} />);
+    await waitFor(() => screen.getByTestId("package-pkg-basic"));
+
+    fireEvent.click(screen.getByTestId("package-pkg-basic"));
+    fireEvent.click(screen.getByTestId("recharge-submit"));
+
+    await waitFor(() => {
+      expect(onRedirect).toHaveBeenCalledWith("https://checkout.example/43");
     });
   });
 

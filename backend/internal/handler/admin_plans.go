@@ -34,6 +34,8 @@ package handler
 
 import (
 	"net/http"
+
+	"github.com/rawdrive/backend/internal/service"
 )
 
 // adminPlan is the wire shape for one row in the plan catalog response.
@@ -50,19 +52,20 @@ type adminPlansResponse struct {
 	Plans []adminPlan `json:"plans"`
 }
 
-// adminPlanCatalog is the single in-process source of truth for the
-// catalog returned to admin surfaces. Kept package-level so the test
-// in admin_plans_test.go (future) can assert ordering / shape without
-// reaching into a handler instance. The free tier is included here
-// (zero-priced) because the admin grant flow allows comping a user
-// onto the free tier — the existing self-serve upgrade list at
-// planPricePaise omits it because users don't pay to be on free.
-var adminPlanCatalog = []adminPlan{
-	{Tier: "free", Name: "Free", MonthlyPricePaise: 0},
-	{Tier: "starter", Name: "Starter", MonthlyPricePaise: 9900},
-	{Tier: "professional", Name: "Professional", MonthlyPricePaise: 29900},
-	{Tier: "business", Name: "Business", MonthlyPricePaise: 299900},
-	{Tier: "enterprise", Name: "Enterprise", MonthlyPricePaise: 599900},
+// adminPlanCatalog projects the shared backend service catalog into the
+// admin wire shape. The free tier is included because the admin grant flow
+// allows comping a user onto the free tier.
+func adminPlanCatalog() []adminPlan {
+	catalog := service.PlanCatalog()
+	out := make([]adminPlan, 0, len(catalog))
+	for _, p := range catalog {
+		out = append(out, adminPlan{
+			Tier:              p.Tier,
+			Name:              p.Name,
+			MonthlyPricePaise: p.MonthlyPricePaise,
+		})
+	}
+	return out
 }
 
 // AdminPlansHandler serves the canonical plan catalog. Stateless — no
@@ -76,5 +79,5 @@ func NewAdminPlansHandler() *AdminPlansHandler {
 
 // List handles GET /api/v1/admin/plans.
 func (h *AdminPlansHandler) List(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, adminPlansResponse{Plans: adminPlanCatalog})
+	respondJSON(w, http.StatusOK, adminPlansResponse{Plans: adminPlanCatalog()})
 }

@@ -18,7 +18,7 @@ import {
   type GalleryAlbum,
   type GalleryAsset,
 } from "@/lib/api/galleries";
-import { listProofingSelections, createComment, listComments, type ProofingComment, type ProofingSelection } from "@/lib/api/proofing";
+import { listProofingSelections, createComment, listComments, updateSelectionStatus, type ProofingComment, type ProofingSelection } from "@/lib/api/proofing";
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
@@ -27,8 +27,8 @@ import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
   assetIsProcessing,
 } from "@/lib/dashboard-ui";
-import { appendGalleryKeyFragment } from "@/lib/media-encryption/media-crypto";
-import { galleryKeyId, getOrCreateGalleryMediaKey, getStoredExportedMediaKey } from "@/lib/media-encryption/media-key-store";
+import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
+import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
@@ -622,14 +622,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const buildShareUrl = useCallback((albumId?: string) => {
     if (!gallery?.slug) return "";
     const base = galleryPublicUrl(gallery, workspaceProfile);
-    const key = getStoredExportedMediaKey(galleryKeyId(id));
     const withAlbum = (() => {
       if (!albumId) return base;
       const sep = base.includes("?") ? "&" : "?";
       return `${base}${sep}album=${encodeURIComponent(albumId)}`;
     })();
-    if (!key) return withAlbum;
-    return appendGalleryKeyFragment(withAlbum, key);
+    return appendStoredGalleryKeyFragment(withAlbum, id);
   }, [gallery, id, workspaceProfile]);
 
   const copyShareUrl = useCallback(async (albumId?: string) => {
@@ -679,8 +677,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     e.stopPropagation();
     if (!gallery?.slug) return;
     const baseUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
-    const key = getStoredExportedMediaKey(galleryKeyId(id));
-    const url = key ? appendGalleryKeyFragment(baseUrl, key) : baseUrl;
+    const url = appendStoredGalleryKeyFragment(baseUrl, id);
     try {
       if (typeof navigator !== "undefined" && "share" in navigator) {
         await (navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }).share({
@@ -826,6 +823,39 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       cancelled = true;
     };
   }, [activeLightboxAssetId, gallery?.id]);
+
+  const handleProofingAction = useCallback(async (assetId: string, action: "select" | "approve" | "reject") => {
+    if (!gallery) return;
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Your session expired. Please log in again.");
+      return;
+    }
+
+    const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "selected";
+    const matchingSelections = selections.filter((selection) => selection.asset_id === assetId);
+    if (matchingSelections.length === 0) {
+      setError("This photo has not been selected by a client yet.");
+      return;
+    }
+
+    try {
+      await Promise.all(
+        matchingSelections.map((selection) =>
+          updateSelectionStatus(token, gallery.id, selection.id, status),
+        ),
+      );
+      const matchingIDs = new Set(matchingSelections.map((selection) => selection.id));
+      setSelections((current) =>
+        current.map((selection) =>
+          matchingIDs.has(selection.id) ? { ...selection, status } : selection,
+        ),
+      );
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update proofing status.");
+    }
+  }, [gallery, selections]);
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -3142,6 +3172,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < assets.length - 1}
           isProofing={gallery?.gallery_type === "proofing"}
+          onProofingAction={handleProofingAction}
           comments={commentsByAsset[assets[lightboxIndex].asset!.id] ?? []}
           onComment={async (assetId, comment) => {
             const t = getStoredAccessToken();

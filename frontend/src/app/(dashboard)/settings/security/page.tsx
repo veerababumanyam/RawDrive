@@ -52,7 +52,7 @@ function authedFetch(path: string, init?: RequestInit) {
 }
 
 export default function SecuritySettingsPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const changeRequired = searchParams.get("change_required") === "1";
 
   const [pwCurrent, setPwCurrent] = useState("");

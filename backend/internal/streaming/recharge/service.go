@@ -100,6 +100,7 @@ type Order struct {
 	ProviderPaymentID *string   `json:"provider_payment_id,omitempty"`
 	Status            string    `json:"status"`
 	CheckoutURL       *string   `json:"checkout_url,omitempty"`
+	RedirectURL       *string   `json:"redirect_url,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -165,6 +166,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Order,
 		ProviderOrderID: init.ProviderOrderID,
 		Status:          "pending",
 		CheckoutURL:     &co,
+		RedirectURL:     &co,
 		CreatedAt:       time.Now().UTC(),
 	}, nil
 }
@@ -349,6 +351,7 @@ func (s *Service) findOrder(ctx context.Context, p Name, providerOrderID string)
 	}
 	o.ProviderPaymentID = providerPaymentID
 	o.CheckoutURL = checkoutURL
+	o.RedirectURL = checkoutURL
 	return o, nil
 }
 
@@ -367,6 +370,7 @@ func (s *Service) reloadOrder(ctx context.Context, id uuid.UUID) (*Order, error)
 	}
 	o.ProviderPaymentID = providerPaymentID
 	o.CheckoutURL = checkoutURL
+	o.RedirectURL = checkoutURL
 	return o, nil
 }
 

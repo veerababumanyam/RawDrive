@@ -11,6 +11,7 @@ export function JsonLd({ data, id, nonce }: JsonLdProps) {
     <script
       id={id}
       nonce={nonce}
+      suppressHydrationWarning
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
     />

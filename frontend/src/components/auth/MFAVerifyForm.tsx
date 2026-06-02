@@ -93,7 +93,7 @@ export function MFAVerifyForm() {
       window.sessionStorage.removeItem(MFA_TOKEN_KEY);
       window.sessionStorage.removeItem(MFA_FLOW_KEY);
       persistAuthTokens(payload.access_token);
-      window.location.assign(getPostLoginPath());
+      router.replace(getPostLoginPath());
     } catch {
       setError(MFA_NETWORK_ERROR);
     } finally {

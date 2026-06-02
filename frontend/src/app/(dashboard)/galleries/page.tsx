@@ -11,8 +11,7 @@ import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
-import { appendGalleryKeyFragment } from "@/lib/media-encryption/media-crypto";
-import { galleryKeyId, getStoredExportedMediaKey } from "@/lib/media-encryption/media-key-store";
+import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
@@ -117,8 +116,7 @@ function GalleryPublishSwitch({
 function buildGalleryCardShareUrl(gallery: Gallery, workspaceProfile: WorkspaceProfile | null): string {
   if (!gallery.slug) return "";
   const base = galleryPublicUrl(gallery, workspaceProfile);
-  const key = getStoredExportedMediaKey(galleryKeyId(gallery.id));
-  return key ? appendGalleryKeyFragment(base, key) : base;
+  return appendStoredGalleryKeyFragment(base, gallery.id);
 }
 
 function buildGalleryShareText(gallery: Gallery, url: string): string {
@@ -247,6 +245,9 @@ function GalleryShareMenu({
 
 export default function GalleriesPage() {
   const searchParams = useSearchParams();
+  const createRequested = searchParams?.get("create") === "true";
+  const clientParam = searchParams?.get("client") ?? "";
+  const projectParam = searchParams?.get("project") ?? "";
   const [token] = useState(() => getStoredAccessToken());
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -486,11 +487,11 @@ export default function GalleriesPage() {
   }, [missingCoverAssetIds, token]);
 
   useEffect(() => {
-    if (searchParams.get("create") !== "true") return;
-    setLinkedContactId(searchParams.get("client") || "");
-    setLinkedProjectId(searchParams.get("project") || "");
+    if (!createRequested) return;
+    setLinkedContactId(clientParam);
+    setLinkedProjectId(projectParam);
     setShowCreate(true);
-  }, [searchParams]);
+  }, [clientParam, createRequested, projectParam]);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) {

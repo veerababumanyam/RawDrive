@@ -25,6 +25,7 @@ type M4Dependencies struct {
 	// degrade gracefully when these are not provided.
 	PDFService             *service.PDFService
 	NotificationDispatcher *NotificationDispatcher
+	PaymentSettings        settingsResolver
 }
 
 // RegisterM4Routes registers all M4 (Business Operations) routes.
@@ -38,6 +39,9 @@ func RegisterM4Routes(r chi.Router, deps M4Dependencies) {
 	projectHandler := NewStudioProjectHandler(deps.ProjectRepo, deps.EventRepo, deps.InvoiceRepo, deps.ContractRepo)
 	invoiceHandler := NewInvoiceHandler(deps.InvoiceRepo).WithPDFService(deps.PDFService)
 	paymentHandler := NewPaymentHandler(deps.PaymentRepo, deps.InvoiceRepo)
+	if deps.PaymentSettings != nil {
+		paymentHandler.WithSettingsResolver(deps.PaymentSettings)
+	}
 	packageHandler := NewServicePackageHandler(deps.ServicePackageRepo)
 	contractHandler := NewContractHandler(deps.ContractRepo).WithPDFService(deps.PDFService)
 	calendarHandler := NewCalendarHandler(deps.EventRepo)

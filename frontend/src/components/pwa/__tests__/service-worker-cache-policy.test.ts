@@ -11,4 +11,9 @@ describe("service worker cache policy", () => {
     expect(source).toContain("/upload-screening.worker");
     expect(source).toContain('cache: "no-store"');
   });
+
+  it("returns a fallback response when gallery asset fetches fail uncached", () => {
+    expect(source).toContain('cached || new Response("", { status: 504');
+    expect(source).toContain('response.ok || response.type === "opaque"');
+  });
 });

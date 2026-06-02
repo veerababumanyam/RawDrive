@@ -1,5 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+function gallerySessionHeaders(gallerySessionToken?: string | null): Record<string, string> {
+  return gallerySessionToken ? { "X-Gallery-Session": gallerySessionToken } : {};
+}
+
+function publicProofingUrl(slug: string, workspaceScope?: string | null): string {
+  const url = new URL(`${API_BASE}/api/v1/public/galleries/${encodeURIComponent(slug)}/proof`);
+  if (workspaceScope) url.searchParams.set("ws", workspaceScope);
+  return url.toString();
+}
+
 export interface ProofingSelection {
   id: string;
   gallery_id: string;
@@ -44,13 +54,21 @@ export async function submitPublicProofing(slug: string, data: {
   client_name: string;
   client_email: string;
   note?: string;
-}): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/proof`, {
+}, gallerySessionToken?: string | null, workspaceScope?: string | null): Promise<void> {
+  const res = await fetch(publicProofingUrl(slug, workspaceScope), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...gallerySessionHeaders(gallerySessionToken),
+    },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Failed to submit proofing: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const message = typeof body?.error === "string" ? body.error : `Failed to submit proofing: ${res.status}`;
+    throw new Error(message);
+  }
 }
 
 // M13: Proofing Sessions

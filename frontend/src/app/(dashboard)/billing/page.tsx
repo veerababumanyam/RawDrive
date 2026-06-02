@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   listInvoices,
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { invoiceStatusClasses } from "@/lib/dashboard-ui";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 interface LineRow {
   description: string;
@@ -37,8 +37,11 @@ const BLANK_LINE: LineRow = {
   tax_rate: 18,
 };
 
-export default function BillingPage() {
+function BillingPageContent() {
   const searchParams = useSearchParams();
+  const createRequested = searchParams?.get("create") === "true";
+  const clientParam = searchParams?.get("client") ?? "";
+  const projectParam = searchParams?.get("project") ?? "";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [packages, setPackages] = useState<ServicePackage[]>([]);
@@ -81,16 +84,16 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("create") !== "true") return;
+    if (!createRequested) return;
     setShowCreate(true);
-    const clientId = searchParams.get("client");
-    const projectId = searchParams.get("project");
+    const clientId = clientParam;
+    const projectId = projectParam;
     if (clientId) {
       setForm((current) => ({ ...current, contact_id: clientId, project_id: projectId || current.project_id }));
     } else if (projectId) {
       setForm((current) => ({ ...current, project_id: projectId }));
     }
-  }, [searchParams]);
+  }, [clientParam, createRequested, projectParam]);
 
   const totalRupees = form.lines.reduce((sum, l) => sum + l.quantity * l.unit_price_rupees, 0);
   const taxRupees = form.lines.reduce(
@@ -563,5 +566,26 @@ export default function BillingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 w-48 bg-surface-sunken rounded" />
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 bg-surface-sunken rounded-xl" />
+              ))}
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <BillingPageContent />
+    </Suspense>
   );
 }

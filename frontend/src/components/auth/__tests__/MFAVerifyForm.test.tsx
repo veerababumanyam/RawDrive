@@ -60,7 +60,7 @@ describe("MFAVerifyForm", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(init.body)).toEqual({ code: "123456" });
     expect(auth.persistAuthTokens).toHaveBeenCalledWith("access-token");
-    expect(window.location.assign).toHaveBeenCalledWith("/dashboard");
+    expect(nav.replace).toHaveBeenCalledWith("/dashboard");
   });
 
   it("keeps password-login MFA tokens in the request body", async () => {
