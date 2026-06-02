@@ -114,3 +114,10 @@ export const Camera = (p: IconProps) => (
     <circle cx="12" cy="12" r="3" />
   </Icon>
 );
+
+// Slideshow playback & audio — Gallery Enhancements June 2026
+export const Play = (p: IconProps) => <Icon {...p}><path d="M7 5.5v13l11-6.5-11-6.5z" fill="currentColor" stroke="none" /></Icon>;
+export const Pause = (p: IconProps) => <Icon {...p}><path d="M8 5h2.5v14H8zM13.5 5H16v14h-2.5z" fill="currentColor" stroke="none" /></Icon>;
+export const Music = (p: IconProps) => <Icon {...p}><path d="M9 18V6l10-2v12" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></Icon>;
+export const Volume = (p: IconProps) => <Icon {...p}><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12" /></Icon>;
+export const VolumeOff = (p: IconProps) => <Icon {...p}><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M17 9.5l4 5M21 9.5l-4 5" /></Icon>;

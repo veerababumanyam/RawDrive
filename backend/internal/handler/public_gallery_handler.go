@@ -1266,6 +1266,66 @@ func (h *PublicGalleryHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Re
 	_, _ = io.Copy(w, reader)
 }
 
+// GetGalleryMusic streams the gallery's slideshow background-music asset
+// through the application after resolving the slug and applying the full public
+// access gate (published, expiry, share/password/access-mode). Mirrors
+// GetBrandingLogo — never exposes the object-store key or bucket URL. The audio
+// asset was uploaded through the normal quota-counted asset path, so this only
+// reads it back; no separate storage accounting is required here.
+func (h *PublicGalleryHandler) GetGalleryMusic(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":"missing slug"}`, http.StatusBadRequest)
+		return
+	}
+	if h.assetSvc == nil || h.pool == nil {
+		http.Error(w, `{"error":"gallery music unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	gallery, err := h.resolveGalleryForRequest(r, slug)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	// Full public access gate — handles nil/unpublished (404), expiry (410),
+	// and private/password/access-mode session requirements.
+	if !h.gateGalleryAccess(w, r, gallery) {
+		return
+	}
+	if gallery.MusicAssetID == nil {
+		http.Error(w, `{"error":"gallery has no music"}`, http.StatusNotFound)
+		return
+	}
+
+	var storageKey, contentType, filename string
+	err = h.pool.QueryRow(r.Context(), `
+		SELECT storage_key, content_type, filename
+		FROM assets
+		WHERE id = $1
+		  AND workspace_id = $2
+		  AND deleted_at IS NULL
+		  AND content_type LIKE 'audio/%'`,
+		*gallery.MusicAssetID, gallery.WorkspaceID,
+	).Scan(&storageKey, &contentType, &filename)
+	if err != nil {
+		http.Error(w, `{"error":"gallery music not found"}`, http.StatusNotFound)
+		return
+	}
+
+	reader, err := h.assetSvc.GetStorageReader(r.Context(), storageKey)
+	if err != nil {
+		http.Error(w, `{"error":"gallery music retrieval failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = io.Copy(w, reader)
+}
+
 // GetStudioLogo handles GET /api/v1/public/studios/{subdomain}/logo.
 // This mirrors GetBrandingLogo without requiring a gallery slug, so the
 // business-subdomain root page can render the studio logo without exposing a

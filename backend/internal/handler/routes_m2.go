@@ -472,6 +472,10 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		r.Get("/galleries/{slug}/branding", publicHandler.GetBranding)
 		r.Get("/galleries/{slug}/branding/logo", publicHandler.GetBrandingLogo)
 
+		// Gallery Enhancements June 2026: slideshow background music. Streams the
+		// audio asset through the app behind the full public access gate.
+		r.Get("/galleries/{slug}/music", publicHandler.GetGalleryMusic)
+
 		// GAL-FR-107/108: FaceID gallery entry (scoped to current gallery)
 		r.Post("/galleries/{slug}/face-match", publicHandler.FaceMatch)
 

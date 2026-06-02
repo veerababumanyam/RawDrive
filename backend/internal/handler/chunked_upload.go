@@ -112,6 +112,15 @@ type GalleryLinker interface {
 	LinkFinalizedAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID) error
 }
 
+// TermsGate reports whether a user has accepted the active Terms of Service.
+// Satisfied by *service.TermsService. CreateSession consults it (when wired) so
+// no upload — image or slideshow audio — proceeds until the photographer has
+// accepted the copyright/IP terms. The activeVersion return is surfaced in the
+// 403 payload so the client can show the right version in its acceptance modal.
+type TermsGate interface {
+	HasAcceptedActive(ctx context.Context, userID uuid.UUID) (accepted bool, activeVersion string, err error)
+}
+
 // ChunkedUploadHandler implements the TUS v1.0.0 resumable upload protocol.
 // Clients POST to /uploads to create an upload session, then PATCH chunks.
 //
@@ -184,6 +193,11 @@ type ChunkedUploadHandler struct {
 	galleries     galleryResolver
 	albums        albumResolver
 	galleryLinker GalleryLinker
+
+	// termsGate, when wired via WithTermsGate, blocks CreateSession until the
+	// uploading user has accepted the active Terms of Service. Nil = feature
+	// off (legacy/tests): no terms enforcement.
+	termsGate TermsGate
 
 	// assetCreateFn, when non-nil, overrides h.assetRepo.Create as the asset
 	// insert used by finalizeUpload. This exists purely so unit tests can
@@ -340,6 +354,15 @@ func (h *ChunkedUploadHandler) WithGalleryLinkage(
 	return h
 }
 
+// WithTermsGate wires the photographer Terms-of-Service acceptance gate. When
+// set, CreateSession rejects uploads with 403 TERMS_NOT_ACCEPTED until the user
+// has accepted the active terms version. Passing nil leaves the feature off.
+// Returns the same handler for chainable construction.
+func (h *ChunkedUploadHandler) WithTermsGate(g TermsGate) *ChunkedUploadHandler {
+	h.termsGate = g
+	return h
+}
+
 func (h *ChunkedUploadHandler) WithEncryptionMetadata(enabled bool, algo string, version int) *ChunkedUploadHandler {
 	h.encryptionEnabled = enabled
 	h.encryptionAlgo = algo
@@ -379,6 +402,31 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	userID, _ := getUserID(r)
+
+	// Terms gate (hard enforcement). A photographer must have accepted the
+	// active Terms of Service — the copyright/IP, rights-warranty, and
+	// indemnification clauses — before ANY upload, whether a photo or a
+	// slideshow audio track (both funnel through this endpoint). Checked first,
+	// before any credit/storage reservation, so a block is a clean 4xx with
+	// nothing to unwind. The frontend pre-checks acceptance to avoid a
+	// failed-upload flash, but this is the authority. Fail closed on a lookup
+	// error with a 500 (not a 403) so a transient failure never wrongly tells
+	// the client the user has not accepted.
+	if h.termsGate != nil {
+		accepted, activeVersion, err := h.termsGate.HasAcceptedActive(r.Context(), userID)
+		if err != nil {
+			internalError(w, "", "terms_check_failed", err)
+			return
+		}
+		if !accepted {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"error":         "TERMS_NOT_ACCEPTED",
+				"message":       "You must accept the Terms of Service before uploading.",
+				"terms_version": activeVersion,
+			})
+			return
+		}
+	}
 
 	var input struct {
 		Filename        string                      `json:"filename"`

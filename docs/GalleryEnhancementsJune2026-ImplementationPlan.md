@@ -25,6 +25,39 @@ Companion to `docs/GalleryEnhancemetnsJune2026.md`. Scopes four of the "Do first
 
 ---
 
+## 0.4 Build Progress (live)
+
+Branch: `feat/gallery-enhancements-june2026`. TDD throughout; verification noted per item.
+
+**Done & verified**
+- ✅ **F1 Gallery expiry — COMPLETE.** Settings "Access window" picker (`settings/page.tsx`) + client
+  countdown `GalleryExpiryBanner` wired into `g/[slug]/page.tsx`. 410 expired state already existed.
+  Verified: vitest 3/3 (settings) + 4/4 (banner), password regression 1/1, eslint clean.
+- ✅ **F2 Logo/brand — accent white-label.** `lib/gallery-accent.ts` resolver (gallery→workspace→token)
+  injected as `--accent-*` CSS vars on the public wrapper. Verified: vitest 8/8, hero regression 4/4, eslint clean.
+- ✅ **F4 migration 142** (`galleries.music_asset_id`, FK→assets ON DELETE SET NULL, index). Verified:
+  contract test 3/3, numbering contract, live up+down apply (exit 0).
+- ✅ **F4 backend attach-music path.** Repo struct + read in GetByID/GetBySlug/subdomain; `UpdateField`
+  allowlist; `GalleryService.SetGalleryMusic` (workspace-ownership + `audio/*` validation, IDOR-safe);
+  Update handler accepts/validates `music_asset_id`. Music rides the existing quota-counted asset
+  upload (B2 + `workspace_storage`). Verified: `go build ./...`, `go vet`, full-SELECT live-SQL (38 cols),
+  repo+service+handler tests green.
+- ✅ **F3 migration 143** (`email_automation_enabled` + `gallery_email_events` idempotent ledger). Verified:
+  contract test 3/3, live up+down apply (exit 0).
+
+**Remaining**
+- F4: public payload `music_url` + auth/session-gated serve endpoint; frontend music upload UI (reuse
+  `POST /assets` then PUT `music_asset_id`); fullscreen slideshow player + `Play/Pause/Music/Volume` icons.
+- F3: branded HTML template; recipient resolution (contact email); publish-hook enqueue (ready/+7d/expiry-3d);
+  `email_automation_worker` + registration; per-gallery toggle UI.
+- F2: cover-editor logo picker + studio-name field + per-gallery override toggle.
+
+> **Verification note:** new server-side HTTP endpoints + the email worker need the backend Docker
+> image rebuilt to exercise live (the dev `backend` container runs compiled code). Repo/SQL/schema
+> changes above were verified against the live Postgres without a rebuild.
+
+---
+
 ## 0.5 Methodology — Test-Driven Development (mandatory)
 
 **Every task in this plan is executed test-first.** The per-feature **"Test-first"** subsection

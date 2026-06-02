@@ -1312,9 +1312,20 @@ func main() {
 		log.Println("Google OAuth disabled: missing auth.google_client_id / auth.google_client_secret / auth.google_redirect_url (or GOOGLE_* env fallback)")
 	}
 
+	// Terms-of-Service / copyright acceptance (migration 144). One service
+	// powers the auth-side registration capture + /auth/me terms status, the
+	// /api/v1/legal/terms endpoints, and the upload gate. A dedicated audit-log
+	// service mirrors each acceptance into audit_logs; the per-user ledger
+	// (user_terms_acceptances) remains the legal source of truth.
+	termsSvc := service.NewTermsService(
+		repository.NewTermsRepo(dbPool),
+		service.NewAuditLogService(repository.NewAuditLogRepo(dbPool)),
+	)
+
 	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).
 		WithWorkspaceLookup(wsLookup).
-		WithPlanTierLookup(wsLookup)
+		WithPlanTierLookup(wsLookup).
+		WithTerms(termsSvc)
 
 	// ──────────────────────── F-007 (M17 wave 2): MFA setup ────────────────────
 	//
@@ -2029,12 +2040,23 @@ func main() {
 			WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion).
 			WithClientSideEncryptionRequired(true).
 			WithUploadCredit(uploadCreditGate).
+			// Terms-of-Service / copyright acceptance gate (migration 144). No
+			// upload — image or slideshow audio — proceeds until the photographer
+			// has accepted the active terms. Enforced by default (no flag): the
+			// requirement is "till accepted, do not allow any uploads".
+			WithTermsGate(termsSvc).
 			// S3-G4 / AREA-UPLOADER-3: server-side gallery linkage. CreateSession
 			// validates an optional gallery_id (+ album_id) against the caller's
 			// workspace and persists it; finalize links the asset itself so the
 			// association never depends on a post-finalize client call.
 			WithGalleryLinkage(galleryRepo, albumRepo, galleryAssetRepo)
 		chunkedHandler.RegisterRoutes(api)
+
+		// Terms-of-Service / copyright acceptance endpoints (GET current, GET
+		// status, POST accept). Mounted on the authenticated api group but NOT
+		// behind the upload terms gate — a user must be able to read and accept
+		// the terms before they are allowed to upload.
+		handler.NewTermsHandler(termsSvc).RegisterRoutes(api)
 
 		// M40: balance endpoint for the <UploadCreditPill>. Mirrors
 		// streaming/credits/balance wiring — adapter converts Service →

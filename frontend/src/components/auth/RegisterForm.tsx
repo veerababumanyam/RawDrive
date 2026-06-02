@@ -153,6 +153,11 @@ export function RegisterForm() {
           full_name: fullName.trim(),
           phone: phone.trim(),
           plan,
+          // One-time Terms-of-Service / copyright acceptance. The checkbox
+          // already gates this submit; sending it lets the backend record the
+          // acceptance (timestamp, version, IP, UA) as IT Act §10A / DPDP
+          // evidence instead of the checkbox being a client-only gate.
+          terms_accepted: termsAccepted,
         }),
       });
 

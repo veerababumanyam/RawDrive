@@ -27,6 +27,11 @@ type mockUserService struct {
 	users       map[string]string // email -> userID
 	verified    map[string]bool   // email -> emailVerified (added with ResendOTP)
 	errOnCreate bool
+	// createReturnsUUID makes Create return a real uuid (matching production,
+	// where users.id is a UUID) instead of the default "mock-id-<email>".
+	// Needed by tests that exercise code parsing the returned id as a UUID
+	// (e.g. registration terms-acceptance capture).
+	createReturnsUUID bool
 }
 
 func newMockUserService() *mockUserService {
@@ -38,6 +43,9 @@ func (m *mockUserService) Create(_ context.Context, email, password, _, _ string
 		return "", errors.New("mock create error")
 	}
 	id := "mock-id-" + email
+	if m.createReturnsUUID {
+		id = uuid.NewString()
+	}
 	m.users[email] = id
 	return id, nil
 }
@@ -237,6 +245,74 @@ func TestRegisterHandler_Success(t *testing.T) {
 	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.Contains(t, result["message"], "OTP")
+}
+
+// stubTermsManager records AcceptTerms calls so the registration-capture test
+// can assert the one-time acceptance is persisted with the right method.
+type stubTermsManager struct {
+	calls   int
+	userID  uuid.UUID
+	method  string
+	ip      string
+	ua      string
+	version string
+}
+
+func (s *stubTermsManager) AcceptTerms(_ context.Context, userID uuid.UUID, method, ip, ua string) (string, error) {
+	s.calls++
+	s.userID = userID
+	s.method = method
+	s.ip = ip
+	s.ua = ua
+	return "tos-privacy/2026-04", nil
+}
+
+func (s *stubTermsManager) TermsStatusForUser(_ context.Context, _ uuid.UUID) (bool, string, *time.Time, string, error) {
+	return false, "tos-privacy/2026-04", nil, "tos-privacy/2026-04", nil
+}
+
+func TestRegisterHandler_CapturesTermsAcceptance(t *testing.T) {
+	handler, _, _, userSvc := setupAuthRouter()
+	userSvc.createReturnsUUID = true
+	terms := &stubTermsManager{}
+	handler = handler.WithTerms(terms)
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":          "tos@example.com",
+		"password":       "TestPassword123!",
+		"phone":          "9876500000",
+		"terms_accepted": true,
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, 1, terms.calls, "registration with terms_accepted=true must record one acceptance")
+	assert.Equal(t, "registration", terms.method)
+	assert.NotEqual(t, uuid.Nil, terms.userID)
+}
+
+func TestRegisterHandler_NoTermsAcceptanceWhenUnchecked(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	terms := &stubTermsManager{}
+	handler = handler.WithTerms(terms)
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "notos@example.com",
+		"password": "TestPassword123!",
+		"phone":    "9876500001",
+		// terms_accepted omitted/false — nothing should be recorded; the
+		// first-upload gate will prompt instead.
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, 0, terms.calls, "no acceptance must be recorded when the box is unchecked")
 }
 
 func TestRegisterHandler_MissingPhoneRejected(t *testing.T) {

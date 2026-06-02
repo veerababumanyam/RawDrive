@@ -2,10 +2,20 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
+)
+
+// Validation errors for attaching slideshow background music to a gallery.
+// The handler maps these to HTTP 400; anything else is a 500.
+var (
+	ErrMusicAssetNotFound = errors.New("music asset not found in workspace")
+	ErrMusicAssetNotAudio = errors.New("music asset must be an audio file")
+	ErrMusicRepoUnwired   = errors.New("music validation unavailable: asset repo not wired")
 )
 
 // GalleryService handles gallery business logic.
@@ -194,6 +204,35 @@ func (s *GalleryService) List(ctx context.Context, f repository.GalleryFilter) (
 // Update updates a gallery.
 func (s *GalleryService) Update(ctx context.Context, g *repository.Gallery) error {
 	return s.galleryRepo.Update(ctx, g)
+}
+
+// SetGalleryMusic attaches (or clears) the slideshow background music track for
+// a gallery. The audio is an asset that was already ingested through the normal
+// upload path — so its bytes are stored in the workspace's B2 gallery storage
+// and counted against the storage quota; this only records the reference.
+//
+// A nil musicAssetID clears the track. Otherwise the asset MUST belong to the
+// caller's workspace (cross-tenant IDOR guard, same as cover/logo) and MUST be
+// an audio file. Persisted via the allowlisted UpdateField so it does not need
+// to ride the positional Update column set.
+func (s *GalleryService) SetGalleryMusic(ctx context.Context, galleryID, workspaceID uuid.UUID, musicAssetID *uuid.UUID) error {
+	if musicAssetID == nil {
+		return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", nil)
+	}
+	if s.assetRepo == nil {
+		return ErrMusicRepoUnwired
+	}
+	asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, *musicAssetID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("gallery service set music: %w", err)
+	}
+	if asset == nil {
+		return ErrMusicAssetNotFound
+	}
+	if !strings.HasPrefix(strings.ToLower(asset.ContentType), "audio/") {
+		return ErrMusicAssetNotAudio
+	}
+	return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", *musicAssetID)
 }
 
 // SoftDelete deletes a gallery (soft).

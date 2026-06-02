@@ -17,6 +17,7 @@ import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
 import { SharePinGate } from "@/components/gallery/share-pin-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
 import { GalleryExpiryBanner } from "@/components/gallery/gallery-expiry-banner";
+import { PublicGallerySlideshowLauncher } from "@/components/gallery/public-gallery-slideshow-launcher";
 import { galleryAccentCssVars, resolveGalleryAccent } from "@/lib/gallery-accent";
 import { readPublicDesignConfig, readPublicCoverThumbnails } from "@/lib/gallery-design-config";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
@@ -236,6 +237,17 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
       />
 
       <div id="gallery-grid" className="mx-auto max-w-6xl space-y-6 px-4 pb-16">
+        {assets.length > 0 && (
+          <div className="flex justify-end">
+            <PublicGallerySlideshowLauncher
+              slug={slug}
+              ws={ws}
+              assets={assets}
+              hasMusic={Boolean(gallery.music_asset_id)}
+              gallerySessionToken={sessionToken ?? null}
+            />
+          </div>
+        )}
         {/* Embedded YouTube/Vimeo videos in read-only mode. Shows the
             same iframe grid the photographer sees in the dashboard
             editor; the panel auto-hides when the gallery has none. */}

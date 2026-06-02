@@ -40,6 +40,13 @@ type UseUploadOptions = {
     getKey: () => Promise<GalleryMediaKey>;
   };
   destination?: UploadDestination;
+  /**
+   * Called when CreateSession is rejected because the user has not accepted the
+   * active Terms of Service (403 TERMS_NOT_ACCEPTED). The frontend normally
+   * pre-checks acceptance before starting an upload, so this is the safety-net
+   * for a stale/unknown status — the page opens the acceptance modal.
+   */
+  onTermsRequired?: () => void;
 };
 
 async function runScreener(
@@ -266,6 +273,11 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
   const destinationRef = useRef<UploadDestination | undefined>(destination);
   destinationRef.current = destination;
 
+  // Latest onTermsRequired callback in a ref so the stable chunkedUpload
+  // callback can invoke it without re-creating (and tearing the queue).
+  const onTermsRequiredRef = useRef<UseUploadOptions["onTermsRequired"]>(options?.onTermsRequired);
+  onTermsRequiredRef.current = options?.onTermsRequired;
+
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item)),
@@ -418,6 +430,20 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
               errorBody.message ??
               `backend rejected manifest: ${errorBody.error}`,
           });
+          return;
+        }
+        // Terms gate (safety-net). The frontend pre-checks acceptance before
+        // starting an upload, but if the status was stale/unknown the backend
+        // returns 403 TERMS_NOT_ACCEPTED. Mark the item blocked and ask the
+        // page to open the acceptance modal so the user can accept and retry.
+        if (createRes.status === 403 && errorBody.error === "TERMS_NOT_ACCEPTED") {
+          updateItem(item.id, {
+            status: "blocked",
+            error:
+              errorBody.message ??
+              "You must accept the Terms of Service before uploading.",
+          });
+          onTermsRequiredRef.current?.();
           return;
         }
         // 2026-05-20: surface plan-storage-quota rejection as a "blocked"

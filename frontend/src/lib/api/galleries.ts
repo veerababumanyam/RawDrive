@@ -53,6 +53,8 @@ export interface Gallery {
   download_quality?: "original" | "webp" | "both" | string;
   sort_preference?: string;
   whatsapp_template?: string;
+  // Gallery Enhancements June 2026: optional slideshow background-music asset.
+  music_asset_id?: string | null;
   // S4-G3 locked-shell fields. When a private/invite-only gallery is requested
   // without a valid session, GET /public/galleries/{slug} returns ONLY a
   // minimal shell: { id, title, access_mode, access_gated:true, has_password }.
@@ -236,6 +238,51 @@ export async function getPublicGalleryBranding(slug: string, ws?: string | null)
   const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)));
   if (!res.ok) throw new Error(`Failed to get branding: ${res.status}`);
   return res.json();
+}
+
+// Gallery Enhancements June 2026 — slideshow background music.
+//
+// Upload routes the audio through the normal asset-ingest path (POST
+// /api/v1/assets), so it lands in the workspace's managed B2 storage and its
+// bytes are counted against the workspace storage quota (a 403 surfaces the
+// quota error). The created asset is then referenced on the gallery via
+// music_asset_id (validated server-side to be an audio asset in the workspace).
+export async function uploadGalleryMusic(token: string, galleryId: string, file: File): Promise<Gallery> {
+  const form = new FormData();
+  form.append("file", file);
+  const uploadRes = await fetch(apiUrl(`/api/v1/assets`), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json().catch(() => ({}) as Record<string, unknown>);
+    throw new Error(
+      (err.message as string) || (err.error as string) || `Failed to upload music: ${uploadRes.status}`,
+    );
+  }
+  const uploadBody = await uploadRes.json();
+  const asset = uploadBody.asset ?? uploadBody.Asset ?? uploadBody;
+  return updateGallerySettings(token, galleryId, { music_asset_id: asset.id });
+}
+
+// Clears the gallery's slideshow music reference. The underlying audio asset is
+// left in place (freed by the normal asset-delete/quota path if removed).
+export async function clearGalleryMusic(token: string, galleryId: string): Promise<Gallery> {
+  return updateGallerySettings(token, galleryId, { music_asset_id: null });
+}
+
+// Public URL that streams the gallery's background-music asset through the API.
+// Mirrors the image-bytes pattern: `?ws=` scopes the per-business subdomain
+// lookup, and `?gs=` carries the gallery session token for gated galleries
+// (an <audio> element cannot send the X-Gallery-Session header).
+export function publicGalleryMusicUrl(slug: string, ws?: string | null, sessionToken?: string | null): string {
+  let path = withWorkspaceScope(`/api/v1/public/galleries/${slug}/music`, ws);
+  if (sessionToken) {
+    const sep = path.includes("?") ? "&" : "?";
+    path = `${path}${sep}gs=${encodeURIComponent(sessionToken)}`;
+  }
+  return apiUrl(path);
 }
 
 // GAL-FR-107/108: FaceID gallery entry

@@ -114,6 +114,17 @@ func RequirePINRateLimit(limiter PINRateLimiter) func(http.Handler) http.Handler
 	}
 }
 
+// ClientIP returns the best-effort client IP for an HTTP request, preferring
+// X-Forwarded-For, then X-Real-IP, then the TCP RemoteAddr (port stripped).
+// It is exported for audit/compliance call sites (e.g. terms acceptance, where
+// the IP is recorded as IT Act §10A / DPDP evidence) that want the proxy-aware
+// address rather than raw r.RemoteAddr. For rate-limit keying use
+// clientIPForRateLimit instead — that variant only trusts forwarding headers
+// from known proxies (F-008).
+func ClientIP(r *http.Request) string {
+	return clientIP(r)
+}
+
 func clientIP(r *http.Request) string {
 	// X-Forwarded-For first, then X-Real-IP, then RemoteAddr.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {

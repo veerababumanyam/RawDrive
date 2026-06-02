@@ -39,6 +39,8 @@ import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Share, Trash, XMark, Plus, Pencil, CheckCircle, Shield, Envelope } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
+import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
+import { getTermsStatus } from "@/lib/api/legal";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 // FaceFilter import removed 2026-05-18 — the chip strip was unmounted
@@ -843,6 +845,37 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     tokenRef.current = getStoredAccessToken();
   }
   const token = tokenRef.current;
+
+  // ──────── Terms-of-Service / copyright acceptance gate ────────
+  // A photographer must accept the active Terms (copyright/IP ownership,
+  // rights-warranty, indemnification) before ANY upload. We pre-check status so
+  // the modal appears before an upload even starts (no failed-upload flash); the
+  // backend 403 TERMS_NOT_ACCEPTED gate (via onTermsRequired) is the hard
+  // safety-net for a stale/unknown status. termsNeedsAcceptanceRef mirrors the
+  // state so submitFiles (a stable callback) reads the current value without a
+  // dependency churn, and so a replay after acceptance is not re-blocked by a
+  // stale closure.
+  const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const termsNeedsAcceptanceRef = useRef(false);
+  termsNeedsAcceptanceRef.current = termsNeedsAcceptance;
+  const pendingUploadRef = useRef<{ files: File[]; options?: { source?: "manual" | "tethered" } } | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    void getTermsStatus(token).then((status) => {
+      if (!cancelled && status) setTermsNeedsAcceptance(status.needs_acceptance);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+  const openTermsModal = useCallback(() => {
+    termsNeedsAcceptanceRef.current = true;
+    setTermsNeedsAcceptance(true);
+    setTermsModalOpen(true);
+  }, []);
+
   // Client-side media encryption (feature branch): the upload hook fetches the
   // per-gallery media key on demand and encrypts each WebP derivative in the
   // browser before it leaves the device.
@@ -863,6 +896,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const upload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,
     destination: { galleryId: id, albumId: activeAlbum },
+    onTermsRequired: openTermsModal,
   });
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
   const uploadPreviewBackendAsset = useMemo(() => {
@@ -1283,6 +1317,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const submitFiles = useCallback(
     (files: File[], options?: { source?: "manual" | "tethered" }) => {
       if (files.length === 0) return;
+      // Terms gate (pre-check). Block the upload before it starts when the user
+      // has not accepted the active Terms; stash the batch and open the modal so
+      // it replays automatically after acceptance. Read from the ref so a replay
+      // (which sets the ref false first) is not re-blocked by a stale closure.
+      if (termsNeedsAcceptanceRef.current) {
+        pendingUploadRef.current = { files, options };
+        setTermsModalOpen(true);
+        return;
+      }
       const { accepted, duplicatesInGallery, duplicatesInBatch } =
         dedupeIncomingFiles(files);
       if (duplicatesInGallery.length > 0 || duplicatesInBatch.length > 0) {
@@ -1304,6 +1347,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     },
     [dedupeIncomingFiles, upload],
   );
+
+  // Called when the user accepts the Terms in the modal: clear the gate (ref
+  // first so the immediate replay is not re-blocked by a stale closure) and
+  // replay the stashed upload batch, if any.
+  const handleTermsAccepted = useCallback(() => {
+    termsNeedsAcceptanceRef.current = false;
+    setTermsNeedsAcceptance(false);
+    setTermsModalOpen(false);
+    const pending = pendingUploadRef.current;
+    pendingUploadRef.current = null;
+    if (pending && pending.files.length > 0) {
+      submitFiles(pending.files, pending.options);
+    }
+  }, [submitFiles]);
 
   const playTetheredDing = useCallback(() => {
     if (!tetheredSoundEnabled) return;
@@ -3282,6 +3339,17 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       )}
+
+      {/* Terms-of-Service / copyright acceptance gate. Opened by the upload
+          pre-check (submitFiles) or the backend 403 safety-net (onTermsRequired).
+          On accept, handleTermsAccepted clears the gate and replays any stashed
+          upload batch. */}
+      <TermsAcceptanceModal
+        open={termsModalOpen}
+        token={token}
+        onAccepted={handleTermsAccepted}
+        onCancel={() => setTermsModalOpen(false)}
+      />
     </div>
   );
 }

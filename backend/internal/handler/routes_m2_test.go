@@ -86,6 +86,7 @@ func TestM2Routes_PublicEndpoints(t *testing.T) {
 	assert.True(t, routeExists(r, "POST", "/api/v1/public/galleries/test-slug/verify-pin"), "POST verify-pin")
 	assert.True(t, routeExists(r, "POST", "/api/v1/public/galleries/test-slug/proof"), "POST proof")
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug/branding/logo"), "GET public branding logo")
+	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug/music"), "GET public gallery music")
 }
 
 // setupM2RouterWithStubs builds a router with non-nil service stubs so

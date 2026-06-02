@@ -128,6 +128,51 @@ type testBucket struct{}
 
 func (b *testBucket) ProvisionBucket(_ context.Context, _ string) error { return nil }
 
+type testOAuthProvider struct{}
+
+func (p *testOAuthProvider) ExchangeCode(_ context.Context, _, _ string) (*auth.OAuthToken, error) {
+	return &auth.OAuthToken{AccessToken: "test-access-token", IDToken: "test-id-token"}, nil
+}
+
+func (p *testOAuthProvider) GetProfile(_ context.Context, _ *auth.OAuthToken, _ string) (*auth.OAuthProfile, error) {
+	return &auth.OAuthProfile{
+		Email:         "oauth@example.com",
+		DisplayName:   "OAuth User",
+		ProviderID:    "google-oauth-user",
+		EmailVerified: true,
+	}, nil
+}
+
+type testOAuthStore struct{}
+
+func (s *testOAuthStore) FindByOAuth(_ context.Context, _, _ string) (*auth.User, error) {
+	return nil, nil
+}
+
+func (s *testOAuthStore) FindByEmail(_ context.Context, _ string) (*auth.User, error) {
+	return nil, nil
+}
+
+func (s *testOAuthStore) FindByProviderSubject(_ context.Context, _, _ string) (*auth.User, error) {
+	return nil, nil
+}
+
+func (s *testOAuthStore) Create(_ context.Context, u *auth.User) (*auth.User, error) {
+	return u, nil
+}
+
+func (s *testOAuthStore) LinkOAuth(_ context.Context, _, _, _ string) error {
+	return nil
+}
+
+func (s *testOAuthStore) BackfillProfile(_ context.Context, _, _, _ string) error {
+	return nil
+}
+
+func (s *testOAuthStore) MarkEmailVerified(_ context.Context, _ string) error {
+	return nil
+}
+
 // ──────────────────────────── Full App Setup ────────────────────────────
 
 // Use plain string key so it matches handler fallback lookups.
@@ -283,7 +328,11 @@ func TestOAuthFlow(t *testing.T) {
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		MaxSessions:        5,
 	})
-	oauthSvc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client", ClientSecret: "test-secret", RedirectURI: "http://localhost/callback"}, nil, nil)
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test-client", ClientSecret: "test-secret", RedirectURI: "http://localhost/callback"},
+		&testOAuthProvider{},
+		&testOAuthStore{},
+	)
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userSvc)
 
 	r := chi.NewRouter()

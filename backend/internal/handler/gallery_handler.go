@@ -423,9 +423,32 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// music_asset_id (Gallery Enhancements June 2026): optional slideshow
+	// background track. Parsed as an optional nullable UUID. Persisted via the
+	// music-specific column write after Update so it does not collide with the
+	// positional Update column set. Validation (workspace ownership + audio
+	// content-type) lives in the service.
+	musicPresent, musicAssetID, err := parseOptionalUUIDRaw(raw, "music_asset_id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
 	if err := h.gallerySvc.Update(r.Context(), gallery); err != nil {
 		http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if musicPresent {
+		if err := h.gallerySvc.SetGalleryMusic(r.Context(), id, workspaceID, musicAssetID); err != nil {
+			if errors.Is(err, service.ErrMusicAssetNotFound) || errors.Is(err, service.ErrMusicAssetNotAudio) {
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, `{"error":"update failed"}`, http.StatusInternalServerError)
+			return
+		}
+		gallery.MusicAssetID = musicAssetID
 	}
 
 	respondJSON(w, http.StatusOK, gallery)

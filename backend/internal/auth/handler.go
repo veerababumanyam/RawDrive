@@ -38,6 +38,10 @@ type RegisterRequest struct {
 	Plan     string `json:"plan,omitempty"`
 	StateID  *int   `json:"state_id,omitempty"`
 	District string `json:"district,omitempty"`
+	// TermsAccepted mirrors the signup "I accept the Terms of Service and
+	// Privacy Policy" checkbox. When true we record a one-time acceptance
+	// (with timestamp, version, IP, user-agent) as IT Act §10A / DPDP evidence.
+	TermsAccepted bool `json:"terms_accepted,omitempty"`
 }
 
 // selfServePlans is the whitelist of plan IDs that may be self-registered.
@@ -160,6 +164,15 @@ type PlanTierLookup interface {
 	GetWorkspacePlanTier(ctx context.Context, workspaceID string) (tier string, startedAt, expiresAt *time.Time, err error)
 }
 
+// TermsManager records Terms-of-Service / copyright acceptance and reports a
+// user's terms status. Declared here (not imported from the service package)
+// because the service package imports auth — importing it back would create a
+// cycle. The concrete *service.TermsService satisfies this interface.
+type TermsManager interface {
+	AcceptTerms(ctx context.Context, userID uuid.UUID, method, ip, ua string) (string, error)
+	TermsStatusForUser(ctx context.Context, userID uuid.UUID) (needsAcceptance bool, acceptedVersion string, acceptedAt *time.Time, currentVersion string, err error)
+}
+
 // ──────────────────────────── Handler ────────────────────────────
 
 type Handler struct {
@@ -176,6 +189,10 @@ type Handler struct {
 	// to force step-up. When nil, no challenge can be issued so Login
 	// also falls back to the pre-M17 flow.
 	mfaHandler *MFAHandler
+	// terms records ToS/copyright acceptance at registration and surfaces
+	// per-user terms status in /me. When nil, registration captures nothing
+	// and /me omits the terms object (the upload gate still enforces).
+	terms TermsManager
 }
 
 func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserService) *Handler {
@@ -206,6 +223,34 @@ func (h *Handler) WithMFA(store MFAEnrollmentStore, mfaHandler *MFAHandler) *Han
 	h.mfaEnrollments = store
 	h.mfaHandler = mfaHandler
 	return h
+}
+
+// WithTerms attaches the Terms-of-Service acceptance manager so Register can
+// capture acceptance and Me can report status. Pass nil to opt out.
+func (h *Handler) WithTerms(t TermsManager) *Handler {
+	h.terms = t
+	return h
+}
+
+// clientIPForAudit returns the best-effort client IP for an audit record.
+// The auth package cannot import the middleware package (import cycle), so the
+// proxy-aware extraction is mirrored here: X-Forwarded-For, then X-Real-IP,
+// then the TCP RemoteAddr with the port stripped.
+func clientIPForAudit(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.Index(xff, ","); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
+		return xri
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // Routes returns the auth subrouter. Note: /register, /login, and
@@ -314,6 +359,25 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		subExpiresAt = ea
 	}
 
+	// Terms-of-Service / copyright acceptance status. Lets the frontend
+	// pre-check whether to prompt before an upload without a separate call.
+	// Nil (omitted) when the terms manager is unwired or lookup fails — the
+	// frontend treats that as "unknown" and relies on the backend upload gate.
+	var termsStatus map[string]any
+	if h.terms != nil {
+		if uid, perr := uuid.Parse(claims.Sub); perr == nil {
+			needs, accVer, accAt, curVer, terr := h.terms.TermsStatusForUser(r.Context(), uid)
+			if terr == nil {
+				termsStatus = map[string]any{
+					"needs_acceptance": needs,
+					"accepted_version": accVer,
+					"accepted_at":      accAt,
+					"current_version":  curVer,
+				}
+			}
+		}
+	}
+
 	// Pass selected claims through to the client so the frontend has a
 	// single network call to populate its user-state store.
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -331,6 +395,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"plan_tier":               planTier,
 		"subscription_started_at": subStartedAt,
 		"subscription_expires_at": subExpiresAt,
+		"terms":                   termsStatus,
 	})
 }
 
@@ -398,6 +463,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		log.Printf("auth.Register: create user failed email=%s: %v", maskEmail(req.Email), err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
+	}
+
+	// One-time Terms-of-Service / copyright acceptance capture. The frontend
+	// gates the signup button on the checkbox and sends terms_accepted=true; we
+	// persist the acceptance with IP + user-agent as IT Act §10A / DPDP
+	// evidence. Best-effort: a failure here is logged but does NOT fail
+	// registration — the upload terms gate re-prompts if it did not persist.
+	if req.TermsAccepted && h.terms != nil {
+		if uid, perr := uuid.Parse(userID); perr == nil {
+			if _, terr := h.terms.AcceptTerms(r.Context(), uid, "registration", clientIPForAudit(r), r.UserAgent()); terr != nil {
+				log.Printf("auth.Register: terms acceptance capture failed user=%s: %v", userID, terr)
+			}
+		}
 	}
 
 	// Generate OTP for activation
