@@ -37,7 +37,7 @@ import { visibleUploadWarnings } from "@/lib/upload-screening/visible-findings";
 import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Share, EllipsisVertical, Trash, XMark, Plus, Pencil, CheckCircle, Shield, Envelope } from "@/components/icons";
+import { Share, Trash, XMark, Plus, Pencil, CheckCircle, Shield, Envelope } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
@@ -165,7 +165,7 @@ function UploadDropzoneBackendPreview({
       src={media.src}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-xl"
+      className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-35"
       decoding="async"
     />
   );
@@ -340,10 +340,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [savingAlbumId, setSavingAlbumId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
-  const [openMenuAssetId, setOpenMenuAssetId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ assetId: string; filename: string; isBulk?: boolean } | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [tetheredEnabled, setTetheredEnabled] = useState(false);
   const [tetheredFolderName, setTetheredFolderName] = useState<string | null>(null);
   const [tetheredStatus, setTetheredStatus] = useState<"idle" | "watching" | "paused" | "unsupported" | "error">("idle");
@@ -674,20 +672,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
   }, []);
 
-  useEffect(() => {
-    if (!openMenuAssetId) return;
-    const close = () => setOpenMenuAssetId(null);
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenMenuAssetId(null);
-    };
-    document.addEventListener("click", close);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("click", close);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [openMenuAssetId]);
-
   // Subscribe to face-filter events from the FaceFilter component. The
   // component doesn't know anything about the page's asset list — it
   // just dispatches the matched ID set via a window CustomEvent, and
@@ -798,47 +782,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
   const upload = useUpload(apiUrl, token, { encryption: uploadEncryption });
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
-  const uploadPreviewFile = useMemo(() => {
-    const activePreview = upload.items.find(
-      (item) =>
-        item.file.type.startsWith("image/") &&
-        (item.status === "pending" ||
-          item.status === "screening" ||
-          item.status === "encrypting" ||
-          item.status === "uploading" ||
-          item.status === "paused"),
-    )?.file;
-    if (activePreview) return activePreview;
-    return upload.items.find(
-      (item) =>
-        item.file.type.startsWith("image/") &&
-        item.status !== "blocked" &&
-        item.status !== "needs_desktop",
-    )?.file ?? null;
-  }, [upload.items]);
-  const uploadPreviewSignature = uploadPreviewFile ? uploadFileSignature(uploadPreviewFile) : "";
   const uploadPreviewBackendAsset = useMemo(() => {
     const completedAssetIds = new Set(
       upload.items
         .filter((item) => item.status === "complete" && item.assetId)
         .map((item) => item.assetId as string),
     );
-    const completedUploadAsset = visibleAssets.find(
+    return visibleAssets.find(
       (entry) => entry.asset && completedAssetIds.has(entry.asset.id) && assetHasWebPDisplay(entry.asset),
-    )?.asset;
-    if (completedUploadAsset) return completedUploadAsset;
-    return visibleAssets.find((entry) => entry.asset && assetHasWebPDisplay(entry.asset))?.asset ?? null;
+    )?.asset ?? null;
   }, [upload.items, visibleAssets]);
-
-  useEffect(() => {
-    if (!uploadPreviewFile) {
-      setUploadPreviewUrl(null);
-      return;
-    }
-    const objectUrl = URL.createObjectURL(uploadPreviewFile);
-    setUploadPreviewUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [uploadPreviewFile, uploadPreviewSignature]);
 
   useEffect(() => {
     tetheredAutoOpenRef.current = tetheredAutoOpen;
@@ -1167,14 +1120,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       for (const item of toLink) {
         if (!item.assetId) continue;
+        const uploadSignature = uploadFileSignature(item.file);
+        const isTetheredUpload = tetheredUploadSignaturesRef.current.has(uploadSignature);
+        if (isTetheredUpload) {
+          tetheredUploadSignaturesRef.current.delete(uploadSignature);
+          newlyAddedTetheredAssetIds.push(item.assetId);
+        }
         try {
           await addAssetToGallery(t, id, item.assetId, 0);
           linkedAssetIdsRef.current.add(item.assetId);
           newlyAddedAssetIds.push(item.assetId);
-          const uploadSignature = uploadFileSignature(item.file);
-          if (tetheredUploadSignaturesRef.current.delete(uploadSignature)) {
-            newlyAddedTetheredAssetIds.push(item.assetId);
-          }
         } catch (err) {
           console.warn("Failed to link asset to gallery:", err);
         }
@@ -1211,7 +1166,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             : [...newlyAddedTetheredAssetIds].reverse();
           const targetAssetId = orderedAssetIds[0];
           const targetIndex = hydratedAssets.findIndex((entry) => entry.asset?.id === targetAssetId);
-          if (targetIndex >= 0) setLightboxIndex(targetIndex);
+          if (targetIndex >= 0) {
+            setShowUploadDialog(false);
+            setLightboxIndex(targetIndex);
+          }
         }
       } catch (err) {
         console.warn("Failed to reload assets after upload:", err);
@@ -2458,67 +2416,42 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         />
                         {!bulkMode && entry.asset && !isProcessing && (
                           <div
-                            className="absolute bottom-2 right-2 z-10"
+                            className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"
                             onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") {
-                                e.stopPropagation();
-                                setOpenMenuAssetId(null);
-                              }
-                            }}
                           >
-                            <div className="relative">
-                              <GlassIconButton
-                                size="md"
-                                variant="glass"
-                                label={`More actions for ${entry.asset.filename}`}
-                                aria-haspopup="menu"
-                                aria-expanded={openMenuAssetId === entry.asset.id}
-                                aria-controls={`asset-actions-${entry.asset.id}`}
-                                className="!border-border-strong !bg-surface-elevated !text-text-primary shadow-elevation-1 hover:!bg-surface-container-high hover:!text-text-primary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenMenuAssetId((prev) => (prev === entry.asset!.id ? null : entry.asset!.id));
-                                }}
-                              >
-                                <EllipsisVertical className="h-5 w-5" />
-                              </GlassIconButton>
-                              {openMenuAssetId === entry.asset.id && (
-                                <div
-                                  id={`asset-actions-${entry.asset.id}`}
-                                  role="menu"
-                                  aria-label={`Actions for ${entry.asset.filename}`}
-                                  className="absolute bottom-full right-0 z-50 mb-2 min-w-40 rounded-xl border border-border-default bg-surface-elevated py-1 shadow-elevation-1"
-                                >
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex min-h-11 w-full items-center gap-2 rounded-t-xl px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenMenuAssetId(null);
-                                      void handleShareAsset(e, entry.asset!.id);
-                                    }}
-                                  >
-                                    <Share className="h-4 w-4 text-text-secondary shrink-0" />
-                                    <span>{copiedAssetId === entry.asset.id ? "Copied!" : "Share"}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex min-h-11 w-full items-center gap-2 rounded-b-xl px-3 py-2 text-sm font-medium text-feedback-error transition-colors hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenMenuAssetId(null);
-                                      setDeleteConfirm({ assetId: entry.asset!.id, filename: entry.asset!.filename || "this photo" });
-                                    }}
-                                  >
-                                    <Trash className="h-4 w-4 shrink-0" />
-                                    <span>Delete</span>
-                                  </button>
-                                </div>
+                            <GlassIconButton
+                              size="md"
+                              variant={copiedAssetId === entry.asset.id ? "success" : "accent"}
+                              label={
+                                copiedAssetId === entry.asset.id
+                                  ? `${entry.asset.filename} link copied`
+                                  : `Share ${entry.asset.filename}`
+                              }
+                              className={cn(
+                                "!text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-white",
+                                copiedAssetId === entry.asset.id
+                                  ? "!bg-feedback-success hover:!bg-feedback-success/90"
+                                  : "!bg-accent-primary hover:!bg-accent-primary/90",
                               )}
-                            </div>
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleShareAsset(e, entry.asset!.id);
+                              }}
+                            >
+                              <Share />
+                            </GlassIconButton>
+                            <GlassIconButton
+                              size="md"
+                              variant="danger"
+                              label={`Delete ${entry.asset.filename}`}
+                              className="!bg-feedback-error !text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!bg-feedback-error/90 hover:!text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm({ assetId: entry.asset!.id, filename: entry.asset!.filename || "this photo" });
+                              }}
+                            >
+                              <Trash />
+                            </GlassIconButton>
                           </div>
                         )}
                       </div>
@@ -2691,23 +2624,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       : "border-border-default bg-surface-sunken text-text-secondary hover:border-accent hover:bg-accent-subtle",
                   )}
                 >
-                  {(uploadPreviewUrl || uploadPreviewBackendAsset) && (
+                  {uploadPreviewBackendAsset && (
                     <>
-                      {uploadPreviewUrl ? (
-                        <img
-                          data-testid="upload-dropzone-preview"
-                          src={uploadPreviewUrl}
-                          alt=""
-                          aria-hidden="true"
-                          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-xl"
-                          decoding="async"
-                        />
-                      ) : (
-                        <UploadDropzoneBackendPreview asset={uploadPreviewBackendAsset} token={token} />
-                      )}
+                      <UploadDropzoneBackendPreview asset={uploadPreviewBackendAsset} token={token} />
                       <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 bg-surface-scrim/85 backdrop-blur-sm"
+                        className="pointer-events-none absolute inset-0 bg-surface-scrim/70"
                       />
                     </>
                   )}

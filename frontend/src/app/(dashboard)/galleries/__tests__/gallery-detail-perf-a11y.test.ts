@@ -85,18 +85,19 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('decoding="async"');
   });
 
-  it("keeps per-tile quick actions visible, named, and keyboard-menu accessible", () => {
+  it("keeps per-tile quick actions visible, named, and directly accessible", () => {
     const source = readDetailPage();
 
     expect(source).not.toContain(
       '"absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"',
     );
-    expect(source).toContain('label={`More actions for ${entry.asset.filename}`}');
-    expect(source).toMatch(/<GlassIconButton[\s\S]{0,280}size="md"[\s\S]{0,280}label=\{`More actions for \$\{entry\.asset\.filename\}`\}/);
-    expect(source).toContain('aria-haspopup="menu"');
-    expect(source).toContain("aria-expanded={openMenuAssetId === entry.asset.id}");
-    expect(source).toContain('role="menu"');
-    expect(source).toContain('role="menuitem"');
+    expect(source).not.toContain("openMenuAssetId");
+    expect(source).not.toContain("EllipsisVertical");
+    expect(source).toContain('`Share ${entry.asset.filename}`');
+    expect(source).toContain('`Delete ${entry.asset.filename}`');
+    expect(source).toContain("void handleShareAsset(e, entry.asset!.id)");
+    expect(source).toContain("setDeleteConfirm({ assetId: entry.asset!.id");
+    expect(source).toContain('className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"');
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
 
@@ -116,21 +117,23 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("setShowUploadDialog(true)");
   });
 
-  it("shows the selected upload photo as a blurred dropzone background preview", () => {
+  it("shows only completed backend WebP as the upload dropzone background", () => {
     const source = readDetailPage();
 
-    expect(source).toContain("uploadPreviewUrl");
     expect(source).toContain("uploadPreviewBackendAsset");
     expect(source).toContain("UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS");
-    expect(source).toContain("URL.createObjectURL");
-    expect(source).toContain("URL.revokeObjectURL");
-    expect(source).toContain('data-testid="upload-dropzone-preview"');
+    expect(source).toContain('item.status === "complete" && item.assetId');
+    expect(source).toContain("completedAssetIds.has(entry.asset.id)");
+    expect(source).not.toContain("uploadPreviewUrl");
+    expect(source).not.toContain("URL.createObjectURL");
+    expect(source).not.toContain("URL.revokeObjectURL");
+    expect(source).not.toContain('data-testid="upload-dropzone-preview"');
     expect(source).toContain('data-testid="upload-dropzone-backend-preview"');
     expect(source).toContain('aria-hidden="true"');
     expect(source).toContain('alt=""');
-    expect(source).toContain("blur-xl");
-    expect(source).toContain("scale-110");
-    expect(source).toContain("bg-surface-scrim/85");
+    expect(source).toContain("bg-surface-scrim/70");
+    expect(source).not.toContain("blur-xl");
+    expect(source).not.toContain("scale-110");
   });
 
   it("keeps the upload dialog mobile-first by hiding desktop-only progress tabs and helper cards", () => {
@@ -171,6 +174,17 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("requestPermission");
     expect(source).toContain("Last detected:");
     expect(source).toContain("tetheredAutoOpenRef.current");
+  });
+
+  it("auto-opens tethered uploads after backend completion without leaving the upload dialog on top", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("const isTetheredUpload = tetheredUploadSignaturesRef.current.has(uploadSignature)");
+    expect(source).toContain("if (isTetheredUpload) {");
+    expect(source).toContain("newlyAddedTetheredAssetIds.push(item.assetId)");
+    expect(source).toContain("setShowUploadDialog(false);");
+    expect(source).toContain("setLightboxIndex(targetIndex)");
+    expect(source).toContain("tetheredAutoOpenRef.current && newlyAddedTetheredAssetIds.length > 0");
   });
 
   it("uses one accessible publish-state switch instead of a separate status badge and action button", () => {

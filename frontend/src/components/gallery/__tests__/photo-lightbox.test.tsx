@@ -1,0 +1,122 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Asset } from "@/lib/api/assets";
+
+const mocks = vi.hoisted(() => ({
+  getStoredAccessToken: vi.fn(() => "test-token"),
+  useDecryptedAssetUrl: vi.fn(() => ({
+    src: "blob:lightbox-photo",
+    loading: false,
+    error: null,
+  })),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  getStoredAccessToken: mocks.getStoredAccessToken,
+}));
+
+vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
+  useDecryptedAssetUrl: mocks.useDecryptedAssetUrl,
+}));
+
+import { PhotoLightbox } from "../photo-lightbox";
+
+function photo(overrides: Partial<Asset> = {}): Asset {
+  return {
+    id: "asset-delete",
+    workspace_id: "workspace-delete",
+    filename: "DSC_7305.JPG",
+    content_type: "image/jpeg",
+    size_bytes: 1024,
+    storage_key: "originals/asset-delete.jpg.enc",
+    exif_data: {},
+    thumbnail_urls: {
+      display_webp: "derivatives/asset-delete/display_webp.webp.enc",
+      thumb_lg_webp: "thumbnails/asset-delete/thumb_lg_webp.webp.enc",
+    },
+    status: "ready",
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("PhotoLightbox", () => {
+  beforeEach(() => {
+    mocks.getStoredAccessToken.mockClear();
+    mocks.useDecryptedAssetUrl.mockClear();
+  });
+
+  it("shows a clearly destructive delete control and delegates confirmation to the gallery page", () => {
+    const onDeleteRequest = vi.fn();
+    const props = {
+      asset: photo(),
+      onClose: vi.fn(),
+      hasPrev: false,
+      hasNext: false,
+      onDeleteRequest,
+    };
+
+    render(<PhotoLightbox {...props} />);
+
+    const deleteButton = screen.getByRole("button", { name: "Delete photo" });
+    expect(deleteButton).toHaveClass("bg-feedback-error", "text-white");
+
+    fireEvent.click(deleteButton);
+
+    expect(onDeleteRequest).toHaveBeenCalledWith(expect.objectContaining({ id: "asset-delete" }));
+  });
+
+  it("does not render the low-contrast keyboard shortcut footer", () => {
+    render(
+      <PhotoLightbox
+        asset={photo()}
+        onClose={vi.fn()}
+        hasPrev={false}
+        hasNext={false}
+      />,
+    );
+
+    expect(screen.queryByText("F Fullscreen")).toBeNull();
+    expect(screen.queryByText("Esc Close")).toBeNull();
+  });
+
+  it("downloads the original directly without asking for a format", async () => {
+    const anchors: HTMLAnchorElement[] = [];
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string, options?: ElementCreationOptions) => {
+        const element = originalCreateElement(tagName, options);
+        if (tagName.toLowerCase() === "a") {
+          anchors.push(element as HTMLAnchorElement);
+          vi.spyOn(element as HTMLAnchorElement, "click").mockImplementation(() => {});
+        }
+        return element;
+      });
+
+    try {
+      render(
+        <PhotoLightbox
+          asset={photo({
+            is_encrypted: false,
+            storage_key: "originals/asset-delete.jpg",
+          })}
+          onClose={vi.fn()}
+          hasPrev={false}
+          hasNext={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /download original/i }));
+
+      await waitFor(() => expect(anchors).toHaveLength(1));
+      expect(anchors[0].download).toBe("DSC_7305.JPG");
+      expect(anchors[0].href).toContain("/storage/originals/asset-delete.jpg");
+      expect(anchors[0].href).toContain("token=test-token");
+      expect(screen.queryByText(/optimized webp/i)).toBeNull();
+      expect(screen.queryByText(/thumbnail/i)).toBeNull();
+    } finally {
+      createElementSpy.mockRestore();
+    }
+  });
+});

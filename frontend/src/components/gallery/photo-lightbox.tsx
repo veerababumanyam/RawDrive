@@ -28,7 +28,7 @@ import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   ChevronLeft, ChevronRight, XMark, Download, Expand, Compress,
-  ZoomIn, ZoomOut, InfoCircle, ChatBubble, CheckCircle, ThumbsUp, XCircle,
+  ZoomIn, ZoomOut, InfoCircle, ChatBubble, CheckCircle, ThumbsUp, XCircle, Trash,
 } from "@/components/icons";
 import { WatermarkOverlay } from "./watermark-overlay";
 import { FaceBoxesOverlay } from "./face-boxes-overlay";
@@ -37,6 +37,9 @@ import { Filmstrip } from "./filmstrip";
 import { CompareMode } from "./compare-mode";
 import { useTouchGestures } from "@/hooks/use-touch-gestures";
 import { useScrollRestore } from "@/hooks/use-scroll-restore";
+import { FILMSTRIP_VARIANTS, LIGHTBOX_VARIANTS, originalManifest, variantManifest, assetUsesClientMediaEncryption } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 
 interface PhotoLightboxProps {
   asset: Asset;
@@ -52,6 +55,7 @@ interface PhotoLightboxProps {
   allAssets?: Asset[];     // powers filmstrip and compare mode (GAL-FR-093, 092)
   gallery?: Gallery;       // powers watermark overlay (GAL-FR-088)
   showFilmstrip?: boolean; // default true when allAssets provided
+  onDeleteRequest?: (asset: Asset) => void;
   /** Jump to a specific asset by ID — enables random-access filmstrip nav.
    *  When omitted, the filmstrip only supports ±1 navigation via onPrev/onNext. */
   onJumpTo?: (assetId: string) => void;
@@ -89,15 +93,57 @@ function isVideo(a: Asset): boolean {
   return a.content_type?.startsWith("video/") ?? false;
 }
 
+function BurstSiblingThumb({
+  sibling,
+  activeId,
+  token,
+}: {
+  sibling: Asset;
+  activeId: string;
+  token: string | null;
+}) {
+  const [useDisplayFallback, setUseDisplayFallback] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  const variants = useDisplayFallback ? LIGHTBOX_VARIANTS : FILMSTRIP_VARIANTS;
+  const media = useDecryptedAssetUrl(sibling, variants, token);
+
+  const handleImageError = () => {
+    if (!useDisplayFallback) {
+      setImageFailed(false);
+      setUseDisplayFallback(true);
+      return;
+    }
+    setImageFailed(true);
+  };
+
+  return (
+    <div
+      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
+        sibling.id === activeId ? "border-white" : "border-white/20"
+      }`}
+    >
+      {media.loading ? (
+        <div className="h-full w-full animate-pulse bg-white/5" />
+      ) : media.src && !imageFailed ? (
+        <img src={media.src} alt={sibling.filename} className="h-full w-full object-cover" onError={handleImageError} />
+      ) : (
+        <div className="h-full w-full bg-white/5" />
+      )}
+      {sibling.burst_is_top_pick && (
+        <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent-primary" title="Top pick" />
+      )}
+    </div>
+  );
+}
+
 export function PhotoLightbox({
   asset, onClose, onPrev, onNext, hasPrev, hasNext,
   isProofing = false, onProofingAction, onComment,
-  allAssets, gallery, showFilmstrip, onJumpTo,
+  allAssets, gallery, showFilmstrip, onDeleteRequest, onJumpTo,
 }: PhotoLightboxProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [zoom, setZoom] = useState(1);
   const [showFaces, setShowFaces] = useState(false);              // GAL-FR-089
@@ -188,25 +234,36 @@ export function PhotoLightbox({
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
 
-  const handleDownloadFormat = (format: "original" | "webp" | "thumbnail") => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-    let url: string; let filename: string;
+  const handleDownloadFormat = async (format: "original" | "webp" | "thumbnail") => {
+    let url: string; let filename: string; let variant = "original";
     switch (format) {
       case "webp":
+        variant = asset.thumbnail_urls?.display_webp ? "display_webp" : "thumb_lg_webp";
         url = asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp || "";
         filename = asset.filename.replace(/\.[^.]+$/, ".webp");
         break;
       case "thumbnail":
-        url = asset.thumbnail_urls?.thumb_lg_webp || asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg || "";
-        filename = "thumb_" + asset.filename.replace(/\.[^.]+$/, url.endsWith(".webp") ? ".webp" : "");
+        variant = "thumb_lg_webp";
+        url = asset.thumbnail_urls?.thumb_lg_webp || "";
+        filename = "thumb_" + asset.filename.replace(/\.[^.]+$/, ".webp");
         break;
       default:
         url = asset.download_url || asset.storage_key || "";
         filename = asset.filename;
     }
     if (!url) return;
-    if (!url.startsWith("http")) url = `${API_BASE}/storage/${url}`;
     url = authedStorageUrl(url, token);
+    if (assetUsesClientMediaEncryption(asset)) {
+      const manifest = variant === "original" ? originalManifest(asset) : variantManifest(asset, variant);
+      if (!manifest) return;
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const plain = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
+      const objectUrl = URL.createObjectURL(plain);
+      const a = document.createElement("a"); a.href = objectUrl; a.download = filename; a.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      return;
+    }
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   };
 
@@ -214,41 +271,17 @@ export function PhotoLightbox({
     if (commentText.trim() && onComment) { onComment(asset.id, commentText.trim()); setCommentText(""); }
   };
 
+  const handleDeleteRequest = () => {
+    onDeleteRequest?.(asset);
+  };
+
   // Token is read eagerly so every URL derived below uses the same
   // session credential. The token is in-memory (see lib/auth.ts) and
   // is refreshed by the ambient refresh hook, so we do not need to
   // watch for changes here.
   const token = getStoredAccessToken();
-  const rawLargeUrl = asset.thumbnail_urls?.display_webp
-    || asset.thumbnail_urls?.thumb_lg_webp
-    || asset.thumbnail_urls?.thumb_lg
-    || asset.thumbnail_urls?.lg
-    || asset.thumbnail_urls?.cover_1920
-    || asset.download_url
-    || Object.values(asset.thumbnail_urls || {})[0]
-    || "";
-  const largeUrl = authedStorageUrl(rawLargeUrl, token);
+  const media = useDecryptedAssetUrl(asset, LIGHTBOX_VARIANTS, token);
   const exif = asset.exif_data || {};
-  const downloadOptions = [
-    {
-      format: "original" as const,
-      label: `Original (${formatBytes(asset.size_bytes)})`,
-      badge: "Original",
-      available: Boolean(asset.download_url || asset.storage_key),
-    },
-    {
-      format: "webp" as const,
-      label: "Optimized WebP",
-      badge: "WebP",
-      available: Boolean(asset.thumbnail_urls?.display_webp || asset.thumbnail_urls?.thumb_lg_webp),
-    },
-    {
-      format: "thumbnail" as const,
-      label: "Thumbnail",
-      badge: "Small",
-      available: Boolean(asset.thumbnail_urls?.thumb_lg_webp || asset.thumbnail_urls?.thumb_lg || asset.thumbnail_urls?.lg),
-    },
-  ];
 
   const filmstripVisible = (showFilmstrip ?? !!allAssets) && !compareMode && !!allAssets && allAssets.length > 1;
 
@@ -310,28 +343,24 @@ export function PhotoLightbox({
           )}
           <GlassIconButton size="sm" label="Comments (C)" active={showComments} onClick={() => setShowComments(s => !s)}><ChatBubble /></GlassIconButton>
           <GlassIconButton size="sm" label="Info (I)" active={showInfo} onClick={() => setShowInfo(s => !s)}><InfoCircle /></GlassIconButton>
-          <div className="relative">
-            <GlassIconButton size="sm" label="Download" active={showDownloadMenu} onClick={() => setShowDownloadMenu(s => !s)}><Download /></GlassIconButton>
-            {showDownloadMenu && (
-              <div className="absolute right-0 top-11 z-20 w-56 rounded-xl border border-border-default bg-surface-elevated py-2 shadow-elevation-2">
-                {downloadOptions.map((option) => (
-                  <button
-                    key={option.format}
-                    type="button"
-                    disabled={!option.available}
-                    onClick={() => {
-                      handleDownloadFormat(option.format);
-                      setShowDownloadMenu(false);
-                    }}
-                    className="flex min-h-11 w-full items-center gap-3 px-4 py-2 text-sm text-text-primary transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:text-text-tertiary"
-                  >
-                    <span className="w-14 text-xs font-semibold uppercase tracking-wide text-text-tertiary">{option.badge}</span>
-                    <span className="truncate">{option.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <GlassIconButton
+            size="sm"
+            label="Download original"
+            onClick={() => void handleDownloadFormat("original")}
+          >
+            <Download />
+          </GlassIconButton>
+          {onDeleteRequest && (
+            <GlassIconButton
+              size="sm"
+              variant="danger"
+              label="Delete photo"
+              className="bg-feedback-error text-white border-feedback-error shadow-elevation-1 ring-2 ring-feedback-error/30 hover:bg-feedback-error/90 hover:text-white hover:border-feedback-error focus-visible:ring-feedback-error"
+              onClick={handleDeleteRequest}
+            >
+              <Trash />
+            </GlassIconButton>
+          )}
           {/* Fullscreen toggle hidden on mobile — phone browsers already
               render the image at viewport size and the button was crowding
               out the Close (X) exit. */}
@@ -371,13 +400,23 @@ export function PhotoLightbox({
                 />
               ) : (
                 <div className="relative">
-                  <img
-                    src={largeUrl}
-                    alt={asset.filename}
-                    className="max-h-full max-w-full object-contain p-4 transition-transform duration-200"
-                    style={{ transform: `scale(${zoom})` }}
-                    draggable={false}
-                  />
+                  {media.loading ? (
+                    <div className="flex min-h-[50vh] min-w-[50vw] items-center justify-center p-4 text-sm text-white/60">
+                      Decrypting photo...
+                    </div>
+                  ) : media.src ? (
+                    <img
+                      src={media.src}
+                      alt={asset.filename}
+                      className="max-h-full max-w-full object-contain p-4 transition-transform duration-200"
+                      style={{ transform: `scale(${zoom})` }}
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="flex min-h-[50vh] min-w-[50vw] items-center justify-center p-4 text-sm text-white/60">
+                      {media.error || "Preview unavailable"}
+                    </div>
+                  )}
                   {/* GAL-FR-088 — watermark overlay */}
                   <WatermarkOverlay config={gallery?.watermark_config} />
                   {/* GAL-FR-089 — face bounding boxes */}
@@ -424,31 +463,14 @@ export function PhotoLightbox({
           </button>
           {burstExpanded && (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
-              {burstSiblings.map((sib) => {
-                // Burst-sibling strip: WebP-first, JPG fallback for legacy.
-                // The 80×80 tile size matches thumb_sm_webp (200px source).
-                const rawThumb =
-                  sib.thumbnail_urls?.thumb_sm_webp ||
-                  sib.thumbnail_urls?.thumb_md_webp ||
-                  sib.thumbnail_urls?.thumb_sm ||
-                  sib.thumbnail_urls?.sm ||
-                  sib.thumbnail_urls?.thumb_md ||
-                  "";
-                const thumb = authedStorageUrl(rawThumb, token);
-                return (
-                  <div
-                    key={sib.id}
-                    className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
-                      sib.id === asset.id ? "border-white" : "border-white/20"
-                    }`}
-                  >
-                    {thumb && <img src={thumb} alt={sib.filename} className="h-full w-full object-cover" />}
-                    {sib.burst_is_top_pick && (
-                      <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent-primary" title="Top pick" />
-                    )}
-                  </div>
-                );
-              })}
+              {burstSiblings.map((sib) => (
+                <BurstSiblingThumb
+                  key={sib.id}
+                  sibling={sib}
+                  activeId={asset.id}
+                  token={token}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -483,60 +505,50 @@ export function PhotoLightbox({
         />
       )}
 
-      {/* ─── Bottom Bar ─── */}
-      <div className="px-4 pb-4 shrink-0">
-        {/* Proofing toolbar */}
-        {isProofing && (
-          <div className="mb-3 flex items-center justify-center gap-4">
-            <GlassIconButton size="lg" variant="accent" label="Select (1)" onClick={() => onProofingAction?.(asset.id, "select")}><CheckCircle /></GlassIconButton>
-            <GlassIconButton size="lg" variant="success" label="Approve (2)" onClick={() => onProofingAction?.(asset.id, "approve")}><ThumbsUp /></GlassIconButton>
-            <GlassIconButton size="lg" variant="danger" label="Reject (3)" onClick={() => onProofingAction?.(asset.id, "reject")}><XCircle /></GlassIconButton>
-          </div>
-        )}
-
-        {/* Keyboard hints — desktop only. The hint row was visible on
-            mobile and confused users (it shows keyboard shortcuts that
-            do nothing on touch devices) while taking footer space that
-            the filmstrip needs. */}
-        <div className="mb-2 hidden items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide flex-wrap sm:flex">
-          <span>← → Navigate</span><span>F Fullscreen</span><span>I Info</span><span>C Comments</span>
-          {asset.face_boxes && asset.face_boxes.length > 0 && <span>B Faces</span>}
-          <span>+/- Zoom</span><span>Esc Close</span>
-          {isProofing && <span>1/2/3 Select/Approve/Reject</span>}
-        </div>
-
-        {/* Info panel — EXIF metadata and file details (separate from Comments sidebar) */}
-        {showInfo && (
-          <div className="mx-auto max-w-2xl rounded-2xl bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] px-6 py-4 text-white shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.2)]">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">File info</h3>
-              <span className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
-                asset.status === "ready" ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20" :
-                asset.status === "failed" ? "bg-feedback-error/15 text-feedback-error/70 border-feedback-error/20" :
-                "bg-feedback-warning/15 text-feedback-warning/70 border-feedback-warning/20"
-              }`}>{asset.status}</span>
+      {(isProofing || showInfo) && (
+        <div className="px-4 pb-4 shrink-0">
+          {/* Proofing toolbar */}
+          {isProofing && (
+            <div className="mb-3 flex items-center justify-center gap-4">
+              <GlassIconButton size="lg" variant="accent" label="Select (1)" onClick={() => onProofingAction?.(asset.id, "select")}><CheckCircle /></GlassIconButton>
+              <GlassIconButton size="lg" variant="success" label="Approve (2)" onClick={() => onProofingAction?.(asset.id, "approve")}><ThumbsUp /></GlassIconButton>
+              <GlassIconButton size="lg" variant="danger" label="Reject (3)" onClick={() => onProofingAction?.(asset.id, "reject")}><XCircle /></GlassIconButton>
             </div>
-            <p className="text-sm text-white/60">
-              {asset.filename}{" — "}
-              {asset.width && asset.height ? `${asset.width} x ${asset.height} px` : "Dimensions unknown"}{" "}
-              — {formatBytes(asset.size_bytes)} — {asset.content_type}
-            </p>
-            {Object.keys(exif).length > 0 ? (
-              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
-                {exif.camera_make ? <div><span className="text-white/35">Camera</span> <span className="text-white/70">{String(exif.camera_make)} {String(exif.camera_model || "")}</span></div> : null}
-                {exif.focal_length ? <div><span className="text-white/35">Focal</span> <span className="text-white/70">{String(exif.focal_length)}mm</span></div> : null}
-                {exif.exposure_time ? <div><span className="text-white/35">Shutter</span> <span className="text-white/70">{String(exif.exposure_time)}</span></div> : null}
-                {exif.f_number ? <div><span className="text-white/35">Aperture</span> <span className="text-white/70">f/{String(exif.f_number)}</span></div> : null}
-                {exif.iso ? <div><span className="text-white/35">ISO</span> <span className="text-white/70">{String(exif.iso)}</span></div> : null}
-                {exif.date_taken ? <div><span className="text-white/35">Taken</span> <span className="text-white/70">{String(exif.date_taken)}</span></div> : null}
-                {exif.lens_model ? <div className="sm:col-span-2"><span className="text-white/35">Lens</span> <span className="text-white/70">{String(exif.lens_model)}</span></div> : null}
+          )}
+
+          {/* Info panel — EXIF metadata and file details (separate from Comments sidebar) */}
+          {showInfo && (
+            <div className="mx-auto max-w-2xl rounded-2xl bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] px-6 py-4 text-white shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.2)]">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">File info</h3>
+                <span className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
+                  asset.status === "ready" ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20" :
+                  asset.status === "failed" ? "bg-feedback-error/15 text-feedback-error/70 border-feedback-error/20" :
+                  "bg-feedback-warning/15 text-feedback-warning/70 border-feedback-warning/20"
+                }`}>{asset.status}</span>
               </div>
-            ) : (
-              <p className="mt-3 text-xs text-white/25 border-t border-white/8 pt-3">No EXIF metadata available for this file.</p>
-            )}
-          </div>
-        )}
-      </div>
+              <p className="text-sm text-white/60">
+                {asset.filename}{" — "}
+                {asset.width && asset.height ? `${asset.width} x ${asset.height} px` : "Dimensions unknown"}{" "}
+                — {formatBytes(asset.size_bytes)} — {asset.content_type}
+              </p>
+              {Object.keys(exif).length > 0 ? (
+                <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
+                  {exif.camera_make ? <div><span className="text-white/35">Camera</span> <span className="text-white/70">{String(exif.camera_make)} {String(exif.camera_model || "")}</span></div> : null}
+                  {exif.focal_length ? <div><span className="text-white/35">Focal</span> <span className="text-white/70">{String(exif.focal_length)}mm</span></div> : null}
+                  {exif.exposure_time ? <div><span className="text-white/35">Shutter</span> <span className="text-white/70">{String(exif.exposure_time)}</span></div> : null}
+                  {exif.f_number ? <div><span className="text-white/35">Aperture</span> <span className="text-white/70">f/{String(exif.f_number)}</span></div> : null}
+                  {exif.iso ? <div><span className="text-white/35">ISO</span> <span className="text-white/70">{String(exif.iso)}</span></div> : null}
+                  {exif.date_taken ? <div><span className="text-white/35">Taken</span> <span className="text-white/70">{String(exif.date_taken)}</span></div> : null}
+                  {exif.lens_model ? <div className="sm:col-span-2"><span className="text-white/35">Lens</span> <span className="text-white/70">{String(exif.lens_model)}</span></div> : null}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-white/25 border-t border-white/8 pt-3">No EXIF metadata available for this file.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
