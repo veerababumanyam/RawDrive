@@ -71,12 +71,42 @@ describe("PublicGalleryGrid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    const downloadItem = within(menu).getByRole("menuitem", { name: "Download" });
+    const downloadItem = within(menu).getByRole("menuitem", { name: "Download WebP" });
     expect(downloadItem).toBeInTheDocument();
     // The menuitem itself is full-width and never carries hover-only
     // opacity gating, so it stays reachable on touch (no pointer hover).
     expect(downloadItem).toHaveClass("flex", "w-full", "items-center");
     expect(downloadItem.className).not.toMatch(/group-hover:opacity/);
+  });
+
+  it("uses a WebP-only download action when the gallery policy allows only WebP", () => {
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="webp" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Download WebP" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
+  });
+
+  it("uses an original-only download action when the gallery policy allows only originals", () => {
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="original" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Download original" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "Download WebP" })).toBeNull();
+  });
+
+  it("shows both download formats when the gallery policy allows both", () => {
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="both" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Download WebP" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Download original" })).toBeInTheDocument();
   });
 
   it("renders a per-tile favorite toggle alongside the download button", async () => {
@@ -113,13 +143,13 @@ describe("PublicGalleryGrid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    // Two action items on the tile menu: Favorite (default state) and Download.
+    // Tile menu includes Favorite (default state), Share, and explicit Download.
     // Note the per-tile favorite label is "Add to favorites" / "Remove
     // favorite" (NOT "Remove from favorites" — that's the lightbox label).
     // The favorite is a checkable menu item → role="menuitemcheckbox" with
     // aria-checked (valid ARIA; menuitem does not support aria-pressed).
     const favoriteItem = within(menu).getByRole("menuitemcheckbox", { name: /add to favorites/i });
-    const downloadItem = within(menu).getByRole("menuitem", { name: "Download" });
+    const downloadItem = within(menu).getByRole("menuitem", { name: "Download WebP" });
     expect(favoriteItem).toBeInTheDocument();
     expect(downloadItem).toBeInTheDocument();
     // Default (unfavorited) state exposes the unchecked affordance.
@@ -164,13 +194,13 @@ describe("PublicGalleryGrid", () => {
     expect(lightboxImage).toHaveClass("h-full", "w-full", "object-contain");
     // Its immediate parent is the relative full-size wrapper that lets the
     // watermark overlay track the zoom transform. That wrapper sits inside
-    // the absolutely-positioned, scrollable lightbox viewport, so the image
-    // expands to fill the viewport while staying centered.
+    // the centered lightbox viewport, so the image expands to fill the
+    // available surface while staying centered.
     expect(lightboxImage.parentElement).toHaveClass("relative", "h-full", "w-full");
     expect(lightboxImage.parentElement?.parentElement).toHaveClass(
-      "absolute",
-      "inset-0",
-      "overflow-auto",
+      "relative",
+      "flex-1",
+      "overflow-hidden",
     );
   });
 
@@ -207,10 +237,10 @@ describe("PublicGalleryGrid", () => {
       const dialog = openLightbox();
 
       // Lightbox GlassIconButtons expose accessible names via their `label`
-      // prop: favorite = "Add to favorites", download = "Download original",
+      // prop: favorite = "Add to favorites", download = "Download WebP",
       // share = "Share photo" (default; flips to "Share link copied" on copy).
       expect(within(dialog).getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: /download original/i })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: /download webp/i })).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: /share photo/i })).toBeInTheDocument();
     });
 
@@ -224,6 +254,7 @@ describe("PublicGalleryGrid", () => {
       );
       const dialog = openLightbox();
 
+      expect(within(dialog).queryByRole("button", { name: /download webp/i })).toBeNull();
       expect(within(dialog).queryByRole("button", { name: /download original/i })).toBeNull();
       // Star + Share still present (those don't depend on download permission).
       expect(within(dialog).getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
@@ -254,6 +285,27 @@ describe("PublicGalleryGrid", () => {
       expect(
         within(dialog).getByRole("button", { name: /add to favorites/i }),
       ).toBeInTheDocument();
+    });
+
+    it("explains when favorites are disabled in owner preview mode", async () => {
+      render(
+        <PublicGalleryGrid
+          slug="wedding-gallery"
+          assets={[galleryAsset()]}
+          favoritesDisabledReason="Favorites are disabled in owner preview and will not affect client counts."
+        />,
+      );
+      const dialog = openLightbox();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: /add to favorites/i }));
+
+      expect(
+        await screen.findByText("Favorites are disabled in owner preview and will not affect client counts."),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: /add to favorites/i }),
+      ).toBeInTheDocument();
+      expect(mockedAdd).not.toHaveBeenCalled();
     });
 
     it("copies the deep-link share URL to clipboard and flips the button to copied state", async () => {

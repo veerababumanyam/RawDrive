@@ -50,6 +50,7 @@ export interface Gallery {
   cover_config?: Record<string, unknown>;
   expires_at?: string;
   download_enabled?: boolean;
+  download_quality?: "original" | "webp" | "both" | string;
   sort_preference?: string;
   whatsapp_template?: string;
   // S4-G3 locked-shell fields. When a private/invite-only gallery is requested

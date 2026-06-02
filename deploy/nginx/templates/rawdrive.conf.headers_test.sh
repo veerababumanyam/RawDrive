@@ -9,10 +9,13 @@
 # responses frameable (clickjacking) and left reflected-XSS / injection /
 # mixed-content unmitigated at the proxy.
 #
-# This test asserts that EVERY TLS-terminating server block (each
-# `listen 443 ssl` block: apex rawdrive.in, api.rawdrive.in, and the
-# wildcard gallery host) declares the full security-header set, including a
-# Content-Security-Policy whose policy contains `frame-ancestors 'none'`.
+# This test asserts that EVERY TLS-terminating server block (each `listen 443
+# ssl` block: apex rawdrive.in, api.rawdrive.in, and the wildcard gallery host)
+# declares the full security-header set, including a Content-Security-Policy
+# whose policy contains `frame-ancestors 'none'`. Frontend blocks intentionally
+# keep nginx CSP narrow because the Next.js app emits the full per-request
+# nonce policy; a broad nginx script-src/style-src policy would intersect with
+# and weaken/break the app-level CSP.
 #
 # Dependency-free: pure awk + grep so ops/CI can run it without nginx
 # installed:

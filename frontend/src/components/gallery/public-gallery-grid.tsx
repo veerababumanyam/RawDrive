@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
-import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest } from "@/lib/media-encryption/asset-media";
+import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest, variantManifest } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { appendGalleryKeyFragment, readGalleryKeyFromHash } from "@/lib/media-encryption/media-crypto";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
@@ -67,6 +67,48 @@ const GUEST_SESSION_STORAGE_KEY = "rawdrive-guest-session-id";
 // the window to include it.
 const INITIAL_GRID_RENDER_COUNT = 60;
 const GRID_RENDER_BATCH = 60;
+const FULLSCREEN_CHROME_IDLE_MS = 2200;
+
+type PublicDownloadFormat = "original" | "webp";
+type PublicDownloadQuality = PublicDownloadFormat | "both";
+
+const DOWNLOAD_FORMATS_BY_QUALITY: Record<PublicDownloadQuality, PublicDownloadFormat[]> = {
+  original: ["original"],
+  webp: ["webp"],
+  both: ["webp", "original"],
+};
+
+function normalizeDownloadQuality(value: string | undefined | null): PublicDownloadQuality {
+  const normalized = String(value || "webp").toLowerCase().trim();
+  if (normalized === "webp" || normalized === "both") return normalized;
+  if (normalized === "original") return "original";
+  return "webp";
+}
+
+function downloadFormatsForQuality(value: string | undefined | null): PublicDownloadFormat[] {
+  return DOWNLOAD_FORMATS_BY_QUALITY[normalizeDownloadQuality(value)];
+}
+
+function publicDownloadLabel(format: PublicDownloadFormat): string {
+  return format === "webp" ? "Download WebP" : "Download original";
+}
+
+function publicDownloadFilename(asset: PublicAsset, format: PublicDownloadFormat): string {
+  if (format === "webp") {
+    return asset.filename.replace(/\.[^.]+$/, ".webp");
+  }
+  return asset.filename;
+}
+
+function encryptedDownloadManifest(asset: PublicAsset, format: PublicDownloadFormat) {
+  if (format === "original") return originalManifest(asset);
+  return (
+    variantManifest(asset, "display_webp") ||
+    variantManifest(asset, "thumb_lg_webp") ||
+    variantManifest(asset, "thumb_md_webp") ||
+    variantManifest(asset, "thumb_sm_webp")
+  );
+}
 
 function PublicAssetTileImage({
   asset,
@@ -112,7 +154,7 @@ function PublicLightboxImage({
     return <p className="text-sm text-white/40">{media.error || "Image unavailable"}</p>;
   }
   return (
-    <div className="relative h-full w-full">
+    <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
       <img
         src={media.src}
         alt={photo.filename}
@@ -193,22 +235,23 @@ function PublicFilmstripThumb({
   );
 }
 
-async function downloadPublicAsset(slug: string, asset: PublicAsset): Promise<void> {
-  const url = `${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`;
+async function downloadPublicAsset(slug: string, asset: PublicAsset, format: PublicDownloadFormat): Promise<void> {
+  const url = new URL(`${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`);
+  url.searchParams.set("format", format);
   if (!assetUsesClientMediaEncryption(asset)) {
-    window.open(url, "_blank");
+    window.open(url.toString(), "_blank");
     return;
   }
 
-  const manifest = originalManifest(asset);
+  const manifest = encryptedDownloadManifest(asset, format);
   if (!manifest) return;
-  const res = await fetch(url);
+  const res = await fetch(url.toString());
   if (!res.ok) return;
   const plaintext = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
   const objectUrl = URL.createObjectURL(plaintext);
   const a = document.createElement("a");
   a.href = objectUrl;
-  a.download = asset.filename;
+  a.download = publicDownloadFilename(asset, format);
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
@@ -409,6 +452,8 @@ interface Props {
   galleryType?: string;
   maxSelections?: number;
   downloadEnabled?: boolean;
+  downloadQuality?: string | null;
+  favoritesDisabledReason?: string;
   // Optional design config from the Gallery Design Studio. Drives the
   // grid layout (masonry vs uniform grid vs justified vs carousel), the
   // column count, the gap between thumbnails, and whether to show the
@@ -577,7 +622,18 @@ function WatermarkOverlay({
   );
 }
 
-export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null, watermark = null, gallerySessionToken = null }: Props) {
+export function PublicGalleryGrid({
+  slug,
+  assets,
+  galleryType,
+  maxSelections = 0,
+  downloadEnabled = true,
+  downloadQuality = "webp",
+  favoritesDisabledReason,
+  design = null,
+  watermark = null,
+  gallerySessionToken = null,
+}: Props) {
   // Memoize the resolved watermark display state. Returns null when
   // disabled / misconfigured so the render path can short-circuit to
   // a plain <img>. Keeping the derivation in one place means the
@@ -611,10 +667,31 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const clearChromeTimer = useCallback(() => {
+    if (chromeTimerRef.current) {
+      clearTimeout(chromeTimerRef.current);
+      chromeTimerRef.current = null;
+    }
+  }, []);
+
+  const revealChrome = useCallback(() => {
+    setChromeVisible(true);
+    clearChromeTimer();
+  }, [clearChromeTimer]);
+
+  const resetChromeTimer = useCallback(() => {
+    setChromeVisible(true);
+    clearChromeTimer();
+    if (isFullscreen) {
+      chromeTimerRef.current = setTimeout(() => setChromeVisible(false), FULLSCREEN_CHROME_IDLE_MS);
+    }
+  }, [clearChromeTimer, isFullscreen]);
+
   // Client-side favorite store + "share link copied" feedback. The
   // feedback flag is local to the lightbox toolbar — flips true for ~1.6s
   // after the share button's clipboard write succeeds, then resets.
   const { favorites, toggle: toggleFavorite } = useGalleryFavorites(slug);
+  const [favoriteNotice, setFavoriteNotice] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
   // Per-tile share-copied feedback. Keyed by asset id so only the tile the
   // user just clicked flashes a success state — not every Share button on
@@ -622,6 +699,19 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
   // tiles each animate independently.
   const [tileShareCopiedId, setTileShareCopiedId] = useState<string | null>(null);
   const [tileMenuOpenId, setTileMenuOpenId] = useState<string | null>(null);
+  const allowedDownloadFormats = useMemo(
+    () => (downloadEnabled ? downloadFormatsForQuality(downloadQuality) : []),
+    [downloadEnabled, downloadQuality],
+  );
+
+  const handleToggleFavorite = useCallback((assetId: string) => {
+    if (favoritesDisabledReason) {
+      setFavoriteNotice(favoritesDisabledReason);
+      return;
+    }
+    setFavoriteNotice("");
+    toggleFavorite(assetId);
+  }, [favoritesDisabledReason, toggleFavorite]);
 
   const toggleFullscreen = useCallback(() => {
     if (!lightboxRef.current) return;
@@ -639,21 +729,15 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
-  // Auto-hide toolbar/filmstrip after 3s idle in fullscreen
-  const resetChromeTimer = useCallback(() => {
-    setChromeVisible(true);
-    if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current);
-    if (isFullscreen) {
-      chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 3000);
-    }
-  }, [isFullscreen]);
-
   useEffect(() => {
-    if (!isFullscreen) { setChromeVisible(true); return; }
-    // Start the hide timer on entering fullscreen
-    chromeTimerRef.current = setTimeout(() => setChromeVisible(false), 3000);
-    return () => { if (chromeTimerRef.current) clearTimeout(chromeTimerRef.current); };
-  }, [isFullscreen]);
+    if (!isFullscreen) {
+      clearChromeTimer();
+      setChromeVisible(true);
+      return;
+    }
+    resetChromeTimer();
+    return clearChromeTimer;
+  }, [clearChromeTimer, isFullscreen, resetChromeTimer]);
 
   // Exit fullscreen when lightbox closes
   useEffect(() => {
@@ -798,21 +882,31 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleAssets]);
 
-  // Helper to change photo and reset zoom in one update
-  const goToPhoto = (idx: number | null) => {
+  // Helper to change photo and reset zoom in one update. Also wakes the
+  // fullscreen chrome briefly so keyboard users get visual feedback without
+  // losing the photo-first idle state.
+  const goToPhoto = useCallback((idx: number | null) => {
     setLightboxIdx(idx);
     setZoom(1);
-  };
+    resetChromeTimer();
+  }, [resetChromeTimer]);
 
   // Keyboard handling for the lightbox
   useEffect(() => {
     if (lightboxIdx === null) return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const currentIdx = lightboxIdx;
+      if (currentIdx === null) return;
+      resetChromeTimer();
       switch (e.key) {
         case "Escape": setLightboxIdx(null); break;
-        case "ArrowLeft": setLightboxIdx((i) => i !== null && i > 0 ? i - 1 : i); break;
-        case "ArrowRight": setLightboxIdx((i) => i !== null && i < visibleAssets.length - 1 ? i + 1 : i); break;
+        case "ArrowLeft": goToPhoto(currentIdx > 0 ? currentIdx - 1 : currentIdx); break;
+        case "PageUp": goToPhoto(currentIdx > 0 ? currentIdx - 1 : currentIdx); break;
+        case "ArrowRight": goToPhoto(currentIdx < visibleAssets.length - 1 ? currentIdx + 1 : currentIdx); break;
+        case "PageDown": goToPhoto(currentIdx < visibleAssets.length - 1 ? currentIdx + 1 : currentIdx); break;
+        case "Home": goToPhoto(0); break;
+        case "End": goToPhoto(visibleAssets.length - 1); break;
         case "+": case "=": setZoom((z) => Math.min(z + 0.25, 3)); break;
         case "-": setZoom((z) => Math.max(z - 0.25, 0.5)); break;
         case "0": setZoom(1); break;
@@ -822,7 +916,19 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [lightboxIdx, visibleAssets.length, toggleFullscreen]);
+  }, [goToPhoto, lightboxIdx, resetChromeTimer, visibleAssets.length, toggleFullscreen]);
+
+  const handleLightboxSurfaceClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (isFullscreen && !chromeVisible) {
+      resetChromeTimer();
+      return;
+    }
+    setLightboxIdx(null);
+  }, [chromeVisible, isFullscreen, resetChromeTimer]);
+
+  const fullscreenChromeClass =
+    isFullscreen && !chromeVisible ? "pointer-events-none opacity-0" : "opacity-100";
 
   if (visibleAssets.length === 0) {
     return (
@@ -836,6 +942,16 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
   return (
     <>
+      {favoriteNotice && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mb-4 rounded-xl border border-feedback-warning/30 bg-feedback-warning/10 px-4 py-3 text-sm text-feedback-warning"
+        >
+          {favoriteNotice}
+        </p>
+      )}
+
       {/* Grid render — single render path. The legacy Grid/Map toggle
           was removed 2026-05-19 (see file header). */}
       <div
@@ -953,7 +1069,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                             aria-checked={favorites.has(asset.id)}
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleFavorite(asset.id);
+                              handleToggleFavorite(asset.id);
                               setTileMenuOpenId(null);
                             }}
                             className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
@@ -986,22 +1102,23 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                             </span>
                           </button>
 
-                          {/* Download — only when studio allows it */}
-                          {downloadEnabled && (
+                          {/* Download — one explicit item per studio-allowed format */}
+                          {allowedDownloadFormats.map((format) => (
                             <button
+                              key={format}
                               type="button"
                               role="menuitem"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void downloadPublicAsset(slug, asset);
+                                void downloadPublicAsset(slug, asset, format);
                                 setTileMenuOpenId(null);
                               }}
                               className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
                             >
                               <Download className="h-4 w-4" />
-                              <span>Download</span>
+                              <span>{publicDownloadLabel(format)}</span>
                             </button>
-                          )}
+                          ))}
                         </div>
                       </>
                     )}
@@ -1168,17 +1285,24 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
         return (
           <div
             ref={lightboxRef}
-            className="fixed inset-0 z-50 bg-black/95"
-            onClick={(e) => { if (e.target === e.currentTarget) setLightboxIdx(null); }}
+            className="fixed inset-0 z-50 flex flex-col bg-black/95"
+            onClick={handleLightboxSurfaceClick}
             onMouseMove={resetChromeTimer}
+            onPointerDown={() => {
+              if (isFullscreen && !chromeVisible) resetChromeTimer();
+            }}
             role="dialog"
             aria-modal="true"
             aria-label={`Photo: ${photo.filename}`}
           >
             {/* Toolbar — auto-hides in fullscreen after 3s idle */}
-            <div className={`absolute left-0 right-0 top-0 z-20 flex items-center justify-between px-4 py-3 transition-opacity duration-300 ${
-              chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-            }`}>
+            <div
+              className={`${isFullscreen ? "absolute left-0 right-0 top-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 items-center justify-between px-4 py-3 transition-opacity duration-300`}
+              onMouseEnter={isFullscreen ? revealChrome : undefined}
+              onMouseLeave={isFullscreen ? resetChromeTimer : undefined}
+              onFocus={isFullscreen ? revealChrome : undefined}
+              onBlur={isFullscreen ? resetChromeTimer : undefined}
+            >
               <span className="text-sm text-white font-medium truncate max-w-[300px]">
                 {photo.filename}
                 {zoom !== 1 && <span className="ml-2 text-white/40 text-xs">{Math.round(zoom * 100)}%</span>}
@@ -1196,21 +1320,22 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                   variant={favorites.has(photo.id) ? "accent" : "glass"}
                   active={favorites.has(photo.id)}
                   label={favorites.has(photo.id) ? "Remove from favorites" : "Add to favorites"}
-                  onClick={() => toggleFavorite(photo.id)}
+                  onClick={() => handleToggleFavorite(photo.id)}
                 >
                   <Star />
                 </GlassIconButton>
-                {downloadEnabled && (
+                {allowedDownloadFormats.map((format) => (
                   <GlassIconButton
+                    key={format}
                     size="sm"
-                    label="Download original"
+                    label={publicDownloadLabel(format)}
                     onClick={() => {
-                      void downloadPublicAsset(slug, photo);
+                      void downloadPublicAsset(slug, photo, format);
                     }}
                   >
                     <Download />
                   </GlassIconButton>
-                )}
+                ))}
                 <GlassIconButton
                   size="sm"
                   variant={shareCopied ? "success" : "glass"}
@@ -1241,15 +1366,15 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
             {/* Image */}
             <div
-              className="absolute inset-0 flex items-center justify-center overflow-auto"
-              onClick={(e) => { if (e.target === e.currentTarget) setLightboxIdx(null); }}
+              className={`${isFullscreen ? "absolute inset-0 p-2" : "relative flex-1 p-4"} flex min-h-0 min-w-0 items-center justify-center overflow-hidden`}
+              onClick={handleLightboxSurfaceClick}
             >
               {lightboxIdx > 0 && (
                 <GlassIconButton
                   size="lg"
                   label="Previous"
-                  className="absolute left-4 z-10"
-                  onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => i !== null && i > 0 ? i - 1 : i); }}
+                  className={`${fullscreenChromeClass} absolute left-4 z-10 transition-opacity duration-300`}
+                  onClick={(e) => { e.stopPropagation(); goToPhoto(lightboxIdx > 0 ? lightboxIdx - 1 : lightboxIdx); }}
                 >
                   <ChevronLeft />
                 </GlassIconButton>
@@ -1266,8 +1391,8 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 <GlassIconButton
                   size="lg"
                   label="Next"
-                  className="absolute right-4 z-10"
-                  onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => i !== null && i < visibleAssets.length - 1 ? i + 1 : i); }}
+                  className={`${fullscreenChromeClass} absolute right-4 z-10 transition-opacity duration-300`}
+                  onClick={(e) => { e.stopPropagation(); goToPhoto(lightboxIdx < visibleAssets.length - 1 ? lightboxIdx + 1 : lightboxIdx); }}
                 >
                   <ChevronRight />
                 </GlassIconButton>
@@ -1276,9 +1401,15 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
             {/* Filmstrip — scrollable thumbnail strip for quick navigation, auto-hides in fullscreen */}
             {visibleAssets.length > 1 && (
-              <div className={`absolute bottom-4 left-0 right-0 z-20 flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300 ${
-                chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`} role="tablist" aria-label="Photo filmstrip">
+              <div
+                className={`${isFullscreen ? "absolute bottom-4 left-0 right-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300`}
+                role="tablist"
+                aria-label="Photo filmstrip"
+                onMouseEnter={isFullscreen ? revealChrome : undefined}
+                onMouseLeave={isFullscreen ? resetChromeTimer : undefined}
+                onFocus={isFullscreen ? revealChrome : undefined}
+                onBlur={isFullscreen ? resetChromeTimer : undefined}
+              >
                 {visibleAssets.map((a, i) => (
                   <PublicFilmstripThumb
                     key={a.id}

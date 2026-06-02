@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createGallery, deleteGallery, galleryPublicUrl, updateGallery, type Gallery } from "@/lib/api/galleries";
@@ -14,6 +14,7 @@ import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/a
 import { appendGalleryKeyFragment } from "@/lib/media-encryption/media-crypto";
 import { galleryKeyId, getStoredExportedMediaKey } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Camera, ClipboardList, Envelope, Grid, ListBullet, Phone, Trash, Share, XMark } from "@/components/icons";
 
@@ -28,22 +29,24 @@ function GalleryCoverPreview({
   token: string | null;
   alt: string;
 }) {
+  const [failedSrc, setFailedSrc] = useState("");
+  const coverAssetId = readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id);
   const fallbackAsset = useMemo<EncryptedAssetLike | null>(() => {
     if (coverAsset) return coverAsset;
     if (!gallery.cover_thumbnails || Object.keys(gallery.cover_thumbnails).length === 0) return null;
     return {
-      id: gallery.cover_asset_id,
+      id: coverAssetId,
       filename: gallery.title,
       thumbnail_urls: gallery.cover_thumbnails,
     };
-  }, [coverAsset, gallery.cover_asset_id, gallery.cover_thumbnails, gallery.title]);
+  }, [coverAsset, coverAssetId, gallery.cover_thumbnails, gallery.title]);
   const media = useDecryptedAssetUrl(fallbackAsset, GRID_VARIANTS, token);
 
   if (media.loading) {
     return <div className="h-full w-full animate-pulse bg-surface-container-high" aria-hidden="true" />;
   }
 
-  if (media.src) {
+  if (media.src && media.src !== failedSrc) {
     return (
       <img
         src={media.src}
@@ -51,6 +54,7 @@ function GalleryCoverPreview({
         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         loading="lazy"
         decoding="async"
+        onError={() => setFailedSrc(media.src)}
       />
     );
   }
@@ -307,7 +311,7 @@ export default function GalleriesPage() {
     return Array.from(
       new Set(
         galleries
-          .map((g) => g.cover_asset_id)
+          .map((g) => readGalleryCoverAssetId(g.settings, g.cover_asset_id))
           .filter((id): id is string => Boolean(id && !coverAssets[id])),
       ),
     );
@@ -405,7 +409,7 @@ export default function GalleriesPage() {
     };
   }, [shareMenuGalleryId]);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     authFetch("/api/v1/galleries")
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
@@ -424,19 +428,19 @@ export default function GalleriesPage() {
       .then(setGalleries)
       .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  const refreshContacts = () => {
+  const refreshContacts = useCallback(() => {
     if (!token) return;
     listContacts(token)
       .then(setContacts)
       .catch(() => setContacts([]));
-  };
+  }, [token]);
 
   useEffect(() => {
     refresh();
     refreshContacts();
-  }, []);
+  }, [refresh, refreshContacts]);
 
   useEffect(() => {
     if (!token) return;
@@ -847,7 +851,8 @@ export default function GalleriesPage() {
           }
         >
           {filteredGalleries.map((g) => {
-            const coverAsset = g.cover_asset_id ? coverAssets[g.cover_asset_id] : undefined;
+            const coverAssetId = readGalleryCoverAssetId(g.settings, g.cover_asset_id);
+            const coverAsset = coverAssetId ? coverAssets[coverAssetId] : undefined;
             const shareUrl = buildGalleryCardShareUrl(g, workspaceProfile);
 
             return (

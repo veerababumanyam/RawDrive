@@ -298,6 +298,8 @@ export default function GalleryPreviewPage({
           galleryType={gallery.gallery_type}
           maxSelections={gallery.max_selections || 0}
           downloadEnabled={gallery.download_enabled !== false}
+          downloadQuality={gallery.download_quality}
+          favoritesDisabledReason="Favorites are disabled in owner preview and will not affect client counts."
           design={designConfig}
           watermark={gallery.watermark_config as Record<string, unknown> | null}
         />

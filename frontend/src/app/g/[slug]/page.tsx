@@ -16,6 +16,8 @@ import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate"
 import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
 import { SharePinGate } from "@/components/gallery/share-pin-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
+import { GalleryExpiryBanner } from "@/components/gallery/gallery-expiry-banner";
+import { galleryAccentCssVars, resolveGalleryAccent } from "@/lib/gallery-accent";
 import { readPublicDesignConfig, readPublicCoverThumbnails } from "@/lib/gallery-design-config";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
@@ -205,8 +207,14 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
     gallery.settings as Record<string, unknown> | undefined,
   );
 
+  // White-label accent: layer the studio / per-gallery brand colour over the
+  // active theme by overriding the accent token custom properties for this
+  // subtree. All `accent-*` token classes (grid selection, buttons, links) and
+  // their color-mix derivations adopt it automatically. Null → theme default.
+  const galleryAccent = resolveGalleryAccent({ design: designConfig, branding });
+
   const galleryContent = (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" style={galleryAccentCssVars(galleryAccent)}>
       <PublicGalleryHero
         gallery={gallery}
         assets={assets}
@@ -215,6 +223,8 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
         designCoverAsset={designCoverAsset}
         designCoverThumbnails={designCoverThumbnails}
       />
+
+      <GalleryExpiryBanner expiresAt={gallery.expires_at} />
 
       <PublicGalleryBanners slug={slug} initialBanners={banners} />
 
@@ -242,6 +252,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
           galleryType={gallery.gallery_type}
           maxSelections={gallery.max_selections || 0}
           downloadEnabled={gallery.download_enabled !== false}
+          downloadQuality={gallery.download_quality}
           design={designConfig}
           watermark={gallery.watermark_config as Record<string, unknown> | null}
           // S4-G1: when a session exists (password- or share-PIN-scoped), pass

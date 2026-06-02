@@ -83,8 +83,7 @@ export function assetIsProcessing(asset: {
   if (!asset) return true;
   if (asset.status && asset.status !== "ready") return true;
   const thumbs = asset.thumbnail_urls;
-  if (!thumbs || Object.keys(thumbs).length === 0) return true;
-  return false;
+  return !hasWebPDisplayVariant(thumbs);
 }
 
 /**
@@ -155,12 +154,11 @@ export function getStorageBackedUrl(
  * Backend `/storage/*` paths must be absolute because images render from the
  * Next.js origin while storage is served by the Go API.
  *
- * Variant preference is WebP-first, then JPG fallback, at the size that
- * matches the canonical render surface (gallery grid tile at ~400px wide on
- * desktop, 1/2/3-column layout). The picker chooses `thumb_md_webp` (600px
- * source) over `thumb_sm_webp` (200px source) because the former scales
- * down cleanly to the tile whereas the latter is upscaled and looks blurry
- * AND triggers an extra render pass once the higher-res variant arrives.
+ * Variant preference is WebP-only at the size that matches the canonical render
+ * surface (gallery grid tile at ~400px wide on desktop, 1/2/3-column layout).
+ * The picker chooses `thumb_md_webp` (600px source) over `thumb_sm_webp`
+ * (200px source) because the former scales down cleanly to the tile whereas the
+ * latter is upscaled and looks blurry.
  *
  * Both `thumb_sm_webp` and `thumb_md_webp` live under the public
  * `thumbnails/` storage prefix (see service.webpStorageKey), so neither
@@ -180,9 +178,35 @@ export function getAssetPreviewUrl(
   const preferred =
     variants.thumb_md_webp ??
     variants.thumb_sm_webp ??
-    variants.thumb_md ??
-    variants.thumb_sm ??
-    variants.thumb_lg;
-  const chosen = preferred ?? Object.values(variants)[0] ?? asset.download_url ?? "";
+    variants.thumb_lg_webp ??
+    variants.display_webp;
+  const chosen = preferred ?? firstWebPVariant(variants) ?? "";
   return getStorageBackedUrl(chosen, token);
+}
+
+function hasWebPDisplayVariant(variants: Record<string, string> | null | undefined): boolean {
+  return Boolean(firstWebPVariant(variants ?? {}));
+}
+
+function firstWebPVariant(variants: Record<string, string>): string {
+  const preferred =
+    variants.thumb_md_webp ??
+    variants.thumb_sm_webp ??
+    variants.thumb_lg_webp ??
+    variants.display_webp;
+  if (preferred) return preferred;
+
+  for (const [variant, value] of Object.entries(variants)) {
+    if (!value) continue;
+    const normalizedVariant = variant.toLowerCase();
+    const normalizedValue = value.toLowerCase().split("?", 1)[0];
+    if (
+      normalizedVariant.includes("webp") ||
+      normalizedValue.endsWith(".webp") ||
+      normalizedValue.endsWith(".webp.enc")
+    ) {
+      return value;
+    }
+  }
+  return "";
 }

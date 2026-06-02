@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { InfoCircle } from "@/components/icons";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 type Density = "dense" | "standard" | "spacious";
 
@@ -167,7 +169,7 @@ interface PhotoCardProps {
 function PhotoCard({
   asset, isSelected, isHovered, onMouseEnter, onMouseLeave, onClick, onSelect, isProofing,
 }: PhotoCardProps) {
-  const thumbnailUrl = asset.thumbnail_urls?.md || asset.thumbnail_urls?.sm || "";
+  const thumbnailUrl = getAssetPreviewUrl(asset);
   const isFavorite = (asset as unknown as Record<string, unknown>).is_favorite === true;
   const isLocked = (asset as unknown as Record<string, unknown>).is_sensitive === true;
 
@@ -192,6 +194,7 @@ function PhotoCard({
           alt={asset.filename || "Photo"}
           className="w-full h-full object-cover"
           loading="lazy"
+          decoding="async"
         />
       )}
 
@@ -225,9 +228,7 @@ function PhotoCard({
             variant="glass"
             onClick={(e: React.MouseEvent) => { e.stopPropagation(); }}
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
-            </svg>
+            <InfoCircle className="w-4 h-4" />
           </GlassIconButton>
         </div>
       )}

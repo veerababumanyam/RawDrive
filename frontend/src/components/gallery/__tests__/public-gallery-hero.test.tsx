@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
+import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 
 const mocks = vi.hoisted(() => ({
   useDecryptedAssetUrl: vi.fn(
@@ -46,6 +47,16 @@ const coverAsset: PublicAsset = {
     display_webp: weddingPhoto,
   },
   sort_order: 1,
+};
+
+const secondaryAsset: PublicAsset = {
+  id: "asset-2",
+  filename: "Wedding (43).jpg",
+  content_type: "image/jpeg",
+  thumbnail_urls: {
+    thumb_lg_webp: "/tests/photos/Wedding (43).jpg",
+  },
+  sort_order: 2,
 };
 
 const branding: GalleryBranding = {
@@ -123,5 +134,69 @@ describe("PublicGalleryHero", () => {
     expect(screen.queryByText("RawDrive")).not.toBeInTheDocument();
     expect(screen.queryByText("Kaveri Stories")).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /logo$/i })).not.toBeInTheDocument();
+  });
+
+  it("honors the expanded cover experience settings on the public hero", () => {
+    const design: PublicDesignConfig = {
+      theme: { variant: "dark", accentColor: "#B7791F" },
+      cover: {
+        assetId: "asset-cover",
+        styleId: "classic-full",
+        layoutPreset: "haldi-warm",
+        mediaMode: "photo-grid",
+        focalPoint: { x: 50, y: 50 },
+        mobileFocalPoint: { x: 40, y: 35 },
+        title: "Asha & Ravi",
+        subtitle: "Haldi to reception",
+        titlePosition: { x: 50, y: 58 },
+        subtitlePosition: { x: 50, y: 68 },
+        scrimStyle: "warm-vignette",
+        textBackdrop: "glass",
+        textShadow: true,
+      },
+      typography: {
+        headingFont: "Lora",
+        bodyFont: "Manrope",
+        titleSize: 54,
+        subtitleSize: 18,
+      },
+      branding: {
+        logoPlacement: "top-right",
+        monogram: "AR",
+        brandColor: "#B7791F",
+        watermarkStyle: "subtle-corner",
+      },
+      sceneHeaders: [
+        { id: "haldi", label: "Haldi", enabled: true, assetId: "asset-2" },
+        { id: "mehendi", label: "Mehendi", enabled: false, assetId: "asset-2" },
+      ],
+      version: 8,
+    };
+
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        design={design}
+      />,
+    );
+
+    expect(screen.getByTestId("gallery-cover-photo-grid")).toBeInTheDocument();
+    expect(screen.getByTestId("gallery-cover-scrim")).toHaveStyle({
+      background:
+        "radial-gradient(circle at 50% 45%, rgba(255, 196, 87, 0.18), rgba(0, 0, 0, 0.58) 72%)",
+    });
+    expect(screen.getByTestId("gallery-cover-title")).toHaveStyle({
+      background: "rgba(255, 255, 255, 0.16)",
+    });
+    expect(screen.getAllByText("AR").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("gallery-scene-headers")).toBeInTheDocument();
+    expect(screen.getByTestId("gallery-scene-header-haldi")).toHaveTextContent("Haldi");
+    expect(screen.getByRole("img", { name: "Haldi scene cover" })).toHaveAttribute(
+      "src",
+      "/tests/photos/Wedding (43).jpg",
+    );
+    expect(screen.queryByText("Mehendi")).not.toBeInTheDocument();
   });
 });

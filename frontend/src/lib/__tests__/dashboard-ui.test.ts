@@ -50,17 +50,13 @@ describe("assetIsProcessing — gallery skeleton predicate", () => {
     ).toBe(true);
   });
 
-  it("ignores extra thumbnail variants — any populated key counts as ready", () => {
-    // Asset rows in this codebase carry 3-key (legacy JPG-only) and 7-key
-    // (post-M41 with WebPs) shapes. The skeleton predicate must accept
-    // both — we don't want to demote legacy rows back to skeleton when
-    // they're displayable, just not the new shape.
+  it("treats legacy JPG-only thumbnails as processing until WebP exists", () => {
     expect(
       assetIsProcessing({
         status: "ready",
         thumbnail_urls: { thumb_md: "thumbnails/abc/thumb_md.jpg" },
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
@@ -126,6 +122,33 @@ describe("dashboard UI asset URLs", () => {
         "jwt-token",
       ),
     ).toContain("thumb_md_webp.webp");
+  });
+
+  it("does not fall back to legacy JPG thumbnails or original download URLs", () => {
+    expect(
+      getAssetPreviewUrl(
+        {
+          thumbnail_urls: {
+            thumb_md: "thumbnails/abc/thumb_md.jpg",
+          },
+          download_url: "originals/abc/photo.jpg",
+        },
+        "jwt-token",
+      ),
+    ).toBe("");
+  });
+
+  it("accepts non-standard WebP keys when the storage value is WebP", () => {
+    expect(
+      getAssetPreviewUrl(
+        {
+          thumbnail_urls: {
+            preview: "thumbnails/abc/custom-preview.webp",
+          },
+        },
+        "jwt-token",
+      ),
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/custom-preview.webp?token=jwt-token");
   });
 });
 

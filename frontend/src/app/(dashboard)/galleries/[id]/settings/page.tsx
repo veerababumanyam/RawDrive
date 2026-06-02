@@ -6,6 +6,87 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { getGallery, updateGallerySettings, type Gallery } from "@/lib/api/galleries";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
+type DownloadQuality = "original" | "webp" | "both";
+
+const DOWNLOAD_QUALITY_OPTIONS: Array<{
+  value: DownloadQuality;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "webp",
+    label: "WebP",
+    description: "Optimized gallery files only.",
+  },
+  {
+    value: "original",
+    label: "Original",
+    description: "Full source files only.",
+  },
+  {
+    value: "both",
+    label: "Both",
+    description: "Clients choose either format.",
+  },
+];
+
+function normalizeDownloadQuality(value: string | undefined | null): DownloadQuality {
+  const normalized = String(value || "webp").toLowerCase().trim();
+  if (normalized === "webp" || normalized === "both") return normalized;
+  if (normalized === "original") return "original";
+  return "webp";
+}
+
+const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function formatExpiryDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function expiryDaysLeft(iso: string): number | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.ceil((d.getTime() - Date.now()) / DAY_MS);
+}
+
+function toDateInputValue(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function presetButtonClass(active: boolean): string {
+  return `min-h-[44px] rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+    active
+      ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+      : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
+  }`;
+}
+
+function galleryHasPassword(gallery: Gallery): boolean {
+  return Boolean(
+    gallery.has_password ||
+      (gallery.settings as Record<string, unknown> | undefined)?.has_password ||
+      (gallery.settings as Record<string, unknown> | undefined)?.password_protected,
+  );
+}
+
+function withPasswordState(gallery: Gallery, hasPassword: boolean): Gallery {
+  return {
+    ...gallery,
+    has_password: hasPassword,
+    settings: {
+      ...(gallery.settings ?? {}),
+      has_password: hasPassword,
+      password_protected: hasPassword,
+    },
+  };
+}
+
 export default function GallerySettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
@@ -62,18 +143,61 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     }
   };
 
-  const handleSetPassword = async () => {
+  const handleDownloadQuality = async (downloadQuality: DownloadQuality) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { password: password || null });
+      const updated = await updateGallerySettings(token, id, { download_quality: downloadQuality });
       setGallery(updated);
+      setSaveMsg("Saved");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save download format");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExpiry = async (expiresAt: string | null) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const updated = await updateGallerySettings(token, id, { expires_at: expiresAt });
+      setGallery(updated);
+      setSaveMsg(expiresAt ? "Access window set" : "Access window cleared");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update access window");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setExpiryInDays = (days: number) => {
+    void handleExpiry(new Date(Date.now() + days * DAY_MS).toISOString());
+  };
+
+  const handleSetPassword = async (overridePassword?: string | null) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+
+    const nextPassword = overridePassword === undefined ? (password || null) : overridePassword;
+    const nextHasPassword = Boolean(nextPassword);
+
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const updated = await updateGallerySettings(token, id, { password: nextPassword });
+      setGallery(withPasswordState(updated, nextHasPassword));
       setPassword("");
       setShowPasswordField(false);
-      setSaveMsg(password ? "Password set" : "Password removed");
+      setSaveMsg(nextHasPassword ? "Password set" : "Password removed");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update password");
@@ -108,6 +232,8 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     );
   }
 
+  const hasGalleryPassword = galleryHasPassword(gallery);
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
       {/* Workspace nav first so the section dropdown is the topmost
@@ -137,7 +263,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       <section className="surface-panel space-y-4 p-5">
         <h2 className="text-lg font-semibold text-text-primary">Downloads</h2>
         <p className="text-sm text-text-secondary">
-          Allow clients to download original resolution photos from this gallery.
+          Choose whether clients can download optimized WebP files, original source files, or both.
         </p>
         <ToggleRow
           label="Enable downloads"
@@ -146,6 +272,102 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
           disabled={saving}
           onChange={(v) => handleToggle("download_enabled", v)}
         />
+        {(gallery.download_enabled ?? true) && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-text-primary">Allowed file format</p>
+            <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Allowed download file format">
+              {DOWNLOAD_QUALITY_OPTIONS.map((option) => {
+                const active = normalizeDownloadQuality(gallery.download_quality) === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={saving}
+                    onClick={() => void handleDownloadQuality(option.value)}
+                    className={`min-h-[44px] rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      active
+                        ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                        : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{option.label}</span>
+                    <span className="block text-xs">{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Access window / expiry */}
+      <section className="surface-panel space-y-4 p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Access window</h2>
+        <p className="text-sm text-text-secondary">
+          Choose when this gallery stops being accessible to clients. After expiry the public
+          link shows a friendly &ldquo;gallery has expired&rdquo; notice and protects your storage.
+        </p>
+        {gallery.expires_at ? (
+          <p className="text-sm text-text-primary">
+            Expires on <span className="font-semibold">{formatExpiryDate(gallery.expires_at)}</span>
+            {(() => {
+              const left = expiryDaysLeft(gallery.expires_at);
+              if (left === null) return null;
+              return (
+                <span className="text-text-secondary">
+                  {" "}
+                  · {left > 0 ? `${left} day${left === 1 ? "" : "s"} left` : "expired"}
+                </span>
+              );
+            })()}
+          </p>
+        ) : (
+          <p className="text-sm text-text-secondary">No expiry — clients keep access indefinitely.</p>
+        )}
+        <div className="grid gap-2 sm:grid-cols-4" role="group" aria-label="Access window presets">
+          <button
+            type="button"
+            disabled={saving}
+            aria-pressed={!gallery.expires_at}
+            onClick={() => void handleExpiry(null)}
+            className={presetButtonClass(!gallery.expires_at)}
+          >
+            No expiry
+          </button>
+          {ACCESS_WINDOW_PRESETS.map((days) => (
+            <button
+              key={days}
+              type="button"
+              disabled={saving}
+              onClick={() => setExpiryInDays(days)}
+              className={presetButtonClass(false)}
+            >
+              {days} days
+            </button>
+          ))}
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="expiry-custom" className="text-sm font-medium text-text-primary">
+            Custom date
+          </label>
+          <input
+            id="expiry-custom"
+            type="date"
+            disabled={saving}
+            value={toDateInputValue(gallery.expires_at)}
+            min={toDateInputValue(new Date().toISOString())}
+            onChange={(e) => {
+              if (!e.target.value) {
+                void handleExpiry(null);
+                return;
+              }
+              // End of the chosen day so the gallery stays live through that date.
+              void handleExpiry(new Date(`${e.target.value}T23:59:59`).toISOString());
+            }}
+            className="min-h-[44px] w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
+          />
+        </div>
       </section>
 
       {/* AI & FaceID */}
@@ -317,7 +539,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         {showPasswordField ? (
           <div className="space-y-3">
             <input
-              type="text"
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter gallery password"
@@ -326,13 +548,15 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
             />
             <div className="flex gap-2">
               <button
-                onClick={handleSetPassword}
-                disabled={saving}
+                type="button"
+                onClick={() => void handleSetPassword()}
+                disabled={saving || (!password && !hasGalleryPassword)}
                 className="btn-primary px-4 py-2 text-sm"
               >
                 {saving ? "Saving..." : password ? "Set Password" : "Remove Password"}
               </button>
               <button
+                type="button"
                 onClick={() => { setShowPasswordField(false); setPassword(""); }}
                 className="btn-tertiary px-4 py-2 text-sm"
               >
@@ -341,14 +565,37 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => setShowPasswordField(true)}
-            className="btn-tertiary px-4 py-2.5 text-sm"
-          >
-            {gallery.settings && (gallery.settings as Record<string, unknown>).password_protected
-              ? "Change / Remove Password"
-              : "Set Password"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {hasGalleryPassword ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleSetPassword(null)}
+                  disabled={saving}
+                  className="btn-tertiary px-4 py-2.5 text-sm"
+                >
+                  Remove Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordField(true)}
+                  disabled={saving}
+                  className="btn-tertiary px-4 py-2.5 text-sm"
+                >
+                  Change Password
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowPasswordField(true)}
+                disabled={saving}
+                className="btn-tertiary px-4 py-2.5 text-sm"
+              >
+                Set Password
+              </button>
+            )}
+          </div>
         )}
       </section>
     </div>

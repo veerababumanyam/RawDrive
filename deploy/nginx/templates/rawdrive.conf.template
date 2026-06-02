@@ -61,12 +61,10 @@ server {
     ssl_session_timeout 1d;
     ssl_session_tickets off;
 
-    # Security headers (F-078). Kept identical across the apex/api/gallery
-    # server blocks below to prevent drift; the apex additionally carries
-    # `preload` on HSTS plus the COOP/COEP pair. CSP is intentionally
-    # frame-ancestors 'none' + default-src 'self' with the relaxations the
-    # Next.js app needs (inline/eval for the bundler runtime, data:/blob:
-    # images for WebP previews, ws/wss for HMR-style live updates).
+    # Security headers (F-078). Kept aligned across apex/api/gallery blocks to
+    # prevent drift; the apex additionally carries `preload` on HSTS plus the
+    # COOP/COEP pair. The Next.js app emits the full per-request nonce CSP, so
+    # nginx only adds non-conflicting document protections here.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -74,7 +72,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Cross-Origin-Opener-Policy "unsafe-none" always;
     add_header Cross-Origin-Embedder-Policy "unsafe-none" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" always;
+    add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 
     # www → apex redirect
     if ($host = www.rawdrive.in) {
@@ -226,13 +224,14 @@ server {
     # Security headers (F-078). Mirrors the apex set so gallery subdomains
     # can't drift. No HSTS `preload` here — preload is only valid on the
     # apex; subdomains inherit HSTS from the apex includeSubDomains anyway.
-    # CSP matches the apex because this block also serves the Next.js app.
+    # The Next.js app emits the full per-request nonce CSP, so nginx only adds
+    # non-conflicting document protections here.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" always;
+    add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 
     # API calls from the subdomain origin still hit the backend
     location /api/ {

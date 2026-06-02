@@ -1,6 +1,7 @@
 "use client";
 
 import type { SearchResult } from "@/lib/api/ai";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 interface AISearchResultsProps {
   results: SearchResult[];
@@ -25,10 +26,11 @@ export function AISearchResults({ results, loading }: AISearchResultsProps) {
       {results.map((result) => (
         <div key={result.asset_id} className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken group relative">
           <img
-            src={result.thumbnail_urls?.md || result.thumbnail_urls?.sm || ""}
+            src={getAssetPreviewUrl(result)}
             alt={result.ai_caption || result.filename}
             className="w-full"
             loading="lazy"
+            decoding="async"
           />
           <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
             <div className="flex items-center justify-between">

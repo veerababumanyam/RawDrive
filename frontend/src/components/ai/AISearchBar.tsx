@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { searchAssets, type SearchResult } from "@/lib/api/ai";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 interface AISearchBarProps {
   token: string;
@@ -72,10 +73,11 @@ export function AISearchBar({ token, galleryId, onResults }: AISearchBarProps) {
           {results.map((result) => (
             <div key={result.asset_id} className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken group relative">
               <img
-                src={result.thumbnail_urls?.md || result.thumbnail_urls?.sm || ""}
+                src={getAssetPreviewUrl(result, token)}
                 alt={result.ai_caption || result.filename}
                 className="w-full"
                 loading="lazy"
+                decoding="async"
               />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="text-white text-xs font-medium">{Math.round(result.similarity * 100)}% match</span>

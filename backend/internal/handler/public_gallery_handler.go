@@ -1811,9 +1811,10 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 // ──────────────────────────────────────────────────────────────────────────────
 
 // PublicAssetDownload handles GET /api/v1/public/galleries/{slug}/assets/{assetId}/download.
-// Streams the original file from the object store (Backblaze B2 by default)
-// for published galleries that have downloads enabled. No JWT required —
-// this is a public endpoint.
+// Streams a photographer-allowed download variant from the object store
+// (Backblaze B2 by default) for published galleries that have downloads
+// enabled. No JWT required — gallery/session access is enforced before bytes
+// are returned.
 func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -1877,7 +1878,12 @@ func (h *PublicGalleryHandler) PublicAssetDownload(w http.ResponseWriter, r *htt
 		return
 	}
 
-	variant, err := publicDownloadVariant(asset.Asset, r.URL.Query().Get("format"))
+	requestedFormat, err := publicDownloadFormatForPolicy(r.URL.Query().Get("format"), gallery.DownloadQuality)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusForbidden)
+		return
+	}
+	variant, err := publicDownloadVariant(asset.Asset, requestedFormat)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
 		return
@@ -1968,28 +1974,54 @@ func publicDownloadVariant(asset *repository.Asset, requestedFormat string) (*pu
 			Format:      "webp",
 		}, nil
 	case "thumbnail":
-		key := firstThumbnailKey(asset.ThumbnailURLs, "thumb_lg_webp", "thumb_lg", "lg", "thumb_md_webp", "thumb_md")
+		key := firstThumbnailKey(asset.ThumbnailURLs, "thumb_lg_webp", "thumb_md_webp", "thumb_sm_webp")
 		if key == "" {
 			return nil, fmt.Errorf("thumbnail not available")
 		}
-		contentType := "image/webp"
-		ext := ".webp"
-		if !strings.HasSuffix(strings.ToLower(key), ".webp") {
-			contentType = asset.ContentType
-			ext = filepath.Ext(asset.Filename)
-			if ext == "" {
-				ext = ".jpg"
-			}
-		}
 		return &publicDownloadSelection{
 			StorageKey:  key,
-			Filename:    "thumb_" + replaceExt(asset.Filename, ext),
-			ContentType: contentType,
+			Filename:    "thumb_" + replaceExt(asset.Filename, ".webp"),
+			ContentType: "image/webp",
 			Format:      "thumbnail",
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported download format")
 	}
+}
+
+func publicDownloadFormatForPolicy(requestedFormat, policy string) (string, error) {
+	format := strings.ToLower(strings.TrimSpace(requestedFormat))
+	normalizedPolicy := strings.ToLower(strings.TrimSpace(policy))
+	if normalizedPolicy == "" {
+		normalizedPolicy = "webp"
+	}
+	if format == "" {
+		switch normalizedPolicy {
+		case "webp":
+			format = "webp"
+		default:
+			format = "original"
+		}
+	}
+	switch normalizedPolicy {
+	case "original":
+		if format == "original" {
+			return format, nil
+		}
+	case "webp":
+		if format == "webp" || format == "thumbnail" {
+			return format, nil
+		}
+	case "both":
+		if format == "original" || format == "webp" || format == "thumbnail" {
+			return format, nil
+		}
+	default:
+		if format == "original" {
+			return format, nil
+		}
+	}
+	return "", fmt.Errorf("download format not allowed for this gallery")
 }
 
 func firstThumbnailKey(thumbnails map[string]string, keys ...string) string {

@@ -21,13 +21,51 @@ import { useEffect, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Download, Share, XCircle, ZoomIn, ZoomOut } from "@/components/icons";
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
-import { LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest } from "@/lib/media-encryption/asset-media";
+import { LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest, variantManifest } from "@/lib/media-encryption/asset-media";
 import { appendGalleryKeyFragment, readGalleryKeyFromHash } from "@/lib/media-encryption/media-crypto";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { WatermarkOverlay } from "./watermark-overlay";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+type PublicDownloadFormat = "original" | "webp";
+type PublicDownloadQuality = PublicDownloadFormat | "both";
+
+const DOWNLOAD_FORMATS_BY_QUALITY: Record<PublicDownloadQuality, PublicDownloadFormat[]> = {
+  original: ["original"],
+  webp: ["webp"],
+  both: ["webp", "original"],
+};
+
+function normalizeDownloadQuality(value: string | undefined | null): PublicDownloadQuality {
+  const normalized = String(value || "webp").toLowerCase().trim();
+  if (normalized === "webp" || normalized === "both") return normalized;
+  if (normalized === "original") return "original";
+  return "webp";
+}
+
+function downloadFormatsForQuality(value: string | undefined | null): PublicDownloadFormat[] {
+  return DOWNLOAD_FORMATS_BY_QUALITY[normalizeDownloadQuality(value)];
+}
+
+function publicDownloadLabel(format: PublicDownloadFormat): string {
+  return format === "webp" ? "Download WebP" : "Download original";
+}
+
+function publicDownloadFilename(photo: PublicAsset, format: PublicDownloadFormat): string {
+  return format === "webp" ? photo.filename.replace(/\.[^.]+$/, ".webp") : photo.filename;
+}
+
+function encryptedDownloadManifest(photo: PublicAsset, format: PublicDownloadFormat) {
+  if (format === "original") return originalManifest(photo);
+  return (
+    variantManifest(photo, "display_webp") ||
+    variantManifest(photo, "thumb_lg_webp") ||
+    variantManifest(photo, "thumb_md_webp") ||
+    variantManifest(photo, "thumb_sm_webp")
+  );
+}
 
 interface Props {
   slug: string;
@@ -59,6 +97,7 @@ export function SinglePhotoView({ slug, photo, gallery, branding, gallerySession
 
   const brandName = branding?.can_customize ? branding.brand_name : null;
   const downloadEnabled = gallery.download_enabled !== false;
+  const allowedDownloadFormats = downloadEnabled ? downloadFormatsForQuality(gallery.download_quality) : [];
   const wm = gallery.watermark_config as Record<string, unknown> | undefined;
   const watermarkConfig = wm && wm.enabled === true ? wm : undefined;
 
@@ -68,21 +107,22 @@ export function SinglePhotoView({ slug, photo, gallery, branding, gallerySession
   const currentKey = typeof window !== "undefined" ? readGalleryKeyFromHash(window.location.hash) : null;
   const shareUrl = currentKey ? appendGalleryKeyFragment(plainShareUrl, currentKey) : plainShareUrl;
 
-  async function handleDownload() {
-    const url = `${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`;
+  async function handleDownload(format: PublicDownloadFormat) {
+    const url = new URL(`${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`);
+    url.searchParams.set("format", format);
     if (!assetUsesClientMediaEncryption(photo)) {
-      window.open(url, "_self");
+      window.open(url.toString(), "_self");
       return;
     }
-    const manifest = originalManifest(photo);
+    const manifest = encryptedDownloadManifest(photo, format);
     if (!manifest) return;
-    const res = await fetch(url);
+    const res = await fetch(url.toString());
     if (!res.ok) return;
     const plaintext = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
     const objectUrl = URL.createObjectURL(plaintext);
     const a = document.createElement("a");
     a.href = objectUrl;
-    a.download = photo.filename;
+    a.download = publicDownloadFilename(photo, format);
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
@@ -165,17 +205,18 @@ export function SinglePhotoView({ slug, photo, gallery, branding, gallerySession
             <ZoomIn />
           </GlassIconButton>
           <div className="w-px h-6 bg-border-subtle mx-1" />
-          {downloadEnabled && (
+          {allowedDownloadFormats.map((format) => (
             <GlassIconButton
+              key={format}
               size="sm"
-              label="Download"
+              label={publicDownloadLabel(format)}
               onClick={() => {
-                void handleDownload();
+                void handleDownload(format);
               }}
             >
               <Download />
             </GlassIconButton>
-          )}
+          ))}
           <GlassIconButton
             size="sm"
             variant={shareCopied ? "success" : "glass"}

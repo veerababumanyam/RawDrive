@@ -20,7 +20,7 @@
  * pass a single-item array.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import type { Asset } from "@/lib/api/assets";
 import type { Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -50,7 +50,8 @@ interface PhotoLightboxProps {
   hasNext: boolean;
   isProofing?: boolean;
   onProofingAction?: (assetId: string, action: "select" | "approve" | "reject") => void;
-  onComment?: (assetId: string, comment: string) => void;
+  comments?: LightboxComment[];
+  onComment?: (assetId: string, comment: string) => Promise<LightboxComment | void> | LightboxComment | void;
   // M13 deferred-FR additions — all optional so existing callers still work.
   allAssets?: Asset[];     // powers filmstrip and compare mode (GAL-FR-093, 092)
   gallery?: Gallery;       // powers watermark overlay (GAL-FR-088)
@@ -59,6 +60,16 @@ interface PhotoLightboxProps {
   /** Jump to a specific asset by ID — enables random-access filmstrip nav.
    *  When omitted, the filmstrip only supports ±1 navigation via onPrev/onNext. */
   onJumpTo?: (assetId: string) => void;
+}
+
+const FULLSCREEN_CHROME_IDLE_MS = 2200;
+
+export interface LightboxComment {
+  id: string;
+  asset_id?: string;
+  author_name: string;
+  body: string;
+  created_at: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -138,18 +149,23 @@ function BurstSiblingThumb({
 
 export function PhotoLightbox({
   asset, onClose, onPrev, onNext, hasPrev, hasNext,
-  isProofing = false, onProofingAction, onComment,
+  isProofing = false, onProofingAction, comments = [], onComment,
   allAssets, gallery, showFilmstrip, onDeleteRequest, onJumpTo,
 }: PhotoLightboxProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [optimisticComments, setOptimisticComments] = useState<LightboxComment[]>([]);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentError, setCommentError] = useState("");
   const [zoom, setZoom] = useState(1);
   const [showFaces, setShowFaces] = useState(false);              // GAL-FR-089
   const [compareMode, setCompareMode] = useState(false);          // GAL-FR-092
   const [burstExpanded, setBurstExpanded] = useState(false);      // GAL-FR-094
+  const [chromeVisible, setChromeVisible] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // GAL-FR-091: save scroll position on mount, restore on unmount.
   const { save: saveScroll, restore: restoreScroll } = useScrollRestore();
@@ -197,8 +213,41 @@ export function PhotoLightbox({
     else document.exitFullscreen?.();
   }, []);
 
+  const clearChromeTimer = useCallback(() => {
+    if (chromeTimerRef.current) {
+      clearTimeout(chromeTimerRef.current);
+      chromeTimerRef.current = null;
+    }
+  }, []);
+
+  const revealChrome = useCallback(() => {
+    setChromeVisible(true);
+    clearChromeTimer();
+  }, [clearChromeTimer]);
+
+  const resetChromeTimer = useCallback(() => {
+    setChromeVisible(true);
+    clearChromeTimer();
+    if (isFullscreen) {
+      chromeTimerRef.current = setTimeout(() => setChromeVisible(false), FULLSCREEN_CHROME_IDLE_MS);
+    }
+  }, [clearChromeTimer, isFullscreen]);
+
+  const lightboxPointerHandlers = useMemo(() => ({
+    ...touchHandlers,
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      touchHandlers.onPointerDown(e);
+      if (isFullscreen && !chromeVisible) resetChromeTimer();
+    },
+    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      touchHandlers.onPointerMove(e);
+      if (isFullscreen) resetChromeTimer();
+    },
+  }), [chromeVisible, isFullscreen, resetChromeTimer, touchHandlers]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+    resetChromeTimer();
     switch (e.key) {
       case "Escape":
         if (compareMode) setCompareMode(false);
@@ -206,7 +255,15 @@ export function PhotoLightbox({
         else onClose();
         break;
       case "ArrowLeft": if (hasPrev && onPrev) onPrev(); break;
+      case "PageUp": if (hasPrev && onPrev) onPrev(); break;
       case "ArrowRight": if (hasNext && onNext) onNext(); break;
+      case "PageDown": if (hasNext && onNext) onNext(); break;
+      case "Home":
+        if (allAssets?.[0] && onJumpTo) onJumpTo(allAssets[0].id);
+        break;
+      case "End":
+        if (allAssets?.length && onJumpTo) onJumpTo(allAssets[allAssets.length - 1].id);
+        break;
       case "f": case "F": toggleFullscreen(); break;
       case "i": case "I": setShowInfo(s => !s); break;
       case "c": case "C": setShowComments(s => !s); break;
@@ -218,7 +275,7 @@ export function PhotoLightbox({
       case "2": if (isProofing) onProofingAction?.(asset.id, "approve"); break;
       case "3": if (isProofing) onProofingAction?.(asset.id, "reject"); break;
     }
-  }, [onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, compareMode, isProofing, asset.id, onProofingAction, toggleFullscreen]);
+  }, [allAssets, onJumpTo, onClose, onPrev, onNext, hasPrev, hasNext, isFullscreen, compareMode, isProofing, asset.id, onProofingAction, resetChromeTimer, toggleFullscreen]);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -226,13 +283,28 @@ export function PhotoLightbox({
     return () => { document.removeEventListener("keydown", handleKeyDown); document.body.style.overflow = ""; };
   }, [handleKeyDown]);
 
-  useEffect(() => { setZoom(1); setBurstExpanded(false); }, [asset.id]);
+  useEffect(() => {
+    setZoom(1);
+    setBurstExpanded(false);
+    setOptimisticComments([]);
+    setCommentError("");
+  }, [asset.id]);
 
   useEffect(() => {
     const h = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", h);
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      clearChromeTimer();
+      setChromeVisible(true);
+      return;
+    }
+    resetChromeTimer();
+    return clearChromeTimer;
+  }, [clearChromeTimer, isFullscreen, resetChromeTimer]);
 
   const handleDownloadFormat = async (format: "original" | "webp" | "thumbnail") => {
     let url: string; let filename: string; let variant = "original";
@@ -267,8 +339,30 @@ export function PhotoLightbox({
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   };
 
-  const handleSubmitComment = () => {
-    if (commentText.trim() && onComment) { onComment(asset.id, commentText.trim()); setCommentText(""); }
+  const handleSubmitComment = async () => {
+    const body = commentText.trim();
+    if (!body || !onComment || commentSubmitting) return;
+
+    setCommentSubmitting(true);
+    setCommentError("");
+    try {
+      const created = await onComment(asset.id, body);
+      const comment: LightboxComment = created ?? {
+        id: `local-${asset.id}-${Date.now()}`,
+        asset_id: asset.id,
+        author_name: "Studio",
+        body,
+        created_at: new Date().toISOString(),
+      };
+      setOptimisticComments((current) =>
+        current.some((item) => item.id === comment.id) ? current : [...current, comment],
+      );
+      setCommentText("");
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : "Failed to post comment.");
+    } finally {
+      setCommentSubmitting(false);
+    }
   };
 
   const handleDeleteRequest = () => {
@@ -282,22 +376,48 @@ export function PhotoLightbox({
   const token = getStoredAccessToken();
   const media = useDecryptedAssetUrl(asset, LIGHTBOX_VARIANTS, token);
   const exif = asset.exif_data || {};
+  const displayedComments = useMemo(() => {
+    const byId = new Map<string, LightboxComment>();
+    for (const comment of comments) byId.set(comment.id, comment);
+    for (const comment of optimisticComments) byId.set(comment.id, comment);
+    return Array.from(byId.values()).sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+  }, [comments, optimisticComments]);
 
   const filmstripVisible = (showFilmstrip ?? !!allAssets) && !compareMode && !!allAssets && allAssets.length > 1;
+  const fullscreenChromeClass =
+    isFullscreen && !chromeVisible ? "pointer-events-none opacity-0" : "opacity-100";
+
+  const handleLightboxSurfaceClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (isFullscreen && !chromeVisible) {
+      resetChromeTimer();
+      return;
+    }
+    onClose();
+  }, [chromeVisible, isFullscreen, onClose, resetChromeTimer]);
 
   return (
     <div
       ref={containerRef}
       className="fixed inset-0 z-50 flex flex-col bg-black/95"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={handleLightboxSurfaceClick}
+      onMouseMove={resetChromeTimer}
       role="dialog"
       aria-modal="true"
       aria-label={`Photo: ${asset.filename}`}
-      {...touchHandlers}
+      {...lightboxPointerHandlers}
     >
 
       {/* ─── Top Toolbar ─── */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+      <div
+        className={`${isFullscreen ? "absolute left-0 right-0 top-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 items-center justify-between px-4 py-3 transition-opacity duration-300`}
+        onMouseEnter={isFullscreen ? revealChrome : undefined}
+        onMouseLeave={isFullscreen ? resetChromeTimer : undefined}
+        onFocus={isFullscreen ? revealChrome : undefined}
+        onBlur={isFullscreen ? resetChromeTimer : undefined}
+      >
         <div className="flex min-w-0 items-center gap-3 text-white text-sm">
           {/* Tighter filename clamp on mobile so the Close button on the
               right stays inside the viewport. The default 200px ate
@@ -371,9 +491,12 @@ export function PhotoLightbox({
       </div>
 
       {/* ─── Main Content ─── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className={`${isFullscreen ? "relative flex-1" : "flex min-h-0 flex-1"} overflow-hidden`}>
         {/* Image/video area */}
-        <div className="relative flex flex-1 items-center justify-center overflow-auto">
+        <div
+          className={`${isFullscreen ? "absolute inset-0 p-2" : "relative flex-1 p-4"} flex min-h-0 min-w-0 items-center justify-center overflow-hidden`}
+          onClick={handleLightboxSurfaceClick}
+        >
           {compareMode && compareRight ? (
             // GAL-FR-092: compare mode takes over the main area.
             <CompareMode left={asset} right={compareRight} onExit={() => setCompareMode(false)} />
@@ -383,7 +506,7 @@ export function PhotoLightbox({
                 <GlassIconButton
                   size="lg"
                   label="Previous (Left arrow)"
-                  className="absolute left-4 z-10"
+                  className={`${fullscreenChromeClass} absolute left-4 z-10 transition-opacity duration-300`}
                   onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
                 >
                   <ChevronLeft />
@@ -394,26 +517,26 @@ export function PhotoLightbox({
                 // GAL-FR-095: video playback with poster, controls, trim.
                 <VideoPlayer
                   src={authedStorageUrl(asset.download_url || (asset.storage_key ? `/storage/${asset.storage_key}` : ""), token)}
-                  poster={authedStorageUrl(asset.poster_url || asset.thumbnail_urls?.lg, token)}
+                  poster={authedStorageUrl(asset.poster_url || asset.thumbnail_urls?.thumb_lg_webp || asset.thumbnail_urls?.thumb_md_webp || asset.thumbnail_urls?.thumb_sm_webp, token)}
                   showTrim={isProofing}
-                  className="flex max-h-full max-w-full items-center justify-center p-4"
+                  className="flex h-full w-full items-center justify-center"
                 />
               ) : (
-                <div className="relative">
+                <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
                   {media.loading ? (
-                    <div className="flex min-h-[50vh] min-w-[50vw] items-center justify-center p-4 text-sm text-white/60">
+                    <div className="flex h-full w-full items-center justify-center text-sm text-white/60">
                       Decrypting photo...
                     </div>
                   ) : media.src ? (
                     <img
                       src={media.src}
                       alt={asset.filename}
-                      className="max-h-full max-w-full object-contain p-4 transition-transform duration-200"
+                      className="h-full w-full object-contain transition-transform duration-200"
                       style={{ transform: `scale(${zoom})` }}
                       draggable={false}
                     />
                   ) : (
-                    <div className="flex min-h-[50vh] min-w-[50vw] items-center justify-center p-4 text-sm text-white/60">
+                    <div className="flex h-full w-full items-center justify-center text-sm text-white/60">
                       {media.error || "Preview unavailable"}
                     </div>
                   )}
@@ -428,7 +551,7 @@ export function PhotoLightbox({
                 <GlassIconButton
                   size="lg"
                   label="Next (Right arrow)"
-                  className="absolute right-4 z-10"
+                  className={`${fullscreenChromeClass} absolute right-4 z-10 transition-opacity duration-300`}
                   onClick={(e) => { e.stopPropagation(); onNext?.(); }}
                 >
                   <ChevronRight />
@@ -442,10 +565,29 @@ export function PhotoLightbox({
         {showComments && (
           <div className="w-80 shrink-0 border-l border-white/10 bg-black/60 backdrop-blur-xl flex flex-col">
             <div className="p-4 border-b border-white/10"><h3 className="text-sm font-semibold text-white">Comments</h3></div>
-            <div className="flex-1 overflow-y-auto p-4"><p className="text-sm text-white/30 text-center py-8">No comments yet</p></div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {displayedComments.length === 0 ? (
+                <p className="text-sm text-white/30 text-center py-8">No comments yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {displayedComments.map((comment) => (
+                    <article key={comment.id} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs font-semibold text-white/80">{comment.author_name || "Studio"}</p>
+                        <time className="shrink-0 text-[10px] text-white/35" dateTime={comment.created_at}>
+                          {new Date(comment.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        </time>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-white/70">{comment.body}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="p-4 border-t border-white/10">
-              <textarea value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmitComment(); } }} placeholder="Add a comment..." className="w-full resize-none rounded-xl border border-white/15 bg-white/5 backdrop-blur-sm px-3 py-2 text-sm text-white placeholder-white/25 focus:border-white/30 focus:outline-none" rows={2} />
-              <button onClick={handleSubmitComment} disabled={!commentText.trim()} className="mt-2 w-full rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 py-2 text-sm font-medium text-white hover:bg-white/18 disabled:opacity-30 transition-all">Post</button>
+              {commentError && <p role="alert" className="mb-2 text-xs text-feedback-error">{commentError}</p>}
+              <textarea value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSubmitComment(); } }} placeholder="Add a comment..." className="w-full resize-none rounded-xl border border-white/15 bg-white/5 backdrop-blur-sm px-3 py-2 text-sm text-white placeholder-white/25 focus:border-white/30 focus:outline-none" rows={2} />
+              <button onClick={() => void handleSubmitComment()} disabled={!commentText.trim() || commentSubmitting} className="mt-2 w-full rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 py-2 text-sm font-medium text-white hover:bg-white/18 disabled:opacity-30 transition-all">{commentSubmitting ? "Posting..." : "Post"}</button>
             </div>
           </div>
         )}
@@ -478,31 +620,40 @@ export function PhotoLightbox({
 
       {/* ─── Filmstrip (GAL-FR-093) ─── */}
       {filmstripVisible && allAssets && (
-        <Filmstrip
-          assets={allAssets}
-          activeId={asset.id}
-          onSelect={(id) => {
-            if (id === asset.id) return;
-            // Prefer random-access jump when the caller supports it. Fall
-            // back to ±1 navigation only — a non-adjacent click with no
-            // onJumpTo is silently ignored and we log a warning so the
-            // caller notices they forgot to wire it.
-            if (onJumpTo) {
-              onJumpTo(id);
-              return;
-            }
-            const idx = allAssets.findIndex((a) => a.id === asset.id);
-            const targetIdx = allAssets.findIndex((a) => a.id === id);
-            if (idx < 0 || targetIdx < 0) return;
-            if (targetIdx === idx + 1) onNext?.();
-            else if (targetIdx === idx - 1) onPrev?.();
-            else {
-              console.warn(
-                "[PhotoLightbox] filmstrip jump ignored — caller did not pass onJumpTo",
-              );
-            }
-          }}
-        />
+        <div
+          className={`${isFullscreen ? "absolute bottom-4 left-0 right-0" : "shrink-0"} ${fullscreenChromeClass} z-20 transition-opacity duration-300`}
+          onMouseEnter={isFullscreen ? revealChrome : undefined}
+          onMouseLeave={isFullscreen ? resetChromeTimer : undefined}
+          onFocus={isFullscreen ? revealChrome : undefined}
+          onBlur={isFullscreen ? resetChromeTimer : undefined}
+        >
+          <Filmstrip
+            assets={allAssets}
+            activeId={asset.id}
+            onSelect={(id) => {
+              if (id === asset.id) return;
+              resetChromeTimer();
+              // Prefer random-access jump when the caller supports it. Fall
+              // back to ±1 navigation only — a non-adjacent click with no
+              // onJumpTo is silently ignored and we log a warning so the
+              // caller notices they forgot to wire it.
+              if (onJumpTo) {
+                onJumpTo(id);
+                return;
+              }
+              const idx = allAssets.findIndex((a) => a.id === asset.id);
+              const targetIdx = allAssets.findIndex((a) => a.id === id);
+              if (idx < 0 || targetIdx < 0) return;
+              if (targetIdx === idx + 1) onNext?.();
+              else if (targetIdx === idx - 1) onPrev?.();
+              else {
+                console.warn(
+                  "[PhotoLightbox] filmstrip jump ignored — caller did not pass onJumpTo",
+                );
+              }
+            }}
+          />
+        </div>
       )}
 
       {(isProofing || showInfo) && (

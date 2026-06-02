@@ -18,6 +18,7 @@ import { getAsset, type Asset } from "@/lib/api/assets";
 import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
 import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { cn } from "@/lib/utils";
 
 type GalleryCard = {
@@ -69,22 +70,24 @@ function DashboardGalleryCover({
   coverAsset?: Asset;
   token: string | null;
 }) {
+  const [failedSrc, setFailedSrc] = useState("");
+  const coverAssetId = readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id);
   const fallbackAsset = useMemo<EncryptedAssetLike | null>(() => {
     if (coverAsset) return coverAsset;
     if (!gallery.cover_thumbnails || Object.keys(gallery.cover_thumbnails).length === 0) return null;
     return {
-      id: gallery.cover_asset_id,
+      id: coverAssetId,
       filename: gallery.title,
       thumbnail_urls: gallery.cover_thumbnails,
     };
-  }, [coverAsset, gallery.cover_asset_id, gallery.cover_thumbnails, gallery.title]);
+  }, [coverAsset, coverAssetId, gallery.cover_thumbnails, gallery.title]);
   const media = useDecryptedAssetUrl(fallbackAsset, GRID_VARIANTS, token);
 
   if (media.loading) {
     return <div className="absolute inset-0 animate-pulse bg-surface-container-high" aria-hidden="true" />;
   }
 
-  if (media.src) {
+  if (media.src && media.src !== failedSrc) {
     return (
       <img
         src={media.src}
@@ -92,6 +95,7 @@ function DashboardGalleryCover({
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         loading="lazy"
         decoding="async"
+        onError={() => setFailedSrc(media.src)}
       />
     );
   }
@@ -122,7 +126,7 @@ export default function DashboardPage() {
       new Set(
         galleries
           .slice(0, 4)
-          .map((gallery) => gallery.cover_asset_id)
+          .map((gallery) => readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id))
           .filter((id): id is string => Boolean(id && !coverAssets[id])),
       ),
     );
@@ -253,7 +257,7 @@ export default function DashboardPage() {
         icon: Wallet,
       },
     ],
-    [galleries.length, storageUsed, storageMeta, storagePercent],
+    [galleries.length, storageUsed, storageMeta],
   );
 
   return (
@@ -351,18 +355,20 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
-              {cards.map((card) => (
-                <Link
-                  key={card.id}
-                  href={card.id.startsWith("/") ? card.id : `/galleries/${card.id}`}
-                  className="surface-panel group overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
-                >
-                  <div className="relative h-48 overflow-hidden bg-surface-container-high">
-                    <DashboardGalleryCover
-                      gallery={card.gallery}
-                      coverAsset={card.gallery.cover_asset_id ? coverAssets[card.gallery.cover_asset_id] : undefined}
-                      token={token}
-                    />
+              {cards.map((card) => {
+                const coverAssetId = readGalleryCoverAssetId(card.gallery.settings, card.gallery.cover_asset_id);
+                return (
+                  <Link
+                    key={card.id}
+                    href={card.id.startsWith("/") ? card.id : `/galleries/${card.id}`}
+                    className="surface-panel group overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
+                  >
+                    <div className="relative h-48 overflow-hidden bg-surface-container-high">
+                      <DashboardGalleryCover
+                        gallery={card.gallery}
+                        coverAsset={coverAssetId ? coverAssets[coverAssetId] : undefined}
+                        token={token}
+                      />
                     <div
                       className="absolute inset-0"
                       style={{ background: "linear-gradient(to top, var(--surface-scrim), transparent)" }}
@@ -397,9 +403,10 @@ export default function DashboardPage() {
                       </div>
                       <span className="text-xs text-text-secondary">{card.client}</span>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>

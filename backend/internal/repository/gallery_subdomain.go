@@ -11,7 +11,7 @@ import (
 // workspace's business_unique_code. This is the lookup path used by the
 // per-business subdomain feature (migration 121):
 //
-//   <business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
+//	<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
 //
 // The nginx wildcard server block forwards `<biz>-<code>` as the Host header;
 // the public gallery handler extracts <code> (last 8 chars), and this method
@@ -31,8 +31,9 @@ func (r *GalleryRepo) GetBySlugScopedByBusinessCode(ctx context.Context, busines
 		 g.title, g.slug, g.description, g.cover_asset_id, g.gallery_type,
 		 g.settings, g.password_hash, g.watermark_config, g.is_published, g.max_selections, g.status,
 		 g.created_by, g.created_at, g.updated_at, g.published_at, g.archived_at, g.deleted_at,
-		 g.cover_template, g.cover_config, g.expires_at, g.download_enabled, g.sort_preference, g.whatsapp_template,
-		 g.faceid_enabled, g.face_detection_enabled, COALESCE(g.access_mode, 'private')
+		 g.cover_template, g.cover_config, g.expires_at, g.download_enabled, COALESCE(g.download_quality, 'webp'), g.sort_preference, g.whatsapp_template,
+		 g.faceid_enabled, g.face_detection_enabled, COALESCE(g.access_mode, 'private'),
+		 g.music_asset_id
 		 FROM galleries g
 		 INNER JOIN workspaces w ON w.id = g.workspace_id
 		 WHERE w.business_unique_code = $1
@@ -44,8 +45,9 @@ func (r *GalleryRepo) GetBySlugScopedByBusinessCode(ctx context.Context, busines
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
-		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.DownloadQuality, &g.SortPreference, &g.WhatsappTemplate,
 		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
+		&g.MusicAssetID,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil

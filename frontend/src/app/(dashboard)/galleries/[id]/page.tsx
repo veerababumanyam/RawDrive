@@ -18,7 +18,7 @@ import {
   type GalleryAlbum,
   type GalleryAsset,
 } from "@/lib/api/galleries";
-import { listProofingSelections, createComment, type ProofingSelection } from "@/lib/api/proofing";
+import { listProofingSelections, createComment, listComments, type ProofingComment, type ProofingSelection } from "@/lib/api/proofing";
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
@@ -91,12 +91,18 @@ const TETHERED_DEFAULT_POLL_MS = 1000;
 const TETHERED_MIN_POLL_MS = 1000;
 const TETHERED_MAX_POLL_MS = 5000;
 const TETHERED_POLL_STEP_MS = 500;
+const SHARE_UNAVAILABLE_MESSAGE = "Publish this gallery before sharing client links.";
+const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
 const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
   "display_webp",
   "thumb_lg_webp",
   "thumb_md_webp",
   "thumb_sm_webp",
 ] as const;
+
+function assetRowsSignature(entries: Array<Pick<GalleryAsset, "asset_id" | "sort_order">>): string {
+  return entries.map((entry) => `${entry.asset_id}:${entry.sort_order ?? ""}`).join("|");
+}
 
 function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
   return Boolean(
@@ -288,6 +294,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
+  const assetRowsSignatureRef = useRef("");
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
   // M41/105: aggregated guest favorites for this gallery. Null while
   // loading; an empty summary object once the request lands (even with
@@ -297,6 +304,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [commentsByAsset, setCommentsByAsset] = useState<Record<string, ProofingComment[]>>({});
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -352,7 +360,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [tetheredSoundEnabled, setTetheredSoundEnabled] = useState(true);
   const [tetheredSessionNewCount, setTetheredSessionNewCount] = useState(0);
   const [tetheredLastDetectedAt, setTetheredLastDetectedAt] = useState<number | null>(null);
-  const [tetheredClockTick, setTetheredClockTick] = useState(0);
+  const [, setTetheredClockTick] = useState(0);
   const photoFileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadDialogRef = useRef<HTMLElement | null>(null);
   const tetheredDirectoryRef = useRef<TetheredDirectoryEntry | null>(null);
@@ -396,6 +404,22 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       isBulk: true,
     });
   };
+
+  useEffect(() => {
+    assetRowsSignatureRef.current = assetRowsSignature(assets);
+  }, [assets]);
+
+  const refreshGalleryAssets = useCallback(async (options: { skipIfRowsUnchanged?: boolean } = {}) => {
+    const t = getStoredAccessToken();
+    if (!t) return;
+
+    const galleryAssets = await listGalleryAssets(t, id);
+    const nextSignature = assetRowsSignature(galleryAssets);
+    if (options.skipIfRowsUnchanged && nextSignature === assetRowsSignatureRef.current) return;
+
+    const hydratedAssets = await hydrateGalleryAssets(t, galleryAssets);
+    setAssets(hydratedAssets);
+  }, [id]);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -458,6 +482,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (loading || !gallery?.id) return;
+    // Refresh shortly after initial load to catch late-linked assets whose
+    // junction rows settle just after the first overview request completes.
+    const timers = ASSET_SETTLE_REFRESH_DELAYS_MS.map((delay) =>
+      window.setTimeout(() => {
+        void refreshGalleryAssets({ skipIfRowsUnchanged: true });
+      }, delay),
+    );
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [gallery?.id, loading, refreshGalleryAssets]);
 
   const refreshAlbums = useCallback(async () => {
     const t = getStoredAccessToken();
@@ -594,7 +632,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   const copyShareUrl = useCallback(async (albumId?: string) => {
     if (!gallery?.is_published) {
-      setShareMessage("Publish this gallery before sharing client links.");
+      setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
       return;
     }
     const url = buildShareUrl(albumId);
@@ -609,7 +647,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
   const openShareLink = useCallback((albumId: string | undefined, label: string) => {
     if (!gallery?.is_published) {
-      setShareMessage("Publish this gallery before sharing client links.");
+      setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
       return;
     }
     const url = buildShareUrl(albumId);
@@ -647,6 +685,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           title: gallery.title || "Photo",
           url,
         });
+        setShareMessage("Photo share sheet opened.");
         return;
       }
     } catch {
@@ -654,8 +693,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
     try {
       await navigator.clipboard.writeText(url);
+      setShareMessage("Photo link copied.");
     } catch {
-      /* ignore */
+      setShareMessage(url);
     }
     setCopiedAssetId(assetId);
     setTimeout(() => setCopiedAssetId(null), 2000);
@@ -752,6 +792,38 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     [visibleAssets, visibleLimit],
   );
   const hasMoreAssets = visibleAssets.length > pagedAssets.length;
+  const activeLightboxAsset = lightboxIndex !== null ? assets[lightboxIndex]?.asset ?? null : null;
+  const activeLightboxAssetId = activeLightboxAsset?.id;
+
+  useEffect(() => {
+    if (!gallery?.id || !activeLightboxAssetId) return;
+    const t = getStoredAccessToken();
+    if (!t) return;
+
+    let cancelled = false;
+    listComments(t, gallery.id, activeLightboxAssetId)
+      .then((comments) => {
+        if (cancelled) return;
+        setCommentsByAsset((current) => {
+          const byId = new Map<string, ProofingComment>();
+          for (const comment of current[activeLightboxAssetId] ?? []) byId.set(comment.id, comment);
+          for (const comment of comments) byId.set(comment.id, comment);
+          return {
+            ...current,
+            [activeLightboxAssetId]: Array.from(byId.values()).sort((a, b) =>
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+            ),
+          };
+        });
+      })
+      .catch((err) => {
+        console.warn("Failed to load comments:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLightboxAssetId, gallery?.id]);
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -1464,10 +1536,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     input.click();
   }, [submitFiles]);
 
-  const tetheredLastDetectedLabel = useMemo(() => {
-    if (!tetheredLastDetectedAt) return "Last detected: no photos yet";
-    return `Last detected: ${formatTetheredRelativeTime(tetheredLastDetectedAt)}`;
-  }, [tetheredClockTick, tetheredLastDetectedAt]);
+  const tetheredLastDetectedLabel = tetheredLastDetectedAt
+    ? `Last detected: ${formatTetheredRelativeTime(tetheredLastDetectedAt)}`
+    : "Last detected: no photos yet";
   const tetheredPollDisplay = `${(tetheredPollIntervalMs / 1000).toFixed(1)}s`;
   const tetheredIsWatching = tetheredStatus === "watching";
   const tetheredIsPaused = tetheredStatus === "paused";
@@ -1900,6 +1971,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     <ShareQrPopover
                       url={gallery.is_published ? buildShareUrl() : ""}
                       disabled={!gallery.is_published}
+                      onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
                       label="Show QR code for gallery link"
                       filename={`${gallery.slug}-gallery-qr`}
                     />
@@ -2006,7 +2078,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         variant="ghost"
                         onClick={() => copyShareUrl(selectedAlbum?.id)}
                         label={`Copy ${selectedLabel} share link`}
-                        disabled={!gallery.is_published}
+                        aria-disabled={!gallery.is_published}
                         className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
                       >
                         <Share />
@@ -2017,15 +2089,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         variant="ghost"
                         onClick={() => openShareLink(selectedAlbum?.id, selectedLabel)}
                         label={`Email ${selectedLabel} share link`}
-                        disabled={!gallery.is_published}
+                        aria-disabled={!gallery.is_published}
                         className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
                       >
                         <Envelope />
                       </GlassIconButton>
-                      <div className="shrink-0 flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high">
+                      <div
+                        aria-disabled={!gallery.is_published}
+                        className="shrink-0 flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high"
+                      >
                         <ShareQrPopover
                           url={selectedShareUrl}
                           disabled={!gallery.is_published}
+                          onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
                           label={`Show QR code for ${selectedLabel} share link`}
                           filename={`${gallery.slug || "gallery"}-${selectedSlug}-qr`}
                         />
@@ -2092,7 +2168,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       variant="ghost"
                       onClick={() => copyShareUrl()}
                       label="Copy All Photos share link"
-                      disabled={!gallery.is_published}
+                      aria-disabled={!gallery.is_published}
                       className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
                     >
                       <Share />
@@ -2103,7 +2179,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       variant="ghost"
                       onClick={() => openShareLink(undefined, "All Photos")}
                       label="Email All Photos share link"
-                      disabled={!gallery.is_published}
+                      aria-disabled={!gallery.is_published}
                       className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
                     >
                       <Envelope />
@@ -2111,6 +2187,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     <ShareQrPopover
                       url={gallery.is_published ? buildShareUrl() : ""}
                       disabled={!gallery.is_published}
+                      onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
                       label="Show QR code for All Photos share link"
                       filename={`${gallery.slug || "gallery"}-all-photos-qr`}
                     />
@@ -2269,7 +2346,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                               variant="ghost"
                               onClick={() => copyShareUrl(album.id)}
                               label={`Copy ${album.name} share link`}
-                              disabled={!gallery.is_published}
+                              aria-disabled={!gallery.is_published}
                               className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
                             >
                               <Share />
@@ -2280,7 +2357,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                               variant="ghost"
                               onClick={() => openShareLink(album.id, album.name)}
                               label={`Email ${album.name} share link`}
-                              disabled={!gallery.is_published}
+                              aria-disabled={!gallery.is_published}
                               className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
                             >
                               <Envelope />
@@ -2288,6 +2365,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                             <ShareQrPopover
                               url={gallery.is_published ? buildShareUrl(album.id) : ""}
                               disabled={!gallery.is_published}
+                              onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
                               label={`Show QR code for ${album.name} share link`}
                               filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
                             />
@@ -2905,7 +2983,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                        variant="ghost"
                        onClick={() => copyShareUrl()}
                        label="Copy gallery share link"
-                       disabled={!gallery.is_published}
+                       aria-disabled={!gallery.is_published}
                        className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
                      >
                        <Share />
@@ -2916,15 +2994,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                        variant="ghost"
                        onClick={() => openShareLink(undefined, "Gallery")}
                        label="Email gallery share link"
-                       disabled={!gallery.is_published}
+                       aria-disabled={!gallery.is_published}
                        className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
                      >
                        <Envelope />
                      </GlassIconButton>
-                     <div className="flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high">
+                     <div
+                       aria-disabled={!gallery.is_published}
+                       className="flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high"
+                     >
                        <ShareQrPopover
                          url={gallery.is_published ? buildShareUrl() : ""}
                          disabled={!gallery.is_published}
+                         onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
                          label="Show QR code for gallery share link"
                          filename={`${gallery.slug || "gallery"}-share-qr`}
                        />
@@ -3003,18 +3085,24 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < assets.length - 1}
           isProofing={gallery?.gallery_type === "proofing"}
+          comments={commentsByAsset[assets[lightboxIndex].asset!.id] ?? []}
           onComment={async (assetId, comment) => {
             const t = getStoredAccessToken();
             if (!t || !gallery) return;
-            try {
-              await createComment(t, gallery.id, {
-                asset_id: assetId,
-                author_name: "Studio",
-                body: comment,
-              });
-            } catch (err) {
-              console.error("Failed to post comment:", err);
-            }
+            const created = await createComment(t, gallery.id, {
+              asset_id: assetId,
+              author_name: "Studio",
+              body: comment,
+            });
+            setCommentsByAsset((current) => {
+              const existing = current[assetId] ?? [];
+              if (existing.some((item) => item.id === created.id)) return current;
+              return {
+                ...current,
+                [assetId]: [...existing, created],
+              };
+            });
+            return created;
           }}
           // M13: feed filmstrip + compare mode + watermark overlay (FR-088,092,093,094)
           allAssets={assets.map((a) => a.asset).filter((a): a is Asset => a !== null)}
@@ -3209,16 +3297,28 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 // this bounded worker pool is the in-page mitigation for the N+1.)
 const HYDRATE_CONCURRENCY = 6;
 
+function dedupeGalleryAssetEntries(entries: GalleryAsset[]): GalleryAsset[] {
+  const seenAssetIds = new Set<string>();
+  const deduped: GalleryAsset[] = [];
+  for (const entry of entries) {
+    if (seenAssetIds.has(entry.asset_id)) continue;
+    seenAssetIds.add(entry.asset_id);
+    deduped.push(entry);
+  }
+  return deduped;
+}
+
 async function hydrateGalleryAssets(
   token: string,
   entries: GalleryAsset[],
 ): Promise<GalleryAssetRecord[]> {
-  const results = new Array<GalleryAssetRecord>(entries.length);
+  const uniqueEntries = dedupeGalleryAssetEntries(entries);
+  const results = new Array<GalleryAssetRecord>(uniqueEntries.length);
   let cursor = 0;
   const worker = async () => {
-    while (cursor < entries.length) {
+    while (cursor < uniqueEntries.length) {
       const index = cursor++;
-      const entry = entries[index];
+      const entry = uniqueEntries[index];
       try {
         const asset = await getAsset(token, entry.asset_id);
         results[index] = { ...entry, asset };
@@ -3228,7 +3328,7 @@ async function hydrateGalleryAssets(
     }
   };
   const pool = Array.from(
-    { length: Math.min(HYDRATE_CONCURRENCY, entries.length) },
+    { length: Math.min(HYDRATE_CONCURRENCY, uniqueEntries.length) },
     () => worker(),
   );
   await Promise.all(pool);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { searchAssets, type SearchResult } from "@/lib/api/ai";
+import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 
 interface FaceClusterDetailProps {
   token: string;
@@ -63,10 +64,11 @@ export function FaceClusterDetail({ token, clusterLabel, clusterName }: FaceClus
           {assets.map((asset) => (
             <div key={asset.asset_id} className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken">
               <img
-                src={asset.thumbnail_urls?.md || asset.thumbnail_urls?.sm || ""}
+                src={getAssetPreviewUrl(asset, token)}
                 alt={asset.ai_caption || asset.filename}
                 className="w-full"
                 loading="lazy"
+                decoding="async"
               />
             </div>
           ))}

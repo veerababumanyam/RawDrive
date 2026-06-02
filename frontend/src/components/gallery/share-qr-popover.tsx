@@ -30,6 +30,7 @@ interface ShareQrPopoverProps {
   label?: string;
   filename?: string;
   size?: number;
+  onUnavailable?: () => void;
   /**
    * Optional className applied to the toggle wrapper so the caller can
    * match it to the visual weight of the adjacent "Copy" button.
@@ -54,6 +55,7 @@ export function ShareQrPopover({
   label = "Show QR code",
   filename = "share-qr",
   size = 224,
+  onUnavailable,
   className,
 }: ShareQrPopoverProps) {
   const [open, setOpen] = useState(false);
@@ -153,6 +155,17 @@ export function ShareQrPopover({
     }
   }, [filename]);
 
+  const unavailable = disabled || !url;
+  const nativeDisabled = unavailable && !onUnavailable;
+
+  const handleToggle = useCallback(() => {
+    if (unavailable) {
+      onUnavailable?.();
+      return;
+    }
+    setOpen((current) => !current);
+  }, [onUnavailable, unavailable]);
+
   // Resolve the panel position. We prefer right-anchored (panel's right
   // edge aligned to the toggle's right edge) so the panel hangs to the
   // left and stays inside the viewport on the common case. If that would
@@ -250,8 +263,9 @@ export function ShareQrPopover({
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        disabled={disabled || !url}
+        onClick={handleToggle}
+        disabled={nativeDisabled}
+        aria-disabled={unavailable ? true : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label}
@@ -259,7 +273,7 @@ export function ShareQrPopover({
         title={url ? label : "Publish to generate a share QR"}
         className={cn(
           "inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-          !url || disabled
+          unavailable
             ? "bg-surface-container-high text-text-tertiary cursor-not-allowed"
             : "bg-surface-container-high text-text-primary hover:bg-surface-container-highest",
         )}

@@ -56,17 +56,42 @@ import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav"
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "grid";
+type TabId = "cover" | "text" | "media" | "scenes" | "brand" | "grid";
+type PreviewDevice = "desktop" | "phone";
+type CoverPresetId =
+  | "classic-wedding"
+  | "editorial-split"
+  | "luxury-dark"
+  | "haldi-warm"
+  | "reception-glow"
+  | "minimal-studio"
+  | "story-cover"
+  | "proofing-first";
+type CoverMediaMode = "single-photo" | "slideshow" | "short-video" | "photo-grid";
+type ScrimStyle = "none" | "soft-gradient" | "cinematic-dark" | "warm-vignette" | "blur-band" | "light-wash";
+type TextBackdrop = "none" | "glass" | "dark" | "light";
+type LogoPlacement = "hidden" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+type WatermarkStyle = "none" | "subtle-corner" | "center-mark" | "tiled";
 
 interface FocalPoint { x: number; y: number }
 interface TextPos { x: number; y: number }
+interface SceneHeaderConfig {
+  id: string;
+  label: string;
+  enabled: boolean;
+  assetId: string | null;
+}
 
 interface DesignConfig {
   theme: { id: string; variant: ThemeVariant; accentColor: string };
   cover: {
     assetId: string | null;
     styleId: string;
+    layoutPreset: CoverPresetId;
+    mediaMode: CoverMediaMode;
     focalPoint: FocalPoint;
+    mobileFocalPoint: FocalPoint;
+    mobileAspectRatio: string;
     title: string;
     subtitle: string;
     titlePosition: TextPos;
@@ -81,6 +106,8 @@ interface DesignConfig {
     titleColor: string;
     subtitleColor: string;
     textShadow: boolean;
+    scrimStyle: ScrimStyle;
+    textBackdrop: TextBackdrop;
     aspectRatio: string;
   };
   typography: {
@@ -95,6 +122,14 @@ interface DesignConfig {
     columns: number;
     gap: number;
     showInfo: boolean;
+  };
+  sceneHeaders: SceneHeaderConfig[];
+  branding: {
+    logoPlacement: LogoPlacement;
+    monogram: string;
+    brandColor: string;
+    watermarkStyle: WatermarkStyle;
+    applyToAll: boolean;
   };
   version: number;
 }
@@ -154,12 +189,249 @@ const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
 // viewer renders with grid.gap=8 — typical wedding gallery spacing.
 const DEFAULT_GRID_GAP = 8;
 
+const COVER_PRESETS: Array<{
+  id: CoverPresetId;
+  name: string;
+  mood: string;
+  patch: {
+    cover: Partial<DesignConfig["cover"]>;
+    typography: Partial<DesignConfig["typography"]>;
+    theme?: Partial<DesignConfig["theme"]>;
+    grid?: Partial<DesignConfig["grid"]>;
+  };
+}> = [
+  {
+    id: "classic-wedding",
+    name: "Classic Wedding",
+    mood: "Centered, timeless",
+    patch: {
+      cover: {
+        styleId: "classic-full",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 67 },
+        subtitlePosition: { x: 50, y: 78 },
+        textAlign: "center",
+        scrimStyle: "soft-gradient",
+        textBackdrop: "none",
+        textShadow: true,
+        titleColor: "#ffffff",
+        subtitleColor: "#ffffff",
+        textColor: "#ffffff",
+      },
+      typography: { headingFont: "Playfair Display", bodyFont: "Inter", titleSize: 52, subtitleSize: 18 },
+      theme: { variant: "dark" },
+      grid: { layout: "grid", columns: 3 },
+    },
+  },
+  {
+    id: "editorial-split",
+    name: "Editorial Split",
+    mood: "Magazine left",
+    patch: {
+      cover: {
+        styleId: "editorial-left",
+        aspectRatio: "4/3",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 24, y: 62 },
+        subtitlePosition: { x: 24, y: 74 },
+        textAlign: "left",
+        scrimStyle: "blur-band",
+        textBackdrop: "dark",
+        textShadow: true,
+        titleColor: "#ffffff",
+        subtitleColor: "#ffffff",
+        textColor: "#ffffff",
+      },
+      typography: { headingFont: "Cormorant Garamond", bodyFont: "Manrope", titleSize: 58, subtitleSize: 18 },
+      theme: { variant: "dark" },
+    },
+  },
+  {
+    id: "luxury-dark",
+    name: "Luxury Dark",
+    mood: "Reception-ready",
+    patch: {
+      cover: {
+        styleId: "cinematic-dark",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 56 },
+        subtitlePosition: { x: 50, y: 67 },
+        textAlign: "center",
+        scrimStyle: "cinematic-dark",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: "#fffaf0",
+        subtitleColor: "#e6c36a",
+        textColor: "#fffaf0",
+      },
+      typography: { headingFont: "Cormorant Garamond", bodyFont: "Montserrat", titleSize: 60, subtitleSize: 17 },
+      theme: { variant: "dark" },
+    },
+  },
+  {
+    id: "haldi-warm",
+    name: "Haldi Warm",
+    mood: "Yellow, joyful",
+    patch: {
+      cover: {
+        styleId: "hero-overlay",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 58 },
+        subtitlePosition: { x: 50, y: 69 },
+        textAlign: "center",
+        scrimStyle: "warm-vignette",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: "#fff8e7",
+        subtitleColor: "#f5c84b",
+        textColor: "#fff8e7",
+      },
+      typography: { headingFont: "Lora", bodyFont: "Manrope", titleSize: 54, subtitleSize: 18 },
+      theme: { variant: "dark", accentColor: "#B7791F" },
+      grid: { layout: "grid", columns: 4 },
+    },
+  },
+  {
+    id: "reception-glow",
+    name: "Reception Glow",
+    mood: "Stage lights",
+    patch: {
+      cover: {
+        styleId: "cinematic-wide",
+        aspectRatio: "21/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 56 },
+        subtitlePosition: { x: 50, y: 66 },
+        textAlign: "center",
+        scrimStyle: "cinematic-dark",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: "#ffffff",
+        subtitleColor: "#dbeafe",
+        textColor: "#ffffff",
+      },
+      typography: { headingFont: "Montserrat", bodyFont: "DM Sans", titleSize: 50, subtitleSize: 16 },
+      theme: { variant: "dark" },
+    },
+  },
+  {
+    id: "minimal-studio",
+    name: "Minimal Studio",
+    mood: "Clean portfolio",
+    patch: {
+      cover: {
+        styleId: "classic-minimal",
+        aspectRatio: "21/9",
+        mobileAspectRatio: "3/4",
+        titlePosition: { x: 50, y: 52 },
+        subtitlePosition: { x: 50, y: 63 },
+        textAlign: "center",
+        scrimStyle: "light-wash",
+        textBackdrop: "light",
+        textShadow: false,
+        titleColor: "#172033",
+        subtitleColor: "#344054",
+        textColor: "#172033",
+      },
+      typography: { headingFont: "Manrope", bodyFont: "Inter", titleSize: 46, subtitleSize: 16 },
+      theme: { variant: "light" },
+    },
+  },
+  {
+    id: "story-cover",
+    name: "Story Cover",
+    mood: "Album opener",
+    patch: {
+      cover: {
+        styleId: "magazine-spread",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 48 },
+        subtitlePosition: { x: 50, y: 60 },
+        textAlign: "center",
+        mediaMode: "slideshow",
+        scrimStyle: "soft-gradient",
+        textBackdrop: "none",
+        textShadow: true,
+        titleColor: "#ffffff",
+        subtitleColor: "#ffffff",
+        textColor: "#ffffff",
+      },
+      typography: { headingFont: "Playfair Display", bodyFont: "Lato", titleSize: 56, subtitleSize: 18 },
+      theme: { variant: "dark" },
+    },
+  },
+  {
+    id: "proofing-first",
+    name: "Proofing First",
+    mood: "Action-focused",
+    patch: {
+      cover: {
+        styleId: "modern-grid",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 56 },
+        subtitlePosition: { x: 50, y: 67 },
+        textAlign: "center",
+        mediaMode: "photo-grid",
+        scrimStyle: "cinematic-dark",
+        textBackdrop: "dark",
+        textShadow: true,
+        titleColor: "#ffffff",
+        subtitleColor: "#ffffff",
+        textColor: "#ffffff",
+      },
+      typography: { headingFont: "DM Sans", bodyFont: "Inter", titleSize: 44, subtitleSize: 16 },
+      theme: { variant: "dark" },
+      grid: { layout: "grid", columns: 5 },
+    },
+  },
+];
+
+const MEDIA_MODES: Array<{ id: CoverMediaMode; label: string; detail: string }> = [
+  { id: "single-photo", label: "Single Photo", detail: "Classic hero cover" },
+  { id: "slideshow", label: "Slideshow", detail: "Rotating opener" },
+  { id: "short-video", label: "Short Video", detail: "Motion-first cover" },
+  { id: "photo-grid", label: "Photo Grid", detail: "Editorial collage" },
+];
+
+const DEFAULT_SCENE_HEADERS: SceneHeaderConfig[] = [
+  { id: "haldi", label: "Haldi", enabled: false, assetId: null },
+  { id: "mehendi", label: "Mehendi", enabled: false, assetId: null },
+  { id: "wedding", label: "Wedding", enabled: false, assetId: null },
+  { id: "reception", label: "Reception", enabled: false, assetId: null },
+  { id: "family", label: "Family", enabled: false, assetId: null },
+  { id: "couple-portraits", label: "Couple Portraits", enabled: false, assetId: null },
+];
+
+const LOGO_PLACEMENTS: Array<{ id: LogoPlacement; label: string }> = [
+  { id: "hidden", label: "Hidden" },
+  { id: "top-left", label: "Top Left" },
+  { id: "top-right", label: "Top Right" },
+  { id: "bottom-left", label: "Bottom Left" },
+  { id: "bottom-right", label: "Bottom Right" },
+];
+
+const WATERMARK_STYLES: Array<{ id: WatermarkStyle; label: string }> = [
+  { id: "none", label: "None" },
+  { id: "subtle-corner", label: "Subtle Corner" },
+  { id: "center-mark", label: "Center Mark" },
+  { id: "tiled", label: "Tiled" },
+];
+
 const DEFAULT_CONFIG: DesignConfig = {
   theme: { id: "liquid-glass", variant: "dark", accentColor: "" },
   cover: {
     assetId: null,
     styleId: "classic-full",
+    layoutPreset: "classic-wedding",
+    mediaMode: "single-photo",
     focalPoint: { x: 50, y: 50 },
+    mobileFocalPoint: { x: 50, y: 50 },
+    mobileAspectRatio: "4/5",
     title: "",
     subtitle: "",
     titlePosition: { x: 50, y: 70 },
@@ -169,6 +441,8 @@ const DEFAULT_CONFIG: DesignConfig = {
     titleColor: "#ffffff",
     subtitleColor: "#ffffff",
     textShadow: true,
+    scrimStyle: "soft-gradient",
+    textBackdrop: "none",
     aspectRatio: "16/9",
   },
   typography: {
@@ -179,7 +453,15 @@ const DEFAULT_CONFIG: DesignConfig = {
     subtitleSize: 18,
   },
   grid: { layout: "grid", columns: 3, gap: DEFAULT_GRID_GAP, showInfo: false },
-  version: 2,
+  sceneHeaders: DEFAULT_SCENE_HEADERS,
+  branding: {
+    logoPlacement: "top-left",
+    monogram: "",
+    brandColor: "",
+    watermarkStyle: "none",
+    applyToAll: false,
+  },
+  version: 3,
 };
 
 // ───────────── Helpers ─────────────
@@ -210,6 +492,19 @@ function configFromGallery(gallery: Gallery): DesignConfig {
     if (typo) Object.assign(merged.typography, typo);
     const grid = raw.grid as Partial<DesignConfig["grid"]> | undefined;
     if (grid) Object.assign(merged.grid, grid);
+    const sceneHeaders = raw.sceneHeaders as SceneHeaderConfig[] | undefined;
+    if (Array.isArray(sceneHeaders)) {
+      const byId = new Map(DEFAULT_SCENE_HEADERS.map((scene) => [scene.id, { ...scene }]));
+      for (const scene of sceneHeaders) {
+        if (!scene || typeof scene !== "object") continue;
+        const fallback = byId.get(scene.id);
+        if (!fallback) continue;
+        byId.set(scene.id, { ...fallback, ...scene });
+      }
+      merged.sceneHeaders = Array.from(byId.values());
+    }
+    const branding = raw.branding as Partial<DesignConfig["branding"]> | undefined;
+    if (branding) Object.assign(merged.branding, branding);
   }
 
   // Pre-design-config legacy path — pull focal_point + aspect_ratio out of
@@ -258,6 +553,48 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   return merged;
 }
 
+function applyCoverPreset(config: DesignConfig, presetId: CoverPresetId): DesignConfig {
+  const preset = COVER_PRESETS.find((p) => p.id === presetId);
+  if (!preset) return config;
+  return {
+    ...config,
+    theme: { ...config.theme, ...(preset.patch.theme || {}) },
+    cover: {
+      ...config.cover,
+      ...preset.patch.cover,
+      layoutPreset: preset.id,
+    },
+    typography: { ...config.typography, ...preset.patch.typography },
+    grid: { ...config.grid, ...(preset.patch.grid || {}) },
+  };
+}
+
+function coverScrimStyle(style: ScrimStyle, variant: ThemeVariant): string | null {
+  if (style === "none") return null;
+  if (style === "soft-gradient") return "linear-gradient(to bottom, rgba(0,0,0,0.04), rgba(0,0,0,0.52))";
+  if (style === "cinematic-dark") return "linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.68))";
+  if (style === "warm-vignette") return "radial-gradient(circle at 50% 45%, rgba(255,196,87,0.18), rgba(0,0,0,0.58) 72%)";
+  if (style === "blur-band") return "linear-gradient(to bottom, transparent 36%, rgba(0,0,0,0.64) 55%, transparent 76%)";
+  if (style === "light-wash") return "linear-gradient(to bottom, rgba(255,255,255,0.34), rgba(255,255,255,0.08))";
+  if (variant === "dark") return "rgba(0,0,0,0.35)";
+  if (variant === "auto") return "rgba(0,0,0,0.15)";
+  return null;
+}
+
+function textBackdropStyle(style: TextBackdrop): React.CSSProperties | undefined {
+  if (style === "glass") {
+    return {
+      background: "rgba(255,255,255,0.16)",
+      backdropFilter: "blur(14px) saturate(160%)",
+      border: "1px solid rgba(255,255,255,0.24)",
+      boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
+    };
+  }
+  if (style === "dark") return { background: "rgba(0,0,0,0.42)" };
+  if (style === "light") return { background: "rgba(255,255,255,0.76)" };
+  return undefined;
+}
+
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 function pctFromEvent(e: { clientX: number; clientY: number }, rect: DOMRect) {
   return {
@@ -298,6 +635,7 @@ export default function CoverDesignPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [config, setConfig] = useState<DesignConfig>(DEFAULT_CONFIG);
   const [tab, setTab] = useState<TabId>("cover");
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
   const [activeText, setActiveText] = useState<"title" | "subtitle">("title");
   const [dragKind, setDragKind] = useState<DragKind>(null);
   const [saving, setSaving] = useState(false);
@@ -404,7 +742,13 @@ export default function CoverDesignPage() {
     const { x, y } = pctFromEvent(e, rect);
     setConfig((c) => {
       if (kind === "focal") {
-        return { ...c, cover: { ...c.cover, focalPoint: { x: Math.round(x), y: Math.round(y) } } };
+        return {
+          ...c,
+          cover: {
+            ...c.cover,
+            [previewDevice === "phone" ? "mobileFocalPoint" : "focalPoint"]: { x: Math.round(x), y: Math.round(y) },
+          },
+        };
       }
       if (kind === "title") {
         return { ...c, cover: { ...c.cover, titlePosition: { x: Math.round(x), y: Math.round(y) } } };
@@ -414,7 +758,7 @@ export default function CoverDesignPage() {
       }
       return c;
     });
-  }, []);
+  }, [previewDevice]);
 
   const onStagePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     dragKindRef.current = null;
@@ -479,10 +823,10 @@ export default function CoverDesignPage() {
 
   // ───────────── Derived preview state ─────────────
 
-  const variantScrim =
-    config.theme.variant === "dark" ? "rgba(0,0,0,0.35)"
-    : config.theme.variant === "auto" ? "rgba(0,0,0,0.15)"
-    : null;
+  const activeScrim = coverScrimStyle(config.cover.scrimStyle, config.theme.variant);
+  const activeFocalPoint = previewDevice === "phone"
+    ? config.cover.mobileFocalPoint
+    : config.cover.focalPoint;
   // Drag anchor is always the CENTER of the text bounding box, regardless
   // of textAlign. Earlier behavior used textAlign to pick the anchor edge
   // (left = left edge, right = right edge), which made dragging feel
@@ -495,6 +839,7 @@ export default function CoverDesignPage() {
   const textShadowStyle = config.cover.textShadow
     ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
     : undefined;
+  const activeTextBackdropStyle = textBackdropStyle(config.cover.textBackdrop);
 
   // ───────────── Render ─────────────
 
@@ -529,6 +874,9 @@ export default function CoverDesignPage() {
           >
             <option value="cover">Cover</option>
             <option value="text">Text</option>
+            <option value="media">Media</option>
+            <option value="scenes">Scenes</option>
+            <option value="brand">Brand</option>
             <option value="grid">Grid</option>
           </select>
           {gallery?.slug && (
@@ -663,6 +1011,31 @@ export default function CoverDesignPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 pb-8 sm:gap-7 sm:p-6 lg:gap-8 lg:p-8">
         {/* ───────── LIVE PREVIEW ───────── */}
         <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-full border border-white/10 bg-surface-container p-1">
+              {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
+                <button
+                  key={device}
+                  type="button"
+                  onClick={() => setPreviewDevice(device)}
+                  aria-pressed={previewDevice === device}
+                  aria-label={device === "desktop" ? "Desktop preview" : "Phone preview"}
+                  className={`min-h-[40px] rounded-full px-4 text-sm font-medium transition-colors ${
+                    previewDevice === device
+                      ? "bg-primary text-on-primary"
+                      : "text-on-surface-variant hover:bg-white/5"
+                  }`}
+                >
+                  {device === "desktop" ? "Desktop" : "Phone"}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              {previewDevice === "phone"
+                ? "Phone crop uses its own focal point and safe zone."
+                : "Desktop crop follows the full gallery cover."}
+            </p>
+          </div>
           <div
             ref={stageRef}
             onPointerDown={hasCoverPreview ? onStagePointerDown : undefined}
@@ -671,10 +1044,10 @@ export default function CoverDesignPage() {
             onPointerCancel={onStagePointerUp}
             className={`relative w-full select-none overflow-hidden rounded-2xl border border-white/10 bg-surface-container shadow-2xl shadow-black/20 ${
               hasCoverPreview ? (dragKind ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
-            }`}
+            } ${previewDevice === "phone" ? "mx-auto max-w-sm" : ""}`}
             style={{
-              aspectRatio: config.cover.aspectRatio,
-              maxHeight: "min(78vh, 820px)",
+              aspectRatio: previewDevice === "phone" ? config.cover.mobileAspectRatio : config.cover.aspectRatio,
+              maxHeight: previewDevice === "phone" ? "min(78vh, 760px)" : "min(78vh, 820px)",
               touchAction: "none",
             }}
             aria-label="Cover preview — drag photo to pan, drag title/subtitle to position"
@@ -684,7 +1057,7 @@ export default function CoverDesignPage() {
                 src={coverMedia.src}
                 alt={selectedAsset?.filename || "Cover preview"}
                 className="absolute inset-0 h-full w-full object-cover"
-                style={{ objectPosition: `${config.cover.focalPoint.x}% ${config.cover.focalPoint.y}%` }}
+                style={{ objectPosition: `${activeFocalPoint.x}% ${activeFocalPoint.y}%` }}
                 draggable={false}
               />
             ) : (
@@ -697,8 +1070,19 @@ export default function CoverDesignPage() {
               </div>
             )}
 
-            {variantScrim && (
-              <div className="pointer-events-none absolute inset-0" style={{ background: variantScrim }} />
+            {activeScrim && (
+              <div className="pointer-events-none absolute inset-0" style={{ background: activeScrim }} />
+            )}
+
+            {previewDevice === "phone" && (
+              <div
+                className="pointer-events-none absolute inset-x-7 inset-y-12 z-10 rounded-xl border border-dashed border-white/55 bg-black/[0.03]"
+                aria-label="Mobile safe zone"
+              >
+                <span className="absolute left-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white">
+                  Safe zone
+                </span>
+              </div>
             )}
 
             {/* Title overlay — draggable. whitespace: pre prevents the
@@ -731,6 +1115,7 @@ export default function CoverDesignPage() {
                   lineHeight: 1.1,
                   userSelect: "none",
                   whiteSpace: "pre",
+                  ...activeTextBackdropStyle,
                 }}
                 onClick={() => { setActiveText("title"); setTab("text"); }}
               >
@@ -760,6 +1145,7 @@ export default function CoverDesignPage() {
                   lineHeight: 1.3,
                   userSelect: "none",
                   whiteSpace: "pre",
+                  ...activeTextBackdropStyle,
                 }}
                 onClick={() => { setActiveText("subtitle"); setTab("text"); }}
               >
@@ -771,6 +1157,23 @@ export default function CoverDesignPage() {
             {hasCoverPreview && !dragKind && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur-sm">
                 {tab === "text" ? "Drag title / subtitle to position" : "Drag photo to pan"}
+              </div>
+            )}
+
+            {config.branding.logoPlacement !== "hidden" && config.branding.monogram && (
+              <div
+                className={`pointer-events-none absolute z-20 inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-white/35 bg-black/30 px-2 text-sm font-semibold text-white backdrop-blur-md ${
+                  config.branding.logoPlacement === "top-right" ? "right-4 top-4"
+                  : config.branding.logoPlacement === "bottom-left" ? "bottom-4 left-4"
+                  : config.branding.logoPlacement === "bottom-right" ? "bottom-4 right-4"
+                  : "left-4 top-4"
+                }`}
+                style={{
+                  color: config.branding.brandColor || undefined,
+                  borderColor: config.branding.brandColor || undefined,
+                }}
+              >
+                {config.branding.monogram}
               </div>
             )}
           </div>
@@ -804,6 +1207,26 @@ export default function CoverDesignPage() {
                 setConfig={setConfig}
                 assets={assets}
                 token={token}
+              />
+            )}
+            {tab === "media" && (
+              <PanelMedia
+                config={config}
+                setConfig={setConfig}
+                assets={assets}
+              />
+            )}
+            {tab === "scenes" && (
+              <PanelScenes
+                config={config}
+                setConfig={setConfig}
+                assets={assets}
+              />
+            )}
+            {tab === "brand" && (
+              <PanelBrand
+                config={config}
+                setConfig={setConfig}
               />
             )}
           </div>
@@ -1012,6 +1435,39 @@ function PanelCover({
     <div className="space-y-4">
       <div>
         <div className="mb-2 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Design presets</h3>
+            <p className="text-xs text-on-surface-variant">One-tap cover direction for wedding galleries.</p>
+          </div>
+          <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
+            {config.cover.layoutPreset.replace(/-/g, " ")}
+          </span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {COVER_PRESETS.map((preset) => {
+            const active = config.cover.layoutPreset === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setConfig((c) => applyCoverPreset(c, preset.id))}
+                aria-pressed={active}
+                className={`min-h-[72px] rounded-xl border p-3 text-left transition-colors ${
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-white/10 hover:bg-white/5"
+                }`}
+              >
+                <span className="block text-sm font-semibold">{preset.name}</span>
+                <span className="mt-1 block text-xs text-on-surface-variant">{preset.mood}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Cover photo</h3>
           <span className="text-xs text-on-surface-variant">
             {assets.length} {assets.length === 1 ? "photo" : "photos"}
@@ -1050,10 +1506,17 @@ function PanelCover({
 
       <div className="border-t border-white/10 pt-4">
         <button
-          onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, focalPoint: { x: 50, y: 50 } } }))}
+          onClick={() => setConfig((c) => ({
+            ...c,
+            cover: {
+              ...c.cover,
+              focalPoint: { x: 50, y: 50 },
+              mobileFocalPoint: { x: 50, y: 50 },
+            },
+          }))}
           className="min-h-[40px] w-full rounded-lg border border-white/10 px-4 py-2 text-sm transition-colors hover:bg-white/5"
         >
-          Reset focal point ({config.cover.focalPoint.x}%, {config.cover.focalPoint.y}%)
+          Reset focal points ({config.cover.focalPoint.x}%, {config.cover.focalPoint.y}% / phone {config.cover.mobileFocalPoint.x}%, {config.cover.mobileFocalPoint.y}%)
         </button>
       </div>
     </div>
@@ -1132,6 +1595,13 @@ function PanelText({
   // Subtitle toggle into a behavioral side-effect of cursor focus, and
   // gives the panel a single-stream column that reads like a Notion-style
   // form rather than a tabbed control.
+  const readabilityPoints =
+    (config.cover.textShadow ? 1 : 0) +
+    (config.cover.scrimStyle !== "none" ? 1 : 0) +
+    (config.cover.textBackdrop !== "none" ? 1 : 0) +
+    (config.typography.titleSize >= 36 ? 1 : 0);
+  const readabilityLabel = readabilityPoints >= 3 ? "Strong" : readabilityPoints >= 2 ? "Good" : "Needs help";
+
   return (
     <div className="space-y-6">
       {/* ───────── TITLE GROUP ─────────
@@ -1326,6 +1796,72 @@ function PanelText({
             anchor math keeps working.
           - Only the readability-shadow toggle remained shared, so it
             lives inline at the bottom of the panel as a compact row. */}
+      <section className="space-y-3 rounded-xl border border-white/10 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+              Readability assistant
+            </h3>
+            <p className="mt-1 text-[11px] text-on-surface-variant/80">
+              Checks the cover text setup and offers safe one-click fixes.
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+              readabilityPoints >= 3
+                ? "bg-success/10 text-success"
+                : readabilityPoints >= 2
+                  ? "bg-warning/10 text-warning"
+                  : "bg-error/10 text-error"
+            }`}
+          >
+            {readabilityLabel}
+          </span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, scrimStyle: "soft-gradient", textShadow: true },
+            }))}
+            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+          >
+            Gradient scrim
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, textBackdrop: "glass", textShadow: true },
+            }))}
+            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+          >
+            Glass title plate
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, scrimStyle: "blur-band", textShadow: true },
+            }))}
+            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+          >
+            Blur band
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, scrimStyle: "cinematic-dark", textBackdrop: "dark", textShadow: true },
+            }))}
+            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+          >
+            Darker overlay
+          </button>
+        </div>
+      </section>
+
       <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-white/10 pt-4">
         <span className="text-[11px] font-medium text-on-surface-variant">Readability shadow</span>
         <input
@@ -1339,6 +1875,273 @@ function PanelText({
       <p className="text-[11px] text-on-surface-variant/80">
         Drag the title or subtitle on the preview to reposition.
       </p>
+    </div>
+  );
+}
+
+function PanelMedia({
+  config,
+  setConfig,
+  assets,
+}: {
+  config: DesignConfig;
+  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+  assets: Asset[];
+}) {
+  const videoCount = assets.filter((asset) => asset.content_type?.startsWith("video/")).length;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold">Cover media mode</h3>
+        <p className="text-xs text-on-surface-variant">
+          Choose how the public gallery opens before clients reach the photo grid.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {MEDIA_MODES.map((mode) => {
+          const active = config.cover.mediaMode === mode.id;
+          const disabled = mode.id === "short-video" && videoCount === 0;
+          return (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => {
+                if (disabled) return;
+                setConfig((c) => ({ ...c, cover: { ...c.cover, mediaMode: mode.id } }));
+              }}
+              aria-pressed={active}
+              aria-disabled={disabled}
+              className={`min-h-[72px] rounded-xl border p-3 text-left transition-colors ${
+                active
+                  ? "border-primary bg-primary/10 text-primary"
+                  : disabled
+                    ? "border-white/10 opacity-50"
+                    : "border-white/10 hover:bg-white/5"
+              }`}
+            >
+              <span className="block text-sm font-semibold">{mode.label}</span>
+              <span className="mt-1 block text-xs text-on-surface-variant">
+                {disabled ? "Upload a video to use this mode" : mode.detail}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="rounded-xl border border-white/10 bg-surface/40 p-3 text-xs text-on-surface-variant">
+        {config.cover.mediaMode === "single-photo" && "A single cover photo gives the fastest first paint and cleanest hero."}
+        {config.cover.mediaMode === "slideshow" && "The public hero will use available gallery thumbnails as a rotating opener."}
+        {config.cover.mediaMode === "short-video" && "Short video mode plays the selected video cover when the cover asset is video."}
+        {config.cover.mediaMode === "photo-grid" && "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
+      </div>
+    </div>
+  );
+}
+
+function PanelScenes({
+  config,
+  setConfig,
+  assets,
+}: {
+  config: DesignConfig;
+  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+  assets: Asset[];
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold">Scene headers</h3>
+        <p className="text-xs text-on-surface-variant">
+          Prepare mini-cover moments for the rituals and story sections photographers deliver most often.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {config.sceneHeaders.map((scene) => (
+          <div
+            key={scene.id}
+            className={`space-y-3 rounded-xl border p-3 transition-colors ${
+              scene.enabled
+                ? "border-primary bg-primary/10"
+                : "border-white/10 hover:bg-white/5"
+            }`}
+          >
+            <label className="flex min-h-[40px] cursor-pointer items-center justify-between gap-3">
+              <span>
+                <span className="block text-sm font-semibold">{scene.label}</span>
+                <span className="block text-xs text-on-surface-variant">Scene header</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={scene.enabled}
+                onChange={(e) =>
+                  setConfig((c) => ({
+                    ...c,
+                    sceneHeaders: c.sceneHeaders.map((item) =>
+                      item.id === scene.id ? { ...item, enabled: e.target.checked } : item,
+                    ),
+                  }))
+                }
+                aria-label={`${scene.label} scene header`}
+                className="h-4 w-4 accent-primary"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] text-on-surface-variant">Mini-cover</span>
+              <select
+                value={scene.assetId || ""}
+                disabled={!scene.enabled}
+                onChange={(e) =>
+                  setConfig((c) => ({
+                    ...c,
+                    sceneHeaders: c.sceneHeaders.map((item) =>
+                      item.id === scene.id ? { ...item, assetId: e.target.value || null } : item,
+                    ),
+                  }))
+                }
+                aria-label={`${scene.label} mini-cover`}
+                className="min-h-[40px] w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm disabled:opacity-50"
+              >
+                <option value="">Use gallery cover</option>
+                {assets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {asset.filename}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-on-surface-variant/80">
+        Enabled scenes are saved with this cover design and can power future album/ritual section headers.
+      </p>
+    </div>
+  );
+}
+
+function PanelBrand({
+  config,
+  setConfig,
+}: {
+  config: DesignConfig;
+  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-semibold">Studio branding</h3>
+        <p className="text-xs text-on-surface-variant">
+          Add a monogram, brand tint, watermark behavior, and placement for the public cover.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1.5">
+          <span className="text-[11px] text-on-surface-variant">Monogram</span>
+          <input
+            value={config.branding.monogram}
+            onChange={(e) =>
+              setConfig((c) => ({
+                ...c,
+                branding: { ...c.branding, monogram: e.target.value.toUpperCase().slice(0, 4) },
+              }))
+            }
+            placeholder="AR"
+            className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm uppercase transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
+            aria-label="Monogram"
+          />
+        </label>
+        <label className="space-y-1.5">
+          <span className="text-[11px] text-on-surface-variant">Brand color</span>
+          <input
+            type="color"
+            value={config.branding.brandColor || config.theme.accentColor || "#ffffff"}
+            onChange={(e) =>
+              setConfig((c) => ({
+                ...c,
+                branding: { ...c.branding, brandColor: e.target.value },
+                theme: { ...c.theme, accentColor: e.target.value },
+              }))
+            }
+            className="h-10 w-full cursor-pointer rounded-lg border border-white/10 bg-surface p-1"
+            aria-label="Brand color"
+          />
+        </label>
+      </div>
+
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Logo placement</h4>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {LOGO_PLACEMENTS.map((placement) => {
+            const active = config.branding.logoPlacement === placement.id;
+            return (
+              <button
+                key={placement.id}
+                type="button"
+                onClick={() => setConfig((c) => ({
+                  ...c,
+                  branding: { ...c.branding, logoPlacement: placement.id },
+                }))}
+                aria-pressed={active}
+                className={`min-h-[40px] rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-white/10 hover:bg-white/5"
+                }`}
+              >
+                {placement.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Watermark style</h4>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {WATERMARK_STYLES.map((watermark) => {
+            const active = config.branding.watermarkStyle === watermark.id;
+            return (
+              <button
+                key={watermark.id}
+                type="button"
+                onClick={() => setConfig((c) => ({
+                  ...c,
+                  branding: { ...c.branding, watermarkStyle: watermark.id },
+                }))}
+                aria-pressed={active}
+                className={`min-h-[40px] rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-white/10 hover:bg-white/5"
+                }`}
+              >
+                {watermark.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <span>
+          <span className="block text-sm font-medium">Apply this look to all galleries</span>
+          <span className="block text-xs text-on-surface-variant">
+            Saved as intent for the studio design system.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={config.branding.applyToAll}
+          onChange={(e) =>
+            setConfig((c) => ({
+              ...c,
+              branding: { ...c.branding, applyToAll: e.target.checked },
+            }))
+          }
+          className="h-4 w-4 accent-primary"
+        />
+      </label>
     </div>
   );
 }

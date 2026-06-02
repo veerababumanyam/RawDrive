@@ -62,6 +62,16 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toMatch(/galleryAssets\.map\(async/);
   });
 
+  it("deduplicates gallery-asset junction rows by asset_id before hydration", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("dedupeGalleryAssetEntries");
+    expect(source).toContain("seenAssetIds");
+    expect(source).toContain("seenAssetIds.has(entry.asset_id)");
+    expect(source).toContain("const uniqueEntries = dedupeGalleryAssetEntries(entries)");
+    expect(source).toContain("uniqueEntries.length");
+  });
+
   // F-046: the grid must render a bounded window of the filtered assets with
   // a load-more affordance, not map the entire visibleAssets set at once.
   it("F-046: grid renders a paged window with a Load-more control, not the full set", () => {
@@ -249,6 +259,24 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('variant="danger"');
     expect(source).toContain("Publish gallery");
     expect(source).toContain("Share links");
+  });
+
+  it("surfaces publish-required feedback for gallery and sub-gallery QR actions", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("SHARE_UNAVAILABLE_MESSAGE");
+    expect(source).toContain('onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}');
+    expect(source).toContain('aria-disabled={!gallery.is_published}');
+    expect(source).toContain("Publish this gallery before sharing client links.");
+  });
+
+  it("refreshes gallery rows shortly after initial load so late-linked processing photos update counts", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("ASSET_SETTLE_REFRESH_DELAYS_MS");
+    expect(source).toContain("assetRowsSignature");
+    expect(source).toContain("refreshGalleryAssets({ skipIfRowsUnchanged: true })");
+    expect(source).toContain("late-linked assets");
   });
 
   it("keeps tethered capture behind an Enable switch and starts watching only from Watch folder", () => {

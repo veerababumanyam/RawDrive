@@ -27,6 +27,7 @@ import { buildCsp } from "@/lib/csp";
  *   - reserved labels (`api`, `app`, `admin`, …) — defense-in-depth; nginx already
  *     routes the exact-match `api.rawdrive.in` to the backend
  *   - paths starting with `/_next/`, `/api/`, `/static/`, `/g/`
+ *   - public static assets (`/manifest.json`, `/theme-init.js`, `/logo/*.png`, …)
  *   - hosts not ending in `.rawdrive.in` (localhost dev, IP-direct access)
  *
  * MUST stay in sync with the reserved labels in
@@ -67,7 +68,17 @@ const RESERVED_SUBDOMAINS = new Set([
 ]);
 
 const PASS_THROUGH_PREFIXES = ["/_next/", "/api/", "/static/", "/g/"];
-const PASS_THROUGH_EXACT = new Set(["/favicon.ico", "/robots.txt", "/sitemap.xml", "/llms.txt"]);
+const PASS_THROUGH_EXACT = new Set([
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/llms.txt",
+  "/manifest.json",
+  "/service-worker.js",
+  "/theme-init.js",
+  "/offline.html",
+]);
+const PUBLIC_FILE_EXTENSION_RE = /\/[^/]+\.[^/]+$/;
 
 // The trailing portion of a business subdomain — exactly 8 lowercase
 // alphanumerics preceded by a single hyphen. e.g. `-a1b2c3d4` at the end of
@@ -148,6 +159,18 @@ export function resolveBusinessSubdomainRewrite(
   };
 }
 
+export function shouldPassThroughBusinessSubdomainPath(pathname: string): boolean {
+  if (PASS_THROUGH_EXACT.has(pathname)) {
+    return true;
+  }
+  for (const prefix of PASS_THROUGH_PREFIXES) {
+    if (pathname.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return PUBLIC_FILE_EXTENSION_RE.test(pathname);
+}
+
 export function middleware(req: NextRequest) {
   // F-098: build the nonced CSP once per request. The nonce is forwarded on the
   // REQUEST headers so Next.js stamps it onto its framework/bootstrap scripts
@@ -182,13 +205,8 @@ export function middleware(req: NextRequest) {
   }
 
   const { pathname, search } = req.nextUrl;
-  if (PASS_THROUGH_EXACT.has(pathname)) {
+  if (shouldPassThroughBusinessSubdomainPath(pathname)) {
     return pass();
-  }
-  for (const prefix of PASS_THROUGH_PREFIXES) {
-    if (pathname.startsWith(prefix)) {
-      return pass();
-    }
   }
 
   const rewritten = req.nextUrl.clone();
@@ -212,6 +230,9 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|llms\\.txt).*)",
+    // Skip generated assets and every extension-bearing public asset. Gallery
+    // slugs are generated without dots, so extension paths are static files,
+    // not gallery routes.
+    "/((?!_next/static|_next/image|.*\\.[^/]+$).*)",
   ],
 };

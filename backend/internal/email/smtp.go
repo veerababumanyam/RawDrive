@@ -200,17 +200,95 @@ func sendConfigured(mailer Mailer, cfg *SMTPConfig, to string, msg []byte) error
 // field in the test, which is what the current tests do).
 var defaultMailer Mailer = sendSMTP
 
+// smtpDialTimeout bounds the TCP connect phase of every SMTP send;
+// smtpOverallTimeout bounds the full SMTP conversation once connected. They
+// are package vars (not consts) so tests can shrink them. Without a dial
+// timeout a slow or black-holed relay — or, in local dev, the Docker Desktop
+// port-proxy's multi-second cold-connect to the published Mailpit port —
+// blocks the OTP / registration HTTP request for the full OS connect timeout
+// (tens of seconds), which is exactly the "OTP isn't sent immediately" symptom.
+// A bounded dial turns that hang into a fast, retryable failure;
+// auth.otpService.Generate already rolls back the unsent code on send error.
+var (
+	smtpDialTimeout    = 10 * time.Second
+	smtpOverallTimeout = 30 * time.Second
+)
+
 // sendSMTP preserves net/smtp.SendMail behavior for plaintext and
 // STARTTLS providers, and adds the implicit-TLS path required by
 // SMTPS providers. Explicit smtp_security settings win; "auto"
-// preserves the conventional port-465 implicit TLS behavior.
+// preserves the conventional port-465 implicit TLS behavior. Both paths
+// bound the dial and the overall conversation with timeouts so a stalled
+// relay can never block the caller's request indefinitely.
 func sendSMTP(cfg *SMTPConfig, to []string, msg []byte) error {
 	addr := smtpAddr(cfg)
 	auth := smtpAuth(cfg)
 	if usesImplicitTLS(cfg) {
 		return sendMailImplicitTLS(cfg.Host, addr, auth, cfg.FromAddress, to, msg)
 	}
-	return smtp.SendMail(addr, auth, cfg.FromAddress, to, msg)
+	return sendMailWithTimeout(cfg, addr, auth, cfg.FromAddress, to, msg)
+}
+
+// sendMailWithTimeout replicates net/smtp.SendMail (plaintext with an optional
+// STARTTLS upgrade and optional PLAIN auth) but dials with smtpDialTimeout and
+// arms an smtpOverallTimeout deadline on the connection. net/smtp.SendMail
+// offers no hook for either, so a hung connect or a relay that stalls mid-DATA
+// would otherwise block the goroutine — and the inbound HTTP request — forever.
+func sendMailWithTimeout(cfg *SMTPConfig, addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+	conn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
+	if err != nil {
+		return err
+	}
+	// One deadline for the whole SMTP exchange; the conn is closed by
+	// c.Close()/c.Quit() below, which clears it.
+	_ = conn.SetDeadline(time.Now().Add(smtpOverallTimeout))
+
+	c, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	defer c.Close()
+
+	if err := c.Hello("localhost"); err != nil {
+		return err
+	}
+	// Upgrade to TLS when the relay advertises STARTTLS (the 587 path used by
+	// Postmark / SendGrid / SES). Mailpit on 1025 does not advertise it, so
+	// this stays a no-op for local dev.
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		if err := c.StartTLS(&tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
+			return err
+		}
+	}
+	if a != nil {
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err := c.Auth(a); err != nil {
+			return err
+		}
+	}
+	if err := c.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range to {
+		if err := c.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		_ = w.Close()
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return c.Quit()
 }
 
 func smtpAddr(cfg *SMTPConfig) string {
@@ -242,7 +320,7 @@ func usesImplicitTLS(cfg *SMTPConfig) bool {
 }
 
 func sendMailImplicitTLS(host, addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
 	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
 		ServerName: host,
 		MinVersion: tls.VersionTLS12,
@@ -250,6 +328,7 @@ func sendMailImplicitTLS(host, addr string, a smtp.Auth, from string, to []strin
 	if err != nil {
 		return err
 	}
+	_ = conn.SetDeadline(time.Now().Add(smtpOverallTimeout))
 
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {

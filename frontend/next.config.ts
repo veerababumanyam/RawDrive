@@ -14,9 +14,9 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 // NOT listed here: a header configured in next.config.ts is computed once and
 // cannot carry a per-request nonce, and a second static CSP would intersect with
 // the nonced one in the browser and break 'strict-dynamic' script loading. The
-// middleware matcher covers every HTML route; static assets it skips
-// (_next/static, _next/image, favicon, robots, sitemap) do not execute inline
-// scripts, so they need no CSP.
+// middleware matcher covers every HTML route; generated assets and public
+// static files with extensions do not execute inline scripts, so they need no
+// CSP.
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },

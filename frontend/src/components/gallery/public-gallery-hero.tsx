@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, type CSSProperties } from "react";
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getCoverStyleById } from "@/components/gallery/cover-styles";
@@ -85,6 +86,8 @@ const HERO_VARIANTS = [
   "display_webp",
 ] as const;
 
+type PublicCoverConfig = NonNullable<PublicDesignConfig["cover"]>;
+
 function resolvePublicCoverAsset(gallery: Gallery, assets: PublicAsset[]): PublicAsset | null {
   const preferred = gallery.cover_asset_id
     ? assets.find((asset) => asset.id === gallery.cover_asset_id)
@@ -148,6 +151,124 @@ function variantScrim(variant: "light" | "dark" | "auto" | undefined): string | 
   return null;
 }
 
+function coverExperienceScrim(
+  style: PublicCoverConfig["scrimStyle"],
+  variant: "light" | "dark" | "auto" | undefined,
+): string | null {
+  if (style === "none") return null;
+  if (style === "soft-gradient") return "linear-gradient(to bottom, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.52))";
+  if (style === "cinematic-dark") return "linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.68))";
+  if (style === "warm-vignette") {
+    return "radial-gradient(circle at 50% 45%, rgba(255, 196, 87, 0.18), rgba(0, 0, 0, 0.58) 72%)";
+  }
+  if (style === "blur-band") return "linear-gradient(to bottom, transparent 36%, rgba(0, 0, 0, 0.64) 55%, transparent 76%)";
+  if (style === "light-wash") return "linear-gradient(to bottom, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08))";
+  return variantScrim(variant);
+}
+
+function textBackdropStyle(
+  backdrop: PublicCoverConfig["textBackdrop"],
+): CSSProperties | undefined {
+  if (backdrop === "glass") {
+    return {
+      background: "rgba(255, 255, 255, 0.16)",
+      backdropFilter: "blur(14px) saturate(160%)",
+      border: "1px solid rgba(255, 255, 255, 0.24)",
+      borderRadius: "12px",
+      padding: "0.12em 0.26em",
+    };
+  }
+  if (backdrop === "dark") {
+    return {
+      background: "rgba(0, 0, 0, 0.42)",
+      borderRadius: "12px",
+      padding: "0.12em 0.26em",
+    };
+  }
+  if (backdrop === "light") {
+    return {
+      background: "rgba(255, 255, 255, 0.76)",
+      borderRadius: "12px",
+      padding: "0.12em 0.26em",
+    };
+  }
+  return undefined;
+}
+
+function useIsMobileViewport() {
+  const [mobile, setMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(max-width: 640px)");
+    const update = () => setMobile(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  return mobile;
+}
+
+function placementClass(placement: NonNullable<PublicDesignConfig["branding"]>["logoPlacement"] | undefined) {
+  if (placement === "top-right") return "top-6 right-6";
+  if (placement === "bottom-left") return "bottom-6 left-6";
+  if (placement === "bottom-right") return "bottom-6 right-6";
+  return "top-6 left-6";
+}
+
+function mediaUrlForAsset(asset: PublicAsset | null | undefined): string {
+  return pickFromThumbnails(asset?.thumbnail_urls);
+}
+
+function sceneCoverUrl(
+  scene: NonNullable<PublicDesignConfig["sceneHeaders"]>[number],
+  assets: PublicAsset[],
+  fallbackAsset: PublicAsset | null,
+): string {
+  const sceneAsset = scene.assetId ? assets.find((asset) => asset.id === scene.assetId) : null;
+  return mediaUrlForAsset(sceneAsset || fallbackAsset);
+}
+
+function CoverSlideshow({
+  coverUrl,
+  assets,
+  title,
+  objectPosition,
+}: {
+  coverUrl: string;
+  assets: PublicAsset[];
+  title: string;
+  objectPosition: string;
+}) {
+  const urls = [
+    coverUrl,
+    ...assets.map((asset) => mediaUrlForAsset(asset)),
+  ].filter((url, index, all): url is string => Boolean(url) && all.indexOf(url) === index);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (urls.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % urls.length);
+    }, 4500);
+    return () => window.clearInterval(timer);
+  }, [urls.length]);
+
+  if (urls.length === 0) return null;
+
+  return (
+    <img
+      src={urls[index] || urls[0]}
+      alt={title}
+      className="absolute inset-0 h-full w-full object-cover transition-opacity"
+      style={{ objectPosition }}
+      loading="eager"
+      data-testid="gallery-cover-slideshow"
+    />
+  );
+}
+
 // Builds a fonts.googleapis.com URL for the heading and body fonts the
 // design studio picked. The studio injects fonts at design time via
 // dynamic <link>; on the public viewer we add a static <link> in the
@@ -172,6 +293,7 @@ export function PublicGalleryHero({
   designCoverAsset,
   designCoverThumbnails,
 }: PublicGalleryHeroProps) {
+  const mobileViewport = useIsMobileViewport();
   const canUseStudioBrand = Boolean(branding?.can_customize && branding.public_branding_enabled !== false);
   // Brand chip only renders when the studio HAS configured branding for
   // the public viewer. Prior to this fix, the fallback was the literal
@@ -209,10 +331,11 @@ export function PublicGalleryHero({
     );
     const accent = design.theme?.accentColor || studioAccent || "";
     const variant = design.theme?.variant;
-    const scrim = variantScrim(variant);
+    const scrim = coverExperienceScrim(design.cover?.scrimStyle, variant);
     const focal = design.cover?.focalPoint;
+    const mobileFocal = design.cover?.mobileFocalPoint;
     const objectPosition = focal
-      ? `${focal.x}% ${focal.y}%`
+      ? `${mobileViewport && mobileFocal ? mobileFocal.x : focal.x}% ${mobileViewport && mobileFocal ? mobileFocal.y : focal.y}%`
       : designStyle.objectPosition;
     const title = design.cover?.title?.trim() || gallery.title;
     const subtitle = design.cover?.subtitle?.trim() || gallery.description || "";
@@ -234,6 +357,8 @@ export function PublicGalleryHero({
     // Aspect-ratio override from the Cover & Design page lets the user
     // crop a 21/9 panoramic style to 4/3 without picking a new style.
     const effectiveAspectRatio = design.cover?.aspectRatio || designStyle.aspectRatio;
+    const mobileAspectRatio = design.cover?.mobileAspectRatio || "4/5";
+    const renderedAspectRatio = mobileViewport ? mobileAspectRatio : effectiveAspectRatio;
     const titlePos = design.cover?.titlePosition;
     const subtitlePos = design.cover?.subtitlePosition;
     const useDragLayout = Boolean(titlePos || subtitlePos);
@@ -248,6 +373,21 @@ export function PublicGalleryHero({
     const textShadow = design.cover?.textShadow
       ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
       : undefined;
+    const backdropStyle = textBackdropStyle(design.cover?.textBackdrop);
+    const mediaMode = design.cover?.mediaMode || "single-photo";
+    const enabledScenes = (design.sceneHeaders || []).filter((scene) => scene.enabled);
+    const coverForGrid = resolvedDesignCoverAsset || legacyCoverAsset;
+    const photoGridAssets = [
+      coverForGrid,
+      ...assets.filter((asset) => asset.id !== coverForGrid?.id),
+    ].filter((asset): asset is PublicAsset => Boolean(asset)).slice(0, 4);
+    const showPhotoGrid = mediaMode === "photo-grid" && photoGridAssets.length > 1;
+    const showVideo = mediaMode === "short-video" && resolvedDesignCoverAsset?.content_type?.startsWith("video/");
+    const showSlideshow = mediaMode === "slideshow" && photoGridAssets.length > 1;
+    const activeLogoPlacement = design.branding?.logoPlacement;
+    const showBrandChip = activeLogoPlacement !== "hidden" && (logoUrl || brandName || design.branding?.monogram);
+    const monogram = design.branding?.monogram?.trim();
+    const brandColor = design.branding?.brandColor || accent || textColor || "#ffffff";
     // Title and subtitle are anchored at their CENTER regardless of
     // textAlign — matches the Cover & Design editor's drag behavior
     // (Canva/Figma-style: object grabbed at visual middle). textAlign
@@ -276,14 +416,55 @@ export function PublicGalleryHero({
       <section
         className="relative flex w-full overflow-hidden"
         style={{
-          aspectRatio: effectiveAspectRatio,
+          aspectRatio: renderedAspectRatio,
           minHeight: "60vh",
           maxHeight: "85vh",
         }}
         data-cover-style={designStyle.id}
       >
         {fontsHref && <link rel="stylesheet" href={fontsHref} />}
-        {coverUrl && (
+        {showPhotoGrid ? (
+          <div
+            className="absolute inset-0 grid grid-cols-2 grid-rows-2"
+            data-testid="gallery-cover-photo-grid"
+          >
+            {photoGridAssets.map((asset, idx) => {
+              const src = idx === 0 ? coverUrl || mediaUrlForAsset(asset) : mediaUrlForAsset(asset);
+              return (
+                <div key={`${asset.id}-${idx}`} className="relative overflow-hidden">
+                  {src && (
+                    <img
+                      src={src}
+                      alt={idx === 0 ? title : ""}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ objectPosition }}
+                      loading={idx === 0 ? "eager" : "lazy"}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : showVideo && coverUrl ? (
+          <video
+            className="absolute inset-0 h-full w-full object-cover"
+            src={coverUrl}
+            poster={mediaUrlForAsset(resolvedDesignCoverAsset)}
+            style={{ objectPosition }}
+            muted
+            loop
+            playsInline
+            autoPlay
+            data-testid="gallery-cover-video"
+          />
+        ) : showSlideshow ? (
+          <CoverSlideshow
+            coverUrl={coverUrl}
+            assets={photoGridAssets}
+            title={title}
+            objectPosition={objectPosition}
+          />
+        ) : coverUrl && (
           <img
             src={coverUrl}
             alt={title}
@@ -295,7 +476,7 @@ export function PublicGalleryHero({
         {designStyle.overlay && (
           <div className="absolute inset-0" style={{ background: designStyle.overlay }} />
         )}
-        {scrim && <div className="absolute inset-0" style={{ background: scrim }} />}
+        {scrim && <div className="absolute inset-0" style={{ background: scrim }} data-testid="gallery-cover-scrim" />}
 
         {useDragLayout ? (
           // Drag-positioned overlay — title and subtitle are absolutely
@@ -306,6 +487,7 @@ export function PublicGalleryHero({
             {titlePos && (
               <h1
                 className="absolute font-semibold tracking-tight"
+                data-testid="gallery-cover-title"
                 style={{
                   left: `${titlePos.x}%`,
                   top: `${titlePos.y}%`,
@@ -316,6 +498,7 @@ export function PublicGalleryHero({
                   textShadow,
                   textAlign: effectiveAlign,
                   whiteSpace: "pre",
+                  ...backdropStyle,
                 }}
               >
                 {title}
@@ -324,6 +507,7 @@ export function PublicGalleryHero({
             {subtitle && subtitlePos && (
               <p
                 className="absolute"
+                data-testid="gallery-cover-subtitle"
                 style={{
                   left: `${subtitlePos.x}%`,
                   top: `${subtitlePos.y}%`,
@@ -334,14 +518,15 @@ export function PublicGalleryHero({
                   textShadow,
                   textAlign: effectiveAlign,
                   whiteSpace: "pre",
+                  ...backdropStyle,
                 }}
               >
                 {subtitle}
               </p>
             )}
-            {(logoUrl || brandName) && (
+            {showBrandChip && (
               <div
-                className="absolute top-6 left-6 flex items-center gap-3"
+                className={`absolute flex items-center gap-3 ${placementClass(activeLogoPlacement)}`}
                 style={{
                   color: textColor || "#ffffff",
                   textShadow,
@@ -359,6 +544,50 @@ export function PublicGalleryHero({
                     {brandName}
                   </span>
                 )}
+                {monogram && (
+                  <span
+                    className="inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-white/25 px-2 text-sm font-semibold"
+                    style={{ color: brandColor, borderColor: brandColor }}
+                  >
+                    {monogram}
+                  </span>
+                )}
+              </div>
+            )}
+            {design.branding?.watermarkStyle && design.branding.watermarkStyle !== "none" && (
+              <span
+                className={`pointer-events-none absolute left-6 text-xs font-semibold uppercase tracking-[0.22em] opacity-70 ${
+                  enabledScenes.length > 0 ? "bottom-24" : "bottom-5"
+                }`}
+                style={{ color: brandColor, textShadow }}
+                aria-hidden
+              >
+                {monogram || brandName}
+              </span>
+            )}
+            {enabledScenes.length > 0 && (
+              <div
+                className="absolute bottom-6 left-6 right-40 flex gap-2 overflow-x-auto pb-1"
+                data-testid="gallery-scene-headers"
+              >
+                {enabledScenes.map((scene) => (
+                  <a
+                    key={scene.id}
+                    href="#gallery-grid"
+                    className="flex min-w-28 items-center gap-2 rounded-xl border border-white/25 bg-black/35 p-1.5 pr-3 text-xs font-medium text-white backdrop-blur-md transition-colors hover:bg-black/45"
+                    data-testid={`gallery-scene-header-${scene.id}`}
+                  >
+                    {sceneCoverUrl(scene, assets, coverForGrid) && (
+                      <img
+                        src={sceneCoverUrl(scene, assets, coverForGrid)}
+                        alt={`${scene.label} scene cover`}
+                        className="h-10 w-10 rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    <span>{scene.label}</span>
+                  </a>
+                ))}
               </div>
             )}
             <a
@@ -391,11 +620,13 @@ export function PublicGalleryHero({
             )}
             <h1
               className="font-semibold tracking-tight text-text-inverse"
+              data-testid="gallery-cover-title"
               style={{
                 fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
                 fontSize: titleSize ? `${titleSize}px` : undefined,
                 color: titleColor || accent || undefined,
                 textShadow,
+                ...backdropStyle,
               }}
             >
               {title}
@@ -403,15 +634,43 @@ export function PublicGalleryHero({
             {subtitle && (
               <p
                 className="mt-3 max-w-2xl text-text-inverse/85"
+                data-testid="gallery-cover-subtitle"
                 style={{
                   fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
                   color: subtitleColor || undefined,
                   textShadow,
+                  ...backdropStyle,
                 }}
               >
                 {subtitle}
               </p>
+            )}
+            {enabledScenes.length > 0 && (
+              <div
+                className="mt-5 flex max-w-2xl flex-wrap gap-2"
+                style={{ justifyContent: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}
+                data-testid="gallery-scene-headers"
+              >
+                {enabledScenes.map((scene) => (
+                  <a
+                    key={scene.id}
+                    href="#gallery-grid"
+                    className="flex items-center gap-2 rounded-xl border border-white/25 bg-surface-overlay p-1.5 pr-3 text-xs font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+                    data-testid={`gallery-scene-header-${scene.id}`}
+                  >
+                    {sceneCoverUrl(scene, assets, coverForGrid) && (
+                      <img
+                        src={sceneCoverUrl(scene, assets, coverForGrid)}
+                        alt={`${scene.label} scene cover`}
+                        className="h-10 w-10 rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    <span>{scene.label}</span>
+                  </a>
+                ))}
+              </div>
             )}
             <div className="mt-8" style={{ alignSelf: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}>
               <a

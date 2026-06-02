@@ -119,4 +119,41 @@ describe("PhotoLightbox", () => {
       createElementSpy.mockRestore();
     }
   });
+
+  it("keeps a submitted comment visible after persistence succeeds", async () => {
+    const onComment = vi.fn().mockResolvedValue({
+      id: "comment-1",
+      asset_id: "asset-delete",
+      author_name: "Studio",
+      body: "Please retouch the flower garland.",
+      created_at: "2026-06-02T08:30:00Z",
+    });
+
+    render(
+      <PhotoLightbox
+        asset={photo()}
+        onClose={vi.fn()}
+        hasPrev={false}
+        hasNext={false}
+        onComment={onComment}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /comments/i }));
+    fireEvent.change(screen.getByPlaceholderText("Add a comment..."), {
+      target: { value: "Please retouch the flower garland." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+    await waitFor(() => {
+      expect(onComment).toHaveBeenCalledWith(
+        "asset-delete",
+        "Please retouch the flower garland.",
+      );
+    });
+    expect(
+      await screen.findByText("Please retouch the flower garland."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No comments yet")).toBeNull();
+  });
 });

@@ -30,7 +30,19 @@ export interface PublicDesignConfig {
   cover?: {
     assetId?: string | null;
     styleId?: string;
+    layoutPreset?:
+      | "classic-wedding"
+      | "editorial-split"
+      | "luxury-dark"
+      | "haldi-warm"
+      | "reception-glow"
+      | "minimal-studio"
+      | "story-cover"
+      | "proofing-first";
+    mediaMode?: "single-photo" | "slideshow" | "short-video" | "photo-grid";
     focalPoint?: { x: number; y: number };
+    mobileFocalPoint?: { x: number; y: number };
+    mobileAspectRatio?: string;
     title?: string;
     subtitle?: string;
     // Free-positioned text overlay — written by the Cover & Design page's
@@ -51,6 +63,14 @@ export interface PublicDesignConfig {
     titleColor?: string;
     subtitleColor?: string;
     textShadow?: boolean;
+    scrimStyle?:
+      | "none"
+      | "soft-gradient"
+      | "cinematic-dark"
+      | "warm-vignette"
+      | "blur-band"
+      | "light-wash";
+    textBackdrop?: "none" | "glass" | "dark" | "light";
     // Aspect-ratio override for the cover frame. When set, replaces the
     // styleId's declared aspectRatio so users can crop a 21/9 panoramic
     // to 4/3 without picking a whole new style. Format: "W/H" string.
@@ -68,6 +88,18 @@ export interface PublicDesignConfig {
     columns?: number;
     gap?: number;
     showInfo?: boolean;
+  };
+  sceneHeaders?: Array<{
+    id: string;
+    label: string;
+    enabled: boolean;
+    assetId?: string | null;
+  }>;
+  branding?: {
+    logoPlacement?: "hidden" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+    monogram?: string;
+    brandColor?: string;
+    watermarkStyle?: "none" | "subtle-corner" | "center-mark" | "tiled";
   };
   version?: number;
 }
@@ -88,6 +120,55 @@ function asObject(v: unknown): Record<string, unknown> | undefined {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
 
+function asOneOf<T extends readonly string[]>(value: unknown, allowed: T): T[number] | undefined {
+  const text = asString(value);
+  return text && allowed.includes(text) ? text : undefined;
+}
+
+const COVER_PRESETS = [
+  "classic-wedding",
+  "editorial-split",
+  "luxury-dark",
+  "haldi-warm",
+  "reception-glow",
+  "minimal-studio",
+  "story-cover",
+  "proofing-first",
+] as const;
+
+const MEDIA_MODES = ["single-photo", "slideshow", "short-video", "photo-grid"] as const;
+const SCRIM_STYLES = ["none", "soft-gradient", "cinematic-dark", "warm-vignette", "blur-band", "light-wash"] as const;
+const TEXT_BACKDROPS = ["none", "glass", "dark", "light"] as const;
+const LOGO_PLACEMENTS = ["hidden", "top-left", "top-right", "bottom-left", "bottom-right"] as const;
+const WATERMARK_STYLES = ["none", "subtle-corner", "center-mark", "tiled"] as const;
+
+function readPoint(value: unknown, fallbackY: number) {
+  const point = asObject(value);
+  if (!point) return undefined;
+  return {
+    x: asNumber(point.x) ?? 50,
+    y: asNumber(point.y) ?? fallbackY,
+  };
+}
+
+function readSceneHeaders(raw: unknown): PublicDesignConfig["sceneHeaders"] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const scenes = raw.flatMap((entry) => {
+    const scene = asObject(entry);
+    if (!scene) return [];
+    const id = asString(scene.id);
+    const label = asString(scene.label);
+    if (!id || !label) return [];
+    return [{
+      id,
+      label,
+      enabled: asBool(scene.enabled) ?? false,
+      assetId: asString(scene.assetId) ?? null,
+    }];
+  });
+  return scenes.length > 0 ? scenes : undefined;
+}
+
 export function readPublicDesignConfig(
   settings: Record<string, unknown> | undefined | null,
 ): PublicDesignConfig | null {
@@ -100,12 +181,12 @@ export function readPublicDesignConfig(
   const coverRaw = asObject(root.cover);
   const typoRaw = asObject(root.typography);
   const gridRaw = asObject(root.grid);
+  const brandingRaw = asObject(root.branding);
   const focal = asObject(coverRaw?.focalPoint);
-  const titlePos = asObject(coverRaw?.titlePosition);
-  const subtitlePos = asObject(coverRaw?.subtitlePosition);
   const variant = asString(themeRaw?.variant);
   const layout = asString(gridRaw?.layout);
   const coverTextAlign = asString(coverRaw?.textAlign);
+  const sceneHeaders = readSceneHeaders(root.sceneHeaders);
 
   return {
     theme: themeRaw
@@ -119,20 +200,20 @@ export function readPublicDesignConfig(
       ? {
           assetId: asString(coverRaw.assetId) ?? null,
           styleId: asString(coverRaw.styleId),
+          layoutPreset: asOneOf(coverRaw.layoutPreset, COVER_PRESETS),
+          mediaMode: asOneOf(coverRaw.mediaMode, MEDIA_MODES),
           focalPoint: focal
             ? {
                 x: asNumber(focal.x) ?? 50,
                 y: asNumber(focal.y) ?? 50,
               }
             : undefined,
+          mobileFocalPoint: readPoint(coverRaw.mobileFocalPoint, 50),
+          mobileAspectRatio: asString(coverRaw.mobileAspectRatio),
           title: asString(coverRaw.title),
           subtitle: asString(coverRaw.subtitle),
-          titlePosition: titlePos
-            ? { x: asNumber(titlePos.x) ?? 50, y: asNumber(titlePos.y) ?? 50 }
-            : undefined,
-          subtitlePosition: subtitlePos
-            ? { x: asNumber(subtitlePos.x) ?? 50, y: asNumber(subtitlePos.y) ?? 60 }
-            : undefined,
+          titlePosition: readPoint(coverRaw.titlePosition, 50),
+          subtitlePosition: readPoint(coverRaw.subtitlePosition, 60),
           textAlign:
             coverTextAlign === "left" || coverTextAlign === "center" || coverTextAlign === "right"
               ? coverTextAlign
@@ -141,6 +222,8 @@ export function readPublicDesignConfig(
           titleColor: asString(coverRaw.titleColor),
           subtitleColor: asString(coverRaw.subtitleColor),
           textShadow: asBool(coverRaw.textShadow),
+          scrimStyle: asOneOf(coverRaw.scrimStyle, SCRIM_STYLES),
+          textBackdrop: asOneOf(coverRaw.textBackdrop, TEXT_BACKDROPS),
           aspectRatio: asString(coverRaw.aspectRatio),
         }
       : undefined,
@@ -162,6 +245,15 @@ export function readPublicDesignConfig(
           columns: asNumber(gridRaw.columns),
           gap: asNumber(gridRaw.gap),
           showInfo: asBool(gridRaw.showInfo),
+      }
+      : undefined,
+    sceneHeaders,
+    branding: brandingRaw
+      ? {
+          logoPlacement: asOneOf(brandingRaw.logoPlacement, LOGO_PLACEMENTS),
+          monogram: asString(brandingRaw.monogram),
+          brandColor: asString(brandingRaw.brandColor),
+          watermarkStyle: asOneOf(brandingRaw.watermarkStyle, WATERMARK_STYLES),
         }
       : undefined,
     version: asNumber(root.version),
@@ -179,4 +271,12 @@ export function readPublicCoverThumbnails(
     if (typeof v === "string" && v.length > 0) out[k] = v;
   }
   return Object.keys(out).length > 0 ? out : null;
+}
+
+export function readGalleryCoverAssetId(
+  settings: Record<string, unknown> | undefined | null,
+  fallbackAssetId?: string | null,
+): string | undefined {
+  const designAssetId = readPublicDesignConfig(settings)?.cover?.assetId;
+  return designAssetId || fallbackAssetId || undefined;
 }

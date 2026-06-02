@@ -321,6 +321,19 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if value, ok := raw["download_quality"]; ok {
+		var downloadQuality string
+		if err := json.Unmarshal(value, &downloadQuality); err != nil {
+			http.Error(w, `{"error":"invalid download_quality"}`, http.StatusBadRequest)
+			return
+		}
+		downloadQuality = strings.ToLower(strings.TrimSpace(downloadQuality))
+		if downloadQuality != "original" && downloadQuality != "webp" && downloadQuality != "both" {
+			http.Error(w, `{"error":"download_quality must be original, webp, or both"}`, http.StatusBadRequest)
+			return
+		}
+		gallery.DownloadQuality = downloadQuality
+	}
 	if value, ok := raw["sort_preference"]; ok {
 		if err := json.Unmarshal(value, &gallery.SortPreference); err != nil {
 			http.Error(w, `{"error":"invalid sort_preference"}`, http.StatusBadRequest)

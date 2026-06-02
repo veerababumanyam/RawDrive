@@ -51,3 +51,39 @@ func TestPublicDownloadVariantDefaultsToOriginal(t *testing.T) {
 		t.Fatalf("unexpected original variant: %+v", original)
 	}
 }
+
+func TestPublicDownloadFormatForPolicy(t *testing.T) {
+	tests := []struct {
+		name      string
+		requested string
+		policy    string
+		want      string
+		wantErr   bool
+	}{
+		{name: "missing policy defaults to webp", requested: "", policy: "", want: "webp"},
+		{name: "original policy defaults to original", requested: "", policy: "original", want: "original"},
+		{name: "original policy rejects webp", requested: "webp", policy: "original", wantErr: true},
+		{name: "webp policy defaults to webp", requested: "", policy: "webp", want: "webp"},
+		{name: "webp policy rejects original", requested: "original", policy: "webp", wantErr: true},
+		{name: "both policy accepts original", requested: "original", policy: "both", want: "original"},
+		{name: "both policy accepts webp", requested: "webp", policy: "both", want: "webp"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := publicDownloadFormatForPolicy(tc.requested, tc.policy)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got format %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("format mismatch: got %q want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -43,6 +43,7 @@ type Gallery struct {
 	CoverConfig      map[string]interface{} `json:"cover_config"`
 	ExpiresAt        *time.Time             `json:"expires_at,omitempty"`
 	DownloadEnabled  bool                   `json:"download_enabled"`
+	DownloadQuality  string                 `json:"download_quality"`
 	SortPreference   string                 `json:"sort_preference"`
 	WhatsappTemplate string                 `json:"whatsapp_template"`
 	// Face recognition toggles. Migrations 041 + 046 added the columns
@@ -71,6 +72,14 @@ type Gallery struct {
 	// access belongs to the desktop companion app, not the Go API.
 	TetheringEnabled bool    `json:"tethering_enabled"`
 	TetherDirectory  *string `json:"tether_directory,omitempty"`
+	// MusicAssetID (Gallery Enhancements June 2026, migration 142): optional
+	// background audio track for the client slideshow. References an audio
+	// asset (content_type audio/*) that was ingested through the normal
+	// asset-upload path, so its bytes already count against the workspace
+	// storage quota. Set via UpdateField("music_asset_id", ...) after the
+	// handler validates ownership + audio content-type (mirrors logo_asset_id).
+	// nil = no music.
+	MusicAssetID *uuid.UUID `json:"music_asset_id,omitempty"`
 	// CoverThumbnails is populated by List() via a LEFT JOIN on assets.
 	// Not a database column — only present in list responses.
 	CoverThumbnails map[string]string `json:"cover_thumbnails,omitempty"`
@@ -156,6 +165,9 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 	if g.SortPreference == "" {
 		g.SortPreference = "manual"
 	}
+	if g.DownloadQuality == "" {
+		g.DownloadQuality = "webp"
+	}
 	g.DownloadEnabled = true
 
 	_, err := r.pool.Exec(ctx,
@@ -163,15 +175,15 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 		 title, slug, description, cover_asset_id,
 		 gallery_type, settings, password_hash, watermark_config, is_published, max_selections,
 		 status, created_by, created_at, updated_at, published_at, archived_at,
-		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
+		 cover_template, cover_config, expires_at, download_enabled, download_quality, sort_preference, whatsapp_template,
 		 tethering_enabled, tether_directory)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)`,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)`,
 		g.ID, g.WorkspaceID, g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID,
 		g.GalleryType, g.Settings, g.PasswordHash, g.WatermarkConfig, g.IsPublished,
 		g.MaxSelections, g.Status, g.CreatedBy, g.CreatedAt, g.UpdatedAt,
 		g.PublishedAt, g.ArchivedAt,
-		g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled, g.SortPreference, g.WhatsappTemplate,
+		g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled, g.DownloadQuality, g.SortPreference, g.WhatsappTemplate,
 		g.TetheringEnabled, g.TetherDirectory,
 	)
 	if err != nil {
@@ -206,6 +218,7 @@ func (r *GalleryRepo) Duplicate(ctx context.Context, sourceID uuid.UUID, newTitl
 		CoverTemplate:    src.CoverTemplate,
 		CoverConfig:      src.CoverConfig,
 		DownloadEnabled:  src.DownloadEnabled,
+		DownloadQuality:  src.DownloadQuality,
 		SortPreference:   src.SortPreference,
 		WhatsappTemplate: src.WhatsappTemplate,
 		MaxSelections:    src.MaxSelections,
@@ -227,17 +240,17 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		 title, slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
-		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
+		 cover_template, cover_config, expires_at, download_enabled, COALESCE(download_quality, 'webp'), sort_preference, whatsapp_template,
 		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
-		 tethering_enabled, tether_directory
+		 tethering_enabled, tether_directory, music_asset_id
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
-		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.DownloadQuality, &g.SortPreference, &g.WhatsappTemplate,
 		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
-		&g.TetheringEnabled, &g.TetherDirectory,
+		&g.TetheringEnabled, &g.TetherDirectory, &g.MusicAssetID,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -257,17 +270,17 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		 title, slug, description, cover_asset_id, gallery_type,
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
-		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
+		 cover_template, cover_config, expires_at, download_enabled, COALESCE(download_quality, 'webp'), sort_preference, whatsapp_template,
 		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
-		 tethering_enabled, tether_directory
+		 tethering_enabled, tether_directory, music_asset_id
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
-		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.DownloadQuality, &g.SortPreference, &g.WhatsappTemplate,
 		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
-		&g.TetheringEnabled, &g.TetherDirectory,
+		&g.TetheringEnabled, &g.TetherDirectory, &g.MusicAssetID,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -292,7 +305,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		g.gallery_type, g.settings, g.password_hash, g.watermark_config, g.is_published,
 		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
 		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
-		g.download_enabled, g.sort_preference, g.whatsapp_template,
+		g.download_enabled, COALESCE(g.download_quality, 'webp'), g.sort_preference, g.whatsapp_template,
 		g.faceid_enabled, g.face_detection_enabled,
 		g.tethering_enabled, g.tether_directory,
 		cover_asset.thumbnail_urls
@@ -348,7 +361,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 			&g.CoverAssetID, &g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig,
 			&g.IsPublished, &g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt,
 			&g.UpdatedAt, &g.DeletedAt, &g.PublishedAt, &g.ArchivedAt,
-			&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
+			&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.DownloadQuality, &g.SortPreference, &g.WhatsappTemplate,
 			&g.FaceIDEnabled, &g.FaceDetectionEnabled,
 			&g.TetheringEnabled, &g.TetherDirectory,
 			&coverThumbs,
@@ -374,16 +387,16 @@ func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 		 title=$7, slug=$8, description=$9, cover_asset_id=$10,
 		 gallery_type=$11, settings=$12, password_hash=$13, watermark_config=$14,
 		 is_published=$15, max_selections=$16, status=$17, updated_at=$18, published_at=$19, archived_at=$20,
-		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24,
-		 sort_preference=$25, whatsapp_template=$26,
-		 faceid_enabled=$27, face_detection_enabled=$28,
-		 tethering_enabled=$29, tether_directory=$30
-		 WHERE id=$31 AND deleted_at IS NULL`,
+		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24, download_quality=$25,
+		 sort_preference=$26, whatsapp_template=$27,
+		 faceid_enabled=$28, face_detection_enabled=$29,
+		 tethering_enabled=$30, tether_directory=$31
+		 WHERE id=$32 AND deleted_at IS NULL`,
 		g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, g.Settings,
 		g.PasswordHash, g.WatermarkConfig, g.IsPublished, g.MaxSelections, g.Status,
 		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
-		g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled,
+		g.DownloadQuality, g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled,
 		g.TetheringEnabled, g.TetherDirectory, g.ID,
 	)
 	if err != nil {
@@ -535,8 +548,10 @@ func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, fiel
 		"faceid_enabled": true, "cover_config": true,
 		"face_detection_enabled": true, // M3 E8-S1 #6: privacy opt-out
 		// M19: Gallery Enhancement Suite (F-009)
-		"cover_template": true, "expires_at": true, "download_enabled": true,
+		"cover_template": true, "expires_at": true, "download_enabled": true, "download_quality": true,
 		"sort_preference": true, "whatsapp_template": true, "watermark_config": true,
+		"music_asset_id": true, // Gallery Enhancements June 2026 — slideshow background track
+
 		"contact_id": true, "primary_contact_id": true, "project_id": true,
 		"event_id": true, "deal_id": true, "invoice_id": true,
 		"published_at": true, "archived_at": true,
