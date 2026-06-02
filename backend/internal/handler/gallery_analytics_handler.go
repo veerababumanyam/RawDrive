@@ -19,11 +19,22 @@ const analyticsErrMsg = "analytics failed"
 // GalleryAnalyticsHandler handles gallery analytics HTTP requests.
 type GalleryAnalyticsHandler struct {
 	analyticsSvc *service.GalleryAnalyticsService
+	// galleryResolver enforces tenant ownership on gallery-scoped routes via
+	// guardGalleryWorkspace. Nil-safe: when unwired the guard fails closed.
+	galleryResolver *service.GalleryService
 }
 
 // NewGalleryAnalyticsHandler creates a new GalleryAnalyticsHandler.
 func NewGalleryAnalyticsHandler(svc *service.GalleryAnalyticsService) *GalleryAnalyticsHandler {
 	return &GalleryAnalyticsHandler{analyticsSvc: svc}
+}
+
+// WithGalleryResolver injects the gallery resolver used by guardGalleryWorkspace
+// to enforce tenant ownership before serving gallery-scoped routes. Chainable;
+// tolerates a nil resolver (the guard fails closed when the resolver is nil).
+func (h *GalleryAnalyticsHandler) WithGalleryResolver(gs *service.GalleryService) *GalleryAnalyticsHandler {
+	h.galleryResolver = gs
+	return h
 }
 
 // Bounds for analytics query parameters. Without an upper cap an
@@ -68,6 +79,11 @@ func (h *GalleryAnalyticsHandler) GetSummary(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+		return
+	}
+
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	days = clampDays(days)
 
@@ -85,6 +101,11 @@ func (h *GalleryAnalyticsHandler) GetDailyStats(w http.ResponseWriter, r *http.R
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -108,6 +129,10 @@ func (h *GalleryAnalyticsHandler) GetDeviceBreakdown(w http.ResponseWriter, r *h
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
 		return
 	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+		return
+	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	days = clampDays(days)
 	points, err := h.analyticsSvc.DeviceBreakdown(r.Context(), galleryID, days)
@@ -124,6 +149,10 @@ func (h *GalleryAnalyticsHandler) GetDownloadVelocity(w http.ResponseWriter, r *
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
@@ -144,6 +173,10 @@ func (h *GalleryAnalyticsHandler) GetShareChannels(w http.ResponseWriter, r *htt
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
 		return
 	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+		return
+	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	days = clampDays(days)
 	points, err := h.analyticsSvc.ShareChannelBreakdown(r.Context(), galleryID, days)
@@ -162,6 +195,10 @@ func (h *GalleryAnalyticsHandler) GetTopViews(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
 		return
 	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	limit = clampLimit(limit)
 	points, err := h.analyticsSvc.TopViewed(r.Context(), galleryID, limit)
@@ -178,6 +215,10 @@ func (h *GalleryAnalyticsHandler) GetTopDownloads(w http.ResponseWriter, r *http
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

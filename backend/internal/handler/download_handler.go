@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -17,6 +16,9 @@ import (
 // DownloadHandler handles download HTTP requests.
 type DownloadHandler struct {
 	downloadSvc *service.DownloadService
+	// galleryResolver enforces tenant ownership on gallery-scoped routes via
+	// guardGalleryWorkspace. Nil-safe: when unwired the guard fails closed.
+	galleryResolver *service.GalleryService
 }
 
 // NewDownloadHandler creates a new DownloadHandler.
@@ -24,11 +26,25 @@ func NewDownloadHandler(svc *service.DownloadService) *DownloadHandler {
 	return &DownloadHandler{downloadSvc: svc}
 }
 
+// WithGalleryResolver injects the gallery resolver used by guardGalleryWorkspace
+// to enforce tenant ownership before serving gallery-scoped routes. Chainable;
+// tolerates a nil resolver (the guard fails closed when the resolver is nil).
+func (h *DownloadHandler) WithGalleryResolver(gs *service.GalleryService) *DownloadHandler {
+	h.galleryResolver = gs
+	return h
+}
+
 // CreateJob handles POST /galleries/{id}/downloads
 func (h *DownloadHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	_, wsID, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID)
+	if !ok {
 		return
 	}
 
@@ -49,9 +65,6 @@ func (h *DownloadHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		}
 		assetIDs = append(assetIDs, uid)
 	}
-
-	wsIDStr := middleware.WorkspaceIDFromContext(r.Context())
-	wsID, _ := uuid.Parse(wsIDStr)
 
 	job := &repository.DownloadJob{
 		GalleryID:   galleryID,
@@ -77,7 +90,17 @@ func (h *DownloadHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job, err := h.downloadSvc.GetDownloadJob(r.Context(), jobID)
+	// tenant-ownership guard (integration audit 2026-05-31): the route is
+	// addressed by jobId alone, so scope the lookup by the caller's workspace.
+	// A cross-tenant job_id resolves to not-found (404), never another
+	// tenant's job.
+	wsID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace"}`, http.StatusBadRequest)
+		return
+	}
+
+	job, err := h.downloadSvc.GetDownloadJobInWorkspace(r.Context(), jobID, wsID)
 	if err != nil {
 		http.Error(w, `{"error":"job not found"}`, http.StatusNotFound)
 		return
@@ -91,6 +114,11 @@ func (h *DownloadHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -108,6 +136,11 @@ func (h *DownloadHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -132,6 +165,11 @@ func (h *DownloadHandler) GetAuditCSV(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid_gallery_id", "invalid gallery id")
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 
@@ -178,6 +216,11 @@ func (h *DownloadHandler) DownloadZIP(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
 

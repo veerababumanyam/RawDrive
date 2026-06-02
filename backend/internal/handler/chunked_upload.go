@@ -83,6 +83,35 @@ type UploadSessionStore interface {
 	Delete(ctx context.Context, tusUploadID string) error
 }
 
+// galleryResolver resolves a gallery by id for the CreateSession workspace
+// ownership check. Satisfied by *repository.GalleryRepo.GetByID.
+//
+// S3-G4 / AREA-UPLOADER-3: a session may carry a destination gallery_id so
+// finalize can link the asset server-side. Before persisting that id we must
+// confirm the gallery belongs to the caller's workspace — otherwise a client
+// could bind its upload to a gallery in another tenant and (after the
+// DB-level join still rejected the link) at minimum poison the session row.
+type galleryResolver interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*repository.Gallery, error)
+}
+
+// albumResolver resolves an album by id for the CreateSession check.
+// Satisfied by *repository.AlbumRepo.GetByID. The album's parent gallery must
+// match the (already-validated) destination gallery so an album in another
+// gallery — or another tenant — cannot be bound to the session.
+type albumResolver interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*repository.Album, error)
+}
+
+// GalleryLinker links a finalized asset into a gallery server-side. Satisfied
+// by *repository.GalleryAssetRepo.LinkFinalizedAsset. The link is assigned the
+// next sort_order within the gallery (S3-G5) and is idempotent (ON CONFLICT DO
+// NOTHING) so the legacy client addAssetToGallery call still succeeds
+// harmlessly when both paths run.
+type GalleryLinker interface {
+	LinkFinalizedAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID) error
+}
+
 // ChunkedUploadHandler implements the TUS v1.0.0 resumable upload protocol.
 // Clients POST to /uploads to create an upload session, then PATCH chunks.
 //
@@ -143,6 +172,26 @@ type ChunkedUploadHandler struct {
 	// no-op under NoopGate. Flip to LiveGate from main.go when the
 	// streaming.upload_credit_pill_v1 flag is on.
 	creditGate gate.UploadCreditGate
+
+	// S3-G4 / AREA-UPLOADER-3: optional gallery-linkage wiring. When all
+	// three are set (via WithGalleryLinkage), CreateSession accepts an
+	// optional gallery_id (+ album_id), validates it belongs to the caller's
+	// workspace, and persists it on the session; finalizeUpload then links
+	// the finalized asset into the gallery server-side (atomic, idempotent),
+	// so association never depends on a post-finalize client call. All nil =
+	// feature off: CreateSession ignores any gallery_id in the request and
+	// finalize performs no link (legacy client-link flow unchanged).
+	galleries     galleryResolver
+	albums        albumResolver
+	galleryLinker GalleryLinker
+
+	// assetCreateFn, when non-nil, overrides h.assetRepo.Create as the asset
+	// insert used by finalizeUpload. This exists purely so unit tests can
+	// drive the asset-persist + server-side-link path without a live Postgres
+	// pool (the concrete *repository.AssetRepo cannot be made to fail or be
+	// observed in a unit test). Production never sets it — finalize falls back
+	// to h.assetRepo.Create.
+	assetCreateFn func(context.Context, *repository.Asset) error
 }
 
 // sessionStreamState is the in-memory working set for an in-flight upload.
@@ -271,6 +320,26 @@ func (h *ChunkedUploadHandler) WithStorageAccounting(
 	return h
 }
 
+// WithGalleryLinkage wires the S3-G4 / AREA-UPLOADER-3 server-side gallery
+// linkage. When set, CreateSession accepts an optional gallery_id (+ album_id)
+// in the request body, validates the gallery belongs to the caller's workspace
+// (and the album, if any, belongs to that gallery), and persists the target on
+// the session row; finalizeUpload then links the finalized asset into the
+// gallery itself. galleryLinker is the only strictly-required dependency for
+// the finalize-time link; galleries/albums are used for the create-time
+// validation. Passing any nil leaves the feature off (legacy client-link flow).
+// Returns the same handler for chainable construction.
+func (h *ChunkedUploadHandler) WithGalleryLinkage(
+	galleries galleryResolver,
+	albums albumResolver,
+	linker GalleryLinker,
+) *ChunkedUploadHandler {
+	h.galleries = galleries
+	h.albums = albums
+	h.galleryLinker = linker
+	return h
+}
+
 func (h *ChunkedUploadHandler) WithEncryptionMetadata(enabled bool, algo string, version int) *ChunkedUploadHandler {
 	h.encryptionEnabled = enabled
 	h.encryptionAlgo = algo
@@ -319,6 +388,11 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		ScanManifest    *service.UploadScanManifest `json:"scan_manifest,omitempty"`
 		MediaEncryption map[string]interface{}      `json:"media_encryption,omitempty"`
 		SourceMetadata  map[string]interface{}      `json:"source_metadata,omitempty"`
+		// S3-G4 / AREA-UPLOADER-3: optional destination so finalize can link
+		// the asset server-side. Validated against the caller's workspace
+		// below; ignored when gallery linkage is not wired.
+		GalleryID *uuid.UUID `json:"gallery_id,omitempty"`
+		AlbumID   *uuid.UUID `json:"album_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -333,6 +407,10 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// E2EE: client-side media encryption manifest validation. When the
+	// workspace requires client-side encryption, reject uploads that omit the
+	// manifest; otherwise validate any supplied manifest before reserving
+	// credit/storage so a bad manifest is a clean 4xx with nothing to unwind.
 	mediaEncryptionPresent := len(input.MediaEncryption) > 0
 	if h.clientSideEncryptionRequired && !mediaEncryptionPresent {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -348,6 +426,50 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 				"message": err.Error(),
 			})
 			return
+		}
+	}
+
+	// S3-G4 / AREA-UPLOADER-3: resolve + validate the optional destination
+	// BEFORE reserving any credit/storage, so a bad gallery_id is a clean 4xx
+	// with nothing to unwind. The gallery (and album, if any) must belong to
+	// the caller's workspace; a cross-workspace or missing target returns 404
+	// so a foreign id's existence is never disclosed. When gallery linkage is
+	// not wired, any gallery_id in the request is ignored and the session
+	// behaves as the legacy client-link flow.
+	var sessionGalleryID, sessionAlbumID *uuid.UUID
+	if h.galleryLinker != nil && input.GalleryID != nil {
+		if h.galleries == nil {
+			internalError(w, "", "gallery_resolver_missing", errors.New("gallery linkage wired without resolver"))
+			return
+		}
+		gallery, err := h.galleries.GetByID(r.Context(), *input.GalleryID)
+		if err != nil {
+			internalError(w, "", "gallery_lookup_failed", err)
+			return
+		}
+		if gallery == nil || gallery.WorkspaceID != workspaceID {
+			http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+			return
+		}
+		sessionGalleryID = input.GalleryID
+
+		if input.AlbumID != nil {
+			if h.albums == nil {
+				internalError(w, "", "album_resolver_missing", errors.New("album id supplied without resolver"))
+				return
+			}
+			album, err := h.albums.GetByID(r.Context(), *input.AlbumID)
+			if err != nil {
+				internalError(w, "", "album_lookup_failed", err)
+				return
+			}
+			// The album must live in the destination gallery (which we already
+			// proved belongs to this workspace), so this also enforces tenancy.
+			if album == nil || album.GalleryID != *input.GalleryID {
+				http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+				return
+			}
+			sessionAlbumID = input.AlbumID
 		}
 	}
 
@@ -542,6 +664,11 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		ScanManifest:        manifestBytes,
 		MediaEncryption:     mediaEncryptionBytes,
 		SourceMetadata:      sourceMetadataBytes,
+		// S3-G4 / AREA-UPLOADER-3: persist the validated destination so
+		// finalize can link the asset server-side. nil when not supplied
+		// or the feature is not wired.
+		GalleryID: sessionGalleryID,
+		AlbumID:   sessionAlbumID,
 	}
 
 	// M40-DB-001: persist the reservation id so cold-path restart can
@@ -1057,10 +1184,37 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		MediaEncryption:   mediaManifest,
 	}
 	applyScanMetadata(asset, manifest)
-	if h.assetRepo != nil {
-		if err := h.persistAssetOrCleanup(ctx, asset, storageKey, h.assetRepo.Create); err != nil {
+	assetPersisted := false
+	createFn := h.assetCreateFn
+	if createFn == nil && h.assetRepo != nil {
+		createFn = h.assetRepo.Create
+	}
+	if createFn != nil {
+		if err := h.persistAssetOrCleanup(ctx, asset, storageKey, createFn); err != nil {
 			releaseReservation("asset-persist-failure")
 			return nil, err
+		}
+		assetPersisted = true
+	}
+
+	// S3-G4 / AREA-UPLOADER-3: link the finalized asset into its destination
+	// gallery SERVER-SIDE, in the same flow as the asset insert, so the
+	// association never depends on a best-effort client call surviving the
+	// post-finalize round-trip. The link assigns sort_order = MAX+1 within the
+	// gallery (S3-G5) and is idempotent (ON CONFLICT DO NOTHING), so the legacy
+	// client addAssetToGallery call still succeeds harmlessly when both fire.
+	//
+	// This runs only when the asset was actually persisted, the session carries
+	// a gallery_id (validated against the workspace at CreateSession) AND the
+	// linker is wired. A link failure is NOT fatal to the upload: the asset
+	// exists in storage + DB and was charged, so failing the whole finalize
+	// here would force a refund + delete of a perfectly good object. We log
+	// loudly instead — the asset is still reachable via the workspace asset
+	// list, and the legacy client retry converges it.
+	if assetPersisted && h.galleryLinker != nil && row.GalleryID != nil {
+		if err := h.galleryLinker.LinkFinalizedAsset(ctx, *row.GalleryID, asset.ID, row.WorkspaceID); err != nil {
+			log.Printf("chunked_upload: server-side gallery link failed (non-fatal) upload=%s asset=%s gallery=%s err=%v",
+				row.TUSUploadID, asset.ID, *row.GalleryID, err)
 		}
 	}
 

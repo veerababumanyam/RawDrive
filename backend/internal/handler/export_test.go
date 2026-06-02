@@ -92,3 +92,52 @@ func FinalizeUploadForTest(
 	state.hasher = nil
 	return h.finalizeUpload(context.Background(), row, state)
 }
+
+// FinalizeUploadWithLinkerForTest is a test-only seam over finalizeUpload that
+// exercises the S3-G4 / AREA-UPLOADER-3 server-side gallery link. The asset
+// repo is a concrete type that cannot be made to fail/observe in a unit test,
+// so the seam injects a fake asset-create func (via the assetCreateFn hook) and
+// a fake GalleryLinker. finalize routes Create through persistAssetOrCleanup
+// using the supplied create func and then links the persisted asset via the
+// linker. Returns the result so tests can assert the asset id that was linked.
+func FinalizeUploadWithLinkerForTest(
+	store storage.Provider,
+	sessions UploadSessionStore,
+	linker GalleryLinker,
+	row *repository.UploadSession,
+	create func(context.Context, *repository.Asset) error,
+) (map[string]interface{}, error) {
+	h := &ChunkedUploadHandler{
+		store:         store,
+		sessions:      sessions,
+		galleryLinker: linker,
+		assetCreateFn: create,
+	}
+	storageKey, mpID := deriveKeyAndUploadID(row)
+	state := newStreamState(storageKey, mpID, nil)
+	state.hasher = nil
+	return h.finalizeUpload(context.Background(), row, state)
+}
+
+// NewHandlerWithGalleryLinkageForTest builds a handler wired for the
+// CreateSession gallery-validation tests (resolver + linker), over the supplied
+// fake store + session store. Lets the streaming-style tests drive CreateSession
+// with a gallery_id and assert the workspace-ownership rejection / persistence.
+func NewHandlerWithGalleryLinkageForTest(
+	store storage.Provider,
+	sessions UploadSessionStore,
+	galleries galleryResolverForTest,
+	albums albumResolverForTest,
+	linker GalleryLinker,
+) *ChunkedUploadHandler {
+	h := NewChunkedUploadHandler(nil, nil, store, sessions)
+	h.galleries = galleries
+	h.albums = albums
+	h.galleryLinker = linker
+	return h
+}
+
+// galleryResolverForTest / albumResolverForTest re-export the unexported
+// resolver interfaces so external (package handler_test) tests can supply fakes.
+type galleryResolverForTest = galleryResolver
+type albumResolverForTest = albumResolver

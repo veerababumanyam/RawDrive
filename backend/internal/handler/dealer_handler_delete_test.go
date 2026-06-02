@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -41,7 +42,7 @@ func TestDealerRepo_SoftDelete_MethodExists(t *testing.T) {
 	var repo *repository.DealerRepo
 	_ = repo
 	var _ func() = func() {
-		_, _ = repo.SoftDelete(nil, uuid.Nil)
+		_, _ = repo.SoftDelete(context.TODO(), uuid.Nil)
 	}
 }
 

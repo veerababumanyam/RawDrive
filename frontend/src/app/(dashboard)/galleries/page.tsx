@@ -15,7 +15,7 @@ import { appendGalleryKeyFragment } from "@/lib/media-encryption/media-crypto";
 import { galleryKeyId, getStoredExportedMediaKey } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { ClipboardList, Envelope, Grid, ListBullet, Phone, Trash, Share, XMark } from "@/components/icons";
+import { Camera, ClipboardList, Envelope, Grid, ListBullet, Phone, Trash, Share, XMark } from "@/components/icons";
 
 function GalleryCoverPreview({
   gallery,
@@ -270,8 +270,13 @@ export default function GalleriesPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(null);
   const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
+  // Gallery ID currently being published/unpublished — prevents double-clicks.
+  // Backs the GalleryPublishSwitch `busy` state via toggleGalleryPublish.
   const [publishingGalleryId, setPublishingGalleryId] = useState<string | null>(null);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
+  // M23: tethering toggle state — persists while the create panel is open.
+  const [tetheringMode, setTetheringMode] = useState(false);
+  const [tetherDir, setTetherDir] = useState("");
 
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
@@ -505,12 +510,16 @@ export default function GalleriesPage() {
         gallery_type: newType,
         primary_contact_id: linkedContactId || undefined,
         project_id: linkedProjectId || undefined,
+        tethering_enabled: tetheringMode,
+        tether_directory: tetheringMode && tetherDir.trim() ? tetherDir.trim() : null,
       });
       setShowCreate(false);
       setNewTitle("");
       setNewType("proofing");
       setLinkedContactId("");
       setLinkedProjectId("");
+      setTetheringMode(false);
+      setTetherDir("");
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create gallery");
@@ -599,6 +608,18 @@ export default function GalleriesPage() {
             className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary min-h-[44px] flex-1 min-w-0 sm:flex-none sm:w-48 lg:w-64"
             aria-label="Search galleries"
           />
+          <GlassIconButton
+            onClick={() => {
+              setTetheringMode((v) => !v);
+              if (!showCreate) setShowCreate(true);
+            }}
+            variant={tetheringMode ? "accent" : "glass"}
+            active={tetheringMode}
+            label={tetheringMode ? "Tethering enabled — click to disable" : "Enable tethering"}
+            size="md"
+          >
+            <Camera />
+          </GlassIconButton>
           <button
             onClick={() => setShowCreate(true)}
             className="shrink-0 whitespace-nowrap rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] inline-flex items-center justify-center gap-1"
@@ -703,6 +724,29 @@ export default function GalleriesPage() {
                 <option value="delivery">Delivery — final hand-off</option>
               </select>
             </div>
+            {/* M23: tethering directory — visible when the tethering toggle is on */}
+            {tetheringMode && (
+              <div className="rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-accent-primary shrink-0" />
+                  <span className="text-xs font-medium text-accent-primary uppercase tracking-wider">
+                    Tethering enabled
+                  </span>
+                </div>
+                <label className="text-xs text-text-tertiary">Watch directory</label>
+                <input
+                  type="text"
+                  value={tetherDir}
+                  onChange={(e) => setTetherDir(e.target.value)}
+                  placeholder="/Users/you/Camera Imports"
+                  className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                  aria-label="Local directory for tethered camera output"
+                />
+                <p className="text-xs text-text-tertiary">
+                  The RawDrive desktop app watches this folder and auto-uploads every new shot into this gallery.
+                </p>
+              </div>
+            )}
             <div className="rounded-xl border border-border-default bg-surface-sunken/40 p-4">
               <label className="text-xs text-text-tertiary uppercase tracking-wider">Linked client</label>
               <select
@@ -758,6 +802,8 @@ export default function GalleriesPage() {
                 setLinkedProjectId("");
                 setNewClientName("");
                 setNewClientEmail("");
+                setTetheringMode(false);
+                setTetherDir("");
               }}
               className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
               disabled={creating}

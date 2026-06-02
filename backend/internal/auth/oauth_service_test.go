@@ -26,12 +26,30 @@ func (m *mockOAuthProvider) GetProfile(ctx context.Context, token *auth.OAuthTok
 }
 
 // mockUserStore simulates user persistence for OAuth tests.
+//
+// It keeps two identity indexes so it can back both resolution paths the
+// merged auth.UserStore exposes:
+//
+//   - oauthLinks ("provider:subject" -> userID) backs FindByOAuth and HEAD's
+//     application-layer account-takeover detection in LinkOAuth.
+//   - links ("provider|subject" -> userID, via linkKey) backs
+//     FindByProviderSubject, the PRIMARY identity resolution (S1-G2 /
+//     AREA-AUTH-3): the stable Google "sub" decides who logs in, not the
+//     mutable email.
+//
+// Both indexes are written together in LinkOAuth so the two resolution paths
+// never disagree.
 type mockUserStore struct {
-	users       map[string]*auth.User
-	oauthLinks  map[string]string
+	users      map[string]*auth.User
+	oauthLinks map[string]string
+	// links maps "provider|subject" -> userID so FindByProviderSubject can
+	// resolve a previously-linked identity, mirroring user_auth_methods.
+	links       map[string]string
 	linkErr     error
 	backfillErr error
 }
+
+func linkKey(provider, subject string) string { return provider + "|" + subject }
 
 func (m *mockUserStore) FindByOAuth(ctx context.Context, provider, providerID string) (*auth.User, error) {
 	if m.oauthLinks == nil {
@@ -54,6 +72,31 @@ func (m *mockUserStore) FindByEmail(ctx context.Context, email string) (*auth.Us
 		return u, nil
 	}
 	return nil, nil
+}
+
+func (m *mockUserStore) FindByProviderSubject(ctx context.Context, provider, providerSubject string) (*auth.User, error) {
+	if m.links == nil {
+		return nil, nil
+	}
+	userID, ok := m.links[linkKey(provider, providerSubject)]
+	if !ok {
+		return nil, nil
+	}
+	for _, u := range m.users {
+		if u.ID == userID {
+			return u, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockUserStore) MarkEmailVerified(ctx context.Context, userID string) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.EmailVerified = true
+		}
+	}
+	return nil
 }
 
 func (m *mockUserStore) Create(ctx context.Context, u *auth.User) (*auth.User, error) {
@@ -91,18 +134,36 @@ func (m *mockUserStore) LinkOAuth(ctx context.Context, userID, provider, provide
 	if m.linkErr != nil {
 		return m.linkErr
 	}
+	// Application-layer takeover detection (HEAD): a subject already linked to
+	// a DIFFERENT account is rejected, mirroring the production store returning
+	// auth.ErrOAuthAccountConflict on a UNIQUE (provider, provider_subject)
+	// violation owned by another user.
 	if m.oauthLinks == nil {
 		m.oauthLinks = map[string]string{}
 	}
-	key := provider + ":" + providerID
-	if existingUserID, ok := m.oauthLinks[key]; ok && existingUserID != userID {
+	if m.links == nil {
+		m.links = map[string]string{}
+	}
+	oauthKey := provider + ":" + providerID
+	if existingUserID, ok := m.oauthLinks[oauthKey]; ok && existingUserID != userID {
 		return auth.ErrOAuthAccountConflict
 	}
-	m.oauthLinks[key] = userID
+	if existingUserID, ok := m.links[linkKey(provider, providerID)]; ok && existingUserID != userID {
+		return auth.ErrOAuthAccountConflict
+	}
+	// Write both indexes so FindByOAuth and FindByProviderSubject stay in sync.
+	m.oauthLinks[oauthKey] = userID
+	m.links[linkKey(provider, providerID)] = userID
 	return nil
 }
 
 func newMockProvider(profile *auth.OAuthProfile) *mockOAuthProvider {
+	// Default Google profiles to a verified email so existing happy-path tests
+	// keep passing; the unverified-email rejection tests construct their own
+	// profile with EmailVerified=false explicitly.
+	if profile != nil {
+		profile.EmailVerified = true
+	}
 	return &mockOAuthProvider{
 		exchangeFunc: func(code, codeVerifier string) (*auth.OAuthToken, error) {
 			return &auth.OAuthToken{AccessToken: "mock-access-token", IDToken: "mock-id-token"}, nil
@@ -113,10 +174,16 @@ func newMockProvider(profile *auth.OAuthProfile) *mockOAuthProvider {
 	}
 }
 
-func newAuthorizedService(t *testing.T, provider auth.OAuthProvider, store auth.UserStore) (*auth.OAuthService, string, string) {
+// newAuthorizedService starts an OAuth flow and returns the service plus the
+// state and the signed oauth_state cookie value the callback must be given (it
+// would normally arrive via the HttpOnly oauth_state cookie and binds the
+// per-request nonce). ClientSecret is set so the signed-state + nonce-binding
+// path is exercised. The third return value is what HandleGoogleCallback
+// expects as its cookieValue argument.
+func newAuthorizedService(t *testing.T, provider auth.OAuthProvider, store auth.UserStore) (svc *auth.OAuthService, state string, cookieValue string) {
 	t.Helper()
 
-	svc := auth.NewOAuthService(
+	svc = auth.NewOAuthService(
 		auth.OAuthConfig{ClientID: "test-client-id", ClientSecret: "test-client-secret", RedirectURI: "http://localhost/callback"},
 		provider,
 		store,
@@ -138,7 +205,7 @@ func TestGoogleOAuth_InitiateFlow(t *testing.T) {
 	start, err := svc.InitiateGoogleAuth(ctx, "http://localhost:3000")
 	require.NoError(t, err)
 	assert.NotEmpty(t, start.RedirectURL)
-	assert.NotEmpty(t, start.CookieValue)
+	assert.NotEmpty(t, start.CookieValue, "should return a signed oauth_state cookie value")
 	assert.Contains(t, start.RedirectURL, "client_id=test-client-id", "should include client_id")
 	assert.Contains(t, start.RedirectURL, "state=", "should include state parameter")
 	assert.Contains(t, start.RedirectURL, "code_challenge=", "should include PKCE code challenge")
@@ -185,6 +252,8 @@ func TestGoogleOAuth_StateSurvivesBackendInstanceSwitch(t *testing.T) {
 	parsed, err := url.Parse(start.RedirectURL)
 	require.NoError(t, err)
 
+	// The signed state survives an instance switch; the nonce travels with the
+	// browser's oauth_state cookie, so the second instance still validates it.
 	secondInstance := auth.NewOAuthService(config, newMockProvider(profile), store)
 	user, returnTo, err := secondInstance.HandleGoogleCallback(context.Background(), "valid-code", parsed.Query().Get("state"), start.CookieValue)
 	require.NoError(t, err)
@@ -210,6 +279,7 @@ func TestGoogleOAuth_NewUser(t *testing.T) {
 	require.NotNil(t, user)
 	assert.Equal(t, "newuser@gmail.com", user.Email)
 	assert.NotEmpty(t, user.ID, "new user should have an assigned ID")
+	assert.True(t, user.EmailVerified, "Google-created account must be born email-verified")
 }
 
 func TestGoogleOAuth_ExistingUser(t *testing.T) {

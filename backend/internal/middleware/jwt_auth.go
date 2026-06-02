@@ -44,6 +44,10 @@ func JWTAuth(jwtSvc auth.JWTService) func(http.Handler) http.Handler {
 				"platform_role": claims.PlatformRole,
 				"state_id":      claims.StateID,
 				"mfa_verified":  claims.MFAVerified,
+				// S5-G1: surface the impersonation marker so RejectImpersonationWrites
+				// (and any handler) can read it via JWTClaimsFromContext. False for
+				// normal tokens; true only for admin-minted impersonation sessions.
+				"impersonation": claims.Impersonation,
 			}
 
 			ctx := WithJWTClaims(r.Context(), claimsMap)

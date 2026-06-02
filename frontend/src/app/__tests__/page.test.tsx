@@ -1,6 +1,22 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import LandingPage from "@/app/page";
+
+// AuthRedirect (rendered at the top of LandingPage) fires a useEffect on
+// mount that calls refreshAuthSession(API_BASE) → fetch(`${API_BASE}/auth/refresh`).
+// API_BASE is empty in tests, which produces the relative URL "/auth/refresh".
+// Node's undici fetch (used by vitest 4 / jsdom) rejects with
+// "TypeError: Failed to parse URL from /auth/refresh" — surfaced as an
+// unhandled rejection that fails the suite even though the assertions
+// would pass. These tests are about landing-page copy, not the auth
+// redirect, so we stub the auth module: getStoredAccessToken returns
+// null (no token cached) and refreshAuthSession resolves "" (no session
+// refreshable) → AuthRedirect short-circuits and renders nothing.
+vi.mock("@/lib/auth", () => ({
+  getStoredAccessToken: () => null,
+  getPostLoginPath: () => "/dashboard",
+  refreshAuthSession: () => Promise.resolve(""),
+}));
 
 // These tests used to target the pre-cinematic-redesign landing copy
 // ("Professional Photography, Simplified", "Start Free Trial",

@@ -110,6 +110,28 @@ func (r *ProofingRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status st
 	return nil
 }
 
+// UpdateStatusInWorkspace changes a selection's status only if the selection's
+// owning gallery belongs to the given workspace. The workspace scoping is
+// enforced atomically in the WHERE clause (no fetch-then-check) so there is no
+// TOCTOU window. Returns the number of rows affected; 0 means the selection
+// either does not exist or belongs to another tenant — the caller maps that to
+// 404 so cross-tenant existence is never disclosed.
+func (r *ProofingRepo) UpdateStatusInWorkspace(ctx context.Context, selectionID uuid.UUID, status string, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE proofing_selections ps SET status = $2
+		 WHERE ps.id = $1
+		   AND EXISTS (
+		       SELECT 1 FROM galleries g
+		       WHERE g.id = ps.gallery_id AND g.workspace_id = $3
+		   )`,
+		selectionID, status, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("proofing update status in workspace: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // CountByGalleryAndClient returns the number of selections for a client in a gallery.
 func (r *ProofingRepo) CountByGalleryAndClient(ctx context.Context, galleryID uuid.UUID, clientEmail string) (int, error) {
 	var count int
@@ -157,4 +179,42 @@ func (r *ProofingRepo) UpdateColorLabel(ctx context.Context, id uuid.UUID, label
 		return fmt.Errorf("proofing update color_label: %w", err)
 	}
 	return nil
+}
+
+// UpdateStarRatingInWorkspace updates a selection's star rating only if the
+// selection's owning gallery belongs to the given workspace. Scoping is enforced
+// atomically in the WHERE clause (no TOCTOU). Returns rows affected; 0 ⇒ the
+// selection is missing or belongs to another tenant (caller maps to 404).
+func (r *ProofingRepo) UpdateStarRatingInWorkspace(ctx context.Context, selectionID uuid.UUID, rating int, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE proofing_selections ps SET star_rating = $2
+		 WHERE ps.id = $1
+		   AND EXISTS (
+		       SELECT 1 FROM galleries g
+		       WHERE g.id = ps.gallery_id AND g.workspace_id = $3
+		   )`,
+		selectionID, rating, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("proofing update star_rating in workspace: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// UpdateColorLabelInWorkspace updates a selection's color label only if the
+// selection's owning gallery belongs to the given workspace (atomic, no TOCTOU).
+func (r *ProofingRepo) UpdateColorLabelInWorkspace(ctx context.Context, selectionID uuid.UUID, label string, workspaceID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE proofing_selections ps SET color_label = $2
+		 WHERE ps.id = $1
+		   AND EXISTS (
+		       SELECT 1 FROM galleries g
+		       WHERE g.id = ps.gallery_id AND g.workspace_id = $3
+		   )`,
+		selectionID, label, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("proofing update color_label in workspace: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

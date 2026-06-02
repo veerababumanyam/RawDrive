@@ -68,8 +68,17 @@ const GUEST_SESSION_STORAGE_KEY = "rawdrive-guest-session-id";
 const INITIAL_GRID_RENDER_COUNT = 60;
 const GRID_RENDER_BATCH = 60;
 
-function PublicAssetTileImage({ asset, className }: { asset: PublicAsset; className?: string }) {
-  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS);
+function PublicAssetTileImage({
+  asset,
+  className,
+  gallerySessionToken = null,
+}: {
+  asset: PublicAsset;
+  className?: string;
+  // Gated-gallery byte-auth token (origin/main security control).
+  gallerySessionToken?: string | null;
+}) {
+  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, null, gallerySessionToken);
   if (media.loading) {
     return <div className="aspect-[4/3] w-full animate-pulse bg-surface-sunken" />;
   }
@@ -87,12 +96,15 @@ function PublicLightboxImage({
   photo,
   zoom,
   watermarkOverlay,
+  gallerySessionToken = null,
 }: {
   photo: PublicAsset;
   zoom: number;
   watermarkOverlay: { text: string; opacity: number; position: string } | null;
+  // Gated-gallery byte-auth token (origin/main security control).
+  gallerySessionToken?: string | null;
 }) {
-  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS);
+  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS, null, gallerySessionToken);
   if (media.loading) {
     return <p className="text-sm text-white/40">Decrypting photo...</p>;
   }
@@ -127,16 +139,21 @@ function PublicLightboxImage({
 function PublicFilmstripThumb({
   asset,
   active,
+  gallerySessionToken = null,
   onClick,
 }: {
   asset: PublicAsset;
   active: boolean;
+  // Gated-gallery byte-auth token (origin/main security control). Threaded
+  // into the media hook so protected thumbnail bytes authenticate for
+  // password/private/share-gated galleries.
+  gallerySessionToken?: string | null;
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const [useDisplayFallback, setUseDisplayFallback] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const variants = useDisplayFallback ? LIGHTBOX_VARIANTS : FILMSTRIP_VARIANTS;
-  const media = useDecryptedAssetUrl(asset, variants);
+  const media = useDecryptedAssetUrl(asset, variants, null, gallerySessionToken);
 
   const handleImageError = () => {
     if (!useDisplayFallback) {
@@ -409,6 +426,13 @@ interface Props {
   // rather than a typed interface so settings-side schema additions
   // (font, color, use_logo) flow through without a Props change.
   watermark?: Record<string, unknown> | null;
+  // S4-G1: the gallery-session token (password- or share-PIN-scoped) minted
+  // after a successful unlock. When set, it is appended as `?gs=` to every
+  // protected image URL so cross-origin <img> requests authenticate without
+  // relying on the SameSite=Strict gallery_session cookie. Undefined for open
+  // (public/unlisted, non-password) galleries, where the bytes serve
+  // anonymously and no token is needed.
+  gallerySessionToken?: string | null;
 }
 
 // Bound the studio's columns value into the responsive scale the public
@@ -553,7 +577,7 @@ function WatermarkOverlay({
   );
 }
 
-export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null, watermark = null }: Props) {
+export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0, downloadEnabled = true, design = null, watermark = null, gallerySessionToken = null }: Props) {
   // Memoize the resolved watermark display state. Returns null when
   // disabled / misconfigured so the render path can short-circuit to
   // a plain <img>. Keeping the derivation in one place means the
@@ -986,6 +1010,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 <div className={design?.grid?.layout === "grid" ? "absolute inset-0" : ""}>
                   <PublicAssetTileImage
                     asset={asset}
+                    gallerySessionToken={gallerySessionToken}
                     className={
                       design?.grid?.layout === "grid"
                         ? "absolute inset-0 h-full w-full object-cover"
@@ -1131,9 +1156,15 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
       {/* Client-facing lightbox */}
       {lightboxIdx !== null && visibleAssets[lightboxIdx] && (() => {
         const photo = visibleAssets[lightboxIdx];
-        // Public lightbox display also goes through the WebP-only media
-        // picker. If a gallery is E2EE-shared, the URL hash carries the
-        // client key and the hook decrypts the WebP blob in the browser.
+        // Public lightbox display goes through the WebP-only media picker in
+        // PublicLightboxImage (useDecryptedAssetUrl). It prefers the largest
+        // PUBLIC thumb variant (thumb_lg_webp, ~1200px) so unauthenticated
+        // share-link visitors aren't 401'd by the migration-104 (M41) split
+        // that auth-gates display_webp under /storage/derivatives/. If the
+        // gallery is E2EE-shared, the URL hash carries the client key and the
+        // hook decrypts the WebP blob in the browser. The gallery-session
+        // token (for password/private/share-gated galleries) is threaded into
+        // PublicLightboxImage for protected-byte auth.
         return (
           <div
             ref={lightboxRef}
@@ -1228,6 +1259,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 photo={photo}
                 zoom={zoom}
                 watermarkOverlay={watermarkOverlay}
+                gallerySessionToken={gallerySessionToken}
               />
 
               {lightboxIdx < visibleAssets.length - 1 && (
@@ -1252,6 +1284,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     key={a.id}
                     asset={a}
                     active={i === lightboxIdx}
+                    gallerySessionToken={gallerySessionToken}
                     onClick={(e) => { e.stopPropagation(); goToPhoto(i); }}
                   />
                 ))}

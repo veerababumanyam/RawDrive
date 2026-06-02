@@ -147,6 +147,26 @@ func (r *ShareLinkRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// RevokeInWorkspace marks a share link as revoked only when it belongs to a
+// gallery owned by the given workspace. The ownership predicate is applied
+// inside the same UPDATE so the check is atomic and TOCTOU-free (integration
+// audit 2026-05-31). Returns the number of rows affected; 0 means the link
+// either does not exist, is already revoked, or belongs to another tenant —
+// callers must treat 0 as 404 so cross-tenant existence is not disclosed.
+func (r *ShareLinkRepo) RevokeInWorkspace(ctx context.Context, linkID, workspaceID uuid.UUID) (int64, error) {
+	now := time.Now()
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE share_links SET revoked_at = $1
+		 WHERE id = $2 AND revoked_at IS NULL
+		   AND gallery_id IN (SELECT id FROM galleries WHERE workspace_id = $3)`,
+		now, linkID, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("share link revoke in workspace: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // IncrementViewCount atomically increments the view counter for a share link.
 func (r *ShareLinkRepo) IncrementViewCount(ctx context.Context, token string) error {
 	_, err := r.pool.Exec(ctx,

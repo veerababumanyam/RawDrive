@@ -32,7 +32,7 @@ func (r *GalleryRepo) GetBySlugScopedByBusinessCode(ctx context.Context, busines
 		 g.settings, g.password_hash, g.watermark_config, g.is_published, g.max_selections, g.status,
 		 g.created_by, g.created_at, g.updated_at, g.published_at, g.archived_at, g.deleted_at,
 		 g.cover_template, g.cover_config, g.expires_at, g.download_enabled, g.sort_preference, g.whatsapp_template,
-		 g.faceid_enabled, g.face_detection_enabled
+		 g.faceid_enabled, g.face_detection_enabled, COALESCE(g.access_mode, 'private')
 		 FROM galleries g
 		 INNER JOIN workspaces w ON w.id = g.workspace_id
 		 WHERE w.business_unique_code = $1
@@ -45,7 +45,7 @@ func (r *GalleryRepo) GetBySlugScopedByBusinessCode(ctx context.Context, busines
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
-		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil

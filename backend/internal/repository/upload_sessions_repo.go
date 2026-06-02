@@ -54,6 +54,16 @@ type UploadSession struct {
 	// field lets cold-path restart rebuild the reservation handle instead
 	// of relying on TTL cleanup to unwind the ledger entry.
 	CreditReservationID *uuid.UUID `json:"credit_reservation_id,omitempty"`
+
+	// S3-G4 / AREA-UPLOADER-3 (audit 2026-05-31): the destination gallery
+	// (and optional album) the upload is bound for. Persisted at CreateSession
+	// time so finalizeUpload can link the finalized asset into the gallery
+	// server-side, in the same flow as the asset insert, instead of relying on
+	// a best-effort client call after finalize returns. Both are nullable:
+	// when absent the session behaves exactly as the legacy client-link flow
+	// (no server-side link). Migration 134 adds the columns.
+	GalleryID *uuid.UUID `json:"gallery_id,omitempty"`
+	AlbumID   *uuid.UUID `json:"album_id,omitempty"`
 }
 
 // UploadPartETag is the decoded shape of one entry in r2_part_etags.
@@ -119,12 +129,12 @@ func (r *UploadSessionsRepo) Create(ctx context.Context, s *UploadSession) error
 		    workspace_id, user_id, tus_upload_id, filename, content_type,
 		    total_size, upload_offset, chunk_size, r2_multipart_upload_id,
 		    r2_part_etags, expires_at, scan_manifest, media_encryption,
-		    source_metadata, credit_reservation_id
-		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		    source_metadata, credit_reservation_id, gallery_id, album_id
+		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 		s.WorkspaceID, s.UserID, s.TUSUploadID, s.Filename, s.ContentType,
 		s.TotalSize, s.UploadOffset, s.ChunkSize, s.R2MultipartUploadID,
 		s.R2PartETags, s.ExpiresAt, s.ScanManifest, s.MediaEncryption,
-		s.SourceMetadata, s.CreditReservationID,
+		s.SourceMetadata, s.CreditReservationID, s.GalleryID, s.AlbumID,
 	)
 	if err != nil {
 		return fmt.Errorf("upload_sessions: create: %w", err)
@@ -142,7 +152,8 @@ func (r *UploadSessionsRepo) GetByTUSUploadID(ctx context.Context, tusUploadID s
 		        total_size, upload_offset, chunk_size, r2_multipart_upload_id,
 		        r2_part_etags, expires_at, created_at, updated_at, completed_at,
 		        scan_manifest, media_encryption, source_metadata,
-		        scan_manifest_verified_at, credit_reservation_id
+		        scan_manifest_verified_at, credit_reservation_id,
+		        gallery_id, album_id
 		 FROM upload_sessions
 		 WHERE tus_upload_id = $1`,
 		tusUploadID,
@@ -152,6 +163,7 @@ func (r *UploadSessionsRepo) GetByTUSUploadID(ctx context.Context, tusUploadID s
 		&s.R2MultipartUploadID, &s.R2PartETags, &s.ExpiresAt, &s.CreatedAt,
 		&s.UpdatedAt, &s.CompletedAt, &s.ScanManifest, &s.MediaEncryption,
 		&s.SourceMetadata, &s.ScanManifestVerifiedAt, &s.CreditReservationID,
+		&s.GalleryID, &s.AlbumID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUploadSessionNotFound
@@ -252,7 +264,8 @@ func (r *UploadSessionsRepo) ListExpired(ctx context.Context, limit int) ([]Uplo
 		        total_size, upload_offset, chunk_size, r2_multipart_upload_id,
 		        r2_part_etags, expires_at, created_at, updated_at, completed_at,
 		        scan_manifest, media_encryption, source_metadata,
-		        scan_manifest_verified_at, credit_reservation_id
+		        scan_manifest_verified_at, credit_reservation_id,
+		        gallery_id, album_id
 		 FROM upload_sessions
 		 WHERE completed_at IS NULL AND expires_at < now()
 		 ORDER BY expires_at ASC
@@ -273,6 +286,7 @@ func (r *UploadSessionsRepo) ListExpired(ctx context.Context, limit int) ([]Uplo
 			&s.R2MultipartUploadID, &s.R2PartETags, &s.ExpiresAt, &s.CreatedAt,
 			&s.UpdatedAt, &s.CompletedAt, &s.ScanManifest, &s.MediaEncryption,
 			&s.SourceMetadata, &s.ScanManifestVerifiedAt, &s.CreditReservationID,
+			&s.GalleryID, &s.AlbumID,
 		); err != nil {
 			return nil, fmt.Errorf("upload_sessions: scan: %w", err)
 		}

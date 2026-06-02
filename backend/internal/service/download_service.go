@@ -280,6 +280,15 @@ func (s *DownloadService) GetDownloadJob(ctx context.Context, id uuid.UUID) (*re
 	return s.downloadRepo.GetJob(ctx, id)
 }
 
+// GetDownloadJobInWorkspace returns a download job by ID only when it belongs
+// to the given workspace, so a cross-tenant job_id resolves to not-found.
+func (s *DownloadService) GetDownloadJobInWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*repository.DownloadJob, error) {
+	if s.downloadRepo == nil {
+		return nil, fmt.Errorf("download repo not configured")
+	}
+	return s.downloadRepo.GetJobInWorkspace(ctx, id, workspaceID)
+}
+
 // ListDownloadJobs returns download jobs for a gallery.
 func (s *DownloadService) ListDownloadJobs(ctx context.Context, galleryID uuid.UUID) ([]repository.DownloadJob, error) {
 	if s.downloadRepo == nil {

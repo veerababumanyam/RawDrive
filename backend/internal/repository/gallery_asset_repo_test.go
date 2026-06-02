@@ -41,6 +41,40 @@ func TestF073_BuildReorderArrays_ParallelAndLengthInvariant(t *testing.T) {
 	}
 }
 
+// TestS3G4_LinkServerSQL_AssignsMaxPlusOneAndIsIdempotent pins the SQL contract
+// for the server-side finalize-time gallery link (S3-G4 / AREA-UPLOADER-3 +
+// S3-G5). The statement must:
+//   - assign sort_order = COALESCE(MAX(sort_order),0)+1 within the gallery so
+//     newly finalized assets append deterministically (S3-G5), not collide on 0;
+//   - use ON CONFLICT DO NOTHING (not DO UPDATE) so a pre-existing link from the
+//     legacy client call is a harmless no-op rather than a clobber;
+//   - retain the workspace-join tenant guard so a cross-workspace asset is
+//     pruned to zero rows and never linked.
+func TestS3G4_LinkServerSQL_AssignsMaxPlusOneAndIsIdempotent(t *testing.T) {
+	sql := sqlGalleryAssetLinkServer
+
+	if !strings.Contains(sql, "MAX(ga.sort_order)") || !strings.Contains(sql, ") + 1") {
+		t.Fatalf("server link SQL must assign sort_order = MAX+1 within the gallery; got:\n%s", sql)
+	}
+	if !strings.Contains(strings.ToUpper(sql), "ON CONFLICT (GALLERY_ID, ASSET_ID) DO NOTHING") {
+		t.Fatalf("server link SQL must be idempotent via ON CONFLICT DO NOTHING (not DO UPDATE); got:\n%s", sql)
+	}
+	if strings.Contains(strings.ToUpper(sql), "DO UPDATE") {
+		t.Fatalf("server link SQL must NOT clobber an existing link with DO UPDATE; got:\n%s", sql)
+	}
+	// Tenant guard: the asset must join to the gallery on a shared workspace_id
+	// AND the gallery's workspace must equal the caller's workspace param.
+	for _, frag := range []string{
+		"JOIN assets a ON a.workspace_id = g.workspace_id",
+		"a.deleted_at IS NULL",
+		"g.workspace_id = $5",
+	} {
+		if !strings.Contains(sql, frag) {
+			t.Fatalf("server link SQL missing tenant-guard fragment %q; got:\n%s", frag, sql)
+		}
+	}
+}
+
 // TestF073_ReorderSQL_IsSingleSetBasedStatement pins the SQL contract: a single
 // UPDATE driven by unnest of two arrays, so any reorder is one round-trip. A
 // regression back to a per-item loop (which had no shared SQL constant and used

@@ -25,10 +25,6 @@ import (
 // AuthAdapter translates its own user.ErrPhoneTaken into this sentinel.
 var ErrPhoneTaken = errors.New("auth: phone number already registered")
 
-// maxPasswordLen caps user passwords at bcrypt's byte limit. Kept for local
-// readability while the numeric value lives in passwordpolicy.
-const maxPasswordLen = passwordpolicy.MaxBcryptInputBytes
-
 // ──────────────────────────── Request / Response Types ────────────────────────────
 
 type RegisterRequest struct {
@@ -682,6 +678,10 @@ func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+	// S1-G3 / AREA-AUTH-2: bind the signed state to this browser via an
+	// HttpOnly, SameSite=Lax cookie. HandleGoogleCallback requires the callback's
+	// signed state to match this cookie (and rejects replays), so a captured or
+	// replayed state value is useless from any other client.
 	setOAuthStateCookie(w, r, start.CookieValue, start.ExpiresAt)
 
 	http.Redirect(w, r, start.RedirectURL, http.StatusFound)
@@ -740,6 +740,11 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// S1-G3 / AREA-AUTH-2: HandleGoogleCallback binds the signed state to this
+	// browser by requiring the callback's signed state to match the value in the
+	// HttpOnly oauth_state cookie (read above into stateCookie). The deferred
+	// clearOAuthStateCookie plus the service's single-use replay map make the
+	// state unusable a second time within its TTL.
 	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state, stateCookie)
 	if err != nil {
 		errorCode := "oauth_failed"
@@ -801,6 +806,10 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+		// S5-G2: never put the MFA challenge token in the redirect query string
+		// (it lands in browser history, referrers, and server access logs).
+		// Carry it in a short-lived HttpOnly cookie instead and signal only the
+		// step-up requirement in the URL.
 		setMFAChallengeCookie(w, r, mfaToken)
 		http.Redirect(
 			w,

@@ -200,6 +200,60 @@ func TestImpersonateUser_OldHS256TokenRejectedByValidator(t *testing.T) {
 	assert.Error(t, err, "HS256 impersonation token must be rejected by the RS256 validator")
 }
 
+// S5-G1 (audit HIGH): the impersonation token MUST carry impersonation=true so
+// RejectImpersonationWrites can enforce read-only access. Before this fix the
+// token was byte-for-byte a real session (impersonation unset → false), giving
+// an impersonating admin full read/WRITE. This drives the SAME TokenClaims
+// shape ImpersonateUser builds (it sets Impersonation:true) through the real
+// signer + validator and asserts the claim survives the round-trip. (The full
+// ImpersonateUser entry point needs a live DB for GetByID, so we exercise the
+// security-critical claim at the signer boundary, mirroring the F-020 test
+// above.)
+func TestImpersonateUser_TokenCarriesImpersonationTrue(t *testing.T) {
+	signer := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Hour,
+		RefreshTokenExpiry: 24 * time.Hour,
+	})
+	targetID := uuid.New()
+
+	signed, err := signer.GenerateAccessToken(context.Background(), auth.TokenClaims{
+		Sub:           targetID.String(),
+		WorkspaceID:   "ws-123",
+		Role:          "Owner",
+		PlatformRole:  "photographer",
+		StateID:       "state-abc",
+		Impersonation: true, // set by ImpersonateUser
+	})
+	require.NoError(t, err)
+
+	parsed, err := signer.ParseAccessToken(context.Background(), signed)
+	require.NoError(t, err)
+	assert.True(t, parsed.Impersonation, "impersonation=true must round-trip so writes are blocked")
+}
+
+// S5-G1: a normal login token (Impersonation unset → false) must NOT be flagged
+// as impersonated, so genuine tenant sessions keep full read/write access.
+func TestImpersonateUser_NormalTokenImpersonationFalse(t *testing.T) {
+	signer := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  time.Hour,
+		RefreshTokenExpiry: 24 * time.Hour,
+	})
+
+	// Same claims a real login mints — Impersonation left at its zero value.
+	signed, err := signer.GenerateAccessToken(context.Background(), auth.TokenClaims{
+		Sub:          uuid.New().String(),
+		WorkspaceID:  "ws-123",
+		Role:         "Owner",
+		PlatformRole: "photographer",
+		StateID:      "state-abc",
+	})
+	require.NoError(t, err)
+
+	parsed, err := signer.ParseAccessToken(context.Background(), signed)
+	require.NoError(t, err)
+	assert.False(t, parsed.Impersonation, "a normal login token must not be flagged impersonated")
+}
+
 func TestSetImpersonationTokenSigner_StoresSigner(t *testing.T) {
 	svc := NewAdminUserService(nil, nil, nil)
 	require.Nil(t, svc.tokenSigner)

@@ -84,6 +84,38 @@ func APIKeyAuth(verifier APIKeyVerifier) func(http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), apiKeyKey, key)
 			ctx = context.WithValue(ctx, workspaceIDKey, key.WorkspaceID.String())
 			ctx = context.WithValue(ctx, ctxkeys.WorkspaceID, key.WorkspaceID.String())
+
+			// Synthesize JWT claims so handlers under /api/v1/dp/* that read
+			// middleware.JWTClaimsFromContext (or GetActorID / RequireWorkspaceRole)
+			// behave identically whether the request authenticated via a session
+			// JWT or an API key. Without this, those reads returned nil/"" and
+			// uuid.Parse("") silently yielded uuid.Nil — attributing API-key
+			// actions to the nil actor and 401-ing role-gated dp routes despite
+			// valid key auth (S5-G3). The shape mirrors JWTAuth's claimsMap
+			// (including the "user_id" mirror of "sub").
+			//
+			// Actor identity: prefer the key's owner (CreatedBy). Some keys may
+			// predate owner tracking (CreatedBy nil); fall back to the key's own
+			// ID so the actor is a stable, non-nil UUID rather than uuid.Nil.
+			actorID := key.ID
+			if key.CreatedBy != nil {
+				actorID = *key.CreatedBy
+			}
+			// Workspace role for API keys is "Admin": sufficient for the
+			// programmatic dp surface (Editor/Admin-gated routes) without
+			// claiming "Owner", which is reserved for the human account owner
+			// and gates the most destructive operations. The key's real
+			// capability boundary is enforced separately by RequireAPIKeyScope.
+			claimsMap := map[string]interface{}{
+				"sub":           actorID.String(),
+				"user_id":       actorID.String(),
+				"workspace_id":  key.WorkspaceID.String(),
+				"role":          "Admin",
+				"platform_role": "",
+				"state_id":      "",
+				"mfa_verified":  false,
+			}
+			ctx = WithJWTClaims(ctx, claimsMap)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

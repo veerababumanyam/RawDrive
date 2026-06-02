@@ -55,6 +55,22 @@ type Gallery struct {
 	//   face_detection_enabled M3 E8-S1 — face cluster pipeline opt-out. DEFAULT true.
 	FaceIDEnabled        bool `json:"faceid_enabled"`
 	FaceDetectionEnabled bool `json:"face_detection_enabled"`
+	// AccessMode (migration 041) controls public discoverability/reachability:
+	//   public      — reachable by slug AND eligible for discovery surfaces.
+	//   unlisted     — reachable by direct slug only; excluded from discovery.
+	//   private      — requires a verified share-link / invite session to view.
+	//   invite-only  — same gate as private (requires a verified session).
+	// Defaults to 'private' at the DB level (migration 041). Read into the
+	// struct so the public resolve path can enforce it server-side (S4-G3,
+	// integration audit 2026-05-31) — previously it was write-only and every
+	// mode was served identically to 'public'.
+	AccessMode string `json:"access_mode"`
+	// M23: Camera tethering fields (migration 133).
+	// TetheringEnabled: desktop app watches TetherDirectory and auto-uploads.
+	// TetherDirectory: opaque path string stored at the API level; actual FS
+	// access belongs to the desktop companion app, not the Go API.
+	TetheringEnabled bool    `json:"tethering_enabled"`
+	TetherDirectory  *string `json:"tether_directory,omitempty"`
 	// CoverThumbnails is populated by List() via a LEFT JOIN on assets.
 	// Not a database column — only present in list responses.
 	CoverThumbnails map[string]string `json:"cover_thumbnails,omitempty"`
@@ -147,14 +163,16 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 		 title, slug, description, cover_asset_id,
 		 gallery_type, settings, password_hash, watermark_config, is_published, max_selections,
 		 status, created_by, created_at, updated_at, published_at, archived_at,
-		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
+		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
+		 tethering_enabled, tether_directory)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)`,
 		g.ID, g.WorkspaceID, g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID,
 		g.GalleryType, g.Settings, g.PasswordHash, g.WatermarkConfig, g.IsPublished,
 		g.MaxSelections, g.Status, g.CreatedBy, g.CreatedAt, g.UpdatedAt,
 		g.PublishedAt, g.ArchivedAt,
 		g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled, g.SortPreference, g.WhatsappTemplate,
+		g.TetheringEnabled, g.TetherDirectory,
 	)
 	if err != nil {
 		return fmt.Errorf("gallery repo create: %w", err)
@@ -210,14 +228,16 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
-		 faceid_enabled, face_detection_enabled
+		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
+		 tethering_enabled, tether_directory
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
-		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
+		&g.TetheringEnabled, &g.TetherDirectory,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -238,14 +258,16 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		 settings, password_hash, watermark_config, is_published, max_selections, status,
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, sort_preference, whatsapp_template,
-		 faceid_enabled, face_detection_enabled
+		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
+		 tethering_enabled, tether_directory
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
-		&g.FaceIDEnabled, &g.FaceDetectionEnabled,
+		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
+		&g.TetheringEnabled, &g.TetherDirectory,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -272,6 +294,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
 		g.download_enabled, g.sort_preference, g.whatsapp_template,
 		g.faceid_enabled, g.face_detection_enabled,
+		g.tethering_enabled, g.tether_directory,
 		cover_asset.thumbnail_urls
 		FROM galleries g
 		LEFT JOIN LATERAL (
@@ -327,6 +350,7 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 			&g.UpdatedAt, &g.DeletedAt, &g.PublishedAt, &g.ArchivedAt,
 			&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.SortPreference, &g.WhatsappTemplate,
 			&g.FaceIDEnabled, &g.FaceDetectionEnabled,
+			&g.TetheringEnabled, &g.TetherDirectory,
 			&coverThumbs,
 		); err != nil {
 			return nil, fmt.Errorf("gallery repo list scan: %w", err)
@@ -352,13 +376,15 @@ func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 		 is_published=$15, max_selections=$16, status=$17, updated_at=$18, published_at=$19, archived_at=$20,
 		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24,
 		 sort_preference=$25, whatsapp_template=$26,
-		 faceid_enabled=$27, face_detection_enabled=$28
-		 WHERE id=$29 AND deleted_at IS NULL`,
+		 faceid_enabled=$27, face_detection_enabled=$28,
+		 tethering_enabled=$29, tether_directory=$30
+		 WHERE id=$31 AND deleted_at IS NULL`,
 		g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, g.Settings,
 		g.PasswordHash, g.WatermarkConfig, g.IsPublished, g.MaxSelections, g.Status,
 		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
-		g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled, g.ID,
+		g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled,
+		g.TetheringEnabled, g.TetherDirectory, g.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("gallery repo update: %w", err)
@@ -545,4 +571,40 @@ func (r *GalleryRepo) IsFaceDetectionEnabled(ctx context.Context, galleryID uuid
 		return false, fmt.Errorf("gallery repo face detection check: %w", err)
 	}
 	return enabled, nil
+}
+
+// TetheredGallery is the minimal shape returned by ListTethered —
+// only the fields the desktop companion app needs to watch a directory.
+type TetheredGallery struct {
+	ID               uuid.UUID `json:"id"`
+	Title            string    `json:"title"`
+	WorkspaceID      uuid.UUID `json:"workspace_id"`
+	TetherDirectory  *string   `json:"tether_directory"`
+	TetheringEnabled bool      `json:"tethering_enabled"`
+}
+
+// ListTethered returns galleries in workspaceID that have tethering_enabled=true.
+// Used by the desktop companion app to discover which local directories to watch.
+func (r *GalleryRepo) ListTethered(ctx context.Context, workspaceID uuid.UUID) ([]TetheredGallery, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, title, workspace_id, tether_directory, tethering_enabled
+		 FROM galleries
+		 WHERE workspace_id = $1 AND tethering_enabled = true AND deleted_at IS NULL
+		 ORDER BY created_at DESC`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("gallery repo list tethered: %w", err)
+	}
+	defer rows.Close()
+
+	var results []TetheredGallery
+	for rows.Next() {
+		var g TetheredGallery
+		if err := rows.Scan(&g.ID, &g.Title, &g.WorkspaceID, &g.TetherDirectory, &g.TetheringEnabled); err != nil {
+			return nil, fmt.Errorf("gallery repo list tethered scan: %w", err)
+		}
+		results = append(results, g)
+	}
+	return results, rows.Err()
 }

@@ -41,6 +41,16 @@ const sections: Section[] = [
   // People and Photo Search because guests can't aim a camera at the
   // gallery owner's identified-people list directly.
   { label: "Photo Search", path: "/photo-search" },
+  // Delivery + Sales continuity sub-pages re-homed 2026-05-31. Both panels
+  // (DeliveryContinuityPanel / SalesContinuityPanel) were built and tested
+  // but rendered nowhere after commit 46d5188 removed the gallery detail
+  // aside ("API client helpers preserved for future re-mount"). They now
+  // live as workspace sub-routes — Delivery surfaces downloads/views/
+  // proofing roll-up, Sales surfaces linked invoice/deal/project records.
+  // Placed after Photo Search, before Settings so the dropdown reads
+  // workspace tools → commerce → config.
+  { label: "Delivery", path: "/delivery" },
+  { label: "Sales", path: "/sales" },
   { label: "Settings", path: "/settings" },
 ];
 

@@ -22,10 +22,24 @@ export const MAX_CHUNK_UPLOAD_ATTEMPTS = 6;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 15_000;
 
+// Destination binding for server-side gallery linkage (S3-G4 / S3-G5).
+// When `galleryId` is supplied, CreateSession sends it (and `albumId`, if a
+// sub-album is the active upload target) so the backend links the finalized
+// asset into the gallery itself — idempotently, with a deterministic
+// sort_order — at finalize time. The legacy client-side addAssetToGallery
+// call is then redundant and removed at the call site. Both fields are read
+// fresh at request time from a ref so a user switching the active sub-album
+// mid-batch binds subsequent uploads to wherever they are looking.
+export interface UploadDestination {
+  galleryId?: string;
+  albumId?: string | null;
+}
+
 type UseUploadOptions = {
   encryption?: {
     getKey: () => Promise<GalleryMediaKey>;
   };
+  destination?: UploadDestination;
 };
 
 async function runScreener(
@@ -233,7 +247,9 @@ async function uploadChunkWithResume(params: {
   throw new Error("Chunk upload failed after retries");
 }
 
-export function useUpload(apiUrl: string, token: string | null, options: UseUploadOptions = {}) {
+export function useUpload(apiUrl: string, token: string | null, options?: UseUploadOptions) {
+  const encryption = options?.encryption;
+  const destination = options?.destination;
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
@@ -242,6 +258,13 @@ export function useUpload(apiUrl: string, token: string | null, options: UseUplo
   const activeUploads = useRef(0);
   const pumpQueue = useRef<() => void>(() => {});
   const pausedRef = useRef(false);
+
+  // Keep the latest destination in a ref so chunkedUpload (a stable callback)
+  // reads the CURRENT gallery/album at the moment each session is created,
+  // without re-creating the callback (and tearing the queue) on every album
+  // toggle.
+  const destinationRef = useRef<UploadDestination | undefined>(destination);
+  destinationRef.current = destination;
 
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems((prev) =>
@@ -262,7 +285,7 @@ export function useUpload(apiUrl: string, token: string | null, options: UseUplo
     void token; // kept in the signature for caller compatibility
 
     try {
-      if (options.encryption) {
+      if (encryption) {
         const blockReason = getBrowserE2EEUploadBlockReason(item.file);
         if (blockReason) {
           updateItem(item.id, {
@@ -310,9 +333,9 @@ export function useUpload(apiUrl: string, token: string | null, options: UseUplo
       let sourceMetadata: Record<string, unknown> | undefined;
       let encryptedDerivatives: EncryptedDerivative[] = [];
 
-      if (options.encryption) {
+      if (encryption) {
         updateItem(item.id, { status: "encrypting", scanManifest: manifest });
-        const mediaKey = await options.encryption.getKey();
+        const mediaKey = await encryption.getKey();
         const encryptedOriginal = await encryptBlob(item.file, {
           key: mediaKey.key,
           keyId: mediaKey.keyId,
@@ -343,20 +366,41 @@ export function useUpload(apiUrl: string, token: string | null, options: UseUplo
 
       updateItem(item.id, { status: "uploading", scanManifest: manifest });
 
+      // S3-G4 / S3-G5: bind the session to its destination gallery (and
+      // sub-album, when one is the active upload target) so the backend links
+      // the finalized asset server-side. Read from the ref at request time so
+      // a mid-batch album switch routes subsequent uploads correctly. Omitted
+      // keys leave the session as a plain workspace upload (legacy behaviour).
+      const dest = destinationRef.current;
+      // total_size MUST be the size of what we actually chunk and PATCH. In the
+      // E2EE path that is the encrypted ciphertext (uploadBlob), not the
+      // plaintext source; the chunk loop below iterates uploadBlob.size.
+      const createBody: Record<string, unknown> = {
+        filename: item.file.name,
+        content_type: item.file.type || "application/octet-stream",
+        total_size: uploadBlob.size,
+        chunk_size: CHUNK_SIZE,
+        scan_manifest: manifest,
+      };
+      // E2EE manifests for the encrypted original + source metadata, only
+      // present when client-side encryption ran for this item.
+      if (mediaEncryption) {
+        createBody.media_encryption = mediaEncryption;
+      }
+      if (sourceMetadata) {
+        createBody.source_metadata = sourceMetadata;
+      }
+      if (dest?.galleryId) {
+        createBody.gallery_id = dest.galleryId;
+        if (dest.albumId) createBody.album_id = dest.albumId;
+      }
+
       const createRes = await authFetch("/api/v1/uploads", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          filename: item.file.name,
-          content_type: item.file.type || "application/octet-stream",
-          total_size: uploadBlob.size,
-          chunk_size: CHUNK_SIZE,
-          scan_manifest: manifest,
-          media_encryption: mediaEncryption,
-          source_metadata: sourceMetadata,
-        }),
+        body: JSON.stringify(createBody),
         signal: controller.signal,
       });
 
@@ -389,6 +433,22 @@ export function useUpload(apiUrl: string, token: string | null, options: UseUplo
             error:
               errorBody.message ??
               "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+          });
+          return;
+        }
+        // S3-G4: the server validates the destination gallery/album belongs to
+        // the caller's workspace at CreateSession and returns 404
+        // {"error":"gallery not found"} / "album not found" when it does not.
+        // Surface this as a real error row instead of a bare status code so the
+        // photographer learns the link target was rejected (e.g. a stale album
+        // id) rather than the upload silently landing unlinked.
+        if (createRes.status === 404 && (errorBody.error === "gallery not found" || errorBody.error === "album not found")) {
+          updateItem(item.id, {
+            status: "error",
+            error:
+              errorBody.error === "album not found"
+                ? "Couldn't link this upload to the selected sub-gallery (it may have been deleted). Try again."
+                : "Couldn't link this upload to this gallery (it may have been deleted). Try again.",
           });
           return;
         }
@@ -451,7 +511,7 @@ export function useUpload(apiUrl: string, token: string | null, options: UseUplo
       activeUploads.current = Math.max(0, activeUploads.current - 1);
       pumpQueue.current();
     }
-  }, [apiUrl, options.encryption, token, updateItem]);
+  }, [apiUrl, encryption, token, updateItem]);
 
   pumpQueue.current = () => {
     while (

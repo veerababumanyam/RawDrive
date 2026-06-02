@@ -13,6 +13,9 @@ import (
 // GalleryDesignHandler handles gallery design studio API endpoints.
 type GalleryDesignHandler struct {
 	designSvc *service.GalleryDesignService
+	// galleryResolver enforces tenant ownership on gallery-scoped routes via
+	// guardGalleryWorkspace. Nil-safe: when unwired the guard fails closed.
+	galleryResolver *service.GalleryService
 }
 
 // NewGalleryDesignHandler creates a new GalleryDesignHandler.
@@ -20,11 +23,24 @@ func NewGalleryDesignHandler(svc *service.GalleryDesignService) *GalleryDesignHa
 	return &GalleryDesignHandler{designSvc: svc}
 }
 
+// WithGalleryResolver injects the gallery resolver used by guardGalleryWorkspace
+// to enforce tenant ownership before serving gallery-scoped routes. Chainable;
+// tolerates a nil resolver (the guard fails closed when the resolver is nil).
+func (h *GalleryDesignHandler) WithGalleryResolver(gs *service.GalleryService) *GalleryDesignHandler {
+	h.galleryResolver = gs
+	return h
+}
+
 // GetDesign handles GET /api/v1/galleries/{id}/design
 func (h *GalleryDesignHandler) GetDesign(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, id); !ok {
 		return
 	}
 
@@ -69,6 +85,11 @@ func (h *GalleryDesignHandler) UpdateDesign(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, id); !ok {
+		return
+	}
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
@@ -109,6 +130,11 @@ func (h *GalleryDesignHandler) UpdateEmbeddedVideos(w http.ResponseWriter, r *ht
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, id); !ok {
 		return
 	}
 

@@ -91,6 +91,12 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// tenant-ownership guard (integration audit 2026-05-31)
+	gallery, _, ok := guardGalleryWorkspace(w, r, h.galleryRepo, galleryID)
+	if !ok {
+		return
+	}
+
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<14)) // 16KB — cover config is tiny
 	if err != nil {
 		http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
@@ -111,12 +117,6 @@ func (h *GalleryCoverHandler) UpdateCover(w http.ResponseWriter, r *http.Request
 			return
 		}
 		assetID = &parsed
-	}
-
-	gallery, err := h.galleryRepo.GetByID(r.Context(), galleryID)
-	if err != nil || gallery == nil {
-		http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
-		return
 	}
 
 	if gallery.Settings == nil {

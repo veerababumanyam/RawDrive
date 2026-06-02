@@ -99,9 +99,25 @@ export function LoginForm() {
     if (!oauthMfaRequired) {
       return;
     }
+    // PR #57 / S5-G2: the OAuth-MFA path no longer carries a usable mfa_token in
+    // the redirect URL — the backend stashes it in an HttpOnly mfa_token cookie
+    // that the SameSite=Lax browser replays on POST /auth/verify-totp. We never
+    // persist a URL-borne mfa_token (URLs leak into history/logs/referrers), so
+    // any token in the query string is discarded and any stale sessionStorage
+    // token is cleared. The frontend only records that an OAuth MFA flow is in
+    // progress so MFAVerifyForm reads the token from the cookie instead of
+    // bouncing back to /login. The legacy password-then-MFA path still uses the
+    // sessionStorage token written by handleLogin.
     try {
       window.sessionStorage.removeItem("rawdrive_mfa_token");
-    } catch {}
+      window.sessionStorage.setItem("rawdrive_mfa_flow", "oauth");
+    } catch {
+      // sessionStorage unavailable — MFAVerifyForm's "no challenge" guard will
+      // send the user back to /login from there. Surface a hint here too.
+      setError("This browser blocked secure session storage. Please try again.");
+      router.replace("/login");
+      return;
+    }
     router.replace("/login/mfa");
   }, [oauthMfaRequired, router]);
 

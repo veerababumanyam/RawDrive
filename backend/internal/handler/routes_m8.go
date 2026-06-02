@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rawdrive/backend/internal/middleware"
+	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/streaming/viewer"
 )
@@ -23,13 +24,17 @@ type M8Dependencies struct {
 
 	// Optional: nil disables PIN rate limiting.
 	PINRateLimiter middleware.PINRateLimiter
+
+	// Optional: nil disables the tethered-galleries endpoint.
+	GalleryRepo *repository.GalleryRepo
 }
 
 // RegisterM8Routes registers all M8 (Live Streaming & Desktop Companion) routes.
 func RegisterM8Routes(r chi.Router, deps M8Dependencies) {
 	streamHandler := NewStreamHandler(deps.StreamService)
 	videoHandler := NewVideoHandler(deps.VideoService)
-	desktopHandler := NewDesktopHandler(deps.DesktopService)
+	desktopHandler := NewDesktopHandler(deps.DesktopService).
+		WithGalleryRepo(deps.GalleryRepo)
 
 	// Stream management (authenticated)
 	//
@@ -84,6 +89,8 @@ func RegisterM8Routes(r chi.Router, deps M8Dependencies) {
 		r.Put("/sessions/{id}/stats", desktopHandler.UpdateStats)
 		r.Delete("/sessions/{id}", desktopHandler.Deactivate)
 		r.Get("/sync-status", desktopHandler.SyncStatus)
+		// M23: desktop polls this to discover tether-watched directories.
+		r.Get("/tethered-galleries", desktopHandler.TetheredGalleries)
 	})
 }
 

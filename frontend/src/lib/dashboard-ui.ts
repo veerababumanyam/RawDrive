@@ -87,7 +87,35 @@ export function assetIsProcessing(asset: {
   return false;
 }
 
-export function getStorageBackedUrl(url: string | undefined | null, token?: string | null): string {
+/**
+ * Build an absolute, optionally-authenticated URL for a `/storage/*` byte.
+ *
+ * Two independent auth tokens can be attached, because the storage proxy on
+ * the Go API accepts both:
+ *
+ *   - `token`              → dashboard JWT, appended as `?token=` for the
+ *                            owner/workspace-authenticated surfaces.
+ *   - `gallerySessionToken`→ S4-G1: the gallery-session token (password- or
+ *                            share-PIN-scoped) appended as `?gs=`. REQUIRED for
+ *                            protected gallery bytes when the page and the API
+ *                            are on different origins (the default split-origin
+ *                            deployment): the httpOnly `gallery_session` cookie
+ *                            is `SameSite=Strict` on the API origin, so a
+ *                            cross-origin <img> request never carries it. The
+ *                            `?gs=` query param is the same-origin-independent
+ *                            channel the storage proxy reads (see
+ *                            cmd/api/main.go authorizeThumbnailByte). For a
+ *                            truly same-origin deployment the cookie suffices
+ *                            and `gs` is harmlessly redundant.
+ *
+ * Only ONE of the two should generally be present for a given surface: the
+ * dashboard uses `token`; the public viewer uses `gallerySessionToken`.
+ */
+export function getStorageBackedUrl(
+  url: string | undefined | null,
+  token?: string | null,
+  gallerySessionToken?: string | null,
+): string {
   if (!url) return "";
 
   if (
@@ -104,13 +132,22 @@ export function getStorageBackedUrl(url: string | undefined | null, token?: stri
   }
 
   const storagePath = url.startsWith("/storage/") ? url : `/storage/${url.replace(/^\/+/, "")}`;
-  const absoluteUrl = `${API_BASE}${storagePath}`;
-  if (!token || !absoluteUrl.includes("/storage/") || absoluteUrl.includes("token=")) {
+  let absoluteUrl = `${API_BASE}${storagePath}`;
+  if (!absoluteUrl.includes("/storage/")) {
     return absoluteUrl;
   }
 
-  const sep = absoluteUrl.includes("?") ? "&" : "?";
-  return `${absoluteUrl}${sep}token=${encodeURIComponent(token)}`;
+  if (token && !absoluteUrl.includes("token=")) {
+    const sep = absoluteUrl.includes("?") ? "&" : "?";
+    absoluteUrl = `${absoluteUrl}${sep}token=${encodeURIComponent(token)}`;
+  }
+
+  if (gallerySessionToken && !absoluteUrl.includes("gs=")) {
+    const sep = absoluteUrl.includes("?") ? "&" : "?";
+    absoluteUrl = `${absoluteUrl}${sep}gs=${encodeURIComponent(gallerySessionToken)}`;
+  }
+
+  return absoluteUrl;
 }
 
 /**

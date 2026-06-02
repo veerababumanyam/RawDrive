@@ -34,13 +34,28 @@ interface Props {
   photo: PublicAsset;
   gallery: Gallery;
   branding: GalleryBranding | null;
+  // S4-G1: gallery-session token (when the gallery is gated) appended as `?gs=`
+  // to the protected image bytes so the cross-origin <img> authenticates.
+  gallerySessionToken?: string | null;
 }
 
-export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
+export function SinglePhotoView({ slug, photo, gallery, branding, gallerySessionToken = null }: Props) {
   const [shareCopied, setShareCopied] = useState(false);
   const [zoom, setZoom] = useState(1);
 
-  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS);
+  // Client-side media-encryption aware image resolution (feature branch). The
+  // hook picks the largest PUBLIC WebP variant and, for E2EE-shared galleries,
+  // decrypts the blob in the browser using the key carried in the URL hash.
+  //
+  // Gated-gallery byte auth (origin/main security control): the
+  // `gallerySessionToken` is passed in the hook's dedicated 4th slot so it
+  // routes to getStorageBackedUrl's `?gs=` query param — the only one the
+  // storage proxy reads for gallery sessions on a split-origin deployment
+  // (storage is served from the API origin, where the SameSite gallery_session
+  // cookie does not reach). For open/published galleries the bytes serve
+  // anonymously and the token is ignored; gated same-origin deployments also
+  // still work via the SameSite cookie.
+  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS, null, gallerySessionToken);
 
   const brandName = branding?.can_customize ? branding.brand_name : null;
   const downloadEnabled = gallery.download_enabled !== false;

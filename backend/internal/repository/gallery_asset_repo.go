@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,18 +30,121 @@ func NewGalleryAssetRepo(pool *pgxpool.Pool) *GalleryAssetRepo {
 	return &GalleryAssetRepo{pool: pool}
 }
 
-// Add links an asset to a gallery.
-func (r *GalleryAssetRepo) Add(ctx context.Context, galleryID, assetID uuid.UUID, sortOrder int) error {
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO gallery_assets (id, gallery_id, asset_id, sort_order, added_at)
-		 VALUES ($1, $2, $3, $4, $5)
-		 ON CONFLICT (gallery_id, asset_id) DO UPDATE SET sort_order = EXCLUDED.sort_order`,
-		uuid.New(), galleryID, assetID, sortOrder, time.Now(),
-	)
+// ErrAssetNotInWorkspace is returned by GalleryAssetRepo.Add and
+// AlbumRepo.AddAsset when the asset id does not belong to the same workspace as
+// the gallery (or the album's parent gallery) it is being linked into. This is
+// the cross-tenant linkage guard (S2-G6 / S3-G1 / S3-G2 / AREA-UPLOADER-4): a
+// caller in workspace A must not be able to attach a workspace-B asset to one
+// of its own galleries/albums and read it back. Handlers map this to a 404/skip
+// rather than disclosing the foreign id's existence.
+var ErrAssetNotInWorkspace = fmt.Errorf("asset does not belong to gallery workspace")
+
+// sqlGalleryAssetAdd is the DB-level tenant guard for linking an asset into a
+// gallery. Instead of an unconditional INSERT ... VALUES, it inserts only when
+// the gallery and the asset resolve to the SAME workspace_id (joined here, in
+// the database, so the check can never be skipped by a caller). The RETURNING
+// clause lets the repo distinguish "inserted/updated" from "rejected because the
+// asset is foreign or missing": the WHERE prunes the row to zero before the
+// INSERT runs, so a cross-workspace or non-existent asset yields no returned row.
+const sqlGalleryAssetAdd = `INSERT INTO gallery_assets (id, gallery_id, asset_id, sort_order, added_at)
+		 SELECT $1, g.id, a.id, $4, $5
+		 FROM galleries g
+		 JOIN assets a ON a.workspace_id = g.workspace_id
+		 WHERE g.id = $2 AND a.id = $3 AND a.deleted_at IS NULL
+		   AND g.workspace_id = $6
+		 ON CONFLICT (gallery_id, asset_id) DO UPDATE SET sort_order = EXCLUDED.sort_order
+		 RETURNING id`
+
+// Add links an asset to a gallery, but only when the asset belongs to the same
+// workspace as the gallery.
+//
+// workspaceID is the caller's JWT workspace (resolved by the handler via the
+// gallery ownership guard). It is asserted to match the gallery's workspace as
+// a defense-in-depth check before the DB-level join enforces that the asset
+// shares that workspace. A cross-workspace or missing asset inserts no row and
+// returns ErrAssetNotInWorkspace instead of silently linking foreign data.
+func (r *GalleryAssetRepo) Add(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID, sortOrder int) error {
+	var inserted uuid.UUID
+	err := r.pool.QueryRow(ctx, sqlGalleryAssetAdd,
+		uuid.New(), galleryID, assetID, sortOrder, time.Now(), workspaceID,
+	).Scan(&inserted)
+	if err == pgx.ErrNoRows {
+		// No row matched the workspace-join: the asset is foreign to the
+		// gallery's workspace (or does not exist / is deleted). Reject.
+		return ErrAssetNotInWorkspace
+	}
 	if err != nil {
 		return fmt.Errorf("gallery asset add: %w", err)
 	}
 	return nil
+}
+
+// sqlGalleryAssetLinkServer is the server-side finalize-time link used by the
+// chunked upload path (S3-G4 / AREA-UPLOADER-3). It differs from
+// sqlGalleryAssetAdd in two load-bearing ways:
+//
+//   - sort_order is assigned server-side as COALESCE(MAX(sort_order),0)+1 within
+//     the gallery (S3-G5) so newly finalized assets append deterministically to
+//     the end of the grid instead of all colliding on the client-passed 0.
+//   - ON CONFLICT DO NOTHING (not DO UPDATE): if the asset is already linked
+//     (e.g. the legacy client addAssetToGallery call won the race) the
+//     server-side link is a harmless no-op that must NOT clobber the existing
+//     sort_order. This is what makes the dual-path (server + legacy client)
+//     linkage idempotent.
+//
+// The same workspace-join tenant guard as sqlGalleryAssetAdd is retained: the
+// row is pruned to zero unless the gallery and asset resolve to the SAME
+// workspace_id, so a cross-workspace asset can never be linked even via this
+// path. The MAX subquery is correlated to the gallery so it scans only that
+// gallery's link rows (idx_gallery_assets_gallery_id).
+const sqlGalleryAssetLinkServer = `INSERT INTO gallery_assets (id, gallery_id, asset_id, sort_order, added_at)
+		 SELECT $1, g.id, a.id,
+		        COALESCE((SELECT MAX(ga.sort_order) FROM gallery_assets ga WHERE ga.gallery_id = g.id), 0) + 1,
+		        $4
+		 FROM galleries g
+		 JOIN assets a ON a.workspace_id = g.workspace_id
+		 WHERE g.id = $2 AND a.id = $3 AND a.deleted_at IS NULL
+		   AND g.workspace_id = $5
+		 ON CONFLICT (gallery_id, asset_id) DO NOTHING`
+
+// LinkFinalizedAsset links a just-finalized upload asset into a gallery
+// server-side, assigning the next sort_order within the gallery and treating an
+// already-linked asset as a no-op (idempotent). workspaceID is the session's
+// workspace (already validated to own the gallery at CreateSession time); the
+// DB-level workspace join is the authoritative guard. A cross-workspace or
+// missing/deleted asset links no row and returns ErrAssetNotInWorkspace.
+//
+// Unlike Add, a no-op caused by an existing link is NOT an error: ON CONFLICT
+// DO NOTHING means the legacy client link winning the race still leaves this
+// call successful. We therefore distinguish "nothing inserted because already
+// linked" (success) from "nothing inserted because the asset is foreign/missing"
+// (ErrAssetNotInWorkspace) by re-checking existence of the link row.
+func (r *GalleryAssetRepo) LinkFinalizedAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, sqlGalleryAssetLinkServer,
+		uuid.New(), galleryID, assetID, time.Now(), workspaceID,
+	)
+	if err != nil {
+		return fmt.Errorf("gallery asset link finalized: %w", err)
+	}
+	if tag.RowsAffected() > 0 {
+		// A new link row was inserted.
+		return nil
+	}
+	// Zero rows affected: either the asset is foreign/missing (the workspace
+	// join pruned the row) OR the link already exists (ON CONFLICT DO NOTHING).
+	// Disambiguate so a genuine cross-tenant attempt is rejected while an
+	// idempotent re-link is treated as success.
+	var exists bool
+	if err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM gallery_assets WHERE gallery_id = $1 AND asset_id = $2)`,
+		galleryID, assetID,
+	).Scan(&exists); err != nil {
+		return fmt.Errorf("gallery asset link finalized existence check: %w", err)
+	}
+	if exists {
+		return nil // already linked — idempotent no-op
+	}
+	return ErrAssetNotInWorkspace
 }
 
 // Remove unlinks an asset from a gallery.

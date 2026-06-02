@@ -162,7 +162,56 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
     return block("jpeg", cfg.declaredType, findings);
   }
 
-  findings.push(...classifyTrailer(bytes, eoiOffset));
+  // Bytes past the primary EOI. Real-world camera JPEGs routinely carry
+  // BENIGN trailing data — most commonly a Multi-Picture Format (MPF) preview
+  // / second image that the camera appends after the primary image's EOI,
+  // plus assorted EXIF/MPF index padding. The pre-2026-05-31 behaviour flagged
+  // ALL non-padding trailing bytes as a high-severity "appended_payload" and
+  // blocked the upload, which rejected the overwhelming majority of unmodified
+  // DSLR/mirrorless photos (observed: 38 of 39 wedding JPEGs blocked).
+  //
+  // The actual threat here is a POLYGLOT — an archive or executable appended
+  // after EOI — and scanForArchiveSignatures already detects those. So we only
+  // BLOCK when the trailer contains an archive signature; otherwise we record a
+  // low-severity warning (surfaced in the UI, never blocking) and allow the
+  // upload. The Tier-D backend gate still re-screens server-side.
+  if (eoiOffset < bytes.byteLength) {
+    const trailing = bytes.byteLength - eoiOffset;
+    if (hasNonPaddingTrailer(bytes, eoiOffset)) {
+      const archiveFindings = scanForArchiveSignatures(
+        bytes,
+        eoiOffset,
+        bytes.byteLength
+      );
+      if (archiveFindings.length > 0) {
+        // Genuine polyglot: image + appended archive. Reject.
+        findings.push({
+          category: "appended_payload",
+          severity: "high",
+          offset: eoiOffset,
+          message: `${trailing} bytes of appended payload past JPEG EOI containing archive signature(s)`,
+        });
+        findings.push(...archiveFindings);
+      } else {
+        // Benign trailing data — never blocks (#60). When the trailer positively
+        // matches a camera-authored MPF/dependent-JPEG structure we say so;
+        // otherwise it is still allowed as generic trailing data. Either way the
+        // Tier-D backend gate re-screens server-side.
+        const firstNonPadding = firstTrailerPayloadOffset(bytes, eoiOffset);
+        const isCameraMpf =
+          firstNonPadding < bytes.byteLength &&
+          isLikelyCameraJpegTrailer(bytes, firstNonPadding);
+        findings.push({
+          category: "appended_payload",
+          severity: "low",
+          offset: eoiOffset,
+          message: isCameraMpf
+            ? `${trailing} bytes of trailing data past JPEG EOI (camera-authored Multi-Picture Format / dependent JPEG preview; allowed)`
+            : `${trailing} bytes of trailing data past JPEG EOI (no archive signature — typical of camera Multi-Picture Format; allowed)`,
+        });
+      }
+    }
+  }
 
   // Decision: any high-severity finding → block. Otherwise → pass.
   const hasHigh = findings.some((f) => f.severity === "high");
@@ -189,45 +238,14 @@ function block(
   };
 }
 
-function classifyTrailer(bytes: Uint8Array, eoiOffset: number): ScanFinding[] {
-  if (eoiOffset >= bytes.byteLength) return [];
-
-  const firstNonPadding = firstTrailerPayloadOffset(bytes, eoiOffset);
-  if (firstNonPadding >= bytes.byteLength) return [];
-
-  const cameraTrailer = isLikelyCameraJpegTrailer(bytes, firstNonPadding);
-  if (cameraTrailer) {
-    return [
-      {
-        category: "appended_payload",
-        severity: "low",
-        offset: firstNonPadding,
-        message: "camera-authored JPEG preview/MPF data detected after the primary JPEG image",
-      },
-    ];
+// True when the bytes from `start` contain at least one non-padding byte
+// (anything other than 0x00 / 0xFF). Padding-only trailers are ignored.
+function hasNonPaddingTrailer(bytes: Uint8Array, start: number): boolean {
+  for (let i = start; i < bytes.byteLength; i++) {
+    const b = bytes[i];
+    if (b !== 0x00 && b !== 0xff) return true;
   }
-
-  const archiveFindings = scanForArchiveSignatures(bytes, firstNonPadding, bytes.byteLength);
-  if (archiveFindings.length > 0) {
-    return [
-      {
-        category: "appended_payload",
-        severity: "high",
-        offset: firstNonPadding,
-        message: `${bytes.byteLength - firstNonPadding} bytes of non-image payload past JPEG EOI`,
-      },
-      ...archiveFindings,
-    ];
-  }
-
-  return [
-    {
-      category: "appended_payload",
-      severity: "high",
-      offset: firstNonPadding,
-      message: `${bytes.byteLength - firstNonPadding} bytes of unknown payload past JPEG EOI`,
-    },
-  ];
+  return false;
 }
 
 function firstTrailerPayloadOffset(bytes: Uint8Array, start: number): number {

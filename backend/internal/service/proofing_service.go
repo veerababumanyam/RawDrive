@@ -163,3 +163,12 @@ func (s *ProofingService) SubmitPublicBySlug(ctx context.Context, slug string, a
 func (s *ProofingService) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	return s.proofingRepo.UpdateStatus(ctx, id, status)
 }
+
+// UpdateStatusInWorkspace changes a selection's status only when its owning
+// gallery belongs to the given workspace. The check is performed atomically in
+// the repository's UPDATE statement (no TOCTOU window). Returns the number of
+// rows affected; 0 means the selection does not exist or is owned by another
+// tenant, which the handler maps to 404.
+func (s *ProofingService) UpdateStatusInWorkspace(ctx context.Context, id uuid.UUID, status string, workspaceID uuid.UUID) (int64, error) {
+	return s.proofingRepo.UpdateStatusInWorkspace(ctx, id, status, workspaceID)
+}

@@ -66,7 +66,19 @@ describe("F-089: gallery detail page reads the access token once per mount", () 
     );
     expect(source).toMatch(/const token = tokenRef\.current;/);
 
-    // And that snapshot must be the value handed to the upload hook.
-    expect(source).toMatch(/const upload = useUpload\(apiUrl, token, \{ encryption: uploadEncryption \}\);/);
+    // And that snapshot must be the value handed to the upload hook. The hook
+    // now takes a single options object that carries BOTH the client-side
+    // media-encryption key provider (feature branch) AND the S3-G4 destination
+    // binding (galleryId / albumId, server-side gallery linkage), so the call
+    // spans multiple lines. We pin that the once-per-mount `token` snapshot
+    // feeds useUpload and that the `encryption: uploadEncryption` arg is the
+    // value handed in.
+    expect(source).toMatch(/const upload = useUpload\(apiUrl, token, \{/);
+    expect(source).toMatch(/encryption: uploadEncryption,/);
+
+    // And that the same call still allows trailing args after `token` (the
+    // S3-G4 destination binding) while pinning the `token` snapshot as the
+    // value that feeds useUpload.
+    expect(source).toMatch(/const upload = useUpload\(apiUrl, token(,| \)|\))/);
   });
 });

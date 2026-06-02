@@ -404,6 +404,12 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and code required"})
 		return
 	}
+	// PR #57 / S5-G2: the OAuth-MFA path no longer carries the challenge token
+	// in the redirect URL (it would land in history/referrers/access logs).
+	// The OAuth callback instead writes mfa_token into an HttpOnly,
+	// SameSite=Lax cookie (see setMFAChallengeCookie in handler.go). The
+	// password-then-MFA path still sends mfa_token in the JSON body. Honor
+	// the body value first (back-compat), then fall back to the cookie.
 	req.MFAToken = mfaChallengeTokenFromRequest(r, req.MFAToken)
 	if req.MFAToken == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and code required"})
@@ -792,7 +798,7 @@ func (h *MFAHandler) consumeChallengeToken(tokenStr string) bool {
 }
 
 // parseChallengeToken verifies a challenge token and extracts its claims.
-func (h *MFAHandler) parseChallengeToken(ctx context.Context, tokenStr string) (*TokenClaims, error) {
+func (h *MFAHandler) parseChallengeToken(_ context.Context, tokenStr string) (*TokenClaims, error) {
 	// The challenge token rides the same RS256 signing key as the
 	// access token — we reuse ParseAccessToken for signature+expiry
 	// checks, then require the purpose claim to match.

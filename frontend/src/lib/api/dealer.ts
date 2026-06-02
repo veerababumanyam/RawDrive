@@ -125,6 +125,22 @@ export async function getDealerDashboard(): Promise<Dealer> {
   return res.json();
 }
 
+export interface StateRef {
+  id: number;
+  name: string;
+}
+
+// Dealer responses only carry the numeric state_id; GET /api/v1/states resolves
+// id → human-readable name. Mirrors the fetch DealerApplicationModal/DealerDashboard
+// already do, centralized here so territory/dashboard share one source.
+export async function getStates(): Promise<StateRef[]> {
+  const res = await fetch(`${API_BASE}/api/v1/states`);
+  if (!res.ok) throw new Error("Failed to fetch states");
+  const body = await res.json();
+  const states: { id: number; name: string }[] = Array.isArray(body?.states) ? body.states : [];
+  return states.map((s) => ({ id: s.id, name: s.name }));
+}
+
 export interface StatePhotographer {
   user_id: string;
   full_name: string;

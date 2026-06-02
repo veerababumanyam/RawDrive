@@ -6,7 +6,6 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { bulkAssetAction, getAsset, type Asset } from "@/lib/api/assets";
 import {
   addAlbumAssets,
-  addAssetToGallery,
   createGalleryAlbum,
   deleteGalleryAlbum,
   galleryPublicUrl,
@@ -23,6 +22,7 @@ import { listProofingSelections, createComment, type ProofingSelection } from "@
 import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
+import { TetheredShootingPanel } from "@/components/gallery/tethered-shooting-panel";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
   assetIsProcessing,
@@ -771,6 +771,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     tokenRef.current = getStoredAccessToken();
   }
   const token = tokenRef.current;
+  // Client-side media encryption (feature branch): the upload hook fetches the
+  // per-gallery media key on demand and encrypts each WebP derivative in the
+  // browser before it leaves the device.
   const uploadEncryption = useMemo(
     () => ({
       getKey: () => getOrCreateGalleryMediaKey(id),
@@ -780,7 +783,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     void getOrCreateGalleryMediaKey(id);
   }, [id]);
-  const upload = useUpload(apiUrl, token, { encryption: uploadEncryption });
+  // S3-G4 / S3-G5: also bind every upload session to THIS gallery (and the
+  // active sub-album, when one is selected) so the backend links the finalized
+  // asset into the gallery server-side — idempotent, deterministic sort_order —
+  // at finalize. The destination fields update as the user switches albums; the
+  // hook reads them live via a ref so a mid-batch switch routes correctly.
+  const upload = useUpload(apiUrl, token, {
+    encryption: uploadEncryption,
+    destination: { galleryId: id, albumId: activeAlbum },
+  });
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
   const uploadPreviewBackendAsset = useMemo(() => {
     const completedAssetIds = new Set(
@@ -1096,12 +1107,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   }, [activeAlbum]);
   const albumLinkedAssetIdsRef = useRef<Set<string>>(new Set());
 
-  // Link each newly-completed upload to this gallery, then attach it to
-  // the active sub-album (if any), then reload the asset + album views.
-  // The "active sub-album" semantic is: photos land wherever the user is
-  // currently looking. If they kicked off the upload from inside the
-  // Favorites chip, the resulting assets show up in Favorites without
-  // needing a separate drag-into-album step.
+  // S3-G4 / S3-G5: the gallery link is now performed SERVER-SIDE at finalize
+  // (the upload session was bound to gallery_id in CreateSession), so the
+  // formerly-required client addAssetToGallery loop is gone — keeping it would
+  // be a redundant idempotent no-op. What still must happen client-side is the
+  // sub-album membership push (the backend validates album_id but does not add
+  // the asset to the album table) and reloading the asset + album views so the
+  // freshly-linked photos appear. The "active sub-album" semantic is unchanged:
+  // photos land wherever the user is currently looking, so an upload kicked off
+  // from inside the Favorites chip shows up in Favorites without a manual
+  // drag-into-album step.
   useEffect(() => {
     const t = getStoredAccessToken();
     if (!t || !id) return;
@@ -1120,19 +1135,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       for (const item of toLink) {
         if (!item.assetId) continue;
+        // Tethered-capture tracking (feature branch): tag assets that
+        // originated from a tethered shoot so the post-batch auto-open below
+        // can surface them. The signature set is populated when a tethered
+        // file is enqueued (see tetheredUploadSignaturesRef.add).
         const uploadSignature = uploadFileSignature(item.file);
         const isTetheredUpload = tetheredUploadSignaturesRef.current.has(uploadSignature);
         if (isTetheredUpload) {
           tetheredUploadSignaturesRef.current.delete(uploadSignature);
           newlyAddedTetheredAssetIds.push(item.assetId);
         }
-        try {
-          await addAssetToGallery(t, id, item.assetId, 0);
-          linkedAssetIdsRef.current.add(item.assetId);
-          newlyAddedAssetIds.push(item.assetId);
-        } catch (err) {
-          console.warn("Failed to link asset to gallery:", err);
-        }
+        // S3-G4 / S3-G5: server-side finalize already linked this asset into
+        // the gallery (the upload session was bound to gallery_id in
+        // CreateSession). The legacy client-side addAssetToGallery call is now
+        // a redundant no-op and removed. Track the asset locally (de-dup guard)
+        // and queue it for album membership + the post-batch reload below.
+        linkedAssetIdsRef.current.add(item.assetId);
+        newlyAddedAssetIds.push(item.assetId);
       }
 
       // Push the just-linked assets into the active sub-album. Skipped
@@ -1756,12 +1775,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Single publish-state toggle button — shows current state
+                and acts as the action. Collapsed from the previous two-
+                element layout (status badge + separate action button). */}
             <button
               type="button"
               role="switch"
               aria-checked={gallery.is_published}
               aria-label={gallery.is_published ? "Gallery is published. Switch to unpublished." : "Gallery is unpublished. Switch to published."}
               disabled={publishing}
+              // S5-G1: marks this as a mutating control so it visually disables
+              // under an impersonation (read-only) session — the server would
+              // 403 the updateGallery call anyway.
+              data-mutation
               onClick={togglePublishState}
               className="publish-state-toggle"
               data-state={gallery.is_published ? "published" : "unpublished"}
@@ -2502,6 +2528,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 }}
               />
             )}
+
+            <TetheredShootingPanel galleryId={id} apiUrl={apiUrl} />
           </div>
         </section>
 

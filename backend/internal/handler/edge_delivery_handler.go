@@ -29,6 +29,10 @@ func (h *EdgeDeliveryHandler) ServeDerivative(w http.ResponseWriter, r *http.Req
 		http.Error(w, `{"error":"invalid asset_id"}`, http.StatusBadRequest)
 		return
 	}
+	// tenant-ownership guard (integration audit 2026-05-31)
+	if _, _, ok := guardAssetWorkspace(w, r, h.assetRepo, assetID); !ok {
+		return
+	}
 	if variant == "" {
 		variant = "display_webp"
 	}
@@ -48,12 +52,6 @@ func (h *EdgeDeliveryHandler) ServeDerivative(w http.ResponseWriter, r *http.Req
 		default:
 			storageKey = fmt.Sprintf("derivatives/%s/%s.webp", assetID, variant)
 		}
-	}
-
-	asset, err := h.assetRepo.GetByID(r.Context(), assetID)
-	if err != nil || asset == nil {
-		http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
-		return
 	}
 
 	reader, err := h.thumbnailSvc.GetStore().Get(r.Context(), storageKey)

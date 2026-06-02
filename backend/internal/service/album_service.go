@@ -155,31 +155,14 @@ func (s *AlbumService) GetBreadcrumb(ctx context.Context, albumID uuid.UUID) ([]
 }
 
 // AddAsset adds an asset to an album.
-func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID uuid.UUID, position int) error {
-	album, err := s.albumRepo.GetByID(ctx, albumID)
-	if err != nil {
-		return fmt.Errorf("album service add asset: %w", err)
-	}
-	if album == nil {
-		return fmt.Errorf("album not found")
-	}
-	if s.galleryRepo != nil && s.assetRepo != nil {
-		gallery, err := s.galleryRepo.GetByID(ctx, album.GalleryID)
-		if err != nil {
-			return fmt.Errorf("album service add asset: %w", err)
-		}
-		if gallery == nil {
-			return fmt.Errorf("gallery not found")
-		}
-		asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, assetID, gallery.WorkspaceID)
-		if err != nil {
-			return fmt.Errorf("album service add asset: %w", err)
-		}
-		if asset == nil {
-			return fmt.Errorf("asset not found in gallery workspace")
-		}
-	}
-	return s.albumRepo.AddAsset(ctx, albumID, assetID, position)
+//
+// workspaceID is the caller's workspace (resolved by the handler's album
+// ownership guard). The repo enforces, at the DB level, that the asset belongs
+// to the same workspace as the album's parent gallery, so a caller cannot link
+// a foreign asset id into its own album and read it back (cross-tenant
+// exfiltration).
+func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID, workspaceID uuid.UUID, position int) error {
+	return s.albumRepo.AddAsset(ctx, albumID, assetID, workspaceID, position)
 }
 
 // ListAssets returns the asset rows that belong to an album.

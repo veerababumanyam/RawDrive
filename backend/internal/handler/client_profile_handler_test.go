@@ -81,11 +81,21 @@ func TestProfileResponseTypes(t *testing.T) {
 	if len(resp.Galleries) != 0 {
 		t.Errorf("expected empty galleries, got %d", len(resp.Galleries))
 	}
+	if len(resp.Invoices) != 0 {
+		t.Errorf("expected empty invoices, got %d", len(resp.Invoices))
+	}
+	if len(resp.Deals) != 0 {
+		t.Errorf("expected empty deals, got %d", len(resp.Deals))
+	}
+	if len(resp.Events) != 0 {
+		t.Errorf("expected empty events, got %d", len(resp.Events))
+	}
 }
 
 func TestTimelineEntryMetadata(t *testing.T) {
+	now := time.Now()
 	entry := TimelineEntry{
-		Timestamp: time.Now(),
+		Timestamp: now,
 		Type:      "invoice_paid",
 		Title:     "Invoice paid: INV-001",
 		Metadata: map[string]any{
@@ -95,6 +105,12 @@ func TestTimelineEntryMetadata(t *testing.T) {
 	}
 	if entry.Type != "invoice_paid" {
 		t.Errorf("expected type invoice_paid, got %q", entry.Type)
+	}
+	if !entry.Timestamp.Equal(now) {
+		t.Errorf("expected timestamp %v, got %v", now, entry.Timestamp)
+	}
+	if entry.Title != "Invoice paid: INV-001" {
+		t.Errorf("expected title Invoice paid: INV-001, got %q", entry.Title)
 	}
 	if entry.Metadata["invoice_id"] != "abc-123" {
 		t.Errorf("expected invoice_id abc-123, got %v", entry.Metadata["invoice_id"])

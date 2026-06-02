@@ -110,35 +110,47 @@ func (s *BannerService) Get(ctx context.Context, id uuid.UUID) (*repository.Gall
 	return b, nil
 }
 
-// Update overwrites a banner.
-func (s *BannerService) Update(ctx context.Context, id uuid.UUID, in BannerInput) (*repository.GalleryBanner, error) {
+// Update overwrites a banner. The write is scoped to workspaceID so a banner
+// owned by another tenant is never mutated; a 0-row update is reported as
+// ErrBannerNotFound (404) so cross-tenant existence is not disclosed.
+func (s *BannerService) Update(ctx context.Context, id, workspaceID uuid.UUID, in BannerInput) (*repository.GalleryBanner, error) {
 	if err := validateBannerInput(in); err != nil {
 		return nil, err
 	}
-	b, err := s.repo.GetByID(ctx, id)
+	b := &repository.GalleryBanner{
+		ID:              id,
+		WorkspaceID:     workspaceID,
+		Title:           strings.TrimSpace(in.Title),
+		Body:            in.Body,
+		CTALabel:        in.CTALabel,
+		CTAURL:          in.CTAURL,
+		CouponCode:      strings.ToUpper(strings.TrimSpace(in.CouponCode)),
+		BackgroundColor: in.BackgroundColor,
+		TextColor:       in.TextColor,
+		ActiveFrom:      in.ActiveFrom,
+		ActiveUntil:     in.ActiveUntil,
+		IsActive:        in.IsActive,
+	}
+	rows, err := s.repo.UpdateInWorkspace(ctx, b, workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	if b == nil {
+	if rows == 0 {
 		return nil, ErrBannerNotFound
-	}
-	b.Title = strings.TrimSpace(in.Title)
-	b.Body = in.Body
-	b.CTALabel = in.CTALabel
-	b.CTAURL = in.CTAURL
-	b.CouponCode = strings.ToUpper(strings.TrimSpace(in.CouponCode))
-	b.BackgroundColor = in.BackgroundColor
-	b.TextColor = in.TextColor
-	b.ActiveFrom = in.ActiveFrom
-	b.ActiveUntil = in.ActiveUntil
-	b.IsActive = in.IsActive
-	if err := s.repo.Update(ctx, b); err != nil {
-		return nil, err
 	}
 	return b, nil
 }
 
-// Delete hard-deletes a banner.
-func (s *BannerService) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.repo.Delete(ctx, id)
+// Delete hard-deletes a banner. The delete is scoped to workspaceID so a
+// banner owned by another tenant is never removed; a 0-row delete is reported
+// as ErrBannerNotFound (404) so cross-tenant existence is not disclosed.
+func (s *BannerService) Delete(ctx context.Context, id, workspaceID uuid.UUID) error {
+	rows, err := s.repo.DeleteInWorkspace(ctx, id, workspaceID)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBannerNotFound
+	}
+	return nil
 }

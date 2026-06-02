@@ -67,6 +67,9 @@ vi.mock("@/lib/auth", () => ({
   }),
   getStoredPlatformRole: () => "photographer",
   refreshAuthSession: vi.fn(async () => "test-token"),
+  // S5-G1: layout now mounts ImpersonationBanner (hidden for normal sessions).
+  isImpersonatingSession: vi.fn(() => false),
+  logoutAuthSession: vi.fn(async () => {}),
 }));
 
 function renderDashboardLayout() {

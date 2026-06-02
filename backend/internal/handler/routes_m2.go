@@ -20,7 +20,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	// M16 E47-S5: chain the Tier D validation service onto the asset handler
 	// when it is wired (nil-safe — pre-M16 callers continue to work).
 	assetHandler := NewAssetHandler(deps.AssetService, deps.UploadService).
-		WithValidation(deps.UploadValidationSvc)
+		WithValidation(deps.UploadValidationSvc).
+		WithAssetRepo(deps.AssetRepo)
 	galleryHandler := NewGalleryHandler(deps.GalleryService)
 	if deps.Pool != nil {
 		galleryHandler.WithPool(deps.Pool)
@@ -31,7 +32,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	}
 	shareHandler := NewShareLinkHandler(deps.ShareLinkService).
 		WithGalleryShareEmail(deps.GalleryShareSender, deps.GalleryService, deps.PublicBaseURL, deps.GalleryShareLogRepo)
-	proofingHandler := NewProofingHandler(deps.ProofingService)
+	proofingHandler := NewProofingHandler(deps.ProofingService).
+		WithGalleryService(deps.GalleryService)
 	storageConfigHandler := NewStorageConfigHandler(deps.StorageConfigService)
 
 	// M11 handlers
@@ -128,7 +130,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 		// M12: Gallery Design Studio
 		if deps.GalleryDesignSvc != nil {
-			designHandler := NewGalleryDesignHandler(deps.GalleryDesignSvc)
+			designHandler := NewGalleryDesignHandler(deps.GalleryDesignSvc).WithGalleryResolver(deps.GalleryService)
 			r.Get("/{id}/design", designHandler.GetDesign)
 			r.Put("/{id}/design", designHandler.UpdateDesign)
 			// 2026-05-18 — YouTube/Vimeo embed feature. Lives under the
@@ -177,13 +179,13 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		// main.go (e.g. test harness without DB), this entire block stays
 		// dormant rather than crashing on a nil method receiver.
 		if deps.GalleryFavoritesService != nil {
-			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService)
+			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService).WithGalleryResolver(deps.GalleryService)
 			r.Get("/{id}/favorites", favHandler.Summarize)
 		}
 
 		// M13: Gallery Access Control
 		if deps.GalleryAccessSvc != nil {
-			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc)
+			accessHandler := NewGalleryAccessHandler(deps.GalleryAccessSvc).WithGalleryService(deps.GalleryService)
 			r.Post("/{id}/password", accessHandler.SetPassword)
 			r.Patch("/{id}/access-mode", accessHandler.SetAccessMode)
 			r.Post("/{id}/view-as-client", accessHandler.ViewAsClient)
@@ -193,7 +195,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 		// M13: Enhanced Proofing (sessions, comments, album approval)
 		if deps.ProofingSessionSvc != nil {
-			psHandler := NewProofingSessionHandler(deps.ProofingSessionSvc, deps.ProofingCommentSvc, deps.AlbumApprovalSvc)
+			psHandler := NewProofingSessionHandler(deps.ProofingSessionSvc, deps.ProofingCommentSvc, deps.AlbumApprovalSvc).WithGalleryResolver(deps.GalleryService)
 			r.Post("/{id}/proofing/sessions", psHandler.CreateSession)
 			r.Get("/{id}/proofing/sessions", psHandler.ListSessions)
 			r.Patch("/{id}/proofing/sessions/{sessionId}", psHandler.UpdateSession)
@@ -288,7 +290,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 	// M14: Download routes
 	if deps.DownloadService != nil {
-		dlHandler := NewDownloadHandler(deps.DownloadService)
+		dlHandler := NewDownloadHandler(deps.DownloadService).WithGalleryResolver(deps.GalleryService)
 		r.Route("/api/v1/galleries/{id}/downloads", func(r chi.Router) {
 			r.Post("/", dlHandler.CreateJob)
 			r.Get("/", dlHandler.ListJobs)
@@ -326,7 +328,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		if deps.Pool != nil {
 			deps.GalleryAnalyticsSvc.WithAssetAnalyticsRepo(repository.NewGalleryAssetAnalyticsRepo(deps.Pool))
 		}
-		analyticsHandler := NewGalleryAnalyticsHandler(deps.GalleryAnalyticsSvc)
+		analyticsHandler := NewGalleryAnalyticsHandler(deps.GalleryAnalyticsSvc).WithGalleryResolver(deps.GalleryService)
 		r.Get("/api/v1/galleries/{id}/analytics/summary", analyticsHandler.GetSummary)
 		r.Get("/api/v1/galleries/{id}/analytics/daily", analyticsHandler.GetDailyStats)
 		r.Get("/api/v1/galleries/{id}/analytics/devices", analyticsHandler.GetDeviceBreakdown)
@@ -457,7 +459,10 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		// See migration 105 for the schema rationale separating these
 		// from proofing_selections.
 		if deps.GalleryFavoritesService != nil {
-			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService)
+			// S4-G6 (audit 2026-05-31): wire the password/access-mode/share gate
+			// so guest favorites on a protected gallery require a valid session.
+			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService).
+				WithAccessGate(deps.GalleryService, deps.GalleryAccessSvc, deps.ShareLinkService)
 			r.Post("/galleries/{slug}/favorites/{assetId}", favHandler.Add)
 			r.Delete("/galleries/{slug}/favorites/{assetId}", favHandler.Remove)
 			r.Get("/galleries/{slug}/favorites", favHandler.ListForSession)

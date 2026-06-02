@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -140,15 +141,17 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := getUserID(r)
 
 	var input struct {
-		Title            string `json:"title"`
-		Description      string `json:"description"`
-		GalleryType      string `json:"gallery_type"`
-		ContactID        string `json:"contact_id"`
-		PrimaryContactID string `json:"primary_contact_id"`
-		ProjectID        string `json:"project_id"`
-		EventID          string `json:"event_id"`
-		DealID           string `json:"deal_id"`
-		InvoiceID        string `json:"invoice_id"`
+		Title            string  `json:"title"`
+		Description      string  `json:"description"`
+		GalleryType      string  `json:"gallery_type"`
+		ContactID        string  `json:"contact_id"`
+		PrimaryContactID string  `json:"primary_contact_id"`
+		ProjectID        string  `json:"project_id"`
+		EventID          string  `json:"event_id"`
+		DealID           string  `json:"deal_id"`
+		InvoiceID        string  `json:"invoice_id"`
+		TetheringEnabled bool    `json:"tethering_enabled"`
+		TetherDirectory  *string `json:"tether_directory"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -219,6 +222,8 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		EventID:          eventID,
 		DealID:           dealID,
 		InvoiceID:        invoiceID,
+		TetheringEnabled: input.TetheringEnabled,
+		TetherDirectory:  input.TetherDirectory,
 	})
 	if err != nil {
 		http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
@@ -625,7 +630,8 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+	_, workspaceID, ok := h.requireGalleryInWorkspace(w, r, galleryID)
+	if !ok {
 		return
 	}
 
@@ -644,7 +650,11 @@ func (h *GalleryHandler) AddAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.gallerySvc.AddAsset(r.Context(), galleryID, assetID, input.SortOrder); err != nil {
+	if err := h.gallerySvc.AddAsset(r.Context(), galleryID, assetID, workspaceID, input.SortOrder); err != nil {
+		if errors.Is(err, repository.ErrAssetNotInWorkspace) {
+			http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
+			return
+		}
 		http.Error(w, `{"error":"add asset failed"}`, http.StatusInternalServerError)
 		return
 	}

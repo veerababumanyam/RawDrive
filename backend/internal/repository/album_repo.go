@@ -145,14 +145,40 @@ func (r *AlbumRepo) GetBreadcrumb(ctx context.Context, albumID uuid.UUID) ([]Alb
 	return chain, rows.Err()
 }
 
-// AddAsset adds an asset to an album.
-func (r *AlbumRepo) AddAsset(ctx context.Context, albumID, assetID uuid.UUID, position int) error {
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO album_assets (album_id, asset_id, position, added_at)
-		 VALUES ($1, $2, $3, now())
-		 ON CONFLICT (album_id, asset_id) DO UPDATE SET position = $3`,
-		albumID, assetID, position,
-	)
+// sqlAlbumAssetAdd is the DB-level tenant guard for linking an asset into an
+// album. Albums have no workspace_id of their own; ownership flows through the
+// parent gallery (album_assets -> albums -> galleries). The INSERT ... SELECT
+// joins the album's gallery to the asset on workspace_id, so a row is produced
+// only when the asset shares the album's workspace AND that workspace matches
+// the caller's ($4). The RETURNING clause lets the repo distinguish an
+// inserted/updated link from a rejected one (cross-workspace, missing, or
+// deleted asset -> zero rows -> ErrAssetNotInWorkspace).
+const sqlAlbumAssetAdd = `INSERT INTO album_assets (album_id, asset_id, position, added_at)
+		 SELECT al.id, a.id, $3, now()
+		 FROM albums al
+		 JOIN galleries g ON g.id = al.gallery_id
+		 JOIN assets a ON a.workspace_id = g.workspace_id
+		 WHERE al.id = $1 AND a.id = $2 AND a.deleted_at IS NULL
+		   AND g.workspace_id = $4
+		 ON CONFLICT (album_id, asset_id) DO UPDATE SET position = EXCLUDED.position
+		 RETURNING album_id`
+
+// AddAsset adds an asset to an album, but only when the asset belongs to the
+// same workspace as the album's parent gallery.
+//
+// workspaceID is the caller's JWT workspace (resolved by the handler via the
+// album ownership guard). A cross-workspace or missing asset inserts no row and
+// returns ErrAssetNotInWorkspace instead of silently linking foreign data.
+func (r *AlbumRepo) AddAsset(ctx context.Context, albumID, assetID, workspaceID uuid.UUID, position int) error {
+	var inserted uuid.UUID
+	err := r.pool.QueryRow(ctx, sqlAlbumAssetAdd,
+		albumID, assetID, position, workspaceID,
+	).Scan(&inserted)
+	if err == pgx.ErrNoRows {
+		// No row matched the workspace-join: the asset is foreign to the
+		// album's workspace (or does not exist / is deleted). Reject.
+		return ErrAssetNotInWorkspace
+	}
 	if err != nil {
 		return fmt.Errorf("album repo add asset: %w", err)
 	}

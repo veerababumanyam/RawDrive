@@ -286,6 +286,12 @@ func (s *AdminUserService) ImpersonateUser(ctx context.Context, targetID uuid.UU
 		Role:         role,
 		PlatformRole: platformRole,
 		StateID:      stateID,
+		// S5-G1 (audit HIGH): mark this token as an impersonation session so
+		// RejectImpersonationWrites enforces read-only access. This is the ONLY
+		// place Impersonation is set true; every normal login/refresh token has
+		// it false. Without it the impersonation token was byte-for-byte a real
+		// session (full read/WRITE), defeating the "read-only" guarantee.
+		Impersonation: true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("signing impersonation token: %w", err)

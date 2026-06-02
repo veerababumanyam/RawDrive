@@ -811,6 +811,8 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
+	// S1-G3: the callback requires the signed oauth_state cookie to match the
+	// state, so the test must present the cookie the initiate step set.
 	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
 	require.NoError(t, err)
 	req.AddCookie(oauthStateCookie(cookieValue))

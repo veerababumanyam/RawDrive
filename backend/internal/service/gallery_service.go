@@ -47,6 +47,9 @@ type CreateGalleryInput struct {
 	EventID          *uuid.UUID
 	DealID           *uuid.UUID
 	InvoiceID        *uuid.UUID
+	// M23: camera tethering (migration 133).
+	TetheringEnabled bool
+	TetherDirectory  *string
 }
 
 // SetFaceDetectionEnabled toggles the privacy opt-out flag for face
@@ -90,6 +93,8 @@ func (s *GalleryService) Create(ctx context.Context, input CreateGalleryInput) (
 		InvoiceID:        input.InvoiceID,
 		Settings:         map[string]interface{}{},
 		WatermarkConfig:  map[string]interface{}{},
+		TetheringEnabled: input.TetheringEnabled,
+		TetherDirectory:  input.TetherDirectory,
 	}
 	if err := s.galleryRepo.Create(ctx, g); err != nil {
 		return nil, err
@@ -197,7 +202,16 @@ func (s *GalleryService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 }
 
 // AddAsset adds an asset to a gallery and auto-sets cover if none.
-func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID uuid.UUID, sortOrder int) error {
+//
+// workspaceID is the caller's workspace (resolved by the handler's gallery
+// ownership guard). The repo enforces, at the DB level, that the asset belongs
+// to the same workspace as the gallery, so a caller cannot link a foreign
+// asset id into its own gallery and read it back (cross-tenant exfiltration).
+func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID, sortOrder int) error {
+	if err := s.galleryAssetRepo.Add(ctx, galleryID, assetID, workspaceID, sortOrder); err != nil {
+		return err
+	}
+	// Auto-set cover if gallery has no cover
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil {
 		return fmt.Errorf("gallery service add asset: %w", err)
@@ -205,20 +219,6 @@ func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID uuid.U
 	if gallery == nil {
 		return fmt.Errorf("gallery not found")
 	}
-	if s.assetRepo != nil {
-		asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, assetID, gallery.WorkspaceID)
-		if err != nil {
-			return fmt.Errorf("gallery service add asset: %w", err)
-		}
-		if asset == nil {
-			return fmt.Errorf("asset not found in gallery workspace")
-		}
-	}
-
-	if err := s.galleryAssetRepo.Add(ctx, galleryID, assetID, sortOrder); err != nil {
-		return err
-	}
-	// Auto-set cover if gallery has no cover
 	if gallery.CoverAssetID == nil && s.coverSvc != nil {
 		s.coverSvc.AutoSetCover(ctx, galleryID)
 	}

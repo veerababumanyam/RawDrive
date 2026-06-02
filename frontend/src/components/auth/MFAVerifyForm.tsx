@@ -14,11 +14,17 @@ import { getPostLoginPath, persistAuthTokens } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const MFA_TOKEN_KEY = "rawdrive_mfa_token";
+const MFA_FLOW_KEY = "rawdrive_mfa_flow";
 const MFA_NETWORK_ERROR =
   "RawDrive couldn't be reached. Check your connection and try again.";
 
 export function MFAVerifyForm() {
   const router = useRouter();
+  // mfaToken === "" means OAuth-MFA flow: token lives in the HttpOnly
+  // mfa_token cookie set by the OAuth callback (PR #57 / S5-G2) and is
+  // read server-side in /auth/verify-totp. mfaToken === null means
+  // we haven't decided yet (initial mount); a real string means the
+  // password-then-MFA path stashed the JWT in sessionStorage.
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,21 +33,35 @@ export function MFAVerifyForm() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.sessionStorage.getItem(MFA_TOKEN_KEY);
-    setMfaToken(stored || "");
+    if (stored) {
+      // Password-then-MFA path: the short-lived mfa_token JWT was stashed in
+      // sessionStorage by handleLogin and is sent in the request body.
+      setMfaToken(stored);
+      return;
+    }
+    // OAuth-MFA (PR #57 / S5-G2) and any cookie-backed challenge: the real
+    // mfa_token lives in the HttpOnly mfa_token cookie that the browser replays
+    // on POST /auth/verify-totp, so it is NOT readable here. An empty string
+    // signals "ready to verify with the cookie; send the code only". We do not
+    // bounce to /login on a missing JS-visible marker because the HttpOnly
+    // cookie may still be valid — the server is the authority and rejects with
+    // "mfa_token and code required" if no challenge is actually in flight.
+    setMfaToken("");
   }, [router]);
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
-    if (code.trim().length < 6) {
+    if (mfaToken === null || code.trim().length < 6) {
       return;
     }
     setLoading(true);
     setError("");
 
     try {
-      const body = mfaToken
-        ? { mfa_token: mfaToken, code: code.trim() }
-        : { code: code.trim() };
+      const body: { code: string; mfa_token?: string } = { code: code.trim() };
+      if (mfaToken) {
+        body.mfa_token = mfaToken;
+      }
       const response = await fetch(`${API_BASE}/auth/verify-totp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -71,6 +91,7 @@ export function MFAVerifyForm() {
 
       // Clear the short-lived challenge before persisting the real tokens.
       window.sessionStorage.removeItem(MFA_TOKEN_KEY);
+      window.sessionStorage.removeItem(MFA_FLOW_KEY);
       persistAuthTokens(payload.access_token);
       window.location.assign(getPostLoginPath());
     } catch {
@@ -83,6 +104,7 @@ export function MFAVerifyForm() {
   function handleCancel() {
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem(MFA_TOKEN_KEY);
+      window.sessionStorage.removeItem(MFA_FLOW_KEY);
     }
     router.replace("/login");
   }
@@ -127,7 +149,7 @@ export function MFAVerifyForm() {
 
         <button
           type="submit"
-          disabled={loading || code.length < 6}
+          disabled={loading || code.length < 6 || mfaToken === null}
           className="btn-primary w-full py-4 font-headline text-base disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Verifying..." : "Verify & Sign In"}

@@ -150,6 +150,13 @@ func (p *GoogleProvider) GetProfile(ctx context.Context, token *OAuthToken, expe
 	if claims.Email == "" || idToken.Subject == "" {
 		return nil, fmt.Errorf("google id token missing required claims")
 	}
+	// S1-G1 / AREA-AUTH-4: an unverified Google email proves nothing about
+	// ownership. Refuse it here so it can never reach the callback's
+	// link/create logic. Returning an error makes OAuthGoogleCallback redirect
+	// with an error param rather than minting a session.
+	if !claims.EmailVerified {
+		return nil, fmt.Errorf("google account email is not verified")
+	}
 
 	return &OAuthProfile{
 		Email:         claims.Email,
