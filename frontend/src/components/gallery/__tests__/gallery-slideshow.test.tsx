@@ -5,9 +5,7 @@ import { GallerySlideshow } from "../gallery-slideshow";
 // jsdom doesn't implement media playback — stub so the audio-sync effect is inert.
 beforeEach(() => {
   vi.useFakeTimers();
-  // @ts-expect-error jsdom HTMLMediaElement methods are unimplemented
   window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
-  // @ts-expect-error jsdom HTMLMediaElement methods are unimplemented
   window.HTMLMediaElement.prototype.pause = vi.fn();
 });
 afterEach(() => {

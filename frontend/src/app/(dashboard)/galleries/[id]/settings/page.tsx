@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getGallery, updateGallerySettings, type Gallery } from "@/lib/api/galleries";
+import {
+  getGallery,
+  updateGallerySettings,
+  uploadGalleryMusic,
+  clearGalleryMusic,
+  type Gallery,
+} from "@/lib/api/galleries";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 type DownloadQuality = "original" | "webp" | "both";
@@ -99,6 +105,10 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   const [password, setPassword] = useState("");
   const [showPasswordField, setShowPasswordField] = useState(false);
 
+  // Slideshow music state
+  const [musicUploading, setMusicUploading] = useState(false);
+  const [musicError, setMusicError] = useState("");
+
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) {
@@ -181,6 +191,40 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
   const setExpiryInDays = (days: number) => {
     void handleExpiry(new Date(Date.now() + days * DAY_MS).toISOString());
+  };
+
+  const handleMusicUpload = async (file: File) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    setMusicUploading(true);
+    setMusicError("");
+    try {
+      const updated = await uploadGalleryMusic(token, id, file);
+      setGallery(updated);
+      setSaveMsg("Music uploaded");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setMusicError(err instanceof Error ? err.message : "Failed to upload music");
+    } finally {
+      setMusicUploading(false);
+    }
+  };
+
+  const handleMusicRemove = async () => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    setMusicUploading(true);
+    setMusicError("");
+    try {
+      const updated = await clearGalleryMusic(token, id);
+      setGallery(updated);
+      setSaveMsg("Music removed");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setMusicError(err instanceof Error ? err.message : "Failed to remove music");
+    } finally {
+      setMusicUploading(false);
+    }
   };
 
   const handleSetPassword = async (overridePassword?: string | null) => {
@@ -527,6 +571,66 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
         )}
+      </section>
+
+      {/* Client emails */}
+      <section className="surface-panel space-y-4 p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Client emails</h2>
+        <p className="text-sm text-text-secondary">
+          Automatically send your client a branded &ldquo;gallery ready&rdquo; email when this
+          gallery is published, a reminder a week later, and a &ldquo;last chance&rdquo; warning
+          before it expires.
+        </p>
+        <ToggleRow
+          label="Automated client emails"
+          description="Turn off to stop all automated emails for this gallery."
+          checked={gallery.email_automation_enabled ?? true}
+          disabled={saving}
+          onChange={(v) => handleToggle("email_automation_enabled", v)}
+        />
+      </section>
+
+      {/* Slideshow music */}
+      <section className="surface-panel space-y-4 p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Slideshow music</h2>
+        <p className="text-sm text-text-secondary">
+          Add a background track for the full-screen client slideshow. The audio is stored in your
+          gallery storage and counts toward your plan&rsquo;s allocated space.
+        </p>
+        {gallery.music_asset_id ? (
+          <div className="flex items-center justify-between gap-4 py-1">
+            <p className="text-sm text-text-primary">A music track is attached to this gallery.</p>
+            <button
+              type="button"
+              disabled={saving || musicUploading}
+              onClick={() => void handleMusicRemove()}
+              className="btn-tertiary px-4 py-2 text-sm"
+            >
+              Remove music
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">No music attached.</p>
+        )}
+        <div className="space-y-1">
+          <label htmlFor="music-upload" className="text-sm font-medium text-text-primary">
+            {gallery.music_asset_id ? "Replace track" : "Upload track"}
+          </label>
+          <input
+            id="music-upload"
+            type="file"
+            accept="audio/mpeg,audio/mp4,audio/aac,audio/x-m4a,audio/*"
+            disabled={musicUploading || saving}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleMusicUpload(file);
+              e.target.value = "";
+            }}
+            className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-lg file:border-0 file:bg-accent-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-accent-primary disabled:opacity-50"
+          />
+          {musicUploading && <p className="text-xs text-text-secondary">Uploading&hellip;</p>}
+          {musicError && <p className="text-xs text-feedback-error">{musicError}</p>}
+        </div>
       </section>
 
       {/* Password Protection */}

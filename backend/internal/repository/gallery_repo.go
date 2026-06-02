@@ -80,6 +80,11 @@ type Gallery struct {
 	// handler validates ownership + audio content-type (mirrors logo_asset_id).
 	// nil = no music.
 	MusicAssetID *uuid.UUID `json:"music_asset_id,omitempty"`
+	// EmailAutomationEnabled (Gallery Enhancements June 2026, migration 143):
+	// when true, the branded client email drip (ready / reminder / last-chance)
+	// runs for this gallery. DB default true → "full auto"; the photographer can
+	// turn it off per gallery from settings.
+	EmailAutomationEnabled bool `json:"email_automation_enabled"`
 	// CoverThumbnails is populated by List() via a LEFT JOIN on assets.
 	// Not a database column — only present in list responses.
 	CoverThumbnails map[string]string `json:"cover_thumbnails,omitempty"`
@@ -242,7 +247,7 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, COALESCE(download_quality, 'webp'), sort_preference, whatsapp_template,
 		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
-		 tethering_enabled, tether_directory, music_asset_id
+		 tethering_enabled, tether_directory, music_asset_id, email_automation_enabled
 		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
@@ -250,7 +255,7 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.DownloadQuality, &g.SortPreference, &g.WhatsappTemplate,
 		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
-		&g.TetheringEnabled, &g.TetherDirectory, &g.MusicAssetID,
+		&g.TetheringEnabled, &g.TetherDirectory, &g.MusicAssetID, &g.EmailAutomationEnabled,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -272,7 +277,7 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
 		 cover_template, cover_config, expires_at, download_enabled, COALESCE(download_quality, 'webp'), sort_preference, whatsapp_template,
 		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
-		 tethering_enabled, tether_directory, music_asset_id
+		 tethering_enabled, tether_directory, music_asset_id, email_automation_enabled
 		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
 	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
@@ -280,7 +285,7 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
 		&g.CoverTemplate, &g.CoverConfig, &g.ExpiresAt, &g.DownloadEnabled, &g.DownloadQuality, &g.SortPreference, &g.WhatsappTemplate,
 		&g.FaceIDEnabled, &g.FaceDetectionEnabled, &g.AccessMode,
-		&g.TetheringEnabled, &g.TetherDirectory, &g.MusicAssetID,
+		&g.TetheringEnabled, &g.TetherDirectory, &g.MusicAssetID, &g.EmailAutomationEnabled,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -390,14 +395,15 @@ func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24, download_quality=$25,
 		 sort_preference=$26, whatsapp_template=$27,
 		 faceid_enabled=$28, face_detection_enabled=$29,
-		 tethering_enabled=$30, tether_directory=$31
-		 WHERE id=$32 AND deleted_at IS NULL`,
+		 tethering_enabled=$30, tether_directory=$31,
+		 email_automation_enabled=$32
+		 WHERE id=$33 AND deleted_at IS NULL`,
 		g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, g.Settings,
 		g.PasswordHash, g.WatermarkConfig, g.IsPublished, g.MaxSelections, g.Status,
 		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
 		g.DownloadQuality, g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled,
-		g.TetheringEnabled, g.TetherDirectory, g.ID,
+		g.TetheringEnabled, g.TetherDirectory, g.EmailAutomationEnabled, g.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("gallery repo update: %w", err)

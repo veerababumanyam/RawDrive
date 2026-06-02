@@ -376,6 +376,13 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Gallery Enhancements June 2026: per-gallery branded-email automation toggle.
+	if value, ok := raw["email_automation_enabled"]; ok {
+		if err := json.Unmarshal(value, &gallery.EmailAutomationEnabled); err != nil {
+			http.Error(w, `{"error":"invalid email_automation_enabled"}`, http.StatusBadRequest)
+			return
+		}
+	}
 	// 2026-05-18: watermark_config passthrough. The gallery settings UI
 	// (frontend/src/app/(dashboard)/galleries/[id]/settings/page.tsx)
 	// has had the toggle + text + opacity + position controls wired

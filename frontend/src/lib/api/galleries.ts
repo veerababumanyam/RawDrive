@@ -55,6 +55,8 @@ export interface Gallery {
   whatsapp_template?: string;
   // Gallery Enhancements June 2026: optional slideshow background-music asset.
   music_asset_id?: string | null;
+  // Gallery Enhancements June 2026: branded client email automation toggle (default true).
+  email_automation_enabled?: boolean;
   // S4-G3 locked-shell fields. When a private/invite-only gallery is requested
   // without a valid session, GET /public/galleries/{slug} returns ONLY a
   // minimal shell: { id, title, access_mode, access_gated:true, has_password }.

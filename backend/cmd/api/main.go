@@ -1221,6 +1221,8 @@ func main() {
 	var otpDelivery auth.EmailDelivery
 	var teamEmailSender teamPkg.EmailSender
 	var galleryShareSender *email.GalleryShareSender
+	// Gallery Enhancements June 2026: branded client email automation sender.
+	var galleryAutomationSender *email.GalleryAutomationSender
 	var notificationEmailSender *email.NotificationSender
 	// 2026-05-19: SecurityNotifier for the password-reset flow. The
 	// concrete OTPDelivery satisfies the auth.SecurityNotifier interface
@@ -1236,6 +1238,7 @@ func main() {
 		pwdResetNotifier = realOTPDelivery
 		teamEmailSender = email.NewDynamicInvitationSender(smtpReader)
 		galleryShareSender = email.NewDynamicGalleryShareSender(smtpReader)
+		galleryAutomationSender = email.NewDynamicGalleryAutomationSender(smtpReader)
 		notificationEmailSender = email.NewDynamicNotificationSender(smtpReader)
 		log.Printf("Email: SMTP transport wired dynamically to %s:%d (from=%s)",
 			smtpCfg.Host, smtpCfg.Port, smtpCfg.FromAddress)
@@ -3011,6 +3014,17 @@ func main() {
 	workerRegistry.Register("asset-purge", purgeWorker)
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
+	// Gallery Enhancements June 2026: branded client email automation. Self-
+	// seeding drip (ready / reminder / last-chance). Only wired when SMTP is
+	// available; falls back to the standard public base URL for gallery links.
+	if galleryAutomationSender != nil {
+		automationBaseURL := os.Getenv("APP_PUBLIC_BASE_URL")
+		if automationBaseURL == "" {
+			automationBaseURL = "https://app.rawdrive.io"
+		}
+		emailAutomationWorker := worker.NewEmailAutomationWorker(dbPool, galleryAutomationSender, automationBaseURL)
+		workerRegistry.Register("email-automation", emailAutomationWorker)
+	}
 	// M9 E26-S2: outbound webhook delivery — POSTs payloads to subscribers
 	// with HMAC signing, retries up to 5x, dead-letters on terminal failure.
 	webhookDeliveryWorker := worker.NewWebhookDeliveryWorker(dbPool)
