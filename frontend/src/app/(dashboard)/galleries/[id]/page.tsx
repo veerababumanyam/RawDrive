@@ -8,10 +8,12 @@ import {
   addAlbumAssets,
   addAssetToGallery,
   createGalleryAlbum,
+  deleteGalleryAlbum,
   galleryPublicUrl,
   getGallery,
   listGalleryAlbums,
   listGalleryAssets,
+  updateGalleryAlbum,
   updateGallery,
   type Gallery,
   type GalleryAlbum,
@@ -24,12 +26,18 @@ import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel"
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
   assetIsProcessing,
-  getAssetPreviewUrl,
 } from "@/lib/dashboard-ui";
+import { appendGalleryKeyFragment } from "@/lib/media-encryption/media-crypto";
+import { galleryKeyId, getOrCreateGalleryMediaKey, getStoredExportedMediaKey } from "@/lib/media-encryption/media-key-store";
+import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
+import { FILE_PICKER_STILL_IMAGE_ACCEPT, isAcceptedStillImageFile } from "@/lib/still-image-formats";
+import { visibleUploadWarnings } from "@/lib/upload-screening/visible-findings";
 import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Share, EllipsisVertical, Trash, XMark } from "@/components/icons";
+import { Share, EllipsisVertical, Trash, XMark, Plus, Pencil, CheckCircle, Shield, Envelope } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
@@ -46,25 +54,126 @@ type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
 };
 
-// Filename-extension fallback for the image-file gate. The MIME-type
-// check (file.type.startsWith("image/")) catches every JPEG/PNG/HEIC
-// the OS recognises, but it misses raw photo formats that browsers
-// don't classify as image/* (Canon CR2/CR3, Nikon NEF, Sony ARW,
-// Adobe DNG, Fuji RAF, generic TIFF). Studios shoot these as a
-// standard workflow, so we accept them by extension.
-const ACCEPTED_RAW_EXT_RE = /\.(cr2|nef|arw|dng|raf|cr3|tiff?)$/i;
+type TetheredDirectoryEntry = {
+  kind: "directory";
+  name: string;
+  queryPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
+  values: () => AsyncIterable<TetheredDirectoryEntry | TetheredFileEntry>;
+};
 
-function isAcceptedImageFile(f: File): boolean {
-  return f.type.startsWith("image/") || ACCEPTED_RAW_EXT_RE.test(f.name);
+type TetheredFileEntry = {
+  kind: "file";
+  name: string;
+  getFile: () => Promise<File>;
+};
+
+type TetheredDirectoryPickerWindow = Window & {
+  showDirectoryPicker?: (options?: {
+    id?: string;
+    mode?: "read" | "readwrite";
+    startIn?: "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos";
+  }) => Promise<TetheredDirectoryEntry>;
+};
+
+type TetheredFreshFile = {
+  file: File;
+  path: string;
+  lastModified: number;
+};
+
+type TetheredSeenFile = {
+  lastModified: number;
+  size: number;
+};
+
+const TETHERED_DEFAULT_POLL_MS = 1000;
+const TETHERED_MIN_POLL_MS = 1000;
+const TETHERED_MAX_POLL_MS = 5000;
+const TETHERED_POLL_STEP_MS = 500;
+const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
+  "display_webp",
+  "thumb_lg_webp",
+  "thumb_md_webp",
+  "thumb_sm_webp",
+] as const;
+
+function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
+  return Boolean(
+    asset?.thumbnail_urls?.display_webp ||
+      asset?.thumbnail_urls?.thumb_lg_webp ||
+      asset?.thumbnail_urls?.thumb_md_webp ||
+      asset?.thumbnail_urls?.thumb_sm_webp,
+  );
 }
 
-// MIME type list accepted by both the file picker and the folder
-// picker. Mirrors handleDrop's filter so the user can't pick non-
-// image files in the first place. Folder picker (webkitdirectory)
-// honours `accept` only as a hint — the picker still lets the
-// browser return everything inside the folder — so isAcceptedImageFile
-// filters server-side too.
-const FILE_INPUT_ACCEPT = "image/*,.cr2,.nef,.arw,.dng,.raf,.cr3,.tif,.tiff";
+function GalleryAssetTileImage({
+  asset,
+  token,
+  isProcessing,
+}: {
+  asset: Asset | null;
+  token: string | null;
+  isProcessing: boolean;
+}) {
+  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, token);
+  if (isProcessing || media.loading) {
+    return (
+      <div
+        className="flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
+        role="status"
+        aria-live="polite"
+        aria-label={asset?.filename ? `Processing ${asset.filename}` : "Processing photo"}
+      >
+        <div className="flex flex-col items-center gap-2 text-text-tertiary">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-text-tertiary/30 border-t-text-tertiary" />
+          <span className="text-xs">{media.loading ? "Decrypting photo..." : "Processing photo..."}</span>
+        </div>
+      </div>
+    );
+  }
+  if (media.src) {
+    return (
+      <img
+        src={media.src}
+        alt={asset?.filename || "Gallery asset preview"}
+        className="aspect-[4/3] w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+  return (
+    <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
+      {media.error || "Preview unavailable"}
+    </div>
+  );
+}
+
+function UploadDropzoneBackendPreview({
+  asset,
+  token,
+}: {
+  asset: Asset | null;
+  token: string | null;
+}) {
+  const media = useDecryptedAssetUrl(asset, UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS, token);
+  if (!asset || media.loading || !media.src) return null;
+  return (
+    <img
+      data-testid="upload-dropzone-backend-preview"
+      src={media.src}
+      alt=""
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-xl"
+      decoding="async"
+    />
+  );
+}
+
+function albumIsEditable(album: GalleryAlbum): boolean {
+  return !album.smart_filter || Object.keys(album.smart_filter).length === 0;
+}
 
 // Recursively flatten a DataTransferItemList (drag-and-drop source)
 // into a flat File[]. Required when the user drops a FOLDER instead
@@ -73,7 +182,7 @@ const FILE_INPUT_ACCEPT = "image/*,.cr2,.nef,.arw,.dng,.raf,.cr3,.tif,.tiff";
 // FileSystemDirectoryReader API. Reader returns entries in batches
 // of <=100 per call, so we loop until empty.
 //
-// Returns the raw flattened set. Callers must apply isAcceptedImageFile
+// Returns the raw flattened set. Callers must apply isAcceptedStillImageFile
 // themselves to keep parity with the file-picker path.
 async function collectFilesFromDataTransfer(items: DataTransferItemList): Promise<File[]> {
   // Minimal local typing for the webkit file-entry API. The DOM types
@@ -126,6 +235,55 @@ async function collectFilesFromDataTransfer(items: DataTransferItemList): Promis
   return collected;
 }
 
+async function collectNewTetheredFiles(
+  directory: TetheredDirectoryEntry,
+  seen: Map<string, TetheredSeenFile>,
+  options: { recursive: boolean },
+  prefix = "",
+): Promise<TetheredFreshFile[]> {
+  const files: TetheredFreshFile[] = [];
+  for await (const entry of directory.values()) {
+    const entryPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.kind === "directory") {
+      if (options.recursive) {
+        files.push(...await collectNewTetheredFiles(entry, seen, options, entryPath));
+      }
+      continue;
+    }
+
+    const file = await entry.getFile();
+    const previous = seen.get(entryPath);
+    if (previous?.lastModified === file.lastModified && previous.size === file.size) continue;
+    seen.set(entryPath, { lastModified: file.lastModified, size: file.size });
+    if (isAcceptedStillImageFile(file)) {
+      files.push({ file, path: entryPath, lastModified: file.lastModified || Date.now() });
+    }
+  }
+  return files;
+}
+
+function uploadFileSignature(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function formatTetheredRelativeTime(timestamp: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  return `${Math.floor(seconds / 3600)}h ago`;
+}
+
+function buildShareText(gallery: Gallery, label: string, url: string): string {
+  const galleryTitle = gallery.title?.trim() || "Gallery";
+  return `${label} from ${galleryTitle}: ${url}`;
+}
+
+function buildShareEmailHref(gallery: Gallery, label: string, url: string): string {
+  const subject = `${gallery.title?.trim() || "Gallery"} - ${label}`;
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildShareText(gallery, label, url))}`;
+}
+
 export default function GalleryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
@@ -176,10 +334,36 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const [managingAlbums, setManagingAlbums] = useState(false);
+  const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
+  const [editingAlbumName, setEditingAlbumName] = useState("");
+  const [savingAlbumId, setSavingAlbumId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [openMenuAssetId, setOpenMenuAssetId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ assetId: string; filename: string; isBulk?: boolean } | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  const [tetheredEnabled, setTetheredEnabled] = useState(false);
+  const [tetheredFolderName, setTetheredFolderName] = useState<string | null>(null);
+  const [tetheredStatus, setTetheredStatus] = useState<"idle" | "watching" | "paused" | "unsupported" | "error">("idle");
+  const [tetheredPollIntervalMs, setTetheredPollIntervalMs] = useState(TETHERED_DEFAULT_POLL_MS);
+  const [tetheredIncludeSubfolders, setTetheredIncludeSubfolders] = useState(false);
+  const [tetheredNewestFirst, setTetheredNewestFirst] = useState(true);
+  const [tetheredAutoOpen, setTetheredAutoOpen] = useState(false);
+  const [tetheredSoundEnabled, setTetheredSoundEnabled] = useState(true);
+  const [tetheredSessionNewCount, setTetheredSessionNewCount] = useState(0);
+  const [tetheredLastDetectedAt, setTetheredLastDetectedAt] = useState<number | null>(null);
+  const [tetheredClockTick, setTetheredClockTick] = useState(0);
+  const photoFileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadDialogRef = useRef<HTMLElement | null>(null);
+  const tetheredDirectoryRef = useRef<TetheredDirectoryEntry | null>(null);
+  const tetheredSeenFilesRef = useRef<Map<string, TetheredSeenFile>>(new Map());
+  const tetheredPollTimerRef = useRef<number | null>(null);
+  const tetheredUploadSignaturesRef = useRef<Set<string>>(new Set());
+  const tetheredAutoOpenRef = useRef(tetheredAutoOpen);
+  const tetheredNewestFirstRef = useRef(tetheredNewestFirst);
+  const tetheredAudioRef = useRef<AudioContext | null>(null);
 
   // F-046: render the grid in bounded windows instead of mounting the
   // full asset set at once. A 500–2000 photo wedding gallery would
@@ -332,6 +516,61 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [id, newAlbumName, refreshAlbums, selectedAssetIds]);
 
+  const startEditingAlbum = useCallback((album: GalleryAlbum) => {
+    if (!albumIsEditable(album)) return;
+    setEditingAlbumId(album.id);
+    setEditingAlbumName(album.name);
+  }, []);
+
+  const cancelEditingAlbum = useCallback(() => {
+    setEditingAlbumId(null);
+    setEditingAlbumName("");
+  }, []);
+
+  const handleRenameAlbum = useCallback(async (album: GalleryAlbum) => {
+    if (!albumIsEditable(album)) return;
+    const name = editingAlbumName.trim();
+    if (!name || name === album.name) {
+      cancelEditingAlbum();
+      return;
+    }
+    const t = getStoredAccessToken();
+    if (!t) return;
+
+    setSavingAlbumId(album.id);
+    setError("");
+    try {
+      await updateGalleryAlbum(t, album.id, { name });
+      cancelEditingAlbum();
+      await refreshAlbums();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rename sub-gallery");
+    } finally {
+      setSavingAlbumId(null);
+    }
+  }, [cancelEditingAlbum, editingAlbumName, refreshAlbums]);
+
+  const handleDeleteAlbum = useCallback(async (album: GalleryAlbum) => {
+    if (!albumIsEditable(album)) return;
+    const confirmed = window.confirm(`Delete "${album.name}" sub-gallery? Photos stay in All Photos.`);
+    if (!confirmed) return;
+    const t = getStoredAccessToken();
+    if (!t) return;
+
+    setSavingAlbumId(album.id);
+    setError("");
+    try {
+      await deleteGalleryAlbum(t, album.id);
+      if (activeAlbum === album.id) setActiveAlbum(null);
+      if (editingAlbumId === album.id) cancelEditingAlbum();
+      await refreshAlbums();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete sub-gallery");
+    } finally {
+      setSavingAlbumId(null);
+    }
+  }, [activeAlbum, cancelEditingAlbum, editingAlbumId, refreshAlbums]);
+
   // Builds the per-business subdomain URL (migration 121 shape):
   //   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
   // Falls back to /g/<slug> on the apex when workspaceProfile hasn't loaded
@@ -345,10 +584,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const buildShareUrl = useCallback((albumId?: string) => {
     if (!gallery?.slug) return "";
     const base = galleryPublicUrl(gallery, workspaceProfile);
-    if (!albumId) return base;
-    const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}album=${encodeURIComponent(albumId)}`;
-  }, [gallery?.slug, workspaceProfile?.business_profile_slug, workspaceProfile?.business_unique_code]);
+    const key = getStoredExportedMediaKey(galleryKeyId(id));
+    const withAlbum = (() => {
+      if (!albumId) return base;
+      const sep = base.includes("?") ? "&" : "?";
+      return `${base}${sep}album=${encodeURIComponent(albumId)}`;
+    })();
+    if (!key) return withAlbum;
+    return appendGalleryKeyFragment(withAlbum, key);
+  }, [gallery, id, workspaceProfile]);
 
   const copyShareUrl = useCallback(async (albumId?: string) => {
     if (!gallery?.is_published) {
@@ -365,10 +609,40 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [buildShareUrl, gallery?.is_published]);
 
+  const openShareLink = useCallback((albumId: string | undefined, label: string) => {
+    if (!gallery?.is_published) {
+      setShareMessage("Publish this gallery before sharing client links.");
+      return;
+    }
+    const url = buildShareUrl(albumId);
+    if (!url) return;
+    const href = buildShareEmailHref(gallery, label, url);
+    window.location.href = href;
+    setShareMessage("Email share link opened.");
+  }, [buildShareUrl, gallery]);
+
+  const togglePublishState = useCallback(async () => {
+    if (!gallery || publishing) return;
+    const t = getStoredAccessToken();
+    if (!t) return;
+    setPublishing(true);
+    try {
+      const updated = await updateGallery(t, id, { is_published: !gallery.is_published });
+      setGallery(updated);
+      setShareMessage(updated.is_published ? "Gallery published - client links are now live." : "Gallery unpublished.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change publish state");
+    } finally {
+      setPublishing(false);
+    }
+  }, [gallery, id, publishing]);
+
   const handleShareAsset = useCallback(async (e: React.MouseEvent, assetId: string) => {
     e.stopPropagation();
     if (!gallery?.slug) return;
-    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
+    const baseUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
+    const key = getStoredExportedMediaKey(galleryKeyId(id));
+    const url = key ? appendGalleryKeyFragment(baseUrl, key) : baseUrl;
     try {
       if (typeof navigator !== "undefined" && "share" in navigator) {
         await (navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }).share({
@@ -387,7 +661,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
     setCopiedAssetId(assetId);
     setTimeout(() => setCopiedAssetId(null), 2000);
-  }, [gallery?.slug, gallery?.title]);
+  }, [gallery?.slug, gallery?.title, id]);
 
   const handleDeleteAsset = useCallback(async (assetId: string) => {
     const t = getStoredAccessToken();
@@ -403,8 +677,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     if (!openMenuAssetId) return;
     const close = () => setOpenMenuAssetId(null);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMenuAssetId(null);
+    };
     document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [openMenuAssetId]);
 
   // Subscribe to face-filter events from the FaceFilter component. The
@@ -506,8 +787,74 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     tokenRef.current = getStoredAccessToken();
   }
   const token = tokenRef.current;
-  const upload = useUpload(apiUrl, token);
+  const uploadEncryption = useMemo(
+    () => ({
+      getKey: () => getOrCreateGalleryMediaKey(id),
+    }),
+    [id],
+  );
+  useEffect(() => {
+    void getOrCreateGalleryMediaKey(id);
+  }, [id]);
+  const upload = useUpload(apiUrl, token, { encryption: uploadEncryption });
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
+  const uploadPreviewFile = useMemo(() => {
+    const activePreview = upload.items.find(
+      (item) =>
+        item.file.type.startsWith("image/") &&
+        (item.status === "pending" ||
+          item.status === "screening" ||
+          item.status === "encrypting" ||
+          item.status === "uploading" ||
+          item.status === "paused"),
+    )?.file;
+    if (activePreview) return activePreview;
+    return upload.items.find(
+      (item) =>
+        item.file.type.startsWith("image/") &&
+        item.status !== "blocked" &&
+        item.status !== "needs_desktop",
+    )?.file ?? null;
+  }, [upload.items]);
+  const uploadPreviewSignature = uploadPreviewFile ? uploadFileSignature(uploadPreviewFile) : "";
+  const uploadPreviewBackendAsset = useMemo(() => {
+    const completedAssetIds = new Set(
+      upload.items
+        .filter((item) => item.status === "complete" && item.assetId)
+        .map((item) => item.assetId as string),
+    );
+    const completedUploadAsset = visibleAssets.find(
+      (entry) => entry.asset && completedAssetIds.has(entry.asset.id) && assetHasWebPDisplay(entry.asset),
+    )?.asset;
+    if (completedUploadAsset) return completedUploadAsset;
+    return visibleAssets.find((entry) => entry.asset && assetHasWebPDisplay(entry.asset))?.asset ?? null;
+  }, [upload.items, visibleAssets]);
+
+  useEffect(() => {
+    if (!uploadPreviewFile) {
+      setUploadPreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(uploadPreviewFile);
+    setUploadPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [uploadPreviewFile, uploadPreviewSignature]);
+
+  useEffect(() => {
+    tetheredAutoOpenRef.current = tetheredAutoOpen;
+  }, [tetheredAutoOpen]);
+
+  useEffect(() => {
+    tetheredNewestFirstRef.current = tetheredNewestFirst;
+  }, [tetheredNewestFirst]);
+
+  useEffect(() => {
+    if (!tetheredLastDetectedAt) return;
+    const interval = window.setInterval(() => {
+      setTetheredClockTick((tick) => tick + 1);
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [tetheredLastDetectedAt]);
 
   // Upload completion toast — fires when the active upload count
   // (uploading + pending + screening) transitions from >0 to 0 and at
@@ -517,7 +864,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // dead weight. Now the panel hides when activeCount===0 and the
   // user gets a single right-side toast with the success count.
   const activeUploadCount = upload.items.filter(
-    (i) => i.status === "uploading" || i.status === "pending" || i.status === "screening",
+    (i) => i.status === "uploading" || i.status === "pending" || i.status === "screening" || i.status === "encrypting" || i.status === "paused",
   ).length;
   const completedUploadCount = upload.items.filter((i) => i.status === "complete").length;
   const failedUploadCount = upload.items.filter((i) => i.status === "error").length;
@@ -536,6 +883,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       i.status === "uploading" ||
       i.status === "pending" ||
       i.status === "screening" ||
+      i.status === "encrypting" ||
+      i.status === "paused" ||
       i.status === "complete" ||
       i.status === "error",
   );
@@ -554,6 +903,45 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[u]}`;
   };
   const uploadPanelOpen = activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
+  const uploadDialogOpen = showUploadDialog || uploadPanelOpen;
+  const uploadDialogCanClose = activeUploadCount === 0 && failedUploadCount === 0 && blockedUploadCount === 0;
+  const uploadStage: "details" | "processing" | "visibility" =
+    activeUploadCount > 0
+      ? "processing"
+      : upload.items.length > 0 && failedUploadCount === 0 && blockedUploadCount === 0
+        ? "visibility"
+        : "details";
+  const shownUploadCount = byteProgressItems.length;
+  const uploadStatusHeadline = (() => {
+    if (activeUploadCount > 0 && shownUploadCount > activeUploadCount) {
+      return `Uploading ${completedUploadCount + 1} of ${shownUploadCount} files`;
+    }
+    if (activeUploadCount > 0) {
+      return `Uploading ${activeUploadCount} ${activeUploadCount === 1 ? "file" : "files"}`;
+    }
+    if (failedUploadCount > 0) {
+      return `${failedUploadCount} upload${failedUploadCount === 1 ? "" : "s"} failed`;
+    }
+    if (blockedUploadCount > 0) {
+      return `${blockedUploadCount} upload${blockedUploadCount === 1 ? "" : "s"} blocked`;
+    }
+    if (completedUploadCount > 0) {
+      return `${completedUploadCount} ${completedUploadCount === 1 ? "photo" : "photos"} ready`;
+    }
+    return "Select photos to upload";
+  })();
+
+  useEffect(() => {
+    if (!uploadDialogOpen) return;
+    uploadDialogRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && uploadDialogCanClose) {
+        setShowUploadDialog(false);
+      }
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [uploadDialogOpen, uploadDialogCanClose]);
   const prevActiveUploadCountRef = useRef(0);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;
@@ -725,10 +1113,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   //   - StrictMode double-mount closing the connection before it
   //     finishes establishing
   //   - EventSource transient failures the hook silently swallows
-  // Rather than chase the exact SSE root cause, a 4-second poll over
+  // Rather than chase the exact SSE root cause, a 1-second poll over
   // the pendingAssetIds set is a robust belt-and-suspenders fallback:
   // if SSE works, the tile flips immediately; if it doesn't, the poll
-  // catches it within 4 seconds — still vastly better than "never
+  // catches it within 1 second — still vastly better than "never
   // until the user refreshes". The interval clears the moment
   // pendingAssetIds is empty so steady-state cost is zero.
   useEffect(() => {
@@ -737,7 +1125,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       for (const assetId of pendingAssetIds) {
         void handleAssetReady(assetId);
       }
-    }, 4000);
+    }, 1000);
     return () => window.clearInterval(interval);
   }, [pendingAssetIds, handleAssetReady]);
 
@@ -775,6 +1163,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       // even if the user clicks a different chip mid-flight.
       const targetAlbumId = activeAlbumRef.current;
       const newlyAddedAssetIds: string[] = [];
+      const newlyAddedTetheredAssetIds: string[] = [];
 
       for (const item of toLink) {
         if (!item.assetId) continue;
@@ -782,6 +1171,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           await addAssetToGallery(t, id, item.assetId, 0);
           linkedAssetIdsRef.current.add(item.assetId);
           newlyAddedAssetIds.push(item.assetId);
+          const uploadSignature = uploadFileSignature(item.file);
+          if (tetheredUploadSignaturesRef.current.delete(uploadSignature)) {
+            newlyAddedTetheredAssetIds.push(item.assetId);
+          }
         } catch (err) {
           console.warn("Failed to link asset to gallery:", err);
         }
@@ -812,6 +1205,14 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         const galleryAssets = await listGalleryAssets(t, id);
         const hydratedAssets = await hydrateGalleryAssets(t, galleryAssets);
         setAssets(hydratedAssets);
+        if (tetheredAutoOpenRef.current && newlyAddedTetheredAssetIds.length > 0) {
+          const orderedAssetIds = tetheredNewestFirstRef.current
+            ? newlyAddedTetheredAssetIds
+            : [...newlyAddedTetheredAssetIds].reverse();
+          const targetAssetId = orderedAssetIds[0];
+          const targetIndex = hydratedAssets.findIndex((entry) => entry.asset?.id === targetAssetId);
+          if (targetIndex >= 0) setLightboxIndex(targetIndex);
+        }
       } catch (err) {
         console.warn("Failed to reload assets after upload:", err);
       }
@@ -831,7 +1232,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // the file-picker handlers route through here so the duplicate
   // policy fires consistently from either entry point.
   const submitFiles = useCallback(
-    (files: File[]) => {
+    (files: File[], options?: { source?: "manual" | "tethered" }) => {
       if (files.length === 0) return;
       const { accepted, duplicatesInGallery, duplicatesInBatch } =
         dedupeIncomingFiles(files);
@@ -842,10 +1243,182 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           duplicatesInBatch,
         });
       }
-      if (accepted.length > 0) upload.addFiles(accepted);
+      if (accepted.length > 0) {
+        if (options?.source === "tethered") {
+          for (const file of accepted) {
+            tetheredUploadSignaturesRef.current.add(uploadFileSignature(file));
+          }
+        }
+        setShowUploadDialog(true);
+        upload.addFiles(accepted);
+      }
     },
     [dedupeIncomingFiles, upload],
   );
+
+  const playTetheredDing = useCallback(() => {
+    if (!tetheredSoundEnabled) return;
+    try {
+      const win = window as typeof window & { webkitAudioContext?: typeof AudioContext };
+      const AudioContextCtor = window.AudioContext ?? win.webkitAudioContext;
+      if (!AudioContextCtor) return;
+      const ctx = tetheredAudioRef.current ?? new AudioContextCtor();
+      tetheredAudioRef.current = ctx;
+      for (const [index, frequency] of [784, 1046.5].entries()) {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startAt = ctx.currentTime + index * 0.08;
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.linearRampToValueAtTime(0.16, startAt + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.32);
+        oscillator.connect(gain).connect(ctx.destination);
+        oscillator.start(startAt);
+        oscillator.stop(startAt + 0.34);
+      }
+    } catch {
+      // Audio is a courtesy signal; browsers may block it until a user gesture.
+    }
+  }, [tetheredSoundEnabled]);
+
+  const scanTetheredFolder = useCallback(async (initial = false) => {
+    const directory = tetheredDirectoryRef.current;
+    if (!directory) return;
+    try {
+      const queryPermission = directory.queryPermission;
+      const requestPermission = directory.requestPermission;
+      if (queryPermission && requestPermission) {
+        const permission = await queryPermission.call(directory, { mode: "read" });
+        if (permission !== "granted") {
+          const nextPermission = await requestPermission.call(directory, { mode: "read" });
+          if (nextPermission !== "granted") {
+            setTetheredStatus("error");
+            return;
+          }
+        }
+      }
+
+      const freshFiles = await collectNewTetheredFiles(
+        directory,
+        tetheredSeenFilesRef.current,
+        { recursive: tetheredIncludeSubfolders },
+      );
+      freshFiles.sort((a, b) => a.lastModified - b.lastModified);
+      const orderedFiles = tetheredNewestFirst ? [...freshFiles].reverse() : freshFiles;
+      if (orderedFiles.length > 0) {
+        const files = orderedFiles.map((entry) => entry.file);
+        setTetheredLastDetectedAt(Date.now());
+        if (!initial) {
+          setTetheredSessionNewCount((count) => count + files.length);
+          playTetheredDing();
+        }
+        submitFiles(files, { source: "tethered" });
+      }
+      setTetheredStatus("watching");
+    } catch (err) {
+      console.warn("tethered folder scan failed", err);
+      setTetheredStatus("error");
+      if (tetheredPollTimerRef.current !== null) {
+        window.clearInterval(tetheredPollTimerRef.current);
+        tetheredPollTimerRef.current = null;
+      }
+    }
+  }, [playTetheredDing, submitFiles, tetheredIncludeSubfolders, tetheredNewestFirst]);
+
+  const stopTetheredFolder = useCallback(() => {
+    if (tetheredPollTimerRef.current !== null) {
+      window.clearInterval(tetheredPollTimerRef.current);
+      tetheredPollTimerRef.current = null;
+    }
+    tetheredDirectoryRef.current = null;
+    tetheredSeenFilesRef.current.clear();
+    tetheredUploadSignaturesRef.current.clear();
+    setTetheredEnabled(false);
+    setTetheredFolderName(null);
+    setTetheredSessionNewCount(0);
+    setTetheredLastDetectedAt(null);
+    setTetheredStatus("idle");
+  }, []);
+
+  const pauseTetheredFolder = useCallback(() => {
+    if (tetheredStatus !== "watching") return;
+    if (tetheredPollTimerRef.current !== null) {
+      window.clearInterval(tetheredPollTimerRef.current);
+      tetheredPollTimerRef.current = null;
+    }
+    setTetheredStatus("paused");
+  }, [tetheredStatus]);
+
+  const resumeTetheredFolder = useCallback(() => {
+    if (!tetheredDirectoryRef.current) return;
+    setTetheredStatus("watching");
+    void scanTetheredFolder(false);
+  }, [scanTetheredFolder]);
+
+  const startTetheredFolder = useCallback(async () => {
+    const picker = window as unknown as TetheredDirectoryPickerWindow;
+    if (!picker.showDirectoryPicker) {
+      setTetheredEnabled(false);
+      setTetheredStatus("unsupported");
+      setShowUploadDialog(true);
+      return;
+    }
+    try {
+      const directory = await picker.showDirectoryPicker({
+        id: "rawdrive-tethered-gallery-folder",
+        mode: "read",
+        startIn: "pictures",
+      });
+      tetheredDirectoryRef.current = directory;
+      tetheredSeenFilesRef.current.clear();
+      tetheredUploadSignaturesRef.current.clear();
+      setTetheredEnabled(true);
+      setTetheredFolderName(directory.name);
+      setTetheredSessionNewCount(0);
+      setTetheredLastDetectedAt(null);
+      setTetheredStatus("watching");
+      setShowUploadDialog(true);
+      await scanTetheredFolder(true);
+    } catch (err) {
+      setTetheredEnabled(false);
+      if ((err as Error).name !== "AbortError") {
+        console.warn("tethered folder selection failed", err);
+        setTetheredStatus("error");
+      }
+    }
+  }, [scanTetheredFolder]);
+
+  const handleTetheredEnableToggle = useCallback(() => {
+    if (tetheredEnabled) {
+      stopTetheredFolder();
+      setTetheredEnabled(false);
+      return;
+    }
+    setTetheredEnabled(true);
+    setTetheredStatus("idle");
+    setShowUploadDialog(true);
+  }, [stopTetheredFolder, tetheredEnabled]);
+
+  useEffect(() => {
+    if (tetheredStatus !== "watching" || !tetheredDirectoryRef.current) return;
+    if (tetheredPollTimerRef.current !== null) {
+      window.clearInterval(tetheredPollTimerRef.current);
+    }
+    tetheredPollTimerRef.current = window.setInterval(() => {
+      void scanTetheredFolder(false);
+    }, tetheredPollIntervalMs);
+    return () => {
+      if (tetheredPollTimerRef.current !== null) {
+        window.clearInterval(tetheredPollTimerRef.current);
+        tetheredPollTimerRef.current = null;
+      }
+    };
+  }, [scanTetheredFolder, tetheredPollIntervalMs, tetheredStatus]);
+
+  useEffect(() => {
+    return () => stopTetheredFolder();
+  }, [stopTetheredFolder]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -866,26 +1439,22 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         });
       if (hasDirectory) {
         collectFilesFromDataTransfer(items).then((all) => {
-          submitFiles(all.filter(isAcceptedImageFile));
+          submitFiles(all.filter(isAcceptedStillImageFile));
         });
         return;
       }
-      const files = Array.from(e.dataTransfer.files).filter(isAcceptedImageFile);
+      const files = Array.from(e.dataTransfer.files).filter(isAcceptedStillImageFile);
       submitFiles(files);
     },
     [submitFiles],
   );
 
   const handleFileSelect = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = FILE_INPUT_ACCEPT;
-    input.onchange = () => {
-      if (input.files) submitFiles(Array.from(input.files).filter(isAcceptedImageFile));
-    };
-    input.click();
-  }, [submitFiles]);
+    if (photoFileInputRef.current) {
+      photoFileInputRef.current.value = "";
+      photoFileInputRef.current.click();
+    }
+  }, []);
 
   // Folder-picker variant. Sets the `webkitdirectory` attribute (also
   // exposed as a DOM property) so the OS picker opens a folder
@@ -893,7 +1462,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // and the browser returns every file inside it, recursively. The
   // `accept` hint still applies but is treated as advisory by the
   // folder picker, so we additionally filter through
-  // isAcceptedImageFile to discard stray .DS_Store / .ini / sidecar
+  // isAcceptedStillImageFile to discard stray .DS_Store / .ini / sidecar
   // files that ship inside a typical photo-shoot folder.
   //
   // Attribute is set via both the DOM property and the HTML attribute
@@ -906,17 +1475,202 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.accept = FILE_INPUT_ACCEPT;
+    input.accept = FILE_PICKER_STILL_IMAGE_ACCEPT;
     (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
     input.setAttribute("webkitdirectory", "");
     input.setAttribute("directory", "");
     input.onchange = () => {
       if (input.files) {
-        submitFiles(Array.from(input.files).filter(isAcceptedImageFile));
+        submitFiles(Array.from(input.files).filter(isAcceptedStillImageFile));
       }
     };
     input.click();
   }, [submitFiles]);
+
+  const tetheredLastDetectedLabel = useMemo(() => {
+    if (!tetheredLastDetectedAt) return "Last detected: no photos yet";
+    return `Last detected: ${formatTetheredRelativeTime(tetheredLastDetectedAt)}`;
+  }, [tetheredClockTick, tetheredLastDetectedAt]);
+  const tetheredPollDisplay = `${(tetheredPollIntervalMs / 1000).toFixed(1)}s`;
+  const tetheredIsWatching = tetheredStatus === "watching";
+  const tetheredIsPaused = tetheredStatus === "paused";
+  const tetheredControlsEnabled = tetheredEnabled && Boolean(tetheredFolderName);
+  const tetheredControlsVisible = tetheredEnabled;
+
+  const renderTetheredCapturePanel = (variant: "mobile" | "desktop") => (
+    <div
+      data-testid={variant === "mobile" ? "upload-mobile-tethered-capture" : "upload-desktop-tethered-capture"}
+      className={cn(
+        "rounded-2xl border border-border-default bg-surface-container-low p-4",
+        variant === "mobile" ? "lg:hidden" : "",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-text-primary">Tethered capture</h3>
+              <p className="mt-1 text-xs text-text-secondary sm:text-sm">
+                Watch a camera output folder and upload new photos automatically.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                role="switch"
+                data-testid="tethered-enable-toggle"
+                aria-checked={tetheredEnabled}
+                aria-label={tetheredEnabled ? "Disable tethered capture" : "Enable tethered capture"}
+                title={tetheredEnabled ? "Disable tethered capture" : "Enable tethered capture"}
+                onClick={handleTetheredEnableToggle}
+                className="publish-state-toggle"
+                data-state={tetheredEnabled ? "published" : "unpublished"}
+              >
+                <span className="publish-state-toggle__track" aria-hidden="true">
+                  <span className="publish-state-toggle__thumb" />
+                </span>
+                <span className="publish-state-toggle__label">
+                  {tetheredEnabled ? "Enabled" : "Enable"}
+                </span>
+              </button>
+              {tetheredEnabled && (
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                    tetheredIsWatching
+                      ? "bg-success/10 text-success"
+                      : tetheredIsPaused
+                        ? "bg-feedback-warning/10 text-feedback-warning"
+                        : tetheredFolderName
+                          ? "bg-surface-sunken text-text-secondary"
+                          : "bg-accent-subtle text-accent",
+                  )}
+                >
+                  {tetheredIsWatching ? "Live" : tetheredIsPaused ? "Paused" : tetheredFolderName ? "Idle" : "Ready"}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {tetheredControlsVisible && (
+            <>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {tetheredFolderName ? (
+                  <>
+                    <span className="min-w-0 max-w-full truncate rounded-xl bg-surface-sunken px-3 py-2 text-xs font-medium text-text-primary">
+                      Watching {tetheredFolderName}
+                    </span>
+                    <span data-testid="tethered-session-count" className="rounded-xl bg-surface-sunken px-3 py-2 text-xs font-medium text-text-secondary">
+                      + {tetheredSessionNewCount} this session
+                    </span>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="tethered-watch-folder-button"
+                    className="btn-primary px-3 py-2 text-xs"
+                    onClick={startTetheredFolder}
+                  >
+                    Watch folder
+                  </button>
+                )}
+                <button
+                  type="button"
+                  data-testid="tethered-sound-toggle"
+                  aria-pressed={tetheredSoundEnabled}
+                  className={cn("btn-tertiary px-3 py-2 text-xs", tetheredSoundEnabled ? "border-accent bg-accent-subtle text-accent" : "")}
+                  onClick={() => setTetheredSoundEnabled((enabled) => !enabled)}
+                >
+                  Sound
+                </button>
+                <button
+                  type="button"
+                  data-testid="tethered-pause-toggle"
+                  disabled={!tetheredControlsEnabled || tetheredStatus === "error"}
+                  className="btn-tertiary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={tetheredIsPaused ? resumeTetheredFolder : pauseTetheredFolder}
+                >
+                  {tetheredIsPaused ? "Resume" : "Pause"}
+                </button>
+                <button
+                  type="button"
+                  data-testid="tethered-stop-button"
+                  disabled={!tetheredControlsEnabled}
+                  className="btn-danger px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={stopTetheredFolder}
+                >
+                  Stop
+                </button>
+              </div>
+
+              <p className="mt-3 text-xs text-text-secondary">{tetheredLastDetectedLabel}</p>
+
+              <div className="mt-4 space-y-3 rounded-xl border border-border-subtle bg-surface-elevated p-3">
+                <label className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+                  <span>Poll every</span>
+                  <input
+                    type="range"
+                    data-testid="tethered-poll-slider"
+                    min={TETHERED_MIN_POLL_MS}
+                    max={TETHERED_MAX_POLL_MS}
+                    step={TETHERED_POLL_STEP_MS}
+                    value={tetheredPollIntervalMs}
+                    onChange={(event) => setTetheredPollIntervalMs(Number(event.currentTarget.value))}
+                    className="min-w-36 flex-1 accent-accent"
+                  />
+                  <span className="w-10 font-semibold text-text-primary">{tetheredPollDisplay}</span>
+                </label>
+                <div className="grid gap-2 text-xs text-text-secondary sm:grid-cols-3">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      data-testid="tethered-recursive-toggle"
+                      checked={tetheredIncludeSubfolders}
+                      onChange={(event) => setTetheredIncludeSubfolders(event.currentTarget.checked)}
+                      className="accent-accent"
+                    />
+                    <span>Include subfolders</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      data-testid="tethered-newest-first-toggle"
+                      checked={tetheredNewestFirst}
+                      onChange={(event) => setTetheredNewestFirst(event.currentTarget.checked)}
+                      className="accent-accent"
+                    />
+                    <span>Newest first</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      data-testid="tethered-auto-open-toggle"
+                      checked={tetheredAutoOpen}
+                      onChange={(event) => setTetheredAutoOpen(event.currentTarget.checked)}
+                      className="accent-accent"
+                    />
+                    <span>Auto-open new photo</span>
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
+
+          {tetheredStatus === "unsupported" && (
+            <p className="mt-3 text-xs text-feedback-warning">
+              Folder watching requires a Chromium browser. Use Select files or Choose folder as fallback.
+            </p>
+          )}
+          {tetheredStatus === "error" && (
+            <p className="mt-3 text-xs text-feedback-error">
+              Folder watching stopped. Choose the folder again to continue.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -1044,48 +1798,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={gallery.is_published ? "status-badge status-badge--success" : "status-badge status-badge--neutral"}>
-              {gallery.is_published ? "Published" : "Unpublished"}
-            </span>
-            {/* Inline Publish / Unpublish toggle. Previously the only
-                publish affordance was the read-only status badge plus a
-                Publish Checklist that listed blockers without ever
-                offering the action — users had no way to flip the
-                is_published flag from this screen. Now the button sits
-                next to the status badge, calls the same updateGallery
-                endpoint used for title/description edits, and re-renders
-                with the new flag on success. The Share button next to
-                "All Photos" already enforces is_published before copying
-                a link, so this is the missing primary action that
-                unblocks the share flow. */}
             <button
               type="button"
+              role="switch"
+              aria-checked={gallery.is_published}
+              aria-label={gallery.is_published ? "Gallery is published. Switch to unpublished." : "Gallery is unpublished. Switch to published."}
               disabled={publishing}
-              onClick={async () => {
-                const t = getStoredAccessToken();
-                if (!t) return;
-                setPublishing(true);
-                try {
-                  const updated = await updateGallery(t, id, { is_published: !gallery.is_published });
-                  setGallery(updated);
-                  setShareMessage(updated.is_published ? "Gallery published — client links are now live." : "Gallery unpublished.");
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Failed to change publish state");
-                } finally {
-                  setPublishing(false);
-                }
-              }}
-              className={cn(
-                "px-3 py-1 text-xs font-semibold rounded-lg transition-colors min-h-[28px]",
-                publishing
-                  ? "bg-surface-container-high text-text-tertiary cursor-wait"
-                  : gallery.is_published
-                  ? "border border-border-default text-text-secondary hover:bg-surface-container-low hover:text-text-primary"
-                  : "bg-accent text-text-inverse hover:bg-accent-hover",
-              )}
-              title={gallery.is_published ? "Unpublish — client links will stop working" : "Publish — clients will be able to view this gallery"}
+              onClick={togglePublishState}
+              className="publish-state-toggle"
+              data-state={gallery.is_published ? "published" : "unpublished"}
+              title={gallery.is_published ? "Unpublish - client links will stop working" : "Publish - clients will be able to view this gallery"}
             >
-              {publishing ? "Saving…" : gallery.is_published ? "Unpublish" : "Publish"}
+              <span className="publish-state-toggle__track" aria-hidden="true">
+                <span className="publish-state-toggle__thumb" />
+              </span>
+              <span className="publish-state-toggle__label">
+                {publishing ? "Saving..." : gallery.is_published ? "Published" : "Unpublished"}
+              </span>
             </button>
           </div>
         </div>
@@ -1103,8 +1832,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           >
             Preview
           </Link>
-          {/* GAL-FR-118: view-as-client — opens the public gallery in client mode */}
-          {gallery.slug && (
+          {/* GAL-FR-118: view-as-client — public/client route is available only after publishing. */}
+          {gallery.is_published && gallery.slug && (
             <a
               href={`/g/${gallery.slug}?mode=client`}
               target="_blank"
@@ -1122,158 +1851,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       <div>
         <section className="space-y-4">
-
-          {/* Upload panel — 2026-05-21: now persists while any upload is
-              in-flight OR has failed / been blocked, so failures stay
-              visible until the user retries or dismisses them. The "all
-              done" terminal state (no active, no failed) still surfaces
-              via the right-side toast and the panel auto-unmounts. */}
-          {uploadPanelOpen && (
-            <div className="surface-panel space-y-3 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-text-primary">
-                  {(() => {
-                    // 2026-05-21: header now reflects the visible row count
-                    // accurately. Previous "Uploading 1 file" with two rows
-                    // visible (one complete + one in-flight) was confusing —
-                    // it counted only active items but the panel rendered
-                    // every non-blocked item. Use "Uploading N of M files"
-                    // when there's a mix.
-                    const totalShown = byteProgressItems.length;
-                    if (activeUploadCount > 0 && totalShown > activeUploadCount) {
-                      return `Uploading ${completedUploadCount + 1} of ${totalShown} files`;
-                    }
-                    if (activeUploadCount > 0) {
-                      return `Uploading ${activeUploadCount} ${activeUploadCount === 1 ? "file" : "files"}`;
-                    }
-                    if (failedUploadCount > 0) {
-                      return `${failedUploadCount} upload${failedUploadCount === 1 ? "" : "s"} failed`;
-                    }
-                    return `${blockedUploadCount} upload${blockedUploadCount === 1 ? "" : "s"} blocked`;
-                  })()}
-                </h2>
-                <div className="flex flex-wrap gap-2 justify-end">
-                  {activeUploadCount > 0 && (
-                    <>
-                      {upload.isPaused ? (
-                        <button onClick={upload.resumeAll} className="text-xs text-accent hover:underline">Resume All</button>
-                      ) : (
-                        <button onClick={upload.pauseAll} className="text-xs text-text-secondary hover:underline">Pause All</button>
-                      )}
-                      <button onClick={upload.cancelAll} className="text-xs text-error hover:underline">Cancel All</button>
-                    </>
-                  )}
-                  {activeUploadCount === 0 && failedUploadCount > 0 && (
-                    <button onClick={upload.retryAll} className="text-xs text-accent hover:underline">
-                      Retry All ({failedUploadCount})
-                    </button>
-                  )}
-                  {activeUploadCount === 0 && (failedUploadCount > 0 || blockedUploadCount > 0) && (
-                    <button onClick={upload.clearFinished} className="text-xs text-text-secondary hover:underline">
-                      Dismiss
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Aggregate byte-based progress — total upload size and how
-                  many bytes have actually transferred. Completed items
-                  count at 100% of their size; pre-flight blocked items
-                  don't contribute (they never started). */}
-              {bytesTotal > 0 && (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs text-text-secondary">
-                    <span>{formatUploadBytes(bytesUploaded)} of {formatUploadBytes(bytesTotal)}</span>
-                    <span className="font-medium text-text-primary">{overallBytePercent}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-accent transition-all duration-300"
-                      style={{ width: `${overallBytePercent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {upload.items.map((item) => {
-                  // QA #22: surface low-severity scan findings (duplicates,
-                  // near-duplicates, metadata warnings) next to the item so
-                  // the photographer sees why a file was flagged, rather
-                  // than the UI dropping them silently. High/medium
-                  // severity findings already block the upload via the
-                  // status="blocked" path.
-                  const warnings = (item.scanManifest?.findings || []).filter(
-                    (f) => f.severity === "low",
-                  );
-                  const isFailed = item.status === "error";
-                  const isTerminal =
-                    item.status === "complete" ||
-                    item.status === "error" ||
-                    item.status === "blocked" ||
-                    item.status === "needs_desktop";
-                  // 2026-05-21: per-row mini progress bar removed — it
-                  // duplicated the aggregate bar at the top of the panel and
-                  // created the "two progress bars" confusion. Rows now show
-                  // filename + size + status badge + action buttons only;
-                  // the aggregate bar communicates byte progress.
-                  const statusLabel =
-                    item.status === "complete" ? "Done" :
-                    isFailed ? "Failed" :
-                    item.status === "uploading" ? "Uploading…" :
-                    item.status === "screening" ? "Screening" :
-                    item.status === "pending" ? "Queued" :
-                    item.status === "blocked" ? "Blocked" :
-                    item.status === "needs_desktop" ? "Desktop" : item.status;
-                  const statusTone =
-                    item.status === "complete" ? "text-success" :
-                    isFailed ? "text-error" :
-                    item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" :
-                    "text-text-secondary";
-                  return (
-                    <div key={item.id} className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="truncate flex-1 text-text-primary">{item.file.name}</span>
-                        <span className="text-text-tertiary tabular-nums">{formatUploadBytes(item.file.size)}</span>
-                        <span className={`w-20 text-right ${statusTone}`}>{statusLabel}</span>
-                        {isFailed && (
-                          <button
-                            onClick={() => upload.retry(item.id)}
-                            className="text-xs text-accent hover:underline"
-                            title="Retry this upload"
-                          >
-                            Retry
-                          </button>
-                        )}
-                        {isTerminal && (
-                          <button
-                            onClick={() => upload.dismiss(item.id)}
-                            className="text-xs text-text-tertiary hover:text-text-secondary"
-                            title="Dismiss"
-                            aria-label="Dismiss"
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                      {isFailed && item.error && (
-                        <div className="pl-2 text-[10px] text-error">
-                          {item.error}
-                        </div>
-                      )}
-                      {warnings.length > 0 && (
-                        <div className="pl-2 text-[10px] text-feedback-warning">
-                          ⚠ {warnings.length === 1
-                            ? warnings[0].message
-                            : `${warnings.length} scan warnings`}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           <div id="photos" className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
@@ -1294,14 +1871,29 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   </>
                 )}
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={photoFileInputRef}
+                    data-testid="gallery-photo-file-input"
+                    className="sr-only"
+                    type="file"
+                    multiple
+                    accept={FILE_PICKER_STILL_IMAGE_ACCEPT}
+                    onChange={(event) => {
+                      submitFiles(Array.from(event.currentTarget.files ?? []).filter(isAcceptedStillImageFile));
+                      event.currentTarget.value = "";
+                    }}
+                  />
                   <button
-                    onClick={handleFileSelect}
+                    onClick={() => setShowUploadDialog(true)}
                     className="btn-primary px-3 py-1.5 text-xs"
                   >
                     Upload Photos
                   </button>
                   <button
-                    onClick={handleFolderSelect}
+                    onClick={() => {
+                      setShowUploadDialog(true);
+                      handleFolderSelect();
+                    }}
                     className="btn-tertiary px-3 py-1.5 text-xs"
                     title="Pick a folder — every photo inside (including subfolders) is uploaded."
                   >
@@ -1330,6 +1922,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   )}
                   <button
                     type="button"
+                    onClick={() => {
+                      setManagingAlbums((value) => !value);
+                      cancelEditingAlbum();
+                    }}
+                    aria-pressed={managingAlbums}
+                    className={cn(
+                      "btn-tertiary px-3 py-1.5 text-xs",
+                      managingAlbums && "border-accent-primary bg-accent-subtle text-accent-primary",
+                    )}
+                  >
+                    {managingAlbums ? "Done" : "Manage sub-galleries"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowAlbumCreate(true)}
                     className="btn-primary px-3 py-1.5 text-xs"
                   >
@@ -1341,7 +1947,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               {shareMessage && (
                 <p className="text-xs text-accent-primary">{shareMessage}</p>
               )}
-
               {showAlbumCreate && (
                 <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-elevated p-3 sm:flex-row sm:items-center">
                   <input
@@ -1408,25 +2013,52 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   const selectedSlug = selectedAlbum
                     ? selectedAlbum.name.toLowerCase().replace(/\s+/g, "-")
                     : "all-photos";
+                  const selectedShareUrl = gallery.is_published ? buildShareUrl(selectedAlbum?.id) : "";
                   return (
                     <>
-                      <button
+                      <GlassIconButton
                         type="button"
+                        size="md"
+                        variant="ghost"
                         onClick={() => copyShareUrl(selectedAlbum?.id)}
-                        className="shrink-0 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                        title={`Copy ${selectedLabel} share link`}
-                        aria-label={`Copy ${selectedLabel} share link`}
+                        label={`Copy ${selectedLabel} share link`}
+                        disabled={!gallery.is_published}
+                        className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
                       >
-                        Share
-                      </button>
+                        <Share />
+                      </GlassIconButton>
+                      <GlassIconButton
+                        type="button"
+                        size="md"
+                        variant="ghost"
+                        onClick={() => openShareLink(selectedAlbum?.id, selectedLabel)}
+                        label={`Email ${selectedLabel} share link`}
+                        disabled={!gallery.is_published}
+                        className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                      >
+                        <Envelope />
+                      </GlassIconButton>
                       <div className="shrink-0 flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high">
                         <ShareQrPopover
-                          url={gallery.is_published ? buildShareUrl(selectedAlbum?.id) : ""}
+                          url={selectedShareUrl}
                           disabled={!gallery.is_published}
                           label={`Show QR code for ${selectedLabel} share link`}
                           filename={`${gallery.slug || "gallery"}-${selectedSlug}-qr`}
                         />
                       </div>
+                      {selectedAlbum && albumIsEditable(selectedAlbum) && (
+                        <GlassIconButton
+                          type="button"
+                          size="md"
+                          variant="danger"
+                          onClick={() => void handleDeleteAlbum(selectedAlbum)}
+                          label={`Delete ${selectedLabel}`}
+                          disabled={savingAlbumId === selectedAlbum.id}
+                          className="shrink-0"
+                        >
+                          <Trash />
+                        </GlassIconButton>
+                      )}
                     </>
                   );
                 })()}
@@ -1469,16 +2101,29 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       {assets.length}
                     </span>
                   </button>
-                  <div className="flex items-center border-l border-border-subtle">
-                    <button
+                  <div className="flex items-center gap-1 border-l border-border-subtle px-1">
+                    <GlassIconButton
                       type="button"
+                      size="sm"
+                      variant="ghost"
                       onClick={() => copyShareUrl()}
-                      className="px-2 py-1.5 text-[11px] font-medium text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
-                      title="Copy gallery share link"
-                      aria-label="Copy gallery share link"
+                      label="Copy All Photos share link"
+                      disabled={!gallery.is_published}
+                      className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
                     >
-                      Share
-                    </button>
+                      <Share />
+                    </GlassIconButton>
+                    <GlassIconButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openShareLink(undefined, "All Photos")}
+                      label="Email All Photos share link"
+                      disabled={!gallery.is_published}
+                      className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                    >
+                      <Envelope />
+                    </GlassIconButton>
                     <ShareQrPopover
                       url={gallery.is_published ? buildShareUrl() : ""}
                       disabled={!gallery.is_published}
@@ -1489,6 +2134,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 {albums.map((album) => {
                   const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
+                  const isEditableAlbum = albumIsEditable(album);
+                  const isEditingAlbum = editingAlbumId === album.id;
+                  const isSavingAlbum = savingAlbumId === album.id;
                   // QA #18: per-album drop target. When a user drags selected
                   // assets (or a native file list) onto an album chip, assign
                   // those assets to the album via addAlbumAssets. This lets
@@ -1544,43 +2192,135 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         }
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => setActiveAlbum(album.id)}
-                        className={cn(
-                          "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
-                          isActive ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
-                        )}
-                        title={album.name}
-                      >
-                        <span className="truncate">{album.name}</span>
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                            isActive
-                              ? "bg-accent-primary/15 text-accent-primary"
-                              : "bg-surface-sunken text-text-tertiary",
-                          )}
-                        >
-                          {assetCount}
-                        </span>
-                      </button>
-                      <div className="flex items-center border-l border-border-subtle">
+                      {isEditingAlbum ? (
+                        <div className="flex min-w-[16rem] items-center gap-2 px-2 py-1.5">
+                          <input
+                            type="text"
+                            value={editingAlbumName}
+                            onChange={(event) => setEditingAlbumName(event.target.value)}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") void handleRenameAlbum(album);
+                              if (event.key === "Escape") cancelEditingAlbum();
+                            }}
+                            className="input-base h-9 min-w-0 flex-1 text-xs"
+                            aria-label={`Rename ${album.name}`}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleRenameAlbum(album)}
+                            disabled={isSavingAlbum || !editingAlbumName.trim()}
+                            className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
+                          >
+                            {isSavingAlbum ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditingAlbum}
+                            className="btn-tertiary px-3 py-2 text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => copyShareUrl(album.id)}
-                          className="px-2 py-1.5 text-[11px] font-medium text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-accent-primary"
-                          title={`Copy ${album.name} share link`}
-                          aria-label={`Copy ${album.name} share link`}
+                          onClick={() => setActiveAlbum(album.id)}
+                          className={cn(
+                            "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
+                            isActive ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
+                          )}
+                          title={album.name}
                         >
-                          Share
+                          <span className="truncate">{album.name}</span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                              isActive
+                                ? "bg-accent-primary/15 text-accent-primary"
+                                : "bg-surface-sunken text-text-tertiary",
+                            )}
+                          >
+                            {assetCount}
+                          </span>
                         </button>
-                        <ShareQrPopover
-                          url={gallery.is_published ? buildShareUrl(album.id) : ""}
-                          disabled={!gallery.is_published}
-                          label={`Show QR code for ${album.name} share link`}
-                          filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
-                        />
+                      )}
+                      <div className="flex items-center border-l border-border-subtle">
+                        {managingAlbums ? (
+                          isEditableAlbum ? (
+                            <div className="flex items-center gap-1 px-1">
+                              <GlassIconButton
+                                type="button"
+                                size="md"
+                                variant="ghost"
+                                label={`Rename ${album.name}`}
+                                onClick={() => startEditingAlbum(album)}
+                                disabled={isSavingAlbum}
+                                className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                              >
+                                <Pencil />
+                              </GlassIconButton>
+                              <GlassIconButton
+                                type="button"
+                                size="md"
+                                variant="danger"
+                                label={`Delete ${album.name}`}
+                                onClick={() => void handleDeleteAlbum(album)}
+                                disabled={isSavingAlbum}
+                              >
+                                <Trash />
+                              </GlassIconButton>
+                            </div>
+                          ) : (
+                            <span className="px-3 py-2 text-[11px] font-medium text-text-tertiary">
+                              Built-in
+                            </span>
+                          )
+                        ) : (
+                          <div className="flex items-center gap-1 px-1">
+                            <GlassIconButton
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => copyShareUrl(album.id)}
+                              label={`Copy ${album.name} share link`}
+                              disabled={!gallery.is_published}
+                              className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                            >
+                              <Share />
+                            </GlassIconButton>
+                            <GlassIconButton
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openShareLink(album.id, album.name)}
+                              label={`Email ${album.name} share link`}
+                              disabled={!gallery.is_published}
+                              className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                            >
+                              <Envelope />
+                            </GlassIconButton>
+                            <ShareQrPopover
+                              url={gallery.is_published ? buildShareUrl(album.id) : ""}
+                              disabled={!gallery.is_published}
+                              label={`Show QR code for ${album.name} share link`}
+                              filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
+                            />
+                            {isEditableAlbum && (
+                              <GlassIconButton
+                                type="button"
+                                size="sm"
+                                variant="danger"
+                                label={`Delete ${album.name}`}
+                                onClick={() => void handleDeleteAlbum(album)}
+                                disabled={isSavingAlbum}
+                              >
+                                <Trash />
+                              </GlassIconButton>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1615,11 +2355,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   ? "border-accent bg-accent/5 text-accent"
                   : "border-border-default bg-surface-sunken/40 text-text-secondary hover:border-accent/50 hover:bg-accent/[0.02]",
               )}
-              onClick={handleFileSelect}
+              onClick={() => setShowUploadDialog(true)}
             >
-              <p className="font-medium">{isDragOver ? "Drop photos or folders here" : "Drag photos or folders here, or click to browse"}</p>
+              <p className="font-medium">{isDragOver ? "Drop photos or folders here" : "Drag photos or folders here, or click to open upload"}</p>
               <p className="text-xs text-text-tertiary mt-1">
-                JPEG, PNG, TIFF, RAW (CR2, NEF, ARW, DNG, RAF) — up to 2GB per file. Folders upload every photo inside, recursively.
+                Browser upload: JPEG, PNG, WebP, GIF up to {browserE2EEMaxUploadSizeLabel()}. RAW, TIFF, HEIC/AVIF use RawDrive Desktop for source-side encryption.
               </p>
             </div>
 
@@ -1638,7 +2378,6 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {pagedAssets.map((entry) => {
-                  const previewUrl = getAssetPreviewUrl(entry.asset || undefined, token);
                   // A freshly-uploaded asset lands in the listing instantly
                   // (POST /galleries/{id}/assets → 201) but the thumbnail
                   // worker takes up to ~10s to populate thumbnail_urls.
@@ -1687,6 +2426,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       tabIndex={0}
                       aria-label={`View ${entry.asset?.filename || "photo"}`}
                       onKeyDown={(e) => {
+                        if (e.currentTarget !== e.target) return;
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           const idx = assets.findIndex((a) => a.id === entry.id);
@@ -1711,59 +2451,49 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         </div>
                       )}
                       <div className="relative">
-                        {isProcessing ? (
-                          <div
-                            className="flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
-                            role="status"
-                            aria-live="polite"
-                            aria-label={
-                              entry.asset?.filename
-                                ? `Processing ${entry.asset.filename}`
-                                : "Processing photo"
-                            }
-                          >
-                            <div className="flex flex-col items-center gap-2 text-text-tertiary">
-                              <div className="h-8 w-8 animate-spin rounded-full border-2 border-text-tertiary/30 border-t-text-tertiary" />
-                              <span className="text-xs">Processing photo…</span>
-                            </div>
-                          </div>
-                        ) : previewUrl ? (
-                          <img
-                            src={previewUrl}
-                            alt={entry.asset?.filename || "Gallery asset preview"}
-                            className="aspect-[4/3] w-full object-cover"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : (
-                          <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
-                            Preview unavailable
-                          </div>
-                        )}
+                        <GalleryAssetTileImage
+                          asset={entry.asset}
+                          token={token}
+                          isProcessing={isProcessing}
+                        />
                         {!bulkMode && entry.asset && !isProcessing && (
                           <div
-                            className={cn(
-                              "absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity",
-                              openMenuAssetId === entry.asset.id && "!opacity-100",
-                            )}
+                            className="absolute bottom-2 right-2 z-10"
                             onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                e.stopPropagation();
+                                setOpenMenuAssetId(null);
+                              }
+                            }}
                           >
                             <div className="relative">
                               <GlassIconButton
-                                size="sm"
-                                variant="ghost"
-                                label="More options"
+                                size="md"
+                                variant="glass"
+                                label={`More actions for ${entry.asset.filename}`}
+                                aria-haspopup="menu"
+                                aria-expanded={openMenuAssetId === entry.asset.id}
+                                aria-controls={`asset-actions-${entry.asset.id}`}
+                                className="!border-border-strong !bg-surface-elevated !text-text-primary shadow-elevation-1 hover:!bg-surface-container-high hover:!text-text-primary"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenMenuAssetId((prev) => (prev === entry.asset!.id ? null : entry.asset!.id));
                                 }}
                               >
-                                <EllipsisVertical className="h-4 w-4" />
+                                <EllipsisVertical className="h-5 w-5" />
                               </GlassIconButton>
                               {openMenuAssetId === entry.asset.id && (
-                                <div className="absolute bottom-full right-0 mb-1 min-w-[130px] rounded-xl border border-white/[0.08] bg-surface-container-high/95 backdrop-blur-md shadow-xl py-1 z-50">
+                                <div
+                                  id={`asset-actions-${entry.asset.id}`}
+                                  role="menu"
+                                  aria-label={`Actions for ${entry.asset.filename}`}
+                                  className="absolute bottom-full right-0 z-50 mb-2 min-w-40 rounded-xl border border-border-default bg-surface-elevated py-1 shadow-elevation-1"
+                                >
                                   <button
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-on-surface hover:bg-white/[0.06] transition-colors rounded-t-xl"
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex min-h-11 w-full items-center gap-2 rounded-t-xl px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setOpenMenuAssetId(null);
@@ -1774,7 +2504,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                                     <span>{copiedAssetId === entry.asset.id ? "Copied!" : "Share"}</span>
                                   </button>
                                   <button
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-error hover:bg-white/[0.06] transition-colors rounded-b-xl"
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex min-h-11 w-full items-center gap-2 rounded-b-xl px-3 py-2 text-sm font-medium text-feedback-error transition-colors hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setOpenMenuAssetId(null);
@@ -1841,6 +2573,421 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         </section>
 
       </div>
+
+      {uploadDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim p-2 backdrop-blur-md sm:p-4"
+          onClick={(e) => {
+            if (e.currentTarget === e.target && uploadDialogCanClose) setShowUploadDialog(false);
+          }}
+        >
+          <section
+            ref={uploadDialogRef}
+            data-testid="gallery-upload-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Upload photos to gallery"
+            aria-describedby="gallery-upload-dialog-description"
+            tabIndex={-1}
+            className="flex max-h-[100dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-6 sm:py-4">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold text-text-primary sm:text-lg">Upload photos to gallery</h2>
+                <p id="gallery-upload-dialog-description" className="text-sm text-text-secondary">{uploadStatusHeadline}</p>
+                <div
+                  data-testid="upload-mobile-status"
+                  className="mt-3 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2 md:hidden"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-text-inverse">
+                    {uploadStage === "details" ? 1 : uploadStage === "processing" ? 2 : 3}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-text-primary">
+                      {uploadStage === "details" ? "Select photos" : uploadStage === "processing" ? "Processing upload" : "Visibility"}
+                    </span>
+                    <span className="block truncate text-xs text-text-secondary">
+                      {uploadStage === "details"
+                        ? "Choose files or a folder"
+                        : uploadStage === "processing"
+                          ? "Encrypting and uploading"
+                          : gallery.is_published ? "Client links live" : "Private until published"}
+                    </span>
+                  </span>
+                </div>
+              </div>
+              {uploadDialogCanClose && (
+                <GlassIconButton
+                  size="md"
+                  variant="ghost"
+                  label="Close upload dialog"
+                  className="text-text-secondary hover:text-text-primary"
+                  onClick={() => setShowUploadDialog(false)}
+                >
+                  <XMark />
+                </GlassIconButton>
+              )}
+            </div>
+
+            <div data-testid="upload-desktop-stepper" className="hidden border-b border-border-subtle px-6 py-4 md:grid md:grid-cols-3 md:gap-3">
+              {([
+                { key: "details" as const, label: "Details", helper: "Select files" },
+                { key: "processing" as const, label: "Processing", helper: "Encrypt and upload" },
+                { key: "visibility" as const, label: "Visibility", helper: gallery.is_published ? "Client links live" : "Unpublished" },
+              ]).map((step, index) => {
+                const active = uploadStage === step.key;
+                const done =
+                  (step.key === "details" && uploadStage !== "details") ||
+                  (step.key === "processing" && uploadStage === "visibility");
+                return (
+                  <div
+                    key={step.key}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl border px-3 py-2",
+                      active
+                        ? "border-accent bg-accent-subtle"
+                        : done
+                          ? "border-border-default bg-surface-container-low"
+                          : "border-border-subtle bg-surface-sunken",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                        active || done ? "bg-accent text-text-inverse" : "bg-surface-container-high text-text-secondary",
+                      )}
+                    >
+                      {done ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-text-primary">{step.label}</span>
+                      <span className="block truncate text-xs text-text-secondary">{step.helper}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-3 lg:gap-6 lg:p-6">
+              <div className="space-y-4 lg:col-span-2">
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={handleFileSelect}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Select or drop photos for upload"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleFileSelect();
+                    }
+                  }}
+                  className={cn(
+                    "relative flex min-h-56 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-4 py-7 text-center transition-colors sm:min-h-80 sm:px-6 sm:py-10",
+                    isDragOver
+                      ? "border-accent bg-accent-subtle text-accent"
+                      : "border-border-default bg-surface-sunken text-text-secondary hover:border-accent hover:bg-accent-subtle",
+                  )}
+                >
+                  {(uploadPreviewUrl || uploadPreviewBackendAsset) && (
+                    <>
+                      {uploadPreviewUrl ? (
+                        <img
+                          data-testid="upload-dropzone-preview"
+                          src={uploadPreviewUrl}
+                          alt=""
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-xl"
+                          decoding="async"
+                        />
+                      ) : (
+                        <UploadDropzoneBackendPreview asset={uploadPreviewBackendAsset} token={token} />
+                      )}
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 bg-surface-scrim/85 backdrop-blur-sm"
+                      />
+                    </>
+                  )}
+                  <div className="relative z-10 flex flex-col items-center">
+                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-elevated text-text-primary shadow-elevation-1 sm:mb-5 sm:h-20 sm:w-20">
+                      <Plus className="h-8 w-8 sm:h-9 sm:w-9" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-text-primary sm:text-xl">
+                      {isDragOver ? "Drop photos to start upload" : "Add photos"}
+                    </h3>
+                    <p className="mt-2 max-w-md text-sm text-text-secondary">
+                      JPEG, PNG, WebP and GIF up to {browserE2EEMaxUploadSizeLabel()} per file.
+                    </p>
+                    <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-2 sm:mt-6 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+                      <button
+                        type="button"
+                        className="btn-primary px-5 py-2 text-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFileSelect();
+                        }}
+                      >
+                        Select files
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-tertiary px-5 py-2 text-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFolderSelect();
+                        }}
+                      >
+                        Choose folder
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div data-testid="upload-mobile-tethered-capture">
+                  {renderTetheredCapturePanel("mobile")}
+                </div>
+
+                <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-text-primary">Processing queue</h3>
+                      <p className="text-xs text-text-secondary">
+                        {upload.items.length > 0 ? uploadStatusHeadline : "Files appear here after selection."}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {activeUploadCount > 0 && (
+                        <>
+                          {upload.isPaused ? (
+                            <button onClick={upload.resumeAll} className="btn-tertiary px-3 py-1.5 text-xs">Resume all</button>
+                          ) : (
+                            <button onClick={upload.pauseAll} className="btn-tertiary px-3 py-1.5 text-xs">Pause all</button>
+                          )}
+                          <button onClick={upload.cancelAll} className="btn-danger px-3 py-1.5 text-xs">Cancel all</button>
+                        </>
+                      )}
+                      {activeUploadCount === 0 && failedUploadCount > 0 && (
+                        <button onClick={upload.retryAll} className="btn-tertiary px-3 py-1.5 text-xs">
+                          Retry all ({failedUploadCount})
+                        </button>
+                      )}
+                      {activeUploadCount === 0 && (failedUploadCount > 0 || blockedUploadCount > 0) && (
+                        <button onClick={upload.clearFinished} className="btn-tertiary px-3 py-1.5 text-xs">
+                          Dismiss
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {bytesTotal > 0 && (
+                    <div className="mt-4 space-y-1">
+                      <div className="flex items-center justify-between text-xs text-text-secondary">
+                        <span>{formatUploadBytes(bytesUploaded)} of {formatUploadBytes(bytesTotal)}</span>
+                        <span className="font-medium text-text-primary">{overallBytePercent}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-surface-sunken">
+                        <div
+                          className="h-full rounded-full bg-accent transition-all duration-300"
+                          style={{ width: `${overallBytePercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+                    {upload.items.length === 0 ? (
+                      <div className="rounded-xl border border-border-subtle bg-surface-elevated px-4 py-5 text-center text-sm text-text-secondary">
+                        No files selected yet.
+                      </div>
+                    ) : (
+                      upload.items.map((item) => {
+                        const warnings = visibleUploadWarnings(item.scanManifest?.findings);
+                        const isFailed = item.status === "error";
+                        const isTerminal =
+                          item.status === "complete" ||
+                          item.status === "error" ||
+                          item.status === "blocked" ||
+                          item.status === "needs_desktop";
+                        const statusLabel =
+                          item.status === "complete" ? "Done" :
+                          isFailed ? "Failed" :
+                          item.status === "uploading" ? "Uploading..." :
+                          item.status === "encrypting" ? "Encrypting" :
+                          item.status === "paused" ? "Paused" :
+                          item.status === "screening" ? "Screening" :
+                          item.status === "pending" ? "Queued" :
+                          item.status === "blocked" ? "Blocked" :
+                          item.status === "needs_desktop" ? "Desktop" : item.status;
+                        const statusTone =
+                          item.status === "complete" ? "text-success" :
+                          isFailed ? "text-error" :
+                          item.status === "paused" ? "text-feedback-warning" :
+                          item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" :
+                          "text-text-secondary";
+                        return (
+                          <div key={item.id} className="rounded-xl border border-border-subtle bg-surface-elevated px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-3 text-xs">
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">{item.file.name}</span>
+                              <span className="text-text-tertiary tabular-nums">{formatUploadBytes(item.file.size)}</span>
+                              <span className={cn("w-20 text-right font-medium", statusTone)}>{statusLabel}</span>
+                              {isFailed && (
+                                <button
+                                  type="button"
+                                  onClick={() => upload.retry(item.id)}
+                                  className="text-xs font-medium text-accent hover:underline"
+                                >
+                                  Retry
+                                </button>
+                              )}
+                              {(item.status === "uploading" || item.status === "pending") && (
+                                <button
+                                  type="button"
+                                  onClick={() => upload.pause(item.id)}
+                                  className="text-xs font-medium text-text-secondary hover:text-text-primary"
+                                >
+                                  Pause
+                                </button>
+                              )}
+                              {item.status === "paused" && (
+                                <button
+                                  type="button"
+                                  onClick={() => upload.resume(item.id)}
+                                  className="text-xs font-medium text-accent hover:underline"
+                                >
+                                  Resume
+                                </button>
+                              )}
+                              {isTerminal && (
+                                <button
+                                  type="button"
+                                  onClick={() => upload.dismiss(item.id)}
+                                  className="text-xs font-medium text-text-tertiary hover:text-text-primary"
+                                  aria-label={`Dismiss ${item.file.name}`}
+                                >
+                                  Dismiss
+                                </button>
+                              )}
+                            </div>
+                            {(isFailed || item.status === "blocked" || item.status === "needs_desktop") && item.error && (
+                              <p className={cn("mt-2 text-xs", isFailed ? "text-error" : "text-feedback-warning")}>
+                                {item.error}
+                              </p>
+                            )}
+                            {warnings.length > 0 && (
+                              <p className="mt-2 text-xs text-feedback-warning">
+                                {warnings.length === 1 ? warnings[0].message : `${warnings.length} scan warnings`}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <aside data-testid="upload-desktop-sidebar" className="hidden space-y-4 lg:block">
+                <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                  <h3 className="text-sm font-semibold text-text-primary">Details</h3>
+                  <dl className="mt-3 space-y-3 text-sm">
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-text-tertiary">Destination</dt>
+                      <dd className="mt-1 font-medium text-text-primary">{gallery.title}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-text-tertiary">Sub-gallery</dt>
+                      <dd className="mt-1 font-medium text-text-primary">
+                        {activeAlbum ? albums.find((album) => album.id === activeAlbum)?.name ?? "Selected sub-gallery" : "All Photos"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                  <div className="flex items-start gap-3">
+                    <Shield className="mt-0.5 h-5 w-5 text-accent" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-text-primary">Processing</h3>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        Photos are screened, encrypted, uploaded, and converted into WebP display files.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                 <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
+                   <h3 className="text-sm font-semibold text-text-primary">Visibility</h3>
+                   <p className="mt-2 text-sm text-text-secondary">
+                     {gallery.is_published
+                       ? "This gallery is published. Uploaded photos appear after processing completes."
+                       : "This gallery is unpublished. Uploaded photos stay private until you publish it."}
+                   </p>
+                   <div className="mt-4 flex flex-wrap items-center gap-2">
+                     <button
+                       type="button"
+                       role="switch"
+                       aria-checked={gallery.is_published}
+                       aria-label={gallery.is_published ? "Unpublish gallery" : "Publish gallery"}
+                       disabled={publishing}
+                       onClick={togglePublishState}
+                       className="publish-state-toggle"
+                       data-state={gallery.is_published ? "published" : "unpublished"}
+                     >
+                       <span className="publish-state-toggle__track" aria-hidden="true">
+                         <span className="publish-state-toggle__thumb" />
+                       </span>
+                       <span className="publish-state-toggle__label">
+                         {publishing ? "Saving..." : gallery.is_published ? "Published" : "Publish gallery"}
+                       </span>
+                     </button>
+                   </div>
+                   <div
+                     data-testid="visibility-share-links"
+                     className="mt-3 flex flex-wrap items-center gap-2"
+                   >
+                     <span className="text-xs font-semibold text-text-secondary">Share links</span>
+                     <GlassIconButton
+                       type="button"
+                       size="md"
+                       variant="ghost"
+                       onClick={() => copyShareUrl()}
+                       label="Copy gallery share link"
+                       disabled={!gallery.is_published}
+                       className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                     >
+                       <Share />
+                     </GlassIconButton>
+                     <GlassIconButton
+                       type="button"
+                       size="md"
+                       variant="ghost"
+                       onClick={() => openShareLink(undefined, "Gallery")}
+                       label="Email gallery share link"
+                       disabled={!gallery.is_published}
+                       className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                     >
+                       <Envelope />
+                     </GlassIconButton>
+                     <div className="flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high">
+                       <ShareQrPopover
+                         url={gallery.is_published ? buildShareUrl() : ""}
+                         disabled={!gallery.is_published}
+                         label="Show QR code for gallery share link"
+                         filename={`${gallery.slug || "gallery"}-share-qr`}
+                       />
+                     </div>
+                   </div>
+                 </div>
+
+                {renderTetheredCapturePanel("desktop")}
+              </aside>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Delete confirmation modal */}
       {deleteConfirm && (
@@ -1922,6 +3069,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
           // M13: feed filmstrip + compare mode + watermark overlay (FR-088,092,093,094)
           allAssets={assets.map((a) => a.asset).filter((a): a is Asset => a !== null)}
           gallery={gallery ?? undefined}
+          onDeleteRequest={(targetAsset) => {
+            setDeleteConfirm({ assetId: targetAsset.id, filename: targetAsset.filename || "this photo" });
+          }}
           onJumpTo={(targetId) => {
             const idx = assets.findIndex((a) => a.asset?.id === targetId);
             if (idx >= 0) setLightboxIndex(idx);

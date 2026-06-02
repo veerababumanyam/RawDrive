@@ -105,7 +105,16 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
       {/* Logo + subtitle — always rendered first so the brand mark is the
           top-most element of the rail in both expanded and collapsed
           states. The toggle button below never overlaps it. */}
-      <div className={cn("mb-4 flex items-center gap-3", collapsed ? "justify-center" : "px-2")}>
+      <Link
+        href="https://rawdrive.in"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Open RawDrive website"
+        className={cn(
+          "mb-4 flex items-center gap-3 rounded-xl py-2 transition-colors hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus",
+          collapsed ? "justify-center" : "px-2",
+        )}
+      >
         <Image
           src="/logo/android-chrome-192x192.png"
           alt="RawDrive Logo"
@@ -121,7 +130,7 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
             {subtitle}
           </p>
         </div>
-      </div>
+      </Link>
 
       {/* Desktop collapse/expand toggle — sits BELOW the logo so the brand
           mark is never overlapped. Hidden on mobile (drawer UX makes

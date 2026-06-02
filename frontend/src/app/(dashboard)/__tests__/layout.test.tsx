@@ -138,6 +138,7 @@ describe("DashboardLayout role-based sidebar", () => {
     expect(screen.getByText("Business")).toBeInTheDocument();
     // Key nav items
     expect(screen.getByRole("link", { name: /Galleries/i })).toHaveAttribute("href", "/galleries");
+    expect(screen.getByRole("link", { name: /Install App/i })).toHaveAttribute("href", "/settings/pwa");
     // AI Studio tile was removed from the photographer sidebar 2026-05-19
     // to declutter the left nav. The /ai route is still mounted but no
     // longer surfaced from the nav, mirroring the "AI" tab removal from
@@ -145,6 +146,7 @@ describe("DashboardLayout role-based sidebar", () => {
     expect(screen.queryByRole("link", { name: /AI Studio/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Studio CRM/i })).toHaveAttribute("href", "/crm");
     expect(screen.queryByRole("link", { name: /^Invoices$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open RawDrive website" })).toHaveAttribute("href", "https://rawdrive.in");
   });
 
   it("renders AdminSidebar with 8 items for admin", async () => {
