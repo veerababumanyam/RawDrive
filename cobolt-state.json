@@ -3,7 +3,7 @@
   "projectType": "brownfield",
   "runtime": "ide-plugin",
   "currentStage": "shipped",
-  "version": "0.0.71",
+  "version": "0.0.72",
   "scope": "mvp",
   "skills": [
     "cobolt-init",
