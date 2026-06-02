@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -168,6 +169,48 @@ func (h *AlbumHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"data": album})
 }
 
+// Update handles PATCH /api/v1/albums/{id}
+func (h *AlbumHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireAlbumInWorkspace(w, r, id); !ok {
+		return
+	}
+
+	var input struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	album, err := h.albumSvc.Update(r.Context(), id, service.UpdateAlbumInput{
+		Name:        input.Name,
+		Description: input.Description,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrAlbumNameRequired):
+			http.Error(w, `{"error":"album name is required"}`, http.StatusBadRequest)
+		case errors.Is(err, service.ErrAlbumNotEditable):
+			http.Error(w, `{"error":"smart albums cannot be modified"}`, http.StatusBadRequest)
+		case errors.Is(err, service.ErrAlbumNotFound):
+			http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+		default:
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": album})
+}
+
 // Breadcrumb handles GET /api/v1/albums/{id}/breadcrumb
 func (h *AlbumHandler) Breadcrumb(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -269,7 +312,14 @@ func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.albumSvc.Delete(r.Context(), id); err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, service.ErrAlbumNotEditable):
+			http.Error(w, `{"error":"smart albums cannot be modified"}`, http.StatusBadRequest)
+		case errors.Is(err, service.ErrAlbumNotFound):
+			http.Error(w, `{"error":"album not found"}`, http.StatusNotFound)
+		default:
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		}
 		return
 	}
 

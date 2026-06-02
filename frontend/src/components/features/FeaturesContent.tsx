@@ -181,11 +181,12 @@ export function FeaturesContent() {
           </span>
           <div className="space-y-5">
             <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
-              Every core workflow, rebuilt around the original Stitch feature direction.
+              Every core workflow a photography studio needs to book, deliver, and grow.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              Explore the product surfaces that matter most to photography businesses: delivery,
-              proofing, AI, CRM, streaming, analytics, privacy, and local operations.
+              Explore the product surfaces that matter most to Indian photography businesses:
+              gallery delivery, proofing, AI culling, CRM, streaming, analytics, privacy, and
+              local operations.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -206,7 +207,7 @@ export function FeaturesContent() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
               <img
                 src="/stitch/features-a.png"
-                alt="Stitch features showcase preview"
+                alt="RawDrive features showcase for photography studio workflows"
                 className="h-auto w-full object-cover"
               />
             </div>
@@ -215,7 +216,7 @@ export function FeaturesContent() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
               <img
                 src="/stitch/features-b.png"
-                alt="Stitch features showcase secondary preview"
+                alt="RawDrive feature details for galleries, CRM, AI, and streaming"
                 className="h-auto w-full object-cover"
               />
             </div>

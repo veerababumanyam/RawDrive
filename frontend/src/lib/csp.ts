@@ -16,7 +16,7 @@ export interface CspOptions {
    * middleware is the only place that can pass it.
    */
   nonce?: string;
-  /** Extra HTTP API origin to allow in connect-src (Docker dev fallback). */
+  /** Extra HTTP(S) API origin to allow for API-backed media and fetches. */
   apiOrigin?: string;
 }
 
@@ -64,25 +64,27 @@ export function buildCsp({ isDev, nonce, apiOrigin }: CspOptions): string {
   }
   scriptSrcTokens.push("https://checkout.razorpay.com");
 
-  const devConnectExtras = isDev
-    ? " http://localhost:* ws://localhost:*"
-    : apiOrigin
-      ? ` ${apiOrigin}`
-      : "";
-  const devImgExtras = isDev ? " http://localhost:*" : "";
+  const apiSource = normalizeHttpOrigin(apiOrigin);
+  const apiExtra = apiSource ? ` ${apiSource}` : "";
+  const devConnectExtras = isDev ? " http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*" : "";
+  const devMediaExtras = isDev ? " http://localhost:* http://127.0.0.1:*" : "";
 
   return [
     "default-src 'self'",
     `script-src ${scriptSrcTokens.join(" ")}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' data: blob: https:" + devImgExtras,
-    // connect-src must include the API origin for same-origin fetches through
+    // Some gallery surfaces still render authenticated API-backed /storage/*
+    // image URLs directly. Allow only the configured API origin here; encrypted
+    // display paths still decrypt to blob: URLs in application code.
+    "img-src 'self' data: blob: https:" + apiExtra + devMediaExtras,
+    // connect-src must include the API origin for authFetch and same-origin
     // rewrites() plus any public buckets the client talks to. Dev adds
     // localhost:* so cross-origin dev fetches to the Go API work. Razorpay
     // Checkout makes XHRs to api.razorpay.com and lumberjack (analytics) — the
     // existing `https:` token already covers them.
-    "connect-src 'self' https:" + devConnectExtras,
+    "connect-src 'self' https:" + apiExtra + devConnectExtras,
     "font-src 'self' data: https://fonts.gstatic.com",
+    "media-src 'self' blob: https:" + apiExtra + devMediaExtras,
     // Razorpay Checkout opens its payment UI in iframes pointing to
     // api.razorpay.com / checkout.razorpay.com. www.youtube.com /
     // youtube-nocookie.com / player.vimeo.com — the per-gallery embedded
@@ -95,4 +97,15 @@ export function buildCsp({ isDev, nonce, apiOrigin }: CspOptions): string {
     "base-uri 'self'",
     "form-action 'self'",
   ].join("; ");
+}
+
+function normalizeHttpOrigin(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    return parsed.origin;
+  } catch {
+    return "";
+  }
 }

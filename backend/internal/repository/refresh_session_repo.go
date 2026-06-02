@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,6 +100,85 @@ func (r *RefreshSessionRepo) MarkUsed(ctx context.Context, rawToken string) erro
 		return auth.ErrRefreshNotFound
 	}
 	return nil
+}
+
+func (r *RefreshSessionRepo) Rotate(ctx context.Context, oldRawToken, newRawToken string, newExpiresAt time.Time) (*auth.RefreshSessionEntry, error) {
+	if newRawToken == "" {
+		return nil, errors.New("refresh session repo: new raw token is empty")
+	}
+
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("refresh session repo: begin rotate: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	oldHash := auth.HashToken(oldRawToken)
+	entry := &auth.RefreshSessionEntry{}
+	var familyRevoked bool
+	err = tx.QueryRow(ctx,
+		`SELECT sub, family_id, workspace_id, role, platform_role, state_id,
+		        expires_at, revoked, used, family_revoked, mfa_verified
+		 FROM refresh_sessions
+		 WHERE token_hash = $1
+		 FOR UPDATE`,
+		oldHash,
+	).Scan(&entry.Sub, &entry.FamilyID, &entry.WorkspaceID, &entry.Role,
+		&entry.PlatformRole, &entry.StateID, &entry.ExpiresAt,
+		&entry.Revoked, &entry.Used, &familyRevoked, &entry.MFAVerified)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, auth.ErrRefreshNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("refresh session repo: rotate select: %w", err)
+	}
+
+	if entry.Revoked || entry.Used || familyRevoked {
+		if _, revokeErr := tx.Exec(ctx,
+			`UPDATE refresh_sessions
+			 SET family_revoked = TRUE, revoked = TRUE
+			 WHERE family_id = $1`,
+			entry.FamilyID,
+		); revokeErr != nil {
+			return nil, fmt.Errorf("refresh session repo: rotate revoke family: %w", revokeErr)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("refresh session repo: rotate commit revoke: %w", err)
+		}
+		entry.Revoked = true
+		return entry, auth.ErrRefreshReuseDetected
+	}
+
+	if time.Now().After(entry.ExpiresAt) {
+		return entry, auth.ErrRefreshExpired
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE refresh_sessions SET used = TRUE WHERE token_hash = $1`,
+		oldHash,
+	); err != nil {
+		return nil, fmt.Errorf("refresh session repo: rotate mark used: %w", err)
+	}
+
+	newHash := auth.HashToken(newRawToken)
+	_, err = tx.Exec(ctx,
+		`INSERT INTO refresh_sessions (
+		    token_hash, sub, family_id, workspace_id, role, platform_role, state_id,
+		    expires_at, revoked, used, family_revoked, mfa_verified
+		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, FALSE, FALSE, $9)`,
+		newHash, entry.Sub, entry.FamilyID, entry.WorkspaceID, entry.Role,
+		entry.PlatformRole, entry.StateID, newExpiresAt, entry.MFAVerified,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("refresh session repo: rotate create replacement: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("refresh session repo: rotate commit: %w", err)
+	}
+
+	entry.Used = true
+	return entry, nil
 }
 
 // RevokeFamily marks every row in the given family as revoked. Does not

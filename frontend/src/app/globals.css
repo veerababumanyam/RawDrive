@@ -141,55 +141,55 @@
 
 /* --- Theme: Liquid Glass Dark --- */
 [data-theme="liquid-glass-dark"] {
-  --surface-base: #0b1326;
-  --surface-elevated: #131b2e;
-  --surface-sunken: #08101f;
-  --surface-overlay: rgba(19, 27, 46, 0.72);
-  --surface-container: #1b2337;
-  --surface-container-low: #131b2e;
-  --surface-container-high: #20283d;
-  --surface-container-highest: #2d3449;
-  --surface-variant: #1d2538;
-  --surface-bright: #303853;
-  --surface-dim: #08101f;
-  --surface-scrim: rgba(11, 19, 38, 0.72);
+  --surface-base: #061329;
+  --surface-elevated: #09203d;
+  --surface-sunken: #031023;
+  --surface-overlay: rgba(6, 19, 41, 0.86);
+  --surface-container: #0d2a4c;
+  --surface-container-low: #09203d;
+  --surface-container-high: #12355c;
+  --surface-container-highest: #174676;
+  --surface-variant: #0f3155;
+  --surface-bright: #1d5a91;
+  --surface-dim: #031023;
+  --surface-scrim: rgba(6, 19, 41, 0.76);
 
-  --text-primary: #e8edf8;
-  --text-secondary: #b5bfd3;
-  --text-tertiary: #8b95ab;
-  --text-inverse: #0b1326;
+  --text-primary: #ffffff;
+  --text-secondary: #e6f3ff;
+  --text-tertiary: #c7dcf4;
+  --text-inverse: #061329;
   --text-media: #f7f9ff;
 
-  --accent-default: #bdc2ff;
-  --accent-hover: #d4d8ff;
-  --accent-active: #a8affc;
-  --accent-subtle: rgba(189, 194, 255, 0.12);
-  --accent-muted: rgba(124, 135, 243, 0.22);
-  --accent-primary: #7c87f3;
-  --accent-secondary: #74c3ba;
-  --accent-tertiary: #f0b96e;
+  --accent-default: #3368e9;
+  --accent-hover: #2fd6dc;
+  --accent-active: #1d4dca;
+  --accent-subtle: rgba(47, 214, 220, 0.12);
+  --accent-muted: rgba(51, 104, 233, 0.24);
+  --accent-primary: #3368e9;
+  --accent-secondary: #2fd6dc;
+  --accent-tertiary: #d8bd68;
 
-  --semantic-success: #67b786;
-  --semantic-warning: #f0b96e;
+  --semantic-success: #26d4b9;
+  --semantic-warning: #d8bd68;
   --semantic-destructive: #ee8a92;
-  --semantic-info: #7aa8ff;
+  --semantic-info: #2fd6dc;
   --feedback-success: var(--semantic-success);
   --feedback-warning: var(--semantic-warning);
   --feedback-error: var(--semantic-destructive);
 
-  --border-default: rgba(70, 69, 84, 0.15);
-  --border-strong: rgba(70, 69, 84, 0.25);
-  --border-subtle: rgba(70, 69, 84, 0.08);
-  --border-focus: rgba(189, 194, 255, 0.28);
-  --outline-variant: #464554;
+  --border-default: rgba(84, 149, 202, 0.22);
+  --border-strong: rgba(47, 214, 220, 0.32);
+  --border-subtle: rgba(84, 149, 202, 0.10);
+  --border-focus: rgba(47, 214, 220, 0.46);
+  --outline-variant: #1f5b90;
 
   --glass-blur: 20px;
-  --glass-saturation: 140%;
-  --glass-border-opacity: 0.15;
+  --glass-saturation: 155%;
+  --glass-border-opacity: 0.18;
 
-  --button-primary-from: #bdc2ff;
-  --button-primary-to: #7c87f3;
-  --button-primary-foreground: #0b1326;
+  --button-primary-from: #2fd6dc;
+  --button-primary-to: #3368e9;
+  --button-primary-foreground: #061329;
 
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 16px 32px rgba(0, 0, 0, 0.26);
@@ -199,57 +199,57 @@
   --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* --- Theme: Midnight (AMOLED gold accent) --- */
+/* --- Theme: Midnight (AMOLED logo accent) --- */
 [data-theme="midnight"] {
-  --surface-base: #070709;
-  --surface-elevated: #14141a;
-  --surface-sunken: #000000;
-  --surface-overlay: rgba(7, 7, 9, 0.90);
-  --surface-container: #16161d;
-  --surface-container-low: #0e0e13;
-  --surface-container-high: #1c1c24;
-  --surface-container-highest: #24242e;
-  --surface-variant: #18181f;
-  --surface-bright: #2a2a36;
-  --surface-dim: #000000;
-  --surface-scrim: rgba(7, 7, 9, 0.85);
+  --surface-base: #010713;
+  --surface-elevated: #07162c;
+  --surface-sunken: #00040c;
+  --surface-overlay: rgba(1, 7, 19, 0.92);
+  --surface-container: #0a1f3b;
+  --surface-container-low: #051225;
+  --surface-container-high: #0d2b4e;
+  --surface-container-highest: #113c67;
+  --surface-variant: #0b2849;
+  --surface-bright: #164a7e;
+  --surface-dim: #00040c;
+  --surface-scrim: rgba(1, 7, 19, 0.88);
 
-  --text-primary: #e9e7e2;
-  --text-secondary: #a19c91;
-  --text-tertiary: #706d66;
-  --text-inverse: #0b0b0f;
+  --text-primary: #ffffff;
+  --text-secondary: #e6f3ff;
+  --text-tertiary: #c7dcf4;
+  --text-inverse: #010713;
   --text-media: #f5f4f1;
 
-  --accent-default: #e6b033;
-  --accent-hover: #eabc53;
-  --accent-active: #daa11b;
-  --accent-subtle: rgba(230, 176, 51, 0.10);
-  --accent-muted: rgba(230, 176, 51, 0.20);
-  --accent-primary: #e6b033;
-  --accent-secondary: #2eb88a;
-  --accent-tertiary: #da4e4e;
+  --accent-default: #2fd6dc;
+  --accent-hover: #66e7ff;
+  --accent-active: #1d4dca;
+  --accent-subtle: rgba(47, 214, 220, 0.10);
+  --accent-muted: rgba(51, 104, 233, 0.22);
+  --accent-primary: #3368e9;
+  --accent-secondary: #2fd6dc;
+  --accent-tertiary: #d8bd68;
 
-  --semantic-success: #2eb88a;
-  --semantic-warning: #f48c25;
+  --semantic-success: #26d4b9;
+  --semantic-warning: #d8bd68;
   --semantic-destructive: #da4e4e;
-  --semantic-info: #3ca7dd;
+  --semantic-info: #3368e9;
   --feedback-success: var(--semantic-success);
   --feedback-warning: var(--semantic-warning);
   --feedback-error: var(--semantic-destructive);
 
-  --border-default: #22222a;
-  --border-strong: #393946;
-  --border-subtle: #121216;
-  --border-focus: #e6b033;
-  --outline-variant: #393946;
+  --border-default: #0f3155;
+  --border-strong: #1b5a8d;
+  --border-subtle: #07162c;
+  --border-focus: #2fd6dc;
+  --outline-variant: #1b5a8d;
 
   --glass-blur: 20px;
   --glass-saturation: 120%;
   --glass-border-opacity: 0.08;
 
-  --button-primary-from: #e6b033;
-  --button-primary-to: #daa11b;
-  --button-primary-foreground: #0b0b0f;
+  --button-primary-from: #2fd6dc;
+  --button-primary-to: #3368e9;
+  --button-primary-foreground: #010713;
 
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 16px 32px rgba(0, 0, 0, 0.36);
@@ -330,8 +330,8 @@
   --radius-full: var(--radius-full);
 
   /* Font families */
-  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: var(--font-manrope), var(--font-sans);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
@@ -514,6 +514,97 @@ body[data-chrome="marketing"] {
   opacity: 0.6;
 }
 
+.publish-state-toggle {
+  display: inline-flex;
+  min-height: var(--touch-target-min);
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 18%, transparent);
+  background: var(--surface-container-low);
+  color: var(--text-secondary);
+  padding: 0.25rem 0.85rem 0.25rem 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    border-color var(--duration-fast) var(--easing-default),
+    color var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default),
+    transform var(--duration-fast) var(--easing-default);
+}
+
+.publish-state-toggle:hover:not(:disabled) {
+  background: var(--surface-container-high);
+  color: var(--text-primary);
+}
+
+.publish-state-toggle:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 3px color-mix(in srgb, var(--accent-primary) 26%, transparent);
+}
+
+.publish-state-toggle:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.publish-state-toggle:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.publish-state-toggle[data-state="published"] {
+  border-color: color-mix(in srgb, var(--feedback-success) 28%, transparent);
+  background: color-mix(in srgb, var(--feedback-success) 14%, var(--surface-container-low));
+  color: var(--feedback-success);
+}
+
+.publish-state-toggle[data-state="published"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--feedback-success) 20%, var(--surface-container-low));
+}
+
+.publish-state-toggle__track {
+  position: relative;
+  display: inline-flex;
+  width: 3rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: var(--radius-full);
+  background: var(--surface-container-highest);
+  padding: 0.25rem;
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default);
+}
+
+.publish-state-toggle[data-state="published"] .publish-state-toggle__track {
+  background: var(--feedback-success);
+}
+
+.publish-state-toggle__thumb {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--easing-bounce);
+}
+
+.publish-state-toggle[data-state="published"] .publish-state-toggle__thumb {
+  transform: translateX(1rem);
+}
+
+.publish-state-toggle__label {
+  min-width: 5.9rem;
+  text-align: left;
+}
+
 .segmented-control-button {
   display: inline-flex;
   align-items: center;
@@ -688,36 +779,70 @@ body[data-chrome="marketing"] {
      default top padding when this section is the first child. */
   margin-top: calc(var(--navbar-height) * -1);
   padding-top: var(--navbar-height);
+  --landing-hero-image-focus: 68%;
 }
 
 .landing-hero__image {
-  object-position: 60% center;
+  object-position: var(--landing-hero-image-focus) center;
   /* Gentle cinematic settle on page load. Pure CSS. Auto-disabled
      by the global prefers-reduced-motion rule above. */
   animation: landing-hero-image-reveal 900ms var(--easing-out) both;
   will-change: opacity, transform;
-  transform-origin: 60% center;
+  transform-origin: var(--landing-hero-image-focus) center;
 }
 
 .landing-hero__scrim {
   position: absolute;
   inset: 0;
-  /* Theme-aware scrim — fades the left-to-center region toward the
-     theme's surface-base so the text block always hits AA contrast. */
+  /* Theme-aware scrim — prioritizes the offer without flattening the
+     photography into a generic background wash. */
   background:
     linear-gradient(
-      105deg,
-      color-mix(in srgb, var(--surface-base) 72%, transparent) 0%,
-      color-mix(in srgb, var(--surface-base) 58%, transparent) 28%,
-      color-mix(in srgb, var(--surface-base) 20%, transparent) 58%,
-      transparent 90%
+      100deg,
+      color-mix(in srgb, var(--surface-base) 84%, transparent) 0%,
+      color-mix(in srgb, var(--surface-base) 74%, transparent) 34%,
+      color-mix(in srgb, var(--surface-base) 28%, transparent) 62%,
+      transparent 86%
     ),
     linear-gradient(
       180deg,
-      transparent 58%,
-      color-mix(in srgb, var(--surface-base) 30%, transparent) 100%
+      color-mix(in srgb, var(--surface-base) 24%, transparent) 0%,
+      transparent 34%,
+      transparent 62%,
+      color-mix(in srgb, var(--surface-base) 36%, transparent) 100%
     );
   pointer-events: none;
+}
+
+.landing-hero__scrim::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--navbar-height) * -1) 38% -12% -8%;
+  background:
+    radial-gradient(
+      ellipse at 24% 50%,
+      color-mix(in srgb, var(--surface-overlay) 94%, transparent) 0%,
+      color-mix(in srgb, var(--surface-overlay) 76%, transparent) 44%,
+      color-mix(in srgb, var(--surface-base) 36%, transparent) 68%,
+      transparent 100%
+    );
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.45)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.45)) saturate(var(--glass-saturation));
+  mask-image: linear-gradient(90deg, black 0%, black 72%, transparent 100%);
+}
+
+.landing-hero__scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse at var(--landing-hero-image-focus) 52%,
+      transparent 0%,
+      transparent 34%,
+      color-mix(in srgb, var(--surface-sunken) 14%, transparent) 74%,
+      color-mix(in srgb, var(--surface-sunken) 28%, transparent) 100%
+    );
 }
 
 .landing-hero__top-vignette {
@@ -725,6 +850,27 @@ body[data-chrome="marketing"] {
      navbar now provides its own glass backdrop via .landing-navbar-overlay,
      so an additional vignette would double up. */
   display: none;
+}
+
+.landing-hero__text {
+  position: relative;
+  isolation: isolate;
+}
+
+.landing-hero__text::before {
+  content: "";
+  position: absolute;
+  inset: -2rem -2.25rem -2.1rem -2rem;
+  z-index: -1;
+  border-radius: var(--radius-2xl);
+  background:
+    radial-gradient(
+      ellipse at 18% 52%,
+      color-mix(in srgb, var(--surface-overlay) 78%, transparent) 0%,
+      color-mix(in srgb, var(--surface-overlay) 52%, transparent) 52%,
+      transparent 78%
+    );
+  filter: blur(calc(var(--glass-blur) * 0.9));
 }
 
 .landing-hero__eyebrow {
@@ -735,11 +881,13 @@ body[data-chrome="marketing"] {
 .landing-hero__headline {
   opacity: 0;
   animation: landing-fade-up 800ms var(--easing-out) 240ms forwards;
+  text-wrap: balance;
 }
 
 .landing-hero__subhead {
   opacity: 0;
   animation: landing-fade-up 700ms var(--easing-out) 420ms forwards;
+  text-wrap: pretty;
 }
 
 .landing-hero__ctas {
@@ -747,11 +895,61 @@ body[data-chrome="marketing"] {
   animation: landing-fade-up 700ms var(--easing-out) 560ms forwards;
 }
 
+.landing-hero__secondary {
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--surface-overlay) 48%, transparent);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.35)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.35)) saturate(var(--glass-saturation));
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 16%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+
 .landing-hero__scroll-cue {
   opacity: 0;
   animation:
     landing-scroll-cue-reveal 700ms var(--easing-out) 900ms forwards,
     landing-scroll-cue-float 2800ms var(--easing-default) 1600ms infinite;
+}
+
+@media (max-width: 767px) {
+  .landing-hero {
+    --landing-hero-image-focus: 72%;
+  }
+
+  .landing-hero__scrim {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-base) 76%, transparent) 0%,
+        color-mix(in srgb, var(--surface-base) 72%, transparent) 48%,
+        color-mix(in srgb, var(--surface-base) 38%, transparent) 100%
+      ),
+      linear-gradient(
+        100deg,
+        color-mix(in srgb, var(--surface-base) 78%, transparent) 0%,
+        color-mix(in srgb, var(--surface-base) 48%, transparent) 58%,
+        transparent 100%
+      );
+  }
+
+  .landing-hero__scrim::before {
+    display: none;
+  }
+
+  .landing-hero__scrim::after {
+    background:
+      radial-gradient(
+        ellipse at var(--landing-hero-image-focus) 58%,
+        transparent 0%,
+        transparent 36%,
+        color-mix(in srgb, var(--surface-sunken) 10%, transparent) 78%,
+        color-mix(in srgb, var(--surface-sunken) 20%, transparent) 100%
+      );
+  }
+
+  .landing-hero__text::before {
+    inset: -1.25rem -1rem -1.35rem;
+  }
 }
 
 @keyframes landing-hero-image-reveal {
@@ -980,31 +1178,80 @@ body[data-chrome="marketing"] {
   overflow: hidden;
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-xl);
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 4 / 5;
+  min-height: calc(var(--navbar-height) * 7);
   isolation: isolate;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .landing-gallery-photo {
     aspect-ratio: 21 / 10;
+    min-height: auto;
   }
 }
 
 .landing-gallery-photo__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    transparent 55%,
-    color-mix(in srgb, var(--surface-base) 28%, transparent) 100%
-  );
+  background:
+    linear-gradient(
+      104deg,
+      color-mix(in srgb, var(--surface-base) 90%, transparent) 0%,
+      color-mix(in srgb, var(--surface-base) 76%, transparent) 30%,
+      color-mix(in srgb, var(--surface-base) 28%, transparent) 58%,
+      transparent 86%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-base) 54%, transparent) 0%,
+      transparent 48%,
+      color-mix(in srgb, var(--surface-base) 22%, transparent) 100%
+    );
   pointer-events: none;
+}
+
+.landing-gallery-photo__scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse at 18% 24%,
+      color-mix(in srgb, var(--surface-overlay) 82%, transparent) 0%,
+      color-mix(in srgb, var(--surface-overlay) 48%, transparent) 42%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse at 74% 78%,
+      transparent 0%,
+      transparent 42%,
+      color-mix(in srgb, var(--surface-sunken) 18%, transparent) 100%
+    );
+}
+
+.landing-gallery-copy {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: clamp(var(--touch-target-min), 5vw, var(--navbar-height));
+  z-index: 1;
+}
+
+.landing-gallery-copy h2,
+.landing-gallery-copy p {
+  text-wrap: balance;
+}
+
+.landing-gallery-copy p:last-child {
+  max-width: 32ch;
+  text-wrap: pretty;
 }
 
 .landing-gallery-chip {
   position: absolute;
   bottom: 1.5rem;
   right: 1.5rem;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;

@@ -22,31 +22,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Asset } from "@/lib/api/assets";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 
 interface Props {
   left: Asset;
   right: Asset;
   onExit: () => void;
-}
-
-function largeUrl(a: Asset, token: string | null): string {
-  // Pick the largest viewable variant. `thumbnail_urls` values are bare
-  // storage keys (e.g. `derivatives/<id>/display_webp.webp`); they need
-  // the `/storage/` prefix + API_BASE host + JWT token. The previous
-  // implementation only added a token to URLs that already contained
-  // `/storage/`, so bare keys went straight to <img src> and resolved
-  // as relative URLs on the Next.js host (404).
-  const raw =
-    a.thumbnail_urls?.display_webp ||
-    a.thumbnail_urls?.thumb_lg_webp ||
-    a.thumbnail_urls?.thumb_lg ||
-    a.thumbnail_urls?.lg ||
-    a.thumbnail_urls?.cover_1920 ||
-    a.download_url ||
-    Object.values(a.thumbnail_urls || {})[0] ||
-    "";
-  return getStorageBackedUrl(raw, token);
 }
 
 export function CompareMode({ left, right, onExit }: Props) {
@@ -78,52 +60,65 @@ export function CompareMode({ left, right, onExit }: Props) {
   }, [onPointerMove, onPointerUp]);
 
   const token = getStoredAccessToken();
-  const leftUrl = largeUrl(left, token);
-  const rightUrl = largeUrl(right, token);
+  const leftMedia = useDecryptedAssetUrl(left, LIGHTBOX_VARIANTS, token);
+  const rightMedia = useDecryptedAssetUrl(right, LIGHTBOX_VARIANTS, token);
+  const loading = leftMedia.loading || rightMedia.loading;
+  const showCompareImages = Boolean(leftMedia.src && rightMedia.src);
+  const unavailable = leftMedia.error || rightMedia.error || "Preview unavailable";
 
   return (
     <div
       ref={containerRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black select-none"
     >
-      {/* Left image (base layer) */}
-      <img
-        src={leftUrl}
-        alt={left.filename}
-        className="absolute inset-0 h-full w-full object-contain"
-        draggable={false}
-      />
-      {/* Right image, clipped from the divider to the right edge */}
-      <img
-        src={rightUrl}
-        alt={right.filename}
-        className="absolute inset-0 h-full w-full object-contain"
-        style={{ clipPath: `inset(0 0 0 ${dividerPct}%)` }}
-        draggable={false}
-      />
+      {loading ? (
+        <div className="text-sm text-white/60">Decrypting photos...</div>
+      ) : showCompareImages ? (
+        <>
+          {/* Left image (base layer) */}
+          <img
+            src={leftMedia.src}
+            alt={left.filename}
+            className="absolute inset-0 h-full w-full object-contain"
+            draggable={false}
+          />
+          {/* Right image, clipped from the divider to the right edge */}
+          <img
+            src={rightMedia.src}
+            alt={right.filename}
+            className="absolute inset-0 h-full w-full object-contain"
+            style={{ clipPath: `inset(0 0 0 ${dividerPct}%)` }}
+            draggable={false}
+          />
+        </>
+      ) : (
+        <div className="text-sm text-white/60">{unavailable}</div>
+      )}
 
       {/* Draggable divider — absolute line with a circular grab handle */}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-valuenow={Math.round(dividerPct)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        tabIndex={0}
-        className="absolute top-0 bottom-0 w-0.5 bg-white/80 cursor-ew-resize z-10"
-        style={{ left: `${dividerPct}%` }}
-        onPointerDown={() => {
-          dragging.current = true;
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") setDividerPct((p) => Math.max(0, p - 2));
-          else if (e.key === "ArrowRight") setDividerPct((p) => Math.min(100, p + 2));
-        }}
-      >
-        <div className="absolute top-1/2 left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-black text-xs font-bold">
-          ⇔
+      {showCompareImages && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-valuenow={Math.round(dividerPct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          tabIndex={0}
+          className="absolute top-0 bottom-0 w-0.5 bg-white/80 cursor-ew-resize z-10"
+          style={{ left: `${dividerPct}%` }}
+          onPointerDown={() => {
+            dragging.current = true;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") setDividerPct((p) => Math.max(0, p - 2));
+            else if (e.key === "ArrowRight") setDividerPct((p) => Math.min(100, p + 2));
+          }}
+        >
+          <div className="absolute top-1/2 left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-black text-xs font-bold">
+            ⇔
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filename tags */}
       <div className="absolute top-4 left-4 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs text-white/90">

@@ -1,6 +1,8 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+const secureDevOrigin = process.env.PLAYWRIGHT_TREAT_INSECURE_ORIGIN_AS_SECURE;
+
 module.exports = defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -11,6 +13,9 @@ module.exports = defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8229',
     trace: 'on-first-retry',
+    ...(secureDevOrigin
+      ? { launchOptions: { args: [`--unsafely-treat-insecure-origin-as-secure=${secureDevOrigin}`] } }
+      : {}),
   },
   projects: [
     {

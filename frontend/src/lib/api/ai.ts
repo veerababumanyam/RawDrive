@@ -1,6 +1,7 @@
 import { authFetch } from "@/lib/api/authFetch";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
 // ---- Types ----
 
@@ -246,7 +247,7 @@ export interface PublicPersonPhotos {
 }
 
 export async function listPublicPeople(slug: string): Promise<PublicPersonSummary[]> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/people`, {
+  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/people`), {
     credentials: "omit",
   });
   if (!res.ok) throw new Error(`List public people failed: ${res.status}`);
@@ -259,7 +260,7 @@ export async function listPublicPersonPhotos(
   personId: string,
 ): Promise<PublicPersonPhotos> {
   const res = await fetch(
-    `${API_BASE}/api/v1/public/galleries/${slug}/people/${personId}/photos`,
+    apiUrl(`/api/v1/public/galleries/${slug}/people/${personId}/photos`),
     { credentials: "omit" },
   );
   if (!res.ok) throw new Error(`List public person photos failed: ${res.status}`);
@@ -297,7 +298,7 @@ export async function searchPublicFaceInGallery(
   // public_gallery_handler.PhotoSearch.
   form.append("image", imageBlob, "search.jpg");
   const res = await fetch(
-    `${API_BASE}/api/v1/public/galleries/${slug}/photo-search`,
+    apiUrl(`/api/v1/public/galleries/${slug}/photo-search`),
     {
       method: "POST",
       // Public endpoint — no auth, no cookies. Mirrors the rest of the
@@ -316,7 +317,7 @@ export async function searchPublicFaceInGallery(
 // ---- Semantic Search ----
 
 export async function searchAssets(token: string, query: string, galleryId?: string, limit?: number): Promise<{ results: SearchResult[]; total: number }> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/search`, {
+  const res = await fetch(apiUrl("/api/v1/ai/search"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ query, gallery_id: galleryId, limit: limit || 20 }),
@@ -328,7 +329,7 @@ export async function searchAssets(token: string, query: string, galleryId?: str
 // ---- Tags ----
 
 export async function getAssetTags(token: string, assetId: string): Promise<{ ai_tags: AITag[]; ai_caption: string; ai_tag_status: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/tags/${assetId}`, {
+  const res = await fetch(apiUrl(`/api/v1/ai/tags/${assetId}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get tags failed: ${res.status}`);
@@ -338,7 +339,7 @@ export async function getAssetTags(token: string, assetId: string): Promise<{ ai
 // ---- Duplicates ----
 
 export async function scanDuplicates(token: string, galleryId?: string): Promise<{ job_id: string; status: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/duplicates/scan`, {
+  const res = await fetch(apiUrl("/api/v1/ai/duplicates/scan"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ gallery_id: galleryId }),
@@ -349,7 +350,7 @@ export async function scanDuplicates(token: string, galleryId?: string): Promise
 
 export async function getDuplicates(token: string, status?: string): Promise<{ groups: DuplicateGroup[]; total: number }> {
   const params = status ? `?status=${status}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/ai/duplicates${params}`, {
+  const res = await fetch(apiUrl(`/api/v1/ai/duplicates${params}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`List duplicates failed: ${res.status}`);
@@ -357,7 +358,7 @@ export async function getDuplicates(token: string, status?: string): Promise<{ g
 }
 
 export async function getDuplicateGroup(token: string, groupId: string): Promise<DuplicateGroup> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/duplicates/${groupId}`, {
+  const res = await fetch(apiUrl(`/api/v1/ai/duplicates/${groupId}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get duplicate group failed: ${res.status}`);
@@ -367,7 +368,7 @@ export async function getDuplicateGroup(token: string, groupId: string): Promise
 // ---- BYOK Config ----
 
 export async function getAIConfig(token: string): Promise<AIConfig> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/config`, {
+  const res = await fetch(apiUrl("/api/v1/ai/config"), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get AI config failed: ${res.status}`);
@@ -375,7 +376,7 @@ export async function getAIConfig(token: string): Promise<AIConfig> {
 }
 
 export async function saveAIConfig(token: string, apiKey: string, model?: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/config`, {
+  const res = await fetch(apiUrl("/api/v1/ai/config"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ api_key: apiKey, model_preference: model }),
@@ -384,7 +385,7 @@ export async function saveAIConfig(token: string, apiKey: string, model?: string
 }
 
 export async function validateAIKey(token: string): Promise<{ valid: boolean; error?: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/config/validate`, {
+  const res = await fetch(apiUrl("/api/v1/ai/config/validate"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -395,7 +396,7 @@ export async function validateAIKey(token: string): Promise<{ valid: boolean; er
 // ---- Spend ----
 
 export async function getSpend(token: string): Promise<SpendSummary> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/spend`, {
+  const res = await fetch(apiUrl("/api/v1/ai/spend"), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get spend failed: ${res.status}`);
@@ -403,7 +404,7 @@ export async function getSpend(token: string): Promise<SpendSummary> {
 }
 
 export async function getCredits(token: string): Promise<CreditSummary> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/credits`, {
+  const res = await fetch(apiUrl("/api/v1/ai/credits"), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get credits failed: ${res.status}`);
@@ -411,7 +412,7 @@ export async function getCredits(token: string): Promise<CreditSummary> {
 }
 
 export async function setSpendCap(token: string, capPaisa: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/spend/cap`, {
+  const res = await fetch(apiUrl("/api/v1/ai/spend/cap"), {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ monthly_cap_paisa: capPaisa }),
@@ -422,7 +423,7 @@ export async function setSpendCap(token: string, capPaisa: number): Promise<void
 // ---- Jobs ----
 
 export async function getJob(token: string, jobId: string): Promise<AIJob> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/jobs/${jobId}`, {
+  const res = await fetch(apiUrl(`/api/v1/ai/jobs/${jobId}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get job failed: ${res.status}`);
@@ -443,7 +444,7 @@ export async function triggerCulling(
   galleryId: string,
   topPercent = 70,
 ): Promise<AIJob> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/cull`, {
+  const res = await fetch(apiUrl("/api/v1/ai/cull"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ gallery_id: galleryId, top_percent: topPercent }),
@@ -456,7 +457,7 @@ export async function getCullingSuggestions(
   token: string,
   jobId: string,
 ): Promise<{ suggestions: CullingSuggestion[]; total: number }> {
-  const res = await fetch(`${API_BASE}/api/v1/ai/cull/${jobId}`, {
+  const res = await fetch(apiUrl(`/api/v1/ai/cull/${jobId}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Get culling suggestions failed: ${res.status}`);

@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 import { BrainCircuit, CopyCheck, Search, Sparkles } from "lucide-react";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "AI Intelligence & FaceID | RawDrive",
-  description:
-    "Smart culling, Face recognition, and AI-assisted workflows for professional photographers.",
-};
+export const metadata: Metadata = createPageMetadata("ai");
 
 export default function AIIngelligencePage() {
   return (
     <SolutionShowcasePage
       eyebrow="AI Intelligence"
       title="Cull, search, and recognize faces without losing the editorial feel of the product."
-      description="The live page body is now anchored to the Stitch AI dashboard direction instead of a one-paragraph placeholder."
+      description="Shortlist large wedding and event shoots faster with quality ranking, duplicate detection, semantic search, and face-aware discovery connected to delivery."
       previewSrc="/stitch/solution-ai.png"
-      previewAlt="Stitch AI dashboard preview"
+      previewAlt="RawDrive AI culling and face recognition dashboard preview"
       previewLabel="AI intelligence dashboard"
       primaryCta={{ href: "/register", label: "Try AI workflows" }}
       secondaryCta={{ href: "/solutions/galleries", label: "See gallery delivery" }}
@@ -67,8 +64,9 @@ export default function AIIngelligencePage() {
             "Move approved selections back into galleries, proofing, and client-facing experiences without extra handoff steps.",
         },
       ]}
-      quoteTitle="The Stitch AI page was a real product surface, not just a marketing heading."
-      quoteBody="That same principle now drives this route: it showcases operational AI tooling with a premium visual layer instead of generic AI buzzwords."
+      answer="RawDrive AI Intelligence is best for photographers who need to reduce culling time, find strong frames, group people, and move shortlisted photos into proofing without turning the studio into a generic AI dashboard."
+      quoteTitle="AI should shorten the edit, not replace the photographer."
+      quoteBody="RawDrive keeps AI assistance inside the real studio workflow: import the shoot, surface the best frames, review decisions, and move the work into client-facing delivery."
     />
   );
 }

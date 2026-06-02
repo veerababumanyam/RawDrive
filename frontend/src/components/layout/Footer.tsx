@@ -20,9 +20,17 @@ const companyLinks = [
 ];
 
 const legalLinks = [
+  { href: "/legal", label: "Legal Notice" },
   { href: "/privacy", label: "Privacy Policy" },
   { href: "/terms", label: "Terms of Service" },
   { href: "/refund", label: "Refund Policy" },
+];
+
+const contactLinks = [
+  { href: "mailto:infor@rawdrive.in", label: "infor@rawdrive.in" },
+  { href: "mailto:support@rawdrive.in", label: "support@rawdrive.in" },
+  { href: "mailto:contactus@rawdrive.in", label: "contactus@rawdrive.in" },
+  { href: "tel:+91928112993", label: "contact:+91 928112993 ,+91 9010012299", type: "phone" },
 ];
 
 export function Footer() {
@@ -30,58 +38,49 @@ export function Footer() {
     <footer className="border-t border-border bg-surface-elevated">
       <div className="mx-auto max-w-7xl px-4 py-12 lg:px-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Brand — Swaz Consultants */}
+          {/* Brand */}
           <div className="lg:col-span-2">
-            <a
-              href="https://www.swazconsultants.com"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/"
               className="flex items-center gap-2.5"
+              aria-label="RawDrive home"
             >
               <Image
-                src="/swaz-consultants-logo.jpg"
-                alt="Swaz Consultants Logo"
+                src="/logo/android-chrome-192x192.png"
+                alt="RawDrive Logo"
                 width={36}
                 height={36}
                 className="h-9 w-9 shrink-0 rounded-xl object-cover"
               />
               <div>
                 <div className="text-lg font-bold leading-none text-text-primary">
-                  <span>Swaz </span>
-                  <span className="text-accent">Consultants</span>
+                  RawDrive
                 </div>
-                <div className="mt-0.5 text-xs text-text-tertiary">Pvt. Ltd.</div>
+                <div className="mt-0.5 text-xs text-text-tertiary">Built in India</div>
               </div>
-            </a>
+            </Link>
             <p className="mt-3 max-w-xs text-sm text-text-secondary">
-              We engineer software that powers businesses — from ambitious startups to large enterprises across India and beyond.
+              Studio operations, client galleries, proofing, AI workflows, scheduling, and
+              delivery in one photography-first workspace.
             </p>
             <ul className="mt-4 space-y-1.5 text-xs text-text-tertiary">
-              <li className="flex items-center gap-2">
-                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 21c-4-4-7-7.5-7-11a7 7 0 0 1 14 0c0 3.5-3 7-7 11z" />
-                  <circle cx="12" cy="10" r="2" />
-                </svg>
-                <span>Andhra Pradesh, India</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <path d="m2 7 10 7 10-7" />
-                </svg>
-                <a href="mailto:hello@swazconsultants.com" className="hover:text-accent transition-colors">
-                  hello@swazconsultants.com
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-                <a href="https://www.swazconsultants.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
-                  www.swazconsultants.com
-                </a>
-              </li>
+              {contactLinks.map((link) => (
+                <li key={link.href} className="flex items-center gap-2">
+                  {link.type === "phone" ? (
+                    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.35 1.89.66 2.78a2 2 0 0 1-.45 2.11L8.1 9.9a16 16 0 0 0 6 6l1.29-1.22a2 2 0 0 1 2.11-.45c.89.31 1.82.53 2.78.66A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2" />
+                      <path d="m2 7 10 7 10-7" />
+                    </svg>
+                  )}
+                  <a href={link.href} className="hover:text-accent transition-colors">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
 

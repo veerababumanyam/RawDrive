@@ -45,3 +45,55 @@ func TestF113_KEKRequiredForEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestGoogleOAuthRedirectURLPolicy(t *testing.T) {
+	cases := []struct {
+		name    string
+		url     string
+		appEnv  string
+		wantErr bool
+	}{
+		{
+			name:    "local dev may use localhost http callback",
+			url:     "http://localhost:8080/api/v1/auth/oauth/google/callback",
+			appEnv:  "development",
+			wantErr: false,
+		},
+		{
+			name:    "production rejects localhost callback",
+			url:     "http://localhost:8080/api/v1/auth/oauth/google/callback",
+			appEnv:  "production",
+			wantErr: true,
+		},
+		{
+			name:    "staging rejects plain http callback",
+			url:     "http://api.rawdrive.in/auth/oauth/google/callback",
+			appEnv:  "staging",
+			wantErr: true,
+		},
+		{
+			name:    "production accepts https api callback",
+			url:     "https://api.rawdrive.in/auth/oauth/google/callback",
+			appEnv:  "production",
+			wantErr: false,
+		},
+		{
+			name:    "malformed callback rejected",
+			url:     "not a url",
+			appEnv:  "development",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateGoogleRedirectURLForEnv(tc.url, tc.appEnv)
+			if tc.wantErr && err == nil {
+				t.Fatalf("validateGoogleRedirectURLForEnv(%q, %q) = nil, want error", tc.url, tc.appEnv)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("validateGoogleRedirectURLForEnv(%q, %q) = %v, want nil", tc.url, tc.appEnv, err)
+			}
+		})
+	}
+}

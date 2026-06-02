@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
 import { CheckCircle2, ImageIcon, ShieldCheck, Smartphone } from "lucide-react";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Client Galleries & Portfolios | RawDrive",
-  description: "Deliver stunning, branded galleries directly to your clients with PWAs.",
-};
+export const metadata: Metadata = createPageMetadata("galleries");
 
 export default function ClientGalleriesPage() {
   return (
     <SolutionShowcasePage
       eyebrow="Client Galleries"
       title="Deliver galleries that feel handcrafted, branded, and ready for client approval."
-      description="This body now uses the original Stitch gallery-management direction, while keeping the application navbar and footer untouched."
+      description="Give every wedding, event, or portrait client a polished gallery link with proofing, expiry, download control, and studio branding built in."
       previewSrc="/stitch/solution-galleries.png"
-      previewAlt="Stitch gallery management preview"
+      previewAlt="RawDrive gallery management dashboard preview"
       previewLabel="Gallery management dashboard"
       primaryCta={{ href: "/register", label: "Start free trial" }}
       secondaryCta={{ href: "/pricing", label: "See pricing" }}
@@ -66,8 +64,9 @@ export default function ClientGalleriesPage() {
             "Turn favorites and approvals into actionable next steps for editing, invoicing, or final export.",
         },
       ]}
-      quoteTitle="The original Stitch screen was built around a gallery-first dashboard."
-      quoteBody="This page now reflects that same direction: visual presentation first, operational control second, and none of the old blank-section filler."
+      answer="RawDrive client galleries are best for studios that need premium photo delivery, client selections, controlled downloads, and mobile-first proofing without sending clients to generic cloud folders."
+      quoteTitle="Gallery delivery should feel premium before it feels technical."
+      quoteBody="RawDrive keeps visual presentation, proofing, access rules, and follow-up work together so client delivery becomes part of the studio workflow instead of a separate handoff."
     />
   );
 }

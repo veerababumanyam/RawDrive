@@ -6,6 +6,7 @@ import {
   clearAuthTokens,
   getStoredAccessTokenClaims,
   getStoredWorkspaceId,
+  refreshAuthSessionResult,
   refreshAuthSession,
   logoutAuthSession,
   isAndroidWebView,
@@ -281,6 +282,43 @@ describe("refreshAuthSession", () => {
       method: "POST",
       credentials: "include",
     });
+  });
+
+  it("returns a structured no_session reason on 204", async () => {
+    persistAuthTokens("stale");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await refreshAuthSessionResult(apiBase);
+
+    expect(result).toEqual({ ok: false, reason: "no_session" });
+    expect(getStoredAccessToken()).toBe("");
+  });
+
+  it("returns a structured expired reason on 401", async () => {
+    persistAuthTokens("stale");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await refreshAuthSessionResult(apiBase);
+
+    expect(result).toEqual({ ok: false, reason: "expired" });
+    expect(getStoredAccessToken()).toBe("");
+  });
+
+  it("returns a structured network_error reason when fetch rejects", async () => {
+    persistAuthTokens("stale");
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await refreshAuthSessionResult(apiBase);
+
+    expect(result).toEqual({ ok: false, reason: "network_error" });
+    expect(getStoredAccessToken()).toBe("");
   });
 
   it("returns '' and clears the cache when response.ok but no access_token", async () => {

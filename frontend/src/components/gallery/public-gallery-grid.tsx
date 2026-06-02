@@ -24,10 +24,13 @@
  * real; nothing else about the gallery shell changes.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
-import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { appendGalleryKeyFragment, readGalleryKeyFromHash } from "@/lib/media-encryption/media-crypto";
+import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark, ZoomIn, ZoomOut, CheckCircle, Download, Expand, Compress, Star, Share, EllipsisVertical } from "@/components/icons";
 import {
@@ -64,6 +67,134 @@ const GUEST_SESSION_STORAGE_KEY = "rawdrive-guest-session-id";
 // the window to include it.
 const INITIAL_GRID_RENDER_COUNT = 60;
 const GRID_RENDER_BATCH = 60;
+
+function PublicAssetTileImage({ asset, className }: { asset: PublicAsset; className?: string }) {
+  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS);
+  if (media.loading) {
+    return <div className="aspect-[4/3] w-full animate-pulse bg-surface-sunken" />;
+  }
+  if (media.src) {
+    return <img src={media.src} alt={asset.filename} loading="lazy" decoding="async" className={className} />;
+  }
+  return (
+    <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
+      {media.error || "Image unavailable"}
+    </div>
+  );
+}
+
+function PublicLightboxImage({
+  photo,
+  zoom,
+  watermarkOverlay,
+}: {
+  photo: PublicAsset;
+  zoom: number;
+  watermarkOverlay: { text: string; opacity: number; position: string } | null;
+}) {
+  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS);
+  if (media.loading) {
+    return <p className="text-sm text-white/40">Decrypting photo...</p>;
+  }
+  if (!media.src) {
+    return <p className="text-sm text-white/40">{media.error || "Image unavailable"}</p>;
+  }
+  return (
+    <div className="relative h-full w-full">
+      <img
+        src={media.src}
+        alt={photo.filename}
+        className="h-full w-full object-contain transition-transform duration-200"
+        style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+        draggable={false}
+      />
+      {watermarkOverlay && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+        >
+          <WatermarkOverlay
+            text={watermarkOverlay.text}
+            opacity={watermarkOverlay.opacity}
+            position={watermarkOverlay.position}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PublicFilmstripThumb({
+  asset,
+  active,
+  onClick,
+}: {
+  asset: PublicAsset;
+  active: boolean;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const [useDisplayFallback, setUseDisplayFallback] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  const variants = useDisplayFallback ? LIGHTBOX_VARIANTS : FILMSTRIP_VARIANTS;
+  const media = useDecryptedAssetUrl(asset, variants);
+
+  const handleImageError = () => {
+    if (!useDisplayFallback) {
+      setImageFailed(false);
+      setUseDisplayFallback(true);
+      return;
+    }
+    setImageFailed(true);
+  };
+
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+        active ? "border-white scale-105 shadow-lg" : "border-white/20 opacity-50 hover:opacity-100"
+      }`}
+    >
+      {media.loading ? (
+        <div className="h-full w-full animate-pulse bg-white/5" />
+      ) : media.src && !imageFailed ? (
+        <img
+          src={media.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          draggable={false}
+          onError={handleImageError}
+        />
+      ) : (
+        <div className="h-full w-full bg-white/5" />
+      )}
+    </button>
+  );
+}
+
+async function downloadPublicAsset(slug: string, asset: PublicAsset): Promise<void> {
+  const url = `${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`;
+  if (!assetUsesClientMediaEncryption(asset)) {
+    window.open(url, "_blank");
+    return;
+  }
+
+  const manifest = originalManifest(asset);
+  if (!manifest) return;
+  const res = await fetch(url);
+  if (!res.ok) return;
+  const plaintext = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
+  const objectUrl = URL.createObjectURL(plaintext);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = asset.filename;
+  a.click();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
 
 function getOrCreateGuestSessionId(): string {
   if (typeof window === "undefined") return "";
@@ -208,7 +339,10 @@ function useGalleryFavorites(slug: string) {
 // undefined.
 function buildAssetShareUrl(slug: string, assetId: string): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/g/${slug}/photo/${assetId}`;
+  const url = `${origin}/g/${slug}/photo/${assetId}`;
+  if (typeof window === "undefined") return url;
+  const key = readGalleryKeyFromHash(window.location.hash);
+  return key ? appendGalleryKeyFragment(url, key) : url;
 }
 
 // Web Share API + clipboard fallback. Returns the verdict so the caller
@@ -695,22 +829,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
           style={designGridContainerStyle(design?.grid)}
           aria-label={`Grid view for gallery ${slug}`}
         >
-          {renderedAssets.map((asset) => {
-            // Prefer the mandatory WebP derivatives for public display,
-            // but keep legacy JPEG keys as fallbacks for older rows.
-            const thumbUrl = getStorageBackedUrl(
-              asset.thumbnail_urls?.thumb_md_webp ||
-              asset.thumbnail_urls?.thumb_lg_webp ||
-              asset.thumbnail_urls?.thumb_sm_webp ||
-              asset.thumbnail_urls?.display_webp ||
-              asset.thumbnail_urls?.thumb_lg ||
-              asset.thumbnail_urls?.thumb_md ||
-              asset.thumbnail_urls?.thumb_sm ||
-              asset.thumbnail_urls?.lg ||
-              asset.thumbnail_urls?.md ||
-              asset.thumbnail_urls?.sm,
-            );
-            return (
+          {renderedAssets.map((asset) => (
               <div
                 key={asset.id}
                 id={`asset-${asset.id}`}
@@ -850,7 +969,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                               role="menuitem"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.open(`${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`, "_blank");
+                                void downloadPublicAsset(slug, asset);
                                 setTileMenuOpenId(null);
                               }}
                               className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
@@ -864,45 +983,23 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     )}
                   </div>
                 )}
-                {thumbUrl ? (
-                  <>
-                    <img
-                      src={thumbUrl}
-                      alt={asset.filename}
-                      width={asset.width || undefined}
-                      height={asset.height || undefined}
-                      loading="lazy"
-                      decoding="async"
-                      className={
-                        design?.grid?.layout === "grid"
-                          ? "absolute inset-0 h-full w-full object-cover"
-                          : "w-full h-auto object-cover"
-                      }
+                <div className={design?.grid?.layout === "grid" ? "absolute inset-0" : ""}>
+                  <PublicAssetTileImage
+                    asset={asset}
+                    className={
+                      design?.grid?.layout === "grid"
+                        ? "absolute inset-0 h-full w-full object-cover"
+                        : "h-auto w-full object-cover"
+                    }
+                  />
+                  {watermarkOverlay && (
+                    <WatermarkOverlay
+                      text={watermarkOverlay.text}
+                      opacity={watermarkOverlay.opacity}
+                      position={watermarkOverlay.position}
                     />
-                    {/* Watermark overlay — purely client-side render
-                        of gallery.watermark_config.text on top of every
-                        tile when enabled. pointer-events:none keeps
-                        tile click handlers (lightbox, proofing-select)
-                        working. The text-shadow doubles the readability
-                        on both bright and dark photos without needing
-                        a full backdrop. */}
-                    {watermarkOverlay && (
-                      <WatermarkOverlay
-                        text={watermarkOverlay.text}
-                        opacity={watermarkOverlay.opacity}
-                        position={watermarkOverlay.position}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <div
-                    className="w-full aspect-[4/3] bg-surface-sunken flex items-center justify-center"
-                    role="img"
-                    aria-label={asset.filename}
-                  >
-                    <span className="text-xs text-text-tertiary">Processing...</span>
-                  </div>
-                )}
+                  )}
+                </div>
                 {/* Studio-opt-in filename caption. Renders only when the
                     design config explicitly sets showInfo=true so existing
                     galleries that never enabled this don't suddenly show
@@ -913,8 +1010,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                   </p>
                 )}
               </div>
-            );
-          })}
+          ))}
       </div>
 
       {/* Incremental-render sentinel. Sits below the rendered grid window;
@@ -1035,30 +1131,9 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
       {/* Client-facing lightbox */}
       {lightboxIdx !== null && visibleAssets[lightboxIdx] && (() => {
         const photo = visibleAssets[lightboxIdx];
-        // Public lightbox renders the image via plain <img src> — public
-        // share-link visitors have no JWT, so the URL MUST resolve to a
-        // path the storage layer serves without auth.
-        //
-        // Migration 104 (M41) split storage into two prefixes:
-        //   /storage/thumbnails/<id>/thumb_*_webp.webp  — PUBLIC
-        //   /storage/derivatives/<id>/display_webp.webp — AUTH-REQUIRED
-        //
-        // The previous order (display_webp first) 401'd the image for
-        // every unauthenticated viewer — the lightbox opened on a black
-        // background with just the alt-text filename visible. Prefer the
-        // largest public thumb variant (thumb_lg_webp, ~1200px) which is
-        // still high enough resolution for a desktop lightbox. Keep
-        // display_webp in the fallback chain for assets that haven't
-        // been reprocessed under the new path (legacy/transient state).
-        const fullUrl = getStorageBackedUrl(
-          photo.thumbnail_urls?.thumb_lg_webp ||
-          photo.thumbnail_urls?.thumb_md_webp ||
-          photo.thumbnail_urls?.thumb_lg ||
-          photo.thumbnail_urls?.lg ||
-          photo.thumbnail_urls?.display_webp ||
-          Object.values(photo.thumbnail_urls || {})[0] ||
-          "",
-        );
+        // Public lightbox display also goes through the WebP-only media
+        // picker. If a gallery is E2EE-shared, the URL hash carries the
+        // client key and the hook decrypts the WebP blob in the browser.
         return (
           <div
             ref={lightboxRef}
@@ -1099,13 +1174,7 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                     size="sm"
                     label="Download original"
                     onClick={() => {
-                      // The public download endpoint sets
-                      // Content-Disposition: attachment, so navigating
-                      // to it triggers a download instead of replacing
-                      // the page. window.open with _self keeps the
-                      // lightbox state intact across the brief redirect.
-                      const url = `${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`;
-                      window.open(url, "_self");
+                      void downloadPublicAsset(slug, photo);
                     }}
                   >
                     <Download />
@@ -1155,35 +1224,11 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
                 </GlassIconButton>
               )}
 
-              {fullUrl ? (
-                // The watermark overlay is wrapped in a relative container
-                // so it tracks the <img>'s zoom transform — pointer-events-
-                // none keeps the lightbox's mouse-move (chrome auto-hide)
-                // and click-to-close still working through the overlay.
-                <div className="relative h-full w-full">
-                  <img
-                    src={fullUrl}
-                    alt={photo.filename}
-                    className="h-full w-full object-contain transition-transform duration-200"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
-                    draggable={false}
-                  />
-                  {watermarkOverlay && (
-                    <div
-                      className="pointer-events-none absolute inset-0"
-                      style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
-                    >
-                      <WatermarkOverlay
-                        text={watermarkOverlay.text}
-                        opacity={watermarkOverlay.opacity}
-                        position={watermarkOverlay.position}
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-white/40 text-sm">Image unavailable</p>
-              )}
+              <PublicLightboxImage
+                photo={photo}
+                zoom={zoom}
+                watermarkOverlay={watermarkOverlay}
+              />
 
               {lightboxIdx < visibleAssets.length - 1 && (
                 <GlassIconButton
@@ -1199,52 +1244,19 @@ export function PublicGalleryGrid({ slug, assets, galleryType, maxSelections = 0
 
             {/* Filmstrip — scrollable thumbnail strip for quick navigation, auto-hides in fullscreen */}
             {visibleAssets.length > 1 && (
-              <div className={`absolute bottom-8 left-0 right-0 z-20 flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300 ${
+              <div className={`absolute bottom-4 left-0 right-0 z-20 flex gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300 ${
                 chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
               }`} role="tablist" aria-label="Photo filmstrip">
-                {visibleAssets.map((a, i) => {
-                  const thumb = getStorageBackedUrl(
-                    a.thumbnail_urls?.thumb_sm_webp ||
-                    a.thumbnail_urls?.thumb_md_webp ||
-                    a.thumbnail_urls?.thumb_sm ||
-                    a.thumbnail_urls?.sm ||
-                    a.thumbnail_urls?.thumb_md ||
-                    Object.values(a.thumbnail_urls || {})[0] ||
-                    "",
-                  );
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={i === lightboxIdx}
-                      onClick={(e) => { e.stopPropagation(); goToPhoto(i); }}
-                      className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 transition-all ${
-                        i === lightboxIdx ? "border-white scale-105 shadow-lg" : "border-white/20 opacity-50 hover:opacity-100"
-                      }`}
-                    >
-                      {thumb ? (
-                        <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" draggable={false} />
-                      ) : (
-                        <div className="h-full w-full bg-white/5" />
-                      )}
-                    </button>
-                  );
-                })}
+                {visibleAssets.map((a, i) => (
+                  <PublicFilmstripThumb
+                    key={a.id}
+                    asset={a}
+                    active={i === lightboxIdx}
+                    onClick={(e) => { e.stopPropagation(); goToPhoto(i); }}
+                  />
+                ))}
               </div>
             )}
-
-            {/* Bottom hints */}
-            <div className={`absolute bottom-0 left-0 right-0 z-20 px-4 pb-4 transition-opacity duration-300 ${
-              chromeVisible ? "opacity-100" : "opacity-0"
-            }`}>
-              <div className="flex items-center justify-center gap-3 text-[10px] text-white/20 tracking-wide">
-                <span>← → Navigate</span>
-                <span>+/- Zoom</span>
-                <span>F Fullscreen</span>
-                <span>Esc Close</span>
-              </div>
-            </div>
           </div>
         );
       })()}

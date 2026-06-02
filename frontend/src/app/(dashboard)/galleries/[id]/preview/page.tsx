@@ -73,6 +73,8 @@ function mapAssetToPublic(
     height: a.height,
     blurhash: a.blurhash,
     thumbnail_urls: bakeStorageTokens(a.thumbnail_urls, token),
+    is_encrypted: a.is_encrypted,
+    media_encryption: a.media_encryption,
     sort_order: record.sort_order,
   };
 }
@@ -112,6 +114,7 @@ export default function GalleryPreviewPage({
   const [resolvedCoverThumbnails, setResolvedCoverThumbnails] = useState<
     Record<string, string> | null
   >(null);
+  const [resolvedCoverAsset, setResolvedCoverAsset] = useState<PublicAsset | null>(null);
   const [branding, setBranding] = useState<GalleryBranding | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,17 +190,28 @@ export default function GalleryPreviewPage({
           const fromList = filtered.find((a) => a.id === coverAssetId);
           if (fromList) {
             // Already token-baked in step 2.
-            if (!cancelled) setResolvedCoverThumbnails(fromList.thumbnail_urls);
+            if (!cancelled) {
+              setResolvedCoverAsset(fromList);
+              setResolvedCoverThumbnails(fromList.thumbnail_urls);
+            }
           } else {
             try {
               const coverAsset = await getAsset(token, coverAssetId);
+              const mappedCoverAsset = mapAssetToPublic(
+                { asset: coverAsset, sort_order: -1 },
+                token,
+              );
               if (!cancelled) {
+                setResolvedCoverAsset(mappedCoverAsset);
                 setResolvedCoverThumbnails(
                   bakeStorageTokens(coverAsset.thumbnail_urls, token),
                 );
               }
             } catch {
-              if (!cancelled) setResolvedCoverThumbnails(null);
+              if (!cancelled) {
+                setResolvedCoverAsset(null);
+                setResolvedCoverThumbnails(null);
+              }
             }
           }
         }
@@ -273,6 +287,7 @@ export default function GalleryPreviewPage({
         assets={assets}
         branding={branding}
         design={designConfig}
+        designCoverAsset={resolvedCoverAsset}
         designCoverThumbnails={designCoverThumbnails}
       />
 

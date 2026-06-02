@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 import { CalendarHeart, ImageIcon, Send, Smartphone } from "lucide-react";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Digital Invitations & DVC | RawDrive",
-  description:
-    "Create incredible digital invitations and manage your Digital Visiting Card as a modern creative.",
-};
+export const metadata: Metadata = createPageMetadata("digital-invitations");
 
 export default function DigitalInvitationsPage() {
   return (
     <SolutionShowcasePage
       eyebrow="Digital invitations"
       title="Turn invitations into a polished extension of the same brand experience your gallery clients already trust."
-      description="This route now takes its visual body from the Stitch feature showcase work instead of a plain placeholder block."
+      description="Create mobile-first invitation and event touchpoints that connect guest communication, RSVP context, gallery reveal, and studio branding."
       previewSrc="/stitch/solution-invitations.png"
-      previewAlt="Stitch digital invitations showcase preview"
+      previewAlt="RawDrive digital invitation and event microsite preview"
       previewLabel="Invitation showcase"
       primaryCta={{ href: "/register", label: "Launch invitation flows" }}
       secondaryCta={{ href: "/contact", label: "Request a demo" }}
@@ -67,8 +64,9 @@ export default function DigitalInvitationsPage() {
             "Move from invite to live event to gallery reveal without losing the sense of one coherent brand experience.",
         },
       ]}
-      quoteTitle="The Stitch showcase work already had the right premium tone."
-      quoteBody="This route now leans into that original direction so it feels like part of a premium photography platform instead of a forgotten page."
+      answer="RawDrive digital invitations are best for studios that want premium event microsites, guest communication, RSVP context, and branded touchpoints connected to the rest of the photography delivery workflow."
+      quoteTitle="The first guest touchpoint should feel as polished as the final gallery."
+      quoteBody="RawDrive keeps invitations, event communication, gallery delivery, and studio identity in the same premium product language."
     />
   );
 }

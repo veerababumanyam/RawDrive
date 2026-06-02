@@ -1,45 +1,47 @@
+/* eslint-disable @next/next/no-sync-scripts -- The theme bootstrap must run before hydration,
+   and Next's beforeInteractive wrapper cannot suppress nonce hydration warnings. */
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Inter, Manrope } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  variable: "--font-manrope",
-  display: "swap",
-});
+import {
+  buildSiteJsonLd,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  SITE_LOCALE,
+  SITE_NAME,
+  SITE_URL,
+  SITE_TAGLINE,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: {
-    default: "RawDrive — The Operating System for Photography Businesses in India",
-    template: "%s | RawDrive",
+    default: `${SITE_NAME} - ${SITE_TAGLINE}`,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "RawDrive is the all-in-one platform for Indian photographers — gallery delivery, client proofing, AI culling, CRM, live streaming, and marketplaces.",
-  metadataBase: new URL("https://rawdrive.in"),
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "Photography business software",
+  metadataBase: new URL(SITE_URL),
   openGraph: {
     type: "website",
-    locale: "en_IN",
-    url: "https://rawdrive.in",
-    siteName: "RawDrive",
-    title: "RawDrive — The Operating System for Photography Businesses in India",
-    description:
-      "All-in-one platform for Indian photographers — gallery delivery, client proofing, AI culling, CRM, live streaming, and marketplaces.",
+    locale: SITE_LOCALE,
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} - ${SITE_TAGLINE}`,
+    description: DEFAULT_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
-    title: "RawDrive — The Operating System for Photography Businesses in India",
-    description:
-      "All-in-one platform for Indian photographers — gallery delivery, client proofing, AI culling, CRM, live streaming, and marketplaces.",
+    title: `${SITE_NAME} - ${SITE_TAGLINE}`,
+    description: DEFAULT_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE.url],
   },
   icons: {
     icon: [
@@ -59,15 +61,15 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   // F-098: the per-request CSP nonce set by frontend/src/middleware.ts. Passed
-  // to the theme-init <Script> so it executes under the nonce/strict-dynamic
+  // to the theme-init <script> so it executes under the nonce/strict-dynamic
   // policy that replaces script-src 'unsafe-inline'. undefined in contexts
   // where middleware didn't run (the static next.config.ts header is gone).
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
-      // No hardcoded data-theme attribute on SSR — the inline init
-      // script (rawDriveThemeInitScript) sets it before first paint
+      // No hardcoded data-theme attribute on SSR — the theme-init
+      // bootstrap script sets it before first paint
       // based on localStorage → OS `prefers-color-scheme` → fallback.
       // This ensures every route opens in a theme consistent with the
       // visitor's OS and their in-app choice, with no flash of wrong
@@ -75,36 +77,35 @@ export default async function RootLayout({
       // about the mismatch between the serverless HTML and the client DOM
       // after the init script runs.
       suppressHydrationWarning
-      className={`h-full antialiased ${inter.variable} ${manrope.variable}`}
+      className="h-full antialiased"
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0b1326" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <JsonLd id="rawdrive-site-schema" data={buildSiteJsonLd()} nonce={nonce} />
         {/* Theme init MUST run before React hydrates so data-theme is set
             on <html> before first paint — otherwise the page flashes the
             default theme then snaps to the user's choice.
-            React 19 (Next 16) warns on ANY <script> element rendered as
-            JSX *with a body* (including dangerouslySetInnerHTML):
-            "Encountered a script tag while rendering React component."
-            The warning fires every page render and pollutes DevTools.
             Fix: serve as an external static asset (public/theme-init.js)
-            via next/script with strategy="beforeInteractive". The body
-            is empty so React never has a child to warn about, Next
-            injects the tag into <head> before hydration, and
-            @next/next/no-sync-scripts is satisfied because we're going
-            through Next's script loader rather than a bare <script>.
+            through a plain head <script>. It is intentionally parser-blocking
+            because it must set data-theme before React hydrates and before
+            first paint.
             Cross-route navigation still works because data-theme stays
             on <html> and the layout never unmounts. The constants are
             duplicated between this file (implicitly via theme-init.js)
             and ThemeProvider.tsx — see the sync comment at the top of
-            public/theme-init.js. */}
-        <Script
+            public/theme-init.js.
+            The browser masks nonce attributes from getAttribute(), so React
+            dev hydration can compare the client nonce prop with an empty DOM
+            attribute. Keep the nonce for CSP and suppress that one expected
+            attribute mismatch on this script only. */}
+        <script
           id="rawdrive-theme-init"
           src="/theme-init.js"
-          strategy="beforeInteractive"
           nonce={nonce}
+          suppressHydrationWarning
         />
       </head>
       <body className="flex min-h-full flex-col bg-surface font-sans text-text-primary">

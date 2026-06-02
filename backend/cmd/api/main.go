@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -96,6 +98,63 @@ func (p smtpNotificationEmailProvider) Send(ctx context.Context, req service.Del
 		return nil
 	}
 	return p.sender.Send(ctx, req.EmailTo, req.Title, req.Body, req.ActionURL)
+}
+
+func safeRequestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
+		started := time.Now()
+		next.ServeHTTP(ww, r)
+
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		log.Printf(
+			"\"%s %s://%s%s %s\" from %s - %03d %dB in %s",
+			r.Method,
+			scheme,
+			r.Host,
+			sanitizedRequestURI(r),
+			r.Proto,
+			r.RemoteAddr,
+			ww.Status(),
+			ww.BytesWritten(),
+			time.Since(started),
+		)
+	})
+}
+
+func sanitizedRequestURI(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return ""
+	}
+	query := r.URL.Query()
+	if len(query) == 0 {
+		return r.URL.RequestURI()
+	}
+	changed := false
+	for key := range query {
+		if isSensitiveQueryKey(key) {
+			query.Set(key, "<redacted>")
+			changed = true
+		}
+	}
+	if !changed {
+		return r.URL.RequestURI()
+	}
+	clone := *r.URL
+	clone.RawQuery = query.Encode()
+	return clone.RequestURI()
+}
+
+func isSensitiveQueryKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "access_token", "code", "id_token", "mfa_token", "refresh_token", "state", "token":
+		return true
+	default:
+		return strings.Contains(strings.ToLower(key), "secret")
+	}
 }
 
 // platformSettingsJWTKeyStore adapts *repository.PlatformSettingsRepo to
@@ -322,7 +381,11 @@ func registerStreamingRechargeRoutes(api, public chi.Router, h *streamingrecharg
 // a bearer token: workspace-derivative thumbnails written by the derivative
 // pipeline, keyed as thumbnails/<uuid>/<variant>.webp. Anything else (originals,
 // downloads, ZIPs, BYOS prefixes) requires JWT auth. (F-035 hardening.)
-var publicThumbnailKeyRe = regexp.MustCompile(`^thumbnails/[0-9a-fA-F-]{36}/(thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
+//
+// New uploads write WebP variants with the canonical *_webp names
+// (thumb_sm_webp/thumb_md_webp/thumb_lg_webp). Keep the legacy spellings too
+// so pre-M41 rows that already lived under thumbnails/ continue to render.
+var publicThumbnailKeyRe = regexp.MustCompile(`^thumbnails/[0-9a-fA-F-]{36}/(thumb_sm_webp|thumb_md_webp|thumb_lg_webp|thumb_sm|thumb_md|thumb_lg|display)\.webp$`)
 
 // validateStorageKey rejects storage-proxy keys that attempt path traversal or
 // absolute-path escapes before they ever reach the storage provider. B2/S3 use
@@ -398,6 +461,18 @@ func (s *platformSettingsSMTPReader) Get(ctx context.Context, category, key stri
 		return "", false, nil
 	}
 	return row.Value, true, nil
+}
+
+func platformSettingValue(ctx context.Context, repo *repository.PlatformSettingsRepo, category, key, envName string) string {
+	if repo != nil {
+		row, err := repo.GetByKey(ctx, category, key)
+		if err != nil {
+			log.Printf("platform_settings: failed to read %s.%s: %v", category, key, err)
+		} else if row != nil && strings.TrimSpace(row.Value) != "" {
+			return strings.TrimSpace(row.Value)
+		}
+	}
+	return strings.TrimSpace(os.Getenv(envName))
 }
 
 const (
@@ -794,6 +869,43 @@ func storageSSERequiredForEnv(appEnv string) bool {
 	return kekRequiredForEnv(appEnv)
 }
 
+func validateGoogleRedirectURLForEnv(rawURL, appEnv string) error {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("must be an absolute URL")
+	}
+
+	// Local/test environments may use http://localhost callbacks for dev
+	// OAuth clients. Every other environment carries real user credentials,
+	// so fail closed instead of sending users to Google's redirect_uri_mismatch
+	// page with a leaked localhost callback.
+	if !kekRequiredForEnv(appEnv) {
+		return nil
+	}
+
+	if parsed.Scheme != "https" {
+		return fmt.Errorf("must use https when APP_ENV=%q", appEnv)
+	}
+	if isLoopbackHostname(parsed.Hostname()) {
+		return fmt.Errorf("must not point at localhost or loopback when APP_ENV=%q", appEnv)
+	}
+	return nil
+}
+
+func isLoopbackHostname(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func main() {
 	// Load env vars from .env.cobolt / .env before anything reads os.Getenv.
 	// Process environment always wins; files only fill gaps.
@@ -808,7 +920,7 @@ func main() {
 
 	// Global middleware
 	r.Use(middleware.CORS)
-	r.Use(chimw.Logger)
+	r.Use(safeRequestLogger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(middleware.SecurityHeaders)
@@ -959,14 +1071,17 @@ func main() {
 			"goes to stdout. DO NOT USE IN PRODUCTION.")
 	}
 
-	// OTP service backed by the selected delivery.
-	otpSvc := auth.NewOTPServiceWithDelivery(auth.OTPConfig{
+	authOTPRepo := repository.NewAuthOTPCodeRepo(dbPool)
+
+	// OTP service backed by Postgres so registration codes survive restarts
+	// and work consistently across API instances.
+	otpSvc := auth.NewPersistentOTPServiceWithDelivery(auth.OTPConfig{
 		CodeLength:      6,
 		Expiry:          15 * time.Minute,
 		MaxAttempts:     5,
 		RateLimitMax:    10,
 		RateLimitWindow: 15 * time.Minute,
-	}, otpDelivery)
+	}, otpDelivery, authOTPRepo, "registration")
 
 	// JWT
 	jwtSvc := auth.NewJWTService(auth.JWTConfig{
@@ -986,9 +1101,17 @@ func main() {
 
 	wsLookup := workspace.NewAuthLookup(dbPool)
 	var oauthSvc *auth.OAuthService
-	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
-	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
-	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	googleClientID := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_client_id", "GOOGLE_CLIENT_ID")
+	googleClientSecret := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_client_secret", "GOOGLE_CLIENT_SECRET")
+	googleRedirectURL := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_redirect_url", "GOOGLE_REDIRECT_URL")
+	googleStateKey := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_oauth_state_key", "GOOGLE_OAUTH_STATE_KEY")
+	if err := validateGoogleRedirectURLForEnv(googleRedirectURL, strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); err != nil {
+		log.Printf("Google OAuth disabled: invalid auth.google_redirect_url / GOOGLE_REDIRECT_URL %q: %v", googleRedirectURL, err)
+		googleRedirectURL = ""
+	}
+	if googleStateKey == "" {
+		googleStateKey = googleClientSecret
+	}
 	if googleClientID != "" && googleClientSecret != "" && googleRedirectURL != "" {
 		oauthStore := newOAuthUserStore(userSvc, dbPool)
 		googleProvider := auth.NewGoogleProvider(googleClientID, googleClientSecret, googleRedirectURL)
@@ -996,10 +1119,11 @@ func main() {
 			ClientID:     googleClientID,
 			ClientSecret: googleClientSecret,
 			RedirectURI:  googleRedirectURL,
+			StateKey:     googleStateKey,
 		}, googleProvider, oauthStore)
 		log.Println("Google OAuth configured")
 	} else {
-		log.Println("Google OAuth disabled: missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URL")
+		log.Println("Google OAuth disabled: missing auth.google_client_id / auth.google_client_secret / auth.google_redirect_url (or GOOGLE_* env fallback)")
 	}
 
 	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).
@@ -1187,11 +1311,11 @@ func main() {
 	// Rate limiting happens at two layers: credLimiter (per IP) wraps each
 	// route, and PasswordService enforces per-email limits inside its
 	// RequestReset call.
-	passwordSvc := auth.NewPasswordService(auth.PasswordConfig{
+	passwordSvc := auth.NewPasswordServiceWithOTPStore(auth.PasswordConfig{
 		ResetOTPExpiry:    15 * 60,
 		MaxFailedAttempts: 5,
 		LockoutDuration:   15 * 60,
-	}, newPgPasswordStore(dbPool), pwdResetNotifier)
+	}, newPgPasswordStore(dbPool), pwdResetNotifier, authOTPRepo)
 	pwResetRevoker := newPgRefreshSessionRevokerForReset(dbPool)
 	pwResetHandler := handler.NewAuthPasswordResetHandler(passwordSvc, pwResetRevoker)
 	r.With(credLimiter).Post("/auth/request-password-reset", pwResetHandler.RequestReset)
@@ -1607,6 +1731,8 @@ func main() {
 			StorageAccountingSvc: storageAccountingSvc,
 			LifecycleService:     lifecycleSvc,
 			AssetRepo:            assetRepo,
+			AssetDerivativeRepo:  assetDerivativeRepo,
+			StorageProvider:      storageProvider,
 			// M12
 			GalleryDesignSvc:  service.NewGalleryDesignService(galleryRepo),
 			GalleryRepo:       galleryRepo,
@@ -1690,6 +1816,7 @@ func main() {
 			WithValidation(uploadValidationSvc).
 			WithStorageAccounting(storageAccountingSvc).
 			WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion).
+			WithClientSideEncryptionRequired(true).
 			WithUploadCredit(uploadCreditGate)
 		chunkedHandler.RegisterRoutes(api)
 

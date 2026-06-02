@@ -11,10 +11,11 @@
  * automatically.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Asset } from "@/lib/api/assets";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { FILMSTRIP_VARIANTS, LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 
 interface Props {
   assets: Asset[];
@@ -22,16 +23,62 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
-// Thin wrapper retained for call-site readability. Delegates to
-// getStorageBackedUrl which handles bare keys (e.g. `thumbnails/<id>/
-// thumb_sm_webp.webp`), `/storage/...` paths, and absolute URLs.
-// Previous implementation only added a token when the URL ALREADY
-// contained "/storage/" — bare keys from thumbnail_urls were passed
-// straight to <img src> and resolved as relative URLs against the
-// gallery page (404 on the Next.js host instead of /storage/ on the
-// Go API).
-function appendTokenIfStorage(url: string, token: string | null): string {
-  return getStorageBackedUrl(url, token);
+function FilmstripThumb({
+  asset,
+  active,
+  activeRef,
+  onSelect,
+}: {
+  asset: Asset;
+  active: boolean;
+  activeRef: RefObject<HTMLButtonElement | null> | null;
+  onSelect: (id: string) => void;
+}) {
+  const [useDisplayFallback, setUseDisplayFallback] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  const variants = useDisplayFallback ? LIGHTBOX_VARIANTS : FILMSTRIP_VARIANTS;
+  const media = useDecryptedAssetUrl(asset, variants, getStoredAccessToken());
+
+  const handleImageError = () => {
+    if (!useDisplayFallback) {
+      setImageFailed(false);
+      setUseDisplayFallback(true);
+      return;
+    }
+    setImageFailed(true);
+  };
+
+  return (
+    <button
+      ref={active ? activeRef : null}
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-label={asset.filename}
+      onClick={() => onSelect(asset.id)}
+      className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+        active
+          ? "border-white scale-105 shadow-lg"
+          : "border-white/20 opacity-60 hover:opacity-100"
+      }`}
+    >
+      {media.loading ? (
+        <div className="h-full w-full animate-pulse bg-white/5" />
+      ) : media.src && !imageFailed ? (
+        <img
+          src={media.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          draggable={false}
+          onError={handleImageError}
+        />
+      ) : (
+        <div className="h-full w-full bg-white/5" />
+      )}
+    </button>
+  );
 }
 
 export function Filmstrip({ assets, activeId, onSelect }: Props) {
@@ -56,45 +103,14 @@ export function Filmstrip({ assets, activeId, onSelect }: Props) {
     >
       {assets.map((a) => {
         const active = a.id === activeId;
-        // Filmstrip tile is ~80px wide; thumb_sm_webp (200px source) is
-        // a clean fit. Cascade prefers WebP variants first then falls
-        // back to legacy JPG so legacy assets still render.
-        const rawThumb =
-          a.thumbnail_urls?.thumb_sm_webp ||
-          a.thumbnail_urls?.thumb_md_webp ||
-          a.thumbnail_urls?.thumb_sm ||
-          a.thumbnail_urls?.sm ||
-          a.thumbnail_urls?.thumb_md ||
-          "";
-        const thumbUrl = appendTokenIfStorage(rawThumb, getStoredAccessToken());
         return (
-          <button
+          <FilmstripThumb
             key={a.id}
-            ref={active ? activeRef : null}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            aria-label={a.filename}
-            onClick={() => onSelect(a.id)}
-            className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
-              active
-                ? "border-white scale-105 shadow-lg"
-                : "border-white/20 opacity-60 hover:opacity-100"
-            }`}
-          >
-            {thumbUrl ? (
-              <img
-                src={thumbUrl}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="h-full w-full object-cover"
-                draggable={false}
-              />
-            ) : (
-              <div className="h-full w-full bg-white/5" />
-            )}
-          </button>
+            asset={a}
+            active={active}
+            activeRef={activeRef}
+            onSelect={onSelect}
+          />
         );
       })}
     </div>

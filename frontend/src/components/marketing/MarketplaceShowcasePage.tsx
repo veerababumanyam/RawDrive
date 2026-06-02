@@ -26,6 +26,7 @@ type MarketplaceShowcasePageProps = {
     label: string;
   };
   filters: string[];
+  answer: string;
   cards: MarketplaceCard[];
 };
 
@@ -38,6 +39,7 @@ export function MarketplaceShowcasePage({
   primaryCta,
   secondaryCta,
   filters,
+  answer,
   cards,
 }: MarketplaceShowcasePageProps) {
   return (
@@ -69,7 +71,7 @@ export function MarketplaceShowcasePage({
           <div className="surface-panel flex flex-wrap gap-3 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
               <SlidersHorizontal className="h-4 w-4 text-accent" />
-              Filters inspired by Stitch
+              Search by need, city, and specialty
             </div>
             {filters.map((filter) => (
               <span
@@ -89,6 +91,16 @@ export function MarketplaceShowcasePage({
               <img src={previewSrc} alt={previewAlt} className="h-auto w-full object-cover" />
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="border-y border-border bg-surface-sunken px-4 py-12 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-xs font-bold uppercase text-accent">Marketplace fit</p>
+          <h2 className="mt-3 font-headline text-3xl font-bold text-text-primary">
+            Who is this RawDrive marketplace for?
+          </h2>
+          <p className="mt-4 max-w-3xl leading-8 text-text-secondary">{answer}</p>
         </div>
       </section>
 

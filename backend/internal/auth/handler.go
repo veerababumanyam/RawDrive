@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -654,30 +655,43 @@ func (h *Handler) ResendOTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
-	if h.oauth == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "OAuth not configured"})
-		return
-	}
-
-	returnTo := sanitizeFrontendOrigin(r.URL.Query().Get("redirect_to"))
+	fallbackOrigin := defaultFrontendOrigin()
+	returnTo := sanitizeAllowedFrontendOrigin(r.URL.Query().Get("redirect_to"))
 	if returnTo == "" {
-		returnTo = sanitizeFrontendOrigin(os.Getenv("FRONTEND_URL"))
+		returnTo = fallbackOrigin
 	}
 
-	url, err := h.oauth.InitiateGoogleAuth(r.Context(), returnTo)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to initiate OAuth"})
+	if h.oauth == nil || !h.oauth.IsConfigured() {
+		http.Redirect(
+			w,
+			r,
+			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": string(OAuthErrConfigUnavailable)}),
+			http.StatusFound,
+		)
 		return
 	}
 
-	http.Redirect(w, r, url, http.StatusFound)
+	start, err := h.oauth.InitiateGoogleAuth(r.Context(), returnTo)
+	if err != nil {
+		log.Printf("auth.OAuthGoogle: initiate failed: %v", err)
+		http.Redirect(
+			w,
+			r,
+			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": string(OAuthErrConfigUnavailable)}),
+			http.StatusFound,
+		)
+		return
+	}
+	setOAuthStateCookie(w, r, start.CookieValue, start.ExpiresAt)
+
+	http.Redirect(w, r, start.RedirectURL, http.StatusFound)
 }
 
 // OAuthGoogleStatus reports whether Google OAuth is configured so the
 // frontend can hide the "Sign in with Google" button instead of letting
 // the user click into a 500 "OAuth not configured". Public, unauthenticated.
 func (h *Handler) OAuthGoogleStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.oauth != nil})
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.oauth != nil && h.oauth.IsConfigured()})
 }
 
 // requiresMFAStepUp reports whether the given user must complete a TOTP
@@ -708,9 +722,14 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fallbackOrigin := sanitizeFrontendOrigin(os.Getenv("FRONTEND_URL"))
+	fallbackOrigin := defaultFrontendOrigin()
+	defer clearOAuthStateCookie(w, r)
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
+	stateCookie := ""
+	if cookie, err := r.Cookie(oauthStateCookieName); err == nil {
+		stateCookie = cookie.Value
+	}
 	if code == "" || state == "" {
 		http.Redirect(
 			w,
@@ -721,12 +740,23 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state)
+	user, returnTo, err := h.oauth.HandleGoogleCallback(r.Context(), code, state, stateCookie)
 	if err != nil {
+		errorCode := "oauth_failed"
+		var oauthErr *OAuthCallbackError
+		if errors.As(err, &oauthErr) {
+			switch oauthErr.Code {
+			case OAuthErrStateInvalid, OAuthErrStateExpired:
+				errorCode = string(oauthErr.Code)
+			case OAuthErrEmailUnverified, OAuthErrAccountConflict, OAuthErrTokenInvalid, OAuthErrConfigUnavailable:
+				errorCode = string(oauthErr.Code)
+			}
+		}
+		log.Printf("auth.OAuthGoogleCallback: failed code=%s err=%v", errorCode, err)
 		http.Redirect(
 			w,
 			r,
-			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": "oauth_failed"}),
+			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": errorCode}),
 			http.StatusFound,
 		)
 		return
@@ -771,12 +801,12 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+		setMFAChallengeCookie(w, r, mfaToken)
 		http.Redirect(
 			w,
 			r,
 			buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{
 				"mfa_required": "1",
-				"mfa_token":    mfaToken,
 				"challenge":    "totp",
 			}),
 			http.StatusFound,
@@ -922,6 +952,74 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 const refreshTokenCookieName = "refresh_token"
+const oauthStateCookieName = "rawdrive_oauth_state"
+const mfaChallengeCookieName = "rawdrive_mfa_challenge"
+
+func setOAuthStateCookie(w http.ResponseWriter, r *http.Request, value string, expiresAt time.Time) {
+	maxAge := int(time.Until(expiresAt).Seconds())
+	if maxAge < 1 {
+		maxAge = 1
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+		Expires:  expiresAt,
+	})
+}
+
+func clearOAuthStateCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+}
+
+func setMFAChallengeCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     mfaChallengeCookieName,
+		Value:    token,
+		Path:     "/auth",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(mfaChallengeExpiry.Seconds()),
+	})
+}
+
+func clearMFAChallengeCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     mfaChallengeCookieName,
+		Value:    "",
+		Path:     "/auth",
+		HttpOnly: true,
+		Secure:   refreshCookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+}
+
+func mfaChallengeTokenFromRequest(r *http.Request, fallback string) string {
+	if token := strings.TrimSpace(fallback); token != "" {
+		return token
+	}
+	if r == nil {
+		return ""
+	}
+	if cookie, err := r.Cookie(mfaChallengeCookieName); err == nil {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return ""
+}
 
 func setRefreshTokenCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
@@ -972,6 +1070,74 @@ func refreshCookieSecure(r *http.Request) bool {
 	return false
 }
 
+func defaultFrontendOrigin() string {
+	for _, envName := range []string{"FRONTEND_URL", "APP_PUBLIC_BASE_URL"} {
+		if origin := sanitizeAllowedFrontendOrigin(os.Getenv(envName)); origin != "" {
+			return origin
+		}
+	}
+	return ""
+}
+
+func sanitizeAllowedFrontendOrigin(candidate string) string {
+	origin := sanitizeFrontendOrigin(candidate)
+	if origin == "" {
+		return ""
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	if parsed.Scheme == "http" && !isLoopbackHost(parsed.Hostname()) {
+		return ""
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+	if isConfiguredFrontendOrigin(origin) {
+		return origin
+	}
+	if isDevelopmentEnv() && isLoopbackHost(parsed.Hostname()) {
+		return origin
+	}
+	return ""
+}
+
+func isConfiguredFrontendOrigin(origin string) bool {
+	for _, envName := range []string{"FRONTEND_URL", "APP_PUBLIC_BASE_URL"} {
+		if configured := sanitizeFrontendOrigin(os.Getenv(envName)); configured != "" && configured == origin {
+			return true
+		}
+	}
+	return false
+}
+
+func isDevelopmentEnv() bool {
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	goEnv := strings.ToLower(strings.TrimSpace(os.Getenv("GO_ENV")))
+	if appEnv == "" && goEnv == "" {
+		return true
+	}
+	switch appEnv {
+	case "development", "dev", "local", "test":
+		return true
+	}
+	switch goEnv {
+	case "development", "dev", "local", "test":
+		return true
+	}
+	return false
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func sanitizeFrontendOrigin(candidate string) string {
 	candidate = strings.TrimSpace(candidate)
 	if candidate == "" {
@@ -991,9 +1157,9 @@ func sanitizeFrontendOrigin(candidate string) string {
 }
 
 func buildFrontendLoginRedirect(origin, fallback string, params map[string]string) string {
-	base := origin
+	base := sanitizeAllowedFrontendOrigin(origin)
 	if base == "" {
-		base = fallback
+		base = sanitizeAllowedFrontendOrigin(fallback)
 	}
 
 	target := &url.URL{Path: "/login"}

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { createNoIndexMetadata } from "@/lib/seo";
 
 // Service worker registration is handled globally by AppShell
 // (frontend/src/components/layout/AppShell.tsx) which mounts
@@ -23,6 +24,10 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  ...createNoIndexMetadata(
+    "RawDrive gallery",
+    "Private client gallery viewer for invited recipients.",
+  ),
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

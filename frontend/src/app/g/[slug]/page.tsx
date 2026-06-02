@@ -157,6 +157,10 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // otherwise hide it from the asset list.
   const designConfig = readPublicDesignConfig(gallery.settings);
   const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
+  const designCoverAssetId = designConfig?.cover?.assetId || gallery.cover_asset_id;
+  const designCoverAsset = designCoverAssetId
+    ? assets.find((asset) => asset.id === designCoverAssetId) ?? null
+    : null;
   // 2026-05-18: embedded YouTube/Vimeo videos. Same shape the dashboard
   // editor writes — see frontend/src/lib/embedded-videos.ts. Empty list
   // makes the panel render nothing (read-only short-circuits).
@@ -171,6 +175,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
         assets={assets}
         branding={branding}
         design={designConfig}
+        designCoverAsset={designCoverAsset}
         designCoverThumbnails={designCoverThumbnails}
       />
 

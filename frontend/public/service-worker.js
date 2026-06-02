@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v2";
+const VERSION = "m15-v3";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-`;
@@ -64,6 +64,14 @@ self.addEventListener("fetch", (event) => {
   if (request.cache === "only-if-cached" && request.mode !== "same-origin") return;
 
   const url = new URL(request.url);
+
+  // Upload/security workers must never be served from an old shell cache.
+  // They contain the client-side screening/encryption policy; stale code can
+  // reject valid camera files or weaken current security checks.
+  if (isSecurityCriticalWorker(url)) {
+    event.respondWith(fetchNoStore(request));
+    return;
+  }
 
   // Gallery thumbnail/image requests → per-gallery LRU cache
   if (isGalleryAssetRequest(url, request)) {
@@ -226,6 +234,20 @@ async function handleStatic(request) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+function isSecurityCriticalWorker(url) {
+  if (url.origin !== self.location.origin) return false;
+  const path = url.pathname;
+  return path.includes("/upload-screening.worker") || /\.(?:worker)(?:\.|$)/i.test(path);
+}
+
+async function fetchNoStore(request) {
+  try {
+    return await fetch(new Request(request, { cache: "no-store" }));
+  } catch {
+    return fetch(request);
+  }
+}
+
 function isGalleryAssetRequest(url, request) {
   const path = url.pathname;
   if (/\.(jpg|jpeg|png|webp|avif)$/i.test(path)) return true;

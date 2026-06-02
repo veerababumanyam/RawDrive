@@ -3,17 +3,247 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { createGallery, deleteGallery, type Gallery } from "@/lib/api/galleries";
+import { createGallery, deleteGallery, galleryPublicUrl, updateGallery, type Gallery } from "@/lib/api/galleries";
+import { getAsset, type Asset } from "@/lib/api/assets";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
+import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
+import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
+import { appendGalleryKeyFragment } from "@/lib/media-encryption/media-crypto";
+import { galleryKeyId, getStoredExportedMediaKey } from "@/lib/media-encryption/media-key-store";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Grid, ListBullet, Trash, Share, XMark } from "@/components/icons";
+import { ClipboardList, Envelope, Grid, ListBullet, Phone, Trash, Share, XMark } from "@/components/icons";
+
+function GalleryCoverPreview({
+  gallery,
+  coverAsset,
+  token,
+  alt,
+}: {
+  gallery: Gallery;
+  coverAsset?: Asset;
+  token: string | null;
+  alt: string;
+}) {
+  const fallbackAsset = useMemo<EncryptedAssetLike | null>(() => {
+    if (coverAsset) return coverAsset;
+    if (!gallery.cover_thumbnails || Object.keys(gallery.cover_thumbnails).length === 0) return null;
+    return {
+      id: gallery.cover_asset_id,
+      filename: gallery.title,
+      thumbnail_urls: gallery.cover_thumbnails,
+    };
+  }, [coverAsset, gallery.cover_asset_id, gallery.cover_thumbnails, gallery.title]);
+  const media = useDecryptedAssetUrl(fallbackAsset, GRID_VARIANTS, token);
+
+  if (media.loading) {
+    return <div className="h-full w-full animate-pulse bg-surface-container-high" aria-hidden="true" />;
+  }
+
+  if (media.src) {
+    return (
+      <img
+        src={media.src}
+        alt={alt}
+        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <svg className="w-10 h-10 text-text-tertiary/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+      </svg>
+    </div>
+  );
+}
+
+function GalleryPublishSwitch({
+  gallery,
+  busy,
+  onToggle,
+}: {
+  gallery: Gallery;
+  busy: boolean;
+  onToggle: (event: React.MouseEvent<HTMLButtonElement>, gallery: Gallery) => void;
+}) {
+  const archived = gallery.status === "archived";
+  const label = archived ? "Archived" : gallery.is_published ? "Published" : "Unpublished";
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={gallery.is_published}
+      aria-label={
+        archived
+          ? `${gallery.title} is archived`
+          : gallery.is_published
+            ? `${gallery.title} is published. Switch to unpublished.`
+            : `${gallery.title} is unpublished. Switch to published.`
+      }
+      disabled={busy || archived}
+      onClick={(event) => onToggle(event, gallery)}
+      className="publish-state-toggle"
+      data-state={gallery.is_published ? "published" : "unpublished"}
+      title={
+        archived
+          ? "Archived galleries cannot be published from this card"
+          : gallery.is_published
+            ? "Unpublish - client links will stop working"
+            : "Publish - clients will be able to view this gallery"
+      }
+    >
+      <span className="publish-state-toggle__track" aria-hidden="true">
+        <span className="publish-state-toggle__thumb" />
+      </span>
+      <span className="publish-state-toggle__label">
+        {busy ? "Saving..." : label}
+      </span>
+    </button>
+  );
+}
+
+function buildGalleryCardShareUrl(gallery: Gallery, workspaceProfile: WorkspaceProfile | null): string {
+  if (!gallery.slug) return "";
+  const base = galleryPublicUrl(gallery, workspaceProfile);
+  const key = getStoredExportedMediaKey(galleryKeyId(gallery.id));
+  return key ? appendGalleryKeyFragment(base, key) : base;
+}
+
+function buildGalleryShareText(gallery: Gallery, url: string): string {
+  const title = gallery.title?.trim() || "Gallery";
+  return `Your ${title} gallery is ready: ${url}`;
+}
+
+function buildGalleryEmailHref(gallery: Gallery, url: string): string {
+  const title = gallery.title?.trim() || "Gallery";
+  const subject = `${title} gallery`;
+  const body = buildGalleryShareText(gallery, url);
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function buildGalleryWhatsAppHref(gallery: Gallery, url: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(buildGalleryShareText(gallery, url))}`;
+}
+
+function GalleryShareMenu({
+  gallery,
+  shareUrl,
+  open,
+  copied,
+  onToggle,
+  onCopy,
+}: {
+  gallery: Gallery;
+  shareUrl: string;
+  open: boolean;
+  copied: boolean;
+  onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onCopy: () => void;
+}) {
+  const canShare = gallery.is_published && Boolean(shareUrl);
+  const emailHref = canShare ? buildGalleryEmailHref(gallery, shareUrl) : "";
+  const whatsAppHref = canShare ? buildGalleryWhatsAppHref(gallery, shareUrl) : "";
+
+  const runMenuAction = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    action: () => void,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!canShare) return;
+    action();
+  };
+
+  return (
+    <div
+      className="relative"
+      data-gallery-share-menu
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      <GlassIconButton
+        type="button"
+        size="md"
+        variant={copied ? "success" : "solid"}
+        active={open}
+        label={copied ? `${gallery.title} link copied` : `Share ${gallery.title}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={onToggle}
+        className={cn(
+          "shadow-elevation-1 ring-2 ring-surface-raised/60",
+          copied
+            ? "bg-feedback-success text-white hover:bg-feedback-success/90"
+            : "bg-accent-primary text-white hover:bg-accent-primary/90",
+        )}
+      >
+        <Share />
+      </GlassIconButton>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Share ${gallery.title}`}
+          className="fixed left-4 right-4 top-20 z-popover mx-auto max-w-sm rounded-2xl border border-border-default bg-surface-overlay p-2 shadow-xl backdrop-blur-md sm:left-auto sm:right-6 sm:mx-0"
+        >
+          {canShare ? (
+            <div className="space-y-1">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => runMenuAction(event, onCopy)}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+              >
+                <ClipboardList className="h-5 w-5 shrink-0 text-text-secondary" />
+                <span>Copy link</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => runMenuAction(event, () => {
+                  window.location.href = emailHref;
+                })}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+              >
+                <Envelope className="h-5 w-5 shrink-0 text-text-secondary" />
+                <span>Email</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => runMenuAction(event, () => {
+                  window.open(whatsAppHref, "_blank", "noopener,noreferrer");
+                })}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+              >
+                <Phone className="h-5 w-5 shrink-0 text-text-secondary" />
+                <span>WhatsApp</span>
+              </button>
+            </div>
+          ) : (
+            <p className="rounded-xl bg-surface-sunken px-3 py-2 text-sm text-text-secondary">
+              Publish this gallery before sharing client links.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function GalleriesPage() {
   const searchParams = useSearchParams();
+  const [token] = useState(() => getStoredAccessToken());
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +268,10 @@ export default function GalleriesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // ID of the gallery whose share link was just copied — cleared after 1.5s.
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(null);
+  const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
+  const [publishingGalleryId, setPublishingGalleryId] = useState<string | null>(null);
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
 
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
@@ -64,6 +298,16 @@ export default function GalleriesPage() {
     });
   }, [galleries, filterType, filterStatus, searchQuery]);
 
+  const missingCoverAssetIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        galleries
+          .map((g) => g.cover_asset_id)
+          .filter((id): id is string => Boolean(id && !coverAssets[id])),
+      ),
+    );
+  }, [coverAssets, galleries]);
+
   // Arms the inline confirm bar for the given gallery card. The actual
   // delete happens in confirmDelete() — splitting these two keeps the
   // browser confirm() dialog out of the flow (UX rule 2026-05-18) and
@@ -74,18 +318,18 @@ export default function GalleriesPage() {
     setConfirmDeleteId(galleryId);
   };
 
-  const copyShareLink = (e: React.MouseEvent, gallery: Gallery) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const url = `${window.location.origin}/g/${gallery.slug}`;
+  const copyShareLink = (gallery: Gallery) => {
+    if (!gallery.is_published) return;
+    const url = buildGalleryCardShareUrl(gallery, workspaceProfile);
+    if (!url) return;
     navigator.clipboard.writeText(url).then(() => {
       setCopiedId(gallery.id);
+      setShareMenuGalleryId(null);
       setTimeout(() => setCopiedId(null), 1500);
     }).catch(() => {});
   };
 
   const confirmDelete = async (galleryId: string) => {
-    const token = getStoredAccessToken();
     if (!token) {
       setConfirmDeleteId(null);
       return;
@@ -100,6 +344,33 @@ export default function GalleriesPage() {
     }
   };
 
+  const toggleGalleryPublish = async (event: React.MouseEvent<HTMLButtonElement>, gallery: Gallery) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!token || publishingGalleryId === gallery.id || gallery.status === "archived") return;
+
+    setPublishingGalleryId(gallery.id);
+    setError(null);
+    try {
+      const updated = await updateGallery(token, gallery.id, { is_published: !gallery.is_published });
+      setGalleries((prev) =>
+        prev.map((item) =>
+          item.id === gallery.id
+            ? {
+                ...item,
+                ...updated,
+                cover_thumbnails: updated.cover_thumbnails || item.cover_thumbnails,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update publish state");
+    } finally {
+      setPublishingGalleryId(null);
+    }
+  };
+
   // Escape dismisses the armed delete confirmation. Mounted only while a
   // card is armed so the listener doesn't run on every keystroke at idle.
   useEffect(() => {
@@ -110,6 +381,24 @@ export default function GalleriesPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [confirmDeleteId]);
+
+  useEffect(() => {
+    if (!shareMenuGalleryId) return;
+    const close = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest("[data-gallery-share-menu]")) return;
+      setShareMenuGalleryId(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShareMenuGalleryId(null);
+    };
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [shareMenuGalleryId]);
 
   const refresh = () => {
     authFetch("/api/v1/galleries")
@@ -133,7 +422,6 @@ export default function GalleriesPage() {
   };
 
   const refreshContacts = () => {
-    const token = getStoredAccessToken();
     if (!token) return;
     listContacts(token)
       .then(setContacts)
@@ -144,6 +432,49 @@ export default function GalleriesPage() {
     refresh();
     refreshContacts();
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getWorkspaceProfile(token)
+      .then((profile) => {
+        if (!cancelled) setWorkspaceProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaceProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || missingCoverAssetIds.length === 0) return;
+    let cancelled = false;
+
+    void Promise.all(
+      missingCoverAssetIds.map(async (assetId) => {
+        try {
+          return await getAsset(token, assetId);
+        } catch {
+          return null;
+        }
+      }),
+    ).then((assets) => {
+      if (cancelled) return;
+      setCoverAssets((prev) => {
+        const next = { ...prev };
+        for (const asset of assets) {
+          if (asset) next[asset.id] = asset;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [missingCoverAssetIds, token]);
 
   useEffect(() => {
     if (searchParams.get("create") !== "true") return;
@@ -470,10 +801,8 @@ export default function GalleriesPage() {
           }
         >
           {filteredGalleries.map((g) => {
-            const coverUrl = getAssetPreviewUrl(
-              { thumbnail_urls: g.cover_thumbnails || {} },
-              getStoredAccessToken(),
-            );
+            const coverAsset = g.cover_asset_id ? coverAssets[g.cover_asset_id] : undefined;
+            const shareUrl = buildGalleryCardShareUrl(g, workspaceProfile);
 
             return (
               <Link
@@ -488,21 +817,12 @@ export default function GalleriesPage() {
                 {/* Cover thumbnail (grid view) */}
                 {viewMode === "grid" && (
                   <div className="relative aspect-[16/10] w-full overflow-hidden rounded-t-xl bg-surface-sunken">
-                    {coverUrl ? (
-                      <img
-                        src={coverUrl}
-                        alt={`${g.title} cover`}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <svg className="w-10 h-10 text-text-tertiary/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                        </svg>
-                      </div>
-                    )}
+                    <GalleryCoverPreview
+                      gallery={g}
+                      coverAsset={coverAsset}
+                      token={token}
+                      alt={`${g.title} cover`}
+                    />
 
                     {/* Corner Delete affordance — always visible. Replaces
                         the older full-cover scrim that hosted Open /
@@ -525,23 +845,19 @@ export default function GalleriesPage() {
                       className="absolute top-2 right-2 z-10 flex items-center gap-1.5"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     >
-                      {/* Share — copies the public gallery link. Solid circle
-                          matches the delete button treatment so it reads as
-                          a tappable affordance against any cover photo. */}
-                      <button
-                        type="button"
-                        aria-label={copiedId === g.id ? "Link copied!" : "Copy share link"}
-                        title={copiedId === g.id ? "Link copied!" : "Copy share link"}
-                        onClick={(e) => copyShareLink(e, g)}
-                        className={cn(
-                          "inline-flex h-9 w-9 items-center justify-center rounded-full text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-0",
-                          copiedId === g.id
-                            ? "bg-feedback-success focus:ring-feedback-success/50"
-                            : "bg-accent-primary hover:bg-accent-primary/90 focus:ring-accent-primary/50",
-                        )}
-                      >
-                        <Share className="h-4 w-4" />
-                      </button>
+                      <GalleryShareMenu
+                        gallery={g}
+                        shareUrl={shareUrl}
+                        open={shareMenuGalleryId === g.id}
+                        copied={copiedId === g.id}
+                        onToggle={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setConfirmDeleteId(null);
+                          setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
+                        }}
+                        onCopy={() => copyShareLink(g)}
+                      />
                       {confirmDeleteId === g.id ? (
                         <div
                           role="alertdialog"
@@ -585,15 +901,12 @@ export default function GalleriesPage() {
                 {/* List view thumbnail */}
                 {viewMode === "list" && (
                   <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-sunken ml-4">
-                    {coverUrl ? (
-                      <img src={coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <svg className="w-5 h-5 text-text-tertiary/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                        </svg>
-                      </div>
-                    )}
+                    <GalleryCoverPreview
+                      gallery={g}
+                      coverAsset={coverAsset}
+                      token={token}
+                      alt=""
+                    />
                   </div>
                 )}
 
@@ -617,49 +930,15 @@ export default function GalleriesPage() {
                       {g.description}
                     </p>
                   )}
-                  {/* 2026-05-18: Single derived publish-state badge per
-                      card. Previously the card stacked three chips —
-                      `gallery_type` (proofing/delivery), lifecycle
-                      `status` (almost always "draft"), and conditionally
-                      "Published" — which added noise without
-                      decision-value: the gallery-type is metadata, and
-                      "draft" was the implicit state for every
-                      not-yet-published gallery. The single badge below
-                      reads as Published (green) / Archived (neutral) /
-                      Unpublished (neutral) and stays click-filterable so
-                      the active-filter chip strip still works. */}
+                  {/* Publish state is a real action, not just a filter chip:
+                      users can publish/unpublish from the gallery list
+                      without opening the detail page. */}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {(() => {
-                      const publishState: "published" | "archived" | "unpublished" = g.is_published
-                        ? "published"
-                        : g.status === "archived"
-                          ? "archived"
-                          : "unpublished";
-                      const label =
-                        publishState === "published" ? "Published"
-                        : publishState === "archived" ? "Archived"
-                        : "Unpublished";
-                      const badgeClass =
-                        publishState === "published"
-                          ? "status-badge status-badge--success"
-                          : "status-badge status-badge--neutral";
-                      return (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setFilterStatus((prev) => prev === publishState ? null : publishState);
-                          }}
-                          className={cn(
-                            badgeClass,
-                            "cursor-pointer hover:ring-1 hover:ring-accent-primary/40 transition-all",
-                          )}
-                          title={`Filter: ${label.toLowerCase()} galleries`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })()}
+                    <GalleryPublishSwitch
+                      gallery={g}
+                      busy={publishingGalleryId === g.id}
+                      onToggle={toggleGalleryPublish}
+                    />
                   </div>
                 </div>
 
@@ -677,20 +956,19 @@ export default function GalleriesPage() {
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     >
                       {/* Share — copies the public gallery link */}
-                      <button
-                        type="button"
-                        aria-label={copiedId === g.id ? "Link copied!" : "Copy share link"}
-                        title={copiedId === g.id ? "Link copied!" : "Copy share link"}
-                        onClick={(e) => copyShareLink(e, g)}
-                        className={cn(
-                          "inline-flex h-9 w-9 items-center justify-center rounded-full text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-0",
-                          copiedId === g.id
-                            ? "bg-feedback-success focus:ring-feedback-success/50"
-                            : "bg-accent-primary hover:bg-accent-primary/90 focus:ring-accent-primary/50",
-                        )}
-                      >
-                        <Share className="h-4 w-4" />
-                      </button>
+                      <GalleryShareMenu
+                        gallery={g}
+                        shareUrl={shareUrl}
+                        open={shareMenuGalleryId === g.id}
+                        copied={copiedId === g.id}
+                        onToggle={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setConfirmDeleteId(null);
+                          setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
+                        }}
+                        onCopy={() => copyShareLink(g)}
+                      />
                       {confirmDeleteId === g.id ? (
                         <div
                           role="alertdialog"

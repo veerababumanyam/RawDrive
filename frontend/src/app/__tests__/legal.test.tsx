@@ -3,6 +3,31 @@ import { render, screen } from "@testing-library/react";
 import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
 import RefundPage from "@/app/refund/page";
+import LegalPage from "@/app/legal/page";
+import ContactPage from "@/app/contact/page";
+
+describe("Legal Notice Page", () => {
+  it("keeps the legal operator details on the dedicated legal page", () => {
+    render(<LegalPage />);
+    expect(screen.getByText("Legal Notice")).toBeInTheDocument();
+    expect(screen.getByText("Swaz Consultants Pvt. Ltd.")).toBeInTheDocument();
+    expect(screen.getByAltText("Swaz Consultants logo")).toBeInTheDocument();
+  });
+
+  it("uses the approved public contact addresses", () => {
+    render(<LegalPage />);
+    expect(screen.getByText("infor@rawdrive.in")).toBeInTheDocument();
+    expect(screen.getByText("support@rawdrive.in")).toBeInTheDocument();
+    expect(screen.getByText("contactus@rawdrive.in")).toBeInTheDocument();
+  });
+});
+
+describe("Contact Page", () => {
+  it("shows the approved phone and WhatsApp contacts", () => {
+    render(<ContactPage />);
+    expect(screen.getByText("contact:+91 928112993 ,+91 9010012299")).toBeInTheDocument();
+  });
+});
 
 describe("Privacy Page", () => {
   it("renders the privacy policy heading", () => {

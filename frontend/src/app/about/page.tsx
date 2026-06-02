@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { Cpu, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "About Us | RawDrive",
-  description:
-    "Learn more about RawDrive and our mission to transform photography business operations.",
-};
+export const metadata: Metadata = createPageMetadata("about");
 
 const principles = [
   {
@@ -32,7 +29,7 @@ const teamHighlights = [
   "Built for Indian photography studios, not generic cloud storage teams.",
   "Focused on fast delivery, proofing, GST workflows, and marketplace growth.",
   "Designed around client presentation as much as operational control.",
-  "Grounded in the original Stitch art direction instead of placeholder filler.",
+  "Built to make premium delivery feel operationally simple for growing teams.",
 ];
 
 export default function AboutPage() {
@@ -67,7 +64,7 @@ export default function AboutPage() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
               <img
                 src="/stitch/about.png"
-                alt="Stitch about page preview"
+                alt="RawDrive product preview for photography studio operations"
                 className="h-auto w-full object-cover"
               />
             </div>
@@ -103,8 +100,8 @@ export default function AboutPage() {
             </h2>
             <p className="leading-8 text-text-secondary">
               From lead capture to final delivery, every part of the product is meant to feel
-              intentional. That same principle now drives this page body too, using the Stitch
-              original as the visual reference instead of a placeholder section.
+              intentional. RawDrive brings the business layer and the client experience into the
+              same workspace so studios can grow without stitching together generic tools.
             </p>
           </div>
         </div>

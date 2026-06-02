@@ -11,6 +11,62 @@ import (
 	"strings"
 )
 
+var stillImageContentTypeFormats = map[string]string{
+	"image/avif":             "avif",
+	"image/gif":              "gif",
+	"image/heic":             "heic",
+	"image/heif":             "heif",
+	"image/hif":              "hif",
+	"image/jpeg":             "jpeg",
+	"image/jpg":              "jpeg",
+	"image/pjpeg":            "jpeg",
+	"image/png":              "png",
+	"image/tif":              "tiff",
+	"image/tiff":             "tiff",
+	"image/webp":             "webp",
+	"image/x-adobe-dng":      "dng",
+	"image/x-arriflex-ari":   "ari",
+	"image/x-canon-cr2":      "cr2",
+	"image/x-canon-cr3":      "cr3",
+	"image/x-canon-crw":      "crw",
+	"image/x-canon-raw":      "crw",
+	"image/x-casio-bay":      "bay",
+	"image/x-dng":            "dng",
+	"image/x-epson-erf":      "erf",
+	"image/x-fuji-raf":       "raf",
+	"image/x-fujifilm-raf":   "raf",
+	"image/x-gopro-gpr":      "gpr",
+	"image/x-hasselblad-3fr": "3fr",
+	"image/x-hasselblad-fff": "fff",
+	"image/x-kodak-dc2":      "dc2",
+	"image/x-kodak-dcr":      "dcr",
+	"image/x-kodak-k25":      "k25",
+	"image/x-kodak-kdc":      "kdc",
+	"image/x-leaf-mos":       "mos",
+	"image/x-leica-rwl":      "rwl",
+	"image/x-mamiya-mdc":     "mdc",
+	"image/x-mamiya-mef":     "mef",
+	"image/x-minolta-mrw":    "mrw",
+	"image/x-nikon-nef":      "nef",
+	"image/x-nikon-nrw":      "nrw",
+	"image/x-olympus-orf":    "orf",
+	"image/x-olympus-ori":    "ori",
+	"image/x-panasonic-raw":  "raw",
+	"image/x-panasonic-rw2":  "rw2",
+	"image/x-pentax-pef":     "pef",
+	"image/x-phaseone-iiq":   "iiq",
+	"image/x-png":            "png",
+	"image/x-raw":            "raw",
+	"image/x-redcode-r3d":    "r3d",
+	"image/x-samsung-srw":    "srw",
+	"image/x-sigma-x3f":      "x3f",
+	"image/x-sony-arq":       "arq",
+	"image/x-sony-arw":       "arw",
+	"image/x-sony-sr2":       "sr2",
+	"image/x-sony-srf":       "srf",
+	"image/x-tiff":           "tiff",
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // M16 E47-S5 Round 2: Real hash verification + cheap header/trailer spot-check.
 //
@@ -178,35 +234,8 @@ func VerifyHeaderTrailerBytes(head, tail []byte, detectedFormat string) error {
 // sessions for generic documents, archives, scripts, videos, or unknown blobs.
 func StillImageFormatFromContentType(contentType string) (string, bool) {
 	ct := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
-	switch ct {
-	case "image/jpeg", "image/jpg", "image/pjpeg":
-		return "jpeg", true
-	case "image/png", "image/x-png":
-		return "png", true
-	case "image/webp":
-		return "webp", true
-	case "image/gif":
-		return "gif", true
-	case "image/tiff", "image/tif", "image/x-tiff":
-		return "tiff", true
-	case "image/heic", "image/heif", "image/avif":
-		return strings.TrimPrefix(ct, "image/"), true
-	case "image/x-canon-cr2", "image/x-canon-cr3":
-		return strings.TrimPrefix(ct, "image/x-canon-"), true
-	case "image/x-nikon-nef":
-		return "nef", true
-	case "image/x-sony-arw":
-		return "arw", true
-	case "image/x-adobe-dng", "image/x-dng":
-		return "dng", true
-	case "image/x-fuji-raf", "image/x-fujifilm-raf":
-		return "raf", true
-	case "image/x-olympus-orf":
-		return "orf", true
-	case "image/x-panasonic-rw2":
-		return "rw2", true
-	}
-	return "", false
+	format, ok := stillImageContentTypeFormats[ct]
+	return format, ok
 }
 
 // ─── Format signature helpers (bounded, cheap, stateless) ──────────────────

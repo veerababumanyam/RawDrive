@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Terms of Service",
-  description: "RawDrive Terms of Service — governing use of the RawDrive platform.",
-};
+export const metadata: Metadata = createPageMetadata("terms");
 
 const sections = [
   {
@@ -94,8 +92,8 @@ export default function TermsPage() {
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
           <p className="text-sm text-text-secondary">
             Questions about these terms? Contact us at{" "}
-            <a href="mailto:legal@rawdrive.in" className="text-accent hover:text-accent-hover">
-              legal@rawdrive.in
+            <a href="mailto:contactus@rawdrive.in" className="text-accent hover:text-accent-hover">
+              contactus@rawdrive.in
             </a>
           </p>
         </div>

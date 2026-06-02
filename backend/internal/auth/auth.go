@@ -21,6 +21,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 )
 
 // F-103 (audit 2026-05-30): jwtIssuer / jwtAudience bind every access token this
@@ -38,21 +39,24 @@ const (
 // ──────────────────────────── Types ────────────────────────────
 
 type User struct {
-	ID          string
-	Email       string
-	DisplayName string
-	AvatarURL   string
+	ID            string
+	Email         string
+	DisplayName   string
+	AvatarURL     string
+	EmailVerified bool
 }
 
 type OAuthToken struct {
 	AccessToken string
+	IDToken     string
 }
 
 type OAuthProfile struct {
-	Email       string
-	DisplayName string
-	AvatarURL   string
-	ProviderID  string
+	Email         string
+	EmailVerified bool
+	DisplayName   string
+	AvatarURL     string
+	ProviderID    string
 }
 
 // ──────────────────────────── Interfaces ────────────────────────────
@@ -62,11 +66,12 @@ type EmailDelivery interface {
 }
 
 type OAuthProvider interface {
-	ExchangeCode(ctx context.Context, code string) (*OAuthToken, error)
-	GetProfile(ctx context.Context, token *OAuthToken) (*OAuthProfile, error)
+	ExchangeCode(ctx context.Context, code, codeVerifier string) (*OAuthToken, error)
+	GetProfile(ctx context.Context, token *OAuthToken, expectedNonce string) (*OAuthProfile, error)
 }
 
 type UserStore interface {
+	FindByOAuth(ctx context.Context, provider, providerID string) (*User, error)
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	Create(ctx context.Context, u *User) (*User, error)
 	LinkOAuth(ctx context.Context, userID, provider, providerID string) error
@@ -115,6 +120,24 @@ type otpEntry struct {
 	used      bool
 }
 
+type OTPCodeRecord struct {
+	ID         string
+	Purpose    string
+	Identifier string
+	CodeHash   string
+	ExpiresAt  time.Time
+	Attempts   int
+}
+
+type OTPCodeStore interface {
+	CountRecent(ctx context.Context, purpose, identifier string, since time.Time) (int, error)
+	Create(ctx context.Context, record OTPCodeRecord) (string, error)
+	LatestActive(ctx context.Context, purpose, identifier string) (*OTPCodeRecord, error)
+	IncrementAttempts(ctx context.Context, id string) (int, error)
+	MarkUsed(ctx context.Context, id string) error
+	Delete(ctx context.Context, id string) error
+}
+
 type OTPService interface {
 	Generate(ctx context.Context, identifier string) (string, error)
 	Validate(ctx context.Context, identifier, code string) (bool, error)
@@ -127,6 +150,13 @@ type otpService struct {
 	entries  map[string]*otpEntry
 	// rate limiting: identifier -> list of generation timestamps
 	rateLog map[string][]time.Time
+}
+
+type persistentOTPService struct {
+	config   OTPConfig
+	delivery EmailDelivery
+	store    OTPCodeStore
+	purpose  string
 }
 
 func NewOTPService(config OTPConfig) OTPService {
@@ -143,6 +173,21 @@ func NewOTPServiceWithDelivery(config OTPConfig, delivery EmailDelivery) OTPServ
 		delivery: delivery,
 		entries:  make(map[string]*otpEntry),
 		rateLog:  make(map[string][]time.Time),
+	}
+}
+
+func NewPersistentOTPServiceWithDelivery(config OTPConfig, delivery EmailDelivery, store OTPCodeStore, purpose string) OTPService {
+	if store == nil {
+		return NewOTPServiceWithDelivery(config, delivery)
+	}
+	if strings.TrimSpace(purpose) == "" {
+		purpose = "registration"
+	}
+	return &persistentOTPService{
+		config:   config,
+		delivery: delivery,
+		store:    store,
+		purpose:  purpose,
 	}
 }
 
@@ -244,6 +289,80 @@ func (s *otpService) Validate(ctx context.Context, identifier, code string) (boo
 
 	entry.used = true
 	return true, nil
+}
+
+func (s *persistentOTPService) Generate(ctx context.Context, identifier string) (string, error) {
+	identifier = normalizeOTPIdentifier(identifier)
+	now := time.Now()
+	recent, err := s.store.CountRecent(ctx, s.purpose, identifier, now.Add(-s.config.RateLimitWindow))
+	if err != nil {
+		return "", err
+	}
+	if recent >= s.config.RateLimitMax {
+		return "", errors.New("rate limit exceeded")
+	}
+
+	code, err := generateCode(s.config.CodeLength)
+	if err != nil {
+		return "", err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	id, err := s.store.Create(ctx, OTPCodeRecord{
+		Purpose:    s.purpose,
+		Identifier: identifier,
+		CodeHash:   string(hash),
+		ExpiresAt:  now.Add(s.config.Expiry),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if s.delivery != nil {
+		if err := s.delivery.SendOTP(ctx, identifier, code); err != nil {
+			_ = s.store.Delete(ctx, id)
+			return "", err
+		}
+	}
+	return code, nil
+}
+
+func (s *persistentOTPService) Validate(ctx context.Context, identifier, code string) (bool, error) {
+	identifier = normalizeOTPIdentifier(identifier)
+	entry, err := s.store.LatestActive(ctx, s.purpose, identifier)
+	if err != nil {
+		return false, err
+	}
+	if entry == nil {
+		return false, nil
+	}
+	if entry.Attempts >= s.config.MaxAttempts {
+		return false, errors.New("max attempts exceeded")
+	}
+	if time.Now().After(entry.ExpiresAt) {
+		return false, nil
+	}
+
+	attempts, err := s.store.IncrementAttempts(ctx, entry.ID)
+	if err != nil {
+		return false, err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(entry.CodeHash), []byte(code)) != nil {
+		if attempts >= s.config.MaxAttempts {
+			return false, errors.New("max attempts exceeded")
+		}
+		return false, nil
+	}
+	if err := s.store.MarkUsed(ctx, entry.ID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func normalizeOTPIdentifier(identifier string) string {
+	return strings.ToLower(strings.TrimSpace(identifier))
 }
 
 // ──────────────────────────── JWT Service ────────────────────────────
@@ -495,61 +614,22 @@ func (s *jwtService) GenerateRefreshTokenWithMFA(ctx context.Context, userID, fa
 }
 
 func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (string, string, error) {
-	entry, err := s.refreshStore.Get(ctx, oldToken)
-	if err != nil {
-		if errors.Is(err, ErrRefreshNotFound) {
-			return "", "", errors.New("refresh token not found")
-		}
-		return "", "", fmt.Errorf("refresh store: get: %w", err)
-	}
-
-	// Check family revocation first — if the family is dead, nothing
-	// under it can be rotated, even if the individual row looks clean.
-	familyRevoked, err := s.refreshStore.IsFamilyRevoked(ctx, entry.FamilyID)
-	if err != nil {
-		return "", "", fmt.Errorf("refresh store: check family revocation: %w", err)
-	}
-	if entry.Revoked || familyRevoked {
-		// Token reuse detected (or the whole family is already dead).
-		// Kill the family again for idempotency.
-		_ = s.refreshStore.RevokeFamily(ctx, entry.FamilyID)
-		return "", "", errors.New("refresh token reuse detected, family revoked")
-	}
-
-	if entry.Used {
-		// Seeing a second Rotate for the same token means an attacker
-		// has the refresh secret. Nuke the family.
-		_ = s.refreshStore.RevokeFamily(ctx, entry.FamilyID)
-		return "", "", errors.New("refresh token reuse detected, family revoked")
-	}
-
-	if time.Now().After(entry.ExpiresAt) {
-		return "", "", errors.New("refresh token expired")
-	}
-
-	// Mark the old token used BEFORE issuing the new one so a racing
-	// rotate hits the reuse-detection path.
-	if err := s.refreshStore.MarkUsed(ctx, oldToken); err != nil {
-		return "", "", fmt.Errorf("refresh store: mark used: %w", err)
-	}
-
-	// Generate the new refresh token (sliding window) and persist it.
 	newTokenStr, err := s.generateRefreshTokenString()
 	if err != nil {
 		return "", "", err
 	}
-	if err := s.refreshStore.Create(ctx, RefreshSessionEntry{
-		RawToken:     newTokenStr,
-		Sub:          entry.Sub,
-		FamilyID:     entry.FamilyID,
-		WorkspaceID:  entry.WorkspaceID,
-		Role:         entry.Role,
-		PlatformRole: entry.PlatformRole,
-		StateID:      entry.StateID,
-		MFAVerified:  entry.MFAVerified, // F-007 wave 2: preserve MFA state through rotation
-		ExpiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
-	}); err != nil {
-		return "", "", fmt.Errorf("refresh store: create rotated: %w", err)
+	entry, err := s.refreshStore.Rotate(ctx, oldToken, newTokenStr, time.Now().Add(s.config.RefreshTokenExpiry))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrRefreshNotFound):
+			return "", "", errors.New("refresh token not found")
+		case errors.Is(err, ErrRefreshReuseDetected):
+			return "", "", errors.New("refresh token reuse detected, family revoked")
+		case errors.Is(err, ErrRefreshExpired):
+			return "", "", errors.New("refresh token expired")
+		default:
+			return "", "", fmt.Errorf("refresh store: rotate: %w", err)
+		}
 	}
 
 	// Generate the new access token — carry forward claims from the
@@ -636,96 +716,206 @@ type OAuthConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURI  string
+	StateKey     string
 }
 
 type OAuthService struct {
-	config   OAuthConfig
-	provider OAuthProvider
-	store    UserStore
-	mu       sync.Mutex
-	states   map[string]string
+	config     OAuthConfig
+	provider   OAuthProvider
+	store      UserStore
+	mu         sync.Mutex
+	usedStates map[string]time.Time
+	configBad  bool
 }
 
 type oauthStatePayload struct {
-	Nonce     string `json:"n"`
-	ReturnTo  string `json:"r"`
-	ExpiresAt int64  `json:"e"`
+	State        string `json:"s"`
+	Nonce        string `json:"n"`
+	CodeVerifier string `json:"v"`
+	ReturnTo     string `json:"r"`
+	ExpiresAt    int64  `json:"e"`
 }
+
+type OAuthStart struct {
+	RedirectURL string
+	CookieValue string
+	ExpiresAt   time.Time
+}
+
+type OAuthErrorCode string
+
+const (
+	OAuthErrStateInvalid      OAuthErrorCode = "oauth_state_invalid"
+	OAuthErrStateExpired      OAuthErrorCode = "oauth_state_expired"
+	OAuthErrTokenInvalid      OAuthErrorCode = "oauth_token_invalid"
+	OAuthErrEmailUnverified   OAuthErrorCode = "oauth_email_unverified"
+	OAuthErrAccountConflict   OAuthErrorCode = "oauth_account_conflict"
+	OAuthErrConfigUnavailable OAuthErrorCode = "oauth_config_unavailable"
+)
+
+type OAuthCallbackError struct {
+	Code OAuthErrorCode
+	Err  error
+}
+
+func (e *OAuthCallbackError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Err == nil {
+		return string(e.Code)
+	}
+	return string(e.Code) + ": " + e.Err.Error()
+}
+
+func (e *OAuthCallbackError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func oauthError(code OAuthErrorCode, err error) error {
+	return &OAuthCallbackError{Code: code, Err: err}
+}
+
+var ErrOAuthAccountConflict = errors.New("oauth account conflict")
 
 func NewOAuthService(config OAuthConfig, provider OAuthProvider, store UserStore) *OAuthService {
 	return &OAuthService{
-		config:   config,
-		provider: provider,
-		store:    store,
-		states:   make(map[string]string),
+		config:     config,
+		provider:   provider,
+		store:      store,
+		usedStates: make(map[string]time.Time),
 	}
 }
 
-func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) (string, error) {
+func (s *OAuthService) IsConfigured() bool {
+	if s == nil ||
+		s.config.ClientID == "" ||
+		s.config.ClientSecret == "" ||
+		s.config.RedirectURI == "" ||
+		s.provider == nil ||
+		s.store == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.configBad
+}
+
+func (s *OAuthService) InitiateGoogleAuth(ctx context.Context, returnTo string) (*OAuthStart, error) {
 	_ = ctx
 
 	if s.config.ClientID == "" {
-		return "", fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_ID not set")
+		return nil, fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_ID not set")
+	}
+	if s.config.ClientSecret == "" {
+		return nil, fmt.Errorf("google OAuth not configured: GOOGLE_CLIENT_SECRET not set")
+	}
+	if s.config.RedirectURI == "" {
+		return nil, fmt.Errorf("google OAuth not configured: GOOGLE_REDIRECT_URL not set")
 	}
 
-	stateBytes := make([]byte, 16)
-	if _, err := rand.Read(stateBytes); err != nil {
-		return "", err
+	state, err := randomBase64URL(32)
+	if err != nil {
+		return nil, err
 	}
-	state := fmt.Sprintf("%x", stateBytes)
+	nonce, err := randomBase64URL(32)
+	if err != nil {
+		return nil, err
+	}
+	codeVerifier := oauth2.GenerateVerifier()
+	expiresAt := time.Now().UTC().Add(10 * time.Minute)
 
-	if signedState, err := s.signState(oauthStatePayload{
-		Nonce:     state,
-		ReturnTo:  returnTo,
-		ExpiresAt: time.Now().UTC().Add(10 * time.Minute).Unix(),
-	}); err == nil && signedState != "" {
-		state = signedState
-	} else {
-		s.mu.Lock()
-		s.states[state] = returnTo
-		s.mu.Unlock()
+	cookieValue, err := s.signState(oauthStatePayload{
+		State:        state,
+		Nonce:        nonce,
+		CodeVerifier: codeVerifier,
+		ReturnTo:     returnTo,
+		ExpiresAt:    expiresAt.Unix(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if cookieValue == "" {
+		return nil, fmt.Errorf("google OAuth not configured: state signing key not set")
 	}
 
 	query := url.Values{
-		"client_id":     []string{s.config.ClientID},
-		"redirect_uri":  []string{s.config.RedirectURI},
-		"response_type": []string{"code"},
-		"scope":         []string{"openid email profile"},
-		"state":         []string{state},
-		"access_type":   []string{"offline"},
-		"prompt":        []string{"consent"},
+		"client_id":             []string{s.config.ClientID},
+		"redirect_uri":          []string{s.config.RedirectURI},
+		"response_type":         []string{"code"},
+		"scope":                 []string{"openid email profile"},
+		"state":                 []string{state},
+		"nonce":                 []string{nonce},
+		"access_type":           []string{"offline"},
+		"prompt":                []string{"consent"},
+		"code_challenge":        []string{pkceChallengeS256(codeVerifier)},
+		"code_challenge_method": []string{"S256"},
 	}
 
-	return "https://accounts.google.com/o/oauth2/v2/auth?" + query.Encode(), nil
+	return &OAuthStart{
+		RedirectURL: "https://accounts.google.com/o/oauth2/v2/auth?" + query.Encode(),
+		CookieValue: cookieValue,
+		ExpiresAt:   expiresAt,
+	}, nil
 }
 
-func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state string) (*User, string, error) {
+func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state, cookieValue string) (*User, string, error) {
 	if s.provider == nil || s.store == nil {
-		return nil, "", errors.New("oauth service not fully configured")
+		return nil, "", oauthError(OAuthErrConfigUnavailable, errors.New("oauth service not fully configured"))
 	}
 
-	returnTo, ok := s.consumeState(state)
+	statePayload, ok, expired := s.consumeState(state, cookieValue)
 	if !ok {
-		return nil, "", errors.New("invalid oauth state")
+		if expired {
+			return nil, "", oauthError(OAuthErrStateExpired, errors.New("expired oauth state"))
+		}
+		return nil, "", oauthError(OAuthErrStateInvalid, errors.New("invalid oauth state"))
 	}
+	returnTo := statePayload.ReturnTo
 
-	token, err := s.provider.ExchangeCode(ctx, code)
+	token, err := s.provider.ExchangeCode(ctx, code, statePayload.CodeVerifier)
 	if err != nil {
-		return nil, returnTo, fmt.Errorf("exchange code failed: %w", err)
+		if IsOAuthProviderConfigurationError(err) {
+			s.markConfigurationBad()
+			return nil, returnTo, oauthError(OAuthErrConfigUnavailable, err)
+		}
+		return nil, returnTo, oauthError(OAuthErrTokenInvalid, fmt.Errorf("exchange code failed: %w", err))
 	}
 
-	profile, err := s.provider.GetProfile(ctx, token)
+	profile, err := s.provider.GetProfile(ctx, token, statePayload.Nonce)
 	if err != nil {
-		return nil, returnTo, fmt.Errorf("get profile failed: %w", err)
+		return nil, returnTo, oauthError(OAuthErrTokenInvalid, fmt.Errorf("get profile failed: %w", err))
+	}
+	if !profile.EmailVerified {
+		return nil, returnTo, oauthError(OAuthErrEmailUnverified, errors.New("google email is not verified"))
 	}
 
-	existing, err := s.store.FindByEmail(ctx, profile.Email)
+	existing, err := s.store.FindByOAuth(ctx, "google", profile.ProviderID)
+	if err != nil {
+		return nil, returnTo, err
+	}
+	if existing != nil {
+		return existing, returnTo, nil
+	}
+
+	existing, err = s.store.FindByEmail(ctx, profile.Email)
 	if err != nil {
 		return nil, returnTo, err
 	}
 
 	if existing != nil {
-		_ = s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID)
+		if !existing.EmailVerified {
+			return nil, returnTo, oauthError(OAuthErrAccountConflict, errors.New("local account email is not activated"))
+		}
+		if err := s.store.LinkOAuth(ctx, existing.ID, "google", profile.ProviderID); err != nil {
+			if errors.Is(err, ErrOAuthAccountConflict) {
+				return nil, returnTo, oauthError(OAuthErrAccountConflict, err)
+			}
+			return nil, returnTo, err
+		}
 		// Backfill display name and avatar from Google profile if the user
 		// registered via email without providing them.
 		backfillName := ""
@@ -739,7 +929,9 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 			existing.AvatarURL = profile.AvatarURL
 		}
 		if backfillName != "" || backfillAvatar != "" {
-			_ = s.store.BackfillProfile(ctx, existing.ID, backfillName, backfillAvatar)
+			if err := s.store.BackfillProfile(ctx, existing.ID, backfillName, backfillAvatar); err != nil {
+				return nil, returnTo, err
+			}
 		}
 		return existing, returnTo, nil
 	}
@@ -751,10 +943,11 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 	}
 
 	newUser := &User{
-		ID:          fmt.Sprintf("%x", idBytes),
-		Email:       profile.Email,
-		DisplayName: profile.DisplayName,
-		AvatarURL:   profile.AvatarURL,
+		ID:            fmt.Sprintf("%x", idBytes),
+		Email:         profile.Email,
+		DisplayName:   profile.DisplayName,
+		AvatarURL:     profile.AvatarURL,
+		EmailVerified: true,
 	}
 
 	created, err := s.store.Create(ctx, newUser)
@@ -762,11 +955,28 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code, state str
 		return nil, returnTo, err
 	}
 
-	_ = s.store.LinkOAuth(ctx, created.ID, "google", profile.ProviderID)
+	if err := s.store.LinkOAuth(ctx, created.ID, "google", profile.ProviderID); err != nil {
+		if errors.Is(err, ErrOAuthAccountConflict) {
+			return nil, returnTo, oauthError(OAuthErrAccountConflict, err)
+		}
+		return nil, returnTo, err
+	}
 	return created, returnTo, nil
 }
 
+func (s *OAuthService) markConfigurationBad() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.configBad = true
+	s.mu.Unlock()
+}
+
 func (s *OAuthService) stateSigningKey() []byte {
+	if s.config.StateKey != "" {
+		return []byte(s.config.StateKey)
+	}
 	if s.config.ClientSecret == "" {
 		return nil
 	}
@@ -790,29 +1000,39 @@ func (s *OAuthService) signState(payload oauthStatePayload) (string, error) {
 	return encodedBody + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-func (s *OAuthService) consumeState(state string) (string, bool) {
-	if returnTo, ok := s.consumeSignedState(state); ok {
-		return returnTo, true
+func (s *OAuthService) consumeState(state, cookieValue string) (oauthStatePayload, bool, bool) {
+	payload, ok, expired := s.consumeSignedState(cookieValue)
+	if !ok {
+		return oauthStatePayload{}, false, expired
+	}
+	if payload.State == "" || state == "" || !hmac.Equal([]byte(payload.State), []byte(state)) {
+		return oauthStatePayload{}, false, false
 	}
 
 	s.mu.Lock()
-	returnTo, ok := s.states[state]
-	if ok {
-		delete(s.states, state)
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for usedState, expiresAt := range s.usedStates {
+		if expiresAt.Before(now) {
+			delete(s.usedStates, usedState)
+		}
 	}
-	s.mu.Unlock()
-	return returnTo, ok
+	if _, seen := s.usedStates[payload.State]; seen {
+		return oauthStatePayload{}, false, false
+	}
+	s.usedStates[payload.State] = time.Unix(payload.ExpiresAt, 0)
+	return payload, true, false
 }
 
-func (s *OAuthService) consumeSignedState(state string) (string, bool) {
+func (s *OAuthService) consumeSignedState(state string) (oauthStatePayload, bool, bool) {
 	key := s.stateSigningKey()
 	if len(key) == 0 {
-		return "", false
+		return oauthStatePayload{}, false, false
 	}
 
 	parts := strings.Split(state, ".")
 	if len(parts) != 2 {
-		return "", false
+		return oauthStatePayload{}, false, false
 	}
 
 	mac := hmac.New(sha256.New, key)
@@ -821,21 +1041,37 @@ func (s *OAuthService) consumeSignedState(state string) (string, bool) {
 
 	actualSig, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil || !hmac.Equal(actualSig, expectedSig) {
-		return "", false
+		return oauthStatePayload{}, false, false
 	}
 
 	body, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return "", false
+		return oauthStatePayload{}, false, false
 	}
 	var payload oauthStatePayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", false
+		return oauthStatePayload{}, false, false
 	}
 	if payload.ExpiresAt < time.Now().UTC().Unix() {
-		return "", false
+		return oauthStatePayload{}, false, true
 	}
-	return payload.ReturnTo, true
+	if payload.CodeVerifier == "" || payload.Nonce == "" {
+		return oauthStatePayload{}, false, false
+	}
+	return payload, true, false
+}
+
+func randomBase64URL(size int) (string, error) {
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func pkceChallengeS256(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // ──────────────────────────── Password Service ────────────────────────────
@@ -856,6 +1092,7 @@ type passwordService struct {
 	config   PasswordConfig
 	store    PasswordStore
 	notifier SecurityNotifier
+	resetOTP OTPCodeStore
 	mu       sync.Mutex
 	// email -> reset entry
 	resets         map[string]*resetEntry
@@ -882,7 +1119,18 @@ func NewPasswordService(config PasswordConfig, store PasswordStore, notifier Sec
 	}
 }
 
+func NewPasswordServiceWithOTPStore(config PasswordConfig, store PasswordStore, notifier SecurityNotifier, resetOTP OTPCodeStore) PasswordService {
+	svc := NewPasswordService(config, store, notifier).(*passwordService)
+	svc.resetOTP = resetOTP
+	return svc
+}
+
 func (s *passwordService) RequestReset(ctx context.Context, email string) error {
+	email = normalizeOTPIdentifier(email)
+	if s.resetOTP != nil {
+		return s.requestResetPersistent(ctx, email)
+	}
+
 	// Always succeed (enumeration protection) - store OTP only if user exists
 	code, _ := s.codeGenerator(6)
 
@@ -930,8 +1178,12 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) error 
 }
 
 func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPassword string) error {
+	email = normalizeOTPIdentifier(email)
 	if err := s.ValidatePassword(newPassword); err != nil {
 		return err
+	}
+	if s.resetOTP != nil {
+		return s.resetPasswordPersistent(ctx, email, otp, newPassword)
 	}
 
 	// F-031 (audit 2026-05-30): the mutex guards only the in-memory
@@ -1005,6 +1257,99 @@ func (s *passwordService) ResetPassword(ctx context.Context, email, otp, newPass
 	// Send security notification
 	_ = s.notifier.SendSecurityNotification(ctx, email, "Your password has been changed")
 
+	return nil
+}
+
+func (s *passwordService) requestResetPersistent(ctx context.Context, email string) error {
+	if s.store == nil || s.resetOTP == nil {
+		return nil
+	}
+	user, lookupErr := s.store.FindByEmail(ctx, email)
+	if lookupErr != nil || user == nil || s.config.ResetOTPExpiry <= 0 {
+		return nil
+	}
+	window := time.Duration(s.config.LockoutDuration) * time.Second
+	if window <= 0 {
+		window = time.Duration(s.config.ResetOTPExpiry) * time.Second
+	}
+	recent, err := s.resetOTP.CountRecent(ctx, "password_reset", email, time.Now().Add(-window))
+	if err != nil {
+		log.Printf("password reset: rate-limit lookup failed for %s: %v", maskEmail(email), err)
+		return nil
+	}
+	if recent >= s.config.MaxFailedAttempts {
+		return nil
+	}
+	code, err := s.codeGenerator(6)
+	if err != nil {
+		log.Printf("password reset: code generation failed for %s: %v", maskEmail(email), err)
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("password reset: code hash failed for %s: %v", maskEmail(email), err)
+		return nil
+	}
+	id, err := s.resetOTP.Create(ctx, OTPCodeRecord{
+		Purpose:    "password_reset",
+		Identifier: email,
+		CodeHash:   string(hash),
+		ExpiresAt:  time.Now().Add(time.Duration(s.config.ResetOTPExpiry) * time.Second),
+	})
+	if err != nil {
+		log.Printf("password reset: create OTP failed for %s: %v", maskEmail(email), err)
+		return nil
+	}
+	if s.notifier != nil {
+		if err := s.notifier.SendPasswordResetOTP(ctx, email, code, s.config.ResetOTPExpiry); err != nil {
+			_ = s.resetOTP.Delete(ctx, id)
+			log.Printf("password reset: SendPasswordResetOTP to %s failed: %v", maskEmail(email), err)
+		}
+	}
+	return nil
+}
+
+func (s *passwordService) resetPasswordPersistent(ctx context.Context, email, otp, newPassword string) error {
+	entry, err := s.resetOTP.LatestActive(ctx, "password_reset", email)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		_, _ = s.store.RecordFailedAttempt(ctx, email)
+		return errors.New("invalid or expired OTP")
+	}
+	if entry.Attempts >= s.config.MaxFailedAttempts {
+		return errors.New("account locked due to too many failed attempts")
+	}
+	if time.Now().After(entry.ExpiresAt) {
+		_, _ = s.store.RecordFailedAttempt(ctx, email)
+		return errors.New("OTP expired")
+	}
+	attempts, err := s.resetOTP.IncrementAttempts(ctx, entry.ID)
+	if err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(entry.CodeHash), []byte(otp)) != nil {
+		_, _ = s.store.RecordFailedAttempt(ctx, email)
+		if attempts >= s.config.MaxFailedAttempts {
+			return errors.New("account locked due to too many failed attempts")
+		}
+		return errors.New("invalid OTP")
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return err
+	}
+	if err := s.store.UpdatePassword(ctx, email, string(hashed)); err != nil {
+		return err
+	}
+	if err := s.resetOTP.MarkUsed(ctx, entry.ID); err != nil {
+		return err
+	}
+	if s.notifier != nil {
+		_ = s.notifier.SendSecurityNotification(ctx, email, "Your password has been changed")
+	}
 	return nil
 }
 

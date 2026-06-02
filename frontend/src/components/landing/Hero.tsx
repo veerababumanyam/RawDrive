@@ -28,24 +28,23 @@ export function Hero() {
           alt=""
           fill
           priority
+          quality={94}
           sizes="100vw"
           className="landing-hero__image object-cover"
           aria-hidden="true"
         />
-        {/* Theme-aware scrim — fades the left-to-center region toward the
-            theme's surface-base so the text block always hits AA contrast.
-            Uses plain CSS vars, not Tailwind utilities, so the gradient can
-            address four colorstops fluidly. */}
+        {/* Theme-aware scrim — builds a soft editorial stage for the offer
+            while keeping the full-bleed photograph intact. Uses plain CSS
+            vars so the gradient adapts across all shipped themes. */}
         <div className="landing-hero__scrim" aria-hidden="true" />
         {/* Vignette on the top edge — helps the hero-overlay navbar read
             legibly without a hard background color. */}
         <div className="landing-hero__top-vignette" aria-hidden="true" />
       </div>
 
-      {/* Text block — anchored to the left side of the viewport with a
-          wide max-width. The right side deliberately shows the photograph
-          unobstructed on xl+, creating the editorial "breathing" that
-          defines the aesthetic. */}
+      {/* Text block — anchored in the strongest visual zone so the sales
+          message lands first, with the photograph acting as supporting
+          context rather than competing foreground. */}
       <div className="mx-auto flex w-full max-w-7xl flex-col px-6 py-24 sm:px-8 lg:px-12">
         <div className="landing-hero__text max-w-2xl">
           <p className="landing-hero__eyebrow font-headline text-xs font-semibold uppercase tracking-[0.32em] text-text-secondary">

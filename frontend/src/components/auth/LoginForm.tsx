@@ -5,30 +5,65 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, KeyRound } from "lucide-react";
 import {
+  type RefreshAuthFailureReason,
   getGoogleOAuthStartUrl,
   getPostLoginPath,
   isAndroidWebView,
   openPageInChrome,
   persistAuthTokens,
-  refreshAuthSession,
+  refreshAuthSessionResult,
 } from "@/lib/auth";
 import { useOAuthAvailability } from "@/hooks/useOAuthAvailability";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const LOGIN_NETWORK_ERROR =
+  "RawDrive couldn't be reached. Check your connection and try again.";
 
-function friendlyOAuthError(code: string | null) {
+function friendlyOAuthRefreshFailure(reason: RefreshAuthFailureReason | string | null) {
+  switch (reason) {
+    case "network_error":
+      return "Google verified you, but RawDrive couldn't reach the server. Check your connection and try again.";
+    case "no_session":
+    case "expired":
+      return "Google verified you, but your RawDrive session cookie was not available. Start Google sign-in again and allow cookies for RawDrive.";
+    case "server_error":
+    case "invalid_response":
+      return "Google verified you, but RawDrive couldn't start your session. Try again or use your password.";
+    default:
+      return "Google verified you, but RawDrive couldn't start your session. Please try again.";
+  }
+}
+
+function friendlyOAuthError(code: string | null, reason?: string | null) {
   if (!code) {
     return "";
   }
 
   switch (code) {
     case "oauth_failed":
-      return "Google sign-in could not be completed. Please try again.";
+    case "oauth_token_invalid":
+      return "We couldn't complete Google sign-in. Try again or use your password.";
+    case "oauth_config_unavailable":
+      return "Google sign-in is not configured correctly for this environment. Use your password or contact support.";
     case "missing_state":
-      return "The Google sign-in session expired. Please start again.";
+    case "oauth_state_invalid":
+    case "oauth_state_expired":
+      return "That Google sign-in link expired. Start again from this page.";
+    case "oauth_email_unverified":
+      return "Google could not confirm that email address. Use your password or another Google account.";
+    case "oauth_account_conflict":
+      return "That Google account is already linked to another RawDrive account.";
+    case "oauth_refresh_failed":
+      return friendlyOAuthRefreshFailure(reason ?? null);
+    case "oauth_storage_blocked":
+      return "This browser blocked secure storage for the MFA step. Allow site storage and cookies, use Chrome, or sign in with your password.";
     default:
       return "Authentication could not be completed. Please try again.";
   }
+}
+
+function friendlySessionExpired(active: boolean) {
+  return active ? "Your session expired. Sign in again to continue." : "";
 }
 
 export function LoginForm() {
@@ -40,13 +75,16 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [webviewNotice, setWebviewNotice] = useState(false);
+  const [oauthFinishing, setOAuthFinishing] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { enabled: oauthEnabled } = useOAuthAvailability(API_BASE);
 
   const registered = searchParams.get("registered") === "1";
   const oauthAuthenticated = searchParams.get("authenticated") === "1";
   const oauthMfaRequired = searchParams.get("mfa_required") === "1";
-  const oauthMfaToken = searchParams.get("mfa_token") || "";
   const oauthError = searchParams.get("error");
+  const oauthErrorReason = searchParams.get("reason");
+  const sessionExpired = searchParams.get("session_expired") === "1";
   const prefilledEmail = searchParams.get("email") || "";
 
   const googleStartUrl = useMemo(() => getGoogleOAuthStartUrl(API_BASE), []);
@@ -61,20 +99,11 @@ export function LoginForm() {
     if (!oauthMfaRequired) {
       return;
     }
-    if (!oauthMfaToken) {
-      setError("Google sign-in could not be completed. Please try again.");
-      router.replace("/login");
-      return;
-    }
     try {
-      window.sessionStorage.setItem("rawdrive_mfa_token", oauthMfaToken);
-    } catch {
-      setError("This browser blocked secure session storage. Please try again.");
-      router.replace("/login");
-      return;
-    }
+      window.sessionStorage.removeItem("rawdrive_mfa_token");
+    } catch {}
     router.replace("/login/mfa");
-  }, [oauthMfaRequired, oauthMfaToken, router]);
+  }, [oauthMfaRequired, router]);
 
   useEffect(() => {
     if (oauthMfaRequired) {
@@ -86,13 +115,17 @@ export function LoginForm() {
 
     let cancelled = false;
     async function finishOAuthLogin() {
-      const token = await refreshAuthSession(API_BASE);
+      setOAuthFinishing(true);
+      setNotice("Finishing Google sign-in...");
+      const result = await refreshAuthSessionResult(API_BASE);
       if (cancelled) {
         return;
       }
-      if (!token) {
-        setError("Google sign-in could not be completed. Please try again.");
-        router.replace("/login");
+      if (!result.ok) {
+        setOAuthFinishing(false);
+        setNotice("");
+        setError(friendlyOAuthError("oauth_refresh_failed", result.reason));
+        router.replace(`/login?error=oauth_refresh_failed&reason=${encodeURIComponent(result.reason)}`);
         return;
       }
       router.replace(getPostLoginPath());
@@ -110,11 +143,17 @@ export function LoginForm() {
       return;
     }
 
-    const oauthMessage = friendlyOAuthError(oauthError);
+    const sessionMessage = friendlySessionExpired(sessionExpired);
+    if (sessionMessage) {
+      setError(sessionMessage);
+      return;
+    }
+
+    const oauthMessage = friendlyOAuthError(oauthError, oauthErrorReason);
     if (oauthMessage) {
       setError(oauthMessage);
     }
-  }, [oauthError, registered]);
+  }, [oauthError, oauthErrorReason, registered, sessionExpired]);
 
   async function handleLogin(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -165,7 +204,7 @@ export function LoginForm() {
       persistAuthTokens(payload.access_token);
       window.location.assign(getPostLoginPath());
     } catch {
-      setError("Network error. Please confirm the API server is running.");
+      setError(LOGIN_NETWORK_ERROR);
     } finally {
       setLoading(false);
     }
@@ -174,13 +213,21 @@ export function LoginForm() {
   return (
     <div className="mt-10 space-y-6">
       {notice ? (
-        <div className="rounded-2xl border border-border bg-accent-subtle px-4 py-3 text-sm text-accent">
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-2xl border border-border bg-accent-subtle px-4 py-3 text-sm text-accent"
+        >
           {notice}
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error"
+        >
           {error}
         </div>
       ) : null}
@@ -189,14 +236,22 @@ export function LoginForm() {
         <>
           <button
             type="button"
+            disabled={loading || oauthFinishing || googleLoading}
+            aria-describedby={webviewNotice ? "google-webview-recovery" : undefined}
             onClick={() => {
               if (isAndroidWebView()) {
                 setWebviewNotice(true);
+              } else if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                setNotice("");
+                setError(LOGIN_NETWORK_ERROR);
               } else {
+                setError("");
+                setNotice("");
+                setGoogleLoading(true);
                 window.location.assign(googleStartUrl);
               }
             }}
-            className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-surface-container-low px-4 py-4 font-medium text-text-primary transition-colors hover:bg-surface-container-high"
+            className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-surface-container-low px-4 py-4 font-medium text-text-primary transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -216,11 +271,16 @@ export function LoginForm() {
                 fill="#EA4335"
               />
             </svg>
-            <span>Sign in with Google</span>
+            <span>{googleLoading ? "Redirecting to Google..." : "Sign in with Google"}</span>
           </button>
 
           {webviewNotice ? (
-            <div className="rounded-2xl border border-border bg-surface-container-low px-4 py-4 text-sm text-text-secondary">
+            <div
+              id="google-webview-recovery"
+              role="status"
+              aria-live="polite"
+              className="rounded-2xl border border-border bg-surface-container-low px-4 py-4 text-sm text-text-secondary"
+            >
               <p className="font-medium text-text-primary">
                 Google sign-in requires Chrome
               </p>
@@ -308,7 +368,7 @@ export function LoginForm() {
 
         <button
           type="submit"
-          disabled={loading || !email.trim() || !password}
+          disabled={loading || oauthFinishing || googleLoading || !email.trim() || !password}
           className="btn-primary w-full py-4 font-headline text-base disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Signing in..." : "Sign In"}

@@ -3,6 +3,8 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -180,6 +182,55 @@ func TestJWTService_RefreshSessionsSurviveRestart(t *testing.T) {
 	assert.NotEmpty(t, newAccess)
 	assert.NotEmpty(t, newRefresh)
 	assert.NotEqual(t, refreshToken, newRefresh, "rotated token must differ")
+}
+
+func TestJWTService_ConcurrentRefreshRotation_AllowsSingleWinner(t *testing.T) {
+	store := auth.NewInMemoryRefreshStore()
+	cfg := auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	}
+	svc := auth.NewJWTService(cfg).(interface {
+		WithRefreshStore(auth.RefreshSessionStore) auth.JWTService
+	}).WithRefreshStore(store)
+
+	ctx := context.Background()
+	refreshToken, err := svc.GenerateRefreshTokenWithClaims(ctx,
+		"user-1", "family-1", "ws-1", "Owner", "photographer", "state-1")
+	require.NoError(t, err)
+
+	const contenders = 12
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	var successCount int32
+	var failureCount int32
+
+	for i := 0; i < contenders; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			access, rotated, rotateErr := svc.RotateRefreshToken(ctx, refreshToken)
+			if rotateErr == nil {
+				require.NotEmpty(t, access)
+				require.NotEmpty(t, rotated)
+				atomic.AddInt32(&successCount, 1)
+				return
+			}
+			assert.Contains(t, rotateErr.Error(), "refresh token reuse")
+			atomic.AddInt32(&failureCount, 1)
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	assert.Equal(t, int32(1), successCount, "exactly one concurrent refresh should rotate")
+	assert.Equal(t, int32(contenders-1), failureCount)
+	revoked, err := store.IsFamilyRevoked(ctx, "family-1")
+	require.NoError(t, err)
+	assert.True(t, revoked, "reusing the old refresh token must revoke its family")
 }
 
 // The session-limit check must reject a 6th concurrent session when

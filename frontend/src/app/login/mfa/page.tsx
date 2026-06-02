@@ -2,16 +2,18 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ShieldCheck } from "lucide-react";
 import { MFAVerifyForm } from "@/components/auth/MFAVerifyForm";
+import { createNoIndexMetadata } from "@/lib/seo";
 
 // F-007 (M17 wave 3): TOTP step-up page. Reached from /login when the
-// backend returns 401 + mfa_required. The form reads the challenge token
-// from sessionStorage (set by LoginForm) and POSTs it alongside the
-// user's current TOTP code to /auth/verify-totp.
+// backend returns 401 + mfa_required, and from OAuth when the backend sets
+// a short-lived HttpOnly challenge cookie. The form posts the current TOTP
+// code to /auth/verify-totp.
 
-export const metadata: Metadata = {
-  title: "Verify | RawDrive",
-  description: "Enter your authenticator app code to finish signing in.",
-};
+export const metadata: Metadata = createNoIndexMetadata(
+  "Two-factor verification",
+  "Enter your authenticator app code to finish signing in.",
+  "/login/mfa",
+);
 
 function Fallback() {
   return (

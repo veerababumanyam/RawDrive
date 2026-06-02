@@ -64,29 +64,38 @@ func TestF012_OAuthGoogleCallbackEnforcesMFAStepUp(t *testing.T) {
 	// The OAuth callback must consult the step-up gate.
 	gateIdx := strings.Index(body, "h.requiresMFAStepUp(")
 	if gateIdx < 0 {
-		t.Fatalf("F-012 regression: OAuthGoogleCallback no longer calls "+
-			"h.requiresMFAStepUp(...). An enrolled user could log in via "+
+		t.Fatalf("F-012 regression: OAuthGoogleCallback no longer calls " +
+			"h.requiresMFAStepUp(...). An enrolled user could log in via " +
 			"Google and bypass the TOTP second factor entirely.")
 	}
 
 	// And it must issue the MFA challenge on the gated path.
 	if !strings.Contains(body, "IssueMFAChallengeToken(") {
-		t.Errorf("F-012 regression: OAuthGoogleCallback does not issue an MFA "+
-			"challenge token. The step-up path must mint a challenge and "+
+		t.Errorf("F-012 regression: OAuthGoogleCallback does not issue an MFA " +
+			"challenge token. The step-up path must mint a challenge and " +
 			"redirect to the TOTP page instead of completing login.")
 	}
 	if !strings.Contains(body, `"mfa_required"`) {
-		t.Errorf("F-012 regression: OAuthGoogleCallback does not signal "+
-			"mfa_required on the step-up redirect, so the frontend cannot "+
+		t.Errorf("F-012 regression: OAuthGoogleCallback does not signal " +
+			"mfa_required on the step-up redirect, so the frontend cannot " +
 			"route the user to the TOTP step-up page.")
+	}
+	if strings.Contains(body, `"mfa_token"`) {
+		t.Errorf("F-012 regression: OAuthGoogleCallback must not put the " +
+			"MFA challenge token in a redirect URL. Use the HttpOnly " +
+			"rawdrive_mfa_challenge cookie instead.")
+	}
+	if !strings.Contains(body, "setMFAChallengeCookie(") {
+		t.Errorf("F-012 regression: OAuthGoogleCallback must store the " +
+			"OAuth MFA challenge in an HttpOnly cookie before redirecting.")
 	}
 
 	// The gate must come BEFORE the full-session refresh token is issued —
 	// otherwise the enrolled user would already hold a valid session.
 	refreshIdx := strings.Index(body, "GenerateRefreshTokenWithClaims(")
 	if refreshIdx < 0 {
-		t.Fatalf("F-012 regression: OAuthGoogleCallback no longer issues a "+
-			"refresh token via GenerateRefreshTokenWithClaims — the test's "+
+		t.Fatalf("F-012 regression: OAuthGoogleCallback no longer issues a " +
+			"refresh token via GenerateRefreshTokenWithClaims — the test's " +
 			"ordering assumption is stale and must be revisited.")
 	}
 	if gateIdx > refreshIdx {

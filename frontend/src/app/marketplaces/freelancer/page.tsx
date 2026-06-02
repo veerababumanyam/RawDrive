@@ -1,23 +1,21 @@
 import type { Metadata } from "next";
 import { MarketplaceShowcasePage } from "@/components/marketing/MarketplaceShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Freelancer Marketplace | RawDrive",
-  description:
-    "Find the best freelancers for your photography studio in one unified marketplace.",
-};
+export const metadata: Metadata = createPageMetadata("freelancer-marketplace");
 
 export default function FreelancerMarketplacePage() {
   return (
     <MarketplaceShowcasePage
       eyebrow="Marketplace"
       title="Find second shooters, editors, and specialists without leaving RawDrive."
-      description="This page body is now rebuilt from the Stitch marketplace direction, with the application navbar and footer still preserved."
+      description="Discover photography talent by city, specialty, availability, and project fit so your studio can staff weddings, events, edits, and drone work faster."
       previewSrc="/stitch/freelancers.png"
-      previewAlt="Stitch freelancer marketplace preview"
+      previewAlt="RawDrive freelancer marketplace preview"
       primaryCta={{ href: "/register", label: "Create your profile" }}
       secondaryCta={{ href: "/contact", label: "Talk to our team" }}
       filters={["Mumbai", "Wedding", "Portrait", "Drone", "Retouching", "Top rated"]}
+      answer="RawDrive's freelancer marketplace is best for studios that need trusted second shooters, editors, drone operators, and specialists for Indian wedding, event, portrait, and commercial photography projects."
       cards={[
         {
           name: "Aarav Mehta",

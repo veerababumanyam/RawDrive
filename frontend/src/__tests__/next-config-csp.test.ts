@@ -34,11 +34,15 @@ import { buildCsp } from "../lib/csp";
 
 /** Extract just the `script-src ...` directive from a full CSP string. */
 function scriptSrc(csp: string): string {
+  return directive(csp, "script-src");
+}
+
+function directive(csp: string, name: string): string {
   const directive = csp
     .split(";")
     .map((d) => d.trim())
-    .find((d) => d.startsWith("script-src"));
-  if (!directive) throw new Error(`no script-src directive in CSP: ${csp}`);
+    .find((d) => d.startsWith(name));
+  if (!directive) throw new Error(`no ${name} directive in CSP: ${csp}`);
   return directive;
 }
 
@@ -83,5 +87,18 @@ describe("next.config CSP (F-098)", () => {
   it("dev still adds 'unsafe-eval' (turbopack/react-refresh need it)", () => {
     const devScript = scriptSrc(buildCsp({ isDev: true }));
     expect(devScript).toContain("'unsafe-eval'");
+  });
+
+  it("allows the configured API origin for API-backed gallery media", () => {
+    const csp = buildCsp({
+      isDev: false,
+      nonce: "abc",
+      apiOrigin: "http://localhost:8080/api/v1",
+    });
+
+    expect(directive(csp, "img-src")).toContain("http://localhost:8080");
+    expect(directive(csp, "connect-src")).toContain("http://localhost:8080");
+    expect(directive(csp, "media-src")).toContain("http://localhost:8080");
+    expect(csp).not.toContain("/api/v1");
   });
 });

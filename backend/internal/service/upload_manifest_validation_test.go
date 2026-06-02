@@ -187,12 +187,16 @@ func TestValidateForSessionCreate_StrictClientScan_Heic_DesktopRequired(t *testi
 }
 
 func TestValidateForSessionCreate_StrictClientScan_Raw_DesktopRequired(t *testing.T) {
-	v := newValidatorEnforced(&stubCatalog{})
-	m := validManifest()
-	m.DetectedFormat = "cr2"
-	err := v.ValidateForSessionCreate(context.Background(), PolicyModeStrictClientScan, m)
-	if !errors.Is(err, ErrScanDesktopRequired) {
-		t.Fatalf("expected ErrScanDesktopRequired for CR2 in strict mode, got %v", err)
+	for _, format := range []string{"cr2", "cr3", "crw", "nef", "nrw", "arw", "arq", "gpr", "dng", "rw2", "rwl"} {
+		t.Run(format, func(t *testing.T) {
+			v := newValidatorEnforced(&stubCatalog{})
+			m := validManifest()
+			m.DetectedFormat = format
+			err := v.ValidateForSessionCreate(context.Background(), PolicyModeStrictClientScan, m)
+			if !errors.Is(err, ErrScanDesktopRequired) {
+				t.Fatalf("expected ErrScanDesktopRequired for %s in strict mode, got %v", format, err)
+			}
+		})
 	}
 }
 
@@ -267,8 +271,17 @@ func TestIsEngineAllowedForFormat_StrictClientScan_BrowserWorkerTiffRejected(t *
 	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "heic", PolicyModeStrictClientScan) {
 		t.Error("strict_client_scan should REJECT browser-worker HEIC in M16")
 	}
+	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "avif", PolicyModeStrictClientScan) {
+		t.Error("strict_client_scan should REJECT browser-worker AVIF in M16")
+	}
 	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "cr2", PolicyModeStrictClientScan) {
 		t.Error("strict_client_scan should REJECT browser-worker CR2 in M16")
+	}
+	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "arq", PolicyModeStrictClientScan) {
+		t.Error("strict_client_scan should REJECT browser-worker Sony ARQ in M16")
+	}
+	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "gpr", PolicyModeStrictClientScan) {
+		t.Error("strict_client_scan should REJECT browser-worker GoPro GPR in M16")
 	}
 }
 

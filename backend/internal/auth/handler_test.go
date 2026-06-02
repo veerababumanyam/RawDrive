@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,6 +146,51 @@ func refreshCookieFromResponse(t *testing.T, resp *http.Response) *http.Cookie {
 		}
 	}
 	t.Fatalf("expected refresh_token cookie in response")
+	return nil
+}
+
+func oauthStateCookie(value string) *http.Cookie {
+	return &http.Cookie{
+		Name:  "rawdrive_oauth_state",
+		Value: value,
+		Path:  "/",
+	}
+}
+
+func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
+}
+
+type verifiedMFAEnrollmentStore struct {
+	userID uuid.UUID
+}
+
+func (s verifiedMFAEnrollmentStore) Create(context.Context, *auth.MFAEnrollmentRow) error {
+	return nil
+}
+
+func (s verifiedMFAEnrollmentStore) GetByUserID(_ context.Context, userID uuid.UUID) (*auth.MFAEnrollmentRow, error) {
+	if userID != s.userID {
+		return nil, auth.ErrMFANotEnrolled
+	}
+	now := time.Now()
+	return &auth.MFAEnrollmentRow{
+		ID:             uuid.New(),
+		UserID:         userID,
+		LastVerifiedAt: &now,
+	}, nil
+}
+
+func (s verifiedMFAEnrollmentStore) UpdateLastVerified(context.Context, uuid.UUID) error {
+	return nil
+}
+
+func (s verifiedMFAEnrollmentStore) Delete(context.Context, uuid.UUID) error {
 	return nil
 }
 
@@ -352,8 +398,8 @@ func newOAuthHandler() (*auth.Handler, *httptest.Server) {
 		MaxSessions:        5,
 	})
 	oauthSvc := auth.NewOAuthService(
-		auth.OAuthConfig{ClientID: "test", RedirectURI: "http://localhost/cb"},
-		nil, nil,
+		auth.OAuthConfig{ClientID: "test", ClientSecret: "test-secret", RedirectURI: "http://localhost/cb"},
+		newMockProvider(nil), &mockUserStore{users: map[string]*auth.User{}},
 	)
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
 	return handler, newTestServer(handler)
@@ -400,6 +446,38 @@ func TestOAuthGoogle_LoginRedirects(t *testing.T) {
 	assert.Contains(t, resp.Header.Get("Location"), "accounts.google.com")
 }
 
+func TestOAuthGoogle_StartSetsBrowserBoundStateCookie(t *testing.T) {
+	_, ts := newOAuthHandler()
+	defer ts.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Get(ts.URL + "/auth/oauth/google")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode)
+	var stateCookie *http.Cookie
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "rawdrive_oauth_state" {
+			stateCookie = cookie
+			break
+		}
+	}
+	require.NotNil(t, stateCookie, "OAuth start must bind state to a browser cookie")
+	assert.True(t, stateCookie.HttpOnly)
+	assert.Equal(t, http.SameSiteLaxMode, stateCookie.SameSite)
+	assert.Equal(t, "/", stateCookie.Path)
+	assert.NotEmpty(t, stateCookie.Value)
+	assert.Contains(t, resp.Header.Get("Location"), "code_challenge=")
+	assert.Contains(t, resp.Header.Get("Location"), "code_challenge_method=S256")
+	assert.NotContains(t, resp.Header.Get("Location"), "code_verifier")
+}
+
 // TestOAuthGoogleStatus_EnabledWhenConfigured asserts the public status probe
 // reports enabled==true when an OAuth service is wired (GOOGLE_CLIENT_* present).
 // newOAuthHandler() constructs the handler WITH a non-nil oauth service, so the
@@ -437,6 +515,38 @@ func TestOAuthGoogleStatus_DisabledWhenNil(t *testing.T) {
 	var result map[string]bool
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 	assert.False(t, result["enabled"], "status must report disabled when oauth is nil")
+}
+
+func TestOAuthGoogleStatus_DisabledWhenPartiallyConfigured(t *testing.T) {
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test-client", RedirectURI: "http://localhost/callback"},
+		newMockProvider(nil),
+		&mockUserStore{users: map[string]*auth.User{}},
+	)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/auth/oauth/google/status")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var result map[string]bool
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.False(t, result["enabled"], "status must require client id, secret, redirect uri, provider, and store")
 }
 
 func TestVerifyOTPHandler_Success(t *testing.T) {
@@ -642,8 +752,11 @@ func TestOAuthGoogleHandler_Redirect(t *testing.T) {
 	})
 	userSvc := newMockUserService()
 
-	// Create a minimal OAuthService
-	oauthSvc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client", RedirectURI: "http://localhost/callback"}, nil, nil)
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test-client", ClientSecret: "test-secret", RedirectURI: "http://localhost/callback"},
+		newMockProvider(nil),
+		&mockUserStore{users: map[string]*auth.User{}},
+	)
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userSvc)
 
 	ts := newTestServer(handler)
@@ -684,11 +797,12 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 	})
 
 	profile := &auth.OAuthProfile{
-		Email:       "oauth@example.com",
-		DisplayName: "OAuth User",
-		ProviderID:  "google-oauth-test",
+		Email:         "oauth@example.com",
+		EmailVerified: true,
+		DisplayName:   "OAuth User",
+		ProviderID:    "google-oauth-test",
 	}
-	oauthSvc, state := newAuthorizedService(t, newMockProvider(profile), &mockUserStore{users: map[string]*auth.User{}})
+	oauthSvc, state, cookieValue := newAuthorizedService(t, newMockProvider(profile), &mockUserStore{users: map[string]*auth.User{}})
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
 
 	ts := newTestServer(handler)
@@ -697,7 +811,10 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Get(ts.URL + "/auth/oauth/google/callback?code=valid-code&state=" + url.QueryEscape(state))
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(oauthStateCookie(cookieValue))
+	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -710,6 +827,192 @@ func TestOAuthGoogleCallback_DoesNotLeakTokensInRedirect(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1", parsed.Query().Get("authenticated"))
 	assert.NotEmpty(t, refreshCookieFromResponse(t, resp).Value)
+}
+
+func TestOAuthGoogleCallback_InvalidClientRedirectsConfigUnavailable(t *testing.T) {
+	t.Setenv("FRONTEND_URL", "http://localhost:3000")
+
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+	provider := &mockOAuthProvider{
+		exchangeFunc: func(code, codeVerifier string) (*auth.OAuthToken, error) {
+			return nil, &auth.GoogleTokenError{StatusCode: http.StatusUnauthorized, Code: "invalid_client"}
+		},
+		profileFunc: func(token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error) {
+			t.Fatal("profile should not be fetched after invalid_client")
+			return nil, nil
+		},
+	}
+	oauthSvc, state, cookieValue := newAuthorizedService(t, provider, &mockUserStore{users: map[string]*auth.User{}})
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(oauthStateCookie(cookieValue))
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode)
+	location := resp.Header.Get("Location")
+	parsed, err := url.Parse(location)
+	require.NoError(t, err)
+	assert.Equal(t, "oauth_config_unavailable", parsed.Query().Get("error"))
+
+	statusResp, err := http.Get(ts.URL + "/auth/oauth/google/status")
+	require.NoError(t, err)
+	defer statusResp.Body.Close()
+	var status map[string]bool
+	require.NoError(t, json.NewDecoder(statusResp.Body).Decode(&status))
+	assert.False(t, status["enabled"])
+
+	startResp, err := client.Get(ts.URL + "/auth/oauth/google?redirect_to=http%3A%2F%2Flocalhost%3A3000")
+	require.NoError(t, err)
+	defer startResp.Body.Close()
+	assert.Equal(t, http.StatusFound, startResp.StatusCode)
+	startLocation := startResp.Header.Get("Location")
+	assert.NotContains(t, startLocation, "accounts.google.com")
+	startURL, err := url.Parse(startLocation)
+	require.NoError(t, err)
+	assert.Equal(t, "http", startURL.Scheme)
+	assert.Equal(t, "localhost:3000", startURL.Host)
+	assert.Equal(t, "/login", startURL.Path)
+	assert.Equal(t, "oauth_config_unavailable", startURL.Query().Get("error"))
+	assert.Nil(t, findCookie(startResp.Cookies(), "rawdrive_oauth_state"))
+}
+
+func TestOAuthGoogleCallback_MFAStepUpUsesHttpOnlyCookie(t *testing.T) {
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+	userID := uuid.New()
+	email := "oauth-mfa@example.com"
+	profile := &auth.OAuthProfile{
+		Email:         email,
+		EmailVerified: true,
+		DisplayName:   "OAuth MFA User",
+		ProviderID:    "google-oauth-mfa",
+	}
+	store := &mockUserStore{users: map[string]*auth.User{
+		email: {ID: userID.String(), Email: email, EmailVerified: true},
+	}}
+	oauthSvc, state, cookieValue := newAuthorizedService(t, newMockProvider(profile), store)
+	mfaHandler := auth.NewMFAHandler(nil, nil, nil, nil, nil, jwtSvc, "", nil, nil)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService()).
+		WithMFA(verifiedMFAEnrollmentStore{userID: userID}, mfaHandler)
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(oauthStateCookie(cookieValue))
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode)
+	location := resp.Header.Get("Location")
+	parsed, err := url.Parse(location)
+	require.NoError(t, err)
+	assert.Equal(t, "1", parsed.Query().Get("mfa_required"))
+	assert.Equal(t, "totp", parsed.Query().Get("challenge"))
+	assert.Empty(t, parsed.Query().Get("mfa_token"))
+	assert.NotContains(t, location, "mfa_token=")
+	assert.Nil(t, findCookie(resp.Cookies(), "refresh_token"), "full session must not be issued before MFA")
+
+	challengeCookie := findCookie(resp.Cookies(), "rawdrive_mfa_challenge")
+	require.NotNil(t, challengeCookie)
+	assert.True(t, challengeCookie.HttpOnly)
+	assert.Equal(t, http.SameSiteStrictMode, challengeCookie.SameSite)
+	assert.Equal(t, "/auth", challengeCookie.Path)
+	assert.Greater(t, challengeCookie.MaxAge, 0)
+	assert.NotEmpty(t, challengeCookie.Value)
+}
+
+func TestOAuthGoogleRejectsExternalRedirectTo(t *testing.T) {
+	t.Setenv("FRONTEND_URL", "http://localhost:3000")
+
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+	profile := &auth.OAuthProfile{
+		Email:         "safe-redirect@example.com",
+		EmailVerified: true,
+		DisplayName:   "Safe Redirect",
+		ProviderID:    "google-safe-redirect",
+	}
+	oauthSvc := auth.NewOAuthService(
+		auth.OAuthConfig{ClientID: "test-client", ClientSecret: "test-secret", RedirectURI: "http://localhost/callback"},
+		newMockProvider(profile),
+		&mockUserStore{users: map[string]*auth.User{}},
+	)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	startResp, err := client.Get(ts.URL + "/auth/oauth/google?redirect_to=https%3A%2F%2Fevil.example")
+	require.NoError(t, err)
+	defer startResp.Body.Close()
+	require.Equal(t, http.StatusFound, startResp.StatusCode)
+	stateURL, err := url.Parse(startResp.Header.Get("Location"))
+	require.NoError(t, err)
+	state := stateURL.Query().Get("state")
+	require.NotEmpty(t, state)
+	stateCookie := findCookie(startResp.Cookies(), "rawdrive_oauth_state")
+	require.NotNil(t, stateCookie)
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(oauthStateCookie(stateCookie.Value))
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	location := resp.Header.Get("Location")
+	assert.NotContains(t, location, "evil.example")
+	assert.True(t, strings.HasPrefix(location, "http://localhost:3000/login?"), location)
 }
 
 func TestRefreshTokenHandler_Success(t *testing.T) {

@@ -5,7 +5,7 @@ export const brand = {
   tagline: "The Operating System for Professional Photography in India",
   domain: "rawdrive.in",
   locale: "en-IN",
-  dpoEmail: "privacy@rawdrive.in",
+  dpoEmail: "contactus@rawdrive.in",
 } as const;
 
 export const themes = ["liquid-glass", "liquid-glass-dark", "midnight"] as const;

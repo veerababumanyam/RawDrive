@@ -198,15 +198,28 @@ func (s *GalleryService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 
 // AddAsset adds an asset to a gallery and auto-sets cover if none.
 func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID uuid.UUID, sortOrder int) error {
-	if err := s.galleryAssetRepo.Add(ctx, galleryID, assetID, sortOrder); err != nil {
-		return err
-	}
-	// Auto-set cover if gallery has no cover
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil {
 		return fmt.Errorf("gallery service add asset: %w", err)
 	}
-	if gallery != nil && gallery.CoverAssetID == nil {
+	if gallery == nil {
+		return fmt.Errorf("gallery not found")
+	}
+	if s.assetRepo != nil {
+		asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, assetID, gallery.WorkspaceID)
+		if err != nil {
+			return fmt.Errorf("gallery service add asset: %w", err)
+		}
+		if asset == nil {
+			return fmt.Errorf("asset not found in gallery workspace")
+		}
+	}
+
+	if err := s.galleryAssetRepo.Add(ctx, galleryID, assetID, sortOrder); err != nil {
+		return err
+	}
+	// Auto-set cover if gallery has no cover
+	if gallery.CoverAssetID == nil && s.coverSvc != nil {
 		s.coverSvc.AutoSetCover(ctx, galleryID)
 	}
 	return nil

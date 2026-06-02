@@ -1,6 +1,7 @@
 import { authFetch } from "@/lib/api/authFetch";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
 export interface Gallery {
   id: string;
@@ -157,6 +158,50 @@ export interface GalleryBranding {
   public_branding_enabled?: boolean;
 }
 
+export interface PublicStudioProfile {
+  id: string;
+  name: string;
+  display_name: string;
+  brand_name?: string;
+  brand_accent_color?: string;
+  public_branding_enabled: boolean;
+  can_customize: boolean;
+  tier_slug: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  postal_code?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo_url?: string | null;
+  business_profile_slug: string;
+  business_unique_code: string;
+  business_subdomain: string;
+  public_url: string;
+}
+
+export interface PublicStudioGallery {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  gallery_type: string;
+  cover_thumbnails?: Record<string, string>;
+  created_at: string;
+  published_at?: string;
+  download_enabled: boolean;
+  public_url: string;
+}
+
+export interface PublicStudioLanding {
+  studio: PublicStudioProfile;
+  galleries: PublicStudioGallery[];
+  counts: {
+    published_galleries: number;
+  };
+}
+
 // withWorkspaceScope appends `?ws=<sub>` to a public-gallery API URL when the
 // caller supplies a workspace subdomain (set by Next.js middleware on requests
 // arriving via `<biz>-<code>.rawdrive.in/...`). The backend reads `?ws=` and
@@ -168,8 +213,14 @@ function withWorkspaceScope(path: string, ws?: string | null): string {
   return `${path}${sep}ws=${encodeURIComponent(ws)}`;
 }
 
+export async function getPublicStudioLanding(subdomain: string): Promise<PublicStudioLanding> {
+  const res = await fetch(apiUrl(`/api/v1/public/studios/${encodeURIComponent(subdomain)}`));
+  if (!res.ok) throw new Error(`Studio not found: ${res.status}`);
+  return res.json();
+}
+
 export async function getPublicGalleryBranding(slug: string, ws?: string | null): Promise<GalleryBranding> {
-  const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)}`);
+  const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)));
   if (!res.ok) throw new Error(`Failed to get branding: ${res.status}`);
   return res.json();
 }
@@ -189,7 +240,7 @@ export async function postFaceMatch(
   consentGiven: boolean,
   threshold?: number,
 ): Promise<FaceMatchResult> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/face-match`, {
+  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/face-match`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ embedding, consent_given: consentGiven, threshold }),
@@ -212,7 +263,7 @@ export async function verifyShareLink(
   token: string,
   credential?: string,
 ): Promise<{ ok: boolean; reason?: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/public/share/${token}/verify`, {
+  const res = await fetch(apiUrl(`/api/v1/public/share/${token}/verify`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ credential: credential || "" }),
@@ -383,7 +434,7 @@ export async function getGalleryWorkspaceSummary(_token: string, id: string): Pr
 }
 
 export async function duplicateGallery(token: string, id: string, title?: string): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${id}/duplicate`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${id}/duplicate`), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -505,6 +556,26 @@ export async function createGalleryAlbum(
   return body.data ?? body;
 }
 
+export async function updateGalleryAlbum(
+  _token: string,
+  albumId: string,
+  data: { name?: string; description?: string },
+): Promise<GalleryAlbum> {
+  const res = await authFetch(`/api/v1/albums/${albumId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to update album: ${res.status}`);
+  const body = await res.json();
+  return body.data ?? body;
+}
+
+export async function deleteGalleryAlbum(_token: string, albumId: string): Promise<void> {
+  const res = await authFetch(`/api/v1/albums/${albumId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to delete album: ${res.status}`);
+}
+
 export async function listAlbumAssets(_token: string, albumId: string): Promise<AlbumAsset[]> {
   const res = await authFetch(`/api/v1/albums/${albumId}/assets`);
   if (!res.ok) throw new Error(`Failed to list album assets: ${res.status}`);
@@ -524,7 +595,7 @@ export async function addAlbumAssets(_token: string, albumId: string, assetIds: 
 }
 
 export async function getPublicGallery(slug: string, ws?: string | null): Promise<Gallery> {
-  const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)}`);
+  const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)));
   if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
   return res.json();
 }
@@ -537,6 +608,8 @@ export interface PublicAsset {
   height?: number;
   blurhash?: string;
   thumbnail_urls: Record<string, string>;
+  is_encrypted?: boolean;
+  media_encryption?: Record<string, unknown>;
   sort_order: number;
 }
 
@@ -560,7 +633,7 @@ export async function triggerFaceScan(
   token: string,
   galleryId: string,
 ): Promise<{ job_id: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai/scan-faces`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-faces`), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -572,7 +645,7 @@ export async function getFaceScanStatus(
   token: string,
   galleryId: string,
 ): Promise<{ status: string; processed: number; total: number; faces_found: number }> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/ai/scan-status`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-status`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`Failed to get scan status: ${res.status}`);
@@ -596,7 +669,7 @@ export interface PublicGalleryAlbum {
 // degrades gracefully to the All-Photos-only view rather than blowing up.
 export async function getPublicGalleryAlbums(slug: string, ws?: string | null, sessionToken?: string | null): Promise<PublicGalleryAlbum[]> {
   try {
-    const res = await fetch(`${API_BASE}${withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)}`, {
+    const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)), {
       headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
     });
     if (!res.ok) return [];
@@ -616,7 +689,7 @@ export async function getPublicGalleryAssets(slug: string, albumId?: string, ws?
   const path = albumId
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
     : `/api/v1/public/galleries/${slug}/assets`;
-  const res = await fetch(`${API_BASE}${withWorkspaceScope(path, ws)}`, {
+  const res = await fetch(apiUrl(withWorkspaceScope(path, ws)), {
     headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
   });
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);

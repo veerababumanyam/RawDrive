@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 import { Layers3, MonitorPlay, Users, Video } from "lucide-react";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Live Streaming | RawDrive",
-  description:
-    "Offer premium, branded live-streaming options for remote guests straight from the RawDrive platform.",
-};
+export const metadata: Metadata = createPageMetadata("live-streaming");
 
 export default function LiveStreamingPage() {
   return (
     <SolutionShowcasePage
       eyebrow="Live streaming"
       title="Stream weddings and events without dropping the premium visual language your studio is known for."
-      description="The body of this page is now grounded in the Stitch feature showcase art direction instead of a generic text section."
+      description="Package remote guest access, branded viewing, replay handling, and event context beside the rest of your studio workflow."
       previewSrc="/stitch/solution-live.png"
-      previewAlt="Stitch live-streaming showcase preview"
+      previewAlt="RawDrive live-streaming workflow preview"
       previewLabel="Live streaming showcase"
       primaryCta={{ href: "/register", label: "Explore live streaming" }}
       secondaryCta={{ href: "/pricing", label: "Compare plans" }}
@@ -67,8 +64,9 @@ export default function LiveStreamingPage() {
             "Keep recordings and follow-up assets connected to the same project once the live moment ends.",
         },
       ]}
-      quoteTitle="The original Stitch concept treated streaming as part of the studio product, not a bolt-on."
-      quoteBody="That’s what this route does now too: it sits naturally beside galleries, booking, and delivery instead of looking like an afterthought."
+      answer="RawDrive live streaming is best for studios that want to offer branded remote viewing for weddings, ceremonies, and events while keeping stream links, replays, and client delivery in one system."
+      quoteTitle="Streaming works better when it belongs to the same event workflow."
+      quoteBody="RawDrive treats the live moment, replay, gallery, and client follow-up as one connected experience rather than a separate production link."
     />
   );
 }

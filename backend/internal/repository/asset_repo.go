@@ -31,10 +31,10 @@ type Asset struct {
 	CreatedAt         time.Time              `json:"created_at"`
 	UpdatedAt         time.Time              `json:"updated_at"`
 	DeletedAt         *time.Time             `json:"deleted_at,omitempty"`
-	EncryptionKeyID   *uuid.UUID             `json:"encryption_key_id,omitempty"`
 	IsEncrypted       bool                   `json:"is_encrypted"`
 	EncryptionAlgo    *string                `json:"encryption_algo,omitempty"`
 	EncryptionVersion int                    `json:"encryption_version"`
+	MediaEncryption   map[string]interface{} `json:"media_encryption,omitempty"`
 
 	// F-004 (audit 2026-04-10): M16 Tier D upload-scan metadata. These fields
 	// are persisted on Create when the upload came through a path that has a
@@ -96,14 +96,14 @@ func (r *AssetRepo) Create(ctx context.Context, a *Asset) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO assets (id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status,
-		 created_at, updated_at, encryption_key_id, is_encrypted, encryption_algo, encryption_version,
-		 upload_scan_status, upload_scan_engine, upload_scan_policy_version,
+		 created_at, updated_at, is_encrypted, encryption_algo, encryption_version,
+		 media_encryption, upload_scan_status, upload_scan_engine, upload_scan_policy_version,
 		 upload_scan_risk_score, upload_scan_findings, upload_scan_manifest_hash)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
 		a.ID, a.WorkspaceID, a.Filename, a.ContentType, a.SizeBytes, a.StorageKey,
 		a.StorageDriver, a.Width, a.Height, a.Blurhash, a.ExifData, a.ThumbnailURLs,
-		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt, a.EncryptionKeyID, a.IsEncrypted, a.EncryptionAlgo, a.EncryptionVersion,
-		a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
+		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt, a.IsEncrypted, a.EncryptionAlgo, a.EncryptionVersion,
+		jsonMapOrEmpty(a.MediaEncryption), a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
 		a.UploadScanRiskScore, a.UploadScanFindings, a.UploadScanManifestHash,
 	)
 	if err != nil {
@@ -119,12 +119,12 @@ func (r *AssetRepo) GetByID(ctx context.Context, id uuid.UUID) (*Asset, error) {
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
-		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
+		 is_encrypted, encryption_algo, encryption_version, media_encryption
 		 FROM assets WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes, &a.StorageKey,
 		&a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData, &a.ThumbnailURLs,
 		&a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-		&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+		&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -155,7 +155,7 @@ func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, er
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
-		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
+		 is_encrypted, encryption_algo, encryption_version, media_encryption
 		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`,
 		ids,
 	)
@@ -170,7 +170,7 @@ func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, er
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
 			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo get by ids scan: %w", err)
 		}
@@ -192,7 +192,7 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 	query := `SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		status, processing_error, created_at, updated_at, deleted_at,
-		encryption_key_id, is_encrypted, encryption_algo, encryption_version
+		is_encrypted, encryption_algo, encryption_version, media_encryption
 		FROM assets WHERE workspace_id = $1 AND deleted_at IS NULL`
 	args := []interface{}{f.WorkspaceID}
 	argIdx := 2
@@ -261,7 +261,7 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
 			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo list scan: %w", err)
 		}
@@ -288,7 +288,7 @@ func (r *AssetRepo) ListByStatus(ctx context.Context, status string, limit int) 
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
-		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
+		 is_encrypted, encryption_algo, encryption_version, media_encryption
 		 FROM assets WHERE status = $1 AND deleted_at IS NULL
 		 ORDER BY created_at ASC LIMIT $2`,
 		status, limit,
@@ -304,7 +304,7 @@ func (r *AssetRepo) ListByStatus(ctx context.Context, status string, limit int) 
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
 			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo list by status scan: %w", err)
 		}
@@ -361,6 +361,25 @@ func (r *AssetRepo) UpdateThumbnails(ctx context.Context, id uuid.UUID, thumbnai
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo update thumbnails: %w", err)
+	}
+	return nil
+}
+
+func (r *AssetRepo) UpdateEncryptedDerivatives(
+	ctx context.Context,
+	id uuid.UUID,
+	thumbnails map[string]string,
+	mediaEncryption map[string]interface{},
+	status string,
+) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE assets
+		 SET thumbnail_urls = $1, media_encryption = $2, status = $3, updated_at = now()
+		 WHERE id = $4`,
+		thumbnails, jsonMapOrEmpty(mediaEncryption), status, id,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo update encrypted derivatives: %w", err)
 	}
 	return nil
 }
@@ -428,14 +447,14 @@ func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uui
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key, storage_driver,
 		 width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status, processing_error,
 		 created_at, updated_at, deleted_at,
-		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
+		 is_encrypted, encryption_algo, encryption_version, media_encryption
 		 FROM assets WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
 		id, workspaceID,
 	).Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 		&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash,
 		&a.ExifData, &a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError,
 		&a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-		&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+		&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -462,7 +481,7 @@ func (r *AssetRepo) ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, 
 		`SELECT a.id, a.workspace_id, a.filename, a.content_type, a.size_bytes, a.storage_key,
 		 a.storage_driver, a.width, a.height, a.blurhash, a.exif_data, a.thumbnail_urls,
 		 a.uploaded_by, a.status, a.processing_error, a.created_at, a.updated_at, a.deleted_at,
-		 a.encryption_key_id, a.is_encrypted, a.encryption_algo, a.encryption_version,
+		 a.is_encrypted, a.encryption_algo, a.encryption_version, a.media_encryption,
 		 COALESCE(a.capture_date::date, a.created_at::date) as group_date
 		 FROM assets a
 		 JOIN gallery_assets ga ON ga.asset_id = a.id
@@ -484,7 +503,7 @@ func (r *AssetRepo) ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, 
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
 			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 			&groupDate,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo timeline scan: %w", err)
@@ -735,4 +754,11 @@ func (r *AssetRepo) BulkRemoveTags(ctx context.Context, ids []uuid.UUID, tags []
 		return 0, fmt.Errorf("bulk remove tags: %w", err)
 	}
 	return tag.RowsAffected(), nil
+}
+
+func jsonMapOrEmpty(v map[string]interface{}) map[string]interface{} {
+	if v == nil {
+		return map[string]interface{}{}
+	}
+	return v
 }

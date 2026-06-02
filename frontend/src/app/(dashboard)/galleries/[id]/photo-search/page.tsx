@@ -35,8 +35,9 @@ import { Camera, RefreshCw, Search, ChevronLeft } from "lucide-react";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 import { searchFaceInGallery, type FaceSearchResponse } from "@/lib/api/ai";
 import { getAsset, type Asset } from "@/lib/api/assets";
-import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
 import { getStoredAccessToken } from "@/lib/auth";
+import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 
 type Stage =
   | "idle" // before camera grant
@@ -67,6 +68,32 @@ interface CameraError {
   kind: CameraErrorKind;
   rawName?: string;
   rawMessage: string;
+}
+
+function MatchedAssetPreview({ asset, token }: { asset: Asset; token: string | null }) {
+  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, token);
+
+  if (media.loading) {
+    return <div className="h-full w-full animate-pulse bg-surface-container-high" aria-hidden="true" />;
+  }
+
+  if (media.src) {
+    return (
+      <img
+        src={media.src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center px-2 text-center text-xs text-text-tertiary">
+      {media.error || "No preview"}
+    </div>
+  );
 }
 
 // Classify a getUserMedia rejection so the UI can show concrete
@@ -557,31 +584,17 @@ export default function PhotoSearchPage({
               role="list"
               aria-label="Photos matching this face"
             >
-              {matchedAssets.map((asset) => {
-                const url = getAssetPreviewUrl(asset, token);
-                return (
-                  <Link
-                    key={asset.id}
-                    href={`/galleries/${id}?asset=${asset.id}`}
-                    className="group block aspect-square overflow-hidden rounded-xl border border-border-subtle bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-accent-primary"
-                    role="listitem"
-                    aria-label={asset.filename}
-                  >
-                    {url ? (
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-xs text-text-tertiary">
-                        No preview
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
+              {matchedAssets.map((asset) => (
+                <Link
+                  key={asset.id}
+                  href={`/galleries/${id}?asset=${asset.id}`}
+                  className="group block aspect-square overflow-hidden rounded-xl border border-border-subtle bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  role="listitem"
+                  aria-label={asset.filename}
+                >
+                  <MatchedAssetPreview asset={asset} token={token} />
+                </Link>
+              ))}
             </div>
           )}
         </section>

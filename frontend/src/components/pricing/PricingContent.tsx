@@ -68,6 +68,28 @@ export function PricingContent() {
             </p>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              {
+                title: "Solo and early studios",
+                body: "Start with Free or Starter when you need branded galleries, basic proofing, and client delivery before the team grows.",
+              },
+              {
+                title: "Growing wedding teams",
+                body: "Professional is the best fit when AI culling, full CRM, live streaming, and marketplace visibility start saving real production time.",
+              },
+              {
+                title: "Large and enterprise studios",
+                body: "Business and Enterprise add scale, account support, larger storage, API needs, white-label options, and BYOS for enterprise teams.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="surface-panel p-5">
+                <h2 className="font-headline text-xl font-bold text-text-primary">{item.title}</h2>
+                <p className="mt-3 text-sm leading-7 text-text-secondary">{item.body}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="surface-panel inline-flex max-w-max items-center gap-3 px-4 py-3">
             <span
               className={`text-sm font-medium ${!isAnnual ? "text-text-primary" : "text-text-tertiary"}`}
@@ -112,7 +134,7 @@ export function PricingContent() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
               <img
                 src="/stitch/pricing.png"
-                alt="Stitch pricing page preview"
+                alt="RawDrive pricing plans preview for photography studios"
                 className="h-auto w-full object-cover"
               />
             </div>

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { RegisterForm } from "@/components/auth/RegisterForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Register | RawDrive",
-  description: "Join RawDrive India and create your account to run your photography business.",
-};
+export const metadata: Metadata = createPageMetadata("register");
 
 // Matches the silhouette of the real form so the page doesn't jump when the
 // client component hydrates. Mirrors the pattern in app/login/page.tsx.

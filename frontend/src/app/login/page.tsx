@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Camera } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { createNoIndexMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Login | RawDrive",
-  description: "Enter your details to access your RawDrive studio workspace.",
-};
+export const metadata: Metadata = createNoIndexMetadata(
+  "Login",
+  "Enter your details to access your RawDrive studio workspace.",
+  "/login",
+);
 
 function LoginFormFallback() {
   return (

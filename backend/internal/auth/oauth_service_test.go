@@ -13,21 +13,40 @@ import (
 
 // mockOAuthProvider simulates a Google OAuth provider for testing.
 type mockOAuthProvider struct {
-	exchangeFunc func(code string) (*auth.OAuthToken, error)
-	profileFunc  func(token *auth.OAuthToken) (*auth.OAuthProfile, error)
+	exchangeFunc func(code, codeVerifier string) (*auth.OAuthToken, error)
+	profileFunc  func(token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error)
 }
 
-func (m *mockOAuthProvider) ExchangeCode(ctx context.Context, code string) (*auth.OAuthToken, error) {
-	return m.exchangeFunc(code)
+func (m *mockOAuthProvider) ExchangeCode(ctx context.Context, code, codeVerifier string) (*auth.OAuthToken, error) {
+	return m.exchangeFunc(code, codeVerifier)
 }
 
-func (m *mockOAuthProvider) GetProfile(ctx context.Context, token *auth.OAuthToken) (*auth.OAuthProfile, error) {
-	return m.profileFunc(token)
+func (m *mockOAuthProvider) GetProfile(ctx context.Context, token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error) {
+	return m.profileFunc(token, expectedNonce)
 }
 
 // mockUserStore simulates user persistence for OAuth tests.
 type mockUserStore struct {
-	users map[string]*auth.User
+	users       map[string]*auth.User
+	oauthLinks  map[string]string
+	linkErr     error
+	backfillErr error
+}
+
+func (m *mockUserStore) FindByOAuth(ctx context.Context, provider, providerID string) (*auth.User, error) {
+	if m.oauthLinks == nil {
+		return nil, nil
+	}
+	userID, ok := m.oauthLinks[provider+":"+providerID]
+	if !ok {
+		return nil, nil
+	}
+	for _, u := range m.users {
+		if u.ID == userID {
+			return u, nil
+		}
+	}
+	return nil, nil
 }
 
 func (m *mockUserStore) FindByEmail(ctx context.Context, email string) (*auth.User, error) {
@@ -43,6 +62,9 @@ func (m *mockUserStore) Create(ctx context.Context, u *auth.User) (*auth.User, e
 }
 
 func (m *mockUserStore) BackfillProfile(_ context.Context, userID, displayName, avatarURL string) error {
+	if m.backfillErr != nil {
+		return m.backfillErr
+	}
 	var target *auth.User
 	if u, ok := m.users[userID]; ok {
 		target = u
@@ -66,61 +88,77 @@ func (m *mockUserStore) BackfillProfile(_ context.Context, userID, displayName, 
 }
 
 func (m *mockUserStore) LinkOAuth(ctx context.Context, userID, provider, providerID string) error {
+	if m.linkErr != nil {
+		return m.linkErr
+	}
+	if m.oauthLinks == nil {
+		m.oauthLinks = map[string]string{}
+	}
+	key := provider + ":" + providerID
+	if existingUserID, ok := m.oauthLinks[key]; ok && existingUserID != userID {
+		return auth.ErrOAuthAccountConflict
+	}
+	m.oauthLinks[key] = userID
 	return nil
 }
 
 func newMockProvider(profile *auth.OAuthProfile) *mockOAuthProvider {
 	return &mockOAuthProvider{
-		exchangeFunc: func(code string) (*auth.OAuthToken, error) {
-			return &auth.OAuthToken{AccessToken: "mock-access-token"}, nil
+		exchangeFunc: func(code, codeVerifier string) (*auth.OAuthToken, error) {
+			return &auth.OAuthToken{AccessToken: "mock-access-token", IDToken: "mock-id-token"}, nil
 		},
-		profileFunc: func(token *auth.OAuthToken) (*auth.OAuthProfile, error) {
+		profileFunc: func(token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error) {
 			return profile, nil
 		},
 	}
 }
 
-func newAuthorizedService(t *testing.T, provider auth.OAuthProvider, store auth.UserStore) (*auth.OAuthService, string) {
+func newAuthorizedService(t *testing.T, provider auth.OAuthProvider, store auth.UserStore) (*auth.OAuthService, string, string) {
 	t.Helper()
 
 	svc := auth.NewOAuthService(
-		auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"},
+		auth.OAuthConfig{ClientID: "test-client-id", ClientSecret: "test-client-secret", RedirectURI: "http://localhost/callback"},
 		provider,
 		store,
 	)
-	redirectURL, err := svc.InitiateGoogleAuth(context.Background(), "http://localhost:3000")
+	start, err := svc.InitiateGoogleAuth(context.Background(), "http://localhost:3000")
 	require.NoError(t, err)
 
-	parsed, err := url.Parse(redirectURL)
+	parsed, err := url.Parse(start.RedirectURL)
 	require.NoError(t, err)
 
-	return svc, parsed.Query().Get("state")
+	return svc, parsed.Query().Get("state"), start.CookieValue
 }
 
 func TestGoogleOAuth_InitiateFlow(t *testing.T) {
 	provider := newMockProvider(nil)
-	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", RedirectURI: "http://localhost/callback"}, provider, &mockUserStore{users: map[string]*auth.User{}})
+	svc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client-id", ClientSecret: "test-client-secret", RedirectURI: "http://localhost/callback"}, provider, &mockUserStore{users: map[string]*auth.User{}})
 	ctx := context.Background()
 
-	redirectURL, err := svc.InitiateGoogleAuth(ctx, "http://localhost:3000")
+	start, err := svc.InitiateGoogleAuth(ctx, "http://localhost:3000")
 	require.NoError(t, err)
-	assert.NotEmpty(t, redirectURL)
-	assert.Contains(t, redirectURL, "client_id=test-client-id", "should include client_id")
-	assert.Contains(t, redirectURL, "state=", "should include state parameter")
+	assert.NotEmpty(t, start.RedirectURL)
+	assert.NotEmpty(t, start.CookieValue)
+	assert.Contains(t, start.RedirectURL, "client_id=test-client-id", "should include client_id")
+	assert.Contains(t, start.RedirectURL, "state=", "should include state parameter")
+	assert.Contains(t, start.RedirectURL, "code_challenge=", "should include PKCE code challenge")
+	assert.Contains(t, start.RedirectURL, "code_challenge_method=S256", "should use S256 PKCE")
+	assert.NotContains(t, start.RedirectURL, "code_verifier", "should never leak PKCE verifier")
 }
 
 func TestGoogleOAuth_HandleCallback(t *testing.T) {
 	profile := &auth.OAuthProfile{
-		Email:       "user@gmail.com",
-		DisplayName: "Test User",
-		AvatarURL:   "https://example.com/avatar.jpg",
-		ProviderID:  "google-id-123",
+		Email:         "user@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Test User",
+		AvatarURL:     "https://example.com/avatar.jpg",
+		ProviderID:    "google-id-123",
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, returnTo, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
+	user, returnTo, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "user@gmail.com", user.Email)
@@ -129,9 +167,10 @@ func TestGoogleOAuth_HandleCallback(t *testing.T) {
 
 func TestGoogleOAuth_StateSurvivesBackendInstanceSwitch(t *testing.T) {
 	profile := &auth.OAuthProfile{
-		Email:       "multi-node@gmail.com",
-		DisplayName: "Multi Node",
-		ProviderID:  "google-id-multi-node",
+		Email:         "multi-node@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Multi Node",
+		ProviderID:    "google-id-multi-node",
 	}
 	config := auth.OAuthConfig{
 		ClientID:     "test-client-id",
@@ -140,14 +179,14 @@ func TestGoogleOAuth_StateSurvivesBackendInstanceSwitch(t *testing.T) {
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
 	firstInstance := auth.NewOAuthService(config, newMockProvider(profile), store)
-	redirectURL, err := firstInstance.InitiateGoogleAuth(context.Background(), "https://rawdrive.in")
+	start, err := firstInstance.InitiateGoogleAuth(context.Background(), "https://rawdrive.in")
 	require.NoError(t, err)
 
-	parsed, err := url.Parse(redirectURL)
+	parsed, err := url.Parse(start.RedirectURL)
 	require.NoError(t, err)
 
 	secondInstance := auth.NewOAuthService(config, newMockProvider(profile), store)
-	user, returnTo, err := secondInstance.HandleGoogleCallback(context.Background(), "valid-code", parsed.Query().Get("state"))
+	user, returnTo, err := secondInstance.HandleGoogleCallback(context.Background(), "valid-code", parsed.Query().Get("state"), start.CookieValue)
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "https://rawdrive.in", returnTo)
@@ -156,16 +195,17 @@ func TestGoogleOAuth_StateSurvivesBackendInstanceSwitch(t *testing.T) {
 
 func TestGoogleOAuth_NewUser(t *testing.T) {
 	profile := &auth.OAuthProfile{
-		Email:       "newuser@gmail.com",
-		DisplayName: "New User",
-		AvatarURL:   "https://example.com/avatar.jpg",
-		ProviderID:  "google-id-new",
+		Email:         "newuser@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "New User",
+		AvatarURL:     "https://example.com/avatar.jpg",
+		ProviderID:    "google-id-new",
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "newuser@gmail.com", user.Email)
@@ -174,84 +214,109 @@ func TestGoogleOAuth_NewUser(t *testing.T) {
 
 func TestGoogleOAuth_ExistingUser(t *testing.T) {
 	profile := &auth.OAuthProfile{
-		Email:       "existing@gmail.com",
-		DisplayName: "Existing User",
-		ProviderID:  "google-id-existing",
+		Email:         "existing@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Existing User",
+		ProviderID:    "google-id-existing",
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{
-		"existing@gmail.com": {ID: "existing-uuid", Email: "existing@gmail.com"},
+		"existing@gmail.com": {ID: "existing-uuid", Email: "existing@gmail.com", EmailVerified: true},
 	}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	require.NoError(t, err)
 	assert.Equal(t, "existing-uuid", user.ID, "should return existing user")
 }
 
 func TestGoogleOAuth_AccountLinking(t *testing.T) {
 	profile := &auth.OAuthProfile{
-		Email:       "linked@gmail.com",
-		DisplayName: "Linked User",
-		ProviderID:  "google-id-link",
+		Email:         "linked@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Linked User",
+		ProviderID:    "google-id-link",
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{
-		"linked@gmail.com": {ID: "link-uuid", Email: "linked@gmail.com"},
+		"linked@gmail.com": {ID: "link-uuid", Email: "linked@gmail.com", EmailVerified: true},
 	}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	require.NoError(t, err)
 	assert.Equal(t, "link-uuid", user.ID, "should link Google to existing account")
 }
 
 func TestGoogleOAuth_RevokedConsent(t *testing.T) {
 	provider := &mockOAuthProvider{
-		exchangeFunc: func(code string) (*auth.OAuthToken, error) {
+		exchangeFunc: func(code, codeVerifier string) (*auth.OAuthToken, error) {
 			return nil, errors.New("consent revoked")
 		},
-		profileFunc: func(token *auth.OAuthToken) (*auth.OAuthProfile, error) {
+		profileFunc: func(token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error) {
 			return nil, errors.New("no token")
 		},
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, _, err := svc.HandleGoogleCallback(context.Background(), "revoked-code", state)
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "revoked-code", state, cookieValue)
 	assert.Error(t, err, "revoked consent should produce an error")
 	assert.Nil(t, user)
 }
 
+func TestGoogleOAuth_InvalidClientIsConfigurationError(t *testing.T) {
+	provider := &mockOAuthProvider{
+		exchangeFunc: func(code, codeVerifier string) (*auth.OAuthToken, error) {
+			return nil, &auth.GoogleTokenError{StatusCode: 401, Code: "invalid_client"}
+		},
+		profileFunc: func(token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error) {
+			return nil, errors.New("no token")
+		},
+	}
+	store := &mockUserStore{users: map[string]*auth.User{}}
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
+
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
+
+	require.Error(t, err)
+	assert.Nil(t, user)
+	var oauthErr *auth.OAuthCallbackError
+	require.ErrorAs(t, err, &oauthErr)
+	assert.Equal(t, auth.OAuthErrConfigUnavailable, oauthErr.Code)
+	assert.False(t, svc.IsConfigured(), "invalid_client should disable public OAuth availability until config is fixed and service restarts")
+}
+
 func TestGoogleOAuth_ExpiredToken(t *testing.T) {
 	provider := &mockOAuthProvider{
-		exchangeFunc: func(code string) (*auth.OAuthToken, error) {
-			return &auth.OAuthToken{AccessToken: "expired-token"}, nil
+		exchangeFunc: func(code, codeVerifier string) (*auth.OAuthToken, error) {
+			return &auth.OAuthToken{AccessToken: "expired-token", IDToken: "expired-id-token"}, nil
 		},
-		profileFunc: func(token *auth.OAuthToken) (*auth.OAuthProfile, error) {
+		profileFunc: func(token *auth.OAuthToken, expectedNonce string) (*auth.OAuthProfile, error) {
 			return nil, errors.New("token expired")
 		},
 	}
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	assert.Error(t, err, "expired OAuth token should produce an error")
 	assert.Nil(t, user)
 }
 
 func TestGoogleOAuth_ProfileImport(t *testing.T) {
 	profile := &auth.OAuthProfile{
-		Email:       "profile@gmail.com",
-		DisplayName: "Profile User",
-		AvatarURL:   "https://lh3.googleusercontent.com/avatar.jpg",
-		ProviderID:  "google-id-profile",
+		Email:         "profile@gmail.com",
+		EmailVerified: true,
+		DisplayName:   "Profile User",
+		AvatarURL:     "https://lh3.googleusercontent.com/avatar.jpg",
+		ProviderID:    "google-id-profile",
 	}
 	provider := newMockProvider(profile)
 	store := &mockUserStore{users: map[string]*auth.User{}}
-	svc, state := newAuthorizedService(t, provider, store)
+	svc, state, cookieValue := newAuthorizedService(t, provider, store)
 
-	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state)
+	user, _, err := svc.HandleGoogleCallback(context.Background(), "valid-code", state, cookieValue)
 	require.NoError(t, err)
 	assert.Equal(t, "Profile User", user.DisplayName, "should import display name")
 	assert.Equal(t, "https://lh3.googleusercontent.com/avatar.jpg", user.AvatarURL, "should import avatar URL")

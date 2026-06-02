@@ -25,6 +25,10 @@ export interface Asset {
   thumbnail_urls: Record<string, string>;
   status: string;
   created_at: string;
+  is_encrypted?: boolean;
+  encryption_algo?: string;
+  encryption_version?: number;
+  media_encryption?: Record<string, unknown>;
   download_url?: string;
   // M13 deferred-FR fields (optional — unpopulated on older endpoints)
   burst_id?: string | null;         // GAL-FR-094 — burst group membership

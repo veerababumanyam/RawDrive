@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Refund Policy",
-  description: "RawDrive Refund Policy — 7-day refund guarantee on paid plans.",
-};
+export const metadata: Metadata = createPageMetadata("refund");
 
 const sections = [
   {
@@ -29,7 +27,7 @@ const sections = [
   {
     title: "5. How to Request a Refund",
     content:
-      "To request a refund, email billing@rawdrive.in with your account email, transaction ID, and reason for the refund. You may also submit a request through your account dashboard under Settings > Billing > Request Refund. We aim to acknowledge all refund requests within 24 hours.",
+      "To request a refund, email support@rawdrive.in with your account email, transaction ID, and reason for the refund. You may also submit a request through your account dashboard under Settings > Billing > Request Refund. We aim to acknowledge all refund requests within 24 hours.",
   },
   {
     title: "6. Refund Processing",
@@ -44,7 +42,7 @@ const sections = [
   {
     title: "8. Contact Information",
     content:
-      "For refund inquiries, contact our billing team at billing@rawdrive.in or call our support line during business hours (Mon-Sat, 9 AM - 6 PM IST). For escalations, contact our Customer Success team at support@rawdrive.in. Last updated: April 2026.",
+      "For refund inquiries, contact our support team at support@rawdrive.in. For escalations, contact our Customer Success team at contactus@rawdrive.in. Last updated: April 2026.",
   },
 ];
 
@@ -69,8 +67,8 @@ export default function RefundPage() {
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
           <p className="text-sm text-text-secondary">
             Need help with a refund? Contact{" "}
-            <a href="mailto:billing@rawdrive.in" className="text-accent hover:text-accent-hover">
-              billing@rawdrive.in
+            <a href="mailto:support@rawdrive.in" className="text-accent hover:text-accent-hover">
+              support@rawdrive.in
             </a>
           </p>
         </div>

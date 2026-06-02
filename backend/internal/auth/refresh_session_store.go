@@ -40,6 +40,12 @@ type RefreshSessionStore interface {
 	// attempt will detect reuse and revoke the entire family.
 	MarkUsed(ctx context.Context, rawToken string) error
 
+	// Rotate atomically verifies that an old refresh token is active, marks it
+	// used, and persists the next token in the same family. Implementations
+	// must serialize competing consumers for the same token so only one
+	// rotation can ever succeed.
+	Rotate(ctx context.Context, oldRawToken, newRawToken string, newExpiresAt time.Time) (*RefreshSessionEntry, error)
+
 	// RevokeFamily marks every session under the given family as
 	// revoked. Callers use this when token reuse is detected or when
 	// an admin explicitly revokes a user session.
@@ -65,6 +71,13 @@ type RefreshSessionStore interface {
 // requested token is unknown. Wrapped in the store's real error so
 // callers can use errors.Is.
 var ErrRefreshNotFound = errors.New("refresh session not found")
+
+// ErrRefreshReuseDetected means a consumed or revoked refresh token was seen
+// again. Callers must treat the whole token family as compromised.
+var ErrRefreshReuseDetected = errors.New("refresh token reuse detected")
+
+// ErrRefreshExpired means the token existed but its expiry has passed.
+var ErrRefreshExpired = errors.New("refresh session expired")
 
 // RefreshSessionEntry is the exported row shape for RefreshSessionStore.
 // Mirrors the previous unexported refreshEntry but uses exported field
@@ -170,10 +183,59 @@ func (s *inMemoryRefreshStore) MarkUsed(_ context.Context, rawToken string) erro
 	return nil
 }
 
-func (s *inMemoryRefreshStore) RevokeFamily(_ context.Context, familyID string) error {
+func (s *inMemoryRefreshStore) Rotate(_ context.Context, oldRawToken, newRawToken string, newExpiresAt time.Time) (*RefreshSessionEntry, error) {
+	if newRawToken == "" {
+		return nil, errors.New("refresh store: new raw token is empty")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	hash := HashToken(oldRawToken)
+	entry, ok := s.byHash[hash]
+	if !ok {
+		return nil, ErrRefreshNotFound
+	}
+
+	old := *entry
+	if entry.Revoked || s.revokedFamily[entry.FamilyID] {
+		old.Revoked = true
+		s.revokeFamilyLocked(entry.FamilyID)
+		return &old, ErrRefreshReuseDetected
+	}
+	if entry.Used {
+		s.revokeFamilyLocked(entry.FamilyID)
+		return &old, ErrRefreshReuseDetected
+	}
+	if time.Now().After(entry.ExpiresAt) {
+		return &old, ErrRefreshExpired
+	}
+
+	entry.Used = true
+	old.Used = true
+
+	next := old
+	next.RawToken = ""
+	next.ExpiresAt = newExpiresAt
+	next.Revoked = false
+	next.Used = false
+	s.byHash[HashToken(newRawToken)] = &next
+	if s.userFamilies[next.Sub] == nil {
+		s.userFamilies[next.Sub] = make(map[string]bool)
+	}
+	s.userFamilies[next.Sub][next.FamilyID] = true
+
+	return &old, nil
+}
+
+func (s *inMemoryRefreshStore) RevokeFamily(_ context.Context, familyID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revokeFamilyLocked(familyID)
+	return nil
+}
+
+func (s *inMemoryRefreshStore) revokeFamilyLocked(familyID string) {
 	s.revokedFamily[familyID] = true
 	// Also flip the per-entry flag so direct Get/Rotate paths see the
 	// revocation without needing to re-check the family map.
@@ -182,7 +244,6 @@ func (s *inMemoryRefreshStore) RevokeFamily(_ context.Context, familyID string) 
 			entry.Revoked = true
 		}
 	}
-	return nil
 }
 
 func (s *inMemoryRefreshStore) IsFamilyRevoked(_ context.Context, familyID string) (bool, error) {

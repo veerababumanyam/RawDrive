@@ -48,6 +48,17 @@ const defaultSessionTTL = 24 * time.Hour
 // UPLOAD_MAX_BYTES env var is not set. 2 GiB matches pre-wave-6 behavior.
 const defaultMaxUploadBytes int64 = 2 * 1024 * 1024 * 1024
 
+const (
+	clientSideMediaScheme             = "rawdrive-e2ee-v1"
+	clientSideMediaAlgorithm          = "AES-256-GCM"
+	clientSideMediaStorageContentType = "application/vnd.rawdrive.encrypted"
+	clientSideMediaAssetAlgo          = "client-side-aes-256-gcm"
+	clientSideMediaAssetVersion       = 1
+	clientSideMediaWaitingStatus      = "waiting_derivatives"
+)
+
+var ErrEncryptedMediaHashMismatch = errors.New("encrypted media ciphertext hash mismatch")
+
 // setTUSHeaders adds the standard TUS protocol headers to every response.
 // maxBytes is resolved once at handler construction from env and cached on
 // the handler so we do not re-read env on every request.
@@ -123,6 +134,8 @@ type ChunkedUploadHandler struct {
 	encryptionEnabled bool
 	encryptionAlgo    string
 	encryptionVersion int
+
+	clientSideEncryptionRequired bool
 
 	// M40 / Upload Credit Meter: optional upload credit gate. Wired via
 	// WithUploadCredit(). Defaults to a NoopGate so every call site can
@@ -265,6 +278,11 @@ func (h *ChunkedUploadHandler) WithEncryptionMetadata(enabled bool, algo string,
 	return h
 }
 
+func (h *ChunkedUploadHandler) WithClientSideEncryptionRequired(required bool) *ChunkedUploadHandler {
+	h.clientSideEncryptionRequired = required
+	return h
+}
+
 // RegisterRoutes adds chunked upload routes.
 func (h *ChunkedUploadHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/v1/uploads", h.CreateSession)
@@ -294,11 +312,13 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	userID, _ := getUserID(r)
 
 	var input struct {
-		Filename     string                      `json:"filename"`
-		ContentType  string                      `json:"content_type"`
-		TotalSize    int64                       `json:"total_size"`
-		ChunkSize    int64                       `json:"chunk_size"`
-		ScanManifest *service.UploadScanManifest `json:"scan_manifest,omitempty"`
+		Filename        string                      `json:"filename"`
+		ContentType     string                      `json:"content_type"`
+		TotalSize       int64                       `json:"total_size"`
+		ChunkSize       int64                       `json:"chunk_size"`
+		ScanManifest    *service.UploadScanManifest `json:"scan_manifest,omitempty"`
+		MediaEncryption map[string]interface{}      `json:"media_encryption,omitempty"`
+		SourceMetadata  map[string]interface{}      `json:"source_metadata,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -311,6 +331,24 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 			"message": "photo galleries accept still-image uploads only",
 		})
 		return
+	}
+
+	mediaEncryptionPresent := len(input.MediaEncryption) > 0
+	if h.clientSideEncryptionRequired && !mediaEncryptionPresent {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error":   "MEDIA_ENCRYPTION_REQUIRED",
+			"message": "client-side media encryption metadata is required",
+		})
+		return
+	}
+	if mediaEncryptionPresent {
+		if err := validateClientSideMediaManifest(input.MediaEncryption, input.TotalSize); err != nil {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"error":   "MEDIA_ENCRYPTION_INVALID",
+				"message": err.Error(),
+			})
+			return
+		}
 	}
 
 	// M16 E47-S5: Tier D upload manifest validation gate. Preserved across
@@ -457,7 +495,11 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		http.Error(w, `{"error":"storage backend does not support multipart uploads"}`, http.StatusServiceUnavailable)
 		return
 	}
-	r2UploadID, err := mpc.CreateMultipartUpload(r.Context(), storageKey, input.ContentType)
+	storageContentType := input.ContentType
+	if mediaEncryptionPresent {
+		storageContentType = clientSideMediaStorageContentType
+	}
+	r2UploadID, err := mpc.CreateMultipartUpload(r.Context(), storageKey, storageContentType)
 	if err != nil {
 		releaseStorageReservation("multipart-create-failed")
 		internalError(w, uploadID, "create_multipart_upload_failed", err)
@@ -473,6 +515,18 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 			manifestBytes = b
 		}
 	}
+	var mediaEncryptionBytes []byte
+	if mediaEncryptionPresent {
+		if b, err := json.Marshal(input.MediaEncryption); err == nil {
+			mediaEncryptionBytes = b
+		}
+	}
+	var sourceMetadataBytes []byte
+	if len(input.SourceMetadata) > 0 {
+		if b, err := json.Marshal(input.SourceMetadata); err == nil {
+			sourceMetadataBytes = b
+		}
+	}
 
 	row := &repository.UploadSession{
 		WorkspaceID:         workspaceID,
@@ -486,6 +540,8 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		R2MultipartUploadID: &r2UploadID,
 		ExpiresAt:           expiresAt,
 		ScanManifest:        manifestBytes,
+		MediaEncryption:     mediaEncryptionBytes,
+		SourceMetadata:      sourceMetadataBytes,
 	}
 
 	// M40-DB-001: persist the reservation id so cold-path restart can
@@ -723,6 +779,14 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			// F-003 / F-004: map M16 Tier D scan errors to 422. Any other
 			// finalize error stays 500.
+			if errors.Is(err, ErrEncryptedMediaHashMismatch) {
+				logRefundFailure(uploadID, "encrypted-media-hash-mismatch",
+					h.creditGate.Refund(r.Context(), state.reservation,
+						fmt.Sprintf("refund:%s:e2ee-hash", uploadID),
+						"encrypted-media-hash-mismatch"))
+				http.Error(w, `{"error":"ENCRYPTED_MEDIA_HASH_MISMATCH"}`, http.StatusUnprocessableEntity)
+				return
+			}
 			if errors.Is(err, service.ErrScanHashMismatch) {
 				// M40: the upload was charged; a hash mismatch means the
 				// bytes never made it intact. Refund the reservation so
@@ -938,14 +1002,43 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		return nil, fmt.Errorf("compute finalize digest: %w", err)
 	}
 
-	if err := h.verifyUploadBytesAtFinalize(ctx, row.ContentType, fullHashHex, head, tail, manifest); err != nil {
+	mediaManifest, mediaEncrypted, err := decodeClientSideMediaManifest(row.MediaEncryption)
+	if err != nil {
 		_ = h.store.Delete(ctx, storageKey)
-		releaseReservation("verify-failure")
+		releaseReservation("media-manifest-decode-failure")
 		return nil, err
+	}
+	sourceMetadata := decodeSourceMetadata(row.SourceMetadata)
+	if mediaEncrypted {
+		if err := verifyClientSideMediaDigest(mediaManifest, fullHashHex, row.TotalSize); err != nil {
+			_ = h.store.Delete(ctx, storageKey)
+			releaseReservation("encrypted-media-verify-failure")
+			return nil, err
+		}
+	} else {
+		if err := h.verifyUploadBytesAtFinalize(ctx, row.ContentType, fullHashHex, head, tail, manifest); err != nil {
+			_ = h.store.Delete(ctx, storageKey)
+			releaseReservation("verify-failure")
+			return nil, err
+		}
 	}
 
 	// Create the asset row. Tests may pass a nil assetRepo to exercise the
 	// streaming path without a live DB; treat that as an explicit opt-out.
+	assetStatus := "processing"
+	assetIsEncrypted := h.encryptionEnabled
+	assetEncryptionVersion := h.encryptionVersion
+	var assetEncryptionAlgo *string
+	if h.encryptionAlgo != "" {
+		assetEncryptionAlgo = &h.encryptionAlgo
+	}
+	if mediaEncrypted {
+		assetStatus = clientSideMediaWaitingStatus
+		assetIsEncrypted = true
+		assetEncryptionVersion = clientSideMediaAssetVersion
+		algo := clientSideMediaAssetAlgo
+		assetEncryptionAlgo = &algo
+	}
 	asset := &repository.Asset{
 		ID:                uuid.New(),
 		WorkspaceID:       row.WorkspaceID,
@@ -954,15 +1047,14 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		SizeBytes:         row.TotalSize,
 		StorageKey:        storageKey,
 		StorageDriver:     "r2",
-		Status:            "processing",
+		Status:            assetStatus,
 		UploadedBy:        uuidPtr(row.UserID),
-		ExifData:          map[string]interface{}{},
+		ExifData:          sourceMetadata,
 		ThumbnailURLs:     map[string]string{},
-		IsEncrypted:       h.encryptionEnabled,
-		EncryptionVersion: h.encryptionVersion,
-	}
-	if h.encryptionAlgo != "" {
-		asset.EncryptionAlgo = &h.encryptionAlgo
+		IsEncrypted:       assetIsEncrypted,
+		EncryptionAlgo:    assetEncryptionAlgo,
+		EncryptionVersion: assetEncryptionVersion,
+		MediaEncryption:   mediaManifest,
 	}
 	applyScanMetadata(asset, manifest)
 	if h.assetRepo != nil {
@@ -1141,6 +1233,157 @@ func (h *ChunkedUploadHandler) verifyUploadBytesAtFinalize(
 		// when a scanner manifest is present; without one, fail closed.
 		return service.ErrScanManifestRequired
 	}
+}
+
+func validateClientSideMediaManifest(manifest map[string]interface{}, totalSize int64) error {
+	if len(manifest) == 0 {
+		return errors.New("media_encryption is required")
+	}
+	if stringField(manifest, "scheme") != clientSideMediaScheme {
+		return fmt.Errorf("scheme must be %q", clientSideMediaScheme)
+	}
+	if stringField(manifest, "algorithm") != clientSideMediaAlgorithm {
+		return fmt.Errorf("algorithm must be %q", clientSideMediaAlgorithm)
+	}
+	keyID := stringField(manifest, "key_id")
+	if keyID == "" {
+		return errors.New("key_id is required")
+	}
+	if err := validateClientSideMediaKeyID(keyID); err != nil {
+		return err
+	}
+	if stringField(manifest, "object_type") == "" {
+		return errors.New("object_type is required")
+	}
+	iv := stringField(manifest, "iv_b64")
+	if iv == "" {
+		return errors.New("iv_b64 is required")
+	}
+	ivBytes, err := decodeFlexibleBase64(iv)
+	if err != nil {
+		return fmt.Errorf("iv_b64 is invalid: %w", err)
+	}
+	if len(ivBytes) != 12 {
+		return errors.New("iv_b64 must decode to a 96-bit AES-GCM nonce")
+	}
+	cipherHash := stringField(manifest, "ciphertext_sha256")
+	if len(cipherHash) != 64 {
+		return errors.New("ciphertext_sha256 must be 64 hex characters")
+	}
+	if _, err := hex.DecodeString(cipherHash); err != nil {
+		return fmt.Errorf("ciphertext_sha256 is invalid: %w", err)
+	}
+	if totalSize > 0 {
+		if declared, ok := int64Field(manifest, "ciphertext_size"); ok && declared != totalSize {
+			return fmt.Errorf("ciphertext_size %d does not match total_size %d", declared, totalSize)
+		}
+	}
+	return nil
+}
+
+func validateClientSideMediaKeyID(keyID string) error {
+	parts := strings.Split(keyID, ":")
+	if len(parts) != 3 || parts[0] != "gallery" || parts[1] == "" {
+		return errors.New("key_id must be a versioned gallery key id")
+	}
+	fingerprint := parts[2]
+	if len(fingerprint) != 16 {
+		return errors.New("key_id fingerprint must be 16 hex characters")
+	}
+	if _, err := hex.DecodeString(fingerprint); err != nil {
+		return errors.New("key_id fingerprint must be 16 hex characters")
+	}
+	return nil
+}
+
+func decodeClientSideMediaManifest(raw []byte) (map[string]interface{}, bool, error) {
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return nil, false, fmt.Errorf("decode media encryption manifest: %w", err)
+	}
+	if len(manifest) == 0 {
+		return nil, false, nil
+	}
+	if err := validateClientSideMediaManifest(manifest, 0); err != nil {
+		return nil, false, err
+	}
+	return manifest, true, nil
+}
+
+func decodeSourceMetadata(raw []byte) map[string]interface{} {
+	if len(raw) == 0 {
+		return map[string]interface{}{}
+	}
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(raw, &metadata); err != nil || metadata == nil {
+		return map[string]interface{}{}
+	}
+	return metadata
+}
+
+func verifyClientSideMediaDigest(manifest map[string]interface{}, computedHashHex string, totalSize int64) error {
+	if !strings.EqualFold(stringField(manifest, "ciphertext_sha256"), computedHashHex) {
+		return ErrEncryptedMediaHashMismatch
+	}
+	if declared, ok := int64Field(manifest, "ciphertext_size"); ok && declared != totalSize {
+		return ErrEncryptedMediaHashMismatch
+	}
+	return nil
+}
+
+func stringField(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	if s, ok := m[key].(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func int64Field(m map[string]interface{}, key string) (int64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	switch v := m[key].(type) {
+	case int:
+		return int64(v), true
+	case int64:
+		return v, true
+	case int32:
+		return int64(v), true
+	case float64:
+		if v < 0 || v != float64(int64(v)) {
+			return 0, false
+		}
+		return int64(v), true
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func decodeFlexibleBase64(value string) ([]byte, error) {
+	encodings := []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	}
+	var lastErr error
+	for _, enc := range encodings {
+		decoded, err := enc.DecodeString(value)
+		if err == nil {
+			return decoded, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 // applyScanMetadata copies verified scan manifest fields onto the asset row.

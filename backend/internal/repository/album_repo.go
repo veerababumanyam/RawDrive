@@ -100,6 +100,24 @@ func (r *AlbumRepo) ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]A
 	return albums, rows.Err()
 }
 
+// UpdateMetadata updates editable album fields.
+func (r *AlbumRepo) UpdateMetadata(ctx context.Context, a *Album) error {
+	a.UpdatedAt = time.Now()
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE albums
+		 SET name = $2, description = $3, updated_at = $4
+		 WHERE id = $1`,
+		a.ID, a.Name, a.Description, a.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("album repo update metadata: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("album repo update metadata: album not found")
+	}
+	return nil
+}
+
 // GetBreadcrumb returns the parent chain for an album (recursive CTE).
 func (r *AlbumRepo) GetBreadcrumb(ctx context.Context, albumID uuid.UUID) ([]Album, error) {
 	rows, err := r.pool.Query(ctx,

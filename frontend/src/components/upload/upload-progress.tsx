@@ -14,6 +14,8 @@ export interface UploadItem {
   status:
     | "pending"
     | "screening"
+    | "encrypting"
+    | "paused"
     | "uploading"
     | "complete"
     | "error"
@@ -73,15 +75,29 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
               <p className="text-xs text-text-secondary">
                 {(item.file.size / 1024 / 1024).toFixed(1)} MB
                 {item.status === "screening" && " • screening…"}
+                {item.status === "encrypting" && " • encrypting…"}
+                {item.status === "paused" && " • paused"}
                 {item.status === "blocked" && item.error && ` • ${item.error}`}
                 {item.status === "needs_desktop" &&
-                  " • requires RawDrive Desktop (M17)"}
+                  ` • ${item.error ?? "requires RawDrive Desktop"}`}
               </p>
             </div>
 
             {item.status === "screening" && (
               <span className="text-xs font-medium text-text-secondary">
                 Screening
+              </span>
+            )}
+
+            {item.status === "encrypting" && (
+              <span className="text-xs font-medium text-text-secondary">
+                Encrypting
+              </span>
+            )}
+
+            {item.status === "paused" && (
+              <span className="text-xs font-medium text-warning">
+                Paused
               </span>
             )}
 
@@ -131,6 +147,8 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
 
             {(item.status === "pending" ||
               item.status === "screening" ||
+              item.status === "encrypting" ||
+              item.status === "paused" ||
               item.status === "uploading") &&
               onCancel && (
                 <button

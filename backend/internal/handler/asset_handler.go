@@ -65,6 +65,12 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GetByID handles GET /api/v1/assets/{id}
 func (h *AssetHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -72,7 +78,7 @@ func (h *AssetHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := h.assetSvc.GetByID(r.Context(), id)
+	asset, err := h.assetSvc.GetByIDAndWorkspace(r.Context(), id, workspaceID)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
@@ -180,13 +186,19 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 // Download handles GET /api/v1/assets/{id}/download?format=original|webp|thumbnail
 func (h *AssetHandler) Download(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
 		return
 	}
 
-	asset, err := h.assetSvc.GetByID(r.Context(), id)
+	asset, err := h.assetSvc.GetByIDAndWorkspace(r.Context(), id, workspaceID)
 	if err != nil || asset == nil {
 		http.Error(w, `{"error":"asset not found"}`, http.StatusNotFound)
 		return
@@ -238,6 +250,12 @@ func (h *AssetHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 // SoftDelete handles DELETE /api/v1/assets/{id}
 func (h *AssetHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -245,7 +263,7 @@ func (h *AssetHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.assetSvc.SoftDelete(r.Context(), id); err != nil {
+	if err := h.assetSvc.SoftDeleteForWorkspace(r.Context(), id, workspaceID); err != nil {
 		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
 		return
 	}

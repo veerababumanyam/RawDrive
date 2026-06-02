@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 import { FileSignature, ReceiptText, Users, Wallet } from "lucide-react";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "CRM & Contracts | RawDrive",
-  description:
-    "Manage your client base, seal the deal with secure electronic contracts, and simplify GST-ready billing.",
-};
+export const metadata: Metadata = createPageMetadata("crm");
 
 export default function CRMContractsPage() {
   return (
     <SolutionShowcasePage
       eyebrow="CRM and contracts"
       title="Track leads, lock bookings, send contracts, and keep billing in one studio system."
-      description="This page body is rebuilt from the Stitch CRM direction so the route now reflects the real product surfaces behind it."
+      description="Run inquiries, packages, contracts, GST-ready invoices, deposits, and follow-ups in the same workspace that handles delivery."
       previewSrc="/stitch/solution-crm.png"
-      previewAlt="Stitch CRM and contacts preview"
+      previewAlt="RawDrive CRM, contracts, and billing dashboard preview"
       previewLabel="CRM contacts dashboard"
       primaryCta={{ href: "/register", label: "Run your studio on RawDrive" }}
       secondaryCta={{ href: "/contact", label: "Talk to sales" }}
@@ -67,8 +64,9 @@ export default function CRMContractsPage() {
             "Push bookings forward into calendars, galleries, and studio operations from the same platform.",
         },
       ]}
-      quoteTitle="This route now feels like part of the product instead of a dead-end stub."
-      quoteBody="The content is grounded in the Stitch CRM export so users can see the actual operational story behind RawDrive, not just a generic headline."
+      answer="RawDrive CRM is best for photography studios that need to turn inquiries into booked projects, manage client context, send agreements, issue GST-aware invoices, and keep delivery connected to the business pipeline."
+      quoteTitle="A studio CRM should know what happens after the deal closes."
+      quoteBody="RawDrive connects leads, contracts, billing, calendars, and galleries so the client relationship stays visible from first inquiry through final delivery."
     />
   );
 }

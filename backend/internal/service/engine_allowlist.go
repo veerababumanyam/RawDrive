@@ -2,6 +2,62 @@ package service
 
 import "strings"
 
+var desktopRequiredFormats = map[string]struct{}{
+	"3fr":  {},
+	"ari":  {},
+	"arq":  {},
+	"arw":  {},
+	"avif": {},
+	"bay":  {},
+	"bmq":  {},
+	"cap":  {},
+	"cine": {},
+	"cr2":  {},
+	"cr3":  {},
+	"crw":  {},
+	"cs1":  {},
+	"dcr":  {},
+	"dc2":  {},
+	"dng":  {},
+	"erf":  {},
+	"fff":  {},
+	"gpr":  {},
+	"heic": {},
+	"heif": {},
+	"hif":  {},
+	"ia":   {},
+	"iiq":  {},
+	"k25":  {},
+	"kc2":  {},
+	"kdc":  {},
+	"mdc":  {},
+	"mef":  {},
+	"mos":  {},
+	"mrw":  {},
+	"nef":  {},
+	"nrw":  {},
+	"orf":  {},
+	"ori":  {},
+	"pef":  {},
+	"pxn":  {},
+	"qtk":  {},
+	"r3d":  {},
+	"raf":  {},
+	"raw":  {},
+	"rdc":  {},
+	"rw1":  {},
+	"rwl":  {},
+	"rw2":  {},
+	"rwz":  {},
+	"sr2":  {},
+	"srf":  {},
+	"srw":  {},
+	"sti":  {},
+	"tif":  {},
+	"tiff": {},
+	"x3f":  {},
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // M16 E49-S3: Engine/format allowlist matrix
 //
@@ -14,7 +70,7 @@ import "strings"
 // Truth table (M16 — no desktop shipped yet):
 //   standard                     │ any engine OK for any format
 //   strict_client_scan           │ browser-worker OK for jpeg/png/webp/gif ONLY
-//                                │ TIFF/HEIC/RAW → ErrScanDesktopRequired (M17)
+//                                │ TIFF/HEIC/AVIF/RAW → ErrScanDesktopRequired
 //   strict_original_preservation │ browser-worker rejected for everything
 //                                │ (needs signed desktop/cli — not in M16)
 //
@@ -65,9 +121,6 @@ func isBrowserWorkerFormat(format string) bool {
 // ErrScanEngineNotAllowed.
 func isDesktopRequiredFormat(format string) bool {
 	format = strings.ToLower(strings.TrimSpace(format))
-	switch format {
-	case "tiff", "dng", "heic", "heif", "cr2", "nef", "arw", "raf", "orf":
-		return true
-	}
-	return false
+	_, ok := desktopRequiredFormats[format]
+	return ok
 }

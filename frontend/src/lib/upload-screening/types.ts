@@ -18,8 +18,8 @@
  * - "block": structural or metadata violation, upload should be rejected
  *   locally (worker never sends the bytes over the wire)
  * - "needs_desktop_scan": format requires the desktop companion (TIFF / HEIC /
- *   RAW); in M16 this path is a hint — the user sees a "download RawDrive
- *   Desktop" CTA rather than an upload button.
+ *   AVIF / RAW); the user sees a RawDrive Desktop CTA rather than an upload
+ *   button.
  */
 export type ScanDecision = "pass" | "block" | "needs_desktop_scan";
 

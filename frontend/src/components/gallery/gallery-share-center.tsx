@@ -157,8 +157,8 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
             label="Show QR code for public URL"
             filename={`${gallery.slug || "gallery"}-public-qr`}
           />
-          <a href={`/g/${gallery.slug}?mode=client`} target="_blank" rel="noopener noreferrer" className="btn-tertiary px-3 py-2 text-xs">
-            Client preview
+          <a href={`/galleries/${gallery.id}/preview`} className="btn-tertiary px-3 py-2 text-xs">
+            Dashboard preview
           </a>
         </div>
       </div>

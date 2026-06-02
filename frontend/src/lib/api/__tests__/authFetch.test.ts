@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mock the auth module BEFORE importing authFetch so the module-scope
 // API_BASE and the refresh helpers resolve against the mock.
 const getStoredAccessTokenMock = vi.fn();
-const refreshAuthSessionMock = vi.fn();
+const refreshAuthSessionResultMock = vi.fn();
 const clearAuthTokensMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: () => getStoredAccessTokenMock(),
-  refreshAuthSession: (apiBase?: string) => refreshAuthSessionMock(apiBase),
+  refreshAuthSessionResult: (apiBase?: string) => refreshAuthSessionResultMock(apiBase),
   clearAuthTokens: () => clearAuthTokensMock(),
 }));
 
@@ -21,7 +21,7 @@ import { authFetch } from "../authFetch";
 describe("authFetch", () => {
   beforeEach(() => {
     getStoredAccessTokenMock.mockReset();
-    refreshAuthSessionMock.mockReset();
+    refreshAuthSessionResultMock.mockReset();
     clearAuthTokensMock.mockReset();
     locationAssignMock = vi.fn();
     Object.defineProperty(window, "location", {
@@ -50,13 +50,13 @@ describe("authFetch", () => {
 
     expect(res.status).toBe(401);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(refreshAuthSessionMock).not.toHaveBeenCalled();
+    expect(refreshAuthSessionResultMock).not.toHaveBeenCalled();
     expect(locationAssignMock).not.toHaveBeenCalled();
   });
 
   it("attempts refresh and retries on 401 when a token was attached", async () => {
     getStoredAccessTokenMock.mockReturnValueOnce("stale-token");
-    refreshAuthSessionMock.mockResolvedValueOnce("new-token");
+    refreshAuthSessionResultMock.mockResolvedValueOnce({ ok: true, accessToken: "new-token" });
 
     const fetcher = vi
       .fn()
@@ -72,7 +72,7 @@ describe("authFetch", () => {
 
     expect(res.status).toBe(200);
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(refreshAuthSessionMock).toHaveBeenCalledTimes(1);
+    expect(refreshAuthSessionResultMock).toHaveBeenCalledTimes(1);
     const retryCall = fetcher.mock.calls[1] as [unknown, RequestInit];
     expect(new Headers(retryCall[1].headers).get("Authorization")).toBe("Bearer new-token");
     expect(locationAssignMock).not.toHaveBeenCalled();
@@ -80,7 +80,7 @@ describe("authFetch", () => {
 
   it("redirects to /login?session_expired=1 when refresh fails for a real session", async () => {
     getStoredAccessTokenMock.mockReturnValue("expired-token");
-    refreshAuthSessionMock.mockResolvedValueOnce("");
+    refreshAuthSessionResultMock.mockResolvedValueOnce({ ok: false, reason: "expired" });
 
     const fetcher = vi.fn(async () =>
       ({ status: 401, ok: false, headers: new Headers() }) as unknown as Response,
@@ -90,7 +90,7 @@ describe("authFetch", () => {
     await authFetch("/api/v1/streams", { method: "GET" });
 
     expect(clearAuthTokensMock).toHaveBeenCalledTimes(1);
-    expect(locationAssignMock).toHaveBeenCalledWith("/login?session_expired=1");
+    expect(locationAssignMock).toHaveBeenCalledWith("/login?session_expired=1&reason=expired");
   });
 
   it("deduplicates concurrent refresh calls", async () => {
@@ -101,11 +101,11 @@ describe("authFetch", () => {
     // in-flight promise must collapse them into ONE refresh.
     getStoredAccessTokenMock.mockReturnValue("stale-token");
     let refreshResolved = false;
-    refreshAuthSessionMock.mockImplementation(async () => {
+    refreshAuthSessionResultMock.mockImplementation(async () => {
       // Micro-delay so the concurrent callers actually overlap.
       await new Promise((r) => setTimeout(r, 5));
       refreshResolved = true;
-      return "new-token";
+      return { ok: true, accessToken: "new-token" };
     });
 
     const fetcher = vi.fn().mockImplementation(async (_input: unknown, init?: RequestInit) => {
@@ -126,7 +126,7 @@ describe("authFetch", () => {
     ]);
 
     expect(refreshResolved).toBe(true);
-    expect(refreshAuthSessionMock).toHaveBeenCalledTimes(1);
+    expect(refreshAuthSessionResultMock).toHaveBeenCalledTimes(1);
     expect(a.status).toBe(200);
     expect(b.status).toBe(200);
     expect(c.status).toBe(200);

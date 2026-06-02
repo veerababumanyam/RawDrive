@@ -274,7 +274,7 @@ func TestOAuthFlow(t *testing.T) {
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		MaxSessions:        5,
 	})
-	oauthSvc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client", RedirectURI: "http://localhost/callback"}, nil, nil)
+	oauthSvc := auth.NewOAuthService(auth.OAuthConfig{ClientID: "test-client", ClientSecret: "test-secret", RedirectURI: "http://localhost/callback"}, nil, nil)
 	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userSvc)
 
 	r := chi.NewRouter()

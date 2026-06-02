@@ -42,6 +42,10 @@ const securityHeaders = [
   },
 ];
 
+function apiRewriteBase() {
+  return process.env.INTERNAL_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+}
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["host.docker.internal"],
   // Production bootstrap (2026-04-11): required for slim Docker image
@@ -69,26 +73,27 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    const apiBase = apiRewriteBase();
     return [
       {
         source: "/auth/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/auth/:path*`,
+        destination: `${apiBase}/auth/:path*`,
       },
       {
         source: "/api/v1/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/:path*`,
+        destination: `${apiBase}/api/v1/:path*`,
       },
       {
         source: "/onboarding/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/onboarding/:path*`,
+        destination: `${apiBase}/onboarding/:path*`,
       },
       {
         source: "/workspace/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/workspace/:path*`,
+        destination: `${apiBase}/workspace/:path*`,
       },
       {
         source: "/health",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/health`,
+        destination: `${apiBase}/health`,
       },
     ];
   },

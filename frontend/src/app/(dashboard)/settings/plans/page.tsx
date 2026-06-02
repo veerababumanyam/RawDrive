@@ -282,10 +282,10 @@ function PlansPageContent() {
         Prices in Indian Rupees (₹), billed {billingInterval === "annual" ? "annually" : "monthly"}. 18% GST applicable. Payments processed via Razorpay or PhonePe.{" "}
         Enterprise pricing:{" "}
         <a
-          href="mailto:sales@rawdrive.in"
+          href="mailto:infor@rawdrive.in"
           className="underline underline-offset-2 hover:text-text-secondary"
         >
-          sales@rawdrive.in
+          infor@rawdrive.in
         </a>
       </p>
     </div>

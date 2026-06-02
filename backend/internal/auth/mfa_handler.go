@@ -389,9 +389,10 @@ func (h *MFAHandler) VerifyEnrollment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// VerifyTOTP is the login step-up endpoint. The caller passes the
-// mfa_token it received from Login + a current TOTP code. On success,
-// full access + refresh tokens are minted with mfa_verified=true.
+// VerifyTOTP is the login step-up endpoint. Password login submits the
+// mfa_token it received in the JSON challenge; OAuth login uses the
+// HttpOnly rawdrive_mfa_challenge cookie set by the callback redirect.
+// On success, full access + refresh tokens are minted with mfa_verified=true.
 func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 	if h.envelope == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "mfa_unavailable"})
@@ -399,7 +400,12 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req mfaVerifyTOTPRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MFAToken == "" || req.Code == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and code required"})
+		return
+	}
+	req.MFAToken = mfaChallengeTokenFromRequest(r, req.MFAToken)
+	if req.MFAToken == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and code required"})
 		return
 	}
@@ -447,6 +453,7 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "mfa token already used"})
 		return
 	}
+	clearMFAChallengeCookie(w, r)
 
 	_ = h.enrollRepo.UpdateLastVerified(r.Context(), userID)
 
@@ -496,7 +503,7 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 
 // VerifyRecoveryCode is the login step-up fallback when the user has
 // lost access to their authenticator app. It takes the same
-// short-lived mfa_token that Login issues + one of the user's one-time
+// short-lived mfa_token/cookie challenge plus one of the user's one-time
 // recovery codes (plaintext, as shown at enrollment). On success it
 // issues full access/refresh tokens with mfa_verified=true, marks the
 // code consumed atomically, and consumes the mfa_token via the same
@@ -521,7 +528,12 @@ func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req mfaVerifyRecoveryCodeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MFAToken == "" || req.RecoveryCode == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RecoveryCode == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and recovery_code required"})
+		return
+	}
+	req.MFAToken = mfaChallengeTokenFromRequest(r, req.MFAToken)
+	if req.MFAToken == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mfa_token and recovery_code required"})
 		return
 	}
@@ -580,6 +592,7 @@ func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "mfa token already used"})
 		return
 	}
+	clearMFAChallengeCookie(w, r)
 
 	// Stamp last_verified_at so Status reflects a recent successful
 	// step-up, even though the step-up was via recovery code and not a

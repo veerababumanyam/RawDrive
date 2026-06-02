@@ -1,22 +1,21 @@
 import type { Metadata } from "next";
 import { MarketplaceShowcasePage } from "@/components/marketing/MarketplaceShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Camera Rentals | RawDrive",
-  description: "Camera and gear rentals from verified partners in your region.",
-};
+export const metadata: Metadata = createPageMetadata("camera-rentals");
 
 export default function RentalsMarketplacePage() {
   return (
     <MarketplaceShowcasePage
       eyebrow="Rental Network"
       title="Reserve cameras, lenses, lights, and production gear without leaving your workflow."
-      description="The page body now follows the Stitch rentals marketplace direction instead of a plain heading block."
+      description="Find rental kits by city, brand, shoot type, and availability for wedding, event, portrait, and commercial production days."
       previewSrc="/stitch/rentals.png"
-      previewAlt="Stitch camera rentals marketplace preview"
+      previewAlt="RawDrive camera rentals marketplace preview"
       primaryCta={{ href: "/contact", label: "Request a rental" }}
       secondaryCta={{ href: "/register", label: "Join RawDrive" }}
       filters={["Sony", "Canon", "Lights", "Lenses", "Mumbai", "Insurance ready"]}
+      answer="RawDrive camera rentals are best for studios that need production-ready cameras, lenses, lights, audio, and support kits from verified regional partners."
       cards={[
         {
           name: "Cinema Prime Kit",

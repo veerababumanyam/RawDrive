@@ -1,7 +1,10 @@
+"use client";
+
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getCoverStyleById } from "@/components/gallery/cover-styles";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -25,10 +28,9 @@ function absoluteApiUrl(url?: string | null) {
 // invisible against an empty background.
 //
 // Priority is now: public WebP thumbs (thumb_lg → thumb_md → thumb_sm) →
-// legacy public JPG thumbs → finally display_webp as a last resort for
-// assets that haven't been re-processed under the new path. The hero is
-// above-the-fold so thumb_lg_webp (typically ~1200px) is more than enough
-// detail. Lightbox stays on display_webp via authenticated fetch + blob.
+// display_webp as a WebP-only last resort. The hero is above-the-fold so
+// thumb_lg_webp (typically ~1200px) is more than enough detail. Lightbox
+// stays on display_webp via authenticated fetch + blob.
 function pickFromThumbnails(urls: Record<string, string> | undefined | null): string {
   if (!urls) return "";
   return (
@@ -36,11 +38,7 @@ function pickFromThumbnails(urls: Record<string, string> | undefined | null): st
       urls.thumb_lg_webp ||
         urls.thumb_md_webp ||
         urls.thumb_sm_webp ||
-        urls.thumb_lg ||
-        urls.thumb_md ||
-        urls.thumb_sm ||
         urls.display_webp ||
-        Object.values(urls)[0] ||
         "",
     )
   );
@@ -80,6 +78,52 @@ function resolveDesignCoverImage(
   return resolvePublicCoverImage(gallery, assets);
 }
 
+const HERO_VARIANTS = [
+  "thumb_lg_webp",
+  "thumb_md_webp",
+  "thumb_sm_webp",
+  "display_webp",
+] as const;
+
+function resolvePublicCoverAsset(gallery: Gallery, assets: PublicAsset[]): PublicAsset | null {
+  const preferred = gallery.cover_asset_id
+    ? assets.find((asset) => asset.id === gallery.cover_asset_id)
+    : assets[0];
+  return preferred || assets[0] || null;
+}
+
+function coverAssetFromThumbnails(
+  gallery: Gallery,
+  thumbnailUrls: Record<string, string> | null,
+): PublicAsset | null {
+  if (!thumbnailUrls || Object.keys(thumbnailUrls).length === 0) return null;
+  return {
+    id: gallery.cover_asset_id || "design-cover",
+    filename: gallery.title || "Cover photo",
+    content_type: "image/webp",
+    thumbnail_urls: thumbnailUrls,
+    sort_order: -1,
+  };
+}
+
+function resolveDesignCoverAsset(
+  gallery: Gallery,
+  assets: PublicAsset[],
+  design: PublicDesignConfig | null,
+  designCoverThumbnails: Record<string, string> | null,
+  designCoverAsset?: PublicAsset | null,
+): PublicAsset | null {
+  if (designCoverAsset) return designCoverAsset;
+
+  const designAssetId = design?.cover?.assetId || gallery.cover_asset_id;
+  if (designAssetId) {
+    const match = assets.find((a) => a.id === designAssetId);
+    if (match) return match;
+  }
+
+  return coverAssetFromThumbnails(gallery, designCoverThumbnails) || resolvePublicCoverAsset(gallery, assets);
+}
+
 interface PublicGalleryHeroProps {
   gallery: Gallery;
   assets: PublicAsset[];
@@ -89,6 +133,7 @@ interface PublicGalleryHeroProps {
   // falls back to the M19 legacy `cover_template` path so existing
   // galleries that never used the studio still render correctly.
   design?: PublicDesignConfig | null;
+  designCoverAsset?: PublicAsset | null;
   designCoverThumbnails?: Record<string, string> | null;
 }
 
@@ -124,6 +169,7 @@ export function PublicGalleryHero({
   assets,
   branding,
   design,
+  designCoverAsset,
   designCoverThumbnails,
 }: PublicGalleryHeroProps) {
   const canUseStudioBrand = Boolean(branding?.can_customize && branding.public_branding_enabled !== false);
@@ -146,9 +192,21 @@ export function PublicGalleryHero({
   // path for predictability.
   const designStyleId = design?.cover?.styleId;
   const designStyle = designStyleId ? getCoverStyleById(designStyleId) : undefined;
+  const resolvedDesignCoverAsset = design && designStyle
+    ? resolveDesignCoverAsset(gallery, assets, design, designCoverThumbnails ?? null, designCoverAsset)
+    : null;
+  const legacyCoverAsset = !resolvedDesignCoverAsset ? resolvePublicCoverAsset(gallery, assets) : null;
+  const coverMedia = useDecryptedAssetUrl(
+    resolvedDesignCoverAsset || legacyCoverAsset,
+    HERO_VARIANTS,
+  );
 
   if (design && designStyle) {
-    const coverUrl = resolveDesignCoverImage(gallery, assets, design, designCoverThumbnails ?? null);
+    const coverUrl = coverMedia.src || (
+      resolvedDesignCoverAsset
+        ? ""
+        : resolveDesignCoverImage(gallery, assets, design, designCoverThumbnails ?? null)
+    );
     const accent = design.theme?.accentColor || studioAccent || "";
     const variant = design.theme?.variant;
     const scrim = variantScrim(variant);
@@ -373,7 +431,7 @@ export function PublicGalleryHero({
   // Legacy fallback — keeps the M19 `cover_template` path working for any
   // gallery that hasn't been touched by the design studio. Same code as
   // before this fix, modulo the early-return shape above.
-  const coverImageUrl = resolvePublicCoverImage(gallery, assets);
+  const coverImageUrl = coverMedia.src || (!legacyCoverAsset ? resolvePublicCoverImage(gallery, assets) : "");
   const hasCoverTemplate = Boolean(gallery.cover_template && gallery.cover_template !== "none" && coverImageUrl);
   const accentColor = studioAccent;
 

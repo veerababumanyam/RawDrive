@@ -2,12 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Banknote, BadgeCheck, MapPinned, Sparkles } from "lucide-react";
 import DealerApplicationButton from "@/components/DealerApplicationButton";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Partner Dealership Program | RawDrive",
-  description:
-    "Become a state dealer to help scale RawDrive's operations and earn passive commissions.",
-};
+export const metadata: Metadata = createPageMetadata("dealership");
 
 const dealerBenefits = [
   {
@@ -43,8 +40,8 @@ export default function DealershipPage() {
               Become the local growth engine for RawDrive in your market.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              This page now follows the original Stitch dealer registration direction instead of the
-              old placeholder copy. The existing app navbar and footer stay untouched.
+              Help studios in your region adopt RawDrive, support onboarding, and build recurring
+              relationships around gallery delivery, CRM, AI workflows, and marketplace growth.
             </p>
           </div>
 
@@ -96,7 +93,7 @@ export default function DealershipPage() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
               <img
                 src="/stitch/dealer.png"
-                alt="Stitch dealer registration page preview"
+                alt="RawDrive partner dealership registration preview"
                 className="h-auto w-full object-cover"
               />
             </div>

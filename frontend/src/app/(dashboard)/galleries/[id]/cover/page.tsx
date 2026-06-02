@@ -47,7 +47,8 @@ import {
   type Gallery,
 } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
-import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
+import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 // ──────────────────────────── Data ────────────────────────────
@@ -379,7 +380,8 @@ export default function CoverDesignPage() {
 
   const token = useMemo(() => getStoredAccessToken(), []);
   const selectedAsset = assets.find((a) => a.id === config.cover.assetId);
-  const previewUrl = selectedAsset ? getAssetPreviewUrl(selectedAsset, token) : "";
+  const coverMedia = useDecryptedAssetUrl(selectedAsset, LIGHTBOX_VARIANTS, token);
+  const hasCoverPreview = Boolean(coverMedia.src);
 
   // ───────────── Drag handlers ─────────────
 
@@ -531,8 +533,7 @@ export default function CoverDesignPage() {
           </select>
           {gallery?.slug && (
             <Link
-              href={`/g/${gallery.slug}`}
-              target="_blank"
+              href={`/galleries/${galleryId}/preview`}
               className="min-h-[40px] flex-1 rounded-xl border border-white/10 px-4 py-2 text-center text-sm transition-colors hover:bg-white/5 sm:flex-none"
             >
               Preview
@@ -664,12 +665,12 @@ export default function CoverDesignPage() {
         <section>
           <div
             ref={stageRef}
-            onPointerDown={previewUrl ? onStagePointerDown : undefined}
+            onPointerDown={hasCoverPreview ? onStagePointerDown : undefined}
             onPointerMove={onStagePointerMove}
             onPointerUp={onStagePointerUp}
             onPointerCancel={onStagePointerUp}
             className={`relative w-full select-none overflow-hidden rounded-2xl border border-white/10 bg-surface-container shadow-2xl shadow-black/20 ${
-              previewUrl ? (dragKind ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
+              hasCoverPreview ? (dragKind ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
             }`}
             style={{
               aspectRatio: config.cover.aspectRatio,
@@ -678,16 +679,22 @@ export default function CoverDesignPage() {
             }}
             aria-label="Cover preview — drag photo to pan, drag title/subtitle to position"
           >
-            {previewUrl ? (
+            {coverMedia.src ? (
               <img
-                src={previewUrl}
+                src={coverMedia.src}
                 alt={selectedAsset?.filename || "Cover preview"}
                 className="absolute inset-0 h-full w-full object-cover"
                 style={{ objectPosition: `${config.cover.focalPoint.x}% ${config.cover.focalPoint.y}%` }}
                 draggable={false}
               />
             ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-surface-container to-surface-container-high" />
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-container to-surface-container-high">
+                {selectedAsset && (
+                  <span className="rounded-full bg-surface-overlay px-3 py-1 text-xs font-medium text-on-surface-variant">
+                    {coverMedia.loading ? "Decrypting cover preview..." : coverMedia.error || "Cover preview unavailable"}
+                  </span>
+                )}
+              </div>
             )}
 
             {variantScrim && (
@@ -761,7 +768,7 @@ export default function CoverDesignPage() {
             )}
 
             {/* Drag-hint pill */}
-            {previewUrl && !dragKind && (
+            {hasCoverPreview && !dragKind && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur-sm">
                 {tab === "text" ? "Drag title / subtitle to position" : "Drag photo to pan"}
               </div>
@@ -1012,7 +1019,6 @@ function PanelCover({
         </div>
         <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto pr-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
           {assets.map((a) => {
-            const url = getAssetPreviewUrl(a, token);
             const active = config.cover.assetId === a.id;
             return (
               <button
@@ -1024,11 +1030,13 @@ function PanelCover({
                 aria-label={`Use ${a.filename} as cover`}
                 aria-pressed={active}
               >
-                {url ? (
-                  <img src={url} alt={a.filename} className="h-full w-full object-cover" loading="lazy" />
-                ) : (
-                  <div className="h-full w-full bg-surface-container-high" />
-                )}
+                <DecryptedPreviewImage
+                  asset={a}
+                  token={token}
+                  variants={FILMSTRIP_VARIANTS}
+                  alt={a.filename}
+                  className="h-full w-full object-cover"
+                />
               </button>
             );
           })}
@@ -1048,6 +1056,53 @@ function PanelCover({
           Reset focal point ({config.cover.focalPoint.x}%, {config.cover.focalPoint.y}%)
         </button>
       </div>
+    </div>
+  );
+}
+
+function DecryptedPreviewImage({
+  asset,
+  token,
+  variants,
+  alt,
+  className,
+}: {
+  asset: Asset | null;
+  token: string | null;
+  variants: readonly string[];
+  alt: string;
+  className: string;
+}) {
+  const media = useDecryptedAssetUrl(asset, variants, token);
+
+  if (!asset) return null;
+
+  if (media.loading) {
+    return (
+      <div
+        className="flex h-full w-full animate-pulse items-center justify-center bg-surface-container-high"
+        role="status"
+        aria-label={`Decrypting ${asset.filename}`}
+      />
+    );
+  }
+
+  if (media.src) {
+    return (
+      <img
+        src={media.src}
+        alt={alt}
+        className={className}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-surface-container-high px-2 text-center text-[10px] text-on-surface-variant">
+      {media.error || "Preview unavailable"}
     </div>
   );
 }
@@ -1403,16 +1458,19 @@ function GridLivePreview({
         <div className="flex" style={{ gap }}>
           {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
             const asset = empty ? null : (a as Asset);
-            const url = asset ? getAssetPreviewUrl(asset, token) : "";
             return (
               <div
                 key={i}
                 className="shrink-0 overflow-hidden rounded-md bg-surface-container-high"
                 style={{ width: 120, height: 80 }}
               >
-                {url ? (
-                  <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                ) : null}
+                <DecryptedPreviewImage
+                  asset={asset}
+                  token={token}
+                  variants={GRID_VARIANTS}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               </div>
             );
           })}
@@ -1433,7 +1491,6 @@ function GridLivePreview({
       >
         {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
           const asset = empty ? null : (a as Asset);
-          const url = asset ? getAssetPreviewUrl(asset, token) : "";
           const h = heights[i % heights.length];
           return (
             <div
@@ -1441,9 +1498,13 @@ function GridLivePreview({
               className="mb-[var(--gap)] overflow-hidden rounded-md bg-surface-container-high"
               style={{ ["--gap" as never]: `${gap}px`, marginBottom: gap, height: h, breakInside: "avoid" }}
             >
-              {url ? (
-                <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-              ) : null}
+              <DecryptedPreviewImage
+                asset={asset}
+                token={token}
+                variants={GRID_VARIANTS}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </div>
           );
         })}
@@ -1462,7 +1523,6 @@ function GridLivePreview({
       >
         {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
           const asset = empty ? null : (a as Asset);
-          const url = asset ? getAssetPreviewUrl(asset, token) : "";
           const w = widthWeights[i % widthWeights.length];
           return (
             <div
@@ -1470,9 +1530,13 @@ function GridLivePreview({
               className="overflow-hidden rounded-md bg-surface-container-high"
               style={{ flex: `${w} 1 ${w * 60}px`, height: 80 }}
             >
-              {url ? (
-                <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-              ) : null}
+              <DecryptedPreviewImage
+                asset={asset}
+                token={token}
+                variants={GRID_VARIANTS}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </div>
           );
         })}
@@ -1488,15 +1552,18 @@ function GridLivePreview({
     >
       {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
         const asset = empty ? null : (a as Asset);
-        const url = asset ? getAssetPreviewUrl(asset, token) : "";
         return (
           <div
             key={i}
             className="aspect-square overflow-hidden rounded-md bg-surface-container-high"
           >
-            {url ? (
-              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-            ) : null}
+            <DecryptedPreviewImage
+              asset={asset}
+              token={token}
+              variants={GRID_VARIANTS}
+              alt=""
+              className="h-full w-full object-cover"
+            />
           </div>
         );
       })}

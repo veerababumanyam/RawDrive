@@ -7,14 +7,15 @@ import { getPostLoginPath, persistAuthTokens } from "@/lib/auth";
 
 // F-007 (M17 wave 3): TOTP step-up form.
 //
-// Reads the mfa_token from sessionStorage (set by LoginForm on 401 +
-// mfa_required), posts it alongside the user's current 6-digit code to
-// /auth/verify-totp, persists the returned access+refresh tokens, and
-// redirects to the post-login path. On error, the user can retry or
-// restart from /login.
+// Password login stores the mfa_token in sessionStorage; OAuth step-up uses
+// an HttpOnly cookie set by the backend callback. The form posts whichever
+// browser-readable token exists plus the current 6-digit code to
+// /auth/verify-totp, then redirects to the post-login path.
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const MFA_TOKEN_KEY = "rawdrive_mfa_token";
+const MFA_NETWORK_ERROR =
+  "RawDrive couldn't be reached. Check your connection and try again.";
 
 export function MFAVerifyForm() {
   const router = useRouter();
@@ -26,41 +27,42 @@ export function MFAVerifyForm() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.sessionStorage.getItem(MFA_TOKEN_KEY);
-    if (!stored) {
-      // No challenge in flight — send the user back to login.
-      router.replace("/login");
-      return;
-    }
-    setMfaToken(stored);
+    setMfaToken(stored || "");
   }, [router]);
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
-    if (!mfaToken || code.trim().length < 6) {
+    if (code.trim().length < 6) {
       return;
     }
     setLoading(true);
     setError("");
 
     try {
+      const body = mfaToken
+        ? { mfa_token: mfaToken, code: code.trim() }
+        : { code: code.trim() };
       const response = await fetch(`${API_BASE}/auth/verify-totp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ mfa_token: mfaToken, code: code.trim() }),
+        body: JSON.stringify(body),
       });
 
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        const mfaSessionExpired =
+          payload.error === "invalid mfa token" ||
+          payload.error === "mfa_token and code required";
         setError(
           payload.error === "invalid code"
             ? "That code did not match. Check your authenticator and try again."
-            : payload.error === "invalid mfa token"
+            : mfaSessionExpired
               ? "Your sign-in session expired. Please start over."
               : "Verification failed. Please try again.",
         );
-        if (payload.error === "invalid mfa token") {
+        if (mfaSessionExpired) {
           window.sessionStorage.removeItem(MFA_TOKEN_KEY);
           setTimeout(() => router.replace("/login"), 1500);
         }
@@ -72,7 +74,7 @@ export function MFAVerifyForm() {
       persistAuthTokens(payload.access_token);
       window.location.assign(getPostLoginPath());
     } catch {
-      setError("Network error. Please confirm the API server is running.");
+      setError(MFA_NETWORK_ERROR);
     } finally {
       setLoading(false);
     }
@@ -125,7 +127,7 @@ export function MFAVerifyForm() {
 
         <button
           type="submit"
-          disabled={loading || code.length < 6 || !mfaToken}
+          disabled={loading || code.length < 6}
           className="btn-primary w-full py-4 font-headline text-base disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Verifying..." : "Verify & Sign In"}

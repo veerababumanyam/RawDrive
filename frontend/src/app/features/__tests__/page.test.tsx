@@ -19,7 +19,7 @@ describe("Features Page", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /Every core workflow, rebuilt around the original Stitch feature direction\./i,
+        name: /Every core workflow a photography studio needs to book, deliver, and grow\./i,
       }),
     ).toBeInTheDocument();
   });

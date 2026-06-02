@@ -79,25 +79,55 @@ export function getStoredWorkspaceId() {
   return claims?.workspace_id ?? "";
 }
 
-export async function refreshAuthSession(apiBase = "") {
-  const response = await fetch(`${apiBase}/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-  });
+export type RefreshAuthFailureReason =
+  | "no_session"
+  | "expired"
+  | "server_error"
+  | "invalid_response"
+  | "network_error";
+
+export type RefreshAuthSessionResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; reason: RefreshAuthFailureReason };
+
+export async function refreshAuthSessionResult(apiBase = ""): Promise<RefreshAuthSessionResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    clearAuthTokens();
+    return { ok: false, reason: "network_error" };
+  }
+
+  if (response.status === 204) {
+    clearAuthTokens();
+    return { ok: false, reason: "no_session" };
+  }
 
   if (!response.ok) {
     clearAuthTokens();
-    return "";
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, reason: "expired" };
+    }
+    return { ok: false, reason: "server_error" };
   }
 
   const payload = await response.json().catch(() => ({}));
   if (typeof payload.access_token !== "string" || !payload.access_token) {
     clearAuthTokens();
-    return "";
+    return { ok: false, reason: "invalid_response" };
   }
 
   persistAuthTokens(payload.access_token);
-  return payload.access_token;
+  return { ok: true, accessToken: payload.access_token };
+}
+
+export async function refreshAuthSession(apiBase = "") {
+  const result = await refreshAuthSessionResult(apiBase);
+  return result.ok ? result.accessToken : "";
 }
 
 export async function logoutAuthSession(apiBase = "") {

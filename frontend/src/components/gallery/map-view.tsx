@@ -47,15 +47,11 @@ function extractGeoAssets(assets: Asset[]): GeoAsset[] {
       lat,
       lon,
       filename: a.filename,
-      // WebP-first with JPG fallback for legacy assets. After the
-      // worker switched to WebP-only emission, new uploads no longer
-      // carry the `thumb_sm` JPG key — without this chain, every map
-      // pin for a fresh upload would render with no thumbnail.
+      // Gallery display surfaces use WebP derivatives only. Originals
+      // remain reserved for the explicit download flow.
       thumbUrl:
         a.thumbnail_urls?.thumb_sm_webp ||
         a.thumbnail_urls?.thumb_md_webp ||
-        a.thumbnail_urls?.thumb_sm ||
-        a.thumbnail_urls?.sm ||
         "",
     });
   }

@@ -34,6 +34,32 @@ function makeMinimalJpeg(): Uint8Array {
   ]);
 }
 
+function makeJpegWithLargeCameraMetadata(): Uint8Array {
+  const parts: Uint8Array[] = [new Uint8Array([0xff, 0xd8])];
+  for (let i = 0; i < 10; i += 1) {
+    const segmentLength = 60_000;
+    const segment = new Uint8Array(2 + segmentLength);
+    segment[0] = 0xff;
+    segment[1] = 0xe1;
+    segment[2] = (segmentLength >> 8) & 0xff;
+    segment[3] = segmentLength & 0xff;
+    parts.push(segment);
+  }
+  parts.push(new Uint8Array([
+    0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00,
+    0xff, 0xd9,
+  ]));
+
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
 function makeMinimalPng(): Uint8Array {
   // PNG signature + IHDR (13 bytes data) + IEND
   return new Uint8Array([
@@ -81,6 +107,40 @@ describe("screen() format dispatcher", () => {
     expect(result.decision).toBe("pass");
     expect(result.findings).toHaveLength(0);
   });
+
+  it("allows camera JPEGs with large metadata as a warning", () => {
+    const result = screen(makeJpegWithLargeCameraMetadata(), { declaredType: "image/jpeg" });
+    expect(result.detectedFormat).toBe("jpeg");
+    expect(result.decision).toBe("pass");
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        category: "metadata_budget",
+        severity: "low",
+      }),
+    ]);
+  });
+
+  it.each(["Nikon MPF", "Canon/Sony camera preview"])(
+    "allows %s trailing camera JPEG data as a warning",
+    () => {
+      const primary = makeMinimalJpeg();
+      const dependentPreview = makeMinimalJpeg();
+      const combined = new Uint8Array(primary.length + 8 + dependentPreview.length);
+      combined.set(primary, 0);
+      combined.set(new Uint8Array(8), primary.length);
+      combined.set(dependentPreview, primary.length + 8);
+
+      const result = screen(combined, { declaredType: "image/jpeg" });
+
+      expect(result.decision).toBe("pass");
+      expect(result.findings).toEqual([
+        expect.objectContaining({
+          category: "appended_payload",
+          severity: "low",
+        }),
+      ]);
+    },
+  );
 
   it("detects a minimal PNG and passes it", () => {
     const result = screen(makeMinimalPng(), { declaredType: "image/png" });
@@ -144,6 +204,41 @@ describe("screen() format dispatcher", () => {
     const result = screen(tiff, { declaredType: "image/tiff" });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
+  });
+
+  it("sets needs_desktop_scan for Canon CR2 files before generic TIFF", () => {
+    const cr2 = new Uint8Array([
+      0x49, 0x49, 0x2a, 0x00,
+      0x10, 0x00, 0x00, 0x00,
+      0x43, 0x52,
+    ]);
+    const result = screen(cr2, { declaredType: "image/x-canon-cr2" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("cr2");
+  });
+
+  it("sets needs_desktop_scan for Canon CR3 ISO BMFF files", () => {
+    const cr3 = new Uint8Array([
+      0x00, 0x00, 0x00, 0x18,
+      0x66, 0x74, 0x79, 0x70, // ftyp
+      0x63, 0x72, 0x78, 0x20, // crx
+      0x00, 0x00, 0x00, 0x00,
+    ]);
+    const result = screen(cr3, { declaredType: "image/x-canon-cr3" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("cr3");
+  });
+
+  it("sets needs_desktop_scan for AVIF files", () => {
+    const avif = new Uint8Array([
+      0x00, 0x00, 0x00, 0x18,
+      0x66, 0x74, 0x79, 0x70, // ftyp
+      0x61, 0x76, 0x69, 0x66, // avif
+      0x00, 0x00, 0x00, 0x00,
+    ]);
+    const result = screen(avif, { declaredType: "image/avif" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("avif");
   });
 
   it("blocks a JPEG that does not start with SOI", () => {

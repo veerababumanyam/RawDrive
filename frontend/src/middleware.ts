@@ -11,9 +11,7 @@ import { buildCsp } from "@/lib/csp";
  * studio slug.
  *
  * Mapping:
- *   photoworks-a1b2c3d4.rawdrive.in/                  → /g/wedding-veera?ws=photoworks-a1b2c3d4
- *                                                       (when path is `/`, root subdomain hits a future studio
- *                                                       landing page — for now passes through as-is)
+ *   photoworks-a1b2c3d4.rawdrive.in/                  → /studio?ws=photoworks-a1b2c3d4
  *   photoworks-a1b2c3d4.rawdrive.in/wedding-veera     → /g/wedding-veera?ws=photoworks-a1b2c3d4
  *   photoworks-a1b2c3d4.rawdrive.in/wedding-veera/photo/123
  *                                                     → /g/wedding-veera/photo/123?ws=photoworks-a1b2c3d4
@@ -69,7 +67,7 @@ const RESERVED_SUBDOMAINS = new Set([
 ]);
 
 const PASS_THROUGH_PREFIXES = ["/_next/", "/api/", "/static/", "/g/"];
-const PASS_THROUGH_EXACT = new Set(["/favicon.ico", "/robots.txt", "/sitemap.xml"]);
+const PASS_THROUGH_EXACT = new Set(["/favicon.ico", "/robots.txt", "/sitemap.xml", "/llms.txt"]);
 
 // The trailing portion of a business subdomain — exactly 8 lowercase
 // alphanumerics preceded by a single hyphen. e.g. `-a1b2c3d4` at the end of
@@ -134,6 +132,22 @@ function generateNonce(): string {
   return btoa(binary);
 }
 
+export function resolveBusinessSubdomainRewrite(
+  pathname: string,
+  search: string,
+  fullSubdomain: string,
+): { pathname: string; search: string } {
+  const targetPath = pathname === "/" || pathname === ""
+    ? "/studio"
+    : `/g${pathname}`;
+  const merged = new URLSearchParams(search);
+  merged.set("ws", fullSubdomain);
+  return {
+    pathname: targetPath,
+    search: "?" + merged.toString(),
+  };
+}
+
 export function middleware(req: NextRequest) {
   // F-098: build the nonced CSP once per request. The nonce is forwarded on the
   // REQUEST headers so Next.js stamps it onto its framework/bootstrap scripts
@@ -141,8 +155,13 @@ export function middleware(req: NextRequest) {
   // is set on the RESPONSE for browser enforcement. Applied to every return path
   // via pass()/the rewrite below.
   const isDev = process.env.NODE_ENV !== "production";
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-  const apiOrigin = apiUrl.startsWith("http://") ? apiUrl : "";
+  const isLocalBrowser =
+    req.nextUrl.hostname === "localhost" ||
+    req.nextUrl.hostname === "127.0.0.1" ||
+    req.nextUrl.hostname === "::1";
+  const apiOrigin =
+    process.env.NEXT_PUBLIC_API_URL ||
+    (isLocalBrowser ? "http://localhost:8080" : "");
   const nonce = generateNonce();
   const csp = buildCsp({ isDev, nonce, apiOrigin });
 
@@ -172,30 +191,14 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  // Root of the business subdomain — `<biz>-<code>.rawdrive.in/` — has no
-  // gallery slug in the path. Could eventually surface a studio landing
-  // page (list of published galleries); for now, let it fall through so
-  // Next.js renders a 404 rather than rewriting to /g/ which would 404
-  // with a less helpful message.
-  if (pathname === "/" || pathname === "") {
-    return pass();
-  }
-
-  // Path is `/wedding-veera` or `/wedding-veera/photo/123` etc. The first
-  // segment is the gallery slug; everything else is sub-route the existing
-  // /g/[slug] App Router segment handles.
-  // Rewrite: /<gallery-slug>[/...rest] → /g/<gallery-slug>[/...rest]
-  // Preserve original search, then APPEND ws= so the public gallery
-  // server-side fetch can forward it to the backend.
-  const targetPath = `/g${pathname}`;
-
   const rewritten = req.nextUrl.clone();
-  rewritten.pathname = targetPath;
-  // Merge `ws=<sub>` into existing search params (existing `album=`, `page=`, etc.
-  // are preserved). Using URLSearchParams keeps the ordering deterministic.
-  const merged = new URLSearchParams(search);
-  merged.set("ws", biz.fullSubdomain);
-  rewritten.search = "?" + merged.toString();
+  // Root (`/`) becomes the studio landing page; all other paths are gallery
+  // slugs or gallery sub-routes handled by the existing /g/[slug] tree.
+  // In both cases, preserve existing query params and append `ws=<sub>` so
+  // server components can scope public API calls to the business workspace.
+  const target = resolveBusinessSubdomainRewrite(pathname, search, biz.fullSubdomain);
+  rewritten.pathname = target.pathname;
+  rewritten.search = target.search;
 
   const res = NextResponse.rewrite(rewritten, { request: { headers: requestHeaders } });
   res.headers.set("Content-Security-Policy", csp);
@@ -209,6 +212,6 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|llms\\.txt).*)",
   ],
 };

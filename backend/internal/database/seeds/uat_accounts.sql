@@ -4,7 +4,6 @@
 -- Safe to re-run: upserts users, creates workspaces/dealers only if absent.
 
 BEGIN;
-SET LOCAL session_replication_role = 'replica';  -- allow FK ops during seeding
 
 DO $$
 DECLARE
@@ -15,7 +14,10 @@ DECLARE
   state_ka INT := 11;  -- Karnataka
   state_mh INT := 14;  -- Maharashtra
 
-  owner_role_id INT := 1;  -- roles.id = 1 = 'Owner'
+  owner_role_id  INT := 1;  -- roles.id = 1 = 'Owner'
+  admin_role_id  INT := 2;  -- roles.id = 2 = 'Admin'
+  editor_role_id INT := 3;  -- roles.id = 3 = 'Editor'
+  viewer_role_id INT := 4;  -- roles.id = 4 = 'Viewer'
 
   -- Resolved user IDs (populated by SELECT after each INSERT ... RETURNING)
   uid_superadmin   UUID;
@@ -29,11 +31,14 @@ DECLARE
   uid_pho_trial    UUID;
   uid_pho_hold     UUID;
   uid_team_lead    UUID;
+  uid_team_editor  UUID;
+  uid_team_viewer  UUID;
   uid_photographer UUID;
   uid_uat_new      UUID;
   uid_dealer_tg    UUID;
   uid_dealer_mh    UUID;
   uid_dealer       UUID;
+  uid_client_wed   UUID;
 
   -- Workspace IDs (stable per user)
   wid_pho_pro      UUID;
@@ -41,7 +46,6 @@ DECLARE
   wid_pho_biz      UUID;
   wid_pho_trial    UUID;
   wid_pho_hold     UUID;
-  wid_team_lead    UUID;
   wid_photographer UUID;
   wid_uat_new      UUID;
 
@@ -191,8 +195,9 @@ BEGIN
     SELECT id INTO uid_pho_hold FROM users WHERE email = 'pho.hold@rawdrive.test';
   END IF;
 
+  -- ── Team members ────────────────────────────────────────────────────
   INSERT INTO users (email, password_hash, display_name, state_id, platform_role, email_verified)
-  VALUES ('team.lead@rawdrive.test', pw_hash, 'Team Lead', state_ka, 'photographer', true)
+  VALUES ('team.lead@rawdrive.test', pw_hash, 'Team Lead', state_ka, 'team_member', true)
   ON CONFLICT (email) DO UPDATE SET
     password_hash  = EXCLUDED.password_hash,
     display_name   = EXCLUDED.display_name,
@@ -203,6 +208,34 @@ BEGIN
   RETURNING id INTO uid_team_lead;
   IF uid_team_lead IS NULL THEN
     SELECT id INTO uid_team_lead FROM users WHERE email = 'team.lead@rawdrive.test';
+  END IF;
+
+  INSERT INTO users (email, password_hash, display_name, state_id, platform_role, email_verified)
+  VALUES ('team.editor@rawdrive.test', pw_hash, 'Team Editor', state_ka, 'team_member', true)
+  ON CONFLICT (email) DO UPDATE SET
+    password_hash  = EXCLUDED.password_hash,
+    display_name   = EXCLUDED.display_name,
+    state_id       = EXCLUDED.state_id,
+    platform_role  = EXCLUDED.platform_role,
+    email_verified = true,
+    status         = 'active'
+  RETURNING id INTO uid_team_editor;
+  IF uid_team_editor IS NULL THEN
+    SELECT id INTO uid_team_editor FROM users WHERE email = 'team.editor@rawdrive.test';
+  END IF;
+
+  INSERT INTO users (email, password_hash, display_name, state_id, platform_role, email_verified)
+  VALUES ('team.viewer@rawdrive.test', pw_hash, 'Team Viewer', state_ka, 'team_member', true)
+  ON CONFLICT (email) DO UPDATE SET
+    password_hash  = EXCLUDED.password_hash,
+    display_name   = EXCLUDED.display_name,
+    state_id       = EXCLUDED.state_id,
+    platform_role  = EXCLUDED.platform_role,
+    email_verified = true,
+    status         = 'active'
+  RETURNING id INTO uid_team_viewer;
+  IF uid_team_viewer IS NULL THEN
+    SELECT id INTO uid_team_viewer FROM users WHERE email = 'team.viewer@rawdrive.test';
   END IF;
 
   INSERT INTO users (email, password_hash, display_name, state_id, platform_role, email_verified)
@@ -272,6 +305,21 @@ BEGIN
     SELECT id INTO uid_dealer FROM users WHERE email = 'dealer@rawdrive.test';
   END IF;
 
+  -- ── Clients ─────────────────────────────────────────────────────────
+  INSERT INTO users (email, password_hash, display_name, state_id, platform_role, email_verified)
+  VALUES ('client.wed@rawdrive.test', pw_hash, 'Wedding Client', state_ka, 'client', true)
+  ON CONFLICT (email) DO UPDATE SET
+    password_hash  = EXCLUDED.password_hash,
+    display_name   = EXCLUDED.display_name,
+    state_id       = EXCLUDED.state_id,
+    platform_role  = EXCLUDED.platform_role,
+    email_verified = true,
+    status         = 'active'
+  RETURNING id INTO uid_client_wed;
+  IF uid_client_wed IS NULL THEN
+    SELECT id INTO uid_client_wed FROM users WHERE email = 'client.wed@rawdrive.test';
+  END IF;
+
   -- ── Workspaces for Photographers (create if none exists for the user) ─
   SELECT w.id INTO wid_pho_pro FROM workspaces w
   JOIN workspace_members wm ON wm.workspace_id = w.id WHERE wm.user_id = uid_pho_pro LIMIT 1;
@@ -334,18 +382,6 @@ BEGIN
     UPDATE workspaces SET plan_tier = 'free', status = 'suspended' WHERE id = wid_pho_hold;
   END IF;
 
-  SELECT w.id INTO wid_team_lead FROM workspaces w
-  JOIN workspace_members wm ON wm.workspace_id = w.id WHERE wm.user_id = uid_team_lead LIMIT 1;
-  IF wid_team_lead IS NULL THEN
-    INSERT INTO workspaces (name, state_id, owner_id, plan_tier, status)
-    VALUES ('Team Lead Studio', state_ka, uid_team_lead, 'professional', 'active')
-    RETURNING id INTO wid_team_lead;
-    INSERT INTO workspace_members (workspace_id, user_id, role_id)
-    VALUES (wid_team_lead, uid_team_lead, owner_role_id);
-  ELSE
-    UPDATE workspaces SET plan_tier = 'professional', status = 'active' WHERE id = wid_team_lead;
-  END IF;
-
   SELECT w.id INTO wid_photographer FROM workspaces w
   JOIN workspace_members wm ON wm.workspace_id = w.id WHERE wm.user_id = uid_photographer LIMIT 1;
   IF wid_photographer IS NULL THEN
@@ -366,6 +402,41 @@ BEGIN
     VALUES (wid_uat_new, uid_uat_new, owner_role_id);
   END IF;
 
+  -- ── Team memberships on the Business workspace ──────────────────────
+  -- Keep joined_at earlier than any legacy personal "Team Lead Studio"
+  -- membership so auth lookup resolves the business workspace first.
+  IF wid_pho_biz IS NOT NULL THEN
+    INSERT INTO workspace_members (workspace_id, user_id, role_id, joined_at)
+    SELECT wid_pho_biz, uid_team_lead, admin_role_id, TIMESTAMPTZ '2000-01-01 00:00:00+00'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM workspace_members WHERE workspace_id = wid_pho_biz AND user_id = uid_team_lead
+    );
+    UPDATE workspace_members
+       SET role_id = admin_role_id,
+           joined_at = TIMESTAMPTZ '2000-01-01 00:00:00+00'
+     WHERE workspace_id = wid_pho_biz AND user_id = uid_team_lead;
+
+    INSERT INTO workspace_members (workspace_id, user_id, role_id, joined_at)
+    SELECT wid_pho_biz, uid_team_editor, editor_role_id, TIMESTAMPTZ '2000-01-02 00:00:00+00'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM workspace_members WHERE workspace_id = wid_pho_biz AND user_id = uid_team_editor
+    );
+    UPDATE workspace_members
+       SET role_id = editor_role_id,
+           joined_at = TIMESTAMPTZ '2000-01-02 00:00:00+00'
+     WHERE workspace_id = wid_pho_biz AND user_id = uid_team_editor;
+
+    INSERT INTO workspace_members (workspace_id, user_id, role_id, joined_at)
+    SELECT wid_pho_biz, uid_team_viewer, viewer_role_id, TIMESTAMPTZ '2000-01-03 00:00:00+00'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM workspace_members WHERE workspace_id = wid_pho_biz AND user_id = uid_team_viewer
+    );
+    UPDATE workspace_members
+       SET role_id = viewer_role_id,
+           joined_at = TIMESTAMPTZ '2000-01-03 00:00:00+00'
+     WHERE workspace_id = wid_pho_biz AND user_id = uid_team_viewer;
+  END IF;
+
   -- ── Onboarding status = complete for all photographers ───────────────
   INSERT INTO onboarding_statuses (user_id, current_step)
   VALUES
@@ -374,36 +445,59 @@ BEGIN
     (uid_pho_biz,      'complete'),
     (uid_pho_trial,    'complete'),
     (uid_pho_hold,     'complete'),
-    (uid_team_lead,    'complete'),
     (uid_photographer, 'complete'),
     (uid_uat_new,      'complete')
   ON CONFLICT (user_id) DO UPDATE SET current_step = 'complete';
 
   -- ── Dealer Records ────────────────────────────────────────────────────
-  -- dealer.tg: Approved, has referral code DLTG2026
-  INSERT INTO dealers (user_id, state_id, business_name, pan_number, status, referral_code, approved_at)
-  VALUES (uid_dealer_tg, state_tg, 'Dealer Telangana Agency', 'AABPD1234C', 'approved', 'DLTG2026', NOW())
-  ON CONFLICT (user_id) DO UPDATE SET
-    status        = 'approved',
-    referral_code = 'DLTG2026',
-    approved_at   = COALESCE(dealers.approved_at, NOW());
+  -- dealer.tg: Approved, has referral code DLTG2026. Migration 106 removed the
+  -- old dealers(user_id) unique index to allow multiple dealerships per user,
+  -- so these UAT rows are made idempotent with explicit update-then-insert
+  -- checks instead of ON CONFLICT (user_id).
+  UPDATE dealers
+     SET user_id       = uid_dealer_tg,
+         state_id      = state_tg,
+         business_name = 'Dealer Telangana Agency',
+         pan_number    = 'AABPD1234C',
+         status        = 'approved',
+         approved_at   = COALESCE(approved_at, NOW())
+   WHERE referral_code = 'DLTG2026';
+  IF NOT FOUND THEN
+    INSERT INTO dealers (user_id, state_id, business_name, pan_number, status, referral_code, approved_at)
+    VALUES (uid_dealer_tg, state_tg, 'Dealer Telangana Agency', 'AABPD1234C', 'approved', 'DLTG2026', NOW());
+  END IF;
 
   -- dealer.mh: Approved
-  INSERT INTO dealers (user_id, state_id, business_name, pan_number, status, approved_at)
-  VALUES (uid_dealer_mh, state_mh, 'Dealer Maharashtra Agency', 'AABPD5678D', 'approved', NOW())
-  ON CONFLICT (user_id) DO UPDATE SET
-    status      = 'approved',
-    approved_at = COALESCE(dealers.approved_at, NOW());
+  UPDATE dealers
+     SET state_id      = state_mh,
+         pan_number    = 'AABPD5678D',
+         status        = 'approved',
+         approved_at   = COALESCE(approved_at, NOW())
+   WHERE user_id = uid_dealer_mh
+     AND business_name = 'Dealer Maharashtra Agency';
+  IF NOT FOUND THEN
+    INSERT INTO dealers (user_id, state_id, business_name, pan_number, status, approved_at)
+    VALUES (uid_dealer_mh, state_mh, 'Dealer Maharashtra Agency', 'AABPD5678D', 'approved', NOW());
+  END IF;
 
   -- dealer: Pending test dealer (fallback state = Karnataka)
-  INSERT INTO dealers (user_id, state_id, business_name, pan_number, status)
-  VALUES (uid_dealer, state_ka, 'Test Dealer Agency', 'AABPD9012E', 'pending')
-  ON CONFLICT (user_id) DO NOTHING;
+  UPDATE dealers
+     SET state_id   = state_ka,
+         pan_number = 'AABPD9012E',
+         status     = 'pending'
+   WHERE user_id = uid_dealer
+     AND business_name = 'Test Dealer Agency';
+  IF NOT FOUND THEN
+    INSERT INTO dealers (user_id, state_id, business_name, pan_number, status)
+    VALUES (uid_dealer, state_ka, 'Test Dealer Agency', 'AABPD9012E', 'pending');
+  END IF;
 
   RAISE NOTICE '✓ Super Admins  : superadmin@rawdrive.test, super@rawdrive.test';
   RAISE NOTICE '✓ Admins        : admin@rawdrive.test, mod@rawdrive.test, ops@rawdrive.test';
-  RAISE NOTICE '✓ Photographers : pho.pro, pho.starter, pho.biz, pho.trial, pho.hold, team.lead, photographer, uat.new.pho.002 (@rawdrive.test)';
+  RAISE NOTICE '✓ Photographers : pho.pro, pho.starter, pho.biz, pho.trial, pho.hold, photographer, uat.new.pho.002 (@rawdrive.test)';
+  RAISE NOTICE '✓ Team members  : team.lead, team.editor, team.viewer (@rawdrive.test)';
   RAISE NOTICE '✓ Dealers       : dealer.tg (DLTG2026), dealer.mh, dealer (@rawdrive.test)';
+  RAISE NOTICE '✓ Clients       : client.wed@rawdrive.test';
   RAISE NOTICE '✓ Password for all: UatPho@2026';
 
   -- M41 FR-UCRT-09: seed 500 grant_admin upload credits for each pho_* UAT
@@ -427,6 +521,49 @@ BEGIN
     ) AS t(ws_id)
    WHERE ws_id IS NOT NULL
   ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING;
+
+  -- Rebuild the read-side rollup for seeded workspaces. Older versions of this
+  -- seed disabled triggers, so this keeps existing local databases correct even
+  -- when the ledger rows already exist and the idempotent insert above no-ops.
+  INSERT INTO upload_credit_balance_rollup (
+    workspace_id,
+    total_credits,
+    plan_granted,
+    purchased,
+    reserved,
+    consumed,
+    refunded,
+    last_entry_at,
+    updated_at
+  )
+  SELECT
+    le.workspace_id,
+    COALESCE(SUM(le.amount_credits), 0),
+    COALESCE(SUM(CASE WHEN le.entry_type IN ('grant_monthly', 'grant_admin') THEN le.amount_credits ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN le.entry_type = 'purchase' THEN le.amount_credits ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN le.entry_type = 'reserve' THEN -le.amount_credits ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN le.entry_type = 'consume' THEN le.amount_credits ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN le.entry_type = 'refund' THEN le.amount_credits ELSE 0 END), 0),
+    MAX(le.created_at),
+    NOW()
+  FROM upload_ledger_entries le
+  WHERE le.workspace_id IN (
+    wid_pho_pro,
+    wid_pho_starter,
+    wid_pho_biz,
+    wid_pho_trial,
+    wid_pho_hold
+  )
+  GROUP BY le.workspace_id
+  ON CONFLICT (workspace_id) DO UPDATE SET
+    total_credits = EXCLUDED.total_credits,
+    plan_granted  = EXCLUDED.plan_granted,
+    purchased     = EXCLUDED.purchased,
+    reserved      = EXCLUDED.reserved,
+    consumed      = EXCLUDED.consumed,
+    refunded      = EXCLUDED.refunded,
+    last_entry_at = EXCLUDED.last_entry_at,
+    updated_at    = NOW();
 
   RAISE NOTICE '✓ Upload credits: 500 grant_admin per pho_* workspace (idempotent)';
 

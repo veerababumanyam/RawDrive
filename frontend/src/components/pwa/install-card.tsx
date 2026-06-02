@@ -1,9 +1,8 @@
 "use client";
 
-// Dashboard install card. Lives in the dashboard right-aside so the
-// install affordance is discoverable to non-technical photographers
-// who would never notice the browser address-bar install icon or
-// the auto-popup banner (which respects a 30-day dismiss cooldown).
+// Install card for the dedicated PWA settings page. Keeps the install
+// affordance discoverable for photographers who would never notice the
+// browser address-bar install icon or the auto-popup banner.
 //
 // Three render modes:
 //   1. Prompt available (Chromium fired beforeinstallprompt + app

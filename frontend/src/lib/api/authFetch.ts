@@ -1,6 +1,6 @@
 import {
   getStoredAccessToken,
-  refreshAuthSession,
+  refreshAuthSessionResult,
   clearAuthTokens,
 } from "@/lib/auth";
 
@@ -19,11 +19,11 @@ function resolveUrl(input: string): string {
 // flipping the UI into a spurious session_expired redirect even though
 // the first call succeeded. Share a single in-flight refresh promise so
 // every concurrent caller gets the same new token.
-let inflightRefresh: Promise<string> | null = null;
+let inflightRefresh: ReturnType<typeof refreshAuthSessionResult> | null = null;
 
-function sharedRefresh(): Promise<string> {
+function sharedRefresh(): ReturnType<typeof refreshAuthSessionResult> {
   if (!inflightRefresh) {
-    inflightRefresh = refreshAuthSession(API_BASE).finally(() => {
+    inflightRefresh = refreshAuthSessionResult(API_BASE).finally(() => {
       inflightRefresh = null;
     });
   }
@@ -57,14 +57,18 @@ export async function authFetch(
     return response;
   }
 
-  const newToken = await sharedRefresh();
-  if (!newToken) {
+  const refreshResult = await sharedRefresh();
+  if (!refreshResult.ok) {
     clearAuthTokens();
-    if (typeof window !== "undefined") window.location.assign("/login?session_expired=1");
+    if (typeof window !== "undefined") {
+      window.location.assign(
+        `/login?session_expired=1&reason=${encodeURIComponent(refreshResult.reason)}`,
+      );
+    }
     return response;
   }
 
   const retryHeaders = new Headers(init.headers);
-  retryHeaders.set("Authorization", `Bearer ${newToken}`);
+  retryHeaders.set("Authorization", `Bearer ${refreshResult.accessToken}`);
   return fetch(url, { ...init, headers: retryHeaders, credentials: "include" });
 }

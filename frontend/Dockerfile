@@ -56,6 +56,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Server-side rewrites run inside the Next.js container. In Docker dev they
+# must use the Compose service DNS name (`backend`), while browser-side
+# NEXT_PUBLIC_API_URL remains localhost so the host browser can reach the API.
+ARG INTERNAL_API_BASE_URL
+ENV INTERNAL_API_BASE_URL=${INTERNAL_API_BASE_URL}
+
 # Produces .next/standalone/server.js plus a trimmed node_modules tree.
 # Requires next.config.ts to have output: 'standalone' (enabled in
 # Task 0.1 / commit fc7b671).

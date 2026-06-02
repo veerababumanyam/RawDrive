@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 import { CalendarDays, Clock3, MapPinned, Users } from "lucide-react";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Calendar & Scheduling | RawDrive",
-  description:
-    "Integrate seamlessly with your business schedule for smooth bookings and project planning.",
-};
+export const metadata: Metadata = createPageMetadata("scheduling");
 
 export default function SchedulingPage() {
   return (
     <SolutionShowcasePage
       eyebrow="Scheduling"
       title="Keep shoots, planning, reminders, and client coordination inside one calendar surface."
-      description="This page body now follows the Stitch booking-management screen instead of a plain title-and-paragraph placeholder."
+      description="Coordinate event dates, teams, venues, client milestones, and delivery tasks without separating the calendar from the rest of the studio."
       previewSrc="/stitch/solution-scheduling.png"
-      previewAlt="Stitch scheduling dashboard preview"
+      previewAlt="RawDrive scheduling and booking dashboard preview"
       previewLabel="Booking management"
       primaryCta={{ href: "/register", label: "Manage studio schedules" }}
       secondaryCta={{ href: "/contact", label: "See the workflow" }}
@@ -67,8 +64,9 @@ export default function SchedulingPage() {
             "Keep the calendar connected to galleries, invoices, and client follow-up instead of isolating it.",
         },
       ]}
-      quoteTitle="The Stitch scheduling page already had a strong operational layout."
-      quoteBody="This route now shows that structure on the live app, so it no longer falls back to an empty marketing stub."
+      answer="RawDrive scheduling is best for studios that manage multiple shoots, team members, venues, reminders, and client deadlines across weddings, events, and commercial projects."
+      quoteTitle="The calendar should understand the whole job."
+      quoteBody="RawDrive keeps dates, preparation, project context, invoices, galleries, and follow-up work close enough that teams can act without hunting through separate tools."
     />
   );
 }

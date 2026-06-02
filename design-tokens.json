@@ -52,7 +52,7 @@
         "legalEntity": {
             "companyName": "",
             "registeredAddress": "",
-            "dpoEmail": "privacy@rawdrive.in"
+            "dpoEmail": "contactus@rawdrive.in"
         }
     },
     "themes": {
@@ -169,73 +169,73 @@
             }
         },
         "liquid-glass-dark": {
-            "_description": "Dark variant of Liquid Glass. Same depth and translucency principles, inverted for dark backgrounds. Reduces eye strain during long editing sessions.",
+            "_description": "Dark variant of Liquid Glass matched to the RawDrive logo: deep navy glass, electric blue primary, cyan secondary, and a restrained gold highlight.",
             "colorMode": "dark",
             "surface": {
                 "base": {
-                    "value": "hsl(222, 25%, 8%)",
+                    "value": "hsl(218, 72%, 8%)",
                     "description": "Primary page background"
                 },
                 "elevated": {
-                    "value": "hsl(222, 20%, 14%)",
+                    "value": "hsl(213, 70%, 12%)",
                     "description": "Cards, modals, raised elements"
                 },
                 "sunken": {
-                    "value": "hsl(222, 25%, 5%)",
+                    "value": "hsl(217, 76%, 6%)",
                     "description": "Secondary backgrounds, inset areas"
                 },
                 "overlay": {
-                    "value": "hsla(222, 25%, 8%, 0.85)",
+                    "value": "hsla(218, 72%, 8%, 0.86)",
                     "description": "Modal/dialog backdrop"
                 }
             },
             "text": {
                 "primary": {
-                    "value": "hsl(220, 15%, 93%)",
+                    "value": "hsl(0, 0%, 100%)",
                     "description": "High-contrast headers, body text"
                 },
                 "secondary": {
-                    "value": "hsl(220, 10%, 65%)",
+                    "value": "hsl(210, 100%, 95%)",
                     "description": "Subheaders, descriptive text"
                 },
                 "tertiary": {
-                    "value": "hsl(220, 8%, 48%)",
+                    "value": "hsl(212, 64%, 85%)",
                     "description": "Captions, timestamps, metadata"
                 },
                 "inverse": {
-                    "value": "hsl(220, 25%, 10%)",
+                    "value": "hsl(218, 72%, 8%)",
                     "description": "Text on light/accent backgrounds"
                 }
             },
             "accent": {
                 "default": {
-                    "value": "hsl(217, 91%, 60%)",
-                    "description": "Brand color — brighter blue for dark backgrounds"
+                    "value": "hsl(223, 82%, 58%)",
+                    "description": "Logo electric blue primary accent"
                 },
                 "hover": {
-                    "value": "hsl(217, 91%, 67%)",
+                    "value": "hsl(184, 75%, 55%)",
                     "description": "Accent hover state"
                 },
                 "active": {
-                    "value": "hsl(217, 91%, 53%)",
+                    "value": "hsl(223, 76%, 48%)",
                     "description": "Accent pressed state"
                 },
                 "subtle": {
-                    "value": "hsla(217, 91%, 60%, 0.12)",
+                    "value": "hsla(184, 75%, 55%, 0.12)",
                     "description": "Accent background wash"
                 },
                 "muted": {
-                    "value": "hsla(217, 91%, 60%, 0.22)",
+                    "value": "hsla(223, 82%, 58%, 0.24)",
                     "description": "Accent background medium"
                 }
             },
             "semantic": {
                 "success": {
-                    "value": "hsl(142, 60%, 55%)",
+                    "value": "hsl(170, 70%, 50%)",
                     "description": "Positive actions"
                 },
                 "warning": {
-                    "value": "hsl(38, 85%, 55%)",
+                    "value": "hsl(45, 62%, 62%)",
                     "description": "Caution states"
                 },
                 "destructive": {
@@ -243,25 +243,25 @@
                     "description": "Errors, destructive actions"
                 },
                 "info": {
-                    "value": "hsl(199, 80%, 55%)",
+                    "value": "hsl(184, 75%, 55%)",
                     "description": "Informational states"
                 }
             },
             "border": {
                 "default": {
-                    "value": "hsl(222, 15%, 22%)",
+                    "value": "hsl(213, 45%, 23%)",
                     "description": "Default border color"
                 },
                 "strong": {
-                    "value": "hsl(222, 15%, 32%)",
+                    "value": "hsl(206, 52%, 34%)",
                     "description": "Emphasized borders"
                 },
                 "subtle": {
-                    "value": "hsl(222, 15%, 15%)",
+                    "value": "hsl(217, 55%, 15%)",
                     "description": "Subtle borders"
                 },
                 "focus": {
-                    "value": "hsl(217, 91%, 60%)",
+                    "value": "hsl(184, 75%, 55%)",
                     "description": "Focus ring"
                 }
             },
@@ -281,100 +281,100 @@
             }
         },
         "midnight": {
-            "_description": "Rich, deep-dark theme for photographers who prefer dramatic, studio-grade UI. AMOLED-friendly true blacks with warm gold accent. Ideal for photo editing environments where UI should disappear.",
+            "_description": "AMOLED dark theme matched to the RawDrive logo. True-black navy surfaces with blue/cyan brand accents and a small gold highlight.",
             "colorMode": "dark",
             "surface": {
                 "base": {
-                    "value": "hsl(240, 15%, 3%)",
+                    "value": "hsl(224, 78%, 4%)",
                     "description": "Near-black base — AMOLED friendly"
                 },
                 "elevated": {
-                    "value": "hsl(240, 12%, 9%)",
+                    "value": "hsl(217, 70%, 8%)",
                     "description": "Slightly lifted cards"
                 },
                 "sunken": {
-                    "value": "hsl(0, 0%, 0%)",
+                    "value": "hsl(225, 100%, 2%)",
                     "description": "True black insets"
                 },
                 "overlay": {
-                    "value": "hsla(240, 15%, 3%, 0.90)",
+                    "value": "hsla(224, 78%, 4%, 0.92)",
                     "description": "Modal backdrop"
                 }
             },
             "text": {
                 "primary": {
-                    "value": "hsl(40, 15%, 90%)",
-                    "description": "Warm off-white for readability"
+                    "value": "hsl(0, 0%, 100%)",
+                    "description": "White for maximum dark-dashboard readability"
                 },
                 "secondary": {
-                    "value": "hsl(40, 8%, 60%)",
-                    "description": "Warm muted secondary"
+                    "value": "hsl(210, 100%, 95%)",
+                    "description": "Near-white secondary text"
                 },
                 "tertiary": {
-                    "value": "hsl(40, 5%, 42%)",
+                    "value": "hsl(212, 64%, 85%)",
                     "description": "Subdued metadata"
                 },
                 "inverse": {
-                    "value": "hsl(240, 15%, 5%)",
+                    "value": "hsl(224, 78%, 4%)",
                     "description": "Text on accent backgrounds"
                 }
             },
             "accent": {
                 "default": {
-                    "value": "hsl(42, 78%, 55%)",
-                    "description": "Warm gold accent — evokes studio warmth"
+                    "value": "hsl(184, 75%, 55%)",
+                    "description": "Logo cyan accent"
                 },
                 "hover": {
-                    "value": "hsl(42, 78%, 62%)",
+                    "value": "hsl(190, 90%, 68%)",
                     "description": "Accent hover"
                 },
                 "active": {
-                    "value": "hsl(42, 78%, 48%)",
+                    "value": "hsl(223, 76%, 48%)",
                     "description": "Accent pressed"
                 },
                 "subtle": {
-                    "value": "hsla(42, 78%, 55%, 0.10)",
-                    "description": "Gold wash"
+                    "value": "hsla(184, 75%, 55%, 0.10)",
+                    "description": "Cyan wash"
                 },
                 "muted": {
-                    "value": "hsla(42, 78%, 55%, 0.20)",
-                    "description": "Gold medium"
+                    "value": "hsla(223, 82%, 58%, 0.22)",
+                    "description": "Logo blue medium"
                 }
             },
             "semantic": {
                 "success": {
-                    "value": "hsl(160, 60%, 45%)",
-                    "description": "Teal-green success"
+                    "value": "hsl(170, 70%, 50%)",
+                    "description": "Cyan-green success"
                 },
                 "warning": {
-                    "value": "hsl(30, 90%, 55%)",
-                    "description": "Warm orange warning"
+                    "value": "hsl(45, 62%, 62%)",
+                    "description": "Logo gold warning"
                 },
                 "destructive": {
                     "value": "hsl(0, 65%, 58%)",
                     "description": "Muted red for dark context"
                 },
                 "info": {
-                    "value": "hsl(200, 70%, 55%)",
-                    "description": "Cool blue info"
+                    "value": "hsl(223, 82%, 58%)",
+                    "description": "Logo blue info"
                 }
             },
             "border": {
                 "default": {
-                    "value": "hsl(240, 10%, 15%)",
+                    "value": "hsl(217, 55%, 15%)",
                     "description": "Default border"
                 },
                 "strong": {
-                    "value": "hsl(240, 10%, 25%)",
+                    "value": "hsl(206, 52%, 28%)",
                     "description": "Emphasized borders"
                 },
                 "subtle": {
-                    "value": "hsl(240, 10%, 8%)",
+                    "value": "hsl(225, 70%, 8%)",
                     "description": "Barely visible borders"
                 },
                 "focus": {
-                    "value": "hsl(42, 78%, 55%)",
-                    "description": "Gold focus ring"
+                    "value": "hsl(184, 75%, 55%)",
+                    "description": "Cyan focus ring"
                 }
             },
             "glass": {

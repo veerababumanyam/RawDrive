@@ -14,9 +14,10 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import { authFetch } from "@/lib/api/authFetch";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
+import { getAsset, type Asset } from "@/lib/api/assets";
 import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
-import { getAssetPreviewUrl } from "@/lib/dashboard-ui";
-import { PwaInstallCard } from "@/components/pwa/install-card";
+import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { cn } from "@/lib/utils";
 
 type GalleryCard = {
@@ -26,7 +27,7 @@ type GalleryCard = {
   client: string;
   status: string;
   chipClass: string;
-  image?: string;
+  gallery: Gallery;
 };
 
 const quickActions = [
@@ -59,14 +60,54 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+function DashboardGalleryCover({
+  gallery,
+  coverAsset,
+  token,
+}: {
+  gallery: Gallery;
+  coverAsset?: Asset;
+  token: string | null;
+}) {
+  const fallbackAsset = useMemo<EncryptedAssetLike | null>(() => {
+    if (coverAsset) return coverAsset;
+    if (!gallery.cover_thumbnails || Object.keys(gallery.cover_thumbnails).length === 0) return null;
+    return {
+      id: gallery.cover_asset_id,
+      filename: gallery.title,
+      thumbnail_urls: gallery.cover_thumbnails,
+    };
+  }, [coverAsset, gallery.cover_asset_id, gallery.cover_thumbnails, gallery.title]);
+  const media = useDecryptedAssetUrl(fallbackAsset, GRID_VARIANTS, token);
+
+  if (media.loading) {
+    return <div className="absolute inset-0 animate-pulse bg-surface-container-high" aria-hidden="true" />;
+  }
+
+  if (media.src) {
+    return (
+      <img
+        src={media.src}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+
+  return null;
+}
+
 export default function DashboardPage() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [token] = useState(() => getStoredAccessToken());
+  const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
 
   useEffect(() => {
-    const token = getStoredAccessToken();
     listGalleries(token)
       .then((data) => setGalleries(data ?? []))
       .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
@@ -74,7 +115,44 @@ export default function DashboardPage() {
     // Fetch the logged-in user's profile for the greeting banner. A
     // failed /auth/me call degrades gracefully to a neutral greeting.
     getCurrentUser(token).then(setUser).catch(() => setUser(null));
-  }, []);
+  }, [token]);
+
+  const missingCoverAssetIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        galleries
+          .slice(0, 4)
+          .map((gallery) => gallery.cover_asset_id)
+          .filter((id): id is string => Boolean(id && !coverAssets[id])),
+      ),
+    );
+  }, [coverAssets, galleries]);
+
+  useEffect(() => {
+    if (!token || missingCoverAssetIds.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missingCoverAssetIds.map(async (assetId) => {
+        try {
+          return await getAsset(token, assetId);
+        } catch {
+          return null;
+        }
+      }),
+    ).then((assets) => {
+      if (cancelled) return;
+      setCoverAssets((prev) => {
+        const next = { ...prev };
+        for (const asset of assets) {
+          if (asset) next[asset.id] = asset;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [missingCoverAssetIds, token]);
 
   // Cards render the real galleries. When there are none, the UI
   // shows an empty state further down rather than the old placeholder
@@ -84,19 +162,12 @@ export default function DashboardPage() {
   // Cover image: gallery.cover_thumbnails carries the LEFT JOIN'd
   // thumbnail map (thumb_sm_webp / thumb_md_webp / thumb_lg_webp /
   // display_webp) for the gallery's chosen cover asset, populated by
-  // listGalleries. getAssetPreviewUrl picks the preferred size and
-  // signs the URL with the access token so the backend's auth-gated
-  // asset endpoint accepts the request. Without this the card tile
-  // rendered with no background and just the "Delivered" chip floated
-  // on the empty placeholder — the bug from the dashboard screenshot.
+  // listGalleries. The card fetches cover asset metadata when available
+  // and renders through useDecryptedAssetUrl so encrypted WebP previews
+  // display as blob URLs instead of raw storage bytes.
   const cards = useMemo<GalleryCard[]>(
     () => {
-      const token = getStoredAccessToken();
       return galleries.slice(0, 4).map((gallery) => {
-        const coverUrl = getAssetPreviewUrl(
-          { thumbnail_urls: gallery.cover_thumbnails || {} },
-          token,
-        );
         return {
           id: gallery.id,
           title: gallery.title,
@@ -106,7 +177,7 @@ export default function DashboardPage() {
           chipClass: gallery.is_published
             ? "bg-accent-subtle text-accent"
             : "bg-surface-container-high text-text-primary",
-          image: coverUrl || undefined,
+          gallery,
         };
       });
     },
@@ -152,21 +223,34 @@ export default function DashboardPage() {
       {
         label: "Total Galleries",
         value: galleries.length > 0 ? galleries.length.toString() : "0",
-        meta: "",
+        meta: "Open",
         toneClass: "text-accent",
+        href: "/galleries",
+        icon: Cloud,
       },
-      { label: "Active Clients", value: "—", meta: "", toneClass: "text-accent-primary" },
+      {
+        label: "Active Clients",
+        value: "—",
+        meta: "CRM",
+        toneClass: "text-accent-primary",
+        href: "/crm/contacts",
+        icon: UserPlus,
+      },
       {
         label: "Storage Used",
         value: storageUsed,
         meta: storageMeta,
         toneClass: "text-accent-secondary",
+        href: "/settings/storage",
+        icon: Cloud,
       },
       {
         label: "Revenue This Month",
         value: "—",
-        meta: "",
+        meta: "Billing",
         toneClass: "text-accent-tertiary",
+        href: "/billing",
+        icon: Wallet,
       },
     ],
     [galleries.length, storageUsed, storageMeta, storagePercent],
@@ -203,16 +287,20 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <article
-            key={stat.label}
-            className="surface-panel rounded-xl p-6 transition-colors hover:bg-surface-container-high"
-          >
+        {stats.map((stat) => {
+          const StatIcon = stat.icon;
+          return (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              aria-label={`Open ${stat.label}`}
+              className="surface-panel group rounded-xl p-6 transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+            >
             <div className="mb-4 flex items-start justify-between">
-              <Cloud className={cn("h-5 w-5", stat.toneClass)} />
+              <StatIcon className={cn("h-5 w-5", stat.toneClass)} />
               <span
                 className={cn(
-                  "rounded-full bg-surface-container-high px-2 py-1 text-[10px] font-semibold",
+                  "rounded-full bg-surface-container-high px-2 py-1 text-[10px] font-semibold transition-colors group-hover:bg-surface-container-highest",
                   stat.toneClass,
                 )}
               >
@@ -228,8 +316,9 @@ export default function DashboardPage() {
                 <div className="h-1.5 rounded-full bg-accent" style={{ width: `${storagePercent}%` }} />
               </div>
             ) : null}
-          </article>
-        ))}
+          </Link>
+          );
+        })}
       </section>
 
       <div className="grid grid-cols-12 gap-8">
@@ -268,18 +357,17 @@ export default function DashboardPage() {
                   href={card.id.startsWith("/") ? card.id : `/galleries/${card.id}`}
                   className="surface-panel group overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
                 >
-                  <div
-                    className="relative h-48 bg-surface-container-high"
-                    style={
-                      card.image
-                        ? {
-                            backgroundImage: `linear-gradient(to top, var(--surface-scrim), transparent), url(${card.image})`,
-                            backgroundPosition: "center",
-                            backgroundSize: "cover",
-                          }
-                        : undefined
-                    }
-                  >
+                  <div className="relative h-48 overflow-hidden bg-surface-container-high">
+                    <DashboardGalleryCover
+                      gallery={card.gallery}
+                      coverAsset={card.gallery.cover_asset_id ? coverAssets[card.gallery.cover_asset_id] : undefined}
+                      token={token}
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{ background: "linear-gradient(to top, var(--surface-scrim), transparent)" }}
+                      aria-hidden="true"
+                    />
                     <div className="absolute bottom-4 left-4">
                       <span
                         className={cn(
@@ -317,14 +405,6 @@ export default function DashboardPage() {
         </section>
 
         <aside className="col-span-12 space-y-8 lg:col-span-4">
-          {/* PWA install card — surfaces a friendly install button
-              right inside the dashboard. Self-hides when the app is
-              already installed; on browsers where the native install
-              prompt isn't available yet (Safari, Firefox, or Chromium
-              before its installability heuristic fires) it falls back
-              to browser-specific written instructions. */}
-          <PwaInstallCard />
-
           <section className="surface-panel p-6">
             <h3 className="mb-6 font-headline text-lg font-bold text-text-primary">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -332,9 +412,9 @@ export default function DashboardPage() {
                 <Link
                   key={action.label}
                   href={action.href}
-                  className="group flex flex-col items-center justify-center rounded-xl bg-surface-container-high p-4 text-accent transition-colors hover:bg-surface-container-highest"
+                  className="group flex flex-col items-center justify-center rounded-xl bg-surface-container-high p-4 text-text-primary transition-colors hover:bg-surface-container-highest"
                 >
-                  <action.icon className="mb-2 h-5 w-5 transition-transform group-hover:scale-110" />
+                  <action.icon className="mb-2 h-5 w-5 text-accent transition-transform group-hover:scale-110" />
                   <span className="text-xs font-semibold">{action.label}</span>
                 </Link>
               ))}
@@ -371,59 +451,7 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
-
-          {/* E76-S1: Gallery Activity Widget */}
-          <section className="surface-panel p-5 space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Gallery Activity</h2>
-            <GalleryActivityWidget />
-          </section>
         </aside>
-      </div>
-    </div>
-  );
-}
-
-function GalleryActivityWidget() {
-  const [stats, setStats] = useState<{ views: number; downloads: number; selections: number; activeGalleries: number } | null>(null);
-
-  useEffect(() => {
-    if (!getStoredAccessToken()) return;
-    authFetch("/api/v1/dashboard/gallery-activity?days=7")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.data) setStats(d.data); })
-      .catch(() => {});
-  }, []);
-
-  if (!stats) {
-    return (
-      <div className="grid grid-cols-2 gap-3">
-        {["Views (7d)", "Downloads (7d)", "Selections (7d)", "Active Galleries"].map((label) => (
-          <div key={label} className="rounded-xl bg-surface-sunken p-3 text-center">
-            <p className="text-lg font-bold text-text-primary">—</p>
-            <p className="text-[10px] text-text-tertiary mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="rounded-xl bg-surface-sunken p-3 text-center">
-        <p className="text-lg font-bold text-text-primary">{stats.views.toLocaleString()}</p>
-        <p className="text-[10px] text-text-tertiary mt-0.5">Views (7d)</p>
-      </div>
-      <div className="rounded-xl bg-surface-sunken p-3 text-center">
-        <p className="text-lg font-bold text-text-primary">{stats.downloads.toLocaleString()}</p>
-        <p className="text-[10px] text-text-tertiary mt-0.5">Downloads (7d)</p>
-      </div>
-      <div className="rounded-xl bg-surface-sunken p-3 text-center">
-        <p className="text-lg font-bold text-text-primary">{stats.selections.toLocaleString()}</p>
-        <p className="text-[10px] text-text-tertiary mt-0.5">Selections (7d)</p>
-      </div>
-      <div className="rounded-xl bg-surface-sunken p-3 text-center">
-        <p className="text-lg font-bold text-text-primary">{stats.activeGalleries}</p>
-        <p className="text-[10px] text-text-tertiary mt-0.5">Active Galleries</p>
       </div>
     </div>
   );

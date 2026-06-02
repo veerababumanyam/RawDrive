@@ -9,6 +9,7 @@ import {
   uploadWorkspaceLogo,
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 
 const inputClass = "input-base w-full";
 
@@ -100,6 +101,12 @@ export default function BusinessProfilePage() {
   const studioBrandName = profile.brand_name || profile.name || "Your Studio";
   const accentColor = profile.brand_accent_color || "#2563EB";
   const logoFilename = profile.logo_metadata?.filename || (profile.logo_asset_id ? "Uploaded logo" : "");
+  const logoPreviewSource = profile.logo_url || profile.logo_metadata?.storage_key || "";
+  const logoPreviewUrl = logoPreviewSource ? getStorageBackedUrl(logoPreviewSource, getStoredAccessToken()) : "";
+  const businessSubdomain = profile.business_profile_slug && profile.business_unique_code
+    ? `${profile.business_profile_slug}-${profile.business_unique_code}.rawdrive.in`
+    : "";
+  const businessSubdomainUrl = businessSubdomain ? `https://${businessSubdomain}` : "";
 
   if (loading) {
     return (
@@ -168,6 +175,24 @@ export default function BusinessProfilePage() {
             Website
             <input type="url" value={profile.website} onChange={setText("website")} className={inputClass} placeholder="https://example.com" />
           </label>
+          {businessSubdomainUrl && (
+            <div className="rounded-2xl border border-border-default bg-surface-sunken px-4 py-3 sm:col-span-2">
+              <p className="text-xs font-medium text-text-primary">Public subdomain address</p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <a
+                  href={businessSubdomainUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-sm font-medium text-accent hover:text-accent-hover focus:outline-none focus:ring-2 focus:ring-border-focus"
+                >
+                  {businessSubdomainUrl}
+                </a>
+                <span className="text-xs text-text-tertiary">
+                  Published galleries appear under this address.
+                </span>
+              </div>
+            </div>
+          )}
           <label className="flex flex-col gap-1 text-xs text-text-secondary">
             Public brand name
             <input type="text" value={profile.brand_name} onChange={setText("brand_name")} className={inputClass} placeholder={profile.name || "Studio name shown to clients"} />
@@ -186,12 +211,27 @@ export default function BusinessProfilePage() {
             Show studio branding on public galleries
           </label>
           <div className="rounded-2xl border border-border-default bg-surface-sunken p-4 sm:col-span-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-medium text-text-primary">Studio logo</p>
-                <p className="mt-1 text-xs text-text-secondary">
-                  {logoFilename || "Upload a transparent PNG, JPEG, WebP, or SVG logo. It is stored as an authenticated R2 asset."}
-                </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border-default bg-surface-raised">
+                  {logoPreviewUrl ? (
+                    <img
+                      src={logoPreviewUrl}
+                      alt={`${studioBrandName} logo preview`}
+                      className="h-full w-full object-contain p-2"
+                    />
+                  ) : (
+                    <span className="text-2xl font-semibold text-text-tertiary" aria-hidden="true">
+                      {studioBrandName.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-text-primary">Studio logo</p>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {logoFilename || "Upload a transparent PNG, JPEG, WebP, or SVG logo. It is stored as an authenticated asset."}
+                  </p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <input

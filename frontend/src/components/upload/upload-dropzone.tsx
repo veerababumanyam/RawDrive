@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useDropzone, type DropEvent, type FileRejection } from "react-dropzone";
+import { STILL_IMAGE_DROPZONE_ACCEPT } from "@/lib/still-image-formats";
 
 interface UploadDropzoneProps {
   onFilesAccepted: (files: File[]) => void;
@@ -9,24 +10,6 @@ interface UploadDropzoneProps {
   maxFiles?: number;
   disabled?: boolean;
 }
-
-const ACCEPTED_TYPES: Record<string, string[]> = {
-  "image/jpeg": [".jpg", ".jpeg"],
-  "image/png": [".png"],
-  "image/tiff": [".tiff", ".tif"],
-  "image/webp": [".webp"],
-  "image/heic": [".heic", ".heif"],
-  "image/heif": [".heif"],
-  "image/avif": [".avif"],
-  "image/x-canon-cr2": [".cr2"],
-  "image/x-canon-cr3": [".cr3"],
-  "image/x-nikon-nef": [".nef"],
-  "image/x-sony-arw": [".arw"],
-  "image/x-adobe-dng": [".dng"],
-  "image/x-fuji-raf": [".raf"],
-  "image/x-olympus-orf": [".orf"],
-  "image/x-panasonic-rw2": [".rw2"],
-};
 
 type FileSystemEntryLike = {
   isFile: boolean;
@@ -128,7 +111,7 @@ export function UploadDropzone({
   const { getRootProps, getInputProps, isDragActive, isDragReject } =
     useDropzone({
       onDrop,
-      accept: ACCEPTED_TYPES,
+      accept: STILL_IMAGE_DROPZONE_ACCEPT,
       getFilesFromEvent,
       maxSize,
       maxFiles,
@@ -183,7 +166,7 @@ export function UploadDropzone({
                 Drag & drop files, or click to browse
               </p>
               <p className="text-xs text-text-secondary">
-                JPEG, PNG, WebP, HEIC, AVIF, TIFF, RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2) — up to{" "}
+                Browser: JPEG, PNG, WebP, GIF. RAW, TIFF, HEIC/AVIF require RawDrive Desktop. Up to{" "}
                 {Math.round(maxSize / 1024 / 1024)}MB per file
               </p>
               <button

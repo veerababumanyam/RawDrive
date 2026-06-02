@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 // integration site:
 //
 //     const token = getStoredAccessToken();
-//     const upload = useUpload(apiUrl, token);
+//     const upload = useUpload(apiUrl, token, ...);
 //
 // The gallery page re-renders frequently while uploads are in flight
 // (per-byte progress state updates), so that render-body call fired the 4
@@ -67,6 +67,6 @@ describe("F-089: gallery detail page reads the access token once per mount", () 
     expect(source).toMatch(/const token = tokenRef\.current;/);
 
     // And that snapshot must be the value handed to the upload hook.
-    expect(source).toMatch(/const upload = useUpload\(apiUrl, token\);/);
+    expect(source).toMatch(/const upload = useUpload\(apiUrl, token, \{ encryption: uploadEncryption \}\);/);
   });
 });

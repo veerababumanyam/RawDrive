@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -7,6 +8,12 @@ import {
   isUuid,
   type ResolvedShortlink,
 } from "@/lib/streaming/resolve-shortlink";
+import { createNoIndexMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = createNoIndexMetadata(
+  "RawDrive short link",
+  "Private RawDrive short link redirect.",
+);
 
 interface Props {
   params: Promise<{ shortcode: string }>;

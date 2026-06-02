@@ -9,10 +9,24 @@ import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
 import { canUseScreeningWorker, runScreeningWorker } from "@/lib/upload-screening/worker-client";
 import { authFetch } from "@/lib/api/authFetch";
+import { encryptBlob } from "@/lib/media-encryption/media-crypto";
+import { createEncryptedWebPDerivativeSet, type EncryptedDerivative } from "@/lib/media-encryption/webp-derivatives";
+import type { GalleryMediaKey } from "@/lib/media-encryption/media-key-store";
+import { extractSourceImageMetadata } from "@/lib/media-encryption/source-metadata";
+import { getBrowserE2EEUploadBlockReason } from "@/lib/media-encryption/browser-upload-support";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
 export const MAX_CONCURRENT_UPLOADS = 4;
+export const MAX_CHUNK_UPLOAD_ATTEMPTS = 6;
+const INITIAL_RETRY_DELAY_MS = 1_000;
+const MAX_RETRY_DELAY_MS = 15_000;
+
+type UseUploadOptions = {
+  encryption?: {
+    getKey: () => Promise<GalleryMediaKey>;
+  };
+};
 
 async function runScreener(
   file: File,
@@ -33,11 +47,198 @@ async function runScreener(
   return buildManifest({ file, policyVersion, sha256, result });
 }
 
-export function useUpload(apiUrl: string, token: string) {
+async function uploadEncryptedDerivative(
+  assetId: string,
+  derivative: EncryptedDerivative,
+  signal: AbortSignal,
+): Promise<void> {
+  const form = new FormData();
+  form.set("variant", derivative.variant);
+  form.set("width", String(derivative.width));
+  form.set("height", String(derivative.height));
+  form.set("media_encryption", JSON.stringify(derivative.manifest));
+  form.set("file", derivative.ciphertext, `${derivative.variant}.webp.enc`);
+
+  const res = await retryUploadRequest(
+    () => authFetch(`/api/v1/assets/${assetId}/derivatives`, {
+      method: "POST",
+      body: form,
+      signal,
+    }),
+    signal,
+  );
+  if (!res.ok) throw new Error(`Encrypted derivative upload failed: ${res.status}`);
+}
+
+function isActiveUploadStatus(status: UploadItem["status"]): boolean {
+  return status === "uploading" || status === "pending" || status === "screening" || status === "encrypting" || status === "paused";
+}
+
+export function isRetryableUploadStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
+}
+
+export function uploadRetryDelayMs(attempt: number, retryAfterHeader?: string | null): number {
+  const retryAfter = parseRetryAfterMs(retryAfterHeader);
+  if (retryAfter !== null) return Math.min(retryAfter, MAX_RETRY_DELAY_MS);
+  return Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** Math.max(0, attempt - 1));
+}
+
+export function parseUploadOffsetHeader(value: string | null): number | null {
+  if (!value) return null;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function parseRetryAfterMs(value?: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number.parseFloat(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
+  const dateMs = Date.parse(value);
+  if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
+  return null;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
+
+async function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
+  if (ms <= 0) return;
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const timer = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      cleanup();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function browserIsOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+async function waitForOnline(signal: AbortSignal): Promise<void> {
+  if (!browserIsOffline() || typeof window === "undefined") return;
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      window.removeEventListener("online", onOnline);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const onOnline = () => {
+      cleanup();
+      resolve();
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    window.addEventListener("online", onOnline, { once: true });
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function retryUploadRequest(
+  run: () => Promise<Response>,
+  signal: AbortSignal,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_CHUNK_UPLOAD_ATTEMPTS; attempt += 1) {
+    await waitForOnline(signal);
+    try {
+      const res = await run();
+      if (!isRetryableUploadStatus(res.status) || attempt === MAX_CHUNK_UPLOAD_ATTEMPTS) {
+        return res;
+      }
+      await sleepWithAbort(uploadRetryDelayMs(attempt, res.headers.get("Retry-After")), signal);
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      if (browserIsOffline()) {
+        await waitForOnline(signal);
+        attempt -= 1;
+        continue;
+      }
+      if (attempt === MAX_CHUNK_UPLOAD_ATTEMPTS) throw err;
+      lastError = err;
+      await sleepWithAbort(uploadRetryDelayMs(attempt), signal);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Upload request failed");
+}
+
+async function fetchUploadOffset(uploadId: string, signal: AbortSignal): Promise<number | null> {
+  const res = await retryUploadRequest(
+    () => authFetch(`/api/v1/uploads/${uploadId}`, { method: "HEAD", signal }),
+    signal,
+  );
+  if (!res.ok) return null;
+  return parseUploadOffsetHeader(res.headers.get("Upload-Offset"));
+}
+
+async function uploadChunkWithResume(params: {
+  uploadId: string;
+  offset: number;
+  end: number;
+  chunk: Blob;
+  totalSize: number;
+  signal: AbortSignal;
+}): Promise<{ nextOffset: number; response: Response }> {
+  const { uploadId, offset, end, chunk, totalSize, signal } = params;
+  for (let attempt = 1; attempt <= MAX_CHUNK_UPLOAD_ATTEMPTS; attempt += 1) {
+    await waitForOnline(signal);
+    let res: Response;
+    try {
+      res = await authFetch(`/api/v1/uploads/${uploadId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/offset+octet-stream",
+          "Upload-Offset": String(offset),
+        },
+        body: chunk,
+        signal,
+      });
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      if (browserIsOffline()) {
+        await waitForOnline(signal);
+        attempt -= 1;
+        continue;
+      }
+      if (attempt === MAX_CHUNK_UPLOAD_ATTEMPTS) throw err;
+      await sleepWithAbort(uploadRetryDelayMs(attempt), signal);
+      continue;
+    }
+
+    if (res.ok) return { nextOffset: end, response: res };
+
+    if (res.status === 409) {
+      const remoteOffset = await fetchUploadOffset(uploadId, signal);
+      if (remoteOffset !== null && remoteOffset > offset && remoteOffset <= totalSize) {
+        return { nextOffset: remoteOffset, response: res };
+      }
+    }
+
+    if (!isRetryableUploadStatus(res.status) || attempt === MAX_CHUNK_UPLOAD_ATTEMPTS) {
+      throw new Error(`Chunk upload failed: ${res.status}`);
+    }
+    await sleepWithAbort(uploadRetryDelayMs(attempt, res.headers.get("Retry-After")), signal);
+  }
+  throw new Error("Chunk upload failed after retries");
+}
+
+export function useUpload(apiUrl: string, token: string | null, options: UseUploadOptions = {}) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
   const pendingQueue = useRef<UploadItem[]>([]);
+  const pausedItems = useRef<Set<string>>(new Set());
   const activeUploads = useRef(0);
   const pumpQueue = useRef<() => void>(() => {});
   const pausedRef = useRef(false);
@@ -61,6 +262,17 @@ export function useUpload(apiUrl: string, token: string) {
     void token; // kept in the signature for caller compatibility
 
     try {
+      if (options.encryption) {
+        const blockReason = getBrowserE2EEUploadBlockReason(item.file);
+        if (blockReason) {
+          updateItem(item.id, {
+            status: "needs_desktop",
+            error: blockReason,
+          });
+          return;
+        }
+      }
+
       updateItem(item.id, { status: "screening" });
       let manifest: ScanManifest;
       try {
@@ -85,10 +297,48 @@ export function useUpload(apiUrl: string, token: string) {
       if (manifest.decision === "needs_desktop_scan") {
         updateItem(item.id, {
           status: "needs_desktop",
-          error: "this format requires the RawDrive Desktop companion (M17)",
+          error:
+            manifest.findings[0]?.message ??
+            "this format requires RawDrive Desktop for source-side encryption",
           scanManifest: manifest,
         });
         return;
+      }
+
+      let uploadBlob: Blob = item.file;
+      let mediaEncryption: Record<string, unknown> | undefined;
+      let sourceMetadata: Record<string, unknown> | undefined;
+      let encryptedDerivatives: EncryptedDerivative[] = [];
+
+      if (options.encryption) {
+        updateItem(item.id, { status: "encrypting", scanManifest: manifest });
+        const mediaKey = await options.encryption.getKey();
+        const encryptedOriginal = await encryptBlob(item.file, {
+          key: mediaKey.key,
+          keyId: mediaKey.keyId,
+          objectType: "original",
+          contentType: item.file.type || "application/octet-stream",
+        });
+        let sourceDimensions: { width: number; height: number } | undefined;
+        try {
+          const derivativeSet = await createEncryptedWebPDerivativeSet(item.file, mediaKey.key, mediaKey.keyId);
+          encryptedDerivatives = derivativeSet.derivatives;
+          sourceDimensions = derivativeSet.source;
+        } catch (err) {
+          updateItem(item.id, {
+            status: "needs_desktop",
+            error: `RawDrive Desktop is required because source-side WebP generation failed: ${(err as Error).message}`,
+            scanManifest: manifest,
+          });
+          return;
+        }
+        uploadBlob = encryptedOriginal.ciphertext;
+        mediaEncryption = encryptedOriginal.manifest;
+        sourceMetadata = await extractSourceImageMetadata(item.file, sourceDimensions);
+        sourceMetadata = {
+          ...sourceMetadata,
+          derivative_variants: encryptedDerivatives.map((d) => d.variant),
+        };
       }
 
       updateItem(item.id, { status: "uploading", scanManifest: manifest });
@@ -101,9 +351,11 @@ export function useUpload(apiUrl: string, token: string) {
         body: JSON.stringify({
           filename: item.file.name,
           content_type: item.file.type || "application/octet-stream",
-          total_size: item.file.size,
+          total_size: uploadBlob.size,
           chunk_size: CHUNK_SIZE,
           scan_manifest: manifest,
+          media_encryption: mediaEncryption,
+          source_metadata: sourceMetadata,
         }),
         signal: controller.signal,
       });
@@ -147,37 +399,42 @@ export function useUpload(apiUrl: string, token: string) {
       let offset = 0;
       let finalAssetId: string | undefined;
 
-      while (offset < item.file.size) {
-        while (pausedRef.current) {
+      while (offset < uploadBlob.size) {
+        while (pausedRef.current || pausedItems.current.has(item.id)) {
           await new Promise((resolve) => setTimeout(resolve, 500));
           if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
         }
+        await waitForOnline(controller.signal);
 
-        const end = Math.min(offset + CHUNK_SIZE, item.file.size);
-        const chunk = item.file.slice(offset, end);
+        const end = Math.min(offset + CHUNK_SIZE, uploadBlob.size);
+        const chunk = uploadBlob.slice(offset, end);
 
-        const patchRes = await authFetch(`/api/v1/uploads/${upload_id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/offset+octet-stream",
-            "Upload-Offset": String(offset),
-          },
-          body: chunk,
+        const { nextOffset, response: patchRes } = await uploadChunkWithResume({
+          uploadId: upload_id,
+          offset,
+          end,
+          chunk,
+          totalSize: uploadBlob.size,
           signal: controller.signal,
         });
 
-        if (!patchRes.ok) {
-          throw new Error(`Chunk upload failed: ${patchRes.status}`);
-        }
-
-        offset = end;
-        if (offset >= item.file.size) {
+        offset = nextOffset;
+        if (offset >= uploadBlob.size) {
           const body = await patchRes.json().catch(() => ({})) as { asset?: { id?: string } };
           finalAssetId = body.asset?.id;
         }
         updateItem(item.id, {
-          progress: Math.round((offset / item.file.size) * 100),
+          progress: Math.round((offset / uploadBlob.size) * (encryptedDerivatives.length > 0 ? 80 : 100)),
         });
+      }
+
+      if (finalAssetId && encryptedDerivatives.length > 0) {
+        for (let i = 0; i < encryptedDerivatives.length; i += 1) {
+          await uploadEncryptedDerivative(finalAssetId, encryptedDerivatives[i], controller.signal);
+          updateItem(item.id, {
+            progress: 80 + Math.round(((i + 1) / encryptedDerivatives.length) * 20),
+          });
+        }
       }
 
       updateItem(item.id, { status: "complete", progress: 100, assetId: finalAssetId });
@@ -194,7 +451,7 @@ export function useUpload(apiUrl: string, token: string) {
       activeUploads.current = Math.max(0, activeUploads.current - 1);
       pumpQueue.current();
     }
-  }, [apiUrl, token, updateItem]);
+  }, [apiUrl, options.encryption, token, updateItem]);
 
   pumpQueue.current = () => {
     while (
@@ -232,8 +489,7 @@ export function useUpload(apiUrl: string, token: string) {
     // stale state relative to the new upload session.
     setItems((prev) => {
       const active = prev.filter(
-        (i) =>
-          i.status === "uploading" || i.status === "pending" || i.status === "screening",
+        (i) => isActiveUploadStatus(i.status),
       );
       return [...active, ...newItems];
     });
@@ -242,15 +498,36 @@ export function useUpload(apiUrl: string, token: string) {
   }, [enqueueUploads]);
 
   const cancel = useCallback((id: string) => {
+    pausedItems.current.delete(id);
     pendingQueue.current = pendingQueue.current.filter((item) => item.id !== id);
     const controller = abortControllers.current.get(id);
     if (controller) controller.abort();
     setItems((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
+  const pause = useCallback((id: string) => {
+    pausedItems.current.add(id);
+    pendingQueue.current = pendingQueue.current.filter((item) => item.id !== id);
+    updateItem(id, { status: "paused" });
+  }, [updateItem]);
+
+  const resume = useCallback((id: string) => {
+    pausedItems.current.delete(id);
+    const item = items.find((entry) => entry.id === id);
+    if (!item) return;
+    if (abortControllers.current.has(id)) {
+      updateItem(id, { status: "uploading" });
+      return;
+    }
+    const retryItem = { ...item, status: "pending" as const };
+    updateItem(id, { status: "pending" });
+    enqueueUploads([retryItem]);
+  }, [enqueueUploads, items, updateItem]);
+
   const retry = useCallback((id: string) => {
     const item = items.find((entry) => entry.id === id);
     if (item) {
+      pausedItems.current.delete(id);
       const retryItem = { ...item, status: "pending" as const, progress: 0 };
       updateItem(id, { status: "pending", progress: 0, error: undefined });
       enqueueUploads([retryItem]);
@@ -279,8 +556,7 @@ export function useUpload(apiUrl: string, token: string) {
     setItems((prev) =>
       prev.filter((item) => {
         if (item.id !== id) return true;
-        const active = item.status === "uploading" || item.status === "pending" || item.status === "screening";
-        return active; // keep active items even if dismiss is called on them
+        return isActiveUploadStatus(item.status); // keep active items even if dismiss is called on them
       }),
     );
   }, []);
@@ -290,13 +566,13 @@ export function useUpload(apiUrl: string, token: string) {
   const clearFinished = useCallback(() => {
     setItems((prev) =>
       prev.filter(
-        (item) =>
-          item.status === "uploading" || item.status === "pending" || item.status === "screening",
+        (item) => isActiveUploadStatus(item.status),
       ),
     );
   }, []);
 
   const cancelAll = useCallback(() => {
+    pausedItems.current.clear();
     pendingQueue.current = [];
     abortControllers.current.forEach((controller) => controller.abort());
     abortControllers.current.clear();
@@ -309,6 +585,7 @@ export function useUpload(apiUrl: string, token: string) {
   }, []);
 
   const resumeAll = useCallback(() => {
+    pausedItems.current.clear();
     pausedRef.current = false;
     setIsPaused(false);
     pumpQueue.current();
@@ -318,6 +595,8 @@ export function useUpload(apiUrl: string, token: string) {
     items,
     addFiles,
     cancel,
+    pause,
+    resume,
     retry,
     retryAll,
     dismiss,

@@ -21,7 +21,10 @@ import { useEffect, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Download, Share, XCircle, ZoomIn, ZoomOut } from "@/components/icons";
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
-import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest } from "@/lib/media-encryption/asset-media";
+import { appendGalleryKeyFragment, readGalleryKeyFromHash } from "@/lib/media-encryption/media-crypto";
+import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
+import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { WatermarkOverlay } from "./watermark-overlay";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -37,27 +40,37 @@ export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
   const [shareCopied, setShareCopied] = useState(false);
   const [zoom, setZoom] = useState(1);
 
-  // Prefer the largest PUBLIC variant (thumb_lg_webp, ~1200px). Same fallback
-  // chain as the public lightbox — display_webp is auth-gated under the
-  // M41/104 split and would 401 for unauthenticated share recipients.
-  const photoUrl = getStorageBackedUrl(
-    photo.thumbnail_urls?.thumb_lg_webp ||
-    photo.thumbnail_urls?.thumb_md_webp ||
-    photo.thumbnail_urls?.thumb_lg ||
-    photo.thumbnail_urls?.lg ||
-    photo.thumbnail_urls?.display_webp ||
-    Object.values(photo.thumbnail_urls || {})[0] ||
-    "",
-  );
+  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS);
 
   const brandName = branding?.can_customize ? branding.brand_name : null;
   const downloadEnabled = gallery.download_enabled !== false;
   const wm = gallery.watermark_config as Record<string, unknown> | undefined;
   const watermarkConfig = wm && wm.enabled === true ? wm : undefined;
 
-  const shareUrl = typeof window !== "undefined"
+  const plainShareUrl = typeof window !== "undefined"
     ? `${window.location.origin}/g/${slug}/photo/${photo.id}`
     : "";
+  const currentKey = typeof window !== "undefined" ? readGalleryKeyFromHash(window.location.hash) : null;
+  const shareUrl = currentKey ? appendGalleryKeyFragment(plainShareUrl, currentKey) : plainShareUrl;
+
+  async function handleDownload() {
+    const url = `${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`;
+    if (!assetUsesClientMediaEncryption(photo)) {
+      window.open(url, "_self");
+      return;
+    }
+    const manifest = originalManifest(photo);
+    if (!manifest) return;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const plaintext = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
+    const objectUrl = URL.createObjectURL(plaintext);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = photo.filename;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
 
   async function handleShare() {
     // Web Share API on mobile gives the native sheet (WhatsApp, Mail,
@@ -142,7 +155,7 @@ export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
               size="sm"
               label="Download"
               onClick={() => {
-                window.open(`${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`, "_self");
+                void handleDownload();
               }}
             >
               <Download />
@@ -164,10 +177,10 @@ export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
           the user can still right-click → save (which, for galleries with
           downloads disabled, won't yield the original anyway). */}
       <main className="relative flex flex-1 items-center justify-center overflow-auto p-4 sm:p-8">
-        {photoUrl ? (
+        {media.src ? (
           <div className="relative max-h-full max-w-full">
             <img
-              src={photoUrl}
+              src={media.src}
               alt={photo.filename}
               width={photo.width || undefined}
               height={photo.height || undefined}
@@ -187,7 +200,7 @@ export function SinglePhotoView({ slug, photo, gallery, branding }: Props) {
         ) : (
           <div className="text-center">
             <XCircle className="mx-auto mb-2 h-8 w-8 text-text-tertiary" />
-            <p className="text-sm text-text-secondary">Image unavailable</p>
+            <p className="text-sm text-text-secondary">{media.loading ? "Decrypting photo..." : media.error || "Image unavailable"}</p>
           </div>
         )}
       </main>

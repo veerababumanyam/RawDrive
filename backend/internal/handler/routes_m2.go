@@ -11,6 +11,7 @@ import (
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 // RegisterM2Routes registers all M2 (Asset Management & Gallery) and M11 (Processing, Storage, Organization) routes.
@@ -47,6 +48,10 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	if deps.AssetRepo != nil {
 		processingStatusHandler = NewProcessingStatusHandler(deps.AssetRepo)
 	}
+	var encryptedDerivativeHandler *EncryptedDerivativeHandler
+	if deps.AssetRepo != nil && deps.AssetDerivativeRepo != nil && deps.StorageProvider != nil {
+		encryptedDerivativeHandler = NewEncryptedDerivativeHandler(deps.AssetRepo, deps.AssetDerivativeRepo, deps.StorageProvider)
+	}
 	var lifecycleHandler *LifecycleHandler
 	if deps.LifecycleService != nil {
 		lifecycleHandler = NewLifecycleHandler(deps.LifecycleService)
@@ -72,6 +77,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		// Parametric routes
 		r.Get("/{id}", assetHandler.GetByID)
 		r.Get("/{id}/download", assetHandler.Download)
+		if encryptedDerivativeHandler != nil {
+			r.Post("/{id}/derivatives", encryptedDerivativeHandler.Upload)
+		}
 		r.Delete("/{id}", assetHandler.SoftDelete)
 		if processingStatusHandler != nil {
 			r.Get("/{id}/processing-status", processingStatusHandler.GetStatus)
@@ -204,6 +212,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Route("/api/v1/albums", func(r chi.Router) {
 			r.Get("/", capabilityIndex("albums", []string{"{id}", "{id}/breadcrumb", "{id}/assets"}))
 			r.Get("/{id}", albumHandler.GetByID)
+			r.Patch("/{id}", albumHandler.Update)
 			r.Delete("/{id}", albumHandler.Delete)
 			r.Get("/{id}/breadcrumb", albumHandler.Breadcrumb)
 			r.Get("/{id}/assets", albumHandler.ListAssets)
@@ -403,6 +412,8 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		WithGalleryAccessService(deps.GalleryAccessSvc)
 
 	r.Route("/api/v1/public", func(r chi.Router) {
+		r.Get("/studios/{subdomain}", publicHandler.GetStudioLanding)
+		r.Get("/studios/{subdomain}/logo", publicHandler.GetStudioLogo)
 		r.Get("/galleries/{slug}", publicHandler.GetBySlug)
 		r.Get("/galleries/{slug}/assets", publicHandler.ListAssets)
 		r.Get("/galleries/{slug}/albums", publicHandler.ListAlbums)
@@ -589,6 +600,8 @@ type M2Dependencies struct {
 	StorageAccountingSvc *service.StorageAccounting
 	LifecycleService     *service.AssetLifecycleService
 	AssetRepo            *repository.AssetRepo
+	AssetDerivativeRepo  *repository.AssetDerivativeRepo
+	StorageProvider      storage.Provider
 	// M12 dependencies
 	DesignTemplateSvc *service.DesignTemplateService
 	GalleryRepo       *repository.GalleryRepo

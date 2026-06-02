@@ -30,6 +30,7 @@ export const ChevronRight = (p: IconProps) => <Icon {...p}><path d="M9 5l7 7-7 7
 // Actions
 export const XMark = (p: IconProps) => <Icon {...p}><path d="M6 18L18 6M6 6l12 12" /></Icon>;
 export const Plus = (p: IconProps) => <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>;
+export const Pencil = (p: IconProps) => <Icon {...p}><path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /><path d="M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></Icon>;
 export const Download = (p: IconProps) => <Icon {...p}><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></Icon>;
 export const Trash = (p: IconProps) => <Icon {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" /></Icon>;
 export const Expand = (p: IconProps) => <Icon {...p}><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></Icon>;
@@ -46,6 +47,7 @@ export const InfoCircle = (p: IconProps) => <Icon {...p}><path d="M13 16h-1v-4h-
 
 // Communication
 export const ChatBubble = (p: IconProps) => <Icon {...p}><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></Icon>;
+export const Envelope = (p: IconProps) => <Icon {...p}><path d="M4 6h16v12H4V6z" /><path d="M4 7l8 6 8-6" /></Icon>;
 
 // Proofing
 export const CheckCircle = (p: IconProps) => <Icon {...p}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></Icon>;

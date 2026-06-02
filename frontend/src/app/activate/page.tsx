@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { MailCheck } from "lucide-react";
 import { ActivateForm } from "@/components/auth/ActivateForm";
+import { createNoIndexMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Activate Account | RawDrive",
-  description: "Verify your email to activate your account.",
-};
+export const metadata: Metadata = createNoIndexMetadata(
+  "Activate account",
+  "Verify your email to activate your RawDrive account.",
+  "/activate",
+);
 
 function Fallback() {
   return <div className="h-40 animate-pulse rounded-xl bg-surface-container-high" />;

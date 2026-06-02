@@ -14,6 +14,7 @@
  * auth, no workspace context, no studio chrome.
  */
 
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
   fetchStreamState,
@@ -22,8 +23,13 @@ import {
 } from "@/lib/viewer/api";
 import { StreamViewerShell, type ViewerState } from "@/components/viewer/StreamViewerShell";
 import { StreamUnavailableView } from "@/components/viewer/StreamUnavailableView";
+import { createNoIndexMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = createNoIndexMetadata(
+  "RawDrive live stream",
+  "Private live stream viewer for invited guests.",
+);
 
 interface PageProps {
   params: Promise<{ id: string }>;

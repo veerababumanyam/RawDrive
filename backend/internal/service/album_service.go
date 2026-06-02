@@ -2,11 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
+)
+
+var (
+	ErrAlbumNameRequired = errors.New("album name is required")
+	ErrAlbumNotEditable  = errors.New("smart albums cannot be modified")
+	ErrAlbumNotFound     = errors.New("album not found")
 )
 
 // FaceClusterResolver looks up the asset IDs that contain a face from a
@@ -79,16 +87,22 @@ type CreateAlbumInput struct {
 	Description string
 }
 
+// UpdateAlbumInput holds editable album fields.
+type UpdateAlbumInput struct {
+	Name        *string
+	Description *string
+}
+
 // Create creates a new album within a gallery.
 func (s *AlbumService) Create(ctx context.Context, input CreateAlbumInput) (*repository.Album, error) {
-	if input.Name == "" {
-		return nil, fmt.Errorf("album name is required")
+	if strings.TrimSpace(input.Name) == "" {
+		return nil, ErrAlbumNameRequired
 	}
 
 	album := &repository.Album{
 		GalleryID:   input.GalleryID,
 		ParentID:    input.ParentID,
-		Name:        input.Name,
+		Name:        strings.TrimSpace(input.Name),
 		Description: input.Description,
 	}
 
@@ -142,6 +156,29 @@ func (s *AlbumService) GetBreadcrumb(ctx context.Context, albumID uuid.UUID) ([]
 
 // AddAsset adds an asset to an album.
 func (s *AlbumService) AddAsset(ctx context.Context, albumID, assetID uuid.UUID, position int) error {
+	album, err := s.albumRepo.GetByID(ctx, albumID)
+	if err != nil {
+		return fmt.Errorf("album service add asset: %w", err)
+	}
+	if album == nil {
+		return fmt.Errorf("album not found")
+	}
+	if s.galleryRepo != nil && s.assetRepo != nil {
+		gallery, err := s.galleryRepo.GetByID(ctx, album.GalleryID)
+		if err != nil {
+			return fmt.Errorf("album service add asset: %w", err)
+		}
+		if gallery == nil {
+			return fmt.Errorf("gallery not found")
+		}
+		asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, assetID, gallery.WorkspaceID)
+		if err != nil {
+			return fmt.Errorf("album service add asset: %w", err)
+		}
+		if asset == nil {
+			return fmt.Errorf("asset not found in gallery workspace")
+		}
+	}
 	return s.albumRepo.AddAsset(ctx, albumID, assetID, position)
 }
 
@@ -238,6 +275,36 @@ func (s *AlbumService) RemoveAsset(ctx context.Context, albumID, assetID uuid.UU
 	return s.albumRepo.RemoveAsset(ctx, albumID, assetID)
 }
 
+// Update applies editable metadata changes to a manual album.
+func (s *AlbumService) Update(ctx context.Context, id uuid.UUID, input UpdateAlbumInput) (*repository.Album, error) {
+	album, err := s.albumRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("album service update: %w", err)
+	}
+	if album == nil {
+		return nil, ErrAlbumNotFound
+	}
+	if len(album.SmartFilter) > 0 {
+		return nil, ErrAlbumNotEditable
+	}
+
+	if input.Name != nil {
+		name := strings.TrimSpace(*input.Name)
+		if name == "" {
+			return nil, ErrAlbumNameRequired
+		}
+		album.Name = name
+	}
+	if input.Description != nil {
+		album.Description = *input.Description
+	}
+
+	if err := s.albumRepo.UpdateMetadata(ctx, album); err != nil {
+		return nil, fmt.Errorf("album service update: %w", err)
+	}
+	return album, nil
+}
+
 // CreateSmartAlbum creates an album with a smart filter that is evaluated
 // lazily by GetSmartAlbumAssets. Used by M3 E8-S3 to turn a face cluster
 // into a gallery-scoped smart album ("All photos with Veera in them").
@@ -262,6 +329,16 @@ func (s *AlbumService) CreateSmartAlbum(ctx context.Context, galleryID uuid.UUID
 
 // Delete removes an album.
 func (s *AlbumService) Delete(ctx context.Context, id uuid.UUID) error {
+	album, err := s.albumRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("album service delete: %w", err)
+	}
+	if album == nil {
+		return ErrAlbumNotFound
+	}
+	if len(album.SmartFilter) > 0 {
+		return ErrAlbumNotEditable
+	}
 	return s.albumRepo.Delete(ctx, id)
 }
 

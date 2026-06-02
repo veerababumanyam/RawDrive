@@ -40,8 +40,23 @@ func (s *AssetService) GetByID(ctx context.Context, id uuid.UUID) (*AssetWithURL
 	if err != nil {
 		return nil, err
 	}
+	return s.withDownloadURL(asset), nil
+}
+
+// GetByIDAndWorkspace retrieves an asset with a stable download URL, scoped to
+// the caller workspace. Authenticated handlers should use this variant so a
+// known asset UUID cannot leak metadata across tenants.
+func (s *AssetService) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*AssetWithURL, error) {
+	asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, id, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return s.withDownloadURL(asset), nil
+}
+
+func (s *AssetService) withDownloadURL(asset *repository.Asset) *AssetWithURL {
 	if asset == nil {
-		return nil, nil
+		return nil
 	}
 
 	publicBase := os.Getenv("PUBLIC_API_URL")
@@ -50,7 +65,7 @@ func (s *AssetService) GetByID(ctx context.Context, id uuid.UUID) (*AssetWithURL
 	}
 	url := fmt.Sprintf("%s/storage/%s", publicBase, asset.StorageKey)
 
-	return &AssetWithURL{Asset: asset, DownloadURL: url}, nil
+	return &AssetWithURL{Asset: asset, DownloadURL: url}
 }
 
 // List retrieves assets matching the filter.
@@ -80,5 +95,22 @@ func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	// Async storage cleanup would happen via worker; for now just mark deleted
+	return nil
+}
+
+// SoftDeleteForWorkspace marks an asset as deleted only when it belongs to the
+// request workspace.
+func (s *AssetService) SoftDeleteForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) error {
+	asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, id, workspaceID)
+	if err != nil {
+		return err
+	}
+	if asset == nil {
+		return fmt.Errorf("asset not found")
+	}
+
+	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
+		return err
+	}
 	return nil
 }

@@ -63,7 +63,9 @@ export function screen(
     return screenGif(bytes, cfg);
   }
 
-  // TIFF / HEIC / RAW → require desktop agent (M17).
+  // TIFF / HEIC / AVIF / RAW → require desktop agent. AVIF is browser-decodable
+  // in Chromium, but this worker does not yet perform the structural checks
+  // needed to vouch for it under source-side encrypted upload.
   const detectedFormat = detectDesktopFormat(bytes);
   if (detectedFormat) {
     return {
@@ -75,7 +77,7 @@ export function screen(
         {
           category: "unsupported_format",
           severity: "medium",
-          message: `${detectedFormat} requires the RawDrive Desktop companion (available in M17)`,
+          message: `${detectedFormat} requires RawDrive Desktop for source-side encryption`,
         },
       ],
     };
@@ -92,7 +94,7 @@ export function screen(
         category: "unsupported_format",
         severity: "high",
         message:
-          "file format not recognized by the browser screener (supported: jpeg, png, webp, gif)",
+          "file format not recognized by the browser screener (browser-supported: jpeg, png, webp, gif; RAW/TIFF/HEIC/AVIF require RawDrive Desktop)",
       },
     ],
   };
@@ -106,19 +108,8 @@ export function screen(
 function detectDesktopFormat(bytes: Uint8Array): string | null {
   if (bytes.length < 4) return null;
 
-  // TIFF little-endian: "II\x2A\x00"
-  if (matchAt(bytes, 0, [0x49, 0x49, 0x2a, 0x00])) return "tiff";
-  // TIFF big-endian: "MM\x00\x2A"
-  if (matchAt(bytes, 0, [0x4d, 0x4d, 0x00, 0x2a])) return "tiff";
-  // HEIC/HEIF: ftyp box at offset 4 with brand 'heic' / 'heix' / 'mif1'
-  if (bytes.length >= 12 && matchAt(bytes, 4, [0x66, 0x74, 0x79, 0x70])) {
-    // Look at the major brand (4 bytes at offset 8) for a known HEIC brand.
-    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
-    if (["heic", "heix", "mif1", "heim", "heis", "hevc"].includes(brand)) {
-      return "heic";
-    }
-  }
-  // Canon RAW (CR2): "II\x2A\x00\x10\x00\x00\x00CR"
+  // Canon RAW (CR2): "II\x2A\x00\x10\x00\x00\x00CR". Check this before
+  // generic TIFF because CR2 is TIFF-based and shares the same opening bytes.
   if (
     bytes.length >= 10 &&
     matchAt(bytes, 0, [0x49, 0x49, 0x2a, 0x00]) &&
@@ -127,8 +118,26 @@ function detectDesktopFormat(bytes: Uint8Array): string | null {
   ) {
     return "cr2";
   }
-  // DNG shares the TIFF magic — we can't distinguish without walking the
-  // IFD. Return "dng" as a best-guess desktop format.
+  // ISO BMFF still formats: HEIC/HEIF/AVIF expose an ftyp box at offset 4.
+  if (bytes.length >= 12 && matchAt(bytes, 4, [0x66, 0x74, 0x79, 0x70])) {
+    // Look at the major brand (4 bytes at offset 8) for known desktop formats.
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (brand === "crx ") {
+      return "cr3";
+    }
+    if (["heic", "heix", "mif1", "heim", "heis", "hevc"].includes(brand)) {
+      return "heic";
+    }
+    if (["avif", "avis"].includes(brand)) {
+      return "avif";
+    }
+  }
+  // TIFF little-endian: "II\x2A\x00"
+  if (matchAt(bytes, 0, [0x49, 0x49, 0x2a, 0x00])) return "tiff";
+  // TIFF big-endian: "MM\x00\x2A"
+  if (matchAt(bytes, 0, [0x4d, 0x4d, 0x00, 0x2a])) return "tiff";
+  // DNG and many proprietary RAW variants share TIFF magic; the upload gate
+  // routes them by MIME/extension before the browser screener tries to parse.
 
   return null;
 }

@@ -1,18 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Mail, MapPin, MessageSquareText, Phone } from "lucide-react";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Contact Us | RawDrive",
-  description: "Get in touch with the RawDrive support and sales teams.",
-};
+export const metadata: Metadata = createPageMetadata("contact");
 
 const contactCards = [
   {
     icon: Mail,
     title: "Sales & Partnerships",
-    copy: "hello@rawdrive.in",
-    href: "mailto:hello@rawdrive.in",
+    copy: "infor@rawdrive.in",
+    href: "mailto:infor@rawdrive.in",
   },
   {
     icon: MessageSquareText,
@@ -21,10 +19,16 @@ const contactCards = [
     href: "mailto:support@rawdrive.in",
   },
   {
+    icon: Mail,
+    title: "General Contact",
+    copy: "contactus@rawdrive.in",
+    href: "mailto:contactus@rawdrive.in",
+  },
+  {
     icon: Phone,
-    title: "Talk to Us",
-    copy: "+91 90100 11299",
-    href: "tel:+919010011299",
+    title: "Phone & WhatsApp",
+    copy: "contact:+91 928112993 ,+91 9010012299",
+    href: "tel:+91928112993",
   },
   {
     icon: MapPin,
@@ -76,7 +80,7 @@ export default function ContactPage() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
               <img
                 src="/stitch/contact.png"
-                alt="Stitch contact page preview"
+                alt="RawDrive contact page preview for studio support and sales"
                 className="h-auto w-full object-cover"
               />
             </div>
@@ -92,7 +96,7 @@ export default function ContactPage() {
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
-                href="mailto:hello@rawdrive.in"
+                href="mailto:contactus@rawdrive.in"
                 className="btn-primary px-6 py-3 text-sm font-semibold"
               >
                 Email the team

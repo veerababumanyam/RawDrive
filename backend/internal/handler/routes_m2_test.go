@@ -54,6 +54,13 @@ func TestM2Routes_GalleryEndpoints(t *testing.T) {
 	assert.True(t, routeExists(r, "GET", "/api/v1/galleries/test-id/assets"), "GET /galleries/{id}/assets")
 }
 
+func TestM2Routes_AlbumManagementEndpoints(t *testing.T) {
+	r := setupM2RouterWithStubs()
+
+	assert.True(t, routeExists(r, "PATCH", "/api/v1/albums/test-id"), "PATCH /albums/{id}")
+	assert.True(t, routeExists(r, "DELETE", "/api/v1/albums/test-id"), "DELETE /albums/{id}")
+}
+
 func TestM2Routes_ShareLinkEndpoints(t *testing.T) {
 	r := setupM2Router()
 	assert.True(t, routeExists(r, "POST", "/api/v1/galleries/test-id/share"), "POST share")
@@ -72,6 +79,8 @@ func TestM2Routes_DashboardEndpoints(t *testing.T) {
 
 func TestM2Routes_PublicEndpoints(t *testing.T) {
 	r := setupM2Router()
+	assert.True(t, routeExists(r, "GET", "/api/v1/public/studios/test-a1b2c3d4"), "GET public studio landing")
+	assert.True(t, routeExists(r, "GET", "/api/v1/public/studios/test-a1b2c3d4/logo"), "GET public studio logo")
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug"), "GET public gallery")
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug/assets"), "GET public assets")
 	assert.True(t, routeExists(r, "POST", "/api/v1/public/galleries/test-slug/verify-pin"), "POST verify-pin")
@@ -87,6 +96,7 @@ func setupM2RouterWithStubs() *chi.Mux {
 	r := chi.NewRouter()
 	deps := M2Dependencies{
 		GalleryService:      service.NewGalleryService(nil, nil, nil),
+		AlbumService:        service.NewAlbumService(nil),
 		ProductService:      service.NewProductService(nil),
 		BannerService:       service.NewBannerService(nil),
 		CartService:         service.NewCartService(nil, nil, nil),

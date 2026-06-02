@@ -8,7 +8,9 @@
 // variants with a JWT; public gallery pages use the {slug}-addressed
 // variants without auth.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { getApiBaseUrl } from "@/lib/api/base-url";
+
+const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -92,7 +94,7 @@ export interface GalleryBanner {
 // ─── Studio (JWT) routes ─────────────────────────────────────────────
 
 export async function listProducts(token: string, galleryId: string): Promise<GalleryProduct[]> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/products`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`list products: ${res.status}`);
@@ -107,7 +109,7 @@ export async function createProduct(
   galleryId: string,
   input: Partial<GalleryProduct>,
 ): Promise<GalleryProduct> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/products`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products`), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -122,7 +124,7 @@ export async function updateProduct(
   productId: string,
   input: Partial<GalleryProduct>,
 ): Promise<GalleryProduct> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/products/${productId}`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products/${productId}`), {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -136,7 +138,7 @@ export async function deleteProduct(
   galleryId: string,
   productId: string,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/products/${productId}`, {
+  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products/${productId}`), {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -151,7 +153,7 @@ export async function upsertPublicCart(
   items: CartItemInput[],
   couponCode?: string,
 ): Promise<GalleryCart> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/cart`, {
+  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/cart`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -166,7 +168,7 @@ export async function upsertPublicCart(
 
 export async function getPublicCart(slug: string, clientEmail: string): Promise<GalleryCart | null> {
   const res = await fetch(
-    `${API_BASE}/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`,
+    apiUrl(`/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`),
   );
   if (!res.ok) return null;
   const cart = await res.json();
@@ -177,13 +179,13 @@ export async function getPublicCart(slug: string, clientEmail: string): Promise<
 
 export async function clearPublicCart(slug: string, clientEmail: string): Promise<void> {
   await fetch(
-    `${API_BASE}/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`,
+    apiUrl(`/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`),
     { method: "DELETE" },
   );
 }
 
 export async function listPublicBanners(slug: string): Promise<GalleryBanner[]> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/banners`);
+  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/banners`));
   if (!res.ok) return [];
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -195,7 +197,7 @@ export async function listPublicBanners(slug: string): Promise<GalleryBanner[]> 
 // gallery slug. Empty array on 404/error so the public page can render
 // without products gracefully (many galleries don't sell anything).
 export async function listPublicProducts(slug: string): Promise<GalleryProduct[]> {
-  const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/products`);
+  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/products`));
   if (!res.ok) return [];
   const products = (await res.json()) as GalleryProduct[] | null;
   return Array.isArray(products) ? products.filter((p) => p.is_active) : [];
@@ -213,7 +215,7 @@ export async function trackGalleryEvent(
   metadata?: Record<string, unknown>,
 ): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/events`, {
+    const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/events`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_type: eventType, metadata }),
@@ -234,7 +236,7 @@ export async function evaluatePrintPreflight(
   targetDpi = 300,
 ): Promise<PrintPreflightResult> {
   const res = await fetch(
-    `${API_BASE}/api/v1/commerce/print-preflight?target_dpi=${targetDpi}`,
+    apiUrl(`/api/v1/commerce/print-preflight?target_dpi=${targetDpi}`),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

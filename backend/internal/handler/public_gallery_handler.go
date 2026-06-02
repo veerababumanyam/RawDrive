@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/ai"
@@ -81,7 +82,7 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
-		 encryption_key_id, is_encrypted, encryption_algo, encryption_version
+		 is_encrypted, encryption_algo, encryption_version, media_encryption
 		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
 	)
 	if err != nil {
@@ -95,7 +96,7 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
 			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
 			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
-			&a.EncryptionKeyID, &a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion,
+			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 		); err != nil {
 			return nil, fmt.Errorf("public gallery: bulk get assets scan: %w", err)
 		}
@@ -227,6 +228,275 @@ func (h *PublicGalleryHandler) resolveGalleryForRequest(r *http.Request, slug st
 	return h.gallerySvc.GetBySlug(r.Context(), slug)
 }
 
+type publicStudioProfileResponse struct {
+	ID                    string  `json:"id"`
+	Name                  string  `json:"name"`
+	DisplayName           string  `json:"display_name"`
+	BrandName             string  `json:"brand_name,omitempty"`
+	BrandAccentColor      string  `json:"brand_accent_color,omitempty"`
+	PublicBrandingEnabled bool    `json:"public_branding_enabled"`
+	CanCustomize          bool    `json:"can_customize"`
+	TierSlug              string  `json:"tier_slug"`
+	AddressLine1          string  `json:"address_line1,omitempty"`
+	AddressLine2          string  `json:"address_line2,omitempty"`
+	City                  string  `json:"city,omitempty"`
+	PostalCode            string  `json:"postal_code,omitempty"`
+	Phone                 string  `json:"phone,omitempty"`
+	Email                 string  `json:"email,omitempty"`
+	Website               string  `json:"website,omitempty"`
+	LogoURL               *string `json:"logo_url,omitempty"`
+	BusinessProfileSlug   string  `json:"business_profile_slug"`
+	BusinessUniqueCode    string  `json:"business_unique_code"`
+	BusinessSubdomain     string  `json:"business_subdomain"`
+	PublicURL             string  `json:"public_url"`
+}
+
+type publicStudioGalleryResponse struct {
+	ID              string            `json:"id"`
+	Title           string            `json:"title"`
+	Slug            string            `json:"slug"`
+	Description     string            `json:"description"`
+	GalleryType     string            `json:"gallery_type"`
+	CoverThumbnails map[string]string `json:"cover_thumbnails,omitempty"`
+	CreatedAt       time.Time         `json:"created_at"`
+	PublishedAt     *time.Time        `json:"published_at,omitempty"`
+	DownloadEnabled bool              `json:"download_enabled"`
+	PublicURL       string            `json:"public_url"`
+}
+
+type publicStudioLandingResponse struct {
+	Studio    publicStudioProfileResponse   `json:"studio"`
+	Galleries []publicStudioGalleryResponse `json:"galleries"`
+	Counts    map[string]int                `json:"counts"`
+}
+
+func publicStudioBusinessCodeFromSubdomain(subdomain string) string {
+	if len(subdomain) < 10 {
+		return ""
+	}
+	dash := len(subdomain) - 9
+	if subdomain[dash] != '-' {
+		return ""
+	}
+	code := subdomain[dash+1:]
+	if len(code) != 8 {
+		return ""
+	}
+	for i := 0; i < len(code); i++ {
+		c := code[i]
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			return ""
+		}
+	}
+	return code
+}
+
+func publicStudioSubdomainURL(subdomain string) string {
+	return "https://" + subdomain + ".rawdrive.in"
+}
+
+// GetStudioLanding handles GET /api/v1/public/studios/{subdomain}.
+// It exposes public-safe business profile fields plus published gallery cards
+// for the workspace encoded in `<business_profile_slug>-<business_unique_code>`.
+// It never returns workspace bank/tax fields, gallery settings, password
+// hashes, storage keys, or unpublished galleries.
+func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.Request) {
+	subdomain := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "subdomain")))
+	code := publicStudioBusinessCodeFromSubdomain(subdomain)
+	if code == "" {
+		http.Error(w, `{"error":"invalid studio subdomain"}`, http.StatusBadRequest)
+		return
+	}
+	if h.pool == nil {
+		http.Error(w, `{"error":"studio landing unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	var (
+		workspaceID                                          uuid.UUID
+		name, address1, address2, city, postal, phone, email string
+		website, brandName, accent, logoAssetID              string
+		publicBranding                                       bool
+		businessSlug, businessCode                           string
+	)
+	err := h.pool.QueryRow(r.Context(), `
+		SELECT
+			id,
+			COALESCE(name, ''),
+			COALESCE(address_line1, ''),
+			COALESCE(address_line2, ''),
+			COALESCE(city, ''),
+			COALESCE(postal_code, ''),
+			COALESCE(phone, ''),
+			COALESCE(email, ''),
+			COALESCE(website, ''),
+			COALESCE(brand_name, ''),
+			COALESCE(brand_accent_color, ''),
+			COALESCE(public_branding_enabled, true),
+			COALESCE(logo_asset_id::text, ''),
+			COALESCE(business_profile_slug, ''),
+			COALESCE(business_unique_code, '')
+		FROM workspaces
+		WHERE business_unique_code = $1
+		  AND deleted_at IS NULL
+		LIMIT 1`,
+		code,
+	).Scan(
+		&workspaceID,
+		&name,
+		&address1,
+		&address2,
+		&city,
+		&postal,
+		&phone,
+		&email,
+		&website,
+		&brandName,
+		&accent,
+		&publicBranding,
+		&logoAssetID,
+		&businessSlug,
+		&businessCode,
+	)
+	if err == pgx.ErrNoRows {
+		http.Error(w, `{"error":"studio not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"failed to load studio"}`, http.StatusInternalServerError)
+		return
+	}
+
+	tier := h.lookupWorkspaceTier(r.Context(), workspaceID)
+	canCustomize := canCustomizeForTier(tier) && publicBranding
+	displayName := strings.TrimSpace(name)
+	if canCustomize && strings.TrimSpace(brandName) != "" {
+		displayName = strings.TrimSpace(brandName)
+	}
+	if displayName == "" {
+		displayName = "Studio"
+	}
+
+	var logoURL *string
+	if canCustomize && logoAssetID != "" {
+		url := "/api/v1/public/studios/" + subdomain + "/logo"
+		logoURL = &url
+	}
+
+	galleries, err := h.listPublishedStudioGalleries(r.Context(), workspaceID, subdomain)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load studio galleries"}`, http.StatusInternalServerError)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, publicStudioLandingResponse{
+		Studio: publicStudioProfileResponse{
+			ID:                    workspaceID.String(),
+			Name:                  name,
+			DisplayName:           displayName,
+			BrandName:             brandName,
+			BrandAccentColor:      accent,
+			PublicBrandingEnabled: publicBranding,
+			CanCustomize:          canCustomize,
+			TierSlug:              tier,
+			AddressLine1:          address1,
+			AddressLine2:          address2,
+			City:                  city,
+			PostalCode:            postal,
+			Phone:                 phone,
+			Email:                 email,
+			Website:               website,
+			LogoURL:               logoURL,
+			BusinessProfileSlug:   businessSlug,
+			BusinessUniqueCode:    businessCode,
+			BusinessSubdomain:     subdomain,
+			PublicURL:             publicStudioSubdomainURL(subdomain),
+		},
+		Galleries: galleries,
+		Counts: map[string]int{
+			"published_galleries": len(galleries),
+		},
+	})
+}
+
+func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context, workspaceID uuid.UUID, subdomain string) ([]publicStudioGalleryResponse, error) {
+	if h.pool == nil {
+		return nil, fmt.Errorf("missing db pool")
+	}
+
+	rows, err := h.pool.Query(ctx, `
+		SELECT
+			g.id,
+			g.title,
+			g.slug,
+			COALESCE(g.description, ''),
+			g.gallery_type,
+			g.created_at,
+			g.published_at,
+			g.download_enabled,
+			cover_asset.thumbnail_urls
+		FROM galleries g
+		LEFT JOIN LATERAL (
+			SELECT a.thumbnail_urls
+			FROM gallery_assets ga
+			INNER JOIN assets a ON a.id = ga.asset_id
+			WHERE ga.gallery_id = g.id
+			  AND a.deleted_at IS NULL
+			ORDER BY
+				CASE WHEN g.cover_asset_id IS NOT NULL AND a.id = g.cover_asset_id THEN 0 ELSE 1 END,
+				ga.is_hero DESC,
+				ga.sort_order ASC,
+				ga.added_at ASC
+			LIMIT 1
+		) cover_asset ON true
+		WHERE g.workspace_id = $1
+		  AND g.deleted_at IS NULL
+		  AND g.is_published = true
+		  AND (g.status IS NULL OR g.status <> 'archived')
+		  AND g.archived_at IS NULL
+		  AND (g.expires_at IS NULL OR g.expires_at > now())
+		ORDER BY COALESCE(g.published_at, g.created_at) DESC, g.created_at DESC
+		LIMIT 60`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("public studio list galleries: %w", err)
+	}
+	defer rows.Close()
+
+	out := []publicStudioGalleryResponse{}
+	for rows.Next() {
+		var (
+			id          uuid.UUID
+			gallery     publicStudioGalleryResponse
+			coverThumbs *map[string]string
+		)
+		if err := rows.Scan(
+			&id,
+			&gallery.Title,
+			&gallery.Slug,
+			&gallery.Description,
+			&gallery.GalleryType,
+			&gallery.CreatedAt,
+			&gallery.PublishedAt,
+			&gallery.DownloadEnabled,
+			&coverThumbs,
+		); err != nil {
+			return nil, fmt.Errorf("public studio list galleries scan: %w", err)
+		}
+		gallery.ID = id.String()
+		if coverThumbs != nil {
+			gallery.CoverThumbnails = *coverThumbs
+		}
+		gallery.PublicURL = publicStudioSubdomainURL(subdomain) + "/" + gallery.Slug
+		out = append(out, gallery)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("public studio list galleries rows: %w", err)
+	}
+	return out, nil
+}
+
 // GetBySlug handles GET /api/v1/public/galleries/{slug}
 func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
@@ -320,14 +590,16 @@ func resolveDesignCoverAssetID(settings map[string]interface{}, fallback *uuid.U
 
 // publicAssetResponse is the enriched asset returned to public gallery viewers.
 type publicAssetResponse struct {
-	ID            string            `json:"id"`
-	Filename      string            `json:"filename"`
-	ContentType   string            `json:"content_type"`
-	Width         *int              `json:"width,omitempty"`
-	Height        *int              `json:"height,omitempty"`
-	Blurhash      *string           `json:"blurhash,omitempty"`
-	ThumbnailURLs map[string]string `json:"thumbnail_urls"`
-	SortOrder     int               `json:"sort_order"`
+	ID              string                 `json:"id"`
+	Filename        string                 `json:"filename"`
+	ContentType     string                 `json:"content_type"`
+	Width           *int                   `json:"width,omitempty"`
+	Height          *int                   `json:"height,omitempty"`
+	Blurhash        *string                `json:"blurhash,omitempty"`
+	ThumbnailURLs   map[string]string      `json:"thumbnail_urls"`
+	IsEncrypted     bool                   `json:"is_encrypted"`
+	MediaEncryption map[string]interface{} `json:"media_encryption,omitempty"`
+	SortOrder       int                    `json:"sort_order"`
 }
 
 // resolveAssetsByID bulk-fetches the given asset IDs and returns an O(1)
@@ -410,14 +682,16 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 			continue // skip missing assets
 		}
 		result = append(result, publicAssetResponse{
-			ID:            asset.ID.String(),
-			Filename:      asset.Filename,
-			ContentType:   asset.ContentType,
-			Width:         asset.Width,
-			Height:        asset.Height,
-			Blurhash:      asset.Blurhash,
-			ThumbnailURLs: asset.ThumbnailURLs,
-			SortOrder:     ga.SortOrder,
+			ID:              asset.ID.String(),
+			Filename:        asset.Filename,
+			ContentType:     asset.ContentType,
+			Width:           asset.Width,
+			Height:          asset.Height,
+			Blurhash:        asset.Blurhash,
+			ThumbnailURLs:   asset.ThumbnailURLs,
+			IsEncrypted:     asset.IsEncrypted,
+			MediaEncryption: asset.MediaEncryption,
+			SortOrder:       ga.SortOrder,
 		})
 	}
 
@@ -544,14 +818,16 @@ func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Re
 			continue
 		}
 		result = append(result, publicAssetResponse{
-			ID:            asset.ID.String(),
-			Filename:      asset.Filename,
-			ContentType:   asset.ContentType,
-			Width:         asset.Width,
-			Height:        asset.Height,
-			Blurhash:      asset.Blurhash,
-			ThumbnailURLs: asset.ThumbnailURLs,
-			SortOrder:     aa.Position,
+			ID:              asset.ID.String(),
+			Filename:        asset.Filename,
+			ContentType:     asset.ContentType,
+			Width:           asset.Width,
+			Height:          asset.Height,
+			Blurhash:        asset.Blurhash,
+			ThumbnailURLs:   asset.ThumbnailURLs,
+			IsEncrypted:     asset.IsEncrypted,
+			MediaEncryption: asset.MediaEncryption,
+			SortOrder:       aa.Position,
 		})
 	}
 
@@ -775,6 +1051,83 @@ func (h *PublicGalleryHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Re
 	reader, err := h.assetSvc.GetStorageReader(r.Context(), storageKey)
 	if err != nil {
 		http.Error(w, `{"error":"branding logo retrieval failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
+	_, _ = io.Copy(w, reader)
+}
+
+// GetStudioLogo handles GET /api/v1/public/studios/{subdomain}/logo.
+// This mirrors GetBrandingLogo without requiring a gallery slug, so the
+// business-subdomain root page can render the studio logo without exposing a
+// storage key or bucket URL to the browser.
+func (h *PublicGalleryHandler) GetStudioLogo(w http.ResponseWriter, r *http.Request) {
+	subdomain := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "subdomain")))
+	code := publicStudioBusinessCodeFromSubdomain(subdomain)
+	if code == "" {
+		http.Error(w, `{"error":"invalid studio subdomain"}`, http.StatusBadRequest)
+		return
+	}
+	if h.assetSvc == nil || h.pool == nil {
+		http.Error(w, `{"error":"studio logo unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	var (
+		workspaceID    uuid.UUID
+		logoAssetIDRaw string
+		publicBranding bool
+	)
+	err := h.pool.QueryRow(r.Context(), `
+		SELECT id, COALESCE(logo_asset_id::text, ''), COALESCE(public_branding_enabled, true)
+		FROM workspaces
+		WHERE business_unique_code = $1
+		  AND deleted_at IS NULL
+		LIMIT 1`,
+		code,
+	).Scan(&workspaceID, &logoAssetIDRaw, &publicBranding)
+	if err == pgx.ErrNoRows {
+		http.Error(w, `{"error":"studio not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"failed to load studio logo"}`, http.StatusInternalServerError)
+		return
+	}
+
+	tier := h.lookupWorkspaceTier(r.Context(), workspaceID)
+	if !canCustomizeForTier(tier) || !publicBranding || logoAssetIDRaw == "" {
+		http.Error(w, `{"error":"studio logo not available"}`, http.StatusNotFound)
+		return
+	}
+
+	logoAssetID, err := uuid.Parse(logoAssetIDRaw)
+	if err != nil {
+		http.Error(w, `{"error":"studio logo invalid"}`, http.StatusNotFound)
+		return
+	}
+
+	var storageKey, contentType, filename string
+	err = h.pool.QueryRow(r.Context(), `
+		SELECT storage_key, content_type, filename
+		FROM assets
+		WHERE id = $1
+		  AND workspace_id = $2
+		  AND deleted_at IS NULL
+		  AND content_type LIKE 'image/%'`,
+		logoAssetID, workspaceID,
+	).Scan(&storageKey, &contentType, &filename)
+	if err != nil {
+		http.Error(w, `{"error":"studio logo not found"}`, http.StatusNotFound)
+		return
+	}
+
+	reader, err := h.assetSvc.GetStorageReader(r.Context(), storageKey)
+	if err != nil {
+		http.Error(w, `{"error":"studio logo retrieval failed"}`, http.StatusInternalServerError)
 		return
 	}
 	defer reader.Close()

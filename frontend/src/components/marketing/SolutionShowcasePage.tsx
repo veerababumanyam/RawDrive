@@ -34,6 +34,7 @@ type SolutionShowcasePageProps = {
   stats: SolutionStat[];
   features: SolutionFeature[];
   workflow: SolutionWorkflowStep[];
+  answer: string;
   quoteTitle: string;
   quoteBody: string;
 };
@@ -50,6 +51,7 @@ export function SolutionShowcasePage({
   stats,
   features,
   workflow,
+  answer,
   quoteTitle,
   quoteBody,
 }: SolutionShowcasePageProps) {
@@ -126,12 +128,22 @@ export function SolutionShowcasePage({
         </div>
       </section>
 
+      <section className="border-y border-border bg-surface-sunken px-4 py-12 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-xs font-bold uppercase text-accent">Best-fit summary</p>
+          <h2 className="mt-3 font-headline text-3xl font-bold text-text-primary">
+            What is RawDrive {eyebrow.toLowerCase()} best for?
+          </h2>
+          <p className="mt-4 max-w-3xl leading-8 text-text-secondary">{answer}</p>
+        </div>
+      </section>
+
       <section className="mx-auto grid max-w-7xl gap-8 px-4 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
         <div className="space-y-6">
           <div className="space-y-3">
             <p className="text-xs font-bold uppercase tracking-[0.24em] text-accent">Workflow</p>
             <h2 className="font-headline text-3xl font-bold tracking-[-0.02em] text-text-primary">
-              Built from the original Stitch flow, not a placeholder shell
+              A connected workflow from first action to final delivery
             </h2>
           </div>
           <div className="space-y-4">
@@ -151,7 +163,7 @@ export function SolutionShowcasePage({
 
         <aside className="glass-card p-8">
           <div className="inline-flex rounded-full bg-accent-subtle px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
-            Stitch Reference
+            Studio fit
           </div>
           <h3 className="mt-5 font-headline text-2xl font-bold text-text-primary">{quoteTitle}</h3>
           <p className="mt-4 leading-8 text-text-secondary">{quoteBody}</p>

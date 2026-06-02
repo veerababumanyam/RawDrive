@@ -98,6 +98,9 @@ services:
       NATS_URL: nats://nats:4222
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_SECURITY: auto
       # Internal face-svc URL inside the compose network. The Go client
       # (backend/internal/face/client.go) reads this env var. Health gate
       # in face-svc means depends_on:condition:service_healthy below.
@@ -128,9 +131,14 @@ services:
         # Baked into the JS bundle at build time — points browser fetch calls
         # at the backend exposed on the host's port 8080.
         NEXT_PUBLIC_API_URL: http://localhost:8080
+        # Baked into Next.js rewrites — this runs inside the frontend
+        # container, where localhost is the frontend container itself.
+        INTERNAL_API_BASE_URL: http://backend:8080
     environment:
-      # Also needed at runtime so next.config.ts headers() includes it in CSP.
+      # Browser-visible API origin; host browsers can reach this port.
       NEXT_PUBLIC_API_URL: http://localhost:8080
+      # Server-side rewrites use Compose DNS from inside the container.
+      INTERNAL_API_BASE_URL: http://backend:8080
     ports:
       - "3000:3000"
     depends_on:

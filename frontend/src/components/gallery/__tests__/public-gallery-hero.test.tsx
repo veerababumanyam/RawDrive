@@ -1,7 +1,24 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
 import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
+
+const mocks = vi.hoisted(() => ({
+  useDecryptedAssetUrl: vi.fn(
+    (
+      asset: PublicAsset | null | undefined,
+      variants: readonly string[],
+    ) => ({
+      src: variants.map((variant) => asset?.thumbnail_urls?.[variant]).find(Boolean) || "",
+      loading: false,
+      error: null,
+    }),
+  ),
+}));
+
+vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
+  useDecryptedAssetUrl: mocks.useDecryptedAssetUrl,
+}));
 
 const weddingPhoto = "/tests/photos/Wedding (42).jpg";
 
@@ -42,6 +59,10 @@ const branding: GalleryBranding = {
 };
 
 describe("PublicGalleryHero", () => {
+  beforeEach(() => {
+    mocks.useDecryptedAssetUrl.mockClear();
+  });
+
   it("renders studio identity and cover photo on the public gallery hero", () => {
     render(<PublicGalleryHero gallery={gallery} assets={[coverAsset]} branding={branding} />);
 
@@ -52,6 +73,10 @@ describe("PublicGalleryHero", () => {
       expect.stringContaining("/api/v1/public/galleries/asha-ravi/branding/logo"),
     );
     expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute("href", "#gallery-grid");
+    expect(mocks.useDecryptedAssetUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "asset-cover" }),
+      expect.arrayContaining(["thumb_lg_webp", "display_webp"]),
+    );
   });
 
   it("prefers public-prefixed thumb_lg_webp over auth-gated display_webp for the cover", () => {
