@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,7 +32,7 @@ func NewMigrator(dsn string) *Migrator {
 // Up applies all up migrations in order.
 func (m *Migrator) Up() error {
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, m.dsn)
+	pool, err := m.newPool(ctx)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
@@ -105,7 +106,7 @@ func (m *Migrator) Up() error {
 // Down rolls back all migrations in reverse order.
 func (m *Migrator) Down() error {
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, m.dsn)
+	pool, err := m.newPool(ctx)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
@@ -164,6 +165,29 @@ func (m *Migrator) Down() error {
 	_, _ = conn.Exec(ctx, `DROP TABLE IF EXISTS schema_migrations`)
 
 	return nil
+}
+
+func (m *Migrator) newPool(ctx context.Context) (*pgxpool.Pool, error) {
+	cfg, err := newMigrationPoolConfig(m.dsn)
+	if err != nil {
+		return nil, err
+	}
+	return pgxpool.NewWithConfig(ctx, cfg)
+}
+
+func newMigrationPoolConfig(dsn string) (*pgxpool.Config, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	// Production migrations run through pgbouncer. pgx's default
+	// cache_statement mode creates named prepared statements that can collide
+	// across pooled server sessions, so migrations use extended query protocol
+	// without preparing/caching statements.
+	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	cfg.MaxConns = 1
+	cfg.MinConns = 0
+	return cfg, nil
 }
 
 func getMigrationFiles(direction string) ([]string, error) {

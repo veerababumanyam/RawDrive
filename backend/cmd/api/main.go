@@ -1139,6 +1139,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("FATAL: invalid DATABASE_URL: %v", err)
 	}
+	// Production connects through pgbouncer. pgx's default cache_statement
+	// mode creates named prepared statements that can collide across pooled
+	// server sessions, especially after rolling restarts. Use extended query
+	// protocol without statement caching for pgbouncer compatibility.
+	poolCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 	poolCfg.MaxConns = 25
 	poolCfg.MinConns = 5
 
