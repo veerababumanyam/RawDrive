@@ -52,6 +52,8 @@ else
 fi
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o ConnectTimeout=10"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+DEPLOY_REVISION="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+DEPLOY_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 COMPOSE_FILE="docker-compose.prod-app.yml"
 DEPLOY_DIR="/opt/rawdrive/app/deploy"
 HEALTH_URL="http://127.0.0.1:8080/health/deep"
@@ -144,12 +146,34 @@ check_ssh() {
     || { log "ERROR: Cannot SSH to $ip"; exit 1; }
 }
 
+cleanup_excluded_source_paths() {
+  local ip="$1"
+  # Keep server source trees aligned with the tar payload. These paths are
+  # intentionally excluded from production deploys, so stale copies from older
+  # deploys should not remain and confuse release audits.
+  $SSH "root@$ip" 'rm -rf /opt/rawdrive/app/e2e /opt/rawdrive/app/tests /opt/rawdrive/app/backend/tests /opt/rawdrive/app/references /opt/rawdrive/app/docs/archive'
+}
+
+write_deploy_revision() {
+  local ip="$1"
+  local deployed_at
+  deployed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  $SSH "root@$ip" "cat > /opt/rawdrive/app/.rawdrive-deploy-revision" <<EOF
+commit=$DEPLOY_REVISION
+branch=$DEPLOY_BRANCH
+deployed_at=$deployed_at
+script=$(basename "$0")
+EOF
+}
+
 push_code() {
   local ip="$1"
   log "Pushing code to $ip..."
   cd "$REPO_ROOT"
   tar "${tar_excludes[@]}" -cf - . \
     | $SSH "root@$ip" 'tar -xf - -C /opt/rawdrive/app'
+  cleanup_excluded_source_paths "$ip"
+  write_deploy_revision "$ip"
   # Belt-and-suspenders: the tar excludes ._* on push, but tar -xf never
   # deletes files that exist on the target but not in the new stream.
   # Without this sweep, AppleDouble droppings from earlier deploys

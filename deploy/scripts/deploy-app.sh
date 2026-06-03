@@ -94,9 +94,35 @@ if [ -n "${SSH_KEY:-}" ]; then
 fi
 SSH+=(-o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" -o ConnectTimeout=10)
 
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+DEPLOY_REVISION="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+DEPLOY_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+
+cleanup_excluded_source_paths() {
+    # Keep server source trees aligned with the tar payload. These paths are
+    # intentionally excluded from production deploys, so stale copies from older
+    # deploys should not remain and confuse release audits.
+    "${SSH[@]}" "root@$NODE_IP" \
+        'rm -rf /opt/rawdrive/app/e2e /opt/rawdrive/app/tests /opt/rawdrive/app/backend/tests /opt/rawdrive/app/references /opt/rawdrive/app/docs/archive'
+}
+
+write_deploy_revision() {
+    local deployed_at
+    deployed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    "${SSH[@]}" "root@$NODE_IP" "cat > /opt/rawdrive/app/.rawdrive-deploy-revision" <<EOF
+commit=$DEPLOY_REVISION
+branch=$DEPLOY_BRANCH
+deployed_at=$deployed_at
+script=$(basename "$0")
+EOF
+}
+
 echo "==> pushing source to $NODE_IP"
+cd "$REPO_ROOT"
 tar "${tar_excludes[@]}" -cf - . \
     | "${SSH[@]}" "root@$NODE_IP" 'tar -xf - -C /opt/rawdrive/app'
+cleanup_excluded_source_paths
+write_deploy_revision
 
 echo "==> building images on $NODE_IP"
 "${SSH[@]}" "root@$NODE_IP" \
