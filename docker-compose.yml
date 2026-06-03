@@ -3,6 +3,18 @@ name: ${COMPOSE_PROJECT_NAME}
 services:
   postgres:
     image: pgvector/pgvector:pg17
+    # Mirror production planner + observability tuning so dev EXPLAIN plans match
+    # prod (deploy/postgres/postgresql.conf): SSD random_page_cost, slow-query
+    # log, and pg_stat_statements preloaded (PERF-05/06). The init script CREATEs
+    # the pg_stat_statements view on a fresh volume.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - log_min_duration_statement=500
     ports:
       - "${POSTGRES_PORT}:5432"
     environment:
@@ -11,6 +23,7 @@ services:
       POSTGRES_PASSWORD: ${PROJECT_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init/01-create-extensions.sql:/docker-entrypoint-initdb.d/01-create-extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PROJECT_USER}"]
       interval: 5s
@@ -21,7 +34,9 @@ services:
     image: valkey/valkey:9.0-alpine
     ports:
       - "${VALKEY_PORT}:6379"
-    command: valkey-server --appendonly yes --appendfsync everysec
+    # Bound memory + LRU eviction to match prod (deploy/valkey/valkey.conf) so a
+    # runaway dev cache can't OOM the host (PERF-14).
+    command: valkey-server --appendonly yes --appendfsync everysec --maxmemory 400mb --maxmemory-policy allkeys-lru
     volumes:
       - valkey_data:/data
     healthcheck:
