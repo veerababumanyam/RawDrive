@@ -9,8 +9,9 @@ import (
 	"image/png"
 	"io"
 
-	"github.com/disintegration/imaging"
 	"golang.org/x/image/webp"
+
+	"github.com/rawdrive/backend/internal/imageops"
 )
 
 // GAL-FR-060 — Cover auto-compress/resize for delivery optimization.
@@ -30,8 +31,8 @@ import (
 
 // CoverVariantSpec describes a single cover variant target.
 type CoverVariantSpec struct {
-	Name      string // "hero", "card", "thumb"
-	MaxWidth  int
+	Name        string // "hero", "card", "thumb"
+	MaxWidth    int
 	JPEGQuality int
 }
 
@@ -136,7 +137,7 @@ func renderVariant(src image.Image, spec CoverVariantSpec) (CoverVariant, error)
 		targetHeight = 1
 	}
 
-	resized := imaging.Resize(src, targetWidth, targetHeight, imaging.Lanczos)
+	resized := imageops.Resize(src, targetWidth, targetHeight, true)
 
 	var buf bytes.Buffer
 	quality := spec.JPEGQuality

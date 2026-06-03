@@ -15,11 +15,12 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/disintegration/imaging"
-	"github.com/rawdrive/backend/internal/storage"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/rawdrive/backend/internal/imageops"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 func base64Encode(data []byte) string {
@@ -149,7 +150,7 @@ type ThumbnailResult struct {
 // law ("Originals are preserved for download only").
 func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src io.Reader) (*ThumbnailResult, error) {
 	// Decode the source image with auto-orientation from EXIF
-	srcImg, err := imaging.Decode(src, imaging.AutoOrientation(true))
+	srcImg, err := imageops.Decode(src, true)
 	if err != nil {
 		return nil, fmt.Errorf("thumbnail decode: %w", err)
 	}
@@ -165,7 +166,7 @@ func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src 
 	// the three thumbnail sizes + display_webp resize from the same
 	// already-decoded source image, so each goroutine does:
 	//
-	//   imaging.Fit(src, …) → in-memory PNG → cwebp subprocess → R2 PUT
+	//   imageops.Fit(src, …) → in-memory PNG → cwebp subprocess → R2 PUT
 	//
 	// Sequential, this took ~1.5–2s per upload (4 cwebp invocations).
 	// In parallel the total time drops to roughly the slowest single
@@ -226,10 +227,10 @@ func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src 
 
 // generateOne creates a single thumbnail and stores it.
 func (s *ThumbnailService) generateOne(ctx context.Context, assetID string, src image.Image, size ThumbnailSize) (string, error) {
-	thumb := imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
+	thumb := imageops.Fit(src, size.MaxWidth, size.MaxHeight)
 
 	buf := new(bytes.Buffer)
-	if err := imaging.Encode(buf, thumb, imaging.JPEG, imaging.JPEGQuality(80)); err != nil {
+	if err := imageops.EncodeJPEG(buf, thumb, 80); err != nil {
 		return "", fmt.Errorf("encode: %w", err)
 	}
 
@@ -261,7 +262,7 @@ type FullDerivativeResult struct {
 
 // GenerateAllDerivatives produces thumbnails, cover variants, OG image, and LQIP from a source image.
 func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID string, src io.Reader) (*FullDerivativeResult, error) {
-	srcImg, err := imaging.Decode(src, imaging.AutoOrientation(true))
+	srcImg, err := imageops.Decode(src, true)
 	if err != nil {
 		return nil, fmt.Errorf("derivative decode: %w", err)
 	}
@@ -359,7 +360,7 @@ func (s *ThumbnailService) generateWebPDerivative(ctx context.Context, assetID s
 		return nil, fmt.Errorf("cwebp is required for RawDrive WebP derivatives: %w", s.cwebpErr)
 	}
 
-	resized := imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
+	resized := imageops.Fit(src, size.MaxWidth, size.MaxHeight)
 	return s.encodeWebPViaCwebp(ctx, assetID, resized, size)
 }
 
@@ -371,7 +372,7 @@ func (s *ThumbnailService) encodeWebPViaCwebp(ctx context.Context, assetID strin
 		return nil, fmt.Errorf("webp temp in: %w", err)
 	}
 	defer os.Remove(tmpIn.Name())
-	if err := imaging.Encode(tmpIn, img, imaging.PNG); err != nil {
+	if err := imageops.EncodePNG(tmpIn, img); err != nil {
 		tmpIn.Close()
 		return nil, fmt.Errorf("webp png encode: %w", err)
 	}
@@ -420,11 +421,11 @@ func (s *ThumbnailService) encodeWebPViaCwebp(ctx context.Context, assetID strin
 // generateWatermarkPreview creates a watermarked mid-res preview for proofing galleries.
 func (s *ThumbnailService) generateWatermarkPreview(ctx context.Context, assetID string, src image.Image) (*DerivativeResult, error) {
 	// Resize to watermark preview size
-	resized := imaging.Fit(src, WatermarkPreviewSize.MaxWidth, WatermarkPreviewSize.MaxHeight, imaging.Lanczos)
+	resized := imageops.Fit(src, WatermarkPreviewSize.MaxWidth, WatermarkPreviewSize.MaxHeight)
 
 	// Encode to JPEG buffer for watermark input
 	buf := new(bytes.Buffer)
-	if err := imaging.Encode(buf, resized, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
+	if err := imageops.EncodeJPEG(buf, resized, 85); err != nil {
 		return nil, fmt.Errorf("watermark preview encode: %w", err)
 	}
 
@@ -462,13 +463,13 @@ func (s *ThumbnailService) generateDerivative(ctx context.Context, assetID strin
 	var resized image.Image
 	if size.Name == "og_image" {
 		// OG images need exact dimensions with center crop
-		resized = imaging.Fill(src, size.MaxWidth, size.MaxHeight, imaging.Center, imaging.Lanczos)
+		resized = imageops.Fill(src, size.MaxWidth, size.MaxHeight)
 	} else {
-		resized = imaging.Fit(src, size.MaxWidth, size.MaxHeight, imaging.Lanczos)
+		resized = imageops.Fit(src, size.MaxWidth, size.MaxHeight)
 	}
 
 	buf := new(bytes.Buffer)
-	if err := imaging.Encode(buf, resized, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
+	if err := imageops.EncodeJPEG(buf, resized, 85); err != nil {
 		return nil, fmt.Errorf("encode %s: %w", size.Name, err)
 	}
 
@@ -490,9 +491,9 @@ func (s *ThumbnailService) generateDerivative(ctx context.Context, assetID strin
 
 // generateLQIP creates a 20px-wide Low Quality Image Placeholder encoded as base64.
 func (s *ThumbnailService) generateLQIP(src image.Image) string {
-	tiny := imaging.Resize(src, 20, 0, imaging.Box)
+	tiny := imageops.Resize(src, 20, 0, false)
 	buf := new(bytes.Buffer)
-	if err := imaging.Encode(buf, tiny, imaging.JPEG, imaging.JPEGQuality(30)); err != nil {
+	if err := imageops.EncodeJPEG(buf, tiny, 30); err != nil {
 		return ""
 	}
 	encoded := "data:image/jpeg;base64," + base64Encode(buf.Bytes())
@@ -516,7 +517,7 @@ func (s *ThumbnailService) GenerateForAsset(ctx context.Context, assetID interfa
 // Uses a simplified algorithm that produces unique hashes per image without external deps.
 func generateBlurhash(img image.Image) string {
 	// Downscale to 4x4 for a compact hash, then encode pixel data as base83-like string
-	tiny := imaging.Resize(img, 4, 4, imaging.Box)
+	tiny := imageops.Resize(img, 4, 4, false)
 	bounds := tiny.Bounds()
 
 	// Build a deterministic hash from actual pixel data

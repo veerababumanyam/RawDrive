@@ -9,7 +9,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/disintegration/imaging"
+	"github.com/rawdrive/backend/internal/imageops"
 )
 
 // Verifies the rewrite actually modifies pixels in the configured corner /
@@ -18,7 +18,7 @@ import (
 
 func newSolidJPEG(t *testing.T, w, h int, c color.NRGBA) []byte {
 	t.Helper()
-	img := imaging.New(w, h, c)
+	img := imageops.New(w, h, c)
 	buf := new(bytes.Buffer)
 	if err := jpeg.Encode(buf, img, &jpeg.Options{Quality: 95}); err != nil {
 		t.Fatalf("encode source JPEG: %v", err)
@@ -74,7 +74,7 @@ func TestWatermarkApply_BottomRightWritesPixels(t *testing.T) {
 	rgba, ok := img.(*image.RGBA)
 	if !ok {
 		// jpeg.Decode usually returns *image.YCbCr — convert via NRGBA model.
-		nrgba := imaging.Clone(img)
+		nrgba := imageops.Clone(img)
 		rgba = (*image.RGBA)(nil)
 		_ = rgba
 		// Walk the bottom-right strip looking for one watermarked pixel.
@@ -110,7 +110,7 @@ func TestWatermarkApply_CenterDiffersFromCorner(t *testing.T) {
 	}
 	img := decodeJPEG(t, out)
 	b := img.Bounds()
-	nrgba := imaging.Clone(img)
+	nrgba := imageops.Clone(img)
 	dark := color.NRGBA{30, 30, 30, 255}
 
 	// At least one pixel in the central rectangle should differ.

@@ -25,10 +25,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/disintegration/imaging"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
+
+	"github.com/rawdrive/backend/internal/imageops"
 )
 
 // WatermarkConfig controls watermark appearance.
@@ -61,7 +62,7 @@ func NewWatermarkService() *WatermarkService {
 // as a JPEG stream. Returns an error if the source can't be decoded as an image
 // (e.g. RAW / HEIC content — callers must skip baking for those content types).
 func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg WatermarkConfig) (io.Reader, error) {
-	srcImg, err := imaging.Decode(src)
+	srcImg, err := imageops.Decode(src, false)
 	if err != nil {
 		return nil, fmt.Errorf("watermark: decode source: %w", err)
 	}
@@ -98,7 +99,7 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 		target := minInt(srcW, srcH) * 7 / 10
 		tile := buildTextTile(text, target, opacity)
 		// Rotate -30° to match the CSS overlay's transform.
-		rotated := imaging.Rotate(tile, 30, color.NRGBA{0, 0, 0, 0})
+		rotated := imageops.Rotate(tile, 30, color.NRGBA{0, 0, 0, 0})
 		rb := rotated.Bounds()
 		offsetX := (srcW - rb.Dx()) / 2
 		offsetY := (srcH - rb.Dy()) / 2
@@ -113,7 +114,7 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 			target = 80
 		}
 		tile := buildTextTile(text, target, opacity)
-		rotated := imaging.Rotate(tile, 30, color.NRGBA{0, 0, 0, 0})
+		rotated := imageops.Rotate(tile, 30, color.NRGBA{0, 0, 0, 0})
 		rb := rotated.Bounds()
 		// Step ~ 1.4× the rotated bounding box so the pattern feels dense
 		// but tiles don't fully overlap.
@@ -181,7 +182,7 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 // image is upscaled with imaging.Resize so the configured `targetWidth`
 // dictates the final pixel size. Opacity is applied to the source ink so the
 // composite step (draw.Over) blends naturally.
-func buildTextTile(text string, targetWidth int, opacity float64) *image.NRGBA {
+func buildTextTile(text string, targetWidth int, opacity float64) image.Image {
 	face := basicfont.Face7x13
 	textW := font.MeasureString(face, text).Ceil()
 	if textW <= 0 {
@@ -226,14 +227,12 @@ func buildTextTile(text string, targetWidth int, opacity float64) *image.NRGBA {
 	if targetWidth <= 0 || targetWidth <= base.Bounds().Dx() {
 		return base
 	}
-	scaled := imaging.Resize(base, targetWidth, 0, imaging.Lanczos)
-	// imaging.Resize returns *image.NRGBA, which is what we need.
-	return scaled
+	return imageops.Resize(base, targetWidth, 0, true)
 }
 
 func encodeJPEG(img image.Image) (io.Reader, error) {
 	buf := new(bytes.Buffer)
-	if err := imaging.Encode(buf, img, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
+	if err := imageops.EncodeJPEG(buf, img, 85); err != nil {
 		return nil, fmt.Errorf("watermark: encode result: %w", err)
 	}
 	return buf, nil
