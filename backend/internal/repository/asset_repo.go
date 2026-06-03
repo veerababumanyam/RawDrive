@@ -99,12 +99,12 @@ func (r *AssetRepo) Create(ctx context.Context, a *Asset) error {
 		 created_at, updated_at, is_encrypted, encryption_algo, encryption_version,
 		 media_encryption, upload_scan_status, upload_scan_engine, upload_scan_policy_version,
 		 upload_scan_risk_score, upload_scan_findings, upload_scan_manifest_hash)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24,$25::jsonb,$26)`,
 		a.ID, a.WorkspaceID, a.Filename, a.ContentType, a.SizeBytes, a.StorageKey,
-		a.StorageDriver, a.Width, a.Height, a.Blurhash, a.ExifData, a.ThumbnailURLs,
+		a.StorageDriver, a.Width, a.Height, a.Blurhash, jsonMapString(a.ExifData), jsonStringMap(a.ThumbnailURLs),
 		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt, a.IsEncrypted, a.EncryptionAlgo, a.EncryptionVersion,
-		jsonMapOrEmpty(a.MediaEncryption), a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
-		a.UploadScanRiskScore, a.UploadScanFindings, a.UploadScanManifestHash,
+		jsonMapString(jsonMapOrEmpty(a.MediaEncryption)), a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
+		a.UploadScanRiskScore, nullableJSON(a.UploadScanFindings), a.UploadScanManifestHash,
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo create: %w", err)
@@ -374,8 +374,8 @@ func (r *AssetRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status strin
 // UpdateThumbnails sets the thumbnail URLs and blurhash.
 func (r *AssetRepo) UpdateThumbnails(ctx context.Context, id uuid.UUID, thumbnails map[string]string, blurhash string) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE assets SET thumbnail_urls = $1, blurhash = $2, updated_at = now() WHERE id = $3`,
-		thumbnails, blurhash, id,
+		`UPDATE assets SET thumbnail_urls = $1::jsonb, blurhash = $2, updated_at = now() WHERE id = $3`,
+		jsonStringMap(thumbnails), blurhash, id,
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo update thumbnails: %w", err)
@@ -392,9 +392,9 @@ func (r *AssetRepo) UpdateEncryptedDerivatives(
 ) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE assets
-		 SET thumbnail_urls = $1, media_encryption = $2, status = $3, updated_at = now()
+		 SET thumbnail_urls = $1::jsonb, media_encryption = $2::jsonb, status = $3, updated_at = now()
 		 WHERE id = $4`,
-		thumbnails, jsonMapOrEmpty(mediaEncryption), status, id,
+		jsonStringMap(thumbnails), jsonMapString(jsonMapOrEmpty(mediaEncryption)), status, id,
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo update encrypted derivatives: %w", err)
@@ -405,8 +405,8 @@ func (r *AssetRepo) UpdateEncryptedDerivatives(
 // UpdateExif sets the EXIF metadata for an asset.
 func (r *AssetRepo) UpdateExif(ctx context.Context, id uuid.UUID, exifData map[string]interface{}) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE assets SET exif_data = $1, updated_at = now() WHERE id = $2`,
-		exifData, id,
+		`UPDATE assets SET exif_data = $1::jsonb, updated_at = now() WHERE id = $2`,
+		jsonMapString(exifData), id,
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo update exif: %w", err)
@@ -631,11 +631,28 @@ func (r *AssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, statu
 	}
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE assets SET status = $1, updated_at = now()
-		 WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`,
+		 WHERE id = ANY($2::uuid[]) AND workspace_id = $3 AND deleted_at IS NULL`,
 		status, ids, workspaceID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("asset repo bulk update status: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// BulkSoftDelete marks multiple assets as deleted within a workspace.
+func (r *AssetRepo) BulkSoftDelete(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE assets
+		    SET deleted_at = now(), status = 'deleted', updated_at = now()
+		  WHERE id = ANY($1::uuid[]) AND workspace_id = $2 AND deleted_at IS NULL`,
+		ids, workspaceID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("asset repo bulk soft delete: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
@@ -838,4 +855,37 @@ func jsonMapOrEmpty(v map[string]interface{}) map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	return v
+}
+
+func jsonMapString(v map[string]interface{}) string {
+	if v == nil {
+		v = map[string]interface{}{}
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func jsonStringMap(v map[string]string) string {
+	if v == nil {
+		v = map[string]string{}
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func nullableJSON(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return string(b)
 }

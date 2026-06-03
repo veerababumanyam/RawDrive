@@ -18,7 +18,7 @@
 - `PLATFORM_SETTINGS_KEK` is a 32-byte hex value from the secret manager.
 - `TRUSTED_PROXY_MODE=true` only when TLS is terminated by a trusted upstream proxy; otherwise set `TLS_CERT_PATH` and `TLS_KEY_PATH`.
 - All required Backblaze B2 storage variables are set: `B2_BUCKET_NAME`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_ENDPOINT`, `B2_REGION`. The S3-compatible endpoint has the form `https://s3.<region>.backblazeb2.com`. `B2_KEY_ID` maps to `AccessKeyID`; `B2_APPLICATION_KEY` maps to `SecretAccessKey`.
-- SMTP is configured with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM`. Optional: `SMTP_FROM_NAME` (defaults to "RawDrive").
+- SMTP is configured with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM`. Optional: `SMTP_FROM_NAME` (defaults to "RawDrive"). Run the smoke test in `docs/runbooks/smtp-otp-delivery.md` before launch.
 - Google OAuth uses a callback URL on the same site as the app/API session cookie plan.
 
 ## Release Sequence

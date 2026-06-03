@@ -52,6 +52,8 @@ These are **load-bearing**. Violations have caused real production bugs. `AGENTS
 - **Platform roles:** Use `RequirePlatformRole` middleware. Test users come from `backend/seeds/`, not fabricated.
 - **Auth primitives are NOT interchangeable:**
   - **Email OTP** → registration-only (`/auth/verify-otp` from `/activate`). Never on login.
+  - Activation resend (`POST /auth/resend-otp`) stays public with generic feedback. Failed SMTP delivery deletes the generated OTP row, so operators must use `smtp-smoke`, DB checks, and backend logs to diagnose delivery.
+  - Production email uses SecureServer SMTP (`smtpout.secureserver.net:465`, `ssl`, from `noreply@rawdrive.in`). Rotate provider credentials, sync only `email.*` settings with `sync-platform-settings-from-env`, then smoke-test both app nodes. `535 Authentication Failed` is a credential/provider rejection, not an app OTP bug.
   - **TOTP (RFC 6238)** → opt-in login step-up after password. `/auth/login` returns `{mfa_required, mfa_token, challenge:"totp"}`; client calls `/auth/verify-totp`.
   - TOTP secrets are envelope-encrypted with `PLATFORM_SETTINGS_KEK`. Recovery codes are bcrypt-hashed. `mfa_verified` claim preserved across refresh via `refresh_sessions.mfa_verified`.
 - **Upload UX:** Lives inside a gallery/sub-gallery/album. No `/upload` route in sidebar nav. A legacy `/upload/page.tsx` may exist but must not be linked.

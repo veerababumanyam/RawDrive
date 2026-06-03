@@ -53,7 +53,11 @@ export function useDecryptedAssetUrl(
           }
           try {
             const storageUrl = getStorageBackedUrl(picked.key, token, gallerySessionToken);
-            const res = await fetch(storageUrl, { credentials: "same-origin" });
+            const fetchInit: RequestInit = { credentials: "include" };
+            if (token) {
+              fetchInit.headers = { Authorization: `Bearer ${token}` };
+            }
+            const res = await fetch(storageUrl, fetchInit);
             if (!res.ok) {
               throw new Error(`Encrypted media fetch failed: ${res.status}`);
             }

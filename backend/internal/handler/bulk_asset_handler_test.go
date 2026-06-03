@@ -48,6 +48,31 @@ type fakeBulkAssetRepo struct {
 	}
 	statusAffected int64
 	statusErr      error
+
+	deleteCall struct {
+		called      bool
+		ids         []uuid.UUID
+		workspaceID uuid.UUID
+	}
+	deleteAffected int64
+	deleteErr      error
+}
+
+type fakeBulkDeleteService struct {
+	call struct {
+		called      bool
+		ids         []uuid.UUID
+		workspaceID uuid.UUID
+	}
+	affected int64
+	err      error
+}
+
+func (f *fakeBulkDeleteService) SoftDeleteManyForWorkspace(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error) {
+	f.call.called = true
+	f.call.ids = ids
+	f.call.workspaceID = workspaceID
+	return f.affected, f.err
 }
 
 func (f *fakeBulkAssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status string, workspaceID uuid.UUID) (int64, error) {
@@ -56,6 +81,13 @@ func (f *fakeBulkAssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUI
 	f.statusCall.newStatus = status
 	f.statusCall.workspaceID = workspaceID
 	return f.statusAffected, f.statusErr
+}
+
+func (f *fakeBulkAssetRepo) BulkSoftDelete(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error) {
+	f.deleteCall.called = true
+	f.deleteCall.ids = ids
+	f.deleteCall.workspaceID = workspaceID
+	return f.deleteAffected, f.deleteErr
 }
 
 func (f *fakeBulkAssetRepo) BulkMoveToGallery(ctx context.Context, ids []uuid.UUID, fromGalleryID, toGalleryID, workspaceID uuid.UUID) (int64, error) {
@@ -199,4 +231,53 @@ func TestBulkAction_StatusPassesWorkspaceIDToRepo(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
 	assert.Equal(t, wsID, fake.statusCall.workspaceID)
 	assert.Equal(t, "archived", fake.statusCall.newStatus)
+}
+
+func TestBulkAction_DeleteUsesScopedSoftDelete(t *testing.T) {
+	wsID := uuid.New()
+	asset1 := uuid.New()
+	asset2 := uuid.New()
+
+	fake := &fakeBulkAssetRepo{deleteAffected: 2}
+	h := NewBulkAssetHandler(fake)
+
+	req := newBulkRequest(t, wsID, "",
+		map[string]interface{}{
+			"action":    "delete",
+			"asset_ids": []string{asset1.String(), asset2.String()},
+		})
+	rr := httptest.NewRecorder()
+
+	h.BulkAction(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+	require.True(t, fake.deleteCall.called, "BulkSoftDelete must be called for delete action")
+	assert.Equal(t, wsID, fake.deleteCall.workspaceID)
+	assert.ElementsMatch(t, []uuid.UUID{asset1, asset2}, fake.deleteCall.ids)
+	assert.False(t, fake.statusCall.called, "delete must not only update status; it must set deleted_at")
+}
+
+func TestBulkAction_DeleteUsesAssetServiceWhenWired(t *testing.T) {
+	wsID := uuid.New()
+	asset1 := uuid.New()
+	asset2 := uuid.New()
+
+	fakeRepo := &fakeBulkAssetRepo{deleteAffected: 2}
+	fakeDeleteSvc := &fakeBulkDeleteService{affected: 2}
+	h := NewBulkAssetHandler(fakeRepo).WithAssetDeleteService(fakeDeleteSvc)
+
+	req := newBulkRequest(t, wsID, "",
+		map[string]interface{}{
+			"action":    "delete",
+			"asset_ids": []string{asset1.String(), asset2.String()},
+		})
+	rr := httptest.NewRecorder()
+
+	h.BulkAction(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+	require.True(t, fakeDeleteSvc.call.called, "bulk delete must use AssetService so storage accounting and object cleanup run")
+	assert.Equal(t, wsID, fakeDeleteSvc.call.workspaceID)
+	assert.ElementsMatch(t, []uuid.UUID{asset1, asset2}, fakeDeleteSvc.call.ids)
+	assert.False(t, fakeRepo.deleteCall.called, "repo-only soft delete bypasses storage accounting")
 }

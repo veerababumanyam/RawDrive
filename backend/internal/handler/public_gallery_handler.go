@@ -2032,7 +2032,7 @@ func publicDownloadVariant(asset *repository.Asset, requestedFormat string) (*pu
 	}
 	format := strings.ToLower(strings.TrimSpace(requestedFormat))
 	if format == "" {
-		format = "original"
+		format = "webp"
 	}
 
 	switch format {
@@ -2073,35 +2073,17 @@ func publicDownloadVariant(asset *repository.Asset, requestedFormat string) (*pu
 
 func publicDownloadFormatForPolicy(requestedFormat, policy string) (string, error) {
 	format := strings.ToLower(strings.TrimSpace(requestedFormat))
-	normalizedPolicy := strings.ToLower(strings.TrimSpace(policy))
-	if normalizedPolicy == "" {
-		normalizedPolicy = "webp"
+	allowed := strings.ToLower(strings.TrimSpace(policy))
+	if allowed != "thumbnail" && allowed != "original" {
+		// Legacy rows may still contain "both"; the UI no longer offers a
+		// mixed policy, so that value collapses to WebP until explicitly reset.
+		allowed = "webp"
 	}
 	if format == "" {
-		switch normalizedPolicy {
-		case "webp":
-			format = "webp"
-		default:
-			format = "original"
-		}
+		format = allowed
 	}
-	switch normalizedPolicy {
-	case "original":
-		if format == "original" {
-			return format, nil
-		}
-	case "webp":
-		if format == "webp" || format == "thumbnail" {
-			return format, nil
-		}
-	case "both":
-		if format == "original" || format == "webp" || format == "thumbnail" {
-			return format, nil
-		}
-	default:
-		if format == "original" {
-			return format, nil
-		}
+	if format == allowed {
+		return format, nil
 	}
 	return "", fmt.Errorf("download format not allowed for this gallery")
 }

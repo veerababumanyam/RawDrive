@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -94,6 +95,14 @@ func parseOptionalUUIDRaw(raw map[string]json.RawMessage, field string) (bool, *
 	return true, &id, nil
 }
 
+func normalizeGalleryDownloadQuality(value string) (string, error) {
+	downloadQuality := strings.ToLower(strings.TrimSpace(value))
+	if downloadQuality != "webp" && downloadQuality != "thumbnail" && downloadQuality != "original" {
+		return "", fmt.Errorf("download_quality must be webp, thumbnail, or original")
+	}
+	return downloadQuality, nil
+}
+
 func (h *GalleryHandler) validateLinkedEntity(ctx context.Context, workspaceID uuid.UUID, field string, id *uuid.UUID) error {
 	if h.pool == nil || id == nil {
 		return nil
@@ -138,7 +147,12 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
 		return
 	}
-	userID, _ := getUserID(r)
+	userID, ok := getUserID(r)
+	if !ok || userID == uuid.Nil {
+		log.Printf("gallery create rejected: missing valid user claim workspace_id=%s", workspaceID)
+		http.Error(w, `{"error":"missing user_id"}`, http.StatusUnauthorized)
+		return
+	}
 
 	var input struct {
 		Title            string  `json:"title"`
@@ -226,6 +240,7 @@ func (h *GalleryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TetherDirectory:  input.TetherDirectory,
 	})
 	if err != nil {
+		log.Printf("gallery create failed: workspace_id=%s user_id=%s err=%v", workspaceID, userID, err)
 		http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -327,9 +342,9 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid download_quality"}`, http.StatusBadRequest)
 			return
 		}
-		downloadQuality = strings.ToLower(strings.TrimSpace(downloadQuality))
-		if downloadQuality != "original" && downloadQuality != "webp" && downloadQuality != "both" {
-			http.Error(w, `{"error":"download_quality must be original, webp, or both"}`, http.StatusBadRequest)
+		downloadQuality, err = normalizeGalleryDownloadQuality(downloadQuality)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
 			return
 		}
 		gallery.DownloadQuality = downloadQuality
@@ -665,11 +680,9 @@ func (h *GalleryHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, _, ok := h.requireGalleryInWorkspace(w, r, id); !ok {
+	if _, workspaceID, ok := h.requireGalleryInWorkspace(w, r, id); !ok {
 		return
-	}
-
-	if err := h.gallerySvc.SoftDelete(r.Context(), id); err != nil {
+	} else if err := h.gallerySvc.SoftDeleteForWorkspace(r.Context(), id, workspaceID); err != nil {
 		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
 		return
 	}

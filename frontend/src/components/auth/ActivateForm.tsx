@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { persistAuthTokens, getPostLoginPath } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export function ActivateForm() {
   const router = useRouter();
@@ -13,8 +14,17 @@ export function ActivateForm() {
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   if (!email) {
     return (
@@ -56,6 +66,8 @@ export function ActivateForm() {
   }
 
   async function handleResendOtp() {
+    if (resendLoading || resendCooldown > 0) return;
+
     setResendLoading(true);
     setError("");
     setNotice("");
@@ -74,7 +86,12 @@ export function ActivateForm() {
         return;
       }
 
-      setNotice(payload.message || "If this account is unverified, a new activation code has been sent.");
+      setOtpCode("");
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      setNotice(
+        payload.message ||
+          "If this account is still unverified, we sent a fresh code. Use the newest code.",
+      );
     } catch {
       setError("Network error. Please confirm the API server is running.");
     } finally {
@@ -145,10 +162,14 @@ export function ActivateForm() {
       <button
         type="button"
         onClick={() => void handleResendOtp()}
-        disabled={loading || resendLoading}
+        disabled={loading || resendLoading || resendCooldown > 0}
         className="surface-button w-full text-sm font-semibold"
       >
-        {resendLoading ? "Sending..." : "Send new activation code"}
+        {resendLoading
+          ? "Sending..."
+          : resendCooldown > 0
+            ? `Send new code in ${resendCooldown}s`
+            : "Send new activation code"}
       </button>
 
       <div className="text-center">

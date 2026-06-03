@@ -2,14 +2,21 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net/url"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
 )
+
+var ErrAssetNotFound = errors.New("asset not found")
 
 // AssetService handles asset business logic.
 type AssetService struct {
@@ -99,7 +106,7 @@ func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if asset == nil {
-		return fmt.Errorf("asset not found")
+		return ErrAssetNotFound
 	}
 
 	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
@@ -109,7 +116,6 @@ func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	// Async storage cleanup would happen via worker; for now just mark deleted
 	return nil
 }
 
@@ -121,7 +127,7 @@ func (s *AssetService) SoftDeleteForWorkspace(ctx context.Context, id, workspace
 		return err
 	}
 	if asset == nil {
-		return fmt.Errorf("asset not found")
+		return ErrAssetNotFound
 	}
 
 	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
@@ -133,8 +139,37 @@ func (s *AssetService) SoftDeleteForWorkspace(ctx context.Context, id, workspace
 	return nil
 }
 
+// SoftDeleteManyForWorkspace deletes every active workspace-owned asset it can
+// resolve from ids and returns the number actually deleted. Missing, already
+// deleted, and cross-workspace ids are ignored, matching the bulk endpoints'
+// tenant-safe "drop unknown ids" contract.
+func (s *AssetService) SoftDeleteManyForWorkspace(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error) {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	var affected int64
+	for _, id := range ids {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		if err := s.SoftDeleteForWorkspace(ctx, id, workspaceID); err != nil {
+			if errors.Is(err, ErrAssetNotFound) {
+				continue
+			}
+			return affected, err
+		}
+		affected++
+	}
+	return affected, nil
+}
+
 func (s *AssetService) recordDelete(ctx context.Context, asset *repository.Asset) error {
 	if s.storageSvc == nil || asset == nil {
+		if asset != nil {
+			s.deleteStorageObjectsAsync(s.assetStorageKeys(ctx, asset))
+		}
 		return nil
 	}
 	derivativeBytes := int64(0)
@@ -145,8 +180,82 @@ func (s *AssetService) recordDelete(ctx context.Context, asset *repository.Asset
 		}
 		derivativeBytes = total
 	}
+	s.deleteStorageObjectsAsync(s.assetStorageKeys(ctx, asset))
 	if err := s.storageSvc.RecordDelete(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
 		return fmt.Errorf("asset delete: storage accounting: %w", err)
 	}
 	return nil
+}
+
+func (s *AssetService) assetStorageKeys(ctx context.Context, asset *repository.Asset) []string {
+	if asset == nil {
+		return nil
+	}
+	keys := make([]string, 0, 1+len(asset.ThumbnailURLs))
+	if asset.StorageKey != "" {
+		keys = append(keys, asset.StorageKey)
+	}
+	if s.derivativeRepo != nil {
+		derivatives, err := s.derivativeRepo.ListByAsset(ctx, asset.ID)
+		if err != nil {
+			log.Printf("asset delete: derivative key lookup failed for %s: %v", asset.ID, err)
+		}
+		for _, derivative := range derivatives {
+			keys = append(keys, derivative.StorageKey)
+		}
+	}
+	for _, key := range asset.ThumbnailURLs {
+		keys = append(keys, key)
+	}
+	return normalizeStorageKeys(keys)
+}
+
+func normalizeStorageKeys(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	keys := make([]string, 0, len(values))
+	for _, value := range values {
+		key := normalizeStorageKey(value)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func normalizeStorageKey(value string) string {
+	key := strings.TrimSpace(value)
+	if key == "" {
+		return ""
+	}
+	if strings.HasPrefix(key, "/storage/") {
+		return strings.TrimPrefix(key, "/storage/")
+	}
+	parsed, err := url.Parse(key)
+	if err == nil && parsed.Scheme != "" {
+		if strings.HasPrefix(parsed.Path, "/storage/") {
+			return strings.TrimPrefix(parsed.Path, "/storage/")
+		}
+		return ""
+	}
+	return key
+}
+
+func (s *AssetService) deleteStorageObjectsAsync(keys []string) {
+	if s.storage == nil || len(keys) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		for _, key := range keys {
+			if err := s.storage.Delete(ctx, key); err != nil {
+				log.Printf("asset delete: storage delete failed for %q: %v", key, err)
+			}
+		}
+	}()
 }

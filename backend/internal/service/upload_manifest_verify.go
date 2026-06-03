@@ -18,6 +18,7 @@ var stillImageContentTypeFormats = map[string]string{
 	"image/heif":             "heif",
 	"image/hif":              "hif",
 	"image/jpeg":             "jpeg",
+	"image/jfif":             "jpeg",
 	"image/jpg":              "jpeg",
 	"image/pjpeg":            "jpeg",
 	"image/png":              "png",

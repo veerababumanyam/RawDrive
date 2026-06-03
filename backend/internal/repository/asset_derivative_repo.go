@@ -45,13 +45,13 @@ func (r *AssetDerivativeRepo) Upsert(ctx context.Context, d *AssetDerivative) er
 
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO asset_derivatives (id, asset_id, variant, storage_key, width, height, size_bytes, format, is_encrypted, encryption_algo, encryption_version, media_encryption, created_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13)
 		 ON CONFLICT (asset_id, variant) DO UPDATE
 		 SET storage_key = $4, width = $5, height = $6, size_bytes = $7, format = $8,
 		     is_encrypted = $9, encryption_algo = $10, encryption_version = $11,
-		     media_encryption = $12, created_at = $13`,
+		     media_encryption = $12::jsonb, created_at = $13`,
 		d.ID, d.AssetID, d.Variant, d.StorageKey, d.Width, d.Height, d.SizeBytes, d.Format,
-		d.IsEncrypted, d.EncryptionAlgo, d.EncryptionVersion, jsonMapOrEmpty(d.MediaEncryption), d.CreatedAt,
+		d.IsEncrypted, d.EncryptionAlgo, d.EncryptionVersion, jsonMapString(jsonMapOrEmpty(d.MediaEncryption)), d.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("derivative upsert: %w", err)

@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
-  FolderOpen,
   Gear as Settings,
   Home,
   LogOut,
@@ -42,7 +41,6 @@ import {
 
 const studioHeaderNav = [
   { href: "/dashboard", label: "Home", icon: Home, title: "Open your studio dashboard" },
-  { href: "/galleries", label: "Projects", icon: FolderOpen, title: "Browse gallery projects and client deliveries" },
 ] as const;
 
 const adminHeaderNav = [

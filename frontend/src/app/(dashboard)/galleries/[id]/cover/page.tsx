@@ -1443,7 +1443,11 @@ function PanelCover({
             {config.cover.layoutPreset.replace(/-/g, " ")}
           </span>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/10 p-1 sm:grid-cols-2 sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 lg:grid-cols-4"
+          role="group"
+          aria-label="Cover design presets"
+        >
           {COVER_PRESETS.map((preset) => {
             const active = config.cover.layoutPreset === preset.id;
             return (
@@ -1452,14 +1456,14 @@ function PanelCover({
                 type="button"
                 onClick={() => setConfig((c) => applyCoverPreset(c, preset.id))}
                 aria-pressed={active}
-                className={`min-h-[72px] rounded-xl border p-3 text-left transition-colors ${
+                className={`min-h-11 rounded-lg border px-2 py-2 text-center text-xs transition-colors sm:min-h-[72px] sm:rounded-xl sm:p-3 sm:text-left ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-white/10 hover:bg-white/5"
+                    : "border-transparent text-on-surface hover:bg-white/5 sm:border-white/10"
                 }`}
               >
-                <span className="block text-sm font-semibold">{preset.name}</span>
-                <span className="mt-1 block text-xs text-on-surface-variant">{preset.mood}</span>
+                <span className="block font-semibold sm:text-sm">{preset.name}</span>
+                <span className="mt-1 hidden text-xs text-on-surface-variant sm:block">{preset.mood}</span>
               </button>
             );
           })}

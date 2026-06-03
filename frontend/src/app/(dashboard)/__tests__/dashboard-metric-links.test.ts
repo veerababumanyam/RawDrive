@@ -7,6 +7,14 @@ const dashboardRoot = path.join(repoRoot, "src/app/(dashboard)");
 const dashboardPagePath = path.join(dashboardRoot, "dashboard/page.tsx");
 
 describe("dashboard metric links", () => {
+  it("routes create-gallery dashboard actions straight to the create form", () => {
+    const source = fs.readFileSync(dashboardPagePath, "utf8");
+
+    expect(source).toContain('const GALLERY_CREATE_HREF = "/galleries?create=true"');
+    expect(source).toContain('{ label: "Create Gallery", icon: Plus, href: GALLERY_CREATE_HREF }');
+    expect(source).toContain("href={GALLERY_CREATE_HREF}");
+  });
+
   it("links every dashboard metric card to its real workspace page", () => {
     const source = fs.readFileSync(dashboardPagePath, "utf8");
 

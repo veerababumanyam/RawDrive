@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
-import { bulkAssetAction, getAsset, type Asset } from "@/lib/api/assets";
+import {
+  bulkAssetAction,
+  deleteAsset,
+  getAsset,
+  type Asset,
+} from "@/lib/api/assets";
 import {
   addAlbumAssets,
   createGalleryAlbum,
@@ -18,26 +23,48 @@ import {
   type GalleryAlbum,
   type GalleryAsset,
 } from "@/lib/api/galleries";
-import { listProofingSelections, createComment, listComments, updateSelectionStatus, type ProofingComment, type ProofingSelection } from "@/lib/api/proofing";
-import { getGalleryFavoritesSummary, type GalleryFavoritesSummary } from "@/lib/api/favorites";
-import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
-import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
-import { TetheredShootingPanel } from "@/components/gallery/tethered-shooting-panel";
-import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import {
-  assetIsProcessing,
-} from "@/lib/dashboard-ui";
+  listProofingSelections,
+  createComment,
+  listComments,
+  updateSelectionStatus,
+  type ProofingComment,
+  type ProofingSelection,
+} from "@/lib/api/proofing";
+import {
+  getGalleryFavoritesSummary,
+  type GalleryFavoritesSummary,
+} from "@/lib/api/favorites";
+import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
+import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
+import { assetIsProcessing } from "@/lib/dashboard-ui";
 import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
 import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
-import { FILE_PICKER_STILL_IMAGE_ACCEPT, isAcceptedStillImageFile } from "@/lib/still-image-formats";
+import {
+  FILE_PICKER_STILL_IMAGE_ACCEPT,
+  isAcceptedStillImageFile,
+} from "@/lib/still-image-formats";
 import { visibleUploadWarnings } from "@/lib/upload-screening/visible-findings";
-import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
+import {
+  getWorkspaceProfile,
+  type WorkspaceProfile,
+} from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Share, Trash, XMark, Plus, Pencil, CheckCircle, Shield, Envelope } from "@/components/icons";
+import {
+  Share,
+  Trash,
+  XMark,
+  Plus,
+  Pencil,
+  CheckCircle,
+  Shield,
+  Envelope,
+  ChevronLeft,
+} from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { getTermsStatus } from "@/lib/api/legal";
@@ -59,8 +86,12 @@ type GalleryAssetRecord = GalleryAsset & {
 type TetheredDirectoryEntry = {
   kind: "directory";
   name: string;
-  queryPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
-  requestPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
+  queryPermission?: (descriptor?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<PermissionState>;
   values: () => AsyncIterable<TetheredDirectoryEntry | TetheredFileEntry>;
 };
 
@@ -74,7 +105,13 @@ type TetheredDirectoryPickerWindow = Window & {
   showDirectoryPicker?: (options?: {
     id?: string;
     mode?: "read" | "readwrite";
-    startIn?: "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos";
+    startIn?:
+      | "desktop"
+      | "documents"
+      | "downloads"
+      | "music"
+      | "pictures"
+      | "videos";
   }) => Promise<TetheredDirectoryEntry>;
 };
 
@@ -93,7 +130,8 @@ const TETHERED_DEFAULT_POLL_MS = 1000;
 const TETHERED_MIN_POLL_MS = 1000;
 const TETHERED_MAX_POLL_MS = 5000;
 const TETHERED_POLL_STEP_MS = 500;
-const SHARE_UNAVAILABLE_MESSAGE = "Publish this gallery before sharing client links.";
+const SHARE_UNAVAILABLE_MESSAGE =
+  "Publish this gallery before sharing client links.";
 const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
 const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
   "display_webp",
@@ -102,16 +140,20 @@ const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
   "thumb_sm_webp",
 ] as const;
 
-function assetRowsSignature(entries: Array<Pick<GalleryAsset, "asset_id" | "sort_order">>): string {
-  return entries.map((entry) => `${entry.asset_id}:${entry.sort_order ?? ""}`).join("|");
+function assetRowsSignature(
+  entries: Array<Pick<GalleryAsset, "asset_id" | "sort_order">>,
+): string {
+  return entries
+    .map((entry) => `${entry.asset_id}:${entry.sort_order ?? ""}`)
+    .join("|");
 }
 
 function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
   return Boolean(
     asset?.thumbnail_urls?.display_webp ||
-      asset?.thumbnail_urls?.thumb_lg_webp ||
-      asset?.thumbnail_urls?.thumb_md_webp ||
-      asset?.thumbnail_urls?.thumb_sm_webp,
+    asset?.thumbnail_urls?.thumb_lg_webp ||
+    asset?.thumbnail_urls?.thumb_md_webp ||
+    asset?.thumbnail_urls?.thumb_sm_webp,
   );
 }
 
@@ -131,11 +173,15 @@ function GalleryAssetTileImage({
         className="flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
         role="status"
         aria-live="polite"
-        aria-label={asset?.filename ? `Processing ${asset.filename}` : "Processing photo"}
+        aria-label={
+          asset?.filename ? `Processing ${asset.filename}` : "Processing photo"
+        }
       >
         <div className="flex flex-col items-center gap-2 text-text-tertiary">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-text-tertiary/30 border-t-text-tertiary" />
-          <span className="text-xs">{media.loading ? "Decrypting photo..." : "Processing photo..."}</span>
+          <span className="text-xs">
+            {media.loading ? "Decrypting photo..." : "Processing photo..."}
+          </span>
         </div>
       </div>
     );
@@ -165,7 +211,11 @@ function UploadDropzoneBackendPreview({
   asset: Asset | null;
   token: string | null;
 }) {
-  const media = useDecryptedAssetUrl(asset, UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS, token);
+  const media = useDecryptedAssetUrl(
+    asset,
+    UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS,
+    token,
+  );
   if (!asset || media.loading || !media.src) return null;
   return (
     <img
@@ -192,7 +242,9 @@ function albumIsEditable(album: GalleryAlbum): boolean {
 //
 // Returns the raw flattened set. Callers must apply isAcceptedStillImageFile
 // themselves to keep parity with the file-picker path.
-async function collectFilesFromDataTransfer(items: DataTransferItemList): Promise<File[]> {
+async function collectFilesFromDataTransfer(
+  items: DataTransferItemList,
+): Promise<File[]> {
   // Minimal local typing for the webkit file-entry API. The DOM types
   // ship `FileSystemEntry` but DirectoryReader is omitted from lib.dom.d.ts
   // for some toolchains; defining narrow local interfaces avoids a
@@ -201,7 +253,9 @@ async function collectFilesFromDataTransfer(items: DataTransferItemList): Promis
     isFile: boolean;
     isDirectory: boolean;
     file?: (cb: (file: File) => void) => void;
-    createReader?: () => { readEntries: (cb: (entries: FsEntry[]) => void) => void };
+    createReader?: () => {
+      readEntries: (cb: (entries: FsEntry[]) => void) => void;
+    };
   }
   const collected: File[] = [];
 
@@ -219,7 +273,10 @@ async function collectFilesFromDataTransfer(items: DataTransferItemList): Promis
       return new Promise((resolve) => {
         const readBatch = () => {
           reader.readEntries((entries) => {
-            if (entries.length === 0) { resolve(); return; }
+            if (entries.length === 0) {
+              resolve();
+              return;
+            }
             Promise.all(entries.map(walk)).then(() => readBatch());
           });
         };
@@ -234,9 +291,11 @@ async function collectFilesFromDataTransfer(items: DataTransferItemList): Promis
     // webkitGetAsEntry is the cross-browser shorthand for the FileSystem
     // Entry API. Supported in Chrome 13+, Edge, Firefox 50+, Safari 11.1+.
     // Returns null for non-file items (e.g. a string drag).
-    const entry = (item as DataTransferItem & {
-      webkitGetAsEntry?: () => FsEntry | null;
-    }).webkitGetAsEntry?.();
+    const entry = (
+      item as DataTransferItem & {
+        webkitGetAsEntry?: () => FsEntry | null;
+      }
+    ).webkitGetAsEntry?.();
     if (entry) tasks.push(walk(entry));
   }
   await Promise.all(tasks);
@@ -254,17 +313,27 @@ async function collectNewTetheredFiles(
     const entryPath = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.kind === "directory") {
       if (options.recursive) {
-        files.push(...await collectNewTetheredFiles(entry, seen, options, entryPath));
+        files.push(
+          ...(await collectNewTetheredFiles(entry, seen, options, entryPath)),
+        );
       }
       continue;
     }
 
     const file = await entry.getFile();
     const previous = seen.get(entryPath);
-    if (previous?.lastModified === file.lastModified && previous.size === file.size) continue;
+    if (
+      previous?.lastModified === file.lastModified &&
+      previous.size === file.size
+    )
+      continue;
     seen.set(entryPath, { lastModified: file.lastModified, size: file.size });
     if (isAcceptedStillImageFile(file)) {
-      files.push({ file, path: entryPath, lastModified: file.lastModified || Date.now() });
+      files.push({
+        file,
+        path: entryPath,
+        lastModified: file.lastModified || Date.now(),
+      });
     }
   }
   return files;
@@ -287,12 +356,20 @@ function buildShareText(gallery: Gallery, label: string, url: string): string {
   return `${label} from ${galleryTitle}: ${url}`;
 }
 
-function buildShareEmailHref(gallery: Gallery, label: string, url: string): string {
+function buildShareEmailHref(
+  gallery: Gallery,
+  label: string,
+  url: string,
+): string {
   const subject = `${gallery.title?.trim() || "Gallery"} - ${label}`;
   return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildShareText(gallery, label, url))}`;
 }
 
-export default function GalleryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GalleryDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
@@ -302,11 +379,14 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // loading; an empty summary object once the request lands (even with
   // zero favorites). The dashboard tile reads total_favorites and
   // unique_assets_count to render "12 hearts across 4 photos" style.
-  const [favoritesSummary, setFavoritesSummary] = useState<GalleryFavoritesSummary | null>(null);
+  const [favoritesSummary, setFavoritesSummary] =
+    useState<GalleryFavoritesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [commentsByAsset, setCommentsByAsset] = useState<Record<string, ProofingComment[]>>({});
+  const [commentsByAsset, setCommentsByAsset] = useState<
+    Record<string, ProofingComment[]>
+  >({});
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -327,19 +407,28 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // Per-business subdomain identity for share URLs. Loaded once when the
   // page mounts — share URLs are only built after this resolves; until then
   // buildShareUrl falls back to the legacy /g/<slug> shape.
-  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
+  const [workspaceProfile, setWorkspaceProfile] =
+    useState<WorkspaceProfile | null>(null);
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
     let cancelled = false;
     getWorkspaceProfile(token)
-      .then((p) => { if (!cancelled) setWorkspaceProfile(p); })
-      .catch(() => { /* fallback to legacy URL via buildShareUrl */ });
-    return () => { cancelled = true; };
+      .then((p) => {
+        if (!cancelled) setWorkspaceProfile(p);
+      })
+      .catch(() => {
+        /* fallback to legacy URL via buildShareUrl */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   // E71-S1: Album state
   const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
-  const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<Record<string, string[]>>({});
+  const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<
+    Record<string, string[]>
+  >({});
   const [activeAlbum, setActiveAlbum] = useState<string | null>(null);
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
@@ -350,18 +439,32 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [savingAlbumId, setSavingAlbumId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ assetId: string; filename: string; isBulk?: boolean } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    assetId: string;
+    filename: string;
+    isBulk?: boolean;
+  } | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadDialogDismissed, setUploadDialogDismissed] = useState(false);
   const [tetheredEnabled, setTetheredEnabled] = useState(false);
-  const [tetheredFolderName, setTetheredFolderName] = useState<string | null>(null);
-  const [tetheredStatus, setTetheredStatus] = useState<"idle" | "watching" | "paused" | "unsupported" | "error">("idle");
-  const [tetheredPollIntervalMs, setTetheredPollIntervalMs] = useState(TETHERED_DEFAULT_POLL_MS);
-  const [tetheredIncludeSubfolders, setTetheredIncludeSubfolders] = useState(false);
+  const [tetheredFolderName, setTetheredFolderName] = useState<string | null>(
+    null,
+  );
+  const [tetheredStatus, setTetheredStatus] = useState<
+    "idle" | "watching" | "paused" | "unsupported" | "error"
+  >("idle");
+  const [tetheredPollIntervalMs, setTetheredPollIntervalMs] = useState(
+    TETHERED_DEFAULT_POLL_MS,
+  );
+  const [tetheredIncludeSubfolders, setTetheredIncludeSubfolders] =
+    useState(false);
   const [tetheredNewestFirst, setTetheredNewestFirst] = useState(true);
   const [tetheredAutoOpen, setTetheredAutoOpen] = useState(false);
   const [tetheredSoundEnabled, setTetheredSoundEnabled] = useState(true);
   const [tetheredSessionNewCount, setTetheredSessionNewCount] = useState(0);
-  const [tetheredLastDetectedAt, setTetheredLastDetectedAt] = useState<number | null>(null);
+  const [tetheredLastDetectedAt, setTetheredLastDetectedAt] = useState<
+    number | null
+  >(null);
   const [, setTetheredClockTick] = useState(0);
   const photoFileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadDialogRef = useRef<HTMLElement | null>(null);
@@ -385,19 +488,32 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [visibleLimit, setVisibleLimit] = useState(GRID_PAGE_SIZE);
 
   // E68-S1: Bulk selection state
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [bulkMode, setBulkMode] = useState(false);
   const toggleAssetSelection = (assetId: string) => {
     setSelectedAssetIds((prev) => {
       const next = new Set(prev);
-      if (next.has(assetId)) next.delete(assetId); else next.add(assetId);
+      if (next.has(assetId)) next.delete(assetId);
+      else next.add(assetId);
       return next;
     });
   };
   const selectAllAssets = () => {
-    setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[]));
+    setSelectedAssetIds(
+      new Set(
+        visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[],
+      ),
+    );
   };
-  const clearSelection = () => { setSelectedAssetIds(new Set()); setBulkMode(false); };
+  const clearSelectedAssets = () => {
+    setSelectedAssetIds(new Set());
+  };
+  const clearSelection = () => {
+    setSelectedAssetIds(new Set());
+    setBulkMode(false);
+  };
   const handleBulkDelete = () => {
     if (selectedAssetIds.size === 0) return;
     setDeleteConfirm({
@@ -411,17 +527,27 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     assetRowsSignatureRef.current = assetRowsSignature(assets);
   }, [assets]);
 
-  const refreshGalleryAssets = useCallback(async (options: { skipIfRowsUnchanged?: boolean } = {}) => {
-    const t = getStoredAccessToken();
-    if (!t) return;
+  const refreshGalleryAssets = useCallback(
+    async (
+      options: { skipIfRowsUnchanged?: boolean } = {},
+    ): Promise<GalleryAssetRecord[] | null> => {
+      const t = getStoredAccessToken();
+      if (!t) return null;
 
-    const galleryAssets = await listGalleryAssets(t, id);
-    const nextSignature = assetRowsSignature(galleryAssets);
-    if (options.skipIfRowsUnchanged && nextSignature === assetRowsSignatureRef.current) return;
+      const galleryAssets = await listGalleryAssets(t, id);
+      const nextSignature = assetRowsSignature(galleryAssets);
+      if (
+        options.skipIfRowsUnchanged &&
+        nextSignature === assetRowsSignatureRef.current
+      )
+        return null;
 
-    const hydratedAssets = await hydrateGalleryAssets(t, galleryAssets);
-    setAssets(hydratedAssets);
-  }, [id]);
+      const hydratedAssets = await hydrateGalleryAssets(t, galleryAssets);
+      setAssets(hydratedAssets);
+      return hydratedAssets;
+    },
+    [id],
+  );
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -439,19 +565,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       setError("");
 
       try {
-        const [galleryData, galleryAssets, gallerySelections, favSummary] = await Promise.all([
-          getGallery(token, id),
-          listGalleryAssets(token, id),
-          listProofingSelections(token, id).catch((err) => { console.warn("Failed to load proofing selections:", err?.message); return []; }),
-          // Favorites endpoint 404s if the table is empty for the
-          // gallery (no, actually the backend returns zeros) — but
-          // an outage shouldn't break the dashboard. Default to null
-          // so the tile renders "—" instead of crashing the page.
-          getGalleryFavoritesSummary(token, id).catch((err) => {
-            console.warn("Failed to load favorites summary:", err?.message);
-            return null;
-          }),
-        ]);
+        const [galleryData, galleryAssets, gallerySelections, favSummary] =
+          await Promise.all([
+            getGallery(token, id),
+            listGalleryAssets(token, id),
+            listProofingSelections(token, id).catch((err) => {
+              console.warn("Failed to load proofing selections:", err?.message);
+              return [];
+            }),
+            // Favorites endpoint 404s if the table is empty for the
+            // gallery (no, actually the backend returns zeros) — but
+            // an outage shouldn't break the dashboard. Default to null
+            // so the tile renders "—" instead of crashing the page.
+            getGalleryFavoritesSummary(token, id).catch((err) => {
+              console.warn("Failed to load favorites summary:", err?.message);
+              return null;
+            }),
+          ]);
 
         const hydratedAssets = await hydrateGalleryAssets(token, galleryAssets);
 
@@ -465,7 +595,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         setFavoritesSummary(favSummary);
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load gallery.");
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Failed to load gallery.",
+          );
           setGallery(null);
           setAssets([]);
           setSelections([]);
@@ -505,10 +639,14 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     try {
       // F-091: one request returns every album with its member asset IDs inline,
       // replacing the previous 1 + N (listGalleryAlbums + per-album listAlbumAssets).
-      const nextAlbums = await listGalleryAlbums(t, id, { includeAssetIds: true });
+      const nextAlbums = await listGalleryAlbums(t, id, {
+        includeAssetIds: true,
+      });
       setAlbums(nextAlbums);
       setAlbumAssetIdsByAlbum(
-        Object.fromEntries(nextAlbums.map((album) => [album.id, album.asset_ids ?? []])),
+        Object.fromEntries(
+          nextAlbums.map((album) => [album.id, album.asset_ids ?? []]),
+        ),
       );
     } catch {
       setAlbums([]);
@@ -548,7 +686,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       await refreshAlbums();
       setActiveAlbum(album.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create sub-gallery");
+      setError(
+        err instanceof Error ? err.message : "Failed to create sub-gallery",
+      );
     } finally {
       setCreatingAlbum(false);
     }
@@ -565,49 +705,61 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     setEditingAlbumName("");
   }, []);
 
-  const handleRenameAlbum = useCallback(async (album: GalleryAlbum) => {
-    if (!albumIsEditable(album)) return;
-    const name = editingAlbumName.trim();
-    if (!name || name === album.name) {
-      cancelEditingAlbum();
-      return;
-    }
-    const t = getStoredAccessToken();
-    if (!t) return;
+  const handleRenameAlbum = useCallback(
+    async (album: GalleryAlbum) => {
+      if (!albumIsEditable(album)) return;
+      const name = editingAlbumName.trim();
+      if (!name || name === album.name) {
+        cancelEditingAlbum();
+        return;
+      }
+      const t = getStoredAccessToken();
+      if (!t) return;
 
-    setSavingAlbumId(album.id);
-    setError("");
-    try {
-      await updateGalleryAlbum(t, album.id, { name });
-      cancelEditingAlbum();
-      await refreshAlbums();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to rename sub-gallery");
-    } finally {
-      setSavingAlbumId(null);
-    }
-  }, [cancelEditingAlbum, editingAlbumName, refreshAlbums]);
+      setSavingAlbumId(album.id);
+      setError("");
+      try {
+        await updateGalleryAlbum(t, album.id, { name });
+        cancelEditingAlbum();
+        await refreshAlbums();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to rename sub-gallery",
+        );
+      } finally {
+        setSavingAlbumId(null);
+      }
+    },
+    [cancelEditingAlbum, editingAlbumName, refreshAlbums],
+  );
 
-  const handleDeleteAlbum = useCallback(async (album: GalleryAlbum) => {
-    if (!albumIsEditable(album)) return;
-    const confirmed = window.confirm(`Delete "${album.name}" sub-gallery? Photos stay in All Photos.`);
-    if (!confirmed) return;
-    const t = getStoredAccessToken();
-    if (!t) return;
+  const handleDeleteAlbum = useCallback(
+    async (album: GalleryAlbum) => {
+      if (!albumIsEditable(album)) return;
+      const confirmed = window.confirm(
+        `Delete "${album.name}" sub-gallery? Photos stay in All Photos.`,
+      );
+      if (!confirmed) return;
+      const t = getStoredAccessToken();
+      if (!t) return;
 
-    setSavingAlbumId(album.id);
-    setError("");
-    try {
-      await deleteGalleryAlbum(t, album.id);
-      if (activeAlbum === album.id) setActiveAlbum(null);
-      if (editingAlbumId === album.id) cancelEditingAlbum();
-      await refreshAlbums();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete sub-gallery");
-    } finally {
-      setSavingAlbumId(null);
-    }
-  }, [activeAlbum, cancelEditingAlbum, editingAlbumId, refreshAlbums]);
+      setSavingAlbumId(album.id);
+      setError("");
+      try {
+        await deleteGalleryAlbum(t, album.id);
+        if (activeAlbum === album.id) setActiveAlbum(null);
+        if (editingAlbumId === album.id) cancelEditingAlbum();
+        await refreshAlbums();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to delete sub-gallery",
+        );
+      } finally {
+        setSavingAlbumId(null);
+      }
+    },
+    [activeAlbum, cancelEditingAlbum, editingAlbumId, refreshAlbums],
+  );
 
   // Builds the per-business subdomain URL (migration 121 shape):
   //   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
@@ -619,43 +771,54 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // Album query appending: Next.js middleware passes querystring through to
   // /g/[slug], so adding `?album=<id>` to the share URL keeps album deep
   // links working under the new shape unchanged.
-  const buildShareUrl = useCallback((albumId?: string) => {
-    if (!gallery?.slug) return "";
-    const base = galleryPublicUrl(gallery, workspaceProfile);
-    const withAlbum = (() => {
-      if (!albumId) return base;
-      const sep = base.includes("?") ? "&" : "?";
-      return `${base}${sep}album=${encodeURIComponent(albumId)}`;
-    })();
-    return appendStoredGalleryKeyFragment(withAlbum, id);
-  }, [gallery, id, workspaceProfile]);
+  const buildShareUrl = useCallback(
+    (albumId?: string) => {
+      if (!gallery?.slug) return "";
+      const base = galleryPublicUrl(gallery, workspaceProfile);
+      const withAlbum = (() => {
+        if (!albumId) return base;
+        const sep = base.includes("?") ? "&" : "?";
+        return `${base}${sep}album=${encodeURIComponent(albumId)}`;
+      })();
+      return appendStoredGalleryKeyFragment(withAlbum, id);
+    },
+    [gallery, id, workspaceProfile],
+  );
 
-  const copyShareUrl = useCallback(async (albumId?: string) => {
-    if (!gallery?.is_published) {
-      setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
-      return;
-    }
-    const url = buildShareUrl(albumId);
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareMessage(albumId ? "Sub-gallery link copied." : "Gallery link copied.");
-    } catch {
-      setShareMessage(url);
-    }
-  }, [buildShareUrl, gallery?.is_published]);
+  const copyShareUrl = useCallback(
+    async (albumId?: string) => {
+      if (!gallery?.is_published) {
+        setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
+        return;
+      }
+      const url = buildShareUrl(albumId);
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareMessage(
+          albumId ? "Sub-gallery link copied." : "Gallery link copied.",
+        );
+      } catch {
+        setShareMessage(url);
+      }
+    },
+    [buildShareUrl, gallery?.is_published],
+  );
 
-  const openShareLink = useCallback((albumId: string | undefined, label: string) => {
-    if (!gallery?.is_published) {
-      setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
-      return;
-    }
-    const url = buildShareUrl(albumId);
-    if (!url) return;
-    const href = buildShareEmailHref(gallery, label, url);
-    window.location.href = href;
-    setShareMessage("Email share link opened.");
-  }, [buildShareUrl, gallery]);
+  const openShareLink = useCallback(
+    (albumId: string | undefined, label: string) => {
+      if (!gallery?.is_published) {
+        setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
+        return;
+      }
+      const url = buildShareUrl(albumId);
+      if (!url) return;
+      const href = buildShareEmailHref(gallery, label, url);
+      window.location.href = href;
+      setShareMessage("Email share link opened.");
+    },
+    [buildShareUrl, gallery],
+  );
 
   const togglePublishState = useCallback(async () => {
     if (!gallery || publishing) return;
@@ -663,53 +826,73 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     if (!t) return;
     setPublishing(true);
     try {
-      const updated = await updateGallery(t, id, { is_published: !gallery.is_published });
+      const updated = await updateGallery(t, id, {
+        is_published: !gallery.is_published,
+      });
       setGallery(updated);
-      setShareMessage(updated.is_published ? "Gallery published - client links are now live." : "Gallery unpublished.");
+      setShareMessage(
+        updated.is_published
+          ? "Gallery published - client links are now live."
+          : "Gallery unpublished.",
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to change publish state");
+      setError(
+        err instanceof Error ? err.message : "Failed to change publish state",
+      );
     } finally {
       setPublishing(false);
     }
   }, [gallery, id, publishing]);
 
-  const handleShareAsset = useCallback(async (e: React.MouseEvent, assetId: string) => {
-    e.stopPropagation();
-    if (!gallery?.slug) return;
-    const baseUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
-    const url = appendStoredGalleryKeyFragment(baseUrl, id);
-    try {
-      if (typeof navigator !== "undefined" && "share" in navigator) {
-        await (navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }).share({
-          title: gallery.title || "Photo",
-          url,
-        });
-        setShareMessage("Photo share sheet opened.");
-        return;
+  const handleShareAsset = useCallback(
+    async (e: React.MouseEvent, assetId: string) => {
+      e.stopPropagation();
+      if (!gallery?.slug) return;
+      const baseUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
+      const url = appendStoredGalleryKeyFragment(baseUrl, id);
+      try {
+        if (typeof navigator !== "undefined" && "share" in navigator) {
+          await (
+            navigator as Navigator & {
+              share: (d: { title: string; url: string }) => Promise<void>;
+            }
+          ).share({
+            title: gallery.title || "Photo",
+            url,
+          });
+          setShareMessage("Photo share sheet opened.");
+          return;
+        }
+      } catch {
+        /* fall through to clipboard */
       }
-    } catch {
-      /* fall through to clipboard */
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareMessage("Photo link copied.");
-    } catch {
-      setShareMessage(url);
-    }
-    setCopiedAssetId(assetId);
-    setTimeout(() => setCopiedAssetId(null), 2000);
-  }, [gallery?.slug, gallery?.title, id]);
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareMessage("Photo link copied.");
+      } catch {
+        setShareMessage(url);
+      }
+      setCopiedAssetId(assetId);
+      setTimeout(() => setCopiedAssetId(null), 2000);
+    },
+    [gallery?.slug, gallery?.title, id],
+  );
 
-  const handleDeleteAsset = useCallback(async (assetId: string) => {
-    const t = getStoredAccessToken();
-    if (!t) return;
-    try {
-      await bulkAssetAction(t, "delete", [assetId]);
-      setAssets((prev) => prev.filter((a) => a.asset?.id !== assetId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-    }
-  }, []);
+  const handleDeleteAsset = useCallback(
+    async (assetId: string) => {
+      const t = getStoredAccessToken();
+      if (!t) return;
+      try {
+        await deleteAsset(t, assetId);
+        setAssets((prev) => prev.filter((a) => a.asset?.id !== assetId));
+        setLightboxIndex(null);
+        await refreshAlbums();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed");
+      }
+    },
+    [refreshAlbums],
+  );
 
   // Subscribe to face-filter events from the FaceFilter component. The
   // component doesn't know anything about the page's asset list — it
@@ -728,7 +911,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     window.addEventListener("rawdrive:face-filter", onFilter as EventListener);
     window.addEventListener("rawdrive:face-filter-clear", onFilterClear);
     return () => {
-      window.removeEventListener("rawdrive:face-filter", onFilter as EventListener);
+      window.removeEventListener(
+        "rawdrive:face-filter",
+        onFilter as EventListener,
+      );
       window.removeEventListener("rawdrive:face-filter-clear", onFilterClear);
     };
   }, []);
@@ -770,10 +956,25 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       result = result.filter((a) => a.asset && faceFilterIds.has(a.asset.id));
     }
     if (proofingFilterAssetIds) {
-      result = result.filter((a) => a.asset && proofingFilterAssetIds.has(a.asset.id));
+      result = result.filter(
+        (a) => a.asset && proofingFilterAssetIds.has(a.asset.id),
+      );
     }
     return result;
-  }, [activeAlbum, albumAssetIdsByAlbum, assets, faceFilterIds, proofingFilterAssetIds]);
+  }, [
+    activeAlbum,
+    albumAssetIdsByAlbum,
+    assets,
+    faceFilterIds,
+    proofingFilterAssetIds,
+  ]);
+  const visibleSelectableAssetIds = useMemo(
+    () => visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[],
+    [visibleAssets],
+  );
+  const allVisibleAssetsSelected =
+    visibleSelectableAssetIds.length > 0 &&
+    visibleSelectableAssetIds.every((assetId) => selectedAssetIds.has(assetId));
 
   // F-046: collapse the window back to one page whenever the filtered
   // set identity changes (album switch, face filter, proofing filter,
@@ -791,7 +992,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     [visibleAssets, visibleLimit],
   );
   const hasMoreAssets = visibleAssets.length > pagedAssets.length;
-  const activeLightboxAsset = lightboxIndex !== null ? assets[lightboxIndex]?.asset ?? null : null;
+  const activeAlbumDetails = useMemo(
+    () =>
+      activeAlbum
+        ? (albums.find((album) => album.id === activeAlbum) ?? null)
+        : null,
+    [activeAlbum, albums],
+  );
+  const activeLightboxAsset =
+    lightboxIndex !== null ? (assets[lightboxIndex]?.asset ?? null) : null;
   const activeLightboxAssetId = activeLightboxAsset?.id;
 
   useEffect(() => {
@@ -805,12 +1014,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         if (cancelled) return;
         setCommentsByAsset((current) => {
           const byId = new Map<string, ProofingComment>();
-          for (const comment of current[activeLightboxAssetId] ?? []) byId.set(comment.id, comment);
+          for (const comment of current[activeLightboxAssetId] ?? [])
+            byId.set(comment.id, comment);
           for (const comment of comments) byId.set(comment.id, comment);
           return {
             ...current,
-            [activeLightboxAssetId]: Array.from(byId.values()).sort((a, b) =>
-              new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+            [activeLightboxAssetId]: Array.from(byId.values()).sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime(),
             ),
           };
         });
@@ -824,38 +1036,56 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [activeLightboxAssetId, gallery?.id]);
 
-  const handleProofingAction = useCallback(async (assetId: string, action: "select" | "approve" | "reject") => {
-    if (!gallery) return;
-    const token = getStoredAccessToken();
-    if (!token) {
-      setError("Your session expired. Please log in again.");
-      return;
-    }
+  const handleProofingAction = useCallback(
+    async (assetId: string, action: "select" | "approve" | "reject") => {
+      if (!gallery) return;
+      const token = getStoredAccessToken();
+      if (!token) {
+        setError("Your session expired. Please log in again.");
+        return;
+      }
 
-    const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "selected";
-    const matchingSelections = selections.filter((selection) => selection.asset_id === assetId);
-    if (matchingSelections.length === 0) {
-      setError("This photo has not been selected by a client yet.");
-      return;
-    }
+      const status =
+        action === "approve"
+          ? "approved"
+          : action === "reject"
+            ? "rejected"
+            : "selected";
+      const matchingSelections = selections.filter(
+        (selection) => selection.asset_id === assetId,
+      );
+      if (matchingSelections.length === 0) {
+        setError("This photo has not been selected by a client yet.");
+        return;
+      }
 
-    try {
-      await Promise.all(
-        matchingSelections.map((selection) =>
-          updateSelectionStatus(token, gallery.id, selection.id, status),
-        ),
-      );
-      const matchingIDs = new Set(matchingSelections.map((selection) => selection.id));
-      setSelections((current) =>
-        current.map((selection) =>
-          matchingIDs.has(selection.id) ? { ...selection, status } : selection,
-        ),
-      );
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update proofing status.");
-    }
-  }, [gallery, selections]);
+      try {
+        await Promise.all(
+          matchingSelections.map((selection) =>
+            updateSelectionStatus(token, gallery.id, selection.id, status),
+          ),
+        );
+        const matchingIDs = new Set(
+          matchingSelections.map((selection) => selection.id),
+        );
+        setSelections((current) =>
+          current.map((selection) =>
+            matchingIDs.has(selection.id)
+              ? { ...selection, status }
+              : selection,
+          ),
+        );
+        setError("");
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to update proofing status.",
+        );
+      }
+    },
+    [gallery, selections],
+  );
 
   // ──────── Upload Integration ────────
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -889,12 +1119,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const termsNeedsAcceptanceRef = useRef(false);
   termsNeedsAcceptanceRef.current = termsNeedsAcceptance;
-  const pendingUploadRef = useRef<{ files: File[]; options?: { source?: "manual" | "tethered" } } | null>(null);
+  const pendingUploadRef = useRef<{
+    files: File[];
+    options?: { source?: "manual" | "tethered" };
+  } | null>(null);
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     void getTermsStatus(token).then((status) => {
-      if (!cancelled && status) setTermsNeedsAcceptance(status.needs_acceptance);
+      if (!cancelled && status)
+        setTermsNeedsAcceptance(status.needs_acceptance);
     });
     return () => {
       cancelled = true;
@@ -935,10 +1169,50 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         .filter((item) => item.status === "complete" && item.assetId)
         .map((item) => item.assetId as string),
     );
-    return visibleAssets.find(
-      (entry) => entry.asset && completedAssetIds.has(entry.asset.id) && assetHasWebPDisplay(entry.asset),
-    )?.asset ?? null;
+    return (
+      visibleAssets.find(
+        (entry) =>
+          entry.asset &&
+          completedAssetIds.has(entry.asset.id) &&
+          assetHasWebPDisplay(entry.asset),
+      )?.asset ?? null
+    );
   }, [upload.items, visibleAssets]);
+  const completedUploadRefreshKey = useMemo(
+    () =>
+      upload.items
+        .filter((item) => item.status === "complete")
+        .map((item) => item.assetId || item.id)
+        .sort()
+        .join("|"),
+    [upload.items],
+  );
+  const completedUploadRefreshKeyRef = useRef("");
+
+  useEffect(() => {
+    if (
+      !completedUploadRefreshKey ||
+      completedUploadRefreshKey === completedUploadRefreshKeyRef.current
+    )
+      return;
+    completedUploadRefreshKeyRef.current = completedUploadRefreshKey;
+
+    const timers = [0, ...ASSET_SETTLE_REFRESH_DELAYS_MS].map((delay) =>
+      window.setTimeout(() => {
+        void refreshGalleryAssets().catch((err) => {
+          console.warn(
+            "Failed to refresh gallery after upload completion:",
+            err,
+          );
+        });
+        void refreshAlbums();
+      }, delay),
+    );
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [completedUploadRefreshKey, refreshAlbums, refreshGalleryAssets]);
 
   useEffect(() => {
     tetheredAutoOpenRef.current = tetheredAutoOpen;
@@ -964,10 +1238,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   // dead weight. Now the panel hides when activeCount===0 and the
   // user gets a single right-side toast with the success count.
   const activeUploadCount = upload.items.filter(
-    (i) => i.status === "uploading" || i.status === "pending" || i.status === "screening" || i.status === "encrypting" || i.status === "paused",
+    (i) =>
+      i.status === "uploading" ||
+      i.status === "pending" ||
+      i.status === "screening" ||
+      i.status === "encrypting" ||
+      i.status === "paused",
   ).length;
-  const completedUploadCount = upload.items.filter((i) => i.status === "complete").length;
-  const failedUploadCount = upload.items.filter((i) => i.status === "error").length;
+  const completedUploadCount = upload.items.filter(
+    (i) => i.status === "complete",
+  ).length;
+  const failedUploadCount = upload.items.filter(
+    (i) => i.status === "error",
+  ).length;
   // 2026-05-21: pre-flight rejections that also keep the panel mounted so
   // the user can see why a file didn't go through. Not retryable (same file
   // would block again) but explicitly dismissible.
@@ -990,25 +1273,40 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   );
   const bytesTotal = byteProgressItems.reduce((sum, i) => sum + i.file.size, 0);
   const bytesUploaded = byteProgressItems.reduce(
-    (sum, i) => sum + Math.floor(((i.status === "complete" ? 100 : i.progress) / 100) * i.file.size),
+    (sum, i) =>
+      sum +
+      Math.floor(
+        ((i.status === "complete" ? 100 : i.progress) / 100) * i.file.size,
+      ),
     0,
   );
-  const overallBytePercent = bytesTotal > 0 ? Math.round((bytesUploaded / bytesTotal) * 100) : 0;
+  const overallBytePercent =
+    bytesTotal > 0 ? Math.round((bytesUploaded / bytesTotal) * 100) : 0;
   const formatUploadBytes = (b: number): string => {
     if (b < 1024) return `${b} B`;
     const units = ["KB", "MB", "GB", "TB"];
     let n = b / 1024;
     let u = 0;
-    while (n >= 1024 && u < units.length - 1) { n /= 1024; u++; }
+    while (n >= 1024 && u < units.length - 1) {
+      n /= 1024;
+      u++;
+    }
     return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[u]}`;
   };
-  const uploadPanelOpen = activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
-  const uploadDialogOpen = showUploadDialog || uploadPanelOpen;
-  const uploadDialogCanClose = activeUploadCount === 0 && failedUploadCount === 0 && blockedUploadCount === 0;
+  const uploadPanelOpen =
+    activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
+  const uploadDialogOpen =
+    showUploadDialog || (uploadPanelOpen && !uploadDialogDismissed);
+  const uploadDialogCanClose =
+    activeUploadCount === 0 &&
+    failedUploadCount === 0 &&
+    blockedUploadCount === 0;
   const uploadStage: "details" | "processing" | "visibility" =
     activeUploadCount > 0
       ? "processing"
-      : upload.items.length > 0 && failedUploadCount === 0 && blockedUploadCount === 0
+      : upload.items.length > 0 &&
+          failedUploadCount === 0 &&
+          blockedUploadCount === 0
         ? "visibility"
         : "details";
   const shownUploadCount = byteProgressItems.length;
@@ -1030,6 +1328,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
     return "Select photos to upload";
   })();
+  const handleUploadDialogBack = () => {
+    if (activeUploadCount > 0) {
+      setUploadDialogDismissed(true);
+      setShowUploadDialog(false);
+      return;
+    }
+    upload.clearFinished();
+    setUploadDialogDismissed(false);
+    setShowUploadDialog(false);
+  };
 
   useEffect(() => {
     if (!uploadDialogOpen) return;
@@ -1052,7 +1360,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     const wasActive = prevActiveUploadCountRef.current > 0;
     const isIdle = activeUploadCount === 0;
-    if (wasActive && isIdle && (completedUploadCount > 0 || failedUploadCount > 0)) {
+    if (
+      wasActive &&
+      isIdle &&
+      (completedUploadCount > 0 || failedUploadCount > 0)
+    ) {
       setUploadToast({
         visible: true,
         completed: completedUploadCount,
@@ -1170,26 +1482,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     [assets],
   );
 
-  const handleAssetReady = useCallback(
-    async (assetId: string) => {
-      const t = getStoredAccessToken();
-      if (!t) return;
-      try {
-        const refreshed = await getAsset(t, assetId);
-        setAssets((prev) =>
-          prev.map((entry) =>
-            entry.asset?.id === assetId ? { ...entry, asset: refreshed } : entry,
-          ),
-        );
-      } catch (err) {
-        // Worker said the asset is ready but the GET failed (transient
-        // network blip, etc.). Leave the skeleton in place — a manual
-        // page refresh, or the next upload-batch refetch, will recover.
-        console.warn("asset.ready refetch failed", assetId, err);
-      }
-    },
-    [],
-  );
+  const handleAssetReady = useCallback(async (assetId: string) => {
+    const t = getStoredAccessToken();
+    if (!t) return;
+    try {
+      const refreshed = await getAsset(t, assetId);
+      setAssets((prev) =>
+        prev.map((entry) =>
+          entry.asset?.id === assetId ? { ...entry, asset: refreshed } : entry,
+        ),
+      );
+    } catch (err) {
+      // Worker said the asset is ready but the GET failed (transient
+      // network blip, etc.). Leave the skeleton in place — a manual
+      // page refresh, or the next upload-batch refetch, will recover.
+      console.warn("asset.ready refetch failed", assetId, err);
+    }
+  }, []);
 
   useAssetReadySubscription({
     apiBase: apiUrl,
@@ -1257,7 +1566,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     const t = getStoredAccessToken();
     if (!t || !id) return;
     const toLink = upload.items.filter(
-      (item) => item.status === "complete" && item.assetId && !linkedAssetIdsRef.current.has(item.assetId),
+      (item) =>
+        item.status === "complete" &&
+        item.assetId &&
+        !linkedAssetIdsRef.current.has(item.assetId),
     );
     if (toLink.length === 0) return;
 
@@ -1276,7 +1588,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         // can surface them. The signature set is populated when a tethered
         // file is enqueued (see tetheredUploadSignaturesRef.add).
         const uploadSignature = uploadFileSignature(item.file);
-        const isTetheredUpload = tetheredUploadSignaturesRef.current.has(uploadSignature);
+        const isTetheredUpload =
+          tetheredUploadSignaturesRef.current.has(uploadSignature);
         if (isTetheredUpload) {
           tetheredUploadSignaturesRef.current.delete(uploadSignature);
           newlyAddedTetheredAssetIds.push(item.assetId);
@@ -1312,15 +1625,19 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       // Reload assets list after linking
       try {
-        const galleryAssets = await listGalleryAssets(t, id);
-        const hydratedAssets = await hydrateGalleryAssets(t, galleryAssets);
-        setAssets(hydratedAssets);
-        if (tetheredAutoOpenRef.current && newlyAddedTetheredAssetIds.length > 0) {
+        const hydratedAssets = await refreshGalleryAssets();
+        if (
+          tetheredAutoOpenRef.current &&
+          newlyAddedTetheredAssetIds.length > 0
+        ) {
           const orderedAssetIds = tetheredNewestFirstRef.current
             ? newlyAddedTetheredAssetIds
             : [...newlyAddedTetheredAssetIds].reverse();
           const targetAssetId = orderedAssetIds[0];
-          const targetIndex = hydratedAssets.findIndex((entry) => entry.asset?.id === targetAssetId);
+          const targetIndex =
+            hydratedAssets?.findIndex(
+              (entry) => entry.asset?.id === targetAssetId,
+            ) ?? -1;
           if (targetIndex >= 0) {
             setShowUploadDialog(false);
             setLightboxIndex(targetIndex);
@@ -1337,7 +1654,7 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         await refreshAlbums();
       }
     })();
-  }, [upload.items, id, refreshAlbums]);
+  }, [upload.items, id, refreshAlbums, refreshGalleryAssets]);
 
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -1395,7 +1712,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const playTetheredDing = useCallback(() => {
     if (!tetheredSoundEnabled) return;
     try {
-      const win = window as typeof window & { webkitAudioContext?: typeof AudioContext };
+      const win = window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      };
       const AudioContextCtor = window.AudioContext ?? win.webkitAudioContext;
       if (!AudioContextCtor) return;
       const ctx = tetheredAudioRef.current ?? new AudioContextCtor();
@@ -1418,49 +1737,63 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [tetheredSoundEnabled]);
 
-  const scanTetheredFolder = useCallback(async (initial = false) => {
-    const directory = tetheredDirectoryRef.current;
-    if (!directory) return;
-    try {
-      const queryPermission = directory.queryPermission;
-      const requestPermission = directory.requestPermission;
-      if (queryPermission && requestPermission) {
-        const permission = await queryPermission.call(directory, { mode: "read" });
-        if (permission !== "granted") {
-          const nextPermission = await requestPermission.call(directory, { mode: "read" });
-          if (nextPermission !== "granted") {
-            setTetheredStatus("error");
-            return;
+  const scanTetheredFolder = useCallback(
+    async (initial = false) => {
+      const directory = tetheredDirectoryRef.current;
+      if (!directory) return;
+      try {
+        const queryPermission = directory.queryPermission;
+        const requestPermission = directory.requestPermission;
+        if (queryPermission && requestPermission) {
+          const permission = await queryPermission.call(directory, {
+            mode: "read",
+          });
+          if (permission !== "granted") {
+            const nextPermission = await requestPermission.call(directory, {
+              mode: "read",
+            });
+            if (nextPermission !== "granted") {
+              setTetheredStatus("error");
+              return;
+            }
           }
         }
-      }
 
-      const freshFiles = await collectNewTetheredFiles(
-        directory,
-        tetheredSeenFilesRef.current,
-        { recursive: tetheredIncludeSubfolders },
-      );
-      freshFiles.sort((a, b) => a.lastModified - b.lastModified);
-      const orderedFiles = tetheredNewestFirst ? [...freshFiles].reverse() : freshFiles;
-      if (orderedFiles.length > 0) {
-        const files = orderedFiles.map((entry) => entry.file);
-        setTetheredLastDetectedAt(Date.now());
-        if (!initial) {
-          setTetheredSessionNewCount((count) => count + files.length);
-          playTetheredDing();
+        const freshFiles = await collectNewTetheredFiles(
+          directory,
+          tetheredSeenFilesRef.current,
+          { recursive: tetheredIncludeSubfolders },
+        );
+        freshFiles.sort((a, b) => a.lastModified - b.lastModified);
+        const orderedFiles = tetheredNewestFirst
+          ? [...freshFiles].reverse()
+          : freshFiles;
+        if (orderedFiles.length > 0) {
+          const files = orderedFiles.map((entry) => entry.file);
+          setTetheredLastDetectedAt(Date.now());
+          if (!initial) {
+            setTetheredSessionNewCount((count) => count + files.length);
+            playTetheredDing();
+          }
+          submitFiles(files, { source: "tethered" });
         }
-        submitFiles(files, { source: "tethered" });
+        setTetheredStatus("watching");
+      } catch (err) {
+        console.warn("tethered folder scan failed", err);
+        setTetheredStatus("error");
+        if (tetheredPollTimerRef.current !== null) {
+          window.clearInterval(tetheredPollTimerRef.current);
+          tetheredPollTimerRef.current = null;
+        }
       }
-      setTetheredStatus("watching");
-    } catch (err) {
-      console.warn("tethered folder scan failed", err);
-      setTetheredStatus("error");
-      if (tetheredPollTimerRef.current !== null) {
-        window.clearInterval(tetheredPollTimerRef.current);
-        tetheredPollTimerRef.current = null;
-      }
-    }
-  }, [playTetheredDing, submitFiles, tetheredIncludeSubfolders, tetheredNewestFirst]);
+    },
+    [
+      playTetheredDing,
+      submitFiles,
+      tetheredIncludeSubfolders,
+      tetheredNewestFirst,
+    ],
+  );
 
   const stopTetheredFolder = useCallback(() => {
     if (tetheredPollTimerRef.current !== null) {
@@ -1528,13 +1861,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const handleTetheredEnableToggle = useCallback(() => {
     if (tetheredEnabled) {
       stopTetheredFolder();
-      setTetheredEnabled(false);
       return;
     }
-    setTetheredEnabled(true);
-    setTetheredStatus("idle");
-    setShowUploadDialog(true);
-  }, [stopTetheredFolder, tetheredEnabled]);
+    void startTetheredFolder();
+  }, [startTetheredFolder, stopTetheredFolder, tetheredEnabled]);
 
   useEffect(() => {
     if (tetheredStatus !== "watching" || !tetheredDirectoryRef.current) return;
@@ -1567,10 +1897,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       // pay the async traversal cost when there is no folder to walk.
       const items = e.dataTransfer.items;
       const hasDirectory =
-        items && Array.from(items).some((it) => {
-          const entry = (it as DataTransferItem & {
-            webkitGetAsEntry?: () => { isDirectory: boolean } | null;
-          }).webkitGetAsEntry?.();
+        items &&
+        Array.from(items).some((it) => {
+          const entry = (
+            it as DataTransferItem & {
+              webkitGetAsEntry?: () => { isDirectory: boolean } | null;
+            }
+          ).webkitGetAsEntry?.();
           return !!entry?.isDirectory;
         });
       if (hasDirectory) {
@@ -1579,7 +1912,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         });
         return;
       }
-      const files = Array.from(e.dataTransfer.files).filter(isAcceptedStillImageFile);
+      const files = Array.from(e.dataTransfer.files).filter(
+        isAcceptedStillImageFile,
+      );
       submitFiles(files);
     },
     [submitFiles],
@@ -1612,7 +1947,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
     input.type = "file";
     input.multiple = true;
     input.accept = FILE_PICKER_STILL_IMAGE_ACCEPT;
-    (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
+    (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory =
+      true;
     input.setAttribute("webkitdirectory", "");
     input.setAttribute("directory", "");
     input.onchange = () => {
@@ -1629,12 +1965,17 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   const tetheredPollDisplay = `${(tetheredPollIntervalMs / 1000).toFixed(1)}s`;
   const tetheredIsWatching = tetheredStatus === "watching";
   const tetheredIsPaused = tetheredStatus === "paused";
-  const tetheredControlsEnabled = tetheredEnabled && Boolean(tetheredFolderName);
-  const tetheredControlsVisible = tetheredEnabled;
+  const tetheredControlsEnabled =
+    tetheredEnabled && Boolean(tetheredFolderName);
+  const tetheredControlsVisible = tetheredControlsEnabled;
 
   const renderTetheredCapturePanel = (variant: "mobile" | "desktop") => (
     <div
-      data-testid={variant === "mobile" ? "upload-mobile-tethered-capture" : "upload-desktop-tethered-capture"}
+      data-testid={
+        variant === "mobile"
+          ? "upload-mobile-tethered-capture"
+          : "upload-desktop-tethered-capture"
+      }
       className={cn(
         "rounded-2xl border border-border-default bg-surface-container-low p-4",
         variant === "mobile" ? "lg:hidden" : "",
@@ -1645,9 +1986,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-text-primary">Tethered capture</h3>
+              <h3 className="text-sm font-semibold text-text-primary">
+                Tethered capture
+              </h3>
               <p className="mt-1 text-xs text-text-secondary sm:text-sm">
-                Watch a camera output folder and upload new photos automatically.
+                Watch a camera output folder and upload new photos
+                automatically.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1656,13 +2000,24 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 role="switch"
                 data-testid="tethered-enable-toggle"
                 aria-checked={tetheredEnabled}
-                aria-label={tetheredEnabled ? "Disable tethered capture" : "Enable tethered capture"}
-                title={tetheredEnabled ? "Disable tethered capture" : "Enable tethered capture"}
+                aria-label={
+                  tetheredEnabled
+                    ? "Disable tethered capture"
+                    : "Enable tethered capture"
+                }
+                title={
+                  tetheredEnabled
+                    ? "Disable tethered capture"
+                    : "Enable tethered capture"
+                }
                 onClick={handleTetheredEnableToggle}
                 className="publish-state-toggle"
                 data-state={tetheredEnabled ? "published" : "unpublished"}
               >
-                <span className="publish-state-toggle__track" aria-hidden="true">
+                <span
+                  className="publish-state-toggle__track"
+                  aria-hidden="true"
+                >
                   <span className="publish-state-toggle__thumb" />
                 </span>
                 <span className="publish-state-toggle__label">
@@ -1682,7 +2037,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           : "bg-accent-subtle text-accent",
                   )}
                 >
-                  {tetheredIsWatching ? "Live" : tetheredIsPaused ? "Paused" : tetheredFolderName ? "Idle" : "Ready"}
+                  {tetheredIsWatching
+                    ? "Live"
+                    : tetheredIsPaused
+                      ? "Paused"
+                      : tetheredFolderName
+                        ? "Idle"
+                        : "Ready"}
                 </span>
               )}
             </div>
@@ -1696,7 +2057,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     <span className="min-w-0 max-w-full truncate rounded-xl bg-surface-sunken px-3 py-2 text-xs font-medium text-text-primary">
                       Watching {tetheredFolderName}
                     </span>
-                    <span data-testid="tethered-session-count" className="rounded-xl bg-surface-sunken px-3 py-2 text-xs font-medium text-text-secondary">
+                    <span
+                      data-testid="tethered-session-count"
+                      className="rounded-xl bg-surface-sunken px-3 py-2 text-xs font-medium text-text-secondary"
+                    >
                       + {tetheredSessionNewCount} this session
                     </span>
                   </>
@@ -1714,7 +2078,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   type="button"
                   data-testid="tethered-sound-toggle"
                   aria-pressed={tetheredSoundEnabled}
-                  className={cn("btn-tertiary px-3 py-2 text-xs", tetheredSoundEnabled ? "border-accent bg-accent-subtle text-accent" : "")}
+                  className={cn(
+                    "btn-tertiary px-3 py-2 text-xs",
+                    tetheredSoundEnabled
+                      ? "border-accent bg-accent-subtle text-accent"
+                      : "",
+                  )}
                   onClick={() => setTetheredSoundEnabled((enabled) => !enabled)}
                 >
                   Sound
@@ -1722,9 +2091,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 <button
                   type="button"
                   data-testid="tethered-pause-toggle"
-                  disabled={!tetheredControlsEnabled || tetheredStatus === "error"}
+                  disabled={
+                    !tetheredControlsEnabled || tetheredStatus === "error"
+                  }
                   className="btn-tertiary px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={tetheredIsPaused ? resumeTetheredFolder : pauseTetheredFolder}
+                  onClick={
+                    tetheredIsPaused
+                      ? resumeTetheredFolder
+                      : pauseTetheredFolder
+                  }
                 >
                   {tetheredIsPaused ? "Resume" : "Pause"}
                 </button>
@@ -1739,11 +2114,18 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </button>
               </div>
 
-              <p className="mt-3 text-xs text-text-secondary">{tetheredLastDetectedLabel}</p>
+              <p className="mt-3 text-xs text-text-secondary">
+                {tetheredLastDetectedLabel}
+              </p>
 
               <div className="mt-4 space-y-3 rounded-xl border border-border-subtle bg-surface-elevated p-3">
-                <label className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
-                  <span>Poll every</span>
+                <label className="grid gap-2 text-xs text-text-secondary">
+                  <span className="flex items-center justify-between gap-3">
+                    <span>Poll every</span>
+                    <span className="font-semibold text-text-primary">
+                      {tetheredPollDisplay}
+                    </span>
+                  </span>
                   <input
                     type="range"
                     data-testid="tethered-poll-slider"
@@ -1751,38 +2133,54 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     max={TETHERED_MAX_POLL_MS}
                     step={TETHERED_POLL_STEP_MS}
                     value={tetheredPollIntervalMs}
-                    onChange={(event) => setTetheredPollIntervalMs(Number(event.currentTarget.value))}
-                    className="min-w-36 flex-1 accent-accent"
+                    onChange={(event) =>
+                      setTetheredPollIntervalMs(
+                        Number(event.currentTarget.value),
+                      )
+                    }
+                    className="w-full accent-accent"
                   />
-                  <span className="w-10 font-semibold text-text-primary">{tetheredPollDisplay}</span>
                 </label>
-                <div className="grid gap-2 text-xs text-text-secondary sm:grid-cols-3">
-                  <label className="inline-flex items-center gap-2">
+                <div
+                  className={cn(
+                    "grid gap-2 text-xs text-text-secondary",
+                    variant === "desktop" ? "grid-cols-1" : "sm:grid-cols-3",
+                  )}
+                >
+                  <label className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
                     <input
                       type="checkbox"
                       data-testid="tethered-recursive-toggle"
                       checked={tetheredIncludeSubfolders}
-                      onChange={(event) => setTetheredIncludeSubfolders(event.currentTarget.checked)}
+                      onChange={(event) =>
+                        setTetheredIncludeSubfolders(
+                          event.currentTarget.checked,
+                        )
+                      }
                       className="accent-accent"
                     />
                     <span>Include subfolders</span>
                   </label>
-                  <label className="inline-flex items-center gap-2">
+                  <label className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
                     <input
                       type="checkbox"
                       data-testid="tethered-newest-first-toggle"
                       checked={tetheredNewestFirst}
-                      onChange={(event) => setTetheredNewestFirst(event.currentTarget.checked)}
+                      onChange={(event) =>
+                        setTetheredNewestFirst(event.currentTarget.checked)
+                      }
                       className="accent-accent"
                     />
                     <span>Newest first</span>
                   </label>
-                  <label className="inline-flex items-center gap-2">
+                  <label className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
                     <input
                       type="checkbox"
                       data-testid="tethered-auto-open-toggle"
                       checked={tetheredAutoOpen}
-                      onChange={(event) => setTetheredAutoOpen(event.currentTarget.checked)}
+                      onChange={(event) =>
+                        setTetheredAutoOpen(event.currentTarget.checked)
+                      }
                       className="accent-accent"
                     />
                     <span>Auto-open new photo</span>
@@ -1794,7 +2192,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
           {tetheredStatus === "unsupported" && (
             <p className="mt-3 text-xs text-feedback-warning">
-              Folder watching requires a Chromium browser. Use Select files or Choose folder as fallback.
+              Folder watching requires a Chromium browser. Use Select files or
+              Choose folder as fallback.
             </p>
           )}
           {tetheredStatus === "error" && (
@@ -1823,7 +2222,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
   if (!gallery) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-sm text-text-secondary">{error || "Gallery not found."}</p>
+        <p className="text-sm text-text-secondary">
+          {error || "Gallery not found."}
+        </p>
         <Link href="/galleries" className="btn-tertiary mt-4 px-3 py-2 text-sm">
           Back to galleries
         </Link>
@@ -1838,20 +2239,45 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div>
+            {activeAlbumDetails && (
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-medium text-text-secondary">
+                <button
+                  type="button"
+                  onClick={() => setActiveAlbum(null)}
+                  className="text-accent-primary transition-colors hover:text-accent-hover hover:underline"
+                  aria-label={`Show all photos in ${gallery.title}`}
+                >
+                  {gallery.title}
+                </button>
+                <span className="text-text-tertiary">/</span>
+                <span className="text-text-primary">
+                  {activeAlbumDetails.name}
+                </span>
+              </div>
+            )}
             {editingTitle ? (
               <input
                 type="text"
                 value={draftTitle}
                 onChange={(e) => setDraftTitle(e.target.value)}
                 onBlur={async () => {
-                  if (draftTitle.trim() && draftTitle.trim() !== gallery.title) {
+                  if (
+                    draftTitle.trim() &&
+                    draftTitle.trim() !== gallery.title
+                  ) {
                     const t = getStoredAccessToken();
                     if (t) {
                       try {
-                        const updated = await updateGallery(t, id, { title: draftTitle.trim() });
+                        const updated = await updateGallery(t, id, {
+                          title: draftTitle.trim(),
+                        });
                         setGallery(updated);
                       } catch (err) {
-                        setError(err instanceof Error ? err.message : "Failed to update title");
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to update title",
+                        );
                       }
                     }
                   }
@@ -1859,7 +2285,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  if (e.key === "Escape") { setEditingTitle(false); setDraftTitle(gallery.title); }
+                  if (e.key === "Escape") {
+                    setEditingTitle(false);
+                    setDraftTitle(gallery.title);
+                  }
                 }}
                 className="text-2xl font-semibold text-text-primary bg-transparent border-b-2 border-accent-primary focus:outline-none w-full"
                 autoFocus
@@ -1867,12 +2296,25 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             ) : (
               <h1
                 className="text-2xl font-semibold text-text-primary cursor-pointer hover:text-accent-primary transition-colors group"
-                onClick={() => { setDraftTitle(gallery.title); setEditingTitle(true); }}
+                onClick={() => {
+                  setDraftTitle(gallery.title);
+                  setEditingTitle(true);
+                }}
                 title="Click to edit title"
               >
                 {gallery.title}
-                <svg className="inline-block w-4 h-4 ml-2 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                <svg
+                  className="inline-block w-4 h-4 ml-2 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+                  />
                 </svg>
               </h1>
             )}
@@ -1885,17 +2327,26 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     const t = getStoredAccessToken();
                     if (t) {
                       try {
-                        const updated = await updateGallery(t, id, { description: draftDesc.trim() });
+                        const updated = await updateGallery(t, id, {
+                          description: draftDesc.trim(),
+                        });
                         setGallery(updated);
                       } catch (err) {
-                        setError(err instanceof Error ? err.message : "Failed to update description");
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to update description",
+                        );
                       }
                     }
                   }
                   setEditingDesc(false);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Escape") { setEditingDesc(false); setDraftDesc(gallery.description || ""); }
+                  if (e.key === "Escape") {
+                    setEditingDesc(false);
+                    setDraftDesc(gallery.description || "");
+                  }
                 }}
                 className="mt-2 w-full max-w-3xl text-sm leading-relaxed text-text-secondary bg-transparent border border-accent-primary rounded-lg px-3 py-2 focus:outline-none resize-none"
                 rows={2}
@@ -1904,7 +2355,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             ) : (
               <p
                 className="mt-2 max-w-3xl text-sm leading-relaxed text-text-secondary cursor-pointer hover:text-text-primary transition-colors"
-                onClick={() => { setDraftDesc(gallery.description || ""); setEditingDesc(true); }}
+                onClick={() => {
+                  setDraftDesc(gallery.description || "");
+                  setEditingDesc(true);
+                }}
                 title="Click to edit description"
               >
                 {gallery.description || "Click to add a description…"}
@@ -1940,7 +2394,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               type="button"
               role="switch"
               aria-checked={gallery.is_published}
-              aria-label={gallery.is_published ? "Gallery is published. Switch to unpublished." : "Gallery is unpublished. Switch to published."}
+              aria-label={
+                gallery.is_published
+                  ? "Gallery is published. Switch to unpublished."
+                  : "Gallery is unpublished. Switch to published."
+              }
               disabled={publishing}
               // S5-G1: marks this as a mutating control so it visually disables
               // under an impersonation (read-only) session — the server would
@@ -1949,13 +2407,21 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               onClick={togglePublishState}
               className="publish-state-toggle"
               data-state={gallery.is_published ? "published" : "unpublished"}
-              title={gallery.is_published ? "Unpublish - client links will stop working" : "Publish - clients will be able to view this gallery"}
+              title={
+                gallery.is_published
+                  ? "Unpublish - client links will stop working"
+                  : "Publish - clients will be able to view this gallery"
+              }
             >
               <span className="publish-state-toggle__track" aria-hidden="true">
                 <span className="publish-state-toggle__thumb" />
               </span>
               <span className="publish-state-toggle__label">
-                {publishing ? "Saving..." : gallery.is_published ? "Published" : "Unpublished"}
+                {publishing
+                  ? "Saving..."
+                  : gallery.is_published
+                    ? "Published"
+                    : "Unpublished"}
               </span>
             </button>
           </div>
@@ -1993,22 +2459,58 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
       <div>
         <section className="space-y-4">
-
           <div id="photos" className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Assets</h2>
+              <h2 className="text-lg font-semibold text-text-primary">
+                Assets
+              </h2>
               <div className="flex items-center gap-3">
                 {bulkMode ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-text-secondary">{selectedAssetIds.size} of {visibleAssets.length} selected</span>
-                    <button onClick={selectAllAssets} className="text-xs text-accent-primary hover:underline">Select All</button>
-                    <button onClick={handleBulkDelete} disabled={selectedAssetIds.size === 0} className="btn-danger px-3 py-1.5 text-xs disabled:opacity-30">Delete</button>
-                    <button onClick={clearSelection} className="text-xs text-text-tertiary hover:underline">Cancel</button>
+                  <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-border-default bg-surface-container px-3 py-2">
+                    <span className="text-xs font-medium text-text-secondary">
+                      {selectedAssetIds.size} selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={
+                        allVisibleAssetsSelected
+                          ? clearSelectedAssets
+                          : selectAllAssets
+                      }
+                      className="btn-tertiary px-3 py-1.5 text-xs"
+                      disabled={visibleSelectableAssetIds.length === 0}
+                    >
+                      {allVisibleAssetsSelected
+                        ? "Clear selected"
+                        : "Select all"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      disabled={selectedAssetIds.size === 0}
+                      className="btn-danger px-3 py-1.5 text-xs disabled:opacity-30"
+                    >
+                      Delete selected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="btn-tertiary px-3 py-1.5 text-xs"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 ) : (
                   <>
                     {assets.length > 0 && (
-                      <button onClick={() => setBulkMode(true)} className="text-xs text-text-tertiary hover:text-text-primary">Select</button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkMode(true)}
+                        className="btn-tertiary inline-flex items-center gap-2 px-3 py-1.5 text-xs"
+                      >
+                        <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                        Select photos
+                      </button>
                     )}
                   </>
                 )}
@@ -2021,7 +2523,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     multiple
                     accept={FILE_PICKER_STILL_IMAGE_ACCEPT}
                     onChange={(event) => {
-                      submitFiles(Array.from(event.currentTarget.files ?? []).filter(isAcceptedStillImageFile));
+                      submitFiles(
+                        Array.from(event.currentTarget.files ?? []).filter(
+                          isAcceptedStillImageFile,
+                        ),
+                      );
                       event.currentTarget.value = "";
                     }}
                   />
@@ -2045,24 +2551,21 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            <div id="albums" className="rounded-xl border border-border-subtle bg-surface-sunken/40 p-4 space-y-3">
+            <div
+              id="albums"
+              className="rounded-xl border border-border-subtle bg-surface-sunken/40 p-4 space-y-3"
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-text-primary">Sub-galleries</h3>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    Sub-galleries
+                  </h3>
                   <p className="text-xs text-text-secondary">
-                    Group photos for rituals, family sets, or client-only share links.
+                    Group photos for rituals, family sets, or client-only share
+                    links.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {gallery.slug && (
-                    <ShareQrPopover
-                      url={gallery.is_published ? buildShareUrl() : ""}
-                      disabled={!gallery.is_published}
-                      onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
-                      label="Show QR code for gallery link"
-                      filename={`${gallery.slug}-gallery-qr`}
-                    />
-                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -2072,7 +2575,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     aria-pressed={managingAlbums}
                     className={cn(
                       "btn-tertiary px-3 py-1.5 text-xs",
-                      managingAlbums && "border-accent-primary bg-accent-subtle text-accent-primary",
+                      managingAlbums &&
+                        "border-accent-primary bg-accent-subtle text-accent-primary",
                     )}
                   >
                     {managingAlbums ? "Done" : "Manage sub-galleries"}
@@ -2101,7 +2605,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void handleCreateAlbum();
-                      if (e.key === "Escape") { setShowAlbumCreate(false); setNewAlbumName(""); }
+                      if (e.key === "Escape") {
+                        setShowAlbumCreate(false);
+                        setNewAlbumName("");
+                      }
                     }}
                   />
                   <button
@@ -2112,11 +2619,16 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   >
                     {selectedAssetIds.size > 0
                       ? `Create with ${selectedAssetIds.size} selected`
-                      : creatingAlbum ? "Creating..." : "Create"}
+                      : creatingAlbum
+                        ? "Creating..."
+                        : "Create"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setShowAlbumCreate(false); setNewAlbumName(""); }}
+                    onClick={() => {
+                      setShowAlbumCreate(false);
+                      setNewAlbumName("");
+                    }}
                     className="btn-tertiary px-3 py-2 text-xs"
                   >
                     Cancel
@@ -2142,7 +2654,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   <option value="">All Photos ({assets.length})</option>
                   {albums.map((album) => (
                     <option key={album.id} value={album.id}>
-                      {album.name} ({albumAssetIdsByAlbum[album.id]?.length ?? 0})
+                      {album.name} (
+                      {albumAssetIdsByAlbum[album.id]?.length ?? 0})
                     </option>
                   ))}
                 </select>
@@ -2151,12 +2664,12 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   // dropdown currently has selected. activeAlbum === null
                   // means "All Photos" — copyShareUrl/buildShareUrl with
                   // no argument is the gallery-wide canonical share URL.
-                  const selectedAlbum = activeAlbum ? albums.find((a) => a.id === activeAlbum) : null;
-                  const selectedLabel = selectedAlbum ? selectedAlbum.name : "All Photos";
-                  const selectedSlug = selectedAlbum
-                    ? selectedAlbum.name.toLowerCase().replace(/\s+/g, "-")
-                    : "all-photos";
-                  const selectedShareUrl = gallery.is_published ? buildShareUrl(selectedAlbum?.id) : "";
+                  const selectedAlbum = activeAlbum
+                    ? albums.find((a) => a.id === activeAlbum)
+                    : null;
+                  const selectedLabel = selectedAlbum
+                    ? selectedAlbum.name
+                    : "All Photos";
                   return (
                     <>
                       <GlassIconButton
@@ -2174,25 +2687,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                         type="button"
                         size="md"
                         variant="ghost"
-                        onClick={() => openShareLink(selectedAlbum?.id, selectedLabel)}
+                        onClick={() =>
+                          openShareLink(selectedAlbum?.id, selectedLabel)
+                        }
                         label={`Email ${selectedLabel} share link`}
                         aria-disabled={!gallery.is_published}
                         className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
                       >
                         <Envelope />
                       </GlassIconButton>
-                      <div
-                        aria-disabled={!gallery.is_published}
-                        className="shrink-0 flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high"
-                      >
-                        <ShareQrPopover
-                          url={selectedShareUrl}
-                          disabled={!gallery.is_published}
-                          onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
-                          label={`Show QR code for ${selectedLabel} share link`}
-                          filename={`${gallery.slug || "gallery"}-${selectedSlug}-qr`}
-                        />
-                      </div>
                       {selectedAlbum && albumIsEditable(selectedAlbum) && (
                         <GlassIconButton
                           type="button"
@@ -2212,8 +2715,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               </div>
 
               {/* Desktop (sm+): two-segment chip strip. Each chip is split
-                  into a name+count-badge "select" segment and a "Share /
-                  QR" action segment, separated by a subtle inner divider
+                  into a name+count-badge "select" segment and a share
+                  action segment, separated by a subtle inner divider
                   so the secondary actions read as a related-but-distinct
                   cluster instead of crowding the chip label. Layout uses
                   flex-wrap so chips reflow onto multiple lines on narrow
@@ -2233,7 +2736,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     onClick={() => setActiveAlbum(null)}
                     className={cn(
                       "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
-                      !activeAlbum ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
+                      !activeAlbum
+                        ? "text-accent-primary"
+                        : "text-text-secondary hover:text-text-primary",
                     )}
                   >
                     <span>All Photos</span>
@@ -2271,17 +2776,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     >
                       <Envelope />
                     </GlassIconButton>
-                    <ShareQrPopover
-                      url={gallery.is_published ? buildShareUrl() : ""}
-                      disabled={!gallery.is_published}
-                      onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
-                      label="Show QR code for All Photos share link"
-                      filename={`${gallery.slug || "gallery"}-all-photos-qr`}
-                    />
                   </div>
                 </div>
                 {albums.map((album) => {
-                  const assetCount = albumAssetIdsByAlbum[album.id]?.length ?? 0;
+                  const assetCount =
+                    albumAssetIdsByAlbum[album.id]?.length ?? 0;
                   const isEditableAlbum = albumIsEditable(album);
                   const isEditingAlbum = editingAlbumId === album.id;
                   const isSavingAlbum = savingAlbumId === album.id;
@@ -2314,18 +2813,31 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           : "border-border-default bg-surface-container hover:border-accent-primary/60 hover:bg-surface-container-high",
                       )}
                       onDragOver={(e) => {
-                        const hasInternal = e.dataTransfer.types.includes("application/x-rawdrive-asset-ids");
+                        const hasInternal = e.dataTransfer.types.includes(
+                          "application/x-rawdrive-asset-ids",
+                        );
                         if (hasInternal) {
                           e.preventDefault();
-                          e.currentTarget.classList.add("ring-2", "ring-accent-primary");
+                          e.currentTarget.classList.add(
+                            "ring-2",
+                            "ring-accent-primary",
+                          );
                         }
                       }}
                       onDragLeave={(e) => {
-                        e.currentTarget.classList.remove("ring-2", "ring-accent-primary");
+                        e.currentTarget.classList.remove(
+                          "ring-2",
+                          "ring-accent-primary",
+                        );
                       }}
                       onDrop={async (e) => {
-                        e.currentTarget.classList.remove("ring-2", "ring-accent-primary");
-                        const raw = e.dataTransfer.getData("application/x-rawdrive-asset-ids");
+                        e.currentTarget.classList.remove(
+                          "ring-2",
+                          "ring-accent-primary",
+                        );
+                        const raw = e.dataTransfer.getData(
+                          "application/x-rawdrive-asset-ids",
+                        );
                         if (!raw) return;
                         e.preventDefault();
                         try {
@@ -2336,7 +2848,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           await addAlbumAssets(t, album.id, ids);
                           await refreshAlbums();
                         } catch (err) {
-                          setError(err instanceof Error ? err.message : "Failed to add photos to sub-gallery");
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to add photos to sub-gallery",
+                          );
                         }
                       }}
                     >
@@ -2345,10 +2861,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           <input
                             type="text"
                             value={editingAlbumName}
-                            onChange={(event) => setEditingAlbumName(event.target.value)}
+                            onChange={(event) =>
+                              setEditingAlbumName(event.target.value)
+                            }
                             onClick={(event) => event.stopPropagation()}
                             onKeyDown={(event) => {
-                              if (event.key === "Enter") void handleRenameAlbum(album);
+                              if (event.key === "Enter")
+                                void handleRenameAlbum(album);
                               if (event.key === "Escape") cancelEditingAlbum();
                             }}
                             className="input-base h-9 min-w-0 flex-1 text-xs"
@@ -2377,7 +2896,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           onClick={() => setActiveAlbum(album.id)}
                           className={cn(
                             "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
-                            isActive ? "text-accent-primary" : "text-text-secondary hover:text-text-primary",
+                            isActive
+                              ? "text-accent-primary"
+                              : "text-text-secondary hover:text-text-primary",
                           )}
                           title={album.name}
                         >
@@ -2442,20 +2963,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={() => openShareLink(album.id, album.name)}
+                              onClick={() =>
+                                openShareLink(album.id, album.name)
+                              }
                               label={`Email ${album.name} share link`}
                               aria-disabled={!gallery.is_published}
                               className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
                             >
                               <Envelope />
                             </GlassIconButton>
-                            <ShareQrPopover
-                              url={gallery.is_published ? buildShareUrl(album.id) : ""}
-                              disabled={!gallery.is_published}
-                              onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
-                              label={`Show QR code for ${album.name} share link`}
-                              filename={`${gallery.slug || "gallery"}-${album.name.toLowerCase().replace(/\s+/g, "-")}-qr`}
-                            />
                             {isEditableAlbum && (
                               <GlassIconButton
                                 type="button"
@@ -2495,7 +3011,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Drop zone — always visible, acts as upload target */}
             <div
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
               onDragLeave={() => setIsDragOver(false)}
               onDrop={handleDrop}
               className={cn(
@@ -2506,9 +3025,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               )}
               onClick={() => setShowUploadDialog(true)}
             >
-              <p className="font-medium">{isDragOver ? "Drop photos or folders here" : "Drag photos or folders here, or click to open upload"}</p>
+              <p className="font-medium">
+                {isDragOver
+                  ? "Drop photos or folders here"
+                  : "Drag photos or folders here, or click to open upload"}
+              </p>
               <p className="text-xs text-text-tertiary mt-1">
-                Browser upload: JPEG, PNG, WebP, GIF up to {browserE2EEMaxUploadSizeLabel()}. RAW, TIFF, HEIC/AVIF use RawDrive Desktop for source-side encryption.
+                Browser upload: JPEG, PNG, WebP, GIF up to{" "}
+                {browserE2EEMaxUploadSizeLabel()}. RAW, TIFF, HEIC/AVIF use
+                RawDrive Desktop for source-side encryption.
               </p>
             </div>
 
@@ -2545,13 +3070,23 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   // midnight) which already passes WCAG contrast against
                   // surface-panel in every theme.
                   const favoriteCount = entry.asset
-                    ? favoritesCountByAsset.get(entry.asset.id) ?? 0
+                    ? (favoritesCountByAsset.get(entry.asset.id) ?? 0)
                     : 0;
+                  const isSelected = Boolean(
+                    entry.asset && selectedAssetIds.has(entry.asset.id),
+                  );
+                  const tileLabel = entry.asset?.filename || "photo";
 
                   return (
                     <article
                       key={entry.id}
-                      className={cn("surface-panel cursor-pointer overflow-hidden transition-shadow hover:shadow-lg relative group", bulkMode && entry.asset && selectedAssetIds.has(entry.asset.id) && "ring-2 ring-accent-primary")}
+                      className={cn(
+                        "surface-panel relative cursor-pointer overflow-hidden transition-shadow hover:shadow-lg group",
+                        bulkMode &&
+                          entry.asset &&
+                          isSelected &&
+                          "ring-2 ring-accent-primary",
+                      )}
                       // QA #18: in bulk mode, each tile is draggable. Drop
                       // target is the album chip above. Carries either the
                       // whole selection set (when the dragged asset is part
@@ -2560,40 +3095,71 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       draggable={!!entry.asset}
                       onDragStart={(e) => {
                         if (!entry.asset) return;
-                        const ids = bulkMode && selectedAssetIds.has(entry.asset.id)
-                          ? Array.from(selectedAssetIds)
-                          : [entry.asset.id];
-                        e.dataTransfer.setData("application/x-rawdrive-asset-ids", JSON.stringify(ids));
+                        const ids =
+                          bulkMode && isSelected
+                            ? Array.from(selectedAssetIds)
+                            : [entry.asset.id];
+                        e.dataTransfer.setData(
+                          "application/x-rawdrive-asset-ids",
+                          JSON.stringify(ids),
+                        );
                         e.dataTransfer.effectAllowed = "copy";
                       }}
                       onClick={() => {
-                        if (bulkMode && entry.asset) { toggleAssetSelection(entry.asset.id); return; }
+                        if (bulkMode && entry.asset) {
+                          toggleAssetSelection(entry.asset.id);
+                          return;
+                        }
                         const idx = assets.findIndex((a) => a.id === entry.id);
                         if (idx !== -1) setLightboxIndex(idx);
                       }}
-                      role="button"
+                      role={bulkMode ? "checkbox" : "button"}
+                      aria-checked={bulkMode ? isSelected : undefined}
                       tabIndex={0}
-                      aria-label={`View ${entry.asset?.filename || "photo"}`}
+                      aria-label={
+                        bulkMode
+                          ? `${isSelected ? "Deselect" : "Select"} ${tileLabel}`
+                          : `View ${tileLabel}`
+                      }
                       onKeyDown={(e) => {
                         if (e.currentTarget !== e.target) return;
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          const idx = assets.findIndex((a) => a.id === entry.id);
+                          if (bulkMode && entry.asset) {
+                            toggleAssetSelection(entry.asset.id);
+                            return;
+                          }
+                          const idx = assets.findIndex(
+                            (a) => a.id === entry.id,
+                          );
                           if (idx !== -1) setLightboxIndex(idx);
                         }
                       }}
                     >
                       {bulkMode && entry.asset && (
-                        <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedAssetIds.has(entry.asset.id) ? "bg-accent-primary border-accent-primary" : "border-white/60 bg-black/20"}`}>
-                          {selectedAssetIds.has(entry.asset.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                        </div>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "absolute left-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors",
+                            isSelected
+                              ? "border-accent-primary bg-accent-primary text-text-inverse"
+                              : "border-border-strong bg-surface-overlay text-text-secondary backdrop-blur-md",
+                          )}
+                        >
+                          {isSelected && <CheckCircle className="h-4 w-4" />}
+                        </span>
                       )}
                       {favoriteCount > 0 && (
                         <div
                           className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm"
                           aria-label={`${favoriteCount} guest favorite${favoriteCount === 1 ? "" : "s"}`}
                         >
-                          <svg className="h-3.5 w-3.5 text-error" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <svg
+                            className="h-3.5 w-3.5 text-error"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
                             <path d="M12 21s-7-4.5-9.5-9C.5 8.5 2 4 6 4c2 0 3.5 1 4 2 .5-1 2-2 4-2 4 0 5.5 4.5 3.5 8-2.5 4.5-9.5 9-9.5 9z" />
                           </svg>
                           {favoriteCount}
@@ -2612,7 +3178,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           >
                             <GlassIconButton
                               size="md"
-                              variant={copiedAssetId === entry.asset.id ? "success" : "accent"}
+                              variant={
+                                copiedAssetId === entry.asset.id
+                                  ? "success"
+                                  : "accent"
+                              }
                               label={
                                 copiedAssetId === entry.asset.id
                                   ? `${entry.asset.filename} link copied`
@@ -2638,7 +3208,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                               className="!bg-feedback-error !text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!bg-feedback-error/90 hover:!text-white"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteConfirm({ assetId: entry.asset!.id, filename: entry.asset!.filename || "this photo" });
+                                setDeleteConfirm({
+                                  assetId: entry.asset!.id,
+                                  filename:
+                                    entry.asset!.filename || "this photo",
+                                });
                               }}
                             >
                               <Trash />
@@ -2648,11 +3222,13 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                       <div className="space-y-2 p-4">
                         <p className="truncate text-sm font-medium text-text-primary">
-                          {entry.asset?.filename || "Unresolved asset"}
+                          {entry.asset?.filename ?? "Photo unavailable"}
                         </p>
                         {entry.is_hero && (
                           <div className="flex items-center justify-end text-xs text-text-secondary">
-                            <span className="status-badge status-badge--accent">Hero</span>
+                            <span className="status-badge status-badge--accent">
+                              Hero
+                            </span>
                           </div>
                         )}
                       </div>
@@ -2683,28 +3259,34 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             {gallery && (
               <EmbeddedVideosPanel
                 galleryId={id}
-                initialVideos={readEmbeddedVideos(gallery.settings as Record<string, unknown>)}
+                initialVideos={readEmbeddedVideos(
+                  gallery.settings as Record<string, unknown>,
+                )}
                 onChange={(next: EmbeddedVideo[]) => {
                   setGallery((prev) =>
                     prev
-                      ? { ...prev, settings: { ...(prev.settings ?? {}), embedded_videos: next } }
+                      ? {
+                          ...prev,
+                          settings: {
+                            ...(prev.settings ?? {}),
+                            embedded_videos: next,
+                          },
+                        }
                       : prev,
                   );
                 }}
               />
             )}
-
-            <TetheredShootingPanel galleryId={id} apiUrl={apiUrl} />
           </div>
         </section>
-
       </div>
 
       {uploadDialogOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim p-2 backdrop-blur-md sm:p-4"
           onClick={(e) => {
-            if (e.currentTarget === e.target && uploadDialogCanClose) setShowUploadDialog(false);
+            if (e.currentTarget === e.target && uploadDialogCanClose)
+              setShowUploadDialog(false);
           }}
         >
           <section
@@ -2718,28 +3300,62 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             className="flex max-h-[100dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
           >
             <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-6 sm:py-4">
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-text-primary sm:text-lg">Upload photos to gallery</h2>
-                <p id="gallery-upload-dialog-description" className="text-sm text-text-secondary">{uploadStatusHeadline}</p>
-                <div
-                  data-testid="upload-mobile-status"
-                  className="mt-3 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2 md:hidden"
+              <div className="flex min-w-0 items-start gap-3">
+                <GlassIconButton
+                  type="button"
+                  size="md"
+                  variant="ghost"
+                  label={
+                    activeUploadCount > 0
+                      ? "Back to gallery; uploads continue"
+                      : "Back to gallery"
+                  }
+                  data-testid="upload-dialog-back"
+                  className="shrink-0 text-text-secondary hover:text-text-primary"
+                  onClick={handleUploadDialogBack}
                 >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-text-inverse">
-                    {uploadStage === "details" ? 1 : uploadStage === "processing" ? 2 : 3}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-text-primary">
-                      {uploadStage === "details" ? "Select photos" : uploadStage === "processing" ? "Processing upload" : "Visibility"}
-                    </span>
-                    <span className="block truncate text-xs text-text-secondary">
+                  <ChevronLeft />
+                </GlassIconButton>
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-semibold text-text-primary sm:text-lg">
+                    Upload photos to gallery
+                  </h2>
+                  <p
+                    id="gallery-upload-dialog-description"
+                    className="text-sm text-text-secondary"
+                  >
+                    {uploadStatusHeadline}
+                  </p>
+                  <div
+                    data-testid="upload-mobile-status"
+                    className="mt-3 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2 md:hidden"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-text-inverse">
                       {uploadStage === "details"
-                        ? "Choose files or a folder"
+                        ? 1
                         : uploadStage === "processing"
-                          ? "Encrypting and uploading"
-                          : gallery.is_published ? "Client links live" : "Private until published"}
+                          ? 2
+                          : 3}
                     </span>
-                  </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-text-primary">
+                        {uploadStage === "details"
+                          ? "Select photos"
+                          : uploadStage === "processing"
+                            ? "Processing upload"
+                            : "Visibility"}
+                      </span>
+                      <span className="block truncate text-xs text-text-secondary">
+                        {uploadStage === "details"
+                          ? "Choose files or a folder"
+                          : uploadStage === "processing"
+                            ? "Encrypting and uploading"
+                            : gallery.is_published
+                              ? "Client links live"
+                              : "Private until published"}
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
               {uploadDialogCanClose && (
@@ -2755,12 +3371,29 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
 
-            <div data-testid="upload-desktop-stepper" className="hidden border-b border-border-subtle px-6 py-4 md:grid md:grid-cols-3 md:gap-3">
-              {([
-                { key: "details" as const, label: "Details", helper: "Select files" },
-                { key: "processing" as const, label: "Processing", helper: "Encrypt and upload" },
-                { key: "visibility" as const, label: "Visibility", helper: gallery.is_published ? "Client links live" : "Unpublished" },
-              ]).map((step, index) => {
+            <div
+              data-testid="upload-desktop-stepper"
+              className="hidden border-b border-border-subtle px-6 py-4 md:grid md:grid-cols-3 md:gap-3"
+            >
+              {[
+                {
+                  key: "details" as const,
+                  label: "Details",
+                  helper: "Select files",
+                },
+                {
+                  key: "processing" as const,
+                  label: "Processing",
+                  helper: "Encrypt and upload",
+                },
+                {
+                  key: "visibility" as const,
+                  label: "Visibility",
+                  helper: gallery.is_published
+                    ? "Client links live"
+                    : "Unpublished",
+                },
+              ].map((step, index) => {
                 const active = uploadStage === step.key;
                 const done =
                   (step.key === "details" && uploadStage !== "details") ||
@@ -2780,14 +3413,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                     <span
                       className={cn(
                         "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                        active || done ? "bg-accent text-text-inverse" : "bg-surface-container-high text-text-secondary",
+                        active || done
+                          ? "bg-accent text-text-inverse"
+                          : "bg-surface-container-high text-text-secondary",
                       )}
                     >
                       {done ? <CheckCircle className="h-4 w-4" /> : index + 1}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-text-primary">{step.label}</span>
-                      <span className="block truncate text-xs text-text-secondary">{step.helper}</span>
+                      <span className="block text-sm font-semibold text-text-primary">
+                        {step.label}
+                      </span>
+                      <span className="block truncate text-xs text-text-secondary">
+                        {step.helper}
+                      </span>
                     </span>
                   </div>
                 );
@@ -2797,7 +3436,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             <div className="grid gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-3 lg:gap-6 lg:p-6">
               <div className="space-y-4 lg:col-span-2">
                 <div
-                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(true);
+                  }}
                   onDragLeave={() => setIsDragOver(false)}
                   onDrop={handleDrop}
                   onClick={handleFileSelect}
@@ -2819,7 +3461,10 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 >
                   {uploadPreviewBackendAsset && (
                     <>
-                      <UploadDropzoneBackendPreview asset={uploadPreviewBackendAsset} token={token} />
+                      <UploadDropzoneBackendPreview
+                        asset={uploadPreviewBackendAsset}
+                        token={token}
+                      />
                       <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 bg-surface-scrim/70"
@@ -2831,10 +3476,14 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       <Plus className="h-8 w-8 sm:h-9 sm:w-9" />
                     </div>
                     <h3 className="text-lg font-semibold text-text-primary sm:text-xl">
-                      {isDragOver ? "Drop photos to start upload" : "Add photos"}
+                      {isDragOver
+                        ? "Drop photos to start upload"
+                        : "Add photos"}
                     </h3>
                     <p className="mt-2 max-w-md text-sm text-text-secondary">
-                      JPEG, PNG, WebP and GIF up to {browserE2EEMaxUploadSizeLabel()} per file.
+                      Camera JPEG/JFIF, PNG, WebP and GIF up to{" "}
+                      {browserE2EEMaxUploadSizeLabel()} per file. RAW, TIFF,
+                      HEIC and AVIF use RawDrive Desktop.
                     </p>
                     <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-2 sm:mt-6 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
                       <button
@@ -2868,40 +3517,71 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-sm font-semibold text-text-primary">Processing queue</h3>
+                      <h3 className="text-sm font-semibold text-text-primary">
+                        Processing queue
+                      </h3>
                       <p className="text-xs text-text-secondary">
-                        {upload.items.length > 0 ? uploadStatusHeadline : "Files appear here after selection."}
+                        {upload.items.length > 0
+                          ? uploadStatusHeadline
+                          : "Files appear here after selection."}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {activeUploadCount > 0 && (
                         <>
                           {upload.isPaused ? (
-                            <button onClick={upload.resumeAll} className="btn-tertiary px-3 py-1.5 text-xs">Resume all</button>
+                            <button
+                              onClick={upload.resumeAll}
+                              className="btn-tertiary px-3 py-1.5 text-xs"
+                            >
+                              Resume all
+                            </button>
                           ) : (
-                            <button onClick={upload.pauseAll} className="btn-tertiary px-3 py-1.5 text-xs">Pause all</button>
+                            <button
+                              onClick={upload.pauseAll}
+                              className="btn-tertiary px-3 py-1.5 text-xs"
+                            >
+                              Pause all
+                            </button>
                           )}
-                          <button onClick={upload.cancelAll} className="btn-danger px-3 py-1.5 text-xs">Cancel all</button>
+                          <button
+                            onClick={upload.cancelAll}
+                            className="btn-danger px-3 py-1.5 text-xs"
+                          >
+                            Cancel all
+                          </button>
                         </>
                       )}
                       {activeUploadCount === 0 && failedUploadCount > 0 && (
-                        <button onClick={upload.retryAll} className="btn-tertiary px-3 py-1.5 text-xs">
+                        <button
+                          onClick={upload.retryAll}
+                          className="btn-tertiary px-3 py-1.5 text-xs"
+                        >
                           Retry all ({failedUploadCount})
                         </button>
                       )}
-                      {activeUploadCount === 0 && (failedUploadCount > 0 || blockedUploadCount > 0) && (
-                        <button onClick={upload.clearFinished} className="btn-tertiary px-3 py-1.5 text-xs">
-                          Dismiss
-                        </button>
-                      )}
+                      {activeUploadCount === 0 &&
+                        (failedUploadCount > 0 || blockedUploadCount > 0) && (
+                          <button
+                            onClick={upload.clearFinished}
+                            className="btn-tertiary px-3 py-1.5 text-xs"
+                          >
+                            Dismiss
+                          </button>
+                        )}
                     </div>
                   </div>
 
                   {bytesTotal > 0 && (
                     <div className="mt-4 space-y-1">
                       <div className="flex items-center justify-between text-xs text-text-secondary">
-                        <span>{formatUploadBytes(bytesUploaded)} of {formatUploadBytes(bytesTotal)}</span>
-                        <span className="font-medium text-text-primary">{overallBytePercent}%</span>
+                        <span>
+                          {formatUploadBytes(bytesUploaded)} of{" "}
+                          {formatUploadBytes(bytesTotal)}
+                        </span>
+                        <span className="font-medium text-text-primary">
+                          {overallBytePercent}%
+                        </span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-surface-sunken">
                         <div
@@ -2919,7 +3599,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                     ) : (
                       upload.items.map((item) => {
-                        const warnings = visibleUploadWarnings(item.scanManifest?.findings);
+                        const warnings = visibleUploadWarnings(
+                          item.scanManifest?.findings,
+                        );
                         const isFailed = item.status === "error";
                         const isTerminal =
                           item.status === "complete" ||
@@ -2927,27 +3609,56 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                           item.status === "blocked" ||
                           item.status === "needs_desktop";
                         const statusLabel =
-                          item.status === "complete" ? "Done" :
-                          isFailed ? "Failed" :
-                          item.status === "uploading" ? "Uploading..." :
-                          item.status === "encrypting" ? "Encrypting" :
-                          item.status === "paused" ? "Paused" :
-                          item.status === "screening" ? "Screening" :
-                          item.status === "pending" ? "Queued" :
-                          item.status === "blocked" ? "Blocked" :
-                          item.status === "needs_desktop" ? "Desktop" : item.status;
+                          item.status === "complete"
+                            ? "Done"
+                            : isFailed
+                              ? "Failed"
+                              : item.status === "uploading"
+                                ? "Uploading..."
+                                : item.status === "encrypting"
+                                  ? "Encrypting"
+                                  : item.status === "paused"
+                                    ? "Paused"
+                                    : item.status === "screening"
+                                      ? "Screening"
+                                      : item.status === "pending"
+                                        ? "Queued"
+                                        : item.status === "blocked"
+                                          ? "Blocked"
+                                          : item.status === "needs_desktop"
+                                            ? "Desktop"
+                                            : item.status;
                         const statusTone =
-                          item.status === "complete" ? "text-success" :
-                          isFailed ? "text-error" :
-                          item.status === "paused" ? "text-feedback-warning" :
-                          item.status === "blocked" || item.status === "needs_desktop" ? "text-feedback-warning" :
-                          "text-text-secondary";
+                          item.status === "complete"
+                            ? "text-success"
+                            : isFailed
+                              ? "text-error"
+                              : item.status === "paused"
+                                ? "text-feedback-warning"
+                                : item.status === "blocked" ||
+                                    item.status === "needs_desktop"
+                                  ? "text-feedback-warning"
+                                  : "text-text-secondary";
                         return (
-                          <div key={item.id} className="rounded-xl border border-border-subtle bg-surface-elevated px-4 py-3">
+                          <div
+                            key={item.id}
+                            className="rounded-xl border border-border-subtle bg-surface-elevated px-4 py-3"
+                          >
                             <div className="flex flex-wrap items-center gap-3 text-xs">
-                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">{item.file.name}</span>
-                              <span className="text-text-tertiary tabular-nums">{formatUploadBytes(item.file.size)}</span>
-                              <span className={cn("w-20 text-right font-medium", statusTone)}>{statusLabel}</span>
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                                {item.file.name}
+                              </span>
+                              <span className="text-text-tertiary tabular-nums">
+                                {formatUploadBytes(item.file.size)}
+                              </span>
+                              <span
+                                className={cn(
+                                  "w-20 text-right font-medium",
+                                  statusTone,
+                                )}
+                              >
+                                {statusLabel}
+                              </span>
                               {isFailed && (
                                 <button
                                   type="button"
@@ -2957,7 +3668,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                                   Retry
                                 </button>
                               )}
-                              {(item.status === "uploading" || item.status === "pending") && (
+                              {(item.status === "uploading" ||
+                                item.status === "pending") && (
                                 <button
                                   type="button"
                                   onClick={() => upload.pause(item.id)}
@@ -2986,14 +3698,26 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                                 </button>
                               )}
                             </div>
-                            {(isFailed || item.status === "blocked" || item.status === "needs_desktop") && item.error && (
-                              <p className={cn("mt-2 text-xs", isFailed ? "text-error" : "text-feedback-warning")}>
-                                {item.error}
-                              </p>
-                            )}
+                            {(isFailed ||
+                              item.status === "blocked" ||
+                              item.status === "needs_desktop") &&
+                              item.error && (
+                                <p
+                                  className={cn(
+                                    "mt-2 text-xs",
+                                    isFailed
+                                      ? "text-error"
+                                      : "text-feedback-warning",
+                                  )}
+                                >
+                                  {item.error}
+                                </p>
+                              )}
                             {warnings.length > 0 && (
                               <p className="mt-2 text-xs text-feedback-warning">
-                                {warnings.length === 1 ? warnings[0].message : `${warnings.length} scan warnings`}
+                                {warnings.length === 1
+                                  ? warnings[0].message
+                                  : `${warnings.length} scan warnings`}
                               </p>
                             )}
                           </div>
@@ -3004,102 +3728,106 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
 
-              <aside data-testid="upload-desktop-sidebar" className="hidden space-y-4 lg:block">
+              <aside
+                data-testid="upload-desktop-sidebar"
+                className="hidden space-y-4 lg:block"
+              >
                 <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                  <h3 className="text-sm font-semibold text-text-primary">Details</h3>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    Details
+                  </h3>
                   <dl className="mt-3 space-y-3 text-sm">
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-text-tertiary">Destination</dt>
-                      <dd className="mt-1 font-medium text-text-primary">{gallery.title}</dd>
+                      <dt className="text-xs uppercase tracking-wide text-text-tertiary">
+                        Destination
+                      </dt>
+                      <dd className="mt-1 font-medium text-text-primary">
+                        {gallery.title}
+                      </dd>
                     </div>
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-text-tertiary">Sub-gallery</dt>
+                      <dt className="text-xs uppercase tracking-wide text-text-tertiary">
+                        Sub-gallery
+                      </dt>
                       <dd className="mt-1 font-medium text-text-primary">
-                        {activeAlbum ? albums.find((album) => album.id === activeAlbum)?.name ?? "Selected sub-gallery" : "All Photos"}
+                        {activeAlbumDetails?.name ?? "All Photos"}
                       </dd>
                     </div>
                   </dl>
                 </div>
 
                 <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                  <div className="flex items-start gap-3">
-                    <Shield className="mt-0.5 h-5 w-5 text-accent" />
-                    <div>
-                      <h3 className="text-sm font-semibold text-text-primary">Processing</h3>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        Photos are screened, encrypted, uploaded, and converted into WebP display files.
-                      </p>
-                    </div>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    Visibility
+                  </h3>
+                  <p className="mt-2 text-sm text-text-secondary">
+                    {gallery.is_published
+                      ? "This gallery is published. Uploaded photos appear after processing completes."
+                      : "This gallery is unpublished. Uploaded photos stay private until you publish it."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={gallery.is_published}
+                      aria-label={
+                        gallery.is_published
+                          ? "Unpublish gallery"
+                          : "Publish gallery"
+                      }
+                      disabled={publishing}
+                      onClick={togglePublishState}
+                      className="publish-state-toggle"
+                      data-state={
+                        gallery.is_published ? "published" : "unpublished"
+                      }
+                    >
+                      <span
+                        className="publish-state-toggle__track"
+                        aria-hidden="true"
+                      >
+                        <span className="publish-state-toggle__thumb" />
+                      </span>
+                      <span className="publish-state-toggle__label">
+                        {publishing
+                          ? "Saving..."
+                          : gallery.is_published
+                            ? "Published"
+                            : "Publish gallery"}
+                      </span>
+                    </button>
+                  </div>
+                  <div
+                    data-testid="visibility-share-links"
+                    className="mt-3 flex flex-wrap items-center gap-2"
+                  >
+                    <span className="text-xs font-semibold text-text-secondary">
+                      Share links
+                    </span>
+                    <GlassIconButton
+                      type="button"
+                      size="md"
+                      variant="ghost"
+                      onClick={() => copyShareUrl()}
+                      label="Copy gallery share link"
+                      aria-disabled={!gallery.is_published}
+                      className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                    >
+                      <Share />
+                    </GlassIconButton>
+                    <GlassIconButton
+                      type="button"
+                      size="md"
+                      variant="ghost"
+                      onClick={() => openShareLink(undefined, "Gallery")}
+                      label="Email gallery share link"
+                      aria-disabled={!gallery.is_published}
+                      className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                    >
+                      <Envelope />
+                    </GlassIconButton>
                   </div>
                 </div>
-
-                 <div className="rounded-2xl border border-border-default bg-surface-container-low p-4">
-                   <h3 className="text-sm font-semibold text-text-primary">Visibility</h3>
-                   <p className="mt-2 text-sm text-text-secondary">
-                     {gallery.is_published
-                       ? "This gallery is published. Uploaded photos appear after processing completes."
-                       : "This gallery is unpublished. Uploaded photos stay private until you publish it."}
-                   </p>
-                   <div className="mt-4 flex flex-wrap items-center gap-2">
-                     <button
-                       type="button"
-                       role="switch"
-                       aria-checked={gallery.is_published}
-                       aria-label={gallery.is_published ? "Unpublish gallery" : "Publish gallery"}
-                       disabled={publishing}
-                       onClick={togglePublishState}
-                       className="publish-state-toggle"
-                       data-state={gallery.is_published ? "published" : "unpublished"}
-                     >
-                       <span className="publish-state-toggle__track" aria-hidden="true">
-                         <span className="publish-state-toggle__thumb" />
-                       </span>
-                       <span className="publish-state-toggle__label">
-                         {publishing ? "Saving..." : gallery.is_published ? "Published" : "Publish gallery"}
-                       </span>
-                     </button>
-                   </div>
-                   <div
-                     data-testid="visibility-share-links"
-                     className="mt-3 flex flex-wrap items-center gap-2"
-                   >
-                     <span className="text-xs font-semibold text-text-secondary">Share links</span>
-                     <GlassIconButton
-                       type="button"
-                       size="md"
-                       variant="ghost"
-                       onClick={() => copyShareUrl()}
-                       label="Copy gallery share link"
-                       aria-disabled={!gallery.is_published}
-                       className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                     >
-                       <Share />
-                     </GlassIconButton>
-                     <GlassIconButton
-                       type="button"
-                       size="md"
-                       variant="ghost"
-                       onClick={() => openShareLink(undefined, "Gallery")}
-                       label="Email gallery share link"
-                       aria-disabled={!gallery.is_published}
-                       className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                     >
-                       <Envelope />
-                     </GlassIconButton>
-                     <div
-                       aria-disabled={!gallery.is_published}
-                       className="flex items-center rounded-xl border border-border-default bg-surface-container transition-colors hover:border-accent-primary/60 hover:bg-surface-container-high"
-                     >
-                       <ShareQrPopover
-                         url={gallery.is_published ? buildShareUrl() : ""}
-                         disabled={!gallery.is_published}
-                         onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}
-                         label="Show QR code for gallery share link"
-                         filename={`${gallery.slug || "gallery"}-share-qr`}
-                       />
-                     </div>
-                   </div>
-                 </div>
 
                 {renderTetheredCapturePanel("desktop")}
               </aside>
@@ -3119,7 +3847,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-on-surface">
-              {deleteConfirm.isBulk ? `Delete ${deleteConfirm.filename}?` : "Delete photo?"}
+              {deleteConfirm.isBulk
+                ? `Delete ${deleteConfirm.filename}?`
+                : "Delete photo?"}
             </h2>
             <p className="mt-2 text-sm text-text-secondary">
               {deleteConfirm.isBulk
@@ -3143,11 +3873,20 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                       const t = getStoredAccessToken();
                       if (!t) return;
                       try {
-                        await bulkAssetAction(t, "delete", Array.from(selectedAssetIds));
+                        await bulkAssetAction(
+                          t,
+                          "delete",
+                          Array.from(selectedAssetIds),
+                        );
                         clearSelection();
-                        window.location.reload();
+                        await refreshGalleryAssets();
+                        await refreshAlbums();
                       } catch (err) {
-                        setError(err instanceof Error ? err.message : "Bulk delete failed");
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : "Bulk delete failed",
+                        );
                       }
                     })();
                   } else {
@@ -3167,8 +3906,14 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
         <PhotoLightbox
           asset={assets[lightboxIndex].asset!}
           onClose={() => setLightboxIndex(null)}
-          onPrev={() => setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i))}
-          onNext={() => setLightboxIndex((i) => (i !== null && i < assets.length - 1 ? i + 1 : i))}
+          onPrev={() =>
+            setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i))
+          }
+          onNext={() =>
+            setLightboxIndex((i) =>
+              i !== null && i < assets.length - 1 ? i + 1 : i,
+            )
+          }
           hasPrev={lightboxIndex > 0}
           hasNext={lightboxIndex < assets.length - 1}
           isProofing={gallery?.gallery_type === "proofing"}
@@ -3184,7 +3929,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             });
             setCommentsByAsset((current) => {
               const existing = current[assetId] ?? [];
-              if (existing.some((item) => item.id === created.id)) return current;
+              if (existing.some((item) => item.id === created.id))
+                return current;
               return {
                 ...current,
                 [assetId]: [...existing, created],
@@ -3193,10 +3939,15 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
             return created;
           }}
           // M13: feed filmstrip + compare mode + watermark overlay (FR-088,092,093,094)
-          allAssets={assets.map((a) => a.asset).filter((a): a is Asset => a !== null)}
+          allAssets={assets
+            .map((a) => a.asset)
+            .filter((a): a is Asset => a !== null)}
           gallery={gallery ?? undefined}
           onDeleteRequest={(targetAsset) => {
-            setDeleteConfirm({ assetId: targetAsset.id, filename: targetAsset.filename || "this photo" });
+            setDeleteConfirm({
+              assetId: targetAsset.id,
+              filename: targetAsset.filename || "this photo",
+            });
           }}
           onJumpTo={(targetId) => {
             const idx = assets.findIndex((a) => a.asset?.id === targetId);
@@ -3248,7 +3999,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   stroke="currentColor"
                   strokeWidth={2.5}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4.5 12.75l6 6 9-13.5"
+                  />
                 </svg>
               ) : (
                 <svg
@@ -3258,7 +4013,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                   stroke="currentColor"
                   strokeWidth={2.5}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                  />
                 </svg>
               )}
             </div>
@@ -3281,7 +4040,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               variant="ghost"
               label="Dismiss"
               className="-mr-1 -mt-1 text-text-tertiary"
-              onClick={() => setUploadToast((t) => (t ? { ...t, visible: false } : null))}
+              onClick={() =>
+                setUploadToast((t) => (t ? { ...t, visible: false } : null))
+              }
             >
               <XMark />
             </GlassIconButton>
@@ -3324,7 +4085,11 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 stroke="currentColor"
                 strokeWidth={2.2}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m0 3.75h.008v.008H12v-.008zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <div className="flex-1 space-y-1">
@@ -3353,7 +4118,8 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
                 </p>
               )}
               <p className="text-[11px] text-text-tertiary pt-0.5">
-                Rename the files locally and try again if you meant to upload them.
+                Rename the files locally and try again if you meant to upload
+                them.
               </p>
             </div>
             <GlassIconButton
@@ -3362,7 +4128,9 @@ export default function GalleryDetailPage({ params }: { params: Promise<{ id: st
               label="Dismiss"
               className="-mr-1 -mt-1 text-text-tertiary"
               onClick={() =>
-                setDuplicateWarning((t) => (t ? { ...t, visible: false } : null))
+                setDuplicateWarning((t) =>
+                  t ? { ...t, visible: false } : null,
+                )
               }
             >
               <XMark />
@@ -3431,7 +4199,9 @@ async function hydrateGalleryAssets(
     () => worker(),
   );
   await Promise.all(pool);
-  return results;
+  return results.filter((entry): entry is GalleryAssetRecord =>
+    Boolean(entry?.asset),
+  );
 }
 
 // formatDuplicateNames — show up to 3 filenames then "+N more" so the

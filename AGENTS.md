@@ -88,7 +88,7 @@ The bullets above are the TLDR. The sections below are the authoritative referen
 - Config lookup order: (1) `platform_settings` database table → (2) environment variables → (3) fail with a clear error and disable the feature.
 - No "dev default" secrets. If an env var is missing, log a warning and disable that feature — do not substitute a placeholder.
 - `.env.cobolt` holds all local env vars. It is **gitignored**. Never commit it, never reference its values in source code.
-- Required B2 storage env vars (managed backend): `B2_BUCKET_NAME`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_ENDPOINT`, `B2_REGION`. `B2_KEY_ID` maps to the S3 `AccessKeyID`; `B2_APPLICATION_KEY` maps to `SecretAccessKey`. The Backblaze console's `B2_BUCKET_ID` is kept in `.env.cobolt` as a comment for reference only — the S3 API uses the bucket name.
+- Managed B2 storage config follows the same lookup order as auth/email/payments: `platform_settings.storage.*` first, then environment variables, then fatal exit if neither supplies the required fields (bucket, key ID, application key). Keys: `platform_settings` `storage.driver` / `storage.b2_bucket_name` / `storage.b2_region` / `storage.b2_endpoint` / `storage.b2_key_id` / `storage.b2_application_key` / `storage.sse_mode` / `storage.sse_customer_key_hex`, with env fallbacks `STORAGE_DRIVER` / `B2_BUCKET_NAME` / `B2_REGION` / `B2_ENDPOINT` / `B2_KEY_ID` / `B2_APPLICATION_KEY` / `STORAGE_SSE_MODE` / `STORAGE_SSE_C_KEY`. `b2_key_id` / `B2_KEY_ID` maps to the S3 `AccessKeyID`; `b2_application_key` / `B2_APPLICATION_KEY` maps to `SecretAccessKey`. Seed the DB rows from env once via `go run ./backend/cmd/sync-platform-settings-from-env` (migration `151_storage_b2_platform_settings` creates the rows). The Backblaze console's `B2_BUCKET_ID` is kept in `.env.cobolt` as a comment for reference only — the S3 API uses the bucket name.
 - `R2_ACCOUNT_ID` is **only** for Cloudflare Stream (video) — `backend/internal/service/stream_service.go` still reads it as a fallback for `CF_STREAM_ACCOUNT_ID`. It is unrelated to object storage and predates the B2 migration.
 
 ### WebP Derivatives (MANDATORY)
@@ -111,6 +111,8 @@ There are **two separate one-time-code primitives** in this codebase and they ar
 - Used **only** during registration to verify email ownership.
 - `/auth/verify-otp` is only called from the `/activate` page after registration.
 - Never added to login flows. `/auth/login` checks password + `email_verified` flag. Unverified accounts get 403 "account not activated".
+- `/auth/resend-otp` stays public and returns generic success text for account-enumeration safety. If delivery fails, the backend deletes the unsent OTP row; operators diagnose delivery with `smtp-smoke` and backend logs, not browser-visible errors.
+- Production SMTP is SecureServer (`smtpout.secureserver.net:465` with `ssl`, from `noreply@rawdrive.in`). Rotate credentials in the provider dashboard, update env on both app nodes, run filtered `sync-platform-settings-from-env --category email --keys smtp_host,smtp_port,smtp_user,smtp_password,smtp_security,smtp_from,smtp_from_name`, then run `smtp-smoke` from both app nodes. `535 Authentication Failed` means provider credential rejection. Never paste SMTP passwords into source, docs, logs, or chat.
 - Backed by `OTPService` in `backend/internal/auth/auth.go`.
 
 **Authenticator-app TOTP (RFC 6238)** — F-007 (M17 wave 2):

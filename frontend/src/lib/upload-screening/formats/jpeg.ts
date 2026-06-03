@@ -178,37 +178,45 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
   if (eoiOffset < bytes.byteLength) {
     const trailing = bytes.byteLength - eoiOffset;
     if (hasNonPaddingTrailer(bytes, eoiOffset)) {
-      const archiveFindings = scanForArchiveSignatures(
-        bytes,
-        eoiOffset,
-        bytes.byteLength
-      );
-      if (archiveFindings.length > 0) {
-        // Genuine polyglot: image + appended archive. Reject.
-        findings.push({
-          category: "appended_payload",
-          severity: "high",
-          offset: eoiOffset,
-          message: `${trailing} bytes of appended payload past JPEG EOI containing archive signature(s)`,
-        });
-        findings.push(...archiveFindings);
-      } else {
-        // Benign trailing data — never blocks (#60). When the trailer positively
-        // matches a camera-authored MPF/dependent-JPEG structure we say so;
-        // otherwise it is still allowed as generic trailing data. Either way the
-        // Tier-D backend gate re-screens server-side.
-        const firstNonPadding = firstTrailerPayloadOffset(bytes, eoiOffset);
-        const isCameraMpf =
-          firstNonPadding < bytes.byteLength &&
-          isLikelyCameraJpegTrailer(bytes, firstNonPadding);
+      const firstNonPadding = firstTrailerPayloadOffset(bytes, eoiOffset);
+      const isCameraMpf =
+        firstNonPadding < bytes.byteLength &&
+        isLikelyCameraJpegTrailer(bytes, firstNonPadding);
+      if (isCameraMpf) {
+        // Dependent MPF/preview JPEGs are compressed image data. Their entropy
+        // can coincidentally contain ZIP/RAR/gzip byte sequences, so scanning
+        // inside them creates false positives for real camera files.
         findings.push({
           category: "appended_payload",
           severity: "low",
           offset: eoiOffset,
-          message: isCameraMpf
-            ? `${trailing} bytes of trailing data past JPEG EOI (camera-authored Multi-Picture Format / dependent JPEG preview; allowed)`
-            : `${trailing} bytes of trailing data past JPEG EOI (no archive signature — typical of camera Multi-Picture Format; allowed)`,
+          message: `${trailing} bytes of camera-authored JPEG preview/MPF data after the primary JPEG image (allowed)`,
         });
+      } else {
+        const archiveFindings = scanForArchiveSignatures(
+          bytes,
+          eoiOffset,
+          bytes.byteLength
+        );
+        if (archiveFindings.length > 0) {
+          // Genuine polyglot: image + appended archive. Reject.
+          findings.push({
+            category: "appended_payload",
+            severity: "high",
+            offset: eoiOffset,
+            message: `${trailing} bytes of appended payload past JPEG EOI containing archive signature(s)`,
+          });
+          findings.push(...archiveFindings);
+        } else {
+          // Benign trailing data — never blocks (#60). The Tier-D backend gate
+          // still verifies the manifest + final byte hash server-side.
+          findings.push({
+            category: "appended_payload",
+            severity: "low",
+            offset: eoiOffset,
+            message: `${trailing} bytes of trailing data past JPEG EOI (no archive signature — allowed)`,
+          });
+        }
       }
     }
   }

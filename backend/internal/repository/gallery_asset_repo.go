@@ -159,13 +159,33 @@ func (r *GalleryAssetRepo) Remove(ctx context.Context, galleryID, assetID uuid.U
 	return nil
 }
 
-// ListByGallery returns all assets in a gallery ordered by sort_order.
+// sqlGalleryAssetListByGallery hides stale junction rows for assets that have
+// already been soft-deleted. The purge worker eventually removes those rows,
+// but the dashboard list must not surface them as unresolved cards in the
+// meantime.
+const sqlGalleryAssetListByGallery = `SELECT ga.id, ga.gallery_id, ga.asset_id, ga.sort_order, ga.is_hero, ga.added_at
+		 FROM gallery_assets ga
+		 JOIN assets a ON a.id = ga.asset_id
+		 WHERE ga.gallery_id = $1 AND a.deleted_at IS NULL
+		 ORDER BY ga.sort_order ASC`
+
+const sqlGalleryAssetDeletableIDsForGallery = `SELECT DISTINCT ga.asset_id
+		 FROM gallery_assets ga
+		 JOIN assets a ON a.id = ga.asset_id
+		 WHERE ga.gallery_id = $1
+		   AND a.deleted_at IS NULL
+		   AND NOT EXISTS (
+		     SELECT 1
+		     FROM gallery_assets other_ga
+		     JOIN galleries other_g ON other_g.id = other_ga.gallery_id
+		     WHERE other_ga.asset_id = ga.asset_id
+		       AND other_ga.gallery_id <> ga.gallery_id
+		       AND other_g.deleted_at IS NULL
+		   )`
+
+// ListByGallery returns all active assets in a gallery ordered by sort_order.
 func (r *GalleryAssetRepo) ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]GalleryAsset, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, gallery_id, asset_id, sort_order, is_hero, added_at
-		 FROM gallery_assets WHERE gallery_id = $1 ORDER BY sort_order ASC`,
-		galleryID,
-	)
+	rows, err := r.pool.Query(ctx, sqlGalleryAssetListByGallery, galleryID)
 	if err != nil {
 		return nil, fmt.Errorf("gallery asset list: %w", err)
 	}
@@ -182,11 +202,36 @@ func (r *GalleryAssetRepo) ListByGallery(ctx context.Context, galleryID uuid.UUI
 	return items, rows.Err()
 }
 
+// ListDeletableAssetIDsForGallery returns active assets whose only live gallery
+// membership is the gallery being deleted. Assets shared with any other live
+// gallery are preserved.
+func (r *GalleryAssetRepo) ListDeletableAssetIDsForGallery(ctx context.Context, galleryID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, sqlGalleryAssetDeletableIDsForGallery, galleryID)
+	if err != nil {
+		return nil, fmt.Errorf("gallery asset deletable ids: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("gallery asset deletable ids scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // GetFirstAssetID returns the first asset ID in a gallery (by sort_order).
 func (r *GalleryAssetRepo) GetFirstAssetID(ctx context.Context, galleryID uuid.UUID) (*uuid.UUID, error) {
 	var assetID uuid.UUID
 	err := r.pool.QueryRow(ctx,
-		`SELECT asset_id FROM gallery_assets WHERE gallery_id = $1 ORDER BY sort_order ASC LIMIT 1`,
+		`SELECT ga.asset_id
+		 FROM gallery_assets ga
+		 JOIN assets a ON a.id = ga.asset_id
+		 WHERE ga.gallery_id = $1 AND a.deleted_at IS NULL
+		 ORDER BY ga.sort_order ASC LIMIT 1`,
 		galleryID,
 	).Scan(&assetID)
 	if err != nil {

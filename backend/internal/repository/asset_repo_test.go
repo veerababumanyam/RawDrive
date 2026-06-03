@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,48 @@ func TestAsset_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, "local", a.StorageDriver)
 	assert.Equal(t, 6000, *a.Width)
 	assert.Equal(t, &blurhash, a.Blurhash)
+}
+
+func TestAssetRepoJSONBHelpersMarshalMapsForPgCasts(t *testing.T) {
+	sourceMetadata := map[string]interface{}{
+		"original_filename":     "ChatGPT Image May 14, 2026.png",
+		"original_content_type": "image/png",
+		"image_width":           853,
+		"image_height":          1844,
+		"derivative_variants":   []interface{}{"thumb_sm_webp", "display_webp"},
+	}
+
+	raw := jsonMapString(sourceMetadata)
+	var decoded map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		t.Fatalf("jsonMapString produced invalid JSON: %v", err)
+	}
+	assert.Equal(t, "image/png", decoded["original_content_type"])
+	assert.Equal(t, float64(853), decoded["image_width"])
+
+	thumbs := jsonStringMap(map[string]string{"display_webp": "derivatives/display.webp"})
+	var thumbDecoded map[string]string
+	if err := json.Unmarshal([]byte(thumbs), &thumbDecoded); err != nil {
+		t.Fatalf("jsonStringMap produced invalid JSON: %v", err)
+	}
+	assert.Equal(t, "derivatives/display.webp", thumbDecoded["display_webp"])
+}
+
+func TestAssetRepoNullableJSON(t *testing.T) {
+	assert.Nil(t, nullableJSON(nil))
+
+	raw := nullableJSON([]map[string]interface{}{
+		{"category": "container", "severity": "info", "message": "ok"},
+	})
+	s, ok := raw.(string)
+	if !ok {
+		t.Fatalf("nullableJSON should return a string for non-nil JSON values, got %T", raw)
+	}
+	var decoded []map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &decoded); err != nil {
+		t.Fatalf("nullableJSON produced invalid JSON: %v", err)
+	}
+	assert.Equal(t, "container", decoded[0]["category"])
 }
 
 // ──────────────────────── AssetFilter ────────────────────────

@@ -31,8 +31,10 @@ type GalleryCard = {
   gallery: Gallery;
 };
 
+const GALLERY_CREATE_HREF = "/galleries?create=true";
+
 const quickActions = [
-  { label: "Create Gallery", icon: Plus, href: "/galleries" },
+  { label: "Create Gallery", icon: Plus, href: GALLERY_CREATE_HREF },
   { label: "Send Invoice", icon: Wallet, href: "/billing" },
   { label: "Add Client", icon: UserPlus, href: "/crm/contacts" },
   { label: "New Booking", icon: Sparkles, href: "/calendar" },
@@ -347,7 +349,7 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
               <p className="text-text-secondary">No galleries yet.</p>
               <Link
-                href="/galleries"
+                href={GALLERY_CREATE_HREF}
                 className="mt-4 inline-block rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90"
               >
                 + Create your first gallery

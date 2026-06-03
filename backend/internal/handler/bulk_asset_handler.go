@@ -19,6 +19,7 @@ import (
 // requirement for every caller.
 type bulkAssetRepo interface {
 	BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status string, workspaceID uuid.UUID) (int64, error)
+	BulkSoftDelete(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error)
 	BulkMoveToGallery(ctx context.Context, ids []uuid.UUID, fromGalleryID, toGalleryID, workspaceID uuid.UUID) (int64, error)
 	BulkSetRating(ctx context.Context, ids []uuid.UUID, rating int, workspaceID uuid.UUID) (int64, error)
 	BulkSetColorLabel(ctx context.Context, ids []uuid.UUID, label string, workspaceID uuid.UUID) (int64, error)
@@ -26,9 +27,14 @@ type bulkAssetRepo interface {
 	BulkRemoveTags(ctx context.Context, ids []uuid.UUID, tags []string, workspaceID uuid.UUID) (int64, error)
 }
 
+type bulkAssetDeleteService interface {
+	SoftDeleteManyForWorkspace(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error)
+}
+
 // BulkAssetHandler handles bulk asset operations.
 type BulkAssetHandler struct {
-	assetRepo bulkAssetRepo
+	assetRepo      bulkAssetRepo
+	assetDeleteSvc bulkAssetDeleteService
 }
 
 // NewBulkAssetHandler creates a new BulkAssetHandler. The repo
@@ -36,6 +42,11 @@ type BulkAssetHandler struct {
 // substitute fakes; production wiring passes *repository.AssetRepo.
 func NewBulkAssetHandler(ar bulkAssetRepo) *BulkAssetHandler {
 	return &BulkAssetHandler{assetRepo: ar}
+}
+
+func (h *BulkAssetHandler) WithAssetDeleteService(svc bulkAssetDeleteService) *BulkAssetHandler {
+	h.assetDeleteSvc = svc
+	return h
 }
 
 // BulkAction handles POST /api/v1/assets/bulk
@@ -112,7 +123,11 @@ func (h *BulkAssetHandler) BulkAction(w http.ResponseWriter, r *http.Request) {
 		// previously hardcoded len(ids).
 		affected, err = h.assetRepo.BulkMoveToGallery(r.Context(), ids, fromID, toID, workspaceID)
 	case "delete":
-		affected, err = h.assetRepo.BulkUpdateStatus(r.Context(), ids, "deleted", workspaceID)
+		if h.assetDeleteSvc != nil {
+			affected, err = h.assetDeleteSvc.SoftDeleteManyForWorkspace(r.Context(), ids, workspaceID)
+		} else {
+			affected, err = h.assetRepo.BulkSoftDelete(r.Context(), ids, workspaceID)
+		}
 	case "set_rating":
 		if input.Rating == nil || *input.Rating < 0 || *input.Rating > 5 {
 			http.Error(w, `{"error":"rating must be 0-5"}`, http.StatusBadRequest)

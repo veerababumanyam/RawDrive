@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import GalleriesPage from "../page";
 
 const mocks = vi.hoisted(() => ({
   authFetch: vi.fn(),
+  createGallery: vi.fn(),
   getAsset: vi.fn(),
   useDecryptedAssetUrl: vi.fn(),
 }));
@@ -42,7 +43,7 @@ vi.mock("@/lib/api/workspace-profile", () => ({
 }));
 
 vi.mock("@/lib/api/galleries", () => ({
-  createGallery: vi.fn(),
+  createGallery: mocks.createGallery,
   deleteGallery: vi.fn(),
   updateGallery: vi.fn(),
   galleryPublicUrl: vi.fn((gallery: { slug: string }) => `https://app.rawdrive.test/g/${gallery.slug}`),
@@ -77,6 +78,14 @@ function galleryWithDesignCover() {
 }
 
 describe("GalleriesPage cover previews", () => {
+  beforeEach(() => {
+    mocks.authFetch.mockReset();
+    mocks.createGallery.mockReset();
+    mocks.getAsset.mockReset();
+    mocks.useDecryptedAssetUrl.mockReset();
+    mocks.useDecryptedAssetUrl.mockReturnValue({ src: "", loading: false, error: null });
+  });
+
   it("fetches the Design Studio cover asset so encrypted thumbnails render with their manifest", async () => {
     mocks.authFetch.mockResolvedValue(
       new Response(JSON.stringify({ galleries: [galleryWithDesignCover()] }), {
@@ -116,5 +125,29 @@ describe("GalleriesPage cover previews", () => {
       "src",
       "blob:design-cover",
     );
+  });
+
+  it("clears stale create-gallery errors when the create form is cancelled", async () => {
+    mocks.authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ galleries: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    mocks.createGallery.mockRejectedValue(new Error("Failed to create gallery: create failed (500)"));
+
+    render(<GalleriesPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create new gallery" }));
+    fireEvent.change(screen.getByPlaceholderText("e.g. Sharma Wedding 2026"), {
+      target: { value: "Reception" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create Gallery" }));
+
+    expect(await screen.findByText("Failed to create gallery: create failed (500)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByText("Failed to create gallery: create failed (500)")).not.toBeInTheDocument();
   });
 });

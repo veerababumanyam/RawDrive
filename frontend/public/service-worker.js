@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v4";
+const VERSION = "m15-v5";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-`;
@@ -88,6 +88,15 @@ self.addEventListener("fetch", (event) => {
   // Navigation → network-first → cached shell → offline page
   if (request.mode === "navigate") {
     event.respondWith(handleNavigation(request));
+    return;
+  }
+
+  // Next/Turbopack chunk filenames are not a reliable deploy boundary here.
+  // Prefer fresh bytes after each deploy and keep cache only as an offline
+  // fallback; otherwise returning cache-first chunks makes production look
+  // like an old build until the user manually clears site data.
+  if (url.origin === self.location.origin && url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(handleFreshStatic(request));
     return;
   }
 
@@ -229,6 +238,21 @@ async function handleStatic(request) {
     }
     return response;
   } catch {
+    return new Response("", { status: 504 });
+  }
+}
+
+async function handleFreshStatic(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await fetch(new Request(request, { cache: "no-store" }));
+    if (response.ok) {
+      cache.put(request, response.clone()).catch(() => {});
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
     return new Response("", { status: 504 });
   }
 }

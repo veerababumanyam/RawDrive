@@ -19,13 +19,15 @@ RUN go mod download
 # Now copy the rest of the backend source
 COPY . .
 
-# Build BOTH binaries with the same toolchain / same vendored deps.
+# Build the runtime binaries with the same toolchain / same vendored deps.
 # CGO off ⇒ static binary, works on scratch-like runtime.
 # -trimpath strips local filesystem paths from stack traces.
 # -ldflags '-s -w' strips symbol + debug tables (smaller image).
 ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -trimpath -ldflags='-s -w' -o /out/api     ./cmd/api
-RUN go build -trimpath -ldflags='-s -w' -o /out/migrate ./cmd/migrate
+RUN go build -trimpath -ldflags='-s -w' -o /out/api                            ./cmd/api
+RUN go build -trimpath -ldflags='-s -w' -o /out/migrate                        ./cmd/migrate
+RUN go build -trimpath -ldflags='-s -w' -o /out/sync-platform-settings-from-env ./cmd/sync-platform-settings-from-env
+RUN go build -trimpath -ldflags='-s -w' -o /out/smtp-smoke                     ./cmd/smtp-smoke
 
 # ---------- runtime stage ----------
 # Pinned to a specific alpine patch for reproducibility. Bump when we
@@ -47,9 +49,11 @@ RUN apk add --no-cache ca-certificates tzdata curl libwebp-tools ffmpeg
 # Non-root user — drops privileges even if the binary is exploited
 RUN addgroup -S rawdrive && adduser -S -G rawdrive rawdrive
 
-# Copy both binaries
-COPY --from=build /out/api     /usr/local/bin/api
-COPY --from=build /out/migrate /usr/local/bin/migrate
+# Copy runtime binaries.
+COPY --from=build /out/api                            /usr/local/bin/api
+COPY --from=build /out/migrate                        /usr/local/bin/migrate
+COPY --from=build /out/sync-platform-settings-from-env /usr/local/bin/sync-platform-settings-from-env
+COPY --from=build /out/smtp-smoke                     /usr/local/bin/smtp-smoke
 
 USER rawdrive
 WORKDIR /home/rawdrive

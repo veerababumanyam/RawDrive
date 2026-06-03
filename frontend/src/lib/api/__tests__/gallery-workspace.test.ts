@@ -51,6 +51,21 @@ describe("gallery workspace API", () => {
     );
   });
 
+  it("surfaces the backend create-gallery error body instead of only the status code", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      clone() {
+        return this;
+      },
+      json: async () => ({ error: "create failed" }),
+    });
+
+    await expect(createGallery("token", { title: "Reception" })).rejects.toThrow(
+      "Failed to create gallery: create failed (500)",
+    );
+  });
+
   it("links and unlinks gallery relationships through the workspace endpoint", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

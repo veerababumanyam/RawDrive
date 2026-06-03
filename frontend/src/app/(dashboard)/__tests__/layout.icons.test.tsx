@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
  * F-090 regression guard.
  *
  * `(dashboard)/layout.tsx` previously imported nine glyphs from `lucide-react`
- * (Bell, FolderOpen, Home, LogOut, Menu, Search, Settings, User, X) and
+ * (Bell, Home, LogOut, Menu, Search, Settings, User, X) and
  * rendered them in its header (quick-nav, global search, notifications) and
  * user menu. The fix moves the icons layout.tsx itself renders to the
  * project's SF-Symbols system — the shared barrel at `@/components/icons`.
@@ -120,7 +120,7 @@ function layoutOwnedSvgs(): SVGElement[] {
   });
   searchInput.closest("form")?.querySelectorAll("svg").forEach((s) => svgs.push(s));
 
-  // Quick-nav links — layout.tsx renders the Home/FolderOpen glyphs here.
+  // Quick-nav links — layout.tsx renders the Home glyph here.
   const quickNav = screen.getByRole("navigation", { name: "Workspace quick navigation" });
   quickNav.querySelectorAll("svg").forEach((s) => svgs.push(s));
 

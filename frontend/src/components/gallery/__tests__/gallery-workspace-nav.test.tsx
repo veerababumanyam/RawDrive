@@ -30,11 +30,6 @@ describe("GalleryWorkspaceNav", () => {
       // People tab was removed 2026-05-18 in favor of Photo Search,
       // which subsumes the use case for the dashboard surface.
       "Photo Search",
-      // Delivery + Sales re-homed as workspace sub-pages 2026-05-31 — the
-      // two continuity panels were orphaned when commit 46d5188 removed the
-      // gallery detail aside; they now live at /delivery and /sales.
-      "Delivery",
-      "Sales",
       "Settings",
     ]) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
@@ -52,15 +47,8 @@ describe("GalleryWorkspaceNav", () => {
       "href",
       "/galleries/gallery-1/photo-search",
     );
-    // Delivery + Sales continuity sub-pages (re-homed 2026-05-31).
-    expect(within(nav).getByRole("link", { name: "Delivery" })).toHaveAttribute(
-      "href",
-      "/galleries/gallery-1/delivery",
-    );
-    expect(within(nav).getByRole("link", { name: "Sales" })).toHaveAttribute(
-      "href",
-      "/galleries/gallery-1/sales",
-    );
+    expect(within(nav).queryByRole("link", { name: "Delivery" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Sales" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Gallery" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Photos" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Albums" })).toBeNull();

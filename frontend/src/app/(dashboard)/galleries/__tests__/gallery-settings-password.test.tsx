@@ -37,7 +37,7 @@ vi.mock("@/lib/api/galleries", () => ({
   updateGallerySettings: mocks.updateGallerySettings,
 }));
 
-function gallery(settings: Record<string, unknown> = {}) {
+function gallery(overrides: Record<string, unknown> = {}) {
   return {
     id: "gallery-1",
     workspace_id: "workspace-1",
@@ -48,9 +48,10 @@ function gallery(settings: Record<string, unknown> = {}) {
     is_published: false,
     max_selections: 0,
     status: "active",
-    settings,
+    settings: {},
     created_at: "2026-06-02T00:00:00Z",
     updated_at: "2026-06-02T00:00:00Z",
+    ...overrides,
   };
 }
 
@@ -98,5 +99,62 @@ describe("Gallery settings password protection", () => {
 
     expect(await screen.findByText("Password set")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Password" })).toBeInTheDocument();
+  });
+
+  it("offers explicit client download formats without the mixed Both option", async () => {
+    mocks.getGallery.mockResolvedValue(gallery({ has_password: false, download_enabled: true, download_quality: "original" }));
+
+    await renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Gallery Settings" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Choose the exact format clients can download from this public gallery.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /WebP display/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /WebP thumbnail/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Original source/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Both/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Full source files only.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Clients choose either format.")).not.toBeInTheDocument();
+  });
+
+  it("saves the selected optimized WebP download option", async () => {
+    mocks.getGallery.mockResolvedValue(gallery({ has_password: false, download_enabled: true, download_quality: "webp" }));
+    mocks.updateGallerySettings.mockResolvedValue(gallery({ download_enabled: true, download_quality: "thumbnail" }));
+
+    await renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /WebP thumbnail/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /WebP thumbnail/i }));
+
+    await waitFor(() => {
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith("token-1", "gallery-1", {
+        download_quality: "thumbnail",
+      });
+    });
+    expect(await screen.findByText("Download option saved")).toBeInTheDocument();
+  });
+
+  it("saves original source as a client download option", async () => {
+    mocks.getGallery.mockResolvedValue(gallery({ has_password: false, download_enabled: true, download_quality: "webp" }));
+    mocks.updateGallerySettings.mockResolvedValue(gallery({ download_enabled: true, download_quality: "original" }));
+
+    await renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Original source/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Original source/i }));
+
+    await waitFor(() => {
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith("token-1", "gallery-1", {
+        download_quality: "original",
+      });
+    });
   });
 });

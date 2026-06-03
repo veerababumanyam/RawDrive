@@ -74,39 +74,35 @@ const INITIAL_GRID_RENDER_COUNT = 60;
 const GRID_RENDER_BATCH = 60;
 const FULLSCREEN_CHROME_IDLE_MS = 2200;
 
-type PublicDownloadFormat = "original" | "webp";
-type PublicDownloadQuality = PublicDownloadFormat | "both";
-
-const DOWNLOAD_FORMATS_BY_QUALITY: Record<PublicDownloadQuality, PublicDownloadFormat[]> = {
-  original: ["original"],
-  webp: ["webp"],
-  both: ["webp", "original"],
-};
-
-function normalizeDownloadQuality(value: string | undefined | null): PublicDownloadQuality {
-  const normalized = String(value || "webp").toLowerCase().trim();
-  if (normalized === "webp" || normalized === "both") return normalized;
-  if (normalized === "original") return "original";
-  return "webp";
-}
+type PublicDownloadFormat = "webp" | "thumbnail" | "original";
 
 function downloadFormatsForQuality(value: string | undefined | null): PublicDownloadFormat[] {
-  return DOWNLOAD_FORMATS_BY_QUALITY[normalizeDownloadQuality(value)];
+  if (value === "original") return ["original"];
+  if (value === "thumbnail") return ["thumbnail"];
+  return ["webp"];
 }
 
 function publicDownloadLabel(format: PublicDownloadFormat): string {
-  return format === "webp" ? "Download WebP" : "Download original";
+  if (format === "original") return "Download original";
+  if (format === "thumbnail") return "Download thumbnail";
+  return "Download WebP";
 }
 
 function publicDownloadFilename(asset: PublicAsset, format: PublicDownloadFormat): string {
-  if (format === "webp") {
-    return asset.filename.replace(/\.[^.]+$/, ".webp");
-  }
-  return asset.filename;
+  if (format === "original") return asset.filename;
+  if (format === "thumbnail") return "thumb_" + asset.filename.replace(/\.[^.]+$/, ".webp");
+  return asset.filename.replace(/\.[^.]+$/, ".webp");
 }
 
 function encryptedDownloadManifest(asset: PublicAsset, format: PublicDownloadFormat) {
   if (format === "original") return originalManifest(asset);
+  if (format === "thumbnail") {
+    return (
+      variantManifest(asset, "thumb_lg_webp") ||
+      variantManifest(asset, "thumb_md_webp") ||
+      variantManifest(asset, "thumb_sm_webp")
+    );
+  }
   return (
     variantManifest(asset, "display_webp") ||
     variantManifest(asset, "thumb_lg_webp") ||

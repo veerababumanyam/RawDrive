@@ -62,6 +62,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	var bulkHandler *BulkAssetHandler
 	if deps.AssetRepo != nil {
 		bulkHandler = NewBulkAssetHandler(deps.AssetRepo)
+		if deps.AssetService != nil {
+			bulkHandler = bulkHandler.WithAssetDeleteService(deps.AssetService)
+		}
 	}
 
 	// Protected asset routes

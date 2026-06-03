@@ -116,14 +116,11 @@ describe("DashboardLayout header", () => {
 
     const quickNav = await screen.findByRole("navigation", { name: "Workspace quick navigation" });
     const homeLink = within(quickNav).getByRole("link", { name: "Open your studio dashboard" });
-    const projectsLink = within(quickNav).getByRole("link", { name: "Browse gallery projects and client deliveries" });
 
     expect(homeLink).toHaveAttribute("href", "/dashboard");
     expect(homeLink).toHaveAttribute("title", "Open your studio dashboard");
-    expect(projectsLink).toHaveAttribute("href", "/galleries");
-    expect(projectsLink).toHaveAttribute("title", "Browse gallery projects and client deliveries");
     expect(within(quickNav).getByText("Home")).toBeInTheDocument();
-    expect(within(quickNav).getByText("Projects")).toBeInTheDocument();
+    expect(within(quickNav).queryByText("Projects")).not.toBeInTheDocument();
   });
 
   it("keeps the search field in the centered desktop slot", async () => {
@@ -194,6 +191,7 @@ describe("DashboardLayout role-based sidebar", () => {
     // Key nav items
     expect(screen.getByRole("link", { name: /Galleries/i })).toHaveAttribute("href", "/galleries");
     expect(screen.getByRole("link", { name: /Install App/i })).toHaveAttribute("href", "/settings/pwa");
+    expect(screen.queryByRole("link", { name: /Desktop App/i })).not.toBeInTheDocument();
     // AI Studio tile was removed from the photographer sidebar 2026-05-19
     // to declutter the left nav. The /ai route is still mounted but no
     // longer surfaced from the nav, mirroring the "AI" tab removal from

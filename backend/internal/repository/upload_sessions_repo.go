@@ -91,6 +91,26 @@ func NewUploadSessionsRepo(pool *pgxpool.Pool) *UploadSessionsRepo {
 	return &UploadSessionsRepo{pool: pool}
 }
 
+func uploadSessionRequiredJSONB(value []byte, fallback string) (string, error) {
+	if len(value) == 0 {
+		value = []byte(fallback)
+	}
+	if !json.Valid(value) {
+		return "", fmt.Errorf("invalid json")
+	}
+	return string(value), nil
+}
+
+func uploadSessionNullableJSONB(value []byte) (any, error) {
+	if len(value) == 0 {
+		return nil, nil
+	}
+	if !json.Valid(value) {
+		return nil, fmt.Errorf("invalid json")
+	}
+	return string(value), nil
+}
+
 // Create persists a new session row at the start of a TUS upload.
 // The caller is responsible for generating the TUS upload ID (uuid
 // string) and for having already called R2 CreateMultipartUpload when
@@ -120,21 +140,40 @@ func (r *UploadSessionsRepo) Create(ctx context.Context, s *UploadSession) error
 	if s.ExpiresAt.IsZero() {
 		return errors.New("upload_sessions: expires_at required")
 	}
-	if len(s.R2PartETags) == 0 {
-		s.R2PartETags = []byte("[]")
+	r2PartETagsJSON, err := uploadSessionRequiredJSONB(s.R2PartETags, "[]")
+	if err != nil {
+		return fmt.Errorf("upload_sessions: r2_part_etags json: %w", err)
+	}
+	s.R2PartETags = []byte(r2PartETagsJSON)
+
+	scanManifestJSON, err := uploadSessionNullableJSONB(s.ScanManifest)
+	if err != nil {
+		return fmt.Errorf("upload_sessions: scan_manifest json: %w", err)
+	}
+	mediaEncryptionJSON, err := uploadSessionNullableJSONB(s.MediaEncryption)
+	if err != nil {
+		return fmt.Errorf("upload_sessions: media_encryption json: %w", err)
+	}
+	sourceMetadataJSON, err := uploadSessionNullableJSONB(s.SourceMetadata)
+	if err != nil {
+		return fmt.Errorf("upload_sessions: source_metadata json: %w", err)
 	}
 
-	_, err := r.pool.Exec(ctx,
+	if r.pool == nil {
+		return errors.New("upload_sessions: pool is nil")
+	}
+
+	_, err = r.pool.Exec(ctx,
 		`INSERT INTO upload_sessions (
 		    workspace_id, user_id, tus_upload_id, filename, content_type,
 		    total_size, upload_offset, chunk_size, r2_multipart_upload_id,
 		    r2_part_etags, expires_at, scan_manifest, media_encryption,
 		    source_metadata, credit_reservation_id, gallery_id, album_id
-		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16, $17)`,
 		s.WorkspaceID, s.UserID, s.TUSUploadID, s.Filename, s.ContentType,
 		s.TotalSize, s.UploadOffset, s.ChunkSize, s.R2MultipartUploadID,
-		s.R2PartETags, s.ExpiresAt, s.ScanManifest, s.MediaEncryption,
-		s.SourceMetadata, s.CreditReservationID, s.GalleryID, s.AlbumID,
+		r2PartETagsJSON, s.ExpiresAt, scanManifestJSON, mediaEncryptionJSON,
+		sourceMetadataJSON, s.CreditReservationID, s.GalleryID, s.AlbumID,
 	)
 	if err != nil {
 		return fmt.Errorf("upload_sessions: create: %w", err)
@@ -210,7 +249,7 @@ func (r *UploadSessionsRepo) AppendPartETag(ctx context.Context, tusUploadID str
 		 SET r2_part_etags = r2_part_etags || $1::jsonb,
 		     updated_at = now()
 		 WHERE tus_upload_id = $2 AND completed_at IS NULL`,
-		partJSON, tusUploadID,
+		string(partJSON), tusUploadID,
 	)
 	if err != nil {
 		return fmt.Errorf("upload_sessions: append part: %w", err)

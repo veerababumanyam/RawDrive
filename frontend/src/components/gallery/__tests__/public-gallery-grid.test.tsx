@@ -86,10 +86,22 @@ describe("PublicGalleryGrid", () => {
 
     const menu = screen.getByRole("menu");
     expect(within(menu).getByRole("menuitem", { name: "Download WebP" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "Download thumbnail" })).toBeNull();
     expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
   });
 
-  it("uses an original-only download action when the gallery policy allows only originals", () => {
+  it("uses the thumbnail download action when the gallery policy allows thumbnails", () => {
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="thumbnail" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
+
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Download thumbnail" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "Download WebP" })).toBeNull();
+    expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
+  });
+
+  it("uses the original download action when the gallery policy allows source files", () => {
     render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="original" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
@@ -97,16 +109,17 @@ describe("PublicGalleryGrid", () => {
     const menu = screen.getByRole("menu");
     expect(within(menu).getByRole("menuitem", { name: "Download original" })).toBeInTheDocument();
     expect(within(menu).queryByRole("menuitem", { name: "Download WebP" })).toBeNull();
+    expect(within(menu).queryByRole("menuitem", { name: "Download thumbnail" })).toBeNull();
   });
 
-  it("shows both download formats when the gallery policy allows both", () => {
+  it("keeps old both-format policies WebP-only", () => {
     render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="both" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
     expect(within(menu).getByRole("menuitem", { name: "Download WebP" })).toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Download original" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
   });
 
   it("renders a per-tile favorite toggle alongside the download button", async () => {

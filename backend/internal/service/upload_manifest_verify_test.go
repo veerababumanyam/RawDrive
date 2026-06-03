@@ -253,6 +253,7 @@ func TestStillImageFormatFromContentType(t *testing.T) {
 		ok          bool
 	}{
 		{"image/jpeg", "jpeg", true},
+		{"image/jfif", "jpeg", true},
 		{"image/webp; charset=binary", "webp", true},
 		{"image/x-canon-cr3", "cr3", true},
 		{"image/x-canon-crw", "crw", true},

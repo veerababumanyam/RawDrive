@@ -188,10 +188,11 @@ func (r *AlbumRepo) AddAsset(ctx context.Context, albumID, assetID, workspaceID 
 // ListAssets returns all asset links for an album ordered by position.
 func (r *AlbumRepo) ListAssets(ctx context.Context, albumID uuid.UUID) ([]AlbumAsset, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT album_id, asset_id, position, added_at
-		 FROM album_assets
-		 WHERE album_id = $1
-		 ORDER BY position ASC, added_at ASC`,
+		`SELECT aa.album_id, aa.asset_id, aa.position, aa.added_at
+		 FROM album_assets aa
+		 JOIN assets a ON a.id = aa.asset_id
+		 WHERE aa.album_id = $1 AND a.deleted_at IS NULL
+		 ORDER BY aa.position ASC, aa.added_at ASC`,
 		albumID,
 	)
 	if err != nil {
@@ -219,7 +220,8 @@ func (r *AlbumRepo) ListAssetIDsByGallery(ctx context.Context, galleryID uuid.UU
 		`SELECT aa.album_id, aa.asset_id
 		 FROM album_assets aa
 		 JOIN albums al ON al.id = aa.album_id
-		 WHERE al.gallery_id = $1
+		 JOIN assets a ON a.id = aa.asset_id
+		 WHERE al.gallery_id = $1 AND a.deleted_at IS NULL
 		 ORDER BY aa.album_id, aa.position ASC, aa.added_at ASC`,
 		galleryID,
 	)

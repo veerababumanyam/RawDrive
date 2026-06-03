@@ -33,22 +33,33 @@ func TestPublicDownloadVariantSelectsWebPAndThumbnail(t *testing.T) {
 	if thumb.StorageKey != "thumbnails/thumb-lg.webp" || thumb.ContentType != "image/webp" || thumb.Filename != "thumb_Wedding (42).webp" {
 		t.Fatalf("unexpected thumbnail variant: %+v", thumb)
 	}
+
+	original, err := publicDownloadVariant(asset, "original")
+	if err != nil {
+		t.Fatalf("original variant returned error: %v", err)
+	}
+	if original.StorageKey != "originals/wedding.nef" || original.ContentType != "image/x-nikon-nef" || original.Filename != "Wedding (42).NEF" || original.SizeBytes != 100 {
+		t.Fatalf("unexpected original variant: %+v", original)
+	}
 }
 
-func TestPublicDownloadVariantDefaultsToOriginal(t *testing.T) {
+func TestPublicDownloadVariantDefaultsToWebP(t *testing.T) {
 	asset := &repository.Asset{
 		Filename:    "photo.jpg",
 		ContentType: "image/jpeg",
 		StorageKey:  "originals/photo.jpg",
 		SizeBytes:   42,
+		ThumbnailURLs: map[string]string{
+			"display_webp": "derivatives/photo.webp",
+		},
 	}
 
-	original, err := publicDownloadVariant(asset, "")
+	webp, err := publicDownloadVariant(asset, "")
 	if err != nil {
-		t.Fatalf("original variant returned error: %v", err)
+		t.Fatalf("webp variant returned error: %v", err)
 	}
-	if original.StorageKey != asset.StorageKey || original.ContentType != asset.ContentType || original.Filename != asset.Filename || original.SizeBytes != asset.SizeBytes {
-		t.Fatalf("unexpected original variant: %+v", original)
+	if webp.StorageKey != "derivatives/photo.webp" || webp.ContentType != "image/webp" || webp.Filename != "photo.webp" {
+		t.Fatalf("unexpected webp variant: %+v", webp)
 	}
 }
 
@@ -62,11 +73,19 @@ func TestPublicDownloadFormatForPolicy(t *testing.T) {
 	}{
 		{name: "missing policy defaults to webp", requested: "", policy: "", want: "webp"},
 		{name: "original policy defaults to original", requested: "", policy: "original", want: "original"},
+		{name: "original policy accepts original", requested: "original", policy: "original", want: "original"},
 		{name: "original policy rejects webp", requested: "webp", policy: "original", wantErr: true},
+		{name: "original policy rejects thumbnail", requested: "thumbnail", policy: "original", wantErr: true},
 		{name: "webp policy defaults to webp", requested: "", policy: "webp", want: "webp"},
 		{name: "webp policy rejects original", requested: "original", policy: "webp", wantErr: true},
-		{name: "both policy accepts original", requested: "original", policy: "both", want: "original"},
-		{name: "both policy accepts webp", requested: "webp", policy: "both", want: "webp"},
+		{name: "webp policy rejects thumbnail", requested: "thumbnail", policy: "webp", wantErr: true},
+		{name: "thumbnail policy defaults to thumbnail", requested: "", policy: "thumbnail", want: "thumbnail"},
+		{name: "thumbnail policy accepts thumbnail", requested: "thumbnail", policy: "thumbnail", want: "thumbnail"},
+		{name: "thumbnail policy rejects webp", requested: "webp", policy: "thumbnail", wantErr: true},
+		{name: "thumbnail policy rejects original", requested: "original", policy: "thumbnail", wantErr: true},
+		{name: "old both policy rejects original", requested: "original", policy: "both", wantErr: true},
+		{name: "old both policy accepts webp", requested: "webp", policy: "both", want: "webp"},
+		{name: "old both policy rejects thumbnail", requested: "thumbnail", policy: "both", wantErr: true},
 	}
 
 	for _, tc := range tests {

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -134,6 +135,56 @@ func (g *Gallery) normalizeLifecycleTimestamps(now time.Time) {
 	g.ArchivedAt = nil
 }
 
+func galleryJSONB(value map[string]interface{}) (string, error) {
+	if value == nil {
+		value = map[string]interface{}{}
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func galleryJSONBValue(value any) (string, error) {
+	switch v := value.(type) {
+	case nil:
+		return "{}", nil
+	case map[string]interface{}:
+		return galleryJSONB(v)
+	case []byte:
+		if len(v) == 0 {
+			return "{}", nil
+		}
+		if !json.Valid(v) {
+			return "", fmt.Errorf("invalid json")
+		}
+		return string(v), nil
+	case json.RawMessage:
+		if len(v) == 0 {
+			return "{}", nil
+		}
+		if !json.Valid(v) {
+			return "", fmt.Errorf("invalid json")
+		}
+		return string(v), nil
+	case string:
+		if v == "" {
+			return "{}", nil
+		}
+		if !json.Valid([]byte(v)) {
+			return "", fmt.Errorf("invalid json")
+		}
+		return v, nil
+	default:
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		return string(encoded), nil
+	}
+}
+
 // generateSlug creates a URL-safe slug from the title.
 func generateSlug(title string) string {
 	slug := strings.ToLower(title)
@@ -175,20 +226,33 @@ func (r *GalleryRepo) Create(ctx context.Context, g *Gallery) error {
 	}
 	g.DownloadEnabled = true
 
-	_, err := r.pool.Exec(ctx,
+	settingsJSON, err := galleryJSONB(g.Settings)
+	if err != nil {
+		return fmt.Errorf("gallery repo create settings json: %w", err)
+	}
+	watermarkJSON, err := galleryJSONB(g.WatermarkConfig)
+	if err != nil {
+		return fmt.Errorf("gallery repo create watermark json: %w", err)
+	}
+	coverJSON, err := galleryJSONB(g.CoverConfig)
+	if err != nil {
+		return fmt.Errorf("gallery repo create cover json: %w", err)
+	}
+
+	_, err = r.pool.Exec(ctx,
 		`INSERT INTO galleries (id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
 		 title, slug, description, cover_asset_id,
 		 gallery_type, settings, password_hash, watermark_config, is_published, max_selections,
 		 status, created_by, created_at, updated_at, published_at, archived_at,
 		 cover_template, cover_config, expires_at, download_enabled, download_quality, sort_preference, whatsapp_template,
 		 tethering_enabled, tether_directory)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)`,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26::jsonb,$27,$28,$29,$30,$31,$32,$33)`,
 		g.ID, g.WorkspaceID, g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
 		g.Title, g.Slug, g.Description, g.CoverAssetID,
-		g.GalleryType, g.Settings, g.PasswordHash, g.WatermarkConfig, g.IsPublished,
+		g.GalleryType, settingsJSON, g.PasswordHash, watermarkJSON, g.IsPublished,
 		g.MaxSelections, g.Status, g.CreatedBy, g.CreatedAt, g.UpdatedAt,
 		g.PublishedAt, g.ArchivedAt,
-		g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled, g.DownloadQuality, g.SortPreference, g.WhatsappTemplate,
+		g.CoverTemplate, coverJSON, g.ExpiresAt, g.DownloadEnabled, g.DownloadQuality, g.SortPreference, g.WhatsappTemplate,
 		g.TetheringEnabled, g.TetherDirectory,
 	)
 	if err != nil {
@@ -387,21 +451,35 @@ func (r *GalleryRepo) Update(ctx context.Context, g *Gallery) error {
 	g.UpdatedAt = time.Now()
 	g.normalizeWorkspaceLinks()
 	g.normalizeLifecycleTimestamps(g.UpdatedAt)
+
+	settingsJSON, err := galleryJSONB(g.Settings)
+	if err != nil {
+		return fmt.Errorf("gallery repo update settings json: %w", err)
+	}
+	watermarkJSON, err := galleryJSONB(g.WatermarkConfig)
+	if err != nil {
+		return fmt.Errorf("gallery repo update watermark json: %w", err)
+	}
+	coverJSON, err := galleryJSONB(g.CoverConfig)
+	if err != nil {
+		return fmt.Errorf("gallery repo update cover json: %w", err)
+	}
+
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE galleries SET contact_id=$1, primary_contact_id=$2, project_id=$3, event_id=$4, deal_id=$5, invoice_id=$6,
 		 title=$7, slug=$8, description=$9, cover_asset_id=$10,
-		 gallery_type=$11, settings=$12, password_hash=$13, watermark_config=$14,
+		 gallery_type=$11, settings=$12::jsonb, password_hash=$13, watermark_config=$14::jsonb,
 		 is_published=$15, max_selections=$16, status=$17, updated_at=$18, published_at=$19, archived_at=$20,
-		 cover_template=$21, cover_config=$22, expires_at=$23, download_enabled=$24, download_quality=$25,
+		 cover_template=$21, cover_config=$22::jsonb, expires_at=$23, download_enabled=$24, download_quality=$25,
 		 sort_preference=$26, whatsapp_template=$27,
 		 faceid_enabled=$28, face_detection_enabled=$29,
 		 tethering_enabled=$30, tether_directory=$31,
 		 email_automation_enabled=$32
 		 WHERE id=$33 AND deleted_at IS NULL`,
 		g.ContactID, g.PrimaryContactID, g.ProjectID, g.EventID, g.DealID, g.InvoiceID,
-		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, g.Settings,
-		g.PasswordHash, g.WatermarkConfig, g.IsPublished, g.MaxSelections, g.Status,
-		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, g.CoverConfig, g.ExpiresAt, g.DownloadEnabled,
+		g.Title, g.Slug, g.Description, g.CoverAssetID, g.GalleryType, settingsJSON,
+		g.PasswordHash, watermarkJSON, g.IsPublished, g.MaxSelections, g.Status,
+		g.UpdatedAt, g.PublishedAt, g.ArchivedAt, g.CoverTemplate, coverJSON, g.ExpiresAt, g.DownloadEnabled,
 		g.DownloadQuality, g.SortPreference, g.WhatsappTemplate, g.FaceIDEnabled, g.FaceDetectionEnabled,
 		g.TetheringEnabled, g.TetherDirectory, g.EmailAutomationEnabled, g.ID,
 	)
@@ -565,7 +643,18 @@ func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, fiel
 	if !allowedFields[field] {
 		return fmt.Errorf("gallery repo: field %q is not updatable via UpdateField", field)
 	}
-	query := fmt.Sprintf(`UPDATE galleries SET %s=$1, updated_at=now() WHERE id=$2`, field)
+	if field == "cover_config" || field == "watermark_config" {
+		jsonValue, err := galleryJSONBValue(value)
+		if err != nil {
+			return fmt.Errorf("gallery repo update field %s json: %w", field, err)
+		}
+		value = jsonValue
+	}
+	placeholder := "$1"
+	if field == "cover_config" || field == "watermark_config" {
+		placeholder = "$1::jsonb"
+	}
+	query := fmt.Sprintf(`UPDATE galleries SET %s=%s, updated_at=now() WHERE id=$2`, field, placeholder)
 	_, err := r.pool.Exec(ctx, query, value, galleryID)
 	if err != nil {
 		return fmt.Errorf("gallery repo update field %s: %w", field, err)

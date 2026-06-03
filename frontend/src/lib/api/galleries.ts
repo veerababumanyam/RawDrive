@@ -50,7 +50,7 @@ export interface Gallery {
   cover_config?: Record<string, unknown>;
   expires_at?: string;
   download_enabled?: boolean;
-  download_quality?: "original" | "webp" | "both" | string;
+  download_quality?: "webp" | "thumbnail" | "original" | string;
   sort_preference?: string;
   whatsapp_template?: string;
   // Gallery Enhancements June 2026: optional slideshow background-music asset.
@@ -463,8 +463,28 @@ export async function createGallery(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Failed to create gallery: ${res.status}`);
+  if (!res.ok) throw new Error(await galleryApiErrorMessage(res, "Failed to create gallery"));
   return res.json();
+}
+
+async function galleryApiErrorMessage(res: Response, fallback: string): Promise<string> {
+  let detail = "";
+  try {
+    const body = await res.clone().json();
+    if (body && typeof body.error === "string") {
+      detail = body.error;
+    } else if (body && typeof body.message === "string") {
+      detail = body.message;
+    }
+  } catch {
+    try {
+      detail = (await res.text()).trim();
+    } catch {
+      detail = "";
+    }
+  }
+  if (!detail) return `${fallback}: ${res.status}`;
+  return `${fallback}: ${detail} (${res.status})`;
 }
 
 export async function updateGallery(_token: string, id: string, data: Partial<Gallery>): Promise<Gallery> {

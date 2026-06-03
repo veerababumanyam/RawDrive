@@ -43,4 +43,11 @@ describe("StudioSidebar CRM grouping", () => {
 
     expect(screen.getByRole("link", { name: /studio crm/i }).className).toContain("text-accent");
   });
+
+  it("does not expose the desktop app link in studio navigation", () => {
+    render(<StudioSidebar userName="Priya Studio" />);
+
+    expect(screen.queryByRole("link", { name: /desktop app/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /install app/i })).toHaveAttribute("href", "/settings/pwa");
+  });
 });

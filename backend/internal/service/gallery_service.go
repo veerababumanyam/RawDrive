@@ -23,12 +23,17 @@ type galleryAssetSource interface {
 	ListGroupedByDate(ctx context.Context, galleryID uuid.UUID, limit int) ([]repository.TimelineGroup, error)
 }
 
+type galleryAssetDeleteService interface {
+	SoftDeleteManyForWorkspace(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error)
+}
+
 // GalleryService handles gallery business logic.
 type GalleryService struct {
 	galleryRepo      *repository.GalleryRepo
 	galleryAssetRepo *repository.GalleryAssetRepo
 	coverSvc         *GalleryCoverService
 	assetRepo        galleryAssetSource
+	assetDeleteSvc   galleryAssetDeleteService
 	albumSvc         *AlbumService
 }
 
@@ -44,6 +49,14 @@ func (s *GalleryService) WithAssetRepo(ar *repository.AssetRepo) *GalleryService
 		return s
 	}
 	s.assetRepo = ar
+	return s
+}
+
+// WithAssetDeleteService attaches the asset delete workflow used when a whole
+// gallery is removed. It lets gallery deletion clean up originals, derivatives,
+// and storage accounting for assets not shared with another live gallery.
+func (s *GalleryService) WithAssetDeleteService(assetDeleteSvc galleryAssetDeleteService) *GalleryService {
+	s.assetDeleteSvc = assetDeleteSvc
 	return s
 }
 
@@ -261,6 +274,32 @@ func (s *GalleryService) ValidateGalleryMusic(ctx context.Context, workspaceID u
 // SoftDelete deletes a gallery (soft).
 func (s *GalleryService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return s.galleryRepo.SoftDelete(ctx, id)
+}
+
+// SoftDeleteForWorkspace deletes a gallery and also deletes the active assets
+// that are not linked to any other live gallery. This keeps storage usage in
+// sync with the gallery surface: deleting the last gallery should not leave
+// orphaned originals consuming quota.
+func (s *GalleryService) SoftDeleteForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) error {
+	var deletableAssetIDs []uuid.UUID
+	if s.galleryAssetRepo != nil && s.assetDeleteSvc != nil {
+		ids, err := s.galleryAssetRepo.ListDeletableAssetIDsForGallery(ctx, id)
+		if err != nil {
+			return fmt.Errorf("gallery service delete: list deletable assets: %w", err)
+		}
+		deletableAssetIDs = ids
+	}
+
+	if err := s.galleryRepo.SoftDelete(ctx, id); err != nil {
+		return err
+	}
+
+	if len(deletableAssetIDs) > 0 && s.assetDeleteSvc != nil {
+		if _, err := s.assetDeleteSvc.SoftDeleteManyForWorkspace(ctx, deletableAssetIDs, workspaceID); err != nil {
+			return fmt.Errorf("gallery service delete: delete gallery assets: %w", err)
+		}
+	}
+	return nil
 }
 
 // AddAsset adds an asset to a gallery and auto-sets cover if none.

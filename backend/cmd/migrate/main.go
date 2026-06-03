@@ -8,6 +8,11 @@
 // tests) and gives it a production entry point. See design spec
 // docs/superpowers/specs/2026-04-11-hostinger-production-bootstrap-design.md
 // §5.1 for rationale.
+//
+// Service credentials are intentionally not rotated by schema migrations. After
+// changing SMTP/storage/payment env values, run sync-platform-settings-from-env
+// with the narrow category/key filter, then use the relevant smoke command
+// (for email, smtp-smoke) before considering the deploy healthy.
 package main
 
 import (

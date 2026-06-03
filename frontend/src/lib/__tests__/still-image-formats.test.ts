@@ -6,7 +6,7 @@ import {
 } from "../still-image-formats";
 
 describe("still image format registry", () => {
-  it.each(["Wedding (42).JPG", "portrait.PNG", "delivery.WEBP", "animation.GIF"])(
+  it.each(["Wedding (42).JPG", "portrait.JFIF", "scan.JFI", "portrait.PNG", "delivery.WEBP", "animation.GIF"])(
     "accepts browser-decodable image extension %s when MIME is blank",
     (name) => {
       expect(isAcceptedStillImageFile(new File(["image"], name, { type: "" }))).toBe(true);

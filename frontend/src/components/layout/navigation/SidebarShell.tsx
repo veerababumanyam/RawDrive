@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { ChevronDoubleLeft, ChevronDoubleRight } from "@/components/icons";
 
 const SIDEBAR_COLLAPSED_KEY = "rawdrive:sidebar:collapsed";
 
@@ -105,7 +106,7 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
       {/* Logo + subtitle — always rendered first so the brand mark is the
           top-most element of the rail in both expanded and collapsed
           states. The toggle button below never overlaps it. */}
-      <Link
+      <a
         href="https://rawdrive.in"
         target="_blank"
         rel="noopener noreferrer"
@@ -123,14 +124,14 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
           className="h-9 w-9 shrink-0 rounded-lg"
         />
         <div className="sidebar-collapse-hide">
-          <h1 className="font-headline text-lg font-bold tracking-[-0.04em] text-accent">
+          <h1 className="font-headline text-lg font-bold text-accent">
             RawDrive
           </h1>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-text-tertiary">
+          <p className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
             {subtitle}
           </p>
         </div>
-      </Link>
+      </a>
 
       {/* Desktop collapse/expand toggle — sits BELOW the logo so the brand
           mark is never overlapped. Hidden on mobile (drawer UX makes
@@ -138,16 +139,17 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
           right-aligns with the nav-item padding; when collapsed it
           centers in the 64px rail directly under the logo. */}
       <div className={cn("mb-6 hidden lg:flex", collapsed ? "justify-center" : "justify-end px-2")}>
-        <button
+        <GlassIconButton
           type="button"
+          size="sm"
+          variant="ghost"
           onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          label={collapsed ? "Expand navigation" : "Collapse navigation"}
           aria-pressed={collapsed}
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+          className="text-text-tertiary hover:bg-surface-container-high hover:text-text-primary"
         >
-          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </button>
+          {collapsed ? <ChevronDoubleRight /> : <ChevronDoubleLeft />}
+        </GlassIconButton>
       </div>
 
       {/* Navigation groups */}

@@ -202,6 +202,34 @@ describe("screen() format dispatcher", () => {
     expect(result.findings.some((f) => f.severity === "high")).toBe(false);
   });
 
+  it("allows camera dependent JPEG trailers even when preview entropy resembles archive magic", () => {
+    const jpeg = makeMinimalJpeg();
+    const dependentPreview = new Uint8Array([
+      0xff, 0xd8,
+      0xff, 0xe0, 0x00, 0x10,
+      0x4a, 0x46, 0x49, 0x46, 0x00,
+      0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+      0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x50, 0x4b, 0x03, 0x04, // ZIP-like bytes inside compressed JPEG entropy.
+      0xff, 0xd9,
+    ]);
+    const combined = new Uint8Array(jpeg.length + dependentPreview.length);
+    combined.set(jpeg, 0);
+    combined.set(dependentPreview, jpeg.length);
+
+    const result = screen(combined, { declaredType: "image/jpeg" });
+
+    expect(result.detectedFormat).toBe("jpeg");
+    expect(result.decision).toBe("pass");
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        category: "appended_payload",
+        severity: "low",
+      }),
+    ]);
+    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(false);
+  });
+
   it("flags a PNG with appended RAR payload", () => {
     const png = makeMinimalPng();
     const rarHeader = new Uint8Array([

@@ -6,4 +6,7 @@ This directory contains post-incident reports for security events.
 
 **Template:** See `docs/runbooks/incident-response.md` Step 5.
 
-No incidents recorded to date.
+## Recorded Incidents
+
+- `2026-06-02-activation-otp-smtp-535.md` — activation OTP delivery failed
+  because SecureServer rejected the configured SMTP credential.

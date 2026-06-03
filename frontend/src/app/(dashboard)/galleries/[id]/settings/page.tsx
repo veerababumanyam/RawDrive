@@ -12,7 +12,9 @@ import {
 } from "@/lib/api/galleries";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
-type DownloadQuality = "original" | "webp" | "both";
+const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
+const DAY_MS = 24 * 60 * 60 * 1000;
+type DownloadQuality = "webp" | "thumbnail" | "original";
 
 const DOWNLOAD_QUALITY_OPTIONS: Array<{
   value: DownloadQuality;
@@ -21,30 +23,20 @@ const DOWNLOAD_QUALITY_OPTIONS: Array<{
 }> = [
   {
     value: "webp",
-    label: "WebP",
-    description: "Optimized gallery files only.",
+    label: "WebP display",
+    description: "Optimized gallery files for normal client downloads.",
+  },
+  {
+    value: "thumbnail",
+    label: "WebP thumbnail",
+    description: "Lightweight preview files for quick sharing.",
   },
   {
     value: "original",
-    label: "Original",
-    description: "Full source files only.",
-  },
-  {
-    value: "both",
-    label: "Both",
-    description: "Clients choose either format.",
+    label: "Original source",
+    description: "Full uploaded source files for client delivery.",
   },
 ];
-
-function normalizeDownloadQuality(value: string | undefined | null): DownloadQuality {
-  const normalized = String(value || "webp").toLowerCase().trim();
-  if (normalized === "webp" || normalized === "both") return normalized;
-  if (normalized === "original") return "original";
-  return "webp";
-}
-
-const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function formatExpiryDate(iso: string): string {
   const d = new Date(iso);
@@ -71,6 +63,11 @@ function presetButtonClass(active: boolean): string {
       ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
       : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
   }`;
+}
+
+function normalizedDownloadQuality(value: string | null | undefined): DownloadQuality {
+  if (value === "original") return "original";
+  return value === "thumbnail" ? "thumbnail" : "webp";
 }
 
 function galleryHasPassword(gallery: Gallery): boolean {
@@ -153,19 +150,19 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     }
   };
 
-  const handleDownloadQuality = async (downloadQuality: DownloadQuality) => {
+  const handleDownloadQuality = async (value: DownloadQuality) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { download_quality: downloadQuality });
+      const updated = await updateGallerySettings(token, id, { download_quality: value });
       setGallery(updated);
-      setSaveMsg("Saved");
+      setSaveMsg("Download option saved");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save download format");
+      setError(err instanceof Error ? err.message : "Failed to save download option");
     } finally {
       setSaving(false);
     }
@@ -277,6 +274,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   }
 
   const hasGalleryPassword = galleryHasPassword(gallery);
+  const selectedDownloadQuality = normalizedDownloadQuality(gallery.download_quality);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
@@ -307,7 +305,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       <section className="surface-panel space-y-4 p-5">
         <h2 className="text-lg font-semibold text-text-primary">Downloads</h2>
         <p className="text-sm text-text-secondary">
-          Choose whether clients can download optimized WebP files, original source files, or both.
+          Clients can download optimized WebP gallery files or original source files when you allow them.
         </p>
         <ToggleRow
           label="Enable downloads"
@@ -317,26 +315,29 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
           onChange={(v) => handleToggle("download_enabled", v)}
         />
         {(gallery.download_enabled ?? true) && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-text-primary">Allowed file format</p>
-            <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Allowed download file format">
+          <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
+            <p className="text-sm font-semibold text-text-primary">Allowed file format</p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Choose the exact format clients can download from this public gallery.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3" role="group" aria-label="Allowed download file format">
               {DOWNLOAD_QUALITY_OPTIONS.map((option) => {
-                const active = normalizeDownloadQuality(gallery.download_quality) === option.value;
+                const active = selectedDownloadQuality === option.value;
                 return (
                   <button
                     key={option.value}
                     type="button"
-                    aria-pressed={active}
                     disabled={saving}
+                    aria-pressed={active}
                     onClick={() => void handleDownloadQuality(option.value)}
-                    className={`min-h-[44px] rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                       active
                         ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
-                        : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
+                        : "border-border-default bg-surface-container text-text-secondary hover:bg-surface-container-low"
                     }`}
                   >
                     <span className="block text-sm font-semibold">{option.label}</span>
-                    <span className="block text-xs">{option.description}</span>
+                    <span className="mt-1 block text-xs text-text-secondary">{option.description}</span>
                   </button>
                 );
               })}

@@ -116,6 +116,19 @@ func TestGenerateSlug_Uniqueness(t *testing.T) {
 	assert.NotEqual(t, slug1, slug2, "slugs should be unique due to random suffix")
 }
 
+func TestGalleryJSONBValue(t *testing.T) {
+	encoded, err := galleryJSONBValue(map[string]interface{}{"theme": "dark"})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"theme":"dark"}`, encoded)
+
+	encoded, err = galleryJSONBValue(nil)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, encoded)
+
+	_, err = galleryJSONBValue(func() {})
+	require.Error(t, err)
+}
+
 // ──────────────────────── Hierarchy (E6-S1) ────────────────────────
 
 func TestGallery_ParentID_Nil(t *testing.T) {

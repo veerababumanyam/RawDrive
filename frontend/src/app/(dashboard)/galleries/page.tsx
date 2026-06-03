@@ -283,6 +283,25 @@ export default function GalleriesPage() {
   const [tetheringMode, setTetheringMode] = useState(false);
   const [tetherDir, setTetherDir] = useState("");
 
+  const openCreateForm = useCallback(() => {
+    setError(null);
+    setTitleError("");
+    setShowCreate(true);
+  }, []);
+
+  const resetCreateForm = useCallback(() => {
+    setError(null);
+    setShowCreate(false);
+    setNewTitle("");
+    setTitleError("");
+    setLinkedContactId("");
+    setLinkedProjectId("");
+    setNewClientName("");
+    setNewClientEmail("");
+    setTetheringMode(false);
+    setTetherDir("");
+  }, []);
+
   const filteredGalleries = useMemo(() => {
     return galleries.filter((g) => {
       if (filterType && g.gallery_type !== filterType) return false;
@@ -488,6 +507,8 @@ export default function GalleriesPage() {
 
   useEffect(() => {
     if (!createRequested) return;
+    setError(null);
+    setTitleError("");
     setLinkedContactId(clientParam);
     setLinkedProjectId(projectParam);
     setShowCreate(true);
@@ -616,7 +637,7 @@ export default function GalleriesPage() {
           <GlassIconButton
             onClick={() => {
               setTetheringMode((v) => !v);
-              if (!showCreate) setShowCreate(true);
+              if (!showCreate) openCreateForm();
             }}
             variant={tetheringMode ? "accent" : "glass"}
             active={tetheringMode}
@@ -626,7 +647,7 @@ export default function GalleriesPage() {
             <Camera />
           </GlassIconButton>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={openCreateForm}
             className="shrink-0 whitespace-nowrap rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] inline-flex items-center justify-center gap-1"
             aria-label="Create new gallery"
           >
@@ -704,7 +725,7 @@ export default function GalleriesPage() {
               <input
                 type="text"
                 value={newTitle}
-                onChange={(e) => { setNewTitle(e.target.value); if (titleError) setTitleError(""); }}
+                onChange={(e) => { setNewTitle(e.target.value); if (titleError) setTitleError(""); if (error) setError(null); }}
                 className={cn(
                   "mt-1 w-full rounded-xl border bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none",
                   titleError ? "border-error focus:border-error" : "border-border-default focus:border-accent-primary",
@@ -799,17 +820,7 @@ export default function GalleriesPage() {
           </div>
           <div className="flex gap-2 justify-end">
             <button
-              onClick={() => {
-                setShowCreate(false);
-                setNewTitle("");
-                setTitleError("");
-                setLinkedContactId("");
-                setLinkedProjectId("");
-                setNewClientName("");
-                setNewClientEmail("");
-                setTetheringMode(false);
-                setTetherDir("");
-              }}
+              onClick={resetCreateForm}
               className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
               disabled={creating}
             >

@@ -1,5 +1,5 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({
   params: new URLSearchParams("email=photo%40rawdrive.test"),
@@ -25,34 +25,50 @@ import { ActivateForm } from "../ActivateForm";
 describe("ActivateForm", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     nav.params = new URLSearchParams("email=photo%40rawdrive.test");
     nav.push.mockReset();
     auth.persistAuthTokens.mockReset();
   });
 
-  it("resends the registration activation OTP for the current email", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resends the registration activation OTP for the current email and starts a cooldown", async () => {
+    vi.useFakeTimers();
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        message: "If an unverified account exists for this email, a new activation code has been sent.",
-      }),
+      json: async () => ({}),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { getByRole } = render(<ActivateForm />);
+    const { getByLabelText, getByRole } = render(<ActivateForm />);
 
-    fireEvent.click(getByRole("button", { name: /send new activation code/i }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/auth/resend-otp",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ email: "photo@rawdrive.test" }),
-        }),
-      );
+    fireEvent.change(getByLabelText(/activation code/i), {
+      target: { value: "123456" },
     });
-    expect(getByRole("status").textContent).toContain("new activation code has been sent");
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /send new activation code/i }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/auth/resend-otp",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "photo@rawdrive.test" }),
+      }),
+    );
+    expect(getByRole("status").textContent).toContain("Use the newest code");
+    expect(getByLabelText(/activation code/i)).toHaveValue("");
+    expect(getByRole("button", { name: /send new code in 30s/i })).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(getByRole("button", { name: /send new activation code/i })).not.toBeDisabled();
   });
 
   it("activates the account with a valid OTP and stores the access token", async () => {

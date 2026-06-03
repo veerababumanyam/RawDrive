@@ -623,6 +623,10 @@ func (s *platformSettingsSMTPReader) Get(ctx context.Context, category, key stri
 }
 
 func platformSettingValue(ctx context.Context, repo *repository.PlatformSettingsRepo, category, key, envName string) string {
+	return platformSettingValueAny(ctx, repo, category, key, envName)
+}
+
+func platformSettingValueAny(ctx context.Context, repo *repository.PlatformSettingsRepo, category, key string, envNames ...string) string {
 	if repo != nil {
 		row, err := repo.GetByKey(ctx, category, key)
 		if err != nil {
@@ -631,7 +635,19 @@ func platformSettingValue(ctx context.Context, repo *repository.PlatformSettings
 			return strings.TrimSpace(row.Value)
 		}
 	}
-	return strings.TrimSpace(os.Getenv(envName))
+	for _, envName := range envNames {
+		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func platformSettingValueDefault(ctx context.Context, repo *repository.PlatformSettingsRepo, category, key, defaultValue string, envNames ...string) string {
+	if value := platformSettingValueAny(ctx, repo, category, key, envNames...); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 const (
@@ -790,8 +806,6 @@ func (o *onboardingPlanGrantStore) ConsumePendingPlanTier(ctx context.Context, u
 	return o.repo.ConsumePendingPlanTier(ctx, id)
 }
 
-// envOrFatal tries multiple env var names in order. Returns the first non-empty value.
-// Logs fatal if none are set.
 // buildViewerJWTService loads (or creates and persists) the viewer-session
 // JWT signing key from platform_settings.streaming.viewer_jwt_signing_key
 // and constructs the viewer.Service. The key is independent of the main
@@ -892,26 +906,6 @@ func generateRandomKey(n int) ([]byte, error) {
 func encodeHexKey(b []byte) string { return hex.EncodeToString(b) }
 
 func decodeHexKey(s string) ([]byte, error) { return hex.DecodeString(strings.TrimSpace(s)) }
-
-func envOrFatal(names ...string) string {
-	for _, name := range names {
-		if v := os.Getenv(name); v != "" {
-			return v
-		}
-	}
-	log.Fatalf("FATAL: required environment variable not set. Tried: %v", names)
-	return ""
-}
-
-// envOr tries multiple env var names, returns defaultVal if none set.
-func envOr(defaultVal string, names ...string) string {
-	for _, name := range names {
-		if v := os.Getenv(name); v != "" {
-			return v
-		}
-	}
-	return defaultVal
-}
 
 // pgRefreshSessionRevoker implements handler.RefreshSessionRevoker by
 // deleting every refresh_sessions row whose sub (user UUID) matches the
@@ -1640,40 +1634,39 @@ func main() {
 	// ──────────────────────── M2: Asset Management & Gallery ────────────────────────
 
 	// ──────────────────────── Storage Provider (Backblaze B2 — MANDATORY) ────────────────
-	// Local storage is NOT supported. B2 credentials MUST be in environment variables.
-	// Never hardcode credentials. Never fall back to local filesystem.
-	// B2 exposes an S3-compatible API; the storage factory routes B2 through its "s3" case.
-	// Note: B2_KEY_ID maps to S3 AccessKeyID; B2_APPLICATION_KEY maps to S3 SecretAccessKey.
+	// Local storage is NOT supported. Managed B2 config resolves from
+	// platform_settings first and environment variables second. Never hardcode
+	// credentials. Never fall back to local filesystem. B2 exposes an
+	// S3-compatible API; the storage factory routes B2 through its "s3" case.
+	// Note: b2_key_id / B2_KEY_ID maps to S3 AccessKeyID; b2_application_key /
+	// B2_APPLICATION_KEY maps to SecretAccessKey.
 	storageCfg := storage.Config{
-		Driver:    os.Getenv("STORAGE_DRIVER"),
-		Bucket:    envOrFatal("B2_BUCKET_NAME", "B2_BUCKET"),
-		Region:    envOr("us-east-005", "B2_REGION"),
-		Endpoint:  os.Getenv("B2_ENDPOINT"),
-		AccessKey: envOrFatal("B2_KEY_ID", "B2_ACCESS_KEY_ID"),
-		SecretKey: envOrFatal("B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"),
+		Driver:    platformSettingValueDefault(context.Background(), platformSettingsRepo, "storage", "driver", "s3", "STORAGE_DRIVER"),
+		Bucket:    platformSettingValueAny(context.Background(), platformSettingsRepo, "storage", "b2_bucket_name", "B2_BUCKET_NAME", "B2_BUCKET"),
+		Region:    platformSettingValueDefault(context.Background(), platformSettingsRepo, "storage", "b2_region", "us-east-005", "B2_REGION"),
+		Endpoint:  platformSettingValueAny(context.Background(), platformSettingsRepo, "storage", "b2_endpoint", "B2_ENDPOINT"),
+		AccessKey: platformSettingValueAny(context.Background(), platformSettingsRepo, "storage", "b2_key_id", "B2_KEY_ID", "B2_ACCESS_KEY_ID"),
+		SecretKey: platformSettingValueAny(context.Background(), platformSettingsRepo, "storage", "b2_application_key", "B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"),
 		// 2026-05-20: opt-in server-side encryption. STORAGE_SSE_MODE values:
 		//   "AES256" → SSE-B2 (server-managed AES-256), transparent on GET
 		//   "SSE-C"  → customer-managed key (we hold it); requires
 		//              STORAGE_SSE_C_KEY (64-char hex of 32-byte AES key)
 		//   ""       → no SSE header (existing-bucket pass-through)
 		// SSE-C key custody: LOSING THE KEY = LOSING ALL ENCRYPTED DATA.
-		// Backed up in .env.backend on the dev laptop; production reads
-		// from /opt/rawdrive/app/.env on each node.
-		SSEMode:           os.Getenv("STORAGE_SSE_MODE"),
-		SSECustomerKeyHex: os.Getenv("STORAGE_SSE_C_KEY"),
-	}
-	if storageCfg.Driver == "" {
-		storageCfg.Driver = "s3" // B2 uses S3-compatible API
+		// Backed up in platform_settings.storage.sse_customer_key_hex with
+		// env fallback for bootstrap.
+		SSEMode:           platformSettingValueAny(context.Background(), platformSettingsRepo, "storage", "sse_mode", "STORAGE_SSE_MODE"),
+		SSECustomerKeyHex: platformSettingValueAny(context.Background(), platformSettingsRepo, "storage", "sse_customer_key_hex", "STORAGE_SSE_C_KEY"),
 	}
 	if storageCfg.Driver == "local" {
-		log.Fatal("FATAL: STORAGE_DRIVER=local is not allowed. Use Backblaze B2 (s3). Set B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT in environment.")
+		log.Fatal("FATAL: storage.driver / STORAGE_DRIVER=local is not allowed. Use Backblaze B2 (s3).")
 	}
 	if storageSSERequiredForEnv(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))) && strings.TrimSpace(storageCfg.SSEMode) == "" {
-		log.Fatalf("FATAL: STORAGE_SSE_MODE is required for APP_ENV=%q. Set STORAGE_SSE_MODE=AES256 or STORAGE_SSE_MODE=SSE-C with STORAGE_SSE_C_KEY.", os.Getenv("APP_ENV"))
+		log.Fatalf("FATAL: storage.sse_mode / STORAGE_SSE_MODE is required for APP_ENV=%q. Set storage.sse_mode=AES256 or storage.sse_mode=SSE-C with storage.sse_customer_key_hex.", os.Getenv("APP_ENV"))
 	}
 	storageProvider, err := storage.NewProvider(storageCfg)
 	if err != nil {
-		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure B2_BUCKET_NAME, B2_KEY_ID, B2_APPLICATION_KEY, B2_ENDPOINT are set.", err)
+		log.Fatalf("FATAL: failed to create storage provider: %v\nEnsure platform_settings storage.b2_bucket_name, storage.b2_region, storage.b2_endpoint, storage.b2_key_id, storage.b2_application_key are set (env fallback: B2_BUCKET_NAME, B2_REGION, B2_ENDPOINT, B2_KEY_ID, B2_APPLICATION_KEY).", err)
 	}
 	sseDisplay := storageCfg.SSEMode
 	if sseDisplay == "" {
@@ -1764,7 +1757,10 @@ func main() {
 		WithDerivativeRepo(assetDerivativeRepo)
 	thumbnailSvc := service.NewThumbnailService(storageProvider)
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
-	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).WithAssetRepo(assetRepo).WithAlbumService(albumSvc)
+	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).
+		WithAssetRepo(assetRepo).
+		WithAssetDeleteService(assetSvc).
+		WithAlbumService(albumSvc)
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo).
 		WithNotifications(repository.NewNotificationRepo(dbPool)) // GAL-FR-134
@@ -2084,8 +2080,10 @@ func main() {
 		// Feature flag streaming.upload_credit_pill_v1 is captured from
 		// env at startup (not re-read per request). Runtime toggle needs
 		// an API restart; a platform_settings lookup is the follow-up
-		// per PRD §8 Phase 4. When off the handler returns 404 so the
-		// frontend useUploadCreditBalance hook stops polling.
+		// per PRD §8 Phase 4. The dashboard already mounts the
+		// UploadCreditPill in production, so the endpoint defaults on to
+		// avoid browser-visible 404s. Set UPLOAD_CREDIT_PILL_V1_ENABLED=false
+		// to explicitly hide the feature.
 		uploadBalanceEnv := os.Getenv("UPLOAD_CREDIT_PILL_V1_ENABLED")
 		uploadBalanceHandler := &uploadhandlers.UploadBalanceHandler{
 			Balance: &uploadCreditBalanceAdapter{svc: uploadCreditSvc},
@@ -2095,9 +2093,7 @@ func main() {
 				if uploadBalanceEnv != "" {
 					return strings.EqualFold(uploadBalanceEnv, "true")
 				}
-				// Default off so a fresh deploy doesn't leak the feature
-				// before stakeholders have signed off on Decisions 1-5.
-				return false
+				return true
 			},
 		}
 		api.Get("/api/v1/uploads/balance", uploadBalanceHandler.GetBalance)

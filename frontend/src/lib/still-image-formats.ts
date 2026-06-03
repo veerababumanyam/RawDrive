@@ -1,6 +1,7 @@
 export const BROWSER_DECODE_STILL_IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/jpg",
+  "image/jfif",
   "image/pjpeg",
   "image/png",
   "image/x-png",
@@ -12,6 +13,8 @@ export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
   "jpg",
   "jpeg",
   "jpe",
+  "jfif",
+  "jfi",
   "png",
   "webp",
   "gif",
@@ -89,7 +92,8 @@ export const FILE_PICKER_STILL_IMAGE_ACCEPT = [
 ].join(",");
 
 export const STILL_IMAGE_DROPZONE_ACCEPT: Record<string, string[]> = {
-  "image/jpeg": [".jpg", ".jpeg", ".jpe"],
+  "image/jpeg": [".jpg", ".jpeg", ".jpe", ".jfif", ".jfi"],
+  "image/jfif": [".jfif", ".jfi"],
   "image/png": [".png"],
   "image/tiff": [".tiff", ".tif"],
   "image/x-tiff": [".tiff", ".tif"],

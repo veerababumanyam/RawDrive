@@ -10,6 +10,11 @@ describe("browser E2EE upload support", () => {
     expect(getBrowserE2EEUploadBlockReason(file)).toBeNull();
   });
 
+  it("allows JPEG-family camera/export files with JFIF extension or MIME type", () => {
+    expect(getBrowserE2EEUploadBlockReason(new File(["jpeg"], "camera.jfif", { type: "" }))).toBeNull();
+    expect(getBrowserE2EEUploadBlockReason(new File(["jpeg"], "camera.bin", { type: "image/jfif" }))).toBeNull();
+  });
+
   it.each(["Wedding (42).CR3", "canon-legacy.CRW", "sony-pixel-shift.ARQ", "gopro.GPR"])(
     "routes %s to desktop before attempting source-side encryption",
     (filename) => {

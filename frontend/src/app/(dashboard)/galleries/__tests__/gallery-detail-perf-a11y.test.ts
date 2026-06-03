@@ -116,15 +116,25 @@ describe("gallery detail page — perf & a11y contracts", () => {
 
     expect(source).toContain("showUploadDialog");
     expect(source).toContain('data-testid="gallery-upload-dialog"');
+    expect(source).toContain("handleUploadDialogBack");
+    expect(source).toContain('data-testid="upload-dialog-back"');
+    expect(source).toContain("Back to gallery");
+    expect(source).toContain("uploadDialogDismissed");
+    expect(source).toContain("Back to gallery; uploads continue");
+    expect(source).not.toContain("disabled={activeUploadCount > 0}");
+    expect(source).toContain("upload.clearFinished()");
     expect(source).toContain('role="dialog"');
     expect(source).toContain('aria-modal="true"');
     expect(source).toContain("Upload photos to gallery");
+    expect(source).toContain("Camera JPEG/JFIF");
+    expect(source).toContain("RAW, TIFF, HEIC and AVIF use RawDrive Desktop");
     expect(source).toContain("Details");
     expect(source).toContain("Processing");
     expect(source).toContain("Visibility");
     expect(source).toContain("Select files");
     expect(source).toContain("Choose folder");
     expect(source).toContain("setShowUploadDialog(true)");
+    expect(source).not.toContain("TetheredShootingPanel");
   });
 
   it("gates uploads on terms acceptance and replays the stashed batch after acceptance", () => {
@@ -165,6 +175,21 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("scale-110");
   });
 
+  it("refreshes the gallery grid when uploads complete even before asset rows settle", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("completedUploadRefreshKey");
+    expect(source).toContain('item.status === "complete"');
+    expect(source).toContain("item.assetId || item.id");
+    expect(source).toContain("completedUploadRefreshKeyRef");
+    expect(source).toContain("[0, ...ASSET_SETTLE_REFRESH_DELAYS_MS]");
+    expect(source).toContain("refreshGalleryAssets().catch");
+    expect(source).toContain("Failed to refresh gallery after upload completion");
+    expect(source).toContain("void refreshAlbums()");
+    expect(source).toContain("Promise<GalleryAssetRecord[] | null>");
+    expect(source).toContain("const hydratedAssets = await refreshGalleryAssets()");
+  });
+
   it("keeps the upload dialog mobile-first by hiding desktop-only progress tabs and helper cards", () => {
     const source = readDetailPage();
 
@@ -184,6 +209,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
 
     expect(source).toContain("TETHERED_DEFAULT_POLL_MS = 1000");
     expect(source).toContain("tetheredControlsVisible");
+    expect(source).toContain("const tetheredControlsVisible = tetheredControlsEnabled;");
+    expect(source).toContain("void startTetheredFolder();");
     expect(source).toContain("{tetheredControlsVisible && (");
     expect(source).toContain("tetheredPollIntervalMs");
     expect(source).toContain('data-testid="tethered-poll-slider"');
@@ -203,6 +230,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("requestPermission");
     expect(source).toContain("Last detected:");
     expect(source).toContain("tetheredAutoOpenRef.current");
+    expect(source).toContain('variant === "desktop" ? "grid-cols-1" : "sm:grid-cols-3"');
   });
 
   it("auto-opens tethered uploads after backend completion without leaving the upload dialog on top", () => {
@@ -257,7 +285,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("!albumIsEditable(album)");
   });
 
-  it("keeps sub-gallery sharing complete with copy, email, QR, and delete actions without phone buttons", () => {
+  it("keeps sub-gallery sharing complete with copy, email, and delete actions without QR or phone buttons", () => {
     const source = readDetailPage();
 
     expect(source).not.toContain("REQUIRED_SHARE_CONTACTS");
@@ -265,28 +293,33 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("buildShareWhatsAppHrefs");
     expect(source).not.toContain("WhatsApp share contacts");
     expect(source).not.toContain("<Phone");
+    expect(source).not.toContain("ShareQrPopover");
+    expect(source).not.toContain("Show QR code");
     expect(source).toContain("buildShareEmailHref");
     expect(source).toContain("openShareLink");
     expect(source).toContain('label="Copy All Photos share link"');
     expect(source).toContain('label="Email All Photos share link"');
-    expect(source).toContain('label={`Show QR code for ${album.name} share link`}');
     expect(source).toContain('data-testid="visibility-share-links"');
     expect(source).toContain('label="Copy gallery share link"');
     expect(source).toContain('label="Email gallery share link"');
-    expect(source).toContain('label="Show QR code for gallery share link"');
     expect(source).toContain('label={`Delete ${album.name}`}');
     expect(source).toContain('variant="danger"');
     expect(source).toContain("Publish gallery");
     expect(source).toContain("Share links");
   });
 
-  it("surfaces publish-required feedback for gallery and sub-gallery QR actions", () => {
+  it("surfaces publish-required feedback for gallery and sub-gallery share actions", () => {
     const source = readDetailPage();
 
     expect(source).toContain("SHARE_UNAVAILABLE_MESSAGE");
-    expect(source).toContain('onUnavailable={() => setShareMessage(SHARE_UNAVAILABLE_MESSAGE)}');
     expect(source).toContain('aria-disabled={!gallery.is_published}');
     expect(source).toContain("Publish this gallery before sharing client links.");
+  });
+
+  it("does not show the upload sidebar processing helper card", () => {
+    const source = readDetailPage();
+
+    expect(source).not.toContain("Photos are screened, encrypted, uploaded, and converted into WebP display files.");
   });
 
   it("refreshes gallery rows shortly after initial load so late-linked processing photos update counts", () => {
@@ -298,14 +331,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("late-linked assets");
   });
 
-  it("keeps tethered capture behind an Enable switch and starts watching only from Watch folder", () => {
+  it("starts tethered folder selection from Enable and shows controls after a watched folder exists", () => {
     const source = readDetailPage();
     const enableToggleStart = source.indexOf("const handleTetheredEnableToggle = useCallback(() => {");
     const enableToggleEnd = source.indexOf("const handleDrop = useCallback", enableToggleStart);
     const enableToggleBody = source.slice(enableToggleStart, enableToggleEnd);
 
     expect(source).toContain('data-testid="tethered-enable-toggle"');
-    expect(source).toContain('data-testid="tethered-watch-folder-button"');
     expect(source).toContain("tetheredEnabled");
     expect(source).toContain("setTetheredEnabled(true)");
     expect(source).toContain("setTetheredEnabled(false)");
@@ -313,10 +345,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Enable tethered capture");
     expect(source).toContain("Disable tethered capture");
     expect(source).toContain("startTetheredFolder");
-    expect(source).toContain("onClick={startTetheredFolder}");
     expect(source).toContain("const tetheredControlsEnabled = tetheredEnabled && Boolean(tetheredFolderName);");
-    expect(source).toContain("const tetheredControlsVisible = tetheredEnabled;");
-    expect(enableToggleBody).not.toContain("startTetheredFolder");
-    expect(enableToggleBody).not.toContain("void startTetheredFolder()");
+    expect(source).toContain("const tetheredControlsVisible = tetheredControlsEnabled;");
+    expect(enableToggleBody).toContain("void startTetheredFolder();");
   });
 });

@@ -115,6 +115,29 @@ func TestPersistentOTP_SurvivesServiceRestartAndIsSingleUse(t *testing.T) {
 	assert.False(t, replay)
 }
 
+func TestPersistentOTP_FailedSendDeletesUnsentCode(t *testing.T) {
+	store := newFakeOTPCodeStore()
+	cfg := auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     3,
+		RateLimitMax:    1,
+		RateLimitWindow: 15 * time.Minute,
+	}
+	svc := auth.NewPersistentOTPServiceWithDelivery(cfg, failingEmailDelivery{}, store, "registration")
+
+	_, err := svc.Generate(context.Background(), "registered@example.com")
+	require.Error(t, err, "Generate should surface the SMTP failure")
+
+	active, err := store.LatestActive(context.Background(), "registration", "registered@example.com")
+	require.NoError(t, err)
+	assert.Nil(t, active, "failed send must delete the unsent OTP row")
+
+	_, err = svc.Generate(context.Background(), "registered@example.com")
+	require.Error(t, err)
+	assert.NotEqual(t, "rate limit exceeded", err.Error(), "failed sends must not consume the resend quota")
+}
+
 func TestPasswordResetPersistentOTP_SurvivesServiceRestart(t *testing.T) {
 	store := newFakeOTPCodeStore()
 	notifier := &mockNotifier{}

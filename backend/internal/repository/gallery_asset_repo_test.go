@@ -93,3 +93,41 @@ func TestF073_ReorderSQL_IsSingleSetBasedStatement(t *testing.T) {
 		}
 	}
 }
+
+func TestGalleryAssetListSQL_HidesSoftDeletedAssets(t *testing.T) {
+	sql := sqlGalleryAssetListByGallery
+
+	for _, frag := range []string{
+		"FROM gallery_assets ga",
+		"JOIN assets a ON a.id = ga.asset_id",
+		"ga.gallery_id = $1",
+		"a.deleted_at IS NULL",
+		"ORDER BY ga.sort_order ASC",
+	} {
+		if !strings.Contains(sql, frag) {
+			t.Fatalf("gallery asset list SQL missing %q; got:\n%s", frag, sql)
+		}
+	}
+	if strings.Contains(sql, "FROM gallery_assets WHERE") {
+		t.Fatalf("gallery asset list must not return stale junction rows without joining assets; got:\n%s", sql)
+	}
+}
+
+func TestGalleryAssetDeletableIDsSQL_PreservesSharedLiveAssets(t *testing.T) {
+	sql := sqlGalleryAssetDeletableIDsForGallery
+
+	for _, frag := range []string{
+		"SELECT DISTINCT ga.asset_id",
+		"JOIN assets a ON a.id = ga.asset_id",
+		"a.deleted_at IS NULL",
+		"NOT EXISTS",
+		"JOIN galleries other_g ON other_g.id = other_ga.gallery_id",
+		"other_ga.asset_id = ga.asset_id",
+		"other_ga.gallery_id <> ga.gallery_id",
+		"other_g.deleted_at IS NULL",
+	} {
+		if !strings.Contains(sql, frag) {
+			t.Fatalf("gallery delete cascade SQL missing %q; got:\n%s", frag, sql)
+		}
+	}
+}
