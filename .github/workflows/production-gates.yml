@@ -6,6 +6,9 @@ on:
     branches:
       - main
       - master
+  # Allow cd-production.yml to invoke this whole gate set against an exact
+  # ref before deploying, so un-gated code can never reach production.
+  workflow_call:
 
 jobs:
   backend:
@@ -22,6 +25,68 @@ jobs:
       - name: Go vulnerability scan
         working-directory: backend
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
+
+  # ──────────────────────────────────────────────────────────────────────
+  # backend-lint: golangci-lint gate.
+  #
+  # .golangci.yml (govet, errcheck, staticcheck, ineffassign, unused, gofmt,
+  # goimports, misspell) existed in the repo but was never enforced in CI —
+  # only `go test` + govulncheck ran. This makes the documented lint config
+  # an actual gate, matching the pre-commit gofmt check developers see locally.
+  # ──────────────────────────────────────────────────────────────────────
+  backend-lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.3.1
+      - uses: actions/setup-go@v5.6.0
+        with:
+          go-version: "1.26.4"
+          cache-dependency-path: backend/go.sum
+      - name: golangci-lint
+        # ADVISORY (continue-on-error) during rollout — mirrors the semgrep
+        # treatment below. golangci-lint v1.x is built with Go 1.24 and refuses
+        # to run against this repo's go1.25/1.26 target ("the Go language version
+        # used to build golangci-lint is lower than the targeted Go version").
+        # The proper fix is migrating .golangci.yml to the golangci-lint v2
+        # schema (v2 binaries are built with newer Go) — tracked as a follow-up.
+        # Until then this job reports but does not block. Removed from the
+        # required status checks in scripts/setup-repo-hygiene.sh accordingly.
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v6.5.2
+        with:
+          version: v1.64.8
+          working-directory: backend
+          args: --timeout 5m
+
+  # ──────────────────────────────────────────────────────────────────────
+  # known-hosts-guard: prevent SSH host-key pin drift.
+  #
+  # deploy-prod.sh streams a source tarball over SSH and BUILDS the prod
+  # image from it on the VPS, so the pinned host keys in deploy/known_hosts
+  # are a supply-chain control. deploy/known_hosts.candidate is the rotation
+  # staging copy; the two drifting apart silently is exactly the failure we
+  # must catch. This asserts they are byte-identical and both pin all three
+  # production nodes (.42 app, .44 app, .46 db).
+  # ──────────────────────────────────────────────────────────────────────
+  known-hosts-guard:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.3.1
+      - name: known_hosts == known_hosts.candidate and pin all 3 nodes
+        run: |
+          set -euo pipefail
+          if ! cmp -s deploy/known_hosts deploy/known_hosts.candidate; then
+            echo "::error::deploy/known_hosts and deploy/known_hosts.candidate differ. Reconcile them before merging."
+            diff -u deploy/known_hosts deploy/known_hosts.candidate || true
+            exit 1
+          fi
+          for ip in 187.127.142.42 187.127.142.44 187.127.142.46; do
+            if ! grep -q "$ip" deploy/known_hosts; then
+              echo "::error::deploy/known_hosts is missing a pinned key for $ip"
+              exit 1
+            fi
+          done
+          echo "✓ known_hosts reconciled and pins all 3 production nodes"
 
   frontend:
     runs-on: ubuntu-24.04
@@ -183,18 +248,26 @@ jobs:
 
       # gitleaks is BLOCKING by design — secret leakage is exactly the
       # class of finding that should stop a build. No continue-on-error.
-      # Pinned to v2.3.9 (released tag, not @v2 floating) so a future
-      # breaking change in v2.x cannot break the gate without a code
-      # change in this repo.
-      - name: Run gitleaks
+      #
+      # We run the gitleaks BINARY (MIT, free) rather than gitleaks-action,
+      # because the ACTION requires a paid GITLEAKS_LICENSE for repos owned by
+      # a GitHub organization (merupuai is an org), and was failing the gate
+      # with "missing gitleaks license" — a licensing requirement, not a real
+      # secret finding. The CLI has no such requirement and keeps the full
+      # git-history scan (checkout uses fetch-depth: 0). Pinned by version.
+      - name: Run gitleaks (binary, full history)
         id: gitleaks
         if: always()
-        uses: gitleaks/gitleaks-action@v2.3.9
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GITLEAKS_LICENSE is only required for GitHub organizations,
-          # not personal accounts. Leave unset for personal repos.
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          # detect scans the whole git history; --exit-code 1 makes any finding
+          # fail the build; --redact keeps secret values out of the logs.
+          ./gitleaks detect --source . --redact --no-banner --exit-code 1
 
       # trivy is BLOCKING on CRITICAL/HIGH via exit-code: "1".
       # Pinned to v0.36.0 (released tag, not @master) so a compromised

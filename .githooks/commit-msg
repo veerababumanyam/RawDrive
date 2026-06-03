@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# RawDrive commit-msg hook — enforces Conventional Commits (pure grep, no deps).
+# The PR title (= squash-merge subject on main) is gated the same way in CI,
+# so main history stays clean and machine-readable.
+#
+# Bypass (discouraged):  git commit --no-verify
+#
+set -euo pipefail
+
+msg_file="$1"
+
+# Subject = first line that is neither blank nor a comment.
+subject="$(grep -vE '^[[:space:]]*#' "$msg_file" | grep -vE '^[[:space:]]*$' | head -n1 || true)"
+
+# Let git's own machinery (merge/revert/fixup/squash) through untouched.
+case "$subject" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
+
+types='feat|fix|chore|docs|refactor|test|perf|build|ci|style|revert|wip'
+
+if ! printf '%s' "$subject" | grep -qE "^(${types})(\([a-z0-9._/-]+\))?!?: .+"; then
+  cat >&2 <<EOF
+✗ commit-msg: not a Conventional Commit.
+
+    Got:      ${subject:-<empty>}
+    Expected: <type>(<scope>): <subject>     ( scope and ! are optional )
+    Types:    ${types//|/, }
+
+    Examples:
+      fix(galleries): correct thumbnail order
+      feat(auth): add TOTP step-up
+      chore(ci): wire deploy workflow
+      refactor(api)!: rename upload endpoints   (! marks a breaking change)
+
+    Bypass (discouraged): git commit --no-verify
+EOF
+  exit 1
+fi
+
+# Subject hygiene: length cap + no trailing period.
+if [ "${#subject}" -gt 72 ]; then
+  echo "✗ commit-msg: subject is ${#subject} chars (max 72). Tighten it." >&2
+  exit 1
+fi
+case "$subject" in
+  *.) echo "✗ commit-msg: subject must not end with a period." >&2; exit 1 ;;
+esac
+
+exit 0

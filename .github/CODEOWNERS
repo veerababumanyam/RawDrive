@@ -1,0 +1,6 @@
+# Code ownership for RawDrive.
+# Every change is owned/reviewed by the platform owner by default.
+# (Required-reviewer enforcement is off in the main ruleset for a solo owner;
+#  this still routes review requests and shows ownership in the PR UI.)
+
+*       @manyamprasad

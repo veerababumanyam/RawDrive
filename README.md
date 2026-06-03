@@ -170,8 +170,8 @@ Launch the RawDrive ecosystem on your local machine globally.
 
 ```bash
 # 1. Clone the master repository
-git clone https://github.com/veerababumanyam/RawDriveCoBolt.git
-cd RawDriveCoBolt
+git clone git@github.com:merupuai/RawDrive.git
+cd RawDrive
 
 # 2. Install frontend ecosystem dependencies
 npm i -g pnpm
@@ -181,7 +181,25 @@ pnpm install
 cd frontend
 pnpm dev
 ```
-> Navigate to `http://localhost:5173` to experience the front-end SPA.
+> Navigate to `http://localhost:3000` to experience the Next.js app.
+
+---
+
+## 🚢 Shipping & CI/CD
+
+RawDrive uses a clean, automated GitHub flow. You only need two commands:
+
+```bash
+# Land any change on GitHub — branches, tests in Docker, commits, opens a PR,
+# and auto-merges (squash + branch delete) once CI gates pass.
+npm run ship -- "fix(galleries): correct thumbnail order"
+
+# Release GitHub main to production (guarded rolling deploy, Node .42 → .44).
+npm run deploy:prod
+```
+
+Git hooks, CI gates, branch cleanup, and merge policy keep the repo tidy
+automatically. Full flow, one-time setup, and rollback: **[`docs/runbooks/cicd.md`](docs/runbooks/cicd.md)**.
 
 ---
 

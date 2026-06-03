@@ -1,0 +1,45 @@
+# Conservative, grouped dependency updates. Weekly, low PR volume — each PR
+# still flows through the full CI gates (and `npm run ship`-style auto-merge
+# is NOT armed for dependabot, so you review security/dep bumps deliberately).
+version: 2
+updates:
+  # Backend Go modules
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      go-deps:
+        patterns: ["*"]
+
+  # Frontend (pnpm lockfile — npm ecosystem)
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      frontend-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions used by the workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]

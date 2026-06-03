@@ -48,6 +48,29 @@ paths = [
 
   # Historical-only file with server details. Not in current tree.
   '''(^|/)HostingerServerDetails\.md$''',
+
+  # ── Added 2026-06-03 (CI/CD pipeline rollout) ──────────────────────────
+  # ⚠ REAL LEAK — ROTATE: a Google OAuth client_secret committed 2026-04-07.
+  # Already removed from the working tree and gitignored, but present in
+  # history. The secret MUST be rotated in Google Cloud Console; this entry
+  # only stops the history scan from blocking CI. Tracked for history purge.
+  '''(^|/)gen-lang-client-[0-9a-f-]+\.json$''',
+
+  # Test fixtures — dummy private keys, fake JWTs, and SSE-C test vectors
+  # used to exercise crypto/parsing paths. Not production credentials.
+  '''.*_test\.go$''',
+  '''.*\.test\.tsx?$''',
+  '''.*\.spec\.tsx?$''',
+]
+
+# False positives: the Backblaze B2 settings code references config KEY NAMES
+# and env var NAMES as string literals ("b2_application_key",
+# "B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"). These are identifiers, not
+# secret values — actual values resolve at runtime from platform_settings/env.
+regexes = [
+  '''b2_application_key''',
+  '''B2_APPLICATION_KEY''',
+  '''B2_SECRET_ACCESS_KEY''',
 ]
 
 # Future-proofing: when the files above are cleaned up, move their

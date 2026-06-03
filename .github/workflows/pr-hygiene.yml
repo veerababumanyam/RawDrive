@@ -1,0 +1,43 @@
+name: pr-hygiene
+
+# Validates that the PR title is a Conventional Commit. Because the repo
+# squash-merges, the PR title becomes the commit subject on main — so this
+# keeps main history clean and machine-readable. Pure regex, no marketplace
+# action. Set this as a required status check named `pr-title`.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Title must be a Conventional Commit
+        # SECURITY: the PR title is untrusted input. It is passed through an
+        # environment variable and never interpolated into the shell command,
+        # which prevents workflow command injection.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          types='feat|fix|chore|docs|refactor|test|perf|build|ci|style|revert|wip'
+          if printf '%s' "$PR_TITLE" | grep -qE "^(${types})(\([a-z0-9._/-]+\))?!?: .+"; then
+            echo "✓ PR title is a valid Conventional Commit"
+            exit 0
+          fi
+          {
+            echo "## ❌ PR title is not a Conventional Commit"
+            echo ""
+            echo "Rename the PR to: \`<type>(<scope>): <subject>\`"
+            echo ""
+            echo "- Allowed types: ${types//|/, }"
+            echo "- Examples:"
+            echo "  - \`fix(galleries): correct thumbnail order\`"
+            echo "  - \`feat(auth): add TOTP step-up\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::PR title must be a Conventional Commit (got: '$PR_TITLE')"
+          exit 1

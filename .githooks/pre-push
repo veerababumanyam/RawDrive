@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# RawDrive pre-push hook — last guardrail before code leaves the laptop.
+#   • Blocks force-pushing main/master (the prior prod-incident root cause).
+#   • Runs quick build/lint/unit checks. Heavy Docker integration tests live
+#     in `npm run ship` and CI, not here.
+#
+# Bypass entirely:  SKIP_PREPUSH=1 git push
+#
+set -euo pipefail
+
+if [ "${SKIP_PREPUSH:-0}" = "1" ]; then
+  echo "pre-push: skipped (SKIP_PREPUSH=1)"
+  exit 0
+fi
+
+zero="0000000000000000000000000000000000000000"
+force_to_protected=false
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master)
+      if [ "$remote_sha" != "$zero" ] && [ "$local_sha" != "$zero" ]; then
+        if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+          force_to_protected=true
+        fi
+      fi
+      ;;
+  esac
+done
+
+if [ "$force_to_protected" = true ]; then
+  cat >&2 <<'EOF'
+✗ pre-push: refusing a NON-FAST-FORWARD (force) push to main/master.
+    Force-pushing main previously caused a production incident.
+    To undo a bad change, open a revert PR instead:
+      git revert <sha> && npm run ship -- "revert: <subject>"
+EOF
+  exit 1
+fi
+
+run_step() { echo "→ $1"; shift; "$@"; }
+
+# ── Frontend quick checks (only if pnpm + deps available) ─────────────
+if command -v pnpm >/dev/null 2>&1 && [ -d frontend/node_modules ]; then
+  ( cd frontend && pnpm lint )  || { echo "✗ pre-push: frontend lint failed"  >&2; exit 1; }
+  ( cd frontend && pnpm test )  || { echo "✗ pre-push: frontend tests failed" >&2; exit 1; }
+else
+  echo "! pre-push: pnpm/frontend deps absent; skipping frontend checks (CI enforces)"
+fi
+
+# ── Backend quick checks (only if go available) ──────────────────────
+if command -v go >/dev/null 2>&1; then
+  ( cd backend && go build ./... ) || { echo "✗ pre-push: backend build failed" >&2; exit 1; }
+  ( cd backend && go vet ./...   ) || { echo "✗ pre-push: backend vet failed"   >&2; exit 1; }
+else
+  echo "! pre-push: go absent; skipping backend checks (CI enforces)"
+fi
+
+echo "✓ pre-push: checks passed"
+exit 0

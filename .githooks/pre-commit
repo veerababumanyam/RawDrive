@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# RawDrive pre-commit hook  (installed via core.hooksPath -> .githooks)
+#
+# Fast, staged-only guardrails. Designed for macOS bash 3.2 (no `mapfile`).
+# Emergency bypass (discouraged):  git commit --no-verify
+#
+set -euo pipefail
+
+RED=$'\033[0;31m'; YEL=$'\033[0;33m'; GRN=$'\033[0;32m'; NC=$'\033[0m'
+fail() { printf '%s✗ pre-commit: %s%s\n' "$RED" "$1" "$NC" >&2; exit 1; }
+warn() { printf '%s! pre-commit: %s%s\n' "$YEL" "$1" "$NC" >&2; }
+ok()   { printf '%s✓ pre-commit: %s%s\n' "$GRN" "$1" "$NC"; }
+
+# ── 1. Block direct commits to protected branches ─────────────────────
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo DETACHED)"
+case "$branch" in
+  main|master)
+    fail "direct commits to '$branch' are not allowed.
+    Create a feature branch:   git switch -c fix/<short-desc>
+    Or just ship it:           npm run ship -- \"fix(scope): subject\""
+    ;;
+esac
+
+# ── Collect staged Added/Copied/Modified files (NUL-safe, bash 3.2 ok) ─
+staged=()
+while IFS= read -r -d '' f; do staged+=("$f"); done \
+  < <(git diff --cached --name-only --diff-filter=ACM -z)
+[ ${#staged[@]} -eq 0 ] && exit 0
+
+# ── 2. Block secret / env files by path (hard fail, reliable) ─────────
+for f in "${staged[@]}"; do
+  case "$f" in
+    .env|.env.*|*/.env|*/.env.*|*.pem|*.key|*.p12|*.pfx|\
+    *-credentials*.json|*serviceaccount*.json|*client-secret*.json|\
+    firebase-adminsdk*.json|google-credentials*.json|\
+    rawdrive-secrets.env|HostingerServerDetails.md)
+      fail "refusing to commit secret/env file: $f
+    Secrets live in platform_settings (DB) or env vars — never in git.
+    If this file is genuinely safe, bypass with: git commit --no-verify"
+      ;;
+  esac
+done
+
+# ── 3. Hard fail on unambiguous secret CONTENT in added lines ─────────
+#     (Heuristic generic-secret detection is left to gitleaks in CI to
+#      avoid noisy false positives blocking the inner loop.)
+added_secrets="$(git diff --cached --no-color -U0 -- "${staged[@]}" 2>/dev/null \
+  | grep -E '^\+' \
+  | grep -aoE 'BEGIN (RSA|EC|OPENSSH|DSA|PGP) PRIVATE KEY|AKIA[0-9A-Z]{16}' \
+  || true)"
+if [ -n "$added_secrets" ]; then
+  fail "a private key or AWS access key appears in your staged changes:
+$(printf '%s\n' "$added_secrets" | sort -u | sed 's/^/      /')
+    Remove it. Bypass only if this is a false positive: git commit --no-verify"
+fi
+
+# ── 4. Block NEWLY-ADDED large binaries (>1MB). Tracked ones exempt. ──
+while IFS= read -r -d '' f; do
+  [ -f "$f" ] || continue
+  # numstat prints "-\t-\t<path>" for binary files; skip text (lockfiles etc.)
+  if git diff --cached --numstat -- "$f" | grep -qE '^-[[:space:]]+-[[:space:]]'; then
+    size=$(wc -c < "$f" 2>/dev/null | tr -d '[:space:]' || echo 0)
+    if [ "${size:-0}" -gt 1048576 ]; then
+      fail "new large binary ($((size/1024)) KB): $f
+    Build artifacts/binaries do not belong in git. Bypass: git commit --no-verify"
+    fi
+  fi
+done < <(git diff --cached --name-only --diff-filter=A -z)
+
+# ── 5. Format/lint staged files only (lint-staged behaviour, no deps) ─
+go_files=(); fe_files=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    *.go) go_files+=("$f") ;;
+    frontend/*.ts|frontend/*.tsx|frontend/*.js|frontend/*.jsx|frontend/*.mjs|frontend/*.cjs)
+      fe_files+=("$f") ;;
+  esac
+done
+
+if [ ${#go_files[@]} -gt 0 ]; then
+  if command -v gofmt >/dev/null 2>&1; then
+    unformatted="$(gofmt -l "${go_files[@]}" 2>/dev/null || true)"
+    if [ -n "$unformatted" ]; then
+      fail "these Go files need gofmt:
+$(printf '%s\n' "$unformatted" | sed 's/^/      /')
+    Fix:  gofmt -w ${unformatted//$'\n'/ } && git add ${unformatted//$'\n'/ }"
+    fi
+  else
+    warn "gofmt not found; skipping Go format check (CI golangci-lint will enforce)"
+  fi
+fi
+
+if [ ${#fe_files[@]} -gt 0 ]; then
+  if command -v pnpm >/dev/null 2>&1 && [ -d frontend/node_modules ]; then
+    rel=()
+    for f in "${fe_files[@]}"; do rel+=("${f#frontend/}"); done
+    if ! ( cd frontend && pnpm exec eslint "${rel[@]}" ); then
+      fail "eslint failed on staged frontend files.
+    Fix the errors above, or bypass with: git commit --no-verify"
+    fi
+  else
+    warn "pnpm/frontend deps absent; skipping eslint (CI will enforce)"
+  fi
+fi
+
+ok "all checks passed on '$branch'"
+exit 0

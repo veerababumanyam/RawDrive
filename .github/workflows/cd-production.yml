@@ -1,0 +1,90 @@
+name: cd-production
+
+# OPTIONAL "deploy from GitHub" button. Manual only — it NEVER fires on push.
+# The everyday deploy path is the local `npm run deploy:prod`; this workflow is
+# for deploying/rolling back from the GitHub UI (handy from a phone, with an
+# approval gate + audit trail).
+#
+# It is INERT until you do the one-time setup (see docs/runbooks/cicd.md):
+#   1. Register a self-hosted runner on app Node 1 with the label `rawdrive-prod`.
+#      (GitHub-hosted runners egress from rotating IPs and usually cannot reach
+#       an SSH-allowlisted VPS; a self-hosted runner keeps the key on your box
+#       and deploys over the internal network.)
+#   2. Create a `production` Environment with yourself as a required reviewer.
+#   3. Add the Environment secret RAWDRIVE_DEPLOY_SSH_KEY (the private half of
+#      ~/.ssh/rawdrive_hostinger).
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_ref:
+        description: "Git ref (tag or SHA) to deploy. Empty = current main."
+        required: false
+        default: ""
+      skip_gates:
+        description: "Skip CI re-run (use for rollback to an already-gated ref)."
+        type: boolean
+        default: false
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false        # never cancel an in-flight rolling deploy
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  # Re-run the full CI gate set so un-gated code cannot deploy. Skippable only
+  # for rollbacks to a ref that already passed on main.
+  gate:
+    if: ${{ !inputs.skip_gates }}
+    uses: ./.github/workflows/production-gates.yml
+
+  deploy:
+    needs: [gate]
+    if: ${{ always() && (inputs.skip_gates || needs.gate.result == 'success') }}
+    runs-on: [self-hosted, rawdrive-prod]
+    environment:
+      name: production            # ← triggers the one-click approval pause
+      url: https://app.rawdrive.in
+    steps:
+      - uses: actions/checkout@v4.3.1
+        with:
+          # deploy_ref is a maintainer-only workflow_dispatch input (write
+          # access required to trigger), so it is trusted here.
+          ref: ${{ inputs.deploy_ref || github.sha }}
+          fetch-depth: 0
+
+      - name: Write deploy key
+        env:
+          DEPLOY_KEY: ${{ secrets.RAWDRIVE_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/deploy_key"
+          chmod 600 "$RUNNER_TEMP/deploy_key"
+
+      - name: Rolling deploy (Node 1 → health → Node 2)
+        env:
+          SSH_KEY: ${{ runner.temp }}/deploy_key
+          DEPLOY_KNOWN_HOSTS: ${{ github.workspace }}/deploy/known_hosts
+          DEPLOY_REVISION: ${{ inputs.deploy_ref || github.sha }}
+        run: |
+          set -euo pipefail
+          chmod +x deploy/scripts/deploy-prod.sh
+          deploy/scripts/deploy-prod.sh
+
+      - name: Scrub deploy key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deploy_key"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Production deploy"
+            echo "- Ref: \`${{ inputs.deploy_ref || github.sha }}\`"
+            echo "- Result: **${{ job.status }}**"
+            echo "- Nodes: 187.127.142.42, 187.127.142.44"
+          } >> "$GITHUB_STEP_SUMMARY"

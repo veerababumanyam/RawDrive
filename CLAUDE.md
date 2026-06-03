@@ -120,8 +120,28 @@ docker compose run --rm playwright npx playwright test
 ### Lint
 ```bash
 npm run lint                         # frontend eslint (pnpm lint inside frontend/)
-(cd backend && go vet ./...)
+npm run lint:backend                 # golangci-lint (or: cd backend && go vet ./...)
 ```
+
+### Shipping (CI/CD) — how finished work reaches GitHub and production
+**Use `npm run ship` to get any change onto GitHub. Do not hand-craft branches/PRs or
+push to `main`.** Full runbook: `docs/runbooks/cicd.md`.
+```bash
+npm run ship -- "fix(galleries): correct thumbnail order"
+# → auto-branches, tests in Docker, commits (Conventional), pushes, opens a PR,
+#   and arms auto-merge. When CI gates pass, GitHub squash-merges + deletes the
+#   branch automatically. Watch: gh pr checks --watch
+```
+- Git hooks (`.githooks/`, auto-installed via `npm install` → `prepare`) block direct
+  commits to `main`, enforce Conventional Commits, block `.env*`/secrets, and run
+  fast staged-file lint. Bypass only deliberately: `git commit --no-verify`,
+  `SKIP_PREPUSH=1 git push`.
+- CI gates (`.github/workflows/production-gates.yml`): `backend`, `backend-lint`,
+  `frontend`, `openapi`, `security`, `images`, plus `pr-title`. The PR title must be a
+  Conventional Commit (it becomes the squash-merge subject).
+- One-time repo policy: `bash scripts/setup-repo-hygiene.sh` (squash-only, auto-delete,
+  auto-merge, `main` ruleset). Stale merged branches are pruned weekly by
+  `branch-hygiene.yml`.
 
 ### Migrations
 - Add paired `NNN_name.up.sql` + `NNN_name.down.sql` under `backend/internal/database/migrations/`.
@@ -137,7 +157,14 @@ node tools/cobolt-sync-tokens.js sync   # after editing design-tokens.json
 - Hostinger: 3 KVM VPSes (`.42`/`.44` app tier, `.46` db). Full IPs: `187.127.142.42` / `.44` / `.46`.
 - **SSH access:** root login uses the dedicated deploy key `~/.ssh/rawdrive_hostinger` (ed25519 fingerprint `SHA256:IJch3VFzuGuz6kk41q/kbPOYPlt9l/rq+AaROpmGZS8`). The deploy scripts default `SSH_KEY` to this path. **Do NOT use `~/.ssh/id_ed25519`** — that is the local GitHub/default identity and is no longer authorized on the nodes. Leave all pre-existing team keys on the nodes in place.
 - Host keys for all three nodes are pinned in `deploy/known_hosts` (deploy runs `StrictHostKeyChecking=yes`). If a node is rebuilt, re-verify fingerprints out-of-band before updating that file — never seed blind.
-- Rolling deploy via `deploy/scripts/deploy-prod.ps1` — app1 first, then app2.
+- Rolling deploy via `deploy/scripts/deploy-prod.sh` (PS1 wrapper on Windows) — app1 first, then app2.
+- **Preferred entry point: `npm run deploy:prod`** (`deploy/scripts/deploy-from-main.sh`). It refuses
+  to deploy unless you are on `main`, clean, and in sync with `origin/main` — so production always
+  matches GitHub — then hands off to `deploy-prod.sh` unchanged. Pass flags through:
+  `npm run deploy:prod -- --pull`.
+- Deploy is a deliberate manual step (no staging environment). An optional GitHub "Run workflow"
+  button exists (`cd-production.yml`) but is inert until a self-hosted runner + `production`
+  Environment are set up — see `docs/runbooks/cicd.md`.
 - Never bypass the script; never deploy directly to `.46`.
 
 ### Release
@@ -151,6 +178,7 @@ node tools/cobolt-sync-tokens.js sync   # after editing design-tokens.json
 - [ ] For E2E: inject auth via `storageState`/`addInitScript`, run inside Docker.
 - [ ] For secrets/config: add to `platform_settings` table or env, never source.
 - [ ] Confirm touch targets ≥ 44px and focus ring uses `focusRing` tokens.
+- [ ] To land work: `npm run ship -- "<type>(<scope>): subject"` — never push to `main` directly.
 
 ### When In Doubt
 - Frontend specifics → `frontend/AGENTS.md`

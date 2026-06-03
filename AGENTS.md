@@ -40,15 +40,27 @@ npm run test                      # backend + frontend
 npm run test:backend              # go test ./... -count=1 -timeout 120s
 npm run test:frontend             # vitest (frontend)
 npm run lint                      # frontend eslint
+npm run lint:backend              # golangci-lint
 
 # Services (Postgres, Valkey, NATS, Mailpit, Playwright)
 docker compose up -d
+
+# Ship a change to GitHub (branch → docker test → commit → PR → auto-merge)
+npm run ship -- "fix(scope): subject"
+
+# Release GitHub main to production (guarded rolling deploy)
+npm run deploy:prod
 ```
 
 ## Non-obvious project rules
 
 These are load-bearing — breaking them causes real bugs and has burned us before.
 
+- **Shipping:** land every change with **`npm run ship -- "<type>(<scope>): subject"`** — it
+  branches, tests in Docker, commits (Conventional Commits, enforced by `.githooks/`), opens a PR,
+  and arms auto-merge so CI-green PRs squash-merge and self-delete. **Never commit/push to `main`
+  directly** (a force-push to `main` once caused a prod incident). Production ships separately and
+  deliberately via `npm run deploy:prod`. Full flow: `docs/runbooks/cicd.md`.
 - **Auth model:** OTP is **registration-only**. All subsequent logins are password-only.
   Do not add OTP paths to login flows.
 - **Upload UX:** Upload lives **inside a gallery / sub-gallery**. There is no standalone
