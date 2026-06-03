@@ -1,5 +1,6 @@
 import { authFetch } from "@/lib/api/authFetch";
 import { getApiBaseUrl } from "@/lib/api/base-url";
+import type { Asset } from "@/lib/api/assets";
 
 const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
@@ -512,6 +513,10 @@ export interface GalleryAsset {
   asset_id: string;
   sort_order: number;
   is_hero: boolean;
+  // Present only when the row was fetched with ?include_assets=true (PERF-23):
+  // the server embeds the asset so the client skips its per-asset getAsset()
+  // loop. null means the asset is unavailable (e.g. soft-deleted).
+  asset?: Asset | null;
 }
 
 export interface GalleryAlbum {
@@ -737,8 +742,12 @@ export async function addAssetToGallery(
 export async function listGalleryAssets(
   _token: string,
   galleryId: string,
+  opts?: { includeAssets?: boolean },
 ): Promise<GalleryAsset[]> {
-  const res = await authFetch(`/api/v1/galleries/${galleryId}/assets`);
+  // PERF-23: ?include_assets=true asks the server to embed each asset in one
+  // bulk query so the caller can skip its per-asset getAsset() hydration loop.
+  const qs = opts?.includeAssets ? "?include_assets=true" : "";
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/assets${qs}`);
   if (!res.ok) throw new Error(`Failed to list gallery assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;

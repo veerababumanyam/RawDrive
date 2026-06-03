@@ -62,6 +62,20 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toMatch(/galleryAssets\.map\(async/);
   });
 
+  // PERF-23: the dashboard must hydrate the grid from one bulk response
+  // (?include_assets=true) instead of looping getAsset() per asset. The
+  // bounded-concurrency helper stays as the fallback (F-045), but it must
+  // short-circuit when the server already embedded the assets.
+  it("PERF-23: grid requests server-embedded assets and skips the per-asset loop when present", () => {
+    const source = readDetailPage();
+
+    // Both gallery-asset list fetches opt into the embedded-asset response.
+    expect(source).toContain("includeAssets: true");
+
+    // hydrateGalleryAssets short-circuits when every entry already has an asset.
+    expect(source).toMatch(/entry\.asset !== undefined/);
+  });
+
   it("deduplicates gallery-asset junction rows by asset_id before hydration", () => {
     const source = readDetailPage();
 

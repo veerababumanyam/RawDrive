@@ -549,7 +549,9 @@ export default function GalleryDetailPage({
       const t = getStoredAccessToken();
       if (!t) return null;
 
-      const galleryAssets = await listGalleryAssets(t, id);
+      const galleryAssets = await listGalleryAssets(t, id, {
+        includeAssets: true,
+      });
       const nextSignature = assetRowsSignature(galleryAssets);
       if (
         options.skipIfRowsUnchanged &&
@@ -585,7 +587,7 @@ export default function GalleryDetailPage({
         const [galleryData, galleryAssets, gallerySelections, favSummary] =
           await Promise.all([
             getGallery(token, id),
-            listGalleryAssets(token, id),
+            listGalleryAssets(token, id, { includeAssets: true }),
             listProofingSelections(token, id).catch((err) => {
               console.warn("Failed to load proofing selections:", err?.message);
               return [];
@@ -4251,6 +4253,20 @@ async function hydrateGalleryAssets(
   entries: GalleryAsset[],
 ): Promise<GalleryAssetRecord[]> {
   const uniqueEntries = dedupeGalleryAssetEntries(entries);
+
+  // PERF-23: when the server already embedded assets (?include_assets=true),
+  // hydrate straight from the list response and skip the per-asset getAsset()
+  // loop entirely. The bounded-concurrency pool below remains the fallback for
+  // the un-embedded path (older server, or a degraded include response).
+  if (
+    uniqueEntries.length > 0 &&
+    uniqueEntries.every((entry) => entry.asset !== undefined)
+  ) {
+    return uniqueEntries
+      .map((entry) => ({ ...entry, asset: entry.asset ?? null }))
+      .filter((entry): entry is GalleryAssetRecord => Boolean(entry.asset));
+  }
+
   const results = new Array<GalleryAssetRecord>(uniqueEntries.length);
   let cursor = 0;
   const worker = async () => {

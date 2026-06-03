@@ -31,6 +31,12 @@ type GalleryHandler struct {
 	assetSvc *service.AssetService
 	jobRepo  *ai.JobRepo
 	pool     *pgxpool.Pool
+
+	// assetBatch is the bulk asset-read seam for ?include_assets=true (PERF-23).
+	// Optional: when nil, enrichGalleryAssets falls back to the pool, and when
+	// neither is wired it degrades to nil-embedded rows. Tests inject a counting
+	// fake via WithAssetBatchSource — the same seam the public path uses (F-029).
+	assetBatch publicAssetBatchSource
 }
 
 // NewGalleryHandler creates a new GalleryHandler.
@@ -53,6 +59,64 @@ func (h *GalleryHandler) WithAIDeps(faceSvc *ai.FaceService, assetSvc *service.A
 func (h *GalleryHandler) WithPool(pool *pgxpool.Pool) *GalleryHandler {
 	h.pool = pool
 	return h
+}
+
+// WithAssetBatchSource overrides the bulk asset lookup used by
+// ?include_assets=true. Production wires the pool-backed poolAssetBatchSource
+// (via WithPool); tests inject an in-memory counting fake. Mirrors the public
+// handler's seam so both list paths share one N+1-free contract. Chainable.
+func (h *GalleryHandler) WithAssetBatchSource(src publicAssetBatchSource) *GalleryHandler {
+	h.assetBatch = src
+	return h
+}
+
+// galleryAssetWithAsset is a gallery-asset junction row with its asset record
+// embedded inline, returned when ?include_assets=true so the dashboard hydrates
+// a whole page from one response instead of looping getAsset() per asset
+// (PERF-23). The embedded GalleryAsset keeps the same JSON shape the un-enriched
+// path returns, plus an "asset" field (null when the asset is unavailable).
+type galleryAssetWithAsset struct {
+	repository.GalleryAsset
+	Asset *repository.Asset `json:"asset"`
+}
+
+// embedGalleryAssets attaches each asset to its junction row, preserving the
+// gallery's sort order (it iterates the ordered junction slice and looks each
+// asset up by id). Assets absent from `assets` embed as nil.
+func embedGalleryAssets(junctions []repository.GalleryAsset, assets []*repository.Asset) []galleryAssetWithAsset {
+	byID := make(map[uuid.UUID]*repository.Asset, len(assets))
+	for _, a := range assets {
+		byID[a.ID] = a
+	}
+	out := make([]galleryAssetWithAsset, 0, len(junctions))
+	for _, j := range junctions {
+		out = append(out, galleryAssetWithAsset{GalleryAsset: j, Asset: byID[j.AssetID]})
+	}
+	return out
+}
+
+// enrichGalleryAssets hydrates junction rows with their assets in a single bulk
+// query (PERF-23). It prefers the injected batch source, falls back to the
+// request pool, and degrades to nil-embedded rows when neither is wired (the
+// client then falls back to its own hydration).
+func (h *GalleryHandler) enrichGalleryAssets(ctx context.Context, junctions []repository.GalleryAsset) ([]galleryAssetWithAsset, error) {
+	batch := h.assetBatch
+	if batch == nil && h.pool != nil {
+		batch = poolAssetBatchSource{pool: h.pool}
+	}
+	if batch == nil {
+		return embedGalleryAssets(junctions, nil), nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(junctions))
+	for _, j := range junctions {
+		ids = append(ids, j.AssetID)
+	}
+	assets, err := batch.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return embedGalleryAssets(junctions, assets), nil
 }
 
 var galleryRelationshipEntityTables = map[string]string{
@@ -877,6 +941,21 @@ func (h *GalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	assets, err := h.gallerySvc.ListAssets(r.Context(), galleryID)
 	if err != nil {
 		http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// PERF-23: ?include_assets=true hydrates the whole page server-side with one
+	// bulk asset query and embeds each asset on its junction row, so the
+	// dashboard doesn't loop getAsset() per asset (an N+1 that scaled with
+	// gallery size). The default response shape is unchanged for callers that
+	// don't opt in.
+	if r.URL.Query().Get("include_assets") == "true" {
+		enriched, err := h.enrichGalleryAssets(r.Context(), assets)
+		if err != nil {
+			http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, http.StatusOK, enriched)
 		return
 	}
 

@@ -1309,6 +1309,15 @@ paths:
           in: query
           schema:
             type: string
+        - name: include_assets
+          in: query
+          description: >-
+            When true, the server embeds each asset record inline on its
+            junction row via a single bulk query (PERF-23), so the client
+            hydrates the whole page in one request instead of looping per asset.
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: Asset list
