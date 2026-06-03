@@ -184,35 +184,35 @@ describe("dashboard UI asset URLs", () => {
   });
 });
 
-describe("getStorageBackedUrl — gallery-session (?gs=) channel (S4-G1)", () => {
+describe("getStorageBackedUrl — asset-access token (?at=) channel (SEC-1)", () => {
   // The public viewer fetches protected gallery bytes cross-origin (the
   // /storage/* path is NOT proxied by the Next rewrites, so <img> requests go
-  // straight to the API origin). The httpOnly gallery_session cookie is
-  // SameSite=Strict on the API origin and never rides a cross-origin <img>,
-  // so the session token MUST be appended as ?gs= for protected bytes to
-  // authenticate. These tests lock that contract.
+  // straight to the API origin). The durable gallery session is header/cookie
+  // only and MUST never appear in a URL (SEC-1, security audit 2026-05-30).
+  // Instead, a short-lived, byte-read-only asset-access token is appended as
+  // ?at= for protected bytes. These tests lock that contract.
 
-  it("appends the gallery-session token as ?gs= for storage paths", () => {
+  it("appends the asset-access token as ?at= for storage paths", () => {
     expect(
       getStorageBackedUrl(
         "/storage/derivatives/asset-1/display_webp.webp",
         null,
-        "gs-token",
+        "at-token",
       ),
     ).toBe(
-      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?gs=gs-token",
+      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?at=at-token",
     );
   });
 
-  it("URL-encodes the gallery-session token", () => {
+  it("URL-encodes the asset-access token", () => {
     expect(
       getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp", null, "a/b+c=="),
     ).toBe(
-      "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp?gs=a%2Fb%2Bc%3D%3D",
+      "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp?at=a%2Fb%2Bc%3D%3D",
     );
   });
 
-  it("omits ?gs= when no session token is supplied (open gallery, anonymous bytes)", () => {
+  it("omits ?at= when no asset-access token is supplied (open gallery, anonymous bytes)", () => {
     expect(getStorageBackedUrl("thumbnails/abc/thumb_md_webp.webp")).toBe(
       "http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp",
     );
@@ -221,30 +221,30 @@ describe("getStorageBackedUrl — gallery-session (?gs=) channel (S4-G1)", () =>
     ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb_md_webp.webp");
   });
 
-  it("ignores the dashboard JWT argument but can carry the gallery session (?gs=)", () => {
+  it("ignores the dashboard JWT argument but can carry the asset-access token (?at=)", () => {
     expect(
       getStorageBackedUrl(
         "/storage/derivatives/asset-1/display_webp.webp",
         "jwt-token",
-        "gs-token",
+        "at-token",
       ),
     ).toBe(
-      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?gs=gs-token",
+      "http://localhost:8080/storage/derivatives/asset-1/display_webp.webp?at=at-token",
     );
   });
 
-  it("never appends ?gs= to non-storage, data, blob, or external URLs", () => {
+  it("never appends ?at= to non-storage, data, blob, or external URLs", () => {
     expect(
       getStorageBackedUrl(
         "/api/v1/public/galleries/x/branding",
         null,
-        "gs-token",
+        "at-token",
       ),
     ).toBe("/api/v1/public/galleries/x/branding");
     expect(
-      getStorageBackedUrl("data:image/webp;base64,abc", null, "gs-token"),
+      getStorageBackedUrl("data:image/webp;base64,abc", null, "at-token"),
     ).toBe("data:image/webp;base64,abc");
     const external = "https://example.r2.cloudflarestorage.com/p.webp?sig=abc";
-    expect(getStorageBackedUrl(external, null, "gs-token")).toBe(external);
+    expect(getStorageBackedUrl(external, null, "at-token")).toBe(external);
   });
 });

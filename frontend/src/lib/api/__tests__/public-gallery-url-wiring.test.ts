@@ -14,9 +14,9 @@ beforeEach(() => {
 });
 
 describe("public gallery URL/session wiring", () => {
-  it("builds music URLs with workspace scope and gallery-session token", () => {
+  it("builds music URLs with workspace scope and asset-access token (?at=)", () => {
     expect(publicGalleryMusicUrl("wedding", "kaveri-a1", "a/b+c==")).toBe(
-      "http://localhost:8080/api/v1/public/galleries/wedding/music?ws=kaveri-a1&gs=a%2Fb%2Bc%3D%3D",
+      "http://localhost:8080/api/v1/public/galleries/wedding/music?ws=kaveri-a1&at=a%2Fb%2Bc%3D%3D",
     );
   });
 

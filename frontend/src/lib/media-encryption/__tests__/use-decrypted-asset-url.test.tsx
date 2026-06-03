@@ -14,13 +14,13 @@ const TEST_VARIANTS = ["thumb_md_webp"] as const;
 function Probe({
   asset,
   token,
-  gallerySessionToken,
+  assetAccessToken,
 }: {
   asset: EncryptedAssetLike;
   token?: string | null;
-  gallerySessionToken?: string | null;
+  assetAccessToken?: string | null;
 }) {
-  const media = useDecryptedAssetUrl(asset, TEST_VARIANTS, token, gallerySessionToken);
+  const media = useDecryptedAssetUrl(asset, TEST_VARIANTS, token, assetAccessToken);
   return (
     <div>
       <span data-testid="loading">{String(media.loading)}</span>
@@ -146,7 +146,7 @@ describe("useDecryptedAssetUrl", () => {
 
     render(
       <Probe
-        gallerySessionToken="gallery-session"
+        assetAccessToken="gallery-session"
         asset={{
           id: "asset-1",
           filename: "photo.webp",
@@ -166,7 +166,7 @@ describe("useDecryptedAssetUrl", () => {
       expect(screen.getByTestId("src")).toHaveTextContent("blob:decrypted-webp");
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8080/storage/gallery/asset-1/thumb_md.webp.enc?gs=gallery-session",
+      "http://localhost:8080/storage/gallery/asset-1/thumb_md.webp.enc?at=gallery-session",
       { credentials: "include" },
     );
   });
