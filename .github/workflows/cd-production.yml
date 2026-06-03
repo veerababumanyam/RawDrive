@@ -49,7 +49,7 @@ jobs:
       name: production            # ← triggers the one-click approval pause
       url: https://app.rawdrive.in
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v6.0.3
         with:
           # deploy_ref is a maintainer-only workflow_dispatch input (write
           # access required to trigger), so it is trusted here.

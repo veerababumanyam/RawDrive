@@ -14,8 +14,8 @@ jobs:
   backend:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4.3.1
-      - uses: actions/setup-go@v5.6.0
+      - uses: actions/checkout@v6.0.3
+      - uses: actions/setup-go@v6.4.0
         with:
           go-version: "1.26.4"
           cache-dependency-path: backend/go.sum
@@ -46,11 +46,11 @@ jobs:
   backend-lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v6.0.3
         with:
           # only-new-issues needs history to diff new code against the base.
           fetch-depth: 0
-      - uses: actions/setup-go@v5.6.0
+      - uses: actions/setup-go@v6.4.0
         with:
           go-version: "1.26.4"
           cache-dependency-path: backend/go.sum
@@ -77,7 +77,7 @@ jobs:
   known-hosts-guard:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v6.0.3
       - name: known_hosts == known_hosts.candidate and pin all 3 nodes
         run: |
           set -euo pipefail
@@ -97,11 +97,11 @@ jobs:
   frontend:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4.3.1
-      - uses: pnpm/action-setup@v4.4.0
+      - uses: actions/checkout@v6.0.3
+      - uses: pnpm/action-setup@v6.0.8
         with:
           version: 9.15.9
-      - uses: actions/setup-node@v4.4.0
+      - uses: actions/setup-node@v6.4.0
         with:
           node-version: "22.22.3"
           cache: pnpm
@@ -141,8 +141,8 @@ jobs:
   openapi:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4.3.1
-      - uses: actions/setup-node@v4.4.0
+      - uses: actions/checkout@v6.0.3
+      - uses: actions/setup-node@v6.4.0
         with:
           node-version: "22.22.3"
       - name: Lint OpenAPI spec
@@ -156,7 +156,7 @@ jobs:
       - openapi
       - security
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v6.0.3
       - name: Build backend image
         run: docker build -f backend/Dockerfile -t rawdrive-api:ci backend
       - name: Build frontend image
@@ -203,14 +203,14 @@ jobs:
       #   security-events: write
       #   actions: read
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v6.0.3
         with:
           # gitleaks needs full git history to scan every commit for
           # leaked secrets, not just the current tree.
           fetch-depth: 0
 
       - name: Set up Python for semgrep
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.12"
 
@@ -245,7 +245,7 @@ jobs:
 
       - name: Archive semgrep SARIF
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: semgrep-sarif
           path: semgrep.sarif
@@ -307,7 +307,7 @@ jobs:
 
       - name: Archive trivy SARIF
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: trivy-sarif
           path: trivy-results.sarif
