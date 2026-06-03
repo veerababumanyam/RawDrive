@@ -17,6 +17,8 @@ const SOI = 0xd8;
 const EOI = 0xd9;
 const SOS = 0xda; // Start of Scan — after this marker, payload is raw
                     //                 entropy-coded data until EOI.
+const CAMERA_TRAILER_INCIDENTAL_ARCHIVE_MIN_BYTES = 64 * 1024;
+const CAMERA_TRAILER_ARCHIVE_PREFIX_GUARD_BYTES = 512;
 
 interface JpegConfig {
   metadataBudgetBytes: number;
@@ -199,14 +201,30 @@ export function screenJpeg(bytes: Uint8Array, cfg: JpegConfig): ScanResult {
           bytes.byteLength
         );
         if (archiveFindings.length > 0) {
-          // Genuine polyglot: image + appended archive. Reject.
-          findings.push({
-            category: "appended_payload",
-            severity: "high",
-            offset: eoiOffset,
-            message: `${trailing} bytes of appended payload past JPEG EOI containing archive signature(s)`,
-          });
-          findings.push(...archiveFindings);
+          const isCameraTrailerFalsePositive = isLikelyCameraTrailerArchiveFalsePositive(
+            bytes,
+            firstNonPadding,
+            trailing,
+            archiveFindings,
+          );
+
+          if (isCameraTrailerFalsePositive) {
+            findings.push({
+              category: "appended_payload",
+              severity: "low",
+              offset: eoiOffset,
+              message: `${trailing} bytes of camera-authored trailer data after the primary JPEG image (allowed)`,
+            });
+          } else {
+            // Genuine polyglot: image + appended archive. Reject.
+            findings.push({
+              category: "appended_payload",
+              severity: "high",
+              offset: eoiOffset,
+              message: `${trailing} bytes of appended payload past JPEG EOI containing archive signature(s)`,
+            });
+            findings.push(...archiveFindings);
+          }
         } else {
           // Benign trailing data — never blocks (#60). The Tier-D backend gate
           // still verifies the manifest + final byte hash server-side.
@@ -286,6 +304,82 @@ function isLikelyCameraJpegTrailer(bytes: Uint8Array, start: number): boolean {
 
   const lastNonPadding = lastNonPaddingOffset(bytes);
   return lastNonPadding > start && bytes[lastNonPadding - 1] === 0xff && bytes[lastNonPadding] === EOI;
+}
+
+function isLikelyCameraTrailerArchiveFalsePositive(
+  bytes: Uint8Array,
+  firstNonPadding: number,
+  trailingBytes: number,
+  archiveFindings: ScanFinding[],
+): boolean {
+  const firstArchiveOffset = firstArchiveFindingOffset(archiveFindings);
+  if (firstArchiveOffset === null) return false;
+
+  // Keep the obvious polyglot case blocked: padding followed by a ZIP/RAR/7z
+  // header immediately after the JPEG EOI.
+  if (firstArchiveOffset === firstNonPadding) return false;
+
+  const cameraPreviewRanges = findEmbeddedCameraJpegRanges(
+    bytes,
+    firstNonPadding,
+    bytes.byteLength,
+  );
+  if (
+    cameraPreviewRanges.length > 0 &&
+    archiveFindings.every((finding) =>
+      typeof finding.offset === "number" &&
+      cameraPreviewRanges.some((range) => finding.offset! >= range.start && finding.offset! < range.end)
+    )
+  ) {
+    return true;
+  }
+
+  // Some phone/camera JPEGs carry a large opaque vendor trailer after the
+  // primary EOI. Compressed camera data inside that trailer can contain
+  // byte sequences that look like archive magic. Do not allow tiny "junk then
+  // ZIP" payloads through; only downgrade large, camera-sized tails where the
+  // archive-like sequence is not right at the payload boundary.
+  return (
+    trailingBytes >= CAMERA_TRAILER_INCIDENTAL_ARCHIVE_MIN_BYTES &&
+    firstArchiveOffset - firstNonPadding >= CAMERA_TRAILER_ARCHIVE_PREFIX_GUARD_BYTES
+  );
+}
+
+function firstArchiveFindingOffset(findings: ScanFinding[]): number | null {
+  let first: number | null = null;
+  for (const finding of findings) {
+    if (typeof finding.offset !== "number") continue;
+    if (first === null || finding.offset < first) first = finding.offset;
+  }
+  return first;
+}
+
+function findEmbeddedCameraJpegRanges(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  for (let i = start; i < end - 3; i += 1) {
+    if (bytes[i] !== 0xff || bytes[i + 1] !== SOI || bytes[i + 2] !== 0xff) {
+      continue;
+    }
+    const eoi = findJpegEoi(bytes, i + 2, end);
+    if (eoi > i) {
+      ranges.push({ start: i, end: eoi });
+      i = eoi - 1;
+    }
+  }
+  return ranges;
+}
+
+function findJpegEoi(bytes: Uint8Array, start: number, end: number): number {
+  for (let i = start; i < end - 1; i += 1) {
+    if (bytes[i] === 0xff && bytes[i + 1] === EOI) {
+      return i + 2;
+    }
+  }
+  return -1;
 }
 
 function lastNonPaddingOffset(bytes: Uint8Array): number {

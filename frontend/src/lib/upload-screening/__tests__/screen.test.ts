@@ -182,6 +182,21 @@ describe("screen() format dispatcher", () => {
     expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
   });
 
+  it("flags a JPEG with padded appended ZIP payload", () => {
+    const jpeg = makeMinimalJpeg();
+    const padding = new Uint8Array([0x00, 0x00, 0x00]);
+    const zipHeader = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]); // "PK\x03\x04"
+    const combined = new Uint8Array(jpeg.length + padding.length + zipHeader.length);
+    combined.set(jpeg, 0);
+    combined.set(padding, jpeg.length);
+    combined.set(zipHeader, jpeg.length + padding.length);
+
+    const result = screen(combined, { declaredType: "image/jpeg" });
+    expect(result.decision).toBe("block");
+    expect(result.findings.some((f) => f.category === "appended_payload")).toBe(true);
+    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
+  });
+
   it("allows a JPEG with benign trailing data past EOI (camera Multi-Picture Format)", () => {
     // Regression for the 2026-05-31 upload-blocked bug: real Nikon/Sony JPEGs
     // append an MPF preview / second image after the primary EOI. Such trailing
@@ -216,6 +231,62 @@ describe("screen() format dispatcher", () => {
     const combined = new Uint8Array(jpeg.length + dependentPreview.length);
     combined.set(jpeg, 0);
     combined.set(dependentPreview, jpeg.length);
+
+    const result = screen(combined, { declaredType: "image/jpeg" });
+
+    expect(result.detectedFormat).toBe("jpeg");
+    expect(result.decision).toBe("pass");
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        category: "appended_payload",
+        severity: "low",
+      }),
+    ]);
+    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(false);
+  });
+
+  it("allows camera trailers with an MPF index before preview entropy that resembles archive magic", () => {
+    const jpeg = makeMinimalJpeg();
+    const mpfIndex = new Uint8Array([
+      0x4d, 0x50, 0x46, 0x00, // "MPF\0"
+      0x00, 0x00, 0x00, 0x18,
+    ]);
+    const dependentPreview = new Uint8Array([
+      0xff, 0xd8,
+      0xff, 0xe0, 0x00, 0x10,
+      0x4a, 0x46, 0x49, 0x46, 0x00,
+      0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+      0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x50, 0x4b, 0x03, 0x04, // ZIP-like bytes inside compressed JPEG entropy.
+      0xff, 0xd9,
+    ]);
+    const combined = new Uint8Array(jpeg.length + mpfIndex.length + dependentPreview.length);
+    combined.set(jpeg, 0);
+    combined.set(mpfIndex, jpeg.length);
+    combined.set(dependentPreview, jpeg.length + mpfIndex.length);
+
+    const result = screen(combined, { declaredType: "image/jpeg" });
+
+    expect(result.detectedFormat).toBe("jpeg");
+    expect(result.decision).toBe("pass");
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        category: "appended_payload",
+        severity: "low",
+      }),
+    ]);
+    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(false);
+  });
+
+  it("allows large camera vendor trailers with incidental archive-like bytes away from the payload start", () => {
+    const jpeg = makeMinimalJpeg();
+    const trailer = new Uint8Array(194_566);
+    trailer.fill(0x2a);
+    trailer.set([0x52, 0x44, 0x43, 0x41, 0x4d], 0); // "RDCAM"
+    trailer.set([0x50, 0x4b, 0x03, 0x04], 12_000); // incidental ZIP-like bytes.
+    const combined = new Uint8Array(jpeg.length + trailer.length);
+    combined.set(jpeg, 0);
+    combined.set(trailer, jpeg.length);
 
     const result = screen(combined, { declaredType: "image/jpeg" });
 
