@@ -193,6 +193,23 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 		args = append(args, v)
 		idx++
 	}
+	addCastAny := func(col string, v any, pgType string) {
+		sets = append(sets, fmt.Sprintf("%s=$%d::%s", col, idx, pgType))
+		args = append(args, v)
+		idx++
+	}
+	var encodeErr error
+	addJSONB := func(col string, v any) {
+		if encodeErr != nil {
+			return
+		}
+		raw, err := workspaceProfileJSONBValue(v)
+		if err != nil {
+			encodeErr = err
+			return
+		}
+		addCastAny(col, raw, "jsonb")
+	}
 	addBool := func(col string, v *bool) {
 		if v != nil {
 			addAny(col, *v)
@@ -226,8 +243,8 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 	if p.LogoAssetID != nil {
 		logoAssetID := strings.TrimSpace(*p.LogoAssetID)
 		if logoAssetID == "" {
-			addAny("logo_asset_id", nil)
-			addAny("logo_metadata", map[string]interface{}{})
+			addCastAny("logo_asset_id", nil, "uuid")
+			addJSONB("logo_metadata", map[string]interface{}{})
 			addAny("logo_url", "")
 		} else {
 			assetID, metadata, storageKey, err := h.logoMetadataForAsset(r.Context(), wsID, logoAssetID)
@@ -239,12 +256,16 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), status)
 				return
 			}
-			addAny("logo_asset_id", assetID)
-			addAny("logo_metadata", metadata)
+			addCastAny("logo_asset_id", assetID, "uuid")
+			addJSONB("logo_metadata", metadata)
 			addAny("logo_url", storageKey)
 		}
 	} else {
 		add("logo_url", p.LogoURL)
+	}
+	if encodeErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to encode profile metadata: %s"}`, encodeErr.Error()), http.StatusInternalServerError)
+		return
 	}
 
 	if len(sets) == 0 {
@@ -262,6 +283,14 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 
 func joinComma(parts []string) string {
 	return strings.Join(parts, ", ")
+}
+
+func workspaceProfileJSONBValue(v any) (string, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func validateBrandAccentColor(value *string) error {
