@@ -3,7 +3,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { createGallery, deleteGallery, galleryPublicUrl, updateGallery, type Gallery } from "@/lib/api/galleries";
+import {
+  createGallery,
+  createGalleryShareLink,
+  deleteGallery,
+  galleryPublicUrl,
+  updateGallery,
+  type Gallery,
+} from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
 import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
@@ -11,7 +18,7 @@ import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
-import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
+import { appendStoredGalleryKeyFragment, setUrlSearchParamBeforeFragment } from "@/lib/media-encryption/share-url";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
@@ -140,28 +147,32 @@ function GalleryShareMenu({
   shareUrl,
   open,
   copied,
+  busy,
   onToggle,
   onCopy,
+  onEmail,
+  onWhatsApp,
 }: {
   gallery: Gallery;
   shareUrl: string;
   open: boolean;
   copied: boolean;
+  busy: boolean;
   onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onCopy: () => void;
+  onCopy: () => void | Promise<void>;
+  onEmail: () => void | Promise<void>;
+  onWhatsApp: () => void | Promise<void>;
 }) {
   const canShare = gallery.is_published && Boolean(shareUrl);
-  const emailHref = canShare ? buildGalleryEmailHref(gallery, shareUrl) : "";
-  const whatsAppHref = canShare ? buildGalleryWhatsAppHref(gallery, shareUrl) : "";
 
   const runMenuAction = (
     event: React.MouseEvent<HTMLButtonElement>,
-    action: () => void,
+    action: () => void | Promise<void>,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!canShare) return;
-    action();
+    if (!canShare || busy) return;
+    void action();
   };
 
   return (
@@ -204,17 +215,17 @@ function GalleryShareMenu({
                 type="button"
                 role="menuitem"
                 onClick={(event) => runMenuAction(event, onCopy)}
+                disabled={busy}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
               >
                 <ClipboardList className="h-5 w-5 shrink-0 text-text-secondary" />
-                <span>Copy link</span>
+                <span>{busy ? "Preparing link..." : "Copy link"}</span>
               </button>
               <button
                 type="button"
                 role="menuitem"
-                onClick={(event) => runMenuAction(event, () => {
-                  window.location.href = emailHref;
-                })}
+                onClick={(event) => runMenuAction(event, onEmail)}
+                disabled={busy}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
               >
                 <Envelope className="h-5 w-5 shrink-0 text-text-secondary" />
@@ -223,9 +234,8 @@ function GalleryShareMenu({
               <button
                 type="button"
                 role="menuitem"
-                onClick={(event) => runMenuAction(event, () => {
-                  window.open(whatsAppHref, "_blank", "noopener,noreferrer");
-                })}
+                onClick={(event) => runMenuAction(event, onWhatsApp)}
+                disabled={busy}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
               >
                 <Phone className="h-5 w-5 shrink-0 text-text-secondary" />
@@ -274,6 +284,7 @@ export default function GalleriesPage() {
   // ID of the gallery whose share link was just copied — cleared after 1.5s.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(null);
+  const [sharingGalleryId, setSharingGalleryId] = useState<string | null>(null);
   const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
   // Gallery ID currently being published/unpublished — prevents double-clicks.
   // Backs the GalleryPublishSwitch `busy` state via toggleGalleryPublish.
@@ -347,15 +358,70 @@ export default function GalleriesPage() {
     setConfirmDeleteId(galleryId);
   };
 
-  const copyShareLink = (gallery: Gallery) => {
-    if (!gallery.is_published) return;
-    const url = buildGalleryCardShareUrl(gallery, workspaceProfile);
-    if (!url) return;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(gallery.id);
+  const createWorkingShareUrl = async (gallery: Gallery, channel: "copy" | "email" | "whatsapp") => {
+    if (!token) {
+      throw new Error("Sign in again to create a share link.");
+    }
+    if (!gallery.is_published) {
+      throw new Error("Publish this gallery before sharing client links.");
+    }
+
+    const baseUrl = buildGalleryCardShareUrl(gallery, workspaceProfile);
+    if (!baseUrl) {
+      throw new Error("Share link unavailable: gallery URL is missing.");
+    }
+
+    const link = await createGalleryShareLink(token, gallery.id, {
+      access_mode: "public",
+      download_allowed: gallery.download_enabled !== false,
+      channel,
+    });
+    return setUrlSearchParamBeforeFragment(baseUrl, "share", link.token);
+  };
+
+  const runShareAction = async (
+    gallery: Gallery,
+    channel: "copy" | "email" | "whatsapp",
+    action: (url: string) => Promise<void> | void,
+  ) => {
+    if (sharingGalleryId === gallery.id) return;
+    setSharingGalleryId(gallery.id);
+    setError(null);
+    try {
+      const url = await createWorkingShareUrl(gallery, channel);
+      await action(url);
+      if (channel === "copy") {
+        setCopiedId(gallery.id);
+        setTimeout(() => setCopiedId(null), 1500);
+      }
       setShareMenuGalleryId(null);
-      setTimeout(() => setCopiedId(null), 1500);
-    }).catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create gallery share link");
+    } finally {
+      setSharingGalleryId(null);
+    }
+  };
+
+  const copyShareLink = (gallery: Gallery) => {
+    void runShareAction(gallery, "copy", async (url) => {
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        throw new Error(`Copy this link: ${url}`);
+      }
+    });
+  };
+
+  const emailShareLink = (gallery: Gallery) => {
+    void runShareAction(gallery, "email", (url) => {
+      window.location.href = buildGalleryEmailHref(gallery, url);
+    });
+  };
+
+  const whatsAppShareLink = (gallery: Gallery) => {
+    void runShareAction(gallery, "whatsapp", (url) => {
+      window.open(buildGalleryWhatsAppHref(gallery, url), "_blank", "noopener,noreferrer");
+    });
   };
 
   const confirmDelete = async (galleryId: string) => {
@@ -913,6 +979,7 @@ export default function GalleriesPage() {
                         shareUrl={shareUrl}
                         open={shareMenuGalleryId === g.id}
                         copied={copiedId === g.id}
+                        busy={sharingGalleryId === g.id}
                         onToggle={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -920,6 +987,8 @@ export default function GalleriesPage() {
                           setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
                         }}
                         onCopy={() => copyShareLink(g)}
+                        onEmail={() => emailShareLink(g)}
+                        onWhatsApp={() => whatsAppShareLink(g)}
                       />
                       {confirmDeleteId === g.id ? (
                         <div
@@ -1024,6 +1093,7 @@ export default function GalleriesPage() {
                         shareUrl={shareUrl}
                         open={shareMenuGalleryId === g.id}
                         copied={copiedId === g.id}
+                        busy={sharingGalleryId === g.id}
                         onToggle={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -1031,6 +1101,8 @@ export default function GalleriesPage() {
                           setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
                         }}
                         onCopy={() => copyShareLink(g)}
+                        onEmail={() => emailShareLink(g)}
+                        onWhatsApp={() => whatsAppShareLink(g)}
                       />
                       {confirmDeleteId === g.id ? (
                         <div

@@ -5,6 +5,7 @@ import GalleriesPage from "../page";
 const mocks = vi.hoisted(() => ({
   authFetch: vi.fn(),
   createGallery: vi.fn(),
+  createGalleryShareLink: vi.fn(),
   getAsset: vi.fn(),
   useDecryptedAssetUrl: vi.fn(),
 }));
@@ -44,6 +45,7 @@ vi.mock("@/lib/api/workspace-profile", () => ({
 
 vi.mock("@/lib/api/galleries", () => ({
   createGallery: mocks.createGallery,
+  createGalleryShareLink: mocks.createGalleryShareLink,
   deleteGallery: vi.fn(),
   updateGallery: vi.fn(),
   galleryPublicUrl: vi.fn((gallery: { slug: string }) => `https://app.rawdrive.test/g/${gallery.slug}`),
@@ -81,9 +83,16 @@ describe("GalleriesPage cover previews", () => {
   beforeEach(() => {
     mocks.authFetch.mockReset();
     mocks.createGallery.mockReset();
+    mocks.createGalleryShareLink.mockReset();
     mocks.getAsset.mockReset();
     mocks.useDecryptedAssetUrl.mockReset();
     mocks.useDecryptedAssetUrl.mockReturnValue({ src: "", loading: false, error: null });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
   });
 
   it("fetches the Design Studio cover asset so encrypted thumbnails render with their manifest", async () => {
@@ -149,5 +158,39 @@ describe("GalleriesPage cover previews", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText("Failed to create gallery: create failed (500)")).not.toBeInTheDocument();
+  });
+
+  it("creates a share token before copying the gallery card public link", async () => {
+    mocks.authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ galleries: [{ ...galleryWithDesignCover(), is_published: true }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    mocks.createGalleryShareLink.mockResolvedValue({
+      id: "share-1",
+      gallery_id: "gallery-1",
+      token: "share-token",
+      permissions: { access_mode: "public" },
+      download_allowed: true,
+      access_count: 0,
+      created_at: "2026-06-03T00:00:00Z",
+    });
+
+    render(<GalleriesPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Share UAT Test Gallery" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy link" }));
+
+    await waitFor(() => {
+      expect(mocks.createGalleryShareLink).toHaveBeenCalledWith("token-1", "gallery-1", {
+        access_mode: "public",
+        download_allowed: true,
+        channel: "copy",
+      });
+    });
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      "https://app.rawdrive.test/g/uat-test-gallery?share=share-token",
+    );
   });
 });
