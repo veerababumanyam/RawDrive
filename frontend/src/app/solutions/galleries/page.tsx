@@ -8,6 +8,7 @@ export const metadata: Metadata = createPageMetadata("galleries");
 export default function ClientGalleriesPage() {
   return (
     <SolutionShowcasePage
+      path="/solutions/galleries"
       eyebrow="Client Galleries"
       title="Deliver galleries that feel handcrafted, branded, and ready for client approval."
       description="Give every wedding, event, or portrait client a polished gallery link with proofing, expiry, download control, and studio branding built in."

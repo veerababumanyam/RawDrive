@@ -8,6 +8,7 @@ export const metadata: Metadata = createPageMetadata("live-streaming");
 export default function LiveStreamingPage() {
   return (
     <SolutionShowcasePage
+      path="/solutions/live-streaming"
       eyebrow="Live streaming"
       title="Stream weddings and events without dropping the premium visual language your studio is known for."
       description="Package remote guest access, branded viewing, replay handling, and event context beside the rest of your studio workflow."

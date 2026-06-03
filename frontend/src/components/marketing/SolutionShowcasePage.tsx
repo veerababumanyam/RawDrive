@@ -1,5 +1,8 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, type LucideIcon } from "lucide-react";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { buildBreadcrumbJsonLd } from "@/lib/seo";
 
 type SolutionStat = {
   label: string;
@@ -37,9 +40,13 @@ type SolutionShowcasePageProps = {
   answer: string;
   quoteTitle: string;
   quoteBody: string;
+  /** Route path of this page, e.g. "/solutions/galleries" — used for BreadcrumbList JSON-LD. */
+  path: string;
+  /** Short label for this page in the breadcrumb trail (defaults to the eyebrow). */
+  breadcrumbName?: string;
 };
 
-export function SolutionShowcasePage({
+export async function SolutionShowcasePage({
   eyebrow,
   title,
   description,
@@ -54,9 +61,18 @@ export function SolutionShowcasePage({
   answer,
   quoteTitle,
   quoteBody,
+  path,
+  breadcrumbName,
 }: SolutionShowcasePageProps) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const breadcrumb = buildBreadcrumbJsonLd([
+    { name: "Home", path: "/" },
+    { name: breadcrumbName ?? eyebrow, path },
+  ]);
+
   return (
     <div className="bg-surface text-text-primary">
+      <JsonLd id="solution-breadcrumb" data={breadcrumb} nonce={nonce} />
       <section className="mx-auto grid max-w-7xl gap-12 px-4 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
         <div className="space-y-8">
           <span className="inline-flex rounded-full bg-accent-subtle px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-accent">

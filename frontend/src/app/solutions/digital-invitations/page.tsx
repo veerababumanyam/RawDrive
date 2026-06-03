@@ -8,6 +8,7 @@ export const metadata: Metadata = createPageMetadata("digital-invitations");
 export default function DigitalInvitationsPage() {
   return (
     <SolutionShowcasePage
+      path="/solutions/digital-invitations"
       eyebrow="Digital invitations"
       title="Turn invitations into a polished extension of the same brand experience your gallery clients already trust."
       description="Create mobile-first invitation and event touchpoints that connect guest communication, RSVP context, gallery reveal, and studio branding."

@@ -7,6 +7,8 @@ export const metadata: Metadata = createPageMetadata("camera-rentals");
 export default function RentalsMarketplacePage() {
   return (
     <MarketplaceShowcasePage
+      path="/marketplaces/rentals"
+      breadcrumbName="Camera Rentals"
       eyebrow="Rental Network"
       title="Reserve cameras, lenses, lights, and production gear without leaving your workflow."
       description="Find rental kits by city, brand, shoot type, and availability for wedding, event, portrait, and commercial production days."

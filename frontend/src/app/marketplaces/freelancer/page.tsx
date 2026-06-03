@@ -7,6 +7,8 @@ export const metadata: Metadata = createPageMetadata("freelancer-marketplace");
 export default function FreelancerMarketplacePage() {
   return (
     <MarketplaceShowcasePage
+      path="/marketplaces/freelancer"
+      breadcrumbName="Freelancers"
       eyebrow="Marketplace"
       title="Find second shooters, editors, and specialists without leaving RawDrive."
       description="Discover photography talent by city, specialty, availability, and project fit so your studio can staff weddings, events, edits, and drone work faster."

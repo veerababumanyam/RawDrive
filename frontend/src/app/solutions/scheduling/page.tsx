@@ -8,6 +8,7 @@ export const metadata: Metadata = createPageMetadata("scheduling");
 export default function SchedulingPage() {
   return (
     <SolutionShowcasePage
+      path="/solutions/scheduling"
       eyebrow="Scheduling"
       title="Keep shoots, planning, reminders, and client coordination inside one calendar surface."
       description="Coordinate event dates, teams, venues, client milestones, and delivery tasks without separating the calendar from the rest of the studio."

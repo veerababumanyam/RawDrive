@@ -8,6 +8,7 @@ export const metadata: Metadata = createPageMetadata("crm");
 export default function CRMContractsPage() {
   return (
     <SolutionShowcasePage
+      path="/solutions/crm-contracts"
       eyebrow="CRM and contracts"
       title="Track leads, lock bookings, send contracts, and keep billing in one studio system."
       description="Run inquiries, packages, contracts, GST-ready invoices, deposits, and follow-ups in the same workspace that handles delivery."

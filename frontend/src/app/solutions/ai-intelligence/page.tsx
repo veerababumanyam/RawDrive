@@ -8,6 +8,7 @@ export const metadata: Metadata = createPageMetadata("ai");
 export default function AIIngelligencePage() {
   return (
     <SolutionShowcasePage
+      path="/solutions/ai-intelligence"
       eyebrow="AI Intelligence"
       title="Cull, search, and recognize faces without losing the editorial feel of the product."
       description="Shortlist large wedding and event shoots faster with quality ranking, duplicate detection, semantic search, and face-aware discovery connected to delivery."

@@ -60,7 +60,7 @@ export const PUBLIC_PAGES = [
     path: "/features",
     title: "Photography Studio Software Features",
     description:
-      "Explore RawDrive features for Indian studios: branded galleries, client proofing, AI culling, CRM, booking workflows, live streaming, analytics, and privacy controls.",
+      "Explore RawDrive features for Indian studios: branded galleries, client proofing, AI culling, CRM, booking, live streaming, and analytics in one platform.",
     summary:
       "The features page explains RawDrive's core workflows for photography studios that need delivery, client selection, AI-assisted culling, operations, payments, and growth in one platform.",
     image: { url: "/stitch/features-a.png", width: 330, height: 1600, alt: "RawDrive feature showcase for studio workflows." },
@@ -82,7 +82,7 @@ export const PUBLIC_PAGES = [
   {
     key: "register",
     path: "/register",
-    title: "Create a RawDrive Account",
+    title: "Create Your Photography Studio Account",
     description:
       "Start a RawDrive account for your photography studio and begin setting up galleries, clients, AI workflows, CRM, and delivery tools.",
     summary:
@@ -191,7 +191,7 @@ export const PUBLIC_PAGES = [
   {
     key: "dealership",
     path: "/dealership",
-    title: "RawDrive Partner Dealership Program",
+    title: "Partner & Dealership Program for India",
     description:
       "Become a RawDrive regional partner and help photography studios adopt modern gallery, CRM, AI, streaming, and marketplace workflows.",
     summary:
@@ -203,7 +203,7 @@ export const PUBLIC_PAGES = [
   {
     key: "about",
     path: "/about",
-    title: "About RawDrive",
+    title: "About the Studio Software Built for India",
     description:
       "Learn why RawDrive is built for Indian photography studios that need premium client delivery and serious business operations in one platform.",
     summary:
@@ -215,7 +215,7 @@ export const PUBLIC_PAGES = [
   {
     key: "contact",
     path: "/contact",
-    title: "Contact RawDrive Sales and Support",
+    title: "Contact Our Sales and Support Team",
     description:
       "Contact RawDrive for product demos, onboarding, partnerships, billing, and support for photography studios in India.",
     summary:
@@ -227,7 +227,7 @@ export const PUBLIC_PAGES = [
   {
     key: "legal",
     path: "/legal",
-    title: "Legal Notice",
+    title: "Legal Notice & Operator Details",
     description:
       "RawDrive legal operator details, official contact channels, jurisdiction, and business identity information.",
     summary:
@@ -238,7 +238,7 @@ export const PUBLIC_PAGES = [
   {
     key: "privacy",
     path: "/privacy",
-    title: "Privacy Policy",
+    title: "Privacy Policy (DPDPA & GDPR-aware)",
     description:
       "RawDrive's privacy policy covers DPDPA and GDPR-aware data handling for photography studios, clients, galleries, payments, and support workflows.",
     summary:
@@ -249,7 +249,7 @@ export const PUBLIC_PAGES = [
   {
     key: "terms",
     path: "/terms",
-    title: "Terms of Service",
+    title: "Terms of Service for Studio Accounts",
     description:
       "Read the RawDrive terms governing studio accounts, subscriptions, marketplace participation, AI culling, user content, and acceptable use.",
     summary:
@@ -260,7 +260,7 @@ export const PUBLIC_PAGES = [
   {
     key: "refund",
     path: "/refund",
-    title: "Refund Policy",
+    title: "Refund Policy & 7-Day Money-Back Window",
     description:
       "RawDrive's refund policy explains the 7-day first-purchase refund window, eligible charges, exclusions, processing timelines, and billing contact.",
     summary:
@@ -300,16 +300,50 @@ export const ROBOTS_PRIVATE_PATHS = [
   "/moderation/",
 ];
 
-export const AI_SEARCH_CRAWLERS = [
-  "OAI-SearchBot",
-  "GPTBot",
-  "ChatGPT-User",
-  "ClaudeBot",
-  "Claude-SearchBot",
-  "Claude-User",
-  "PerplexityBot",
-  "Google-Extended",
+// AI crawler policy (June 2026): a single decision became three per vendor —
+// TRAINING (ingest for model training), SEARCH (index so we can be CITED in AI
+// answers), and USER (live fetch when a person asks an assistant about a page).
+// We ALLOW search + user bots (citation + referral upside) and DISALLOW training
+// crawlers and the training opt-out tokens. Blocking a *training* bot does NOT
+// remove us from AI *search* citation — only blocking a *search* bot would.
+// See https://developers.openai.com/api/docs/bots and the per-vendor crawler docs.
+
+// Search/answer + user-action crawlers we WANT to be cited by → allow.
+// Googlebot/Bingbot also match the "*" group; naming Bingbot/Applebot is explicit
+// and documents that they ground Bing Copilot + ChatGPT's hybrid index + Siri.
+export const AI_ALLOW_CRAWLERS = [
+  "OAI-SearchBot", // OpenAI ChatGPT search index
+  "ChatGPT-User", // OpenAI live user-action fetch
+  "Claude-SearchBot", // Anthropic Claude search index
+  "Claude-User", // Anthropic live user-action fetch
+  "PerplexityBot", // Perplexity answer/citation index
+  "Perplexity-User", // Perplexity live user-action fetch
+  "Bingbot", // Bing Search + Copilot + ChatGPT hybrid index (highest leverage)
+  "Applebot", // Apple Siri / Spotlight
+  "DuckAssistBot", // DuckDuckGo AI answers (not training)
 ] as const;
+
+// Model-training crawlers + training opt-out tokens → disallow everything.
+// Google-Extended / Applebot-Extended are directive-only opt-out tokens: blocking
+// them opts OUT of Gemini / Apple-Intelligence training with ZERO impact on Google
+// Search ranking or Siri/Spotlight inclusion. Leaving them allowed opts us IN.
+export const AI_DISALLOW_CRAWLERS = [
+  "GPTBot", // OpenAI training
+  "ClaudeBot", // Anthropic training
+  "Google-Extended", // opt out of Gemini/Vertex training (no Search impact)
+  "Applebot-Extended", // opt out of Apple Intelligence training (no Siri impact)
+  "CCBot", // Common Crawl — feeds most LLM training corpora
+  "Bytespider", // ByteDance training (also enforce at the edge — ignores robots)
+  "meta-externalagent", // Meta AI training
+  "Amazonbot", // mixed index + Nova training
+  "cohere-ai", // Cohere training
+] as const;
+
+/**
+ * @deprecated Back-compat alias for the allow group. Prefer AI_ALLOW_CRAWLERS /
+ * AI_DISALLOW_CRAWLERS. Kept so existing imports of AI_SEARCH_CRAWLERS keep working.
+ */
+export const AI_SEARCH_CRAWLERS = AI_ALLOW_CRAWLERS;
 
 export function absoluteUrl(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -349,6 +383,12 @@ export function createPageMetadata(key: PublicPageKey): Metadata {
     description: page.description,
     alternates: {
       canonical,
+      // India-first English. Self-referencing en-IN + x-default is valid for a
+      // single-locale site and primes the cluster for future hi/te/ta/kn routes.
+      languages: {
+        "en-IN": canonical,
+        "x-default": canonical,
+      },
     },
     openGraph: {
       type: "website",
@@ -405,6 +445,44 @@ export function serializeJsonLd(data: unknown): string {
     .replace(/</g, "\\u003c")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
+}
+
+/**
+ * BreadcrumbList JSON-LD for a page's location in the site hierarchy.
+ * Still earns Google rich results in 2026 and grounds the page for AI engines.
+ */
+export function buildBreadcrumbJsonLd(
+  trail: ReadonlyArray<{ name: string; path: string }>,
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map((crumb, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: crumb.name,
+      item: absoluteUrl(crumb.path),
+    })),
+  };
+}
+
+/**
+ * FAQPage JSON-LD. NOTE: Google retired FAQ rich results on 2026-05-07, so this
+ * earns no SERP widget — keep it for AI-answer value (cited materially more often)
+ * and on-page UX. Answers MUST match the visible on-page copy verbatim.
+ */
+export function buildFaqJsonLd(
+  items: ReadonlyArray<{ question: string; answer: string }>,
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: { "@type": "Answer", text: item.answer },
+    })),
+  };
 }
 
 export function buildSiteJsonLd() {
