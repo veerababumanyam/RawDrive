@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { UploadItem } from "@/components/upload/upload-progress";
 import type { ScanManifest } from "@/lib/upload-screening/types";
 import { screen } from "@/lib/upload-screening/screen";
@@ -271,12 +271,19 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
   // without re-creating the callback (and tearing the queue) on every album
   // toggle.
   const destinationRef = useRef<UploadDestination | undefined>(destination);
-  destinationRef.current = destination;
 
   // Latest onTermsRequired callback in a ref so the stable chunkedUpload
   // callback can invoke it without re-creating (and tearing the queue).
   const onTermsRequiredRef = useRef<UseUploadOptions["onTermsRequired"]>(options?.onTermsRequired);
-  onTermsRequiredRef.current = options?.onTermsRequired;
+
+  // Sync both "latest value" refs after each commit. Writing a ref during
+  // render is impure under the React Compiler; the stable callbacks read
+  // .current asynchronously at upload time (well after commit), so effect
+  // timing preserves the existing behavior.
+  useEffect(() => {
+    destinationRef.current = destination;
+    onTermsRequiredRef.current = options?.onTermsRequired;
+  });
 
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems((prev) =>
@@ -539,18 +546,24 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
     }
   }, [apiUrl, encryption, token, updateItem]);
 
-  pumpQueue.current = () => {
-    while (
-      activeUploads.current < MAX_CONCURRENT_UPLOADS &&
-      pendingQueue.current.length > 0 &&
-      !pausedRef.current
-    ) {
-      const next = pendingQueue.current.shift();
-      if (!next) return;
-      activeUploads.current += 1;
-      void chunkedUpload(next);
-    }
-  };
+  // Keep pumpQueue.current pointing at a closure over the latest chunkedUpload
+  // after each commit (assigning a ref during render is impure under the React
+  // Compiler). enqueueUploads invokes pumpQueue.current() from event handlers,
+  // which always run after the initial commit, so the queue drains as before.
+  useEffect(() => {
+    pumpQueue.current = () => {
+      while (
+        activeUploads.current < MAX_CONCURRENT_UPLOADS &&
+        pendingQueue.current.length > 0 &&
+        !pausedRef.current
+      ) {
+        const next = pendingQueue.current.shift();
+        if (!next) return;
+        activeUploads.current += 1;
+        void chunkedUpload(next);
+      }
+    };
+  });
 
   const enqueueUploads = useCallback((nextItems: UploadItem[]) => {
     pendingQueue.current.push(...nextItems);

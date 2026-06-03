@@ -45,6 +45,10 @@ export default function SuperAdminStreamingRatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showNewRate, setShowNewRate] = useState(false);
   const [showPatch, setShowPatch] = useState(false);
+  // Captured once at mount so Date.now() is not called during render
+  // (react-hooks/purity). Rate-card active/scheduled status is stable
+  // for the lifetime of this page view.
+  const [nowMs] = useState(() => Date.now());
 
   const token = useMemo(() => getStoredAccessToken() || "", []);
 
@@ -72,8 +76,16 @@ export default function SuperAdminStreamingRatesPage() {
     }
   }, [token, selectedId]);
 
-  useEffect(() => { void refreshPackages(); }, [refreshPackages]);
-  useEffect(() => { void refreshRates(); }, [refreshRates]);
+  useEffect(() => {
+    async function initialFetch() { await refreshPackages(); }
+    void initialFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    async function initialFetch() { await refreshRates(); }
+    void initialFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, token]);
 
   const selected = packages.find((p) => p.id === selectedId) ?? null;
 
@@ -188,7 +200,7 @@ export default function SuperAdminStreamingRatesPage() {
                   </p>
                 )}
                 {rateCards.map((rc) => {
-                  const active = Date.parse(rc.effective_from) <= Date.now();
+                  const active = Date.parse(rc.effective_from) <= nowMs;
                   return (
                     <div
                       key={rc.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { UserPlus, X, Building2, Phone, Mail, MapPin } from "lucide-react";
 import {
   listSubDealers,
@@ -155,20 +155,14 @@ export default function DealerRegistrationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const fetchSubDealers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listSubDealers();
-      setSubDealers(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load sub-dealers");
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    let cancelled = false;
+    listSubDealers()
+      .then((data) => { if (!cancelled) setSubDealers(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load sub-dealers"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => { fetchSubDealers(); }, [fetchSubDealers]);
 
   const handleCreated = (sd: SubDealer) => {
     setSubDealers((prev) => [sd, ...prev]);

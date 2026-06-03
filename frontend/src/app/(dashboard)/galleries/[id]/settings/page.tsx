@@ -150,15 +150,18 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setError("Your session expired. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    getGallery(token, id)
+    // Resolve auth + fetch through a single async chain so no setState runs
+    // synchronously in the effect body. The missing-token case settles via
+    // Promise.reject into the same .catch as a failed fetch.
+    Promise.resolve()
+      .then(() => {
+        const token = getStoredAccessToken();
+        if (!token) {
+          throw new Error("Your session expired. Please log in again.");
+        }
+        return getGallery(token, id);
+      })
       .then((g) => {
         if (!cancelled) {
           setGallery(g);
@@ -244,10 +247,6 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     } finally {
       setSaving(false);
     }
-  };
-
-  const setExpiryInDays = (days: number) => {
-    void handleExpiry(new Date(Date.now() + days * DAY_MS).toISOString());
   };
 
   const handleMusicUpload = async (file: File, options?: { skipTermsPrecheck?: boolean }) => {
@@ -527,7 +526,11 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
               key={days}
               type="button"
               disabled={saving}
-              onClick={() => setExpiryInDays(days)}
+              onClick={() =>
+                void handleExpiry(
+                  new Date(Date.now() + days * DAY_MS).toISOString(),
+                )
+              }
               className={presetButtonClass(false)}
             >
               {days} days

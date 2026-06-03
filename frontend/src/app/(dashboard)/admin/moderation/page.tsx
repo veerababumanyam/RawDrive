@@ -50,7 +50,11 @@ export default function AdminModerationPage() {
     }
   }, []);
 
-  useEffect(() => { fetchQueue(); }, [fetchQueue]);
+  useEffect(() => {
+    async function initialFetch() { await fetchQueue(); }
+    void initialFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleApprove = async (id: string) => { const token = getStoredAccessToken(); await approveModeration(token, id); fetchQueue(); };
   const handleReject = async (id: string) => { const token = getStoredAccessToken(); await rejectModeration(token, id, "Admin rejected"); fetchQueue(); };

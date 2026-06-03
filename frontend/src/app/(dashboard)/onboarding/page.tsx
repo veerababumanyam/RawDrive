@@ -78,8 +78,14 @@ function OnboardingPageContent() {
   const [phone, setPhone] = useState("");
   const [gstin, setGstin] = useState("");
 
-  // Step 3 — plan selection
-  const [selectedPlan, setSelectedPlan] = useState<string>("starter");
+  // Step 3 — plan selection (prefilled from sessionStorage or ?plan= param on first render)
+  const [selectedPlan, setSelectedPlan] = useState<string>(() => {
+    let plan: string | null = null;
+    try { plan = window.sessionStorage.getItem("rawdrive_pending_plan"); } catch { /* ignore */ }
+    if (!plan) plan = planParam;
+    if (plan && ONBOARDING_PLANS.some((p) => p.id === plan)) return plan;
+    return "starter";
+  });
 
   const rzpScriptLoaded = useRef(false);
   // Tracks whether the workspace has already been created so we skip the
@@ -108,7 +114,6 @@ function OnboardingPageContent() {
   // Fetch states list
   useEffect(() => {
     let cancelled = false;
-    setStatesLoading(true);
     fetch(`${API_BASE}/api/v1/states`)
       .then((res) => res.json())
       .then((body: { states?: IndianState[] }) => {
@@ -159,18 +164,6 @@ function OnboardingPageContent() {
       })
       .catch(() => {});
   }, [token]);
-
-  // Carry plan intent from registration
-  useEffect(() => {
-    let plan: string | null = null;
-    try {
-      plan = window.sessionStorage.getItem("rawdrive_pending_plan");
-    } catch { /* ignore */ }
-    if (!plan) plan = planParam;
-    if (plan && ONBOARDING_PLANS.some((p) => p.id === plan)) {
-      setSelectedPlan(plan);
-    }
-  }, [planParam]);
 
   // Step 1: submit state
   async function handleStateSubmit(e: React.FormEvent) {

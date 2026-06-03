@@ -35,8 +35,8 @@ export function MarketplaceInquiriesPanel() {
   }, []);
 
   const [inquiries, setInquiries] = useState<MarketplaceInquiry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => Boolean(token));
+  const [error, setError] = useState<string | null>(() => (token ? null : "Not authenticated"));
   const [selected, setSelected] = useState<MarketplaceInquiry | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
@@ -45,8 +45,6 @@ export function MarketplaceInquiriesPanel() {
 
   const load = useCallback(() => {
     if (!token) {
-      setError("Not authenticated");
-      setLoading(false);
       return undefined;
     }
     // Guard against a stale closure: if token/currentUserID change (e.g. a token
@@ -54,8 +52,6 @@ export function MarketplaceInquiriesPanel() {
     // superseded response never calls setState — preventing the concurrent
     // listInquiries race.
     let ignore = false;
-    setLoading(true);
-    setError(null);
     listInquiries(token)
       .then((data) => {
         if (ignore) return;

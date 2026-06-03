@@ -45,18 +45,30 @@ export type RechargeModalProps = {
 };
 
 export function RechargeModal({ open, onClose, onRedirect, initialSurface = "streaming" }: RechargeModalProps) {
-  const [surface, setSurface] = useState<RechargeSurface>(initialSurface);
   // Reset to the caller-supplied tab whenever the modal re-opens. Prevents
   // a close-from-uploads-tab + re-open-from-streaming-context from showing
-  // the wrong pane.
-  useEffect(() => {
-    if (open) setSurface(initialSurface);
-  }, [open, initialSurface]);
+  // the wrong pane. Performed during render on the open→true transition
+  // (React-recommended pattern for "reset state on prop change") instead of
+  // a synchronous setState-in-effect.
+  const [surface, setSurface] = useState<RechargeSurface>(initialSurface);
+  const [packages, setPackages] = useState<PublicStreamingPackage[] | null>(null);
+  const [loadingPackages, setLoadingPackages] = useState(open);
+  const [packagesError, setPackagesError] = useState<string | null>(null);
+
+  // Reset surface + loading state on re-open during render (the
+  // React-recommended "reset on prop change" pattern) so we never call
+  // setState synchronously inside an effect.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (open) {
+      setSurface(initialSurface);
+      setLoadingPackages(true);
+      setPackagesError(null);
+    }
+  }
 
   const uploadPackagesState = useUploadPackages(open && surface === "uploads");
-  const [packages, setPackages] = useState<PublicStreamingPackage[] | null>(null);
-  const [loadingPackages, setLoadingPackages] = useState(false);
-  const [packagesError, setPackagesError] = useState<string | null>(null);
 
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [provider, setProvider] = useState<RechargeProvider>("phonepe");
@@ -79,8 +91,6 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setLoadingPackages(true);
-    setPackagesError(null);
     fetch(`${API_BASE}/api/v1/public/streaming/packages`, {
       headers: { Accept: "application/json" },
     })

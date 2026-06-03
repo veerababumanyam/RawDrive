@@ -22,8 +22,10 @@ function formatDate(iso: string) {
 export default function MyFreelancerProfilePage() {
   const token = getStoredAccessToken();
   const [listing, setListing] = useState<FreelancerListing | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => !!token);
+  const [error, setError] = useState<string | null>(() =>
+    token ? null : "Not authenticated",
+  );
   const [availability, setAvailability] = useState<FreelancerAvailability | null>(null);
   const [toggling, setToggling] = useState(false);
   const [newBlockDate, setNewBlockDate] = useState("");
@@ -43,11 +45,7 @@ export default function MyFreelancerProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      setError("Not authenticated");
-      setLoading(false);
-      return;
-    }
+    if (!token) return;
     getMyListing(token)
       .then((data) => {
         setListing(data);

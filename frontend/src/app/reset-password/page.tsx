@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { resetPassword } from "@/lib/api/auth";
@@ -12,16 +12,14 @@ function ResetPasswordInner() {
   const router = useRouter();
   const search = useSearchParams();
   const emailParam = search?.get("email") ?? "";
-  const [email, setEmail] = useState("");
+  // Prefill from ?email= once on mount via lazy init — never overwrites a value
+  // the user later types if the query changes (matches the previous effect's intent).
+  const [email, setEmail] = useState(() => emailParam);
   const [otp, setOTP] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (emailParam) setEmail(emailParam);
-  }, [emailParam]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -36,38 +36,35 @@ function timeAgo(iso: string): string {
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => !!getStoredAccessToken());
+  const [error, setError] = useState<string | null>(() =>
+    getStoredAccessToken() ? null : "Your session expired. Please log in again.",
+  );
   const [markingAll, setMarkingAll] = useState(false);
 
-  const load = useCallback(async () => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setError("Your session expired. Please log in again.");
-      setLoading(false);
-      return;
-    }
-    try {
-      const items = await listNotifications(token);
-      // Server may or may not return sorted; enforce newest-first
-      // on the client so the inbox is deterministic regardless of
-      // backend pagination/order choices.
-      items.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-      setNotifications(items);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load notifications");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    const token = getStoredAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    listNotifications(token)
+      .then((items) => {
+        if (cancelled) return;
+        // Server may or may not return sorted; enforce newest-first
+        // on the client so the inbox is deterministic regardless of
+        // backend pagination/order choices.
+        items.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        setNotifications(items);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load notifications");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Optimistic mark-as-read. The backend endpoint returns 200 with no
   // useful body, so we flip the local row immediately and only revert

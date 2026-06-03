@@ -550,17 +550,19 @@ export default function GalleryDetailPage({
   );
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-
-    if (!token) {
-      setError("Your session expired. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
     const loadGallery = async () => {
+      const token = getStoredAccessToken();
+
+      if (!token) {
+        if (!cancelled) {
+          setError("Your session expired. Please log in again.");
+          setLoading(false);
+        }
+        return;
+      }
+
       setLoading(true);
       setError("");
 
@@ -656,7 +658,10 @@ export default function GalleryDetailPage({
 
   // E71-S1: Fetch albums for this gallery
   useEffect(() => {
-    void refreshAlbums();
+    const loadAlbums = async () => {
+      await refreshAlbums();
+    };
+    void loadAlbums();
   }, [refreshAlbums]);
 
   const handleCreateAlbum = useCallback(async () => {
@@ -875,7 +880,7 @@ export default function GalleryDetailPage({
       setCopiedAssetId(assetId);
       setTimeout(() => setCopiedAssetId(null), 2000);
     },
-    [gallery?.slug, gallery?.title, id],
+    [gallery, id],
   );
 
   const handleDeleteAsset = useCallback(
@@ -946,7 +951,13 @@ export default function GalleryDetailPage({
     return map;
   }, [favoritesSummary]);
 
-  const visibleAssets = useMemo(() => {
+  // Reduce the hydrated asset list to the active album / face / proofing
+  // filter set. The React Compiler memoizes this computation (and its
+  // consumers) automatically; a manual useMemo here could not be preserved
+  // by the compiler ("memoized in source but not in compilation output"),
+  // which blocked optimization of the whole component, so we let the
+  // compiler own the memoization. Behavior is identical.
+  const computeVisibleAssets = () => {
     let result = assets;
     if (activeAlbum) {
       const albumAssetIds = new Set(albumAssetIdsByAlbum[activeAlbum] || []);
@@ -961,13 +972,8 @@ export default function GalleryDetailPage({
       );
     }
     return result;
-  }, [
-    activeAlbum,
-    albumAssetIdsByAlbum,
-    assets,
-    faceFilterIds,
-    proofingFilterAssetIds,
-  ]);
+  };
+  const visibleAssets = computeVisibleAssets();
   const visibleSelectableAssetIds = useMemo(
     () => visibleAssets.map((a) => a.asset?.id).filter(Boolean) as string[],
     [visibleAssets],
@@ -981,10 +987,22 @@ export default function GalleryDetailPage({
   // or a fresh asset load). Without this, switching from a 2000-photo
   // "All" view to a 12-photo album would keep an oversized limit and
   // the reverse (album → All) would show a stale partial page until the
-  // user re-triggered "Load more".
-  useEffect(() => {
+  // user re-triggered "Load more". Adjusting state during render (React's
+  // "storing information from previous renders" pattern) instead of in an
+  // effect avoids a stale partial-page flash before the reset commits.
+  const [prevVisibleFilter, setPrevVisibleFilter] = useState<{
+    activeAlbum: string | null;
+    faceFilterIds: Set<string> | null;
+    proofingFilterAssetIds: Set<string> | null;
+  }>({ activeAlbum, faceFilterIds, proofingFilterAssetIds });
+  if (
+    prevVisibleFilter.activeAlbum !== activeAlbum ||
+    prevVisibleFilter.faceFilterIds !== faceFilterIds ||
+    prevVisibleFilter.proofingFilterAssetIds !== proofingFilterAssetIds
+  ) {
+    setPrevVisibleFilter({ activeAlbum, faceFilterIds, proofingFilterAssetIds });
     setVisibleLimit(GRID_PAGE_SIZE);
-  }, [activeAlbum, faceFilterIds, proofingFilterAssetIds, GRID_PAGE_SIZE]);
+  }
 
   // The actual tiles mounted into the DOM — never more than visibleLimit.
   const pagedAssets = useMemo(
@@ -1098,13 +1116,9 @@ export default function GalleryDetailPage({
   // render body fired those 4 main-thread storage writes on each progress
   // tick during the most performance-sensitive UX window. accessTokenCache
   // is a module-level value that only changes on login/refresh/logout, so
-  // a once-per-mount snapshot via useRef is correct and stable for the
-  // upload hook + the SSE subscription below.
-  const tokenRef = useRef<string | null>(null);
-  if (tokenRef.current === null) {
-    tokenRef.current = getStoredAccessToken();
-  }
-  const token = tokenRef.current;
+  // a once-per-mount snapshot via a lazy useState initializer is correct
+  // and stable for the upload hook + the SSE subscription below.
+  const [token] = useState<string | null>(() => getStoredAccessToken());
 
   // ──────── Terms-of-Service / copyright acceptance gate ────────
   // A photographer must accept the active Terms (copyright/IP ownership,
@@ -1118,7 +1132,9 @@ export default function GalleryDetailPage({
   const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const termsNeedsAcceptanceRef = useRef(false);
-  termsNeedsAcceptanceRef.current = termsNeedsAcceptance;
+  useEffect(() => {
+    termsNeedsAcceptanceRef.current = termsNeedsAcceptance;
+  }, [termsNeedsAcceptance]);
   const pendingUploadRef = useRef<{
     files: File[];
     options?: { source?: "manual" | "tethered" };
@@ -1692,7 +1708,16 @@ export default function GalleryDetailPage({
         upload.addFiles(accepted);
       }
     },
-    [dedupeIncomingFiles, upload],
+    // The React Compiler infers the setState setters as dependencies of this
+    // callback; listing them keeps the manual memoization preservable. They
+    // are stable identities, so runtime behavior is unchanged.
+    [
+      dedupeIncomingFiles,
+      upload,
+      setDuplicateWarning,
+      setShowUploadDialog,
+      setTermsModalOpen,
+    ],
   );
 
   // Called when the user accepts the Terms in the modal: clear the gate (ref

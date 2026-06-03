@@ -46,17 +46,20 @@ export function SidebarShell({ subtitle, groups, footer, mobileOpen, onMobileClo
   // photographer's preferred rail width survives reloads. The mobile
   // drawer ignores this — collapsed-mode is meaningless on small
   // screens where the rail is hidden behind a hamburger.
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    // Hydrate collapsed state from localStorage on first render. The lazy
+    // initializer runs only on the client (this is a "use client" component)
+    // so window access is safe. Falls back to false if localStorage is
+    // unavailable (private-browsing mode).
+    try {
+      return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   // Collect all hrefs to resolve prefix-match collisions (e.g., /crm vs /crm/contacts)
   const allHrefs = groups.flatMap((g) => g.items.flatMap((i) => [i.href, ...(i.activeHrefs ?? [])]));
 
-  // Hydrate collapsed state from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-      if (stored === "1") setCollapsed(true);
-    } catch { /* localStorage may be unavailable in private mode */ }
-  }, []);
 
   // Mirror collapsed state onto <html data-sidebar-collapsed> so the
   // global CSS variable --sidebar-width flips and the dashboard layout

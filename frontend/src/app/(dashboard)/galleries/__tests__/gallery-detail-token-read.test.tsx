@@ -19,12 +19,15 @@ import { describe, expect, it } from "vitest";
 // main-thread storage writes on every progress tick — the most
 // performance-sensitive UX window.
 //
-// The fix snapshots the token ONCE per mount via useRef so the read does
-// not repeat on re-render:
+// The fix snapshots the token ONCE per mount via a lazy useState
+// initializer so the read does not repeat on re-render:
 //
-//     const tokenRef = useRef<string | null>(null);
-//     if (tokenRef.current === null) tokenRef.current = getStoredAccessToken();
-//     const token = tokenRef.current;
+//     const [token] = useState<string | null>(() => getStoredAccessToken());
+//
+// (The earlier useRef form — a null-initialized ref assigned once during
+// render — was equivalent but reads/writes a ref during render, which the
+// React Compiler lint rule react-hooks/refs forbids; the lazy useState
+// initializer has the same once-per-mount semantics and is rule-clean.)
 //
 // This test mirrors the established static-source style already used in
 // this directory (gallery-detail-perf-a11y.test.ts covers F-043/F-045/
@@ -53,18 +56,17 @@ describe("F-089: gallery detail page reads the access token once per mount", () 
     );
   });
 
-  it("snapshots the access token with a useRef initializer for the upload hook", () => {
+  it("snapshots the access token with a lazy useState initializer for the upload hook", () => {
     const source = readDetailPage();
 
-    // A useRef-based one-time snapshot must back the token passed to
-    // useUpload: a null-initialized ref, a guarded one-time assignment
-    // from getStoredAccessToken(), and `token` resolving to the ref's
-    // current value.
-    expect(source).toMatch(/const tokenRef = useRef<string \| null>\(null\);/);
+    // A once-per-mount snapshot must back the token passed to useUpload: a
+    // lazy useState initializer that calls getStoredAccessToken() exactly
+    // once at mount (never on re-render). The earlier useRef form was
+    // replaced because reading/writing a ref during render trips the React
+    // Compiler rule react-hooks/refs; the lazy initializer is equivalent.
     expect(source).toMatch(
-      /if \(tokenRef\.current === null\) \{\s*\n\s*tokenRef\.current = getStoredAccessToken\(\);/,
+      /const \[token\] = useState<string \| null>\(\(\) => getStoredAccessToken\(\)\);/,
     );
-    expect(source).toMatch(/const token = tokenRef\.current;/);
 
     // And that snapshot must be the value handed to the upload hook. The hook
     // now takes a single options object that carries BOTH the client-side

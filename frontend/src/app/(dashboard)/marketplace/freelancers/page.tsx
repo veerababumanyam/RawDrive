@@ -54,8 +54,10 @@ function formatDate(iso: string) {
 function MyProfileTab() {
   const token = getStoredAccessToken();
   const [listing, setListing] = useState<FreelancerListing | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => !!token);
+  const [error, setError] = useState<string | null>(() =>
+    token ? null : "Not authenticated",
+  );
   const [availability, setAvailability] =
     useState<FreelancerAvailability | null>(null);
   const [toggling, setToggling] = useState(false);
@@ -78,11 +80,7 @@ function MyProfileTab() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      setError("Not authenticated");
-      setLoading(false);
-      return;
-    }
+    if (!token) return;
     getMyListing(token)
       .then((data) => {
         setListing(data);

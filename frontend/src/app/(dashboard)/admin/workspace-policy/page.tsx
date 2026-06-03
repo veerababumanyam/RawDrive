@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   getWorkspaceUploadPolicy,
@@ -71,10 +71,6 @@ export default function WorkspacePolicyPage() {
     }
   }, [workspaceId]);
 
-  useEffect(() => {
-    setSuccess(null);
-  }, [workspaceId]);
-
   const handleSelect = async (mode: UploadPolicyMode) => {
     if (!workspaceId) {
       setError("Enter a workspace ID first");
@@ -119,7 +115,7 @@ export default function WorkspacePolicyPage() {
             id="workspace-id"
             type="text"
             value={workspaceId}
-            onChange={(e) => setWorkspaceId(e.target.value)}
+            onChange={(e) => { setWorkspaceId(e.target.value); setSuccess(null); }}
             placeholder="e.g. 11111111-1111-1111-1111-111111111111"
             className="w-full rounded-lg border border-surface-raised bg-surface-sunken px-4 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-accent"
           />

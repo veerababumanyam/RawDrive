@@ -353,11 +353,17 @@ export default function GalleriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [showCreate, setShowCreate] = useState(false);
+  // Deep-link prefill: arriving from CRM/dashboard with
+  // `?create=true&client=…&project=…` opens the create panel pre-populated.
+  // The page always mounts fresh on those navigations (they originate from
+  // other routes), so capturing the params as lazy initial state is
+  // equivalent to syncing them in an effect — without the synchronous
+  // set-state-on-mount the React Compiler flags.
+  const [showCreate, setShowCreate] = useState(() => createRequested);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState<"proofing" | "delivery">("delivery");
-  const [linkedContactId, setLinkedContactId] = useState("");
-  const [linkedProjectId, setLinkedProjectId] = useState("");
+  const [linkedContactId, setLinkedContactId] = useState(() => clientParam);
+  const [linkedProjectId, setLinkedProjectId] = useState(() => projectParam);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [newClientName, setNewClientName] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
@@ -660,15 +666,6 @@ export default function GalleriesPage() {
       cancelled = true;
     };
   }, [missingCoverAssetIds, token]);
-
-  useEffect(() => {
-    if (!createRequested) return;
-    setError(null);
-    setTitleError("");
-    setLinkedContactId(clientParam);
-    setLinkedProjectId(projectParam);
-    setShowCreate(true);
-  }, [clientParam, createRequested, projectParam]);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) {

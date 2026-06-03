@@ -42,14 +42,17 @@ export default function ProjectsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(Boolean(token));
   const [error, setError] = useState<string | null>(token ? null : "Missing access token");
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(() => createRequested);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => {
+    const base = emptyForm();
+    if (createRequested && clientParam) return { ...base, contact_id: clientParam };
+    return base;
+  });
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     if (!token) return;
-    setLoading(true);
     Promise.all([listProjects(token), listContacts(token)])
       .then(([projectRows, contactRows]) => {
         setProjects(projectRows);
@@ -62,13 +65,6 @@ export default function ProjectsPage() {
       })
       .finally(() => setLoading(false));
   }, [token, refreshTick]);
-
-  useEffect(() => {
-    if (!createRequested) return;
-    const clientId = clientParam;
-    setForm((current) => ({ ...current, contact_id: clientId || current.contact_id }));
-    setShowCreate(true);
-  }, [clientParam, createRequested]);
 
   const summary = useMemo(() => {
     const activeProjects = projects.filter((project) => !["archived", "cancelled", "lost"].includes(project.status));

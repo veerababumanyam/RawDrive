@@ -123,32 +123,33 @@ function ChoosePaymentContent() {
 
   // Remember the user's last choice for the "Last used" hint badge.
   // Doesn't auto-select — the user still clicks deliberately each time.
-  const [lastUsed, setLastUsed] = useState<ProviderId | null>(null);
   const [processing, setProcessing] = useState<ProviderId | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
-  const [providersLoading, setProvidersLoading] = useState(true);
-  const [providersError, setProvidersError] = useState("");
+  const [providersLoading, setProvidersLoading] = useState(() => Boolean(getStoredAccessToken()));
+  const [providersError, setProvidersError] = useState(() =>
+    getStoredAccessToken() ? "" : "Session expired — please log in again.",
+  );
   const [providerAvailability, setProviderAvailability] = useState<ProviderAvailability>(NO_PROVIDERS);
   const rzpScriptLoaded = useRef(false);
 
   const providers = ALL_PROVIDERS;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  // Derived: which stored provider is still available (re-computed on availability change).
+  const lastUsed = useMemo<ProviderId | null>(() => {
+    if (typeof window === "undefined") return null;
     try {
       const v = window.localStorage.getItem("rawdrive-payment-provider");
       if (v === "razorpay" || v === "phonepe") {
-        setLastUsed(providerAvailability[v] ? v : null);
+        return providerAvailability[v] ? v : null;
       }
     } catch { /* private mode — non-critical */ }
+    return null;
   }, [providerAvailability]);
 
   useEffect(() => {
     let active = true;
     const token = getStoredAccessToken();
     if (!token) {
-      setProvidersLoading(false);
-      setProvidersError("Session expired — please log in again.");
       return;
     }
     fetch(`${API_BASE}/api/v1/workspace/subscription/payment-providers`, {

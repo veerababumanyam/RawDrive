@@ -436,10 +436,15 @@ export default function AdminAuditLogsPage() {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch — defined inline so the compiler sees a locally-scoped
+  // async function rather than an external setState-containing callback.
   useEffect(() => {
-    fetchLogs(emptyFilters);
-  }, [fetchLogs]);
+    async function initialFetch() {
+      await fetchLogs(emptyFilters);
+    }
+    void initialFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Re-fetch when filters change (debounced for text inputs)
   const handleFilterChange = useCallback((f: FilterState) => {

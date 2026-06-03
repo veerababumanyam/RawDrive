@@ -128,7 +128,15 @@ export function useUploadCreditBalance(opts: UseUploadCreditBalanceOptions = {})
       };
     }
 
-    void refresh();
+    // Initial fetch. Kicked off via a microtask rather than called
+    // synchronously in the effect body so the `setLoading(true)` at the top
+    // of `refresh` never runs synchronously during render/commit (which the
+    // React Compiler flags as cascading set-state-in-effect). The fetch
+    // still fires immediately on mount — the microtask resolves before any
+    // paint — and interval-driven refreshes below are already async.
+    void Promise.resolve().then(() => {
+      if (mountedRef.current) void refresh();
+    });
 
     const id = setInterval(() => {
       if (tabHiddenRef.current) return;

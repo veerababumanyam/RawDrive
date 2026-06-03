@@ -27,37 +27,6 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
     };
   }, []);
 
-  // Check if there's already a scan in progress on mount
-  useEffect(() => {
-    let cancelled = false;
-    getFaceScanStatus(token, galleryId)
-      .then((status) => {
-        if (cancelled) return;
-        if (status.status === "processing" || status.status === "pending") {
-          setState({
-            kind: "scanning",
-            jobId: "",
-            processed: status.processed,
-            total: status.total,
-            facesFound: status.faces_found,
-          });
-          startPolling();
-        } else if (status.status === "complete" && status.total > 0) {
-          setState({
-            kind: "complete",
-            processed: status.processed,
-            total: status.total,
-            facesFound: status.faces_found,
-          });
-        }
-      })
-      .catch(() => {
-        // No existing scan — that's fine, stay idle
-      });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, token]);
-
   const startPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
 
@@ -98,6 +67,36 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
       }
     }, 2000);
   }, [token, galleryId]);
+
+  // Check if there's already a scan in progress on mount
+  useEffect(() => {
+    let cancelled = false;
+    getFaceScanStatus(token, galleryId)
+      .then((status) => {
+        if (cancelled) return;
+        if (status.status === "processing" || status.status === "pending") {
+          setState({
+            kind: "scanning",
+            jobId: "",
+            processed: status.processed,
+            total: status.total,
+            facesFound: status.faces_found,
+          });
+          startPolling();
+        } else if (status.status === "complete" && status.total > 0) {
+          setState({
+            kind: "complete",
+            processed: status.processed,
+            total: status.total,
+            facesFound: status.faces_found,
+          });
+        }
+      })
+      .catch(() => {
+        // No existing scan — that's fine, stay idle
+      });
+    return () => { cancelled = true; };
+  }, [galleryId, token, startPolling]);
 
   const handleScan = async () => {
     setState({ kind: "scanning", jobId: "", processed: 0, total: 0, facesFound: 0 });

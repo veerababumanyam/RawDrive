@@ -77,14 +77,36 @@ export function ProductPreview({
   const canPreflight =
     isPrintProduct && sourceWidthPx && sourceHeightPx && sourceWidthPx > 0 && sourceHeightPx > 0;
 
-  // Re-run preflight whenever the selected size or source dimensions change.
-  useEffect(() => {
+  // Signature of the inputs that drive a preflight call. When it changes we
+  // either need a fresh preflight (canPreflight) or must drop any stale one
+  // (cannot preflight). Computing a string lets the adjust-during-render below
+  // react to ALL input changes the way the old effect's synchronous
+  // setPreflightError(null) / setPreflight(null) did — same timing, but
+  // committed in-render instead of as a cascading post-effect setState.
+  const preflightInputKey = canPreflight
+    ? `${sourceWidthPx}x${sourceHeightPx}@${selectedSize.widthIn}x${selectedSize.heightIn}`
+    : "";
+
+  // Optimistically reset preflight result + error the moment the inputs change
+  // (mirrors the original effect-start clears): when we can preflight, the
+  // error is cleared while the new result is in flight; when we can't, the
+  // stale result is dropped so the add-to-cart guard never sees it.
+  const [lastPreflightInputKey, setLastPreflightInputKey] = useState(preflightInputKey);
+  if (lastPreflightInputKey !== preflightInputKey) {
+    setLastPreflightInputKey(preflightInputKey);
+    setPreflightError(null);
     if (!canPreflight) {
       setPreflight(null);
-      return;
     }
+  }
+
+  // Re-run preflight whenever the selected size or source dimensions change.
+  // Guarded so the effect only synchronizes with the backend when a preflight
+  // is actually possible; the optimistic clearing lives in the render-time
+  // adjust above, keeping this effect free of synchronous setState.
+  useEffect(() => {
+    if (!canPreflight) return;
     let cancelled = false;
-    setPreflightError(null);
     evaluatePrintPreflight({
       source_width_px: sourceWidthPx!,
       source_height_px: sourceHeightPx!,

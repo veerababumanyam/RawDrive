@@ -33,6 +33,23 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Reset transient state on each open so a previous error/check does not
+  // leak into a new session. Performed during render on the open→true
+  // transition (the React-recommended pattern for "reset on prop change")
+  // rather than in an effect, which avoids a synchronous setState-in-effect.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    // Track every open<->close transition; only reset state when (re)opening
+    // so a close→reopen replay starts fresh (unchecked, terms reloaded).
+    setPrevOpen(open);
+    if (open) {
+      setChecked(false);
+      setSubmitError(null);
+      setLoadError(null);
+      setTerms(null);
+    }
+  }
+
   // Dismiss on Escape — complements the visible Cancel button so the dialog is
   // cancelable (WCAG + HIG). Listener attached only while open.
   useEffect(() => {
@@ -44,15 +61,10 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onCancel]);
 
-  // Load the active terms text when the modal opens. Reset transient state on
-  // each open so a previous error/check does not leak into a new session.
+  // Load the active terms text when the modal opens.
   useEffect(() => {
     if (!open || !token) return;
     let cancelled = false;
-    setChecked(false);
-    setSubmitError(null);
-    setLoadError(null);
-    setTerms(null);
     getCurrentTerms(token)
       .then((t) => {
         if (!cancelled) setTerms(t);
@@ -77,7 +89,7 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
     } finally {
       setSubmitting(false);
     }
-  }, [token, checked, submitting, terms?.version, onAccepted]);
+  }, [token, checked, submitting, terms, onAccepted]);
 
   if (!open) return null;
 

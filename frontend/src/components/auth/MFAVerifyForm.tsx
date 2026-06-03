@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import { getPostLoginPath, persistAuthTokens } from "@/lib/auth";
@@ -18,36 +18,46 @@ const MFA_FLOW_KEY = "rawdrive_mfa_flow";
 const MFA_NETWORK_ERROR =
   "RawDrive couldn't be reached. Check your connection and try again.";
 
+// sessionStorage is read once and never changes for the life of this form, so
+// the external store has a no-op subscribe. getSnapshot resolves the challenge
+// token on the client; getServerSnapshot returns null during SSR so the markup
+// matches the pre-hydration "haven't decided yet" state (no hydration flicker).
+const noopSubscribe = () => () => {};
+function getMfaTokenSnapshot(): string {
+  return window.sessionStorage.getItem(MFA_TOKEN_KEY) ?? "";
+}
+function getMfaTokenServerSnapshot(): null {
+  return null;
+}
+
 export function MFAVerifyForm() {
   const router = useRouter();
   // mfaToken === "" means OAuth-MFA flow: token lives in the HttpOnly
   // mfa_token cookie set by the OAuth callback (PR #57 / S5-G2) and is
   // read server-side in /auth/verify-totp. mfaToken === null means
-  // we haven't decided yet (initial mount); a real string means the
-  // password-then-MFA path stashed the JWT in sessionStorage.
-  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  // we haven't decided yet (server render, before client mount); a real
+  // string means the password-then-MFA path stashed the JWT in sessionStorage.
+  //
+  // Resolved once via lazy init so the decision happens on first client render
+  // instead of a synchronous setState inside an effect. On the server window is
+  // unavailable, so we stay null until hydration reads sessionStorage:
+  //   - stored token  → password-then-MFA path: the short-lived mfa_token JWT
+  //     stashed by handleLogin is sent in the request body.
+  //   - empty string  → OAuth-MFA (PR #57 / S5-G2) / any cookie-backed
+  //     challenge: the real mfa_token lives in the HttpOnly mfa_token cookie the
+  //     browser replays on POST /auth/verify-totp, so it is NOT readable here.
+  //     "" signals "ready to verify with the cookie; send the code only". We do
+  //     not bounce to /login on a missing JS-visible marker because the HttpOnly
+  //     cookie may still be valid — the server is the authority and rejects with
+  //     "mfa_token and code required" if no challenge is actually in flight.
+  const mfaToken = useSyncExternalStore<string | null>(
+    noopSubscribe,
+    getMfaTokenSnapshot,
+    getMfaTokenServerSnapshot,
+  );
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.sessionStorage.getItem(MFA_TOKEN_KEY);
-    if (stored) {
-      // Password-then-MFA path: the short-lived mfa_token JWT was stashed in
-      // sessionStorage by handleLogin and is sent in the request body.
-      setMfaToken(stored);
-      return;
-    }
-    // OAuth-MFA (PR #57 / S5-G2) and any cookie-backed challenge: the real
-    // mfa_token lives in the HttpOnly mfa_token cookie that the browser replays
-    // on POST /auth/verify-totp, so it is NOT readable here. An empty string
-    // signals "ready to verify with the cookie; send the code only". We do not
-    // bounce to /login on a missing JS-visible marker because the HttpOnly
-    // cookie may still be valid — the server is the authority and rejects with
-    // "mfa_token and code required" if no challenge is actually in flight.
-    setMfaToken("");
-  }, [router]);
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();

@@ -249,7 +249,7 @@ export default function GalleryPreviewPage({
   const publicUrl = useMemo(() => {
     if (!gallery?.slug || !origin) return "";
     return appendStoredGalleryKeyFragment(`${origin}/g/${gallery.slug}`, id);
-  }, [gallery?.slug, id, origin]);
+  }, [gallery, id, origin]);
 
   const designConfig = useMemo(
     () => (gallery ? readPublicDesignConfig(gallery.settings) : null),

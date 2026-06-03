@@ -81,9 +81,13 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
   // photographer — the backend rejects plan grants for non-photographer
   // roles with 400 invalid_plan_tier, so clearing here avoids a
   // confusing inline error on submit when the admin flips the role.
-  useEffect(() => {
+  // Using the "store-derived-value" pattern (setState during render)
+  // to avoid a synchronous setState inside an effect.
+  const [prevRole, setPrevRole] = useState<Role>(role);
+  if (role !== prevRole) {
+    setPrevRole(role);
     if (role !== "photographer") setPlanTier(NO_GRANT_VALUE);
-  }, [role]);
+  }
 
   if (!open) return null;
 

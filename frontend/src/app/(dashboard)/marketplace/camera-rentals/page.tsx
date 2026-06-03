@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { listGear, getMyGearListings, deleteGearListing, type GearListing } from "@/lib/api/gear";
 import { getStoredAccessTokenClaims, getStoredAccessToken } from "@/lib/auth";
@@ -168,28 +168,22 @@ function GearRentalTab() {
 function MyGearTab() {
   const token = getStoredAccessToken();
   const [gear, setGear] = useState<GearListing[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => !!token);
+  const [error, setError] = useState<string | null>(() =>
+    token ? null : "Not authenticated",
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const fetchGear = useCallback(async () => {
-    if (!token) {
-      setError("Not authenticated");
-      setLoading(false);
-      return;
-    }
-    try {
-      const data = await getMyGearListings(token);
-      setGear(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load gear");
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getMyGearListings(token)
+      .then((data) => { if (!cancelled) setGear(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load gear"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [token]);
-
-  useEffect(() => { fetchGear(); }, [fetchGear]);
 
   const handleDelete = async (id: string) => {
     if (!token || deletingId) return;

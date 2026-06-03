@@ -199,7 +199,8 @@ function PublicFilmstripThumb({
   asset,
   active,
   assetAccessToken = null,
-  onClick,
+  index,
+  onSelect,
 }: {
   asset: PublicAsset;
   active: boolean;
@@ -207,7 +208,8 @@ function PublicFilmstripThumb({
   // into the media hook so protected thumbnail bytes authenticate for
   // password/private/share-gated galleries.
   assetAccessToken?: string | null;
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+  index: number;
+  onSelect: (index: number) => void;
 }) {
   const [useDisplayFallback, setUseDisplayFallback] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -223,12 +225,25 @@ function PublicFilmstripThumb({
     setImageFailed(true);
   };
 
+  // Build the click handler here (inside the thumb component) rather than as an
+  // inline arrow in the lightbox's render-time IIFE — onSelect reaches the
+  // chrome-timer ref via goToPhoto, which the compiler flags when the call is
+  // created inside that IIFE. Stopping propagation keeps the surface-click
+  // (close) handler from also firing.
+  const handleClick = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      onSelect(index);
+    },
+    [onSelect, index],
+  );
+
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
-      onClick={onClick}
+      onClick={handleClick}
       className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 transition-all ${
         active ? "border-white scale-105 shadow-lg" : "border-white/20 opacity-50 hover:opacity-100"
       }`}
@@ -795,15 +810,31 @@ export function PublicGalleryGrid({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // Reveal the fullscreen chrome the moment we enter fullscreen, via the
+  // adjust-state-during-render pattern (tracking the last fullscreen value in
+  // state) so it lands in the same render fullscreen turns on. Chrome
+  // visibility is consulted exclusively as `isFullscreen && !chromeVisible`,
+  // so its value is irrelevant while we're not in fullscreen — no need to
+  // force it back to `true` on exit.
+  const [lastIsFullscreen, setLastIsFullscreen] = useState(isFullscreen);
+  if (lastIsFullscreen !== isFullscreen) {
+    setLastIsFullscreen(isFullscreen);
+    if (isFullscreen) setChromeVisible(true);
+  }
+
   useEffect(() => {
+    // Synchronize only the external idle timer with fullscreen state; the
+    // chrome reveal on entry is handled by the render-time adjust above. The
+    // timer's setChromeVisible(false) runs in a deferred callback, not
+    // synchronously within the effect.
     if (!isFullscreen) {
       clearChromeTimer();
-      setChromeVisible(true);
       return;
     }
-    resetChromeTimer();
+    clearChromeTimer();
+    chromeTimerRef.current = setTimeout(() => setChromeVisible(false), FULLSCREEN_CHROME_IDLE_MS);
     return clearChromeTimer;
-  }, [clearChromeTimer, isFullscreen, resetChromeTimer]);
+  }, [clearChromeTimer, isFullscreen]);
 
   // Exit fullscreen when lightbox closes
   useEffect(() => {
@@ -898,33 +929,54 @@ export function PublicGalleryGrid({
 
   // Reset the render window whenever the visible set changes (filter applied
   // or cleared, or the asset list itself changes) so paging always restarts
-  // from the top of the freshly-shown set.
-  useEffect(() => {
+  // from the top of the freshly-shown set. Adjust-state-during-render (keyed on
+  // the faceFilterIds + assets identities held in state) rather than an effect,
+  // so the window is already reset in the render that shows the new set — the
+  // grid never momentarily renders the old visibleCount against new content.
+  const [lastVisibleSetKey, setLastVisibleSetKey] = useState<{
+    faceFilterIds: Set<string> | null;
+    assets: typeof assets;
+  }>({ faceFilterIds, assets });
+  if (
+    lastVisibleSetKey.faceFilterIds !== faceFilterIds ||
+    lastVisibleSetKey.assets !== assets
+  ) {
+    setLastVisibleSetKey({ faceFilterIds, assets });
     setVisibleCount(INITIAL_GRID_RENDER_COUNT);
-  }, [faceFilterIds, assets]);
+  }
+
+  // IntersectionObserver is supported in every browser this public viewer
+  // targets; when it is unavailable (very old browser / jsdom without a
+  // polyfill) we render everything so no photo is ever unreachable. Captured
+  // once at mount — availability never changes at runtime — so the
+  // "render everything" fallback is expressed as an effective render count
+  // instead of a synchronous setState inside the observer effect below.
+  const [hasIntersectionObserver] = useState(
+    () => typeof IntersectionObserver !== "undefined",
+  );
 
   // The slice of visibleAssets actually mounted into the grid DOM. Lightbox /
   // filmstrip / keyboard nav deliberately keep using the full visibleAssets
-  // array — only the grid tiles are paged.
+  // array — only the grid tiles are paged. Without IntersectionObserver there
+  // is no sentinel to grow the window, so we mount the full set up front.
+  const effectiveVisibleCount = hasIntersectionObserver
+    ? visibleCount
+    : visibleAssets.length;
   const renderedAssets = useMemo(
-    () => visibleAssets.slice(0, visibleCount),
-    [visibleAssets, visibleCount],
+    () => visibleAssets.slice(0, effectiveVisibleCount),
+    [visibleAssets, effectiveVisibleCount],
   );
 
-  const hasMoreToRender = visibleCount < visibleAssets.length;
+  const hasMoreToRender = effectiveVisibleCount < visibleAssets.length;
 
-  // Grow the render window as the sentinel scrolls into view. Intersection
-  // Observer is supported in every browser this public viewer targets; when
-  // it is unavailable (very old browser / jsdom without a polyfill) we fall
-  // back to rendering everything so no photo is ever unreachable.
+  // Grow the render window as the sentinel scrolls into view. When
+  // IntersectionObserver is unavailable, effectiveVisibleCount already equals
+  // visibleAssets.length so hasMoreToRender is false and this effect no-ops —
+  // the full set is mounted up front (see hasIntersectionObserver above).
   useEffect(() => {
     if (!hasMoreToRender) return;
     const node = loadMoreRef.current;
     if (!node) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setVisibleCount(visibleAssets.length);
-      return;
-    }
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
@@ -943,22 +995,31 @@ export function PublicGalleryGrid({
   // the link actually feels like sharing the photo, not just the
   // gallery. Runs once after assets are populated; tolerates a stale id
   // (asset filtered out by face-filter etc.) by silently doing nothing.
+  // The open must stay a post-mount side effect (reading window.location
+  // during render would desync hydration), so we apply it off a microtask
+  // rather than synchronously in the effect body. The deepLinkOpenedRef
+  // guard keeps it strictly one-shot across re-renders / async resolution.
+  const deepLinkOpenedRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (deepLinkOpenedRef.current) return;
     if (lightboxIdx !== null) return;
     const params = new URLSearchParams(window.location.search);
     const requestedAsset = params.get("asset");
     if (!requestedAsset) return;
     const idx = visibleAssets.findIndex((a) => a.id === requestedAsset);
-    if (idx >= 0) {
+    if (idx < 0) return;
+    deepLinkOpenedRef.current = true;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
       setLightboxIdx(idx);
       setZoom(1);
-    }
-    // intentionally one-shot: we only auto-open on first navigation. If
-    // the user closes the lightbox we don't keep re-opening it on
-    // re-renders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleAssets]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleAssets, lightboxIdx]);
 
   // Helper to change photo and reset zoom in one update. Also wakes the
   // fullscreen chrome briefly so keyboard users get visual feedback without
@@ -968,6 +1029,22 @@ export function PublicGalleryGrid({
     setZoom(1);
     resetChromeTimer();
   }, [resetChromeTimer]);
+
+  // Prev/Next click handlers are hoisted to stable callbacks (rather than
+  // inline arrows inside the lightbox's render-time IIFE) so they read as
+  // event handlers, not render-time work — goToPhoto reaches the chrome-timer
+  // ref, which the compiler flags if the call is created inside the IIFE.
+  const goToPrev = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (lightboxIdx === null) return;
+    goToPhoto(lightboxIdx > 0 ? lightboxIdx - 1 : lightboxIdx);
+  }, [goToPhoto, lightboxIdx]);
+
+  const goToNext = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (lightboxIdx === null) return;
+    goToPhoto(lightboxIdx < visibleAssets.length - 1 ? lightboxIdx + 1 : lightboxIdx);
+  }, [goToPhoto, lightboxIdx, visibleAssets.length]);
 
   // Keyboard handling for the lightbox
   useEffect(() => {
@@ -1460,7 +1537,7 @@ export function PublicGalleryGrid({
                   size="lg"
                   label="Previous"
                   className={`${fullscreenChromeClass} absolute left-4 z-10 transition-opacity duration-300`}
-                  onClick={(e) => { e.stopPropagation(); goToPhoto(lightboxIdx > 0 ? lightboxIdx - 1 : lightboxIdx); }}
+                  onClick={goToPrev}
                 >
                   <ChevronLeft />
                 </GlassIconButton>
@@ -1478,7 +1555,7 @@ export function PublicGalleryGrid({
                   size="lg"
                   label="Next"
                   className={`${fullscreenChromeClass} absolute right-4 z-10 transition-opacity duration-300`}
-                  onClick={(e) => { e.stopPropagation(); goToPhoto(lightboxIdx < visibleAssets.length - 1 ? lightboxIdx + 1 : lightboxIdx); }}
+                  onClick={goToNext}
                 >
                   <ChevronRight />
                 </GlassIconButton>
@@ -1502,7 +1579,8 @@ export function PublicGalleryGrid({
                     asset={a}
                     active={i === lightboxIdx}
                     assetAccessToken={assetAccessToken}
-                    onClick={(e) => { e.stopPropagation(); goToPhoto(i); }}
+                    index={i}
+                    onSelect={goToPhoto}
                   />
                 ))}
               </div>

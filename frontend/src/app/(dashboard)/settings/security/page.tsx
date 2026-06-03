@@ -99,8 +99,6 @@ export default function SecuritySettingsPage() {
   const [error, setError] = useState("");
 
   const loadStatus = useCallback(async () => {
-    setStatusLoading(true);
-    setError("");
     try {
       const res = await authedFetch("/auth/mfa/status");
       if (!res.ok) {
@@ -117,8 +115,22 @@ export default function SecuritySettingsPage() {
   }, []);
 
   useEffect(() => {
-    void loadStatus();
-  }, [loadStatus]);
+    let cancelled = false;
+    authedFetch("/auth/mfa/status")
+      .then(async (res) => {
+        if (cancelled) return;
+        if (!res.ok) { setError("Could not load MFA status."); return; }
+        const body = (await res.json()) as StatusResponse;
+        if (!cancelled) setStatus(body);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Network error loading MFA status.");
+      })
+      .finally(() => {
+        if (!cancelled) setStatusLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleStartEnrollment() {
     setBusy(true);
@@ -192,6 +204,8 @@ export default function SecuritySettingsPage() {
     setEnrollment(null);
     setRecoveryCodes([]);
     setAcknowledged(false);
+    setStatusLoading(true);
+    setError("");
     await loadStatus();
     setStep("status");
   }

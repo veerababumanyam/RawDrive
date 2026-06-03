@@ -47,15 +47,18 @@ export function GrantUploadCreditsDialog({
   } | null>(null);
 
   // Reset form when the dialog is reopened against a different workspace.
-  useEffect(() => {
-    if (open) {
-      setAmount("");
-      setReason("");
-      setError(null);
-      setSuccess(null);
-      setBusy(false);
-    }
-  }, [open, workspaceId]);
+  // Using the "store-derived-value" pattern: compare previous open+workspaceId
+  // and setState during render to avoid a synchronous setState in an effect.
+  const [prevResetKey, setPrevResetKey] = useState<string | null>(null);
+  const resetKey = open ? `open:${workspaceId}` : null;
+  if (resetKey !== null && resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
+    setAmount("");
+    setReason("");
+    setError(null);
+    setSuccess(null);
+    setBusy(false);
+  }
 
   // Escape-to-close matches the project's other dialogs (RechargeModal,
   // NewUserDialog) so the dismiss contract is consistent.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Eye, EyeOff, Sparkles } from "lucide-react";
@@ -97,6 +97,17 @@ export function RegisterForm() {
   }, [planParam]);
 
   const [plan, setPlan] = useState<SelfServePlanId>(initialPlan);
+  // Keep local plan state in sync if the user navigates from /pricing?plan=X to
+  // /register?plan=Y without a full reload (Next.js soft nav). Adjusting state
+  // during render (React's "store info from previous render" pattern) instead of
+  // in an effect: it re-syncs the moment the URL-derived plan changes, while a
+  // user clicking the segmented control within the same URL still wins because
+  // initialPlan is unchanged on those renders.
+  const [planParamSnapshot, setPlanParamSnapshot] = useState<SelfServePlanId>(initialPlan);
+  if (planParamSnapshot !== initialPlan) {
+    setPlanParamSnapshot(initialPlan);
+    setPlan(initialPlan);
+  }
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -112,12 +123,6 @@ export function RegisterForm() {
     useOAuthAvailability(API_BASE);
   const googleUnavailable = !oauthAvailabilityLoading && !oauthEnabled;
   const googleDescriptionId = webviewNotice ? "register-google-webview-recovery" : undefined;
-
-  // Keep local plan state in sync if the user navigates from /pricing?plan=X to
-  // /register?plan=Y without a full reload (Next.js soft nav).
-  useEffect(() => {
-    setPlan(initialPlan);
-  }, [initialPlan]);
 
   const googleStartUrl = useMemo(
     () => getGoogleOAuthStartUrl(API_BASE, { intent: "signup", plan }),

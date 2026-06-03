@@ -15,7 +15,7 @@ const inputClass = "input-base w-full";
 
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<WorkspaceProfile>(EMPTY_WORKSPACE_PROFILE);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(getStoredAccessToken()));
   const [saving, setSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,6 @@ export default function BusinessProfilePage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) {
-      setLoading(false);
       return;
     }
     getWorkspaceProfile(token)

@@ -349,7 +349,7 @@ describe("PublicGalleryGrid", () => {
       ).toBeInTheDocument();
     });
 
-    it("auto-opens the lightbox on ?asset=<id> deep-link landing", () => {
+    it("auto-opens the lightbox on ?asset=<id> deep-link landing", async () => {
       Object.defineProperty(window, "location", {
         value: {
           origin: "https://app.rawdrive.test",
@@ -360,10 +360,11 @@ describe("PublicGalleryGrid", () => {
 
       render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
 
-      // No click needed — the deep-link effect should have opened the
-      // lightbox to the matching asset.
+      // No click needed — the deep-link auto-open runs in a post-mount
+      // microtask (SSR-safe: the window.location read cannot happen during
+      // render), so await the dialog rather than querying synchronously.
       expect(
-        screen.getByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i }),
+        await screen.findByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i }),
       ).toBeInTheDocument();
     });
 

@@ -26,22 +26,15 @@ const OTP_EXPIRY_MINUTES = 15;
 function ForgotPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
-  const [email, setEmail] = useState("");
+  // Issue #4: prefill from ?email= once on mount via lazy init. This reads the
+  // query param a single time and never overwrites a value the user later types
+  // if the query changes — the same intent the previous prefill effect encoded.
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendNotice, setResendNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    const param = searchParams.get("email");
-    if (param && !email) {
-      setEmail(param);
-    }
-    // intentionally only react to searchParams — we do not want to
-    // overwrite a value the user has typed if the query later changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
 
   // Resend countdown timer — drives the disabled state + label on the
   // "Resend code" button so the user sees concrete feedback ("Resend

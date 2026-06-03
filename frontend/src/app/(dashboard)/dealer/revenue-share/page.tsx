@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { getDealerRevenueCalendar, type RevenueCalendarResponse, type DailyRevenueShare } from "@/lib/api/dealer";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark } from "@/components/icons";
@@ -80,20 +80,26 @@ export default function DealerRevenueSharePage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DailyRevenueShare | null>(null);
 
-  const fetchCalendar = useCallback(async (y: number, m: number) => {
+  // Reset loading + error at render time when the viewed month changes.
+  // Doing this during render (not in an effect) avoids synchronous setState
+  // inside the effect body — the React-recommended pattern for state that
+  // derives from props/other-state transitions.
+  const [prevPeriod, setPrevPeriod] = useState(`${year}:${month}`);
+  const currentPeriod = `${year}:${month}`;
+  if (prevPeriod !== currentPeriod) {
+    setPrevPeriod(currentPeriod);
     setLoading(true);
     setError(null);
-    try {
-      const res = await getDealerRevenueCalendar(y, m);
-      setData(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load revenue data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  }
 
-  useEffect(() => { fetchCalendar(year, month); }, [fetchCalendar, year, month]);
+  useEffect(() => {
+    let cancelled = false;
+    getDealerRevenueCalendar(year, month)
+      .then((res) => { if (!cancelled) setData(res); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load revenue data"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [year, month]);
 
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }

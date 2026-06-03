@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   listChannels,
   getMessages,
@@ -83,23 +83,26 @@ function InquiryConversation({
   const [sendError, setSendError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const fetchMessages = useCallback(async () => {
-    if (!token) return;
-    try {
-      const data = await getInquiryMessages(token, inquiry.id);
-      setMessages(data);
-    } catch {
-      // non-fatal — show empty thread
-    } finally {
-      setLoadingMessages(false);
-    }
-  }, [token, inquiry.id]);
-
-  useEffect(() => {
+  // Reset messages + loading when the conversation changes (inquiry.id or
+  // token). Using a render-time "reset on key change" pattern avoids
+  // synchronous setState calls inside an effect.
+  const [prevConversationKey, setPrevConversationKey] = useState(`${token}:${inquiry.id}`);
+  const conversationKey = `${token}:${inquiry.id}`;
+  if (prevConversationKey !== conversationKey) {
+    setPrevConversationKey(conversationKey);
     setLoadingMessages(true);
     setMessages([]);
-    fetchMessages();
-  }, [fetchMessages]);
+  }
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getInquiryMessages(token, inquiry.id)
+      .then((data) => { if (!cancelled) setMessages(data); })
+      .catch(() => { /* non-fatal — show empty thread */ })
+      .finally(() => { if (!cancelled) setLoadingMessages(false); });
+    return () => { cancelled = true; };
+  }, [token, inquiry.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -298,9 +301,20 @@ export default function MessagesPage() {
 
   // Inquiries state
   const [inquiries, setInquiries] = useState<MarketplaceInquiry[]>([]);
-  const [inquiriesLoading, setInquiriesLoading] = useState(false);
+  const [inquiriesLoading, setInquiriesLoading] = useState(
+    () => tab === "inquiries" && !!token,
+  );
   const [selectedInquiry, setSelectedInquiry] =
     useState<MarketplaceInquiry | null>(null);
+
+  // Reset inquiriesLoading when the user switches to the inquiries tab.
+  // Render-time update avoids a synchronous setState call inside the effect.
+  const [prevInquiriesKey, setPrevInquiriesKey] = useState(`${tab}:${token}`);
+  const inquiriesKey = `${tab}:${token}`;
+  if (prevInquiriesKey !== inquiriesKey && tab === "inquiries" && token) {
+    setPrevInquiriesKey(inquiriesKey);
+    setInquiriesLoading(true);
+  }
 
   useEffect(() => {
     listChannels(token)
@@ -351,7 +365,6 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (tab !== "inquiries" || !token) return;
-    setInquiriesLoading(true);
     listInquiries(token)
       .then(setInquiries)
       .catch((err: unknown) =>

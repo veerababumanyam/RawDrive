@@ -406,12 +406,19 @@ export function PhotoLightbox({
     };
   }, [handleKeyDown]);
 
-  useEffect(() => {
+  // Reset per-photo view state whenever the active asset changes. Done with
+  // the adjust-state-during-render pattern (tracking the last asset id in
+  // state) rather than an effect, so the reset is applied in the same render
+  // the new asset arrives — the viewer never paints the previous photo's zoom,
+  // burst, or comment state for a frame before snapping back.
+  const [lastAssetId, setLastAssetId] = useState(asset.id);
+  if (lastAssetId !== asset.id) {
+    setLastAssetId(asset.id);
     setZoom(1);
     setBurstExpanded(false);
     setOptimisticComments([]);
     setCommentError("");
-  }, [asset.id]);
+  }
 
   useEffect(() => {
     const h = () => setIsFullscreen(!!document.fullscreenElement);
@@ -419,15 +426,35 @@ export function PhotoLightbox({
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
 
+  // Reveal the fullscreen chrome the moment we enter fullscreen. Done with the
+  // adjust-state-during-render pattern (tracking the last fullscreen value in
+  // state) so the chrome is visible in the same render fullscreen turns on —
+  // previously resetChromeTimer() did this from an effect, which now counts as
+  // a synchronous setState-in-effect. The idle-timer arming below still lives
+  // in the effect because that is external-system synchronization.
+  const [lastIsFullscreen, setLastIsFullscreen] = useState(isFullscreen);
+  if (lastIsFullscreen !== isFullscreen) {
+    setLastIsFullscreen(isFullscreen);
+    if (isFullscreen) setChromeVisible(true);
+  }
+
   useEffect(() => {
+    // Synchronize only the external idle timer with fullscreen state. Chrome
+    // visibility is consulted exclusively as `isFullscreen && !chromeVisible`,
+    // so its value is irrelevant while we're not in fullscreen; the reveal on
+    // fullscreen entry is handled by the render-time adjust above. The timer's
+    // setChromeVisible(false) runs in a deferred callback, not synchronously.
     if (!isFullscreen) {
       clearChromeTimer();
-      setChromeVisible(true);
       return;
     }
-    resetChromeTimer();
+    clearChromeTimer();
+    chromeTimerRef.current = setTimeout(
+      () => setChromeVisible(false),
+      FULLSCREEN_CHROME_IDLE_MS,
+    );
     return clearChromeTimer;
-  }, [clearChromeTimer, isFullscreen, resetChromeTimer]);
+  }, [clearChromeTimer, isFullscreen]);
 
   const handleDownloadFormat = async (
     format: "original" | "webp" | "thumbnail",

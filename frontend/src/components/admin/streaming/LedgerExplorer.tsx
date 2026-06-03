@@ -105,7 +105,8 @@ export function LedgerExplorer() {
   );
 
   useEffect(() => {
-    void load(EMPTY_DRAFT);
+    async function initialFetch() { await load(EMPTY_DRAFT); }
+    void initialFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

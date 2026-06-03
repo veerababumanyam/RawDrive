@@ -19,7 +19,7 @@
  *   - Dismissal is session-scoped, not permanent.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface Props {
   /** Delay in milliseconds before the prompt appears. Clamped to >= 30s. */
@@ -45,6 +45,16 @@ export function RegistrationPrompt({
 }: Props) {
   const [visible, setVisible] = useState(false);
 
+  // Declared before the Escape effect so the closure always sees the latest
+  // stable reference. useCallback avoids re-attaching the event listener on
+  // every render; dismissKey is the only reactive dep.
+  const dismiss = useCallback(() => {
+    setVisible(false);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(`rawdrive:reg-prompt:${dismissKey}`, "dismissed");
+    }
+  }, [dismissKey]);
+
   useEffect(() => {
     // Session-scoped dismissal check.
     if (typeof window === "undefined") return;
@@ -63,15 +73,7 @@ export function RegistrationPrompt({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
-
-  const dismiss = () => {
-    setVisible(false);
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(`rawdrive:reg-prompt:${dismissKey}`, "dismissed");
-    }
-  };
+  }, [visible, dismiss]);
 
   if (!visible) return null;
 

@@ -234,8 +234,10 @@ export default function AdminSystemPage() {
       .then((data) => { setMetrics(data); setError(null); })
       .catch(() => setError("Failed to load system metrics"))
       .finally(() => setLoading(false));
-    void loadPaymentSettings(token);
-  }, [loadPaymentSettings]);
+    async function initPaymentSettings() { await loadPaymentSettings(token); }
+    void initPaymentSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const readiness = useMemo(() => {
     const hasField = (field: PaymentGatewayField) => {

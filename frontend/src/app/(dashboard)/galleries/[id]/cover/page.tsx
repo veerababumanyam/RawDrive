@@ -682,6 +682,12 @@ export default function CoverDesignPage() {
           initial.cover.assetId = realAssets[0]?.id || null;
         }
         setConfig(initial);
+        // Capture the just-hydrated config as the initial saved snapshot so
+        // the dirty dot only lights up on actual user edits — not on first
+        // mount when the fetched state structurally differs from
+        // DEFAULT_CONFIG. Same serialisation as the save handler for an
+        // exact comparison.
+        setSavedSnapshot((prev) => (prev ? prev : JSON.stringify(initial)));
         setLoaded(true);
       } catch (err) {
         console.error("Failed to load Cover & Design data:", err);
@@ -808,16 +814,6 @@ export default function CoverDesignPage() {
       window.clearTimeout(t2);
     };
   }, [justSaved]);
-
-  // Whenever the loaded config first hydrates from the gallery, capture
-  // it as the initial saved snapshot. Then the dirty dot only lights up
-  // when the user *actually* changes something — not on first mount when
-  // the just-fetched state structurally differs from DEFAULT_CONFIG.
-  useEffect(() => {
-    if (!loaded) return;
-    setSavedSnapshot((prev) => (prev ? prev : JSON.stringify(config)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
 
   const isDirty = savedSnapshot !== "" && savedSnapshot !== JSON.stringify(config);
 

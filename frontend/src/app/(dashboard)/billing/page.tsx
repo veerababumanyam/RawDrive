@@ -54,11 +54,11 @@ function BillingPageContent() {
   // and see the status flip from issued → paid. Backend endpoints
   // (M4 routes_m4.go) already exist; the frontend just never had a
   // create form.
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(() => createRequested);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({
-    contact_id: "",
-    project_id: "",
+  const [form, setForm] = useState(() => ({
+    contact_id: createRequested ? clientParam : "",
+    project_id: createRequested ? projectParam : "",
     invoice_type: "tax_invoice",
     package_id: "",
     quotation_valid_until: "",
@@ -67,7 +67,7 @@ function BillingPageContent() {
     due_date: "",
     notes: "",
     lines: [{ ...BLANK_LINE }] as LineRow[],
-  });
+  }));
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -82,18 +82,6 @@ function BillingPageContent() {
     listContacts(token).then(setContacts).catch(() => setContacts([]));
     listServicePackages(token).then(setPackages).catch(() => setPackages([]));
   }, []);
-
-  useEffect(() => {
-    if (!createRequested) return;
-    setShowCreate(true);
-    const clientId = clientParam;
-    const projectId = projectParam;
-    if (clientId) {
-      setForm((current) => ({ ...current, contact_id: clientId, project_id: projectId || current.project_id }));
-    } else if (projectId) {
-      setForm((current) => ({ ...current, project_id: projectId }));
-    }
-  }, [clientParam, createRequested, projectParam]);
 
   const totalRupees = form.lines.reduce((sum, l) => sum + l.quantity * l.unit_price_rupees, 0);
   const taxRupees = form.lines.reduce(

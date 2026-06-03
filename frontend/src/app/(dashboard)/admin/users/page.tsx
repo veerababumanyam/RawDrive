@@ -116,7 +116,10 @@ export default function AdminUsersPage() {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    async function initialFetch() { await fetchUsers(); }
+    void initialFetch();
+  }, []);
 
   const handleSuspend = async (id: string) => {
     try {

@@ -33,7 +33,7 @@ const EMPTY_PROFILE: UserProfile = {
 export default function ProfileSettingsPage() {
   const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
   const [states, setStates] = useState<IndianState[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(getStoredAccessToken()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
@@ -50,7 +50,6 @@ export default function ProfileSettingsPage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) {
-      setLoading(false);
       return;
     }
     fetch(`${API_BASE}/api/v1/users/profile`, {

@@ -72,35 +72,78 @@ function friendlySessionExpired(active: boolean) {
   return active ? "Your session expired. Sign in again to continue." : "";
 }
 
+const MFA_STORAGE_BLOCKED_ERROR =
+  "This browser blocked secure session storage. Please try again.";
+
+// The initial notice/error are fully determined by the query flags at first
+// render, so they are computed once and used to seed the corresponding state
+// (lazy init) instead of being written by a synchronous setState in an effect.
+// Priority matches the previous effect: registered → session_expired → oauth
+// error. Runtime handlers (login, Google button, OAuth-finish) still set these
+// imperatively afterwards.
+function initialLoginNotice(params: URLSearchParams): string {
+  return params.get("registered") === "1" ? "Account created. Please login below." : "";
+}
+
+function initialLoginError(params: URLSearchParams): string {
+  if (params.get("registered") === "1") {
+    return "";
+  }
+  if (params.get("mfa_storage_blocked") === "1") {
+    return MFA_STORAGE_BLOCKED_ERROR;
+  }
+  const sessionMessage = friendlySessionExpired(params.get("session_expired") === "1");
+  if (sessionMessage) {
+    return sessionMessage;
+  }
+  return friendlyOAuthError(params.get("error"), params.get("reason"));
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
-  const [email, setEmail] = useState("");
+  // Prefill from ?email= once on mount via lazy init. Reads the query param a
+  // single time and never overwrites a value the user later types — the same
+  // intent the previous prefill effect encoded.
+  const [email, setEmail] = useState(() => searchParams.get("email") || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  // Notice/error are seeded from the query flags via lazy init (see helpers
+  // above) so the first render shows the right message without a synchronous
+  // setState inside an effect. They remain mutable for runtime handlers.
+  const [error, setError] = useState(() => initialLoginError(searchParams));
+  const [notice, setNotice] = useState(() => initialLoginNotice(searchParams));
   const [webviewNotice, setWebviewNotice] = useState(false);
   const [oauthFinishing, setOAuthFinishing] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const { enabled: oauthEnabled } = useOAuthAvailability(API_BASE);
 
-  const registered = searchParams.get("registered") === "1";
+  // Re-seed notice/error from the query flags when they change across a soft
+  // navigation (e.g. router.replace from the MFA-storage-blocked branch below).
+  // This reproduces the previous effect's param-change reactivity using React's
+  // "adjust state during render" pattern instead of a synchronous setState in an
+  // effect — runtime handlers still overwrite these afterwards.
+  const noticeErrorKey = [
+    searchParams.get("registered"),
+    searchParams.get("session_expired"),
+    searchParams.get("mfa_storage_blocked"),
+    searchParams.get("error"),
+    searchParams.get("reason"),
+  ].join("|");
+  const [noticeErrorSnapshot, setNoticeErrorSnapshot] = useState(noticeErrorKey);
+  if (noticeErrorSnapshot !== noticeErrorKey) {
+    setNoticeErrorSnapshot(noticeErrorKey);
+    setNotice(initialLoginNotice(searchParams));
+    setError(initialLoginError(searchParams));
+  }
+
   const oauthAuthenticated = searchParams.get("authenticated") === "1";
   const oauthMfaRequired = searchParams.get("mfa_required") === "1";
   const oauthError = searchParams.get("error");
-  const oauthErrorReason = searchParams.get("reason");
-  const sessionExpired = searchParams.get("session_expired") === "1";
   const prefilledEmail = searchParams.get("email") || "";
   const activationEmail = oauthError === "oauth_account_not_activated" ? prefilledEmail : "";
 
   const googleStartUrl = useMemo(() => getGoogleOAuthStartUrl(API_BASE), []);
-
-  useEffect(() => {
-    if (prefilledEmail) {
-      setEmail(prefilledEmail);
-    }
-  }, [prefilledEmail]);
 
   useEffect(() => {
     if (!oauthMfaRequired) {
@@ -120,9 +163,10 @@ export function LoginForm() {
       window.sessionStorage.setItem("rawdrive_mfa_flow", "oauth");
     } catch {
       // sessionStorage unavailable — MFAVerifyForm's "no challenge" guard will
-      // send the user back to /login from there. Surface a hint here too.
-      setError("This browser blocked secure session storage. Please try again.");
-      router.replace("/login");
+      // send the user back to /login from there. Surface a hint here too: the
+      // ?mfa_storage_blocked=1 flag is read back into the error state on the
+      // next render (initialLoginError) instead of a synchronous setState here.
+      router.replace("/login?mfa_storage_blocked=1");
       return;
     }
     router.replace("/login/mfa");
@@ -159,24 +203,6 @@ export function LoginForm() {
       cancelled = true;
     };
   }, [oauthAuthenticated, oauthMfaRequired, router]);
-
-  useEffect(() => {
-    if (registered) {
-      setNotice("Account created. Please login below.");
-      return;
-    }
-
-    const sessionMessage = friendlySessionExpired(sessionExpired);
-    if (sessionMessage) {
-      setError(sessionMessage);
-      return;
-    }
-
-    const oauthMessage = friendlyOAuthError(oauthError, oauthErrorReason);
-    if (oauthMessage) {
-      setError(oauthMessage);
-    }
-  }, [oauthError, oauthErrorReason, registered, sessionExpired]);
 
   async function handleLogin(e?: React.FormEvent) {
     if (e) e.preventDefault();

@@ -46,7 +46,13 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
     }
   }, []);
 
-  useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+  useEffect(() => {
+    // Fire the initial load without a synchronous setState in the effect
+    // body — the setState calls inside fetchTemplates all run after an
+    // await (network round-trip / finally), so they never trigger a
+    // cascading render on mount. Initial `loading: true` covers the gap.
+    void Promise.resolve().then(fetchTemplates);
+  }, [fetchTemplates]);
 
   const handleSave = async () => {
     if (!saveName.trim() || !currentConfig) return;

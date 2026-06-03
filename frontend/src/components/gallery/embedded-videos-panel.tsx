@@ -11,7 +11,7 @@
 // what the photographer added — same providers, same embed URLs,
 // same aspect ratio.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   buildEmbeddedVideo,
   embedUrlFor,
@@ -46,9 +46,15 @@ export function EmbeddedVideosPanel({
   // Keep our internal state aligned when the parent feeds new data
   // (e.g. after a hard refresh of the gallery). We track the array
   // identity not the content so legitimate updates flow through.
-  useEffect(() => {
+  // Done via the adjust-state-during-render pattern (comparing the last
+  // prop value held in state) instead of an effect, so the realignment
+  // lands in the same render the new prop arrives — no extra commit, no
+  // flash, and React re-runs immediately without painting the stale value.
+  const [lastInitialVideos, setLastInitialVideos] = useState(initialVideos);
+  if (lastInitialVideos !== initialVideos) {
+    setLastInitialVideos(initialVideos);
     setVideos(initialVideos);
-  }, [initialVideos]);
+  }
 
   const [urlInput, setUrlInput] = useState("");
   const [titleInput, setTitleInput] = useState("");
