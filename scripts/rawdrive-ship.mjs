@@ -55,7 +55,7 @@ function has(cmd) {
 
 // ── arg parsing ───────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
-const opts = { skipTests: false, fullStack: false, noMerge: false, draft: false, dryRun: false, base: 'main' };
+const opts = { skipTests: false, fullStack: false, noMerge: false, draft: false, dryRun: false, base: 'main', paths: [] };
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -65,6 +65,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--draft') { opts.draft = true; opts.noMerge = true; }
   else if (a === '--dry-run') opts.dryRun = true;
   else if (a === '--base') opts.base = argv[++i];
+  else if (a === '--paths') opts.paths = (argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
   else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
   else if (a.startsWith('--')) die(`unknown flag: ${a}`);
   else positional.push(a);
@@ -78,6 +79,7 @@ ${C.bold}npm run ship${C.off} -- "<type>(<scope>): <subject>" [flags]
 Turns your finished changes into a clean, auto-merging PR.
 
 Flags:
+  --paths a,b,c   commit ONLY these paths (use when you have unrelated WIP in the tree)
   --skip-tests    skip the Docker verification gate (docs-only changes)
   --full-stack    also bring up docker-compose.dev.yml (--wait) first
   --no-merge      open the PR but do not arm auto-merge
@@ -198,11 +200,30 @@ if (opts.skipTests) {
 if (dirty) {
   step('Committing…');
   if (!opts.dryRun) {
-    run('git', ['add', '-A']);
+    // Stage the change. With --paths, only those paths — so unrelated WIP
+    // elsewhere in the tree is never swept into this commit.
+    if (opts.paths.length) {
+      run('git', ['add', '--', ...opts.paths]);
+    } else {
+      run('git', ['add', '-A']);
+    }
+    // TRANSPARENCY: print exactly what is being committed. A stray dirty file
+    // (WIP in an unrelated area) is then visible instead of silently included
+    // — the failure mode that once swept a 1300-line lockfile into a commit.
+    const staged = capture('git', ['diff', '--cached', '--name-only']);
+    const files = staged ? staged.split('\n').filter(Boolean) : [];
+    info(`Committing ${files.length} file(s):`);
+    for (const f of files) info(`    ${f}`);
+    const hasFE = files.some((f) => f.startsWith('frontend/'));
+    const hasBE = files.some((f) => f.startsWith('backend/'));
+    if (hasFE && hasBE && !opts.paths.length) {
+      warn('This commit spans BOTH frontend/ and backend/. If that is unexpected,');
+      warn('abort (Ctrl-C) and re-run with --paths to scope it to your change.');
+    }
     // pre-commit + commit-msg hooks run here and validate everything.
     run('git', ['commit', '-m', message]);
   } else {
-    info('[dry-run] would: git add -A && git commit -m <message>');
+    info(`[dry-run] would: git add ${opts.paths.length ? opts.paths.join(' ') : '-A'} && git commit -m <message>`);
   }
 }
 
