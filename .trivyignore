@@ -1,0 +1,14 @@
+# Trivy ignore list. Trivy auto-loads this for `trivy fs .`.
+# RULE: every entry MUST carry a justification + a re-review date. Do not add
+# CRITICAL/HIGH vulns that have an available fix — upgrade those instead.
+
+# CVE-2023-36308 — denial-of-service in github.com/disintegration/imaging when
+# decoding a crafted image (excessive memory allocation in DecodeConfig).
+# Used by backend thumbnail_service / cover_variants / watermark_service.
+# There is NO fixed version — the library is unmaintained (last release v1.6.2),
+# so this cannot be resolved by upgrading. Risk is bounded: uploads are MIME/size
+# validated before decode, WebP derivatives are produced by cwebp (not imaging),
+# and this is an availability (DoS) issue, not RCE or data exposure.
+# Follow-up: evaluate migrating to a maintained imaging library (e.g. govips).
+# Re-review by: 2026-12-31
+CVE-2023-36308

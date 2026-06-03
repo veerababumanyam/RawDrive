@@ -269,9 +269,17 @@ jobs:
           # fail the build; --redact keeps secret values out of the logs.
           ./gitleaks detect --source . --redact --no-banner --exit-code 1
 
-      # trivy is BLOCKING on CRITICAL/HIGH via exit-code: "1".
+      # trivy is BLOCKING on CRITICAL/HIGH DEPENDENCY vulns via exit-code: "1".
       # Pinned to v0.36.0 (released tag, not @master) so a compromised
       # upstream main cannot run arbitrary code in CI.
+      #
+      # scanners: vuln ONLY. trivy fs otherwise also runs its secret + misconfig
+      # scanners, and the secret scanner was failing the gate on the SAME
+      # findings gitleaks owns — but against the working tree only and with a
+      # SEPARATE allowlist (.gitleaks.toml would not apply). Secret scanning is
+      # the dedicated, full-history gitleaks gate above; trivy's job here is
+      # Software Composition Analysis (dependency CVEs). Keeping them separate
+      # means one secret allowlist, not two, and no duplicate/contradictory gate.
       - name: Run trivy filesystem scan
         id: trivy
         if: always()
@@ -280,6 +288,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          scanners: vuln
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
