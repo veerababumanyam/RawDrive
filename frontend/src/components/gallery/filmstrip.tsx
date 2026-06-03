@@ -3,12 +3,12 @@
 /**
  * Filmstrip — GAL-FR-093
  *
- * Horizontal thumbnail strip for the lightbox. Shows ~15 thumbnails around
- * the active photo and auto-scrolls the active thumb into view on navigation.
- * Intentionally simple (no virtual scrolling) — galleries with >500 photos
- * will paint all thumb nodes but the DOM cost is dominated by <img> decode,
- * not React reconciliation, and browsers throttle off-screen image decoding
- * automatically.
+ * Horizontal thumbnail strip for the lightbox. Renders a bounded window of
+ * thumbnails around the active photo and auto-scrolls the active thumb into
+ * view on navigation. The window re-centers as the user navigates, so a
+ * 500+ photo gallery mounts (and decrypts) a constant number of thumbs instead
+ * of every one (PERF-25 — AGENTS.md "window large filmstrips"). Global indexing
+ * is preserved because onSelect emits the asset id, not a windowed offset.
  */
 
 import { useEffect, useRef, useState, type RefObject } from "react";
@@ -81,8 +81,23 @@ function FilmstripThumb({
   );
 }
 
+// Number of thumbs rendered on each side of the active photo. ±15 keeps the
+// strip full with overscan for in-strip scrolling while bounding the mounted
+// thumb (and decrypt) count to a constant regardless of gallery size.
+const FILMSTRIP_WINDOW = 15;
+
 export function Filmstrip({ assets, activeId, onSelect }: Props) {
   const activeRef = useRef<HTMLButtonElement>(null);
+
+  // Render only a bounded window of thumbs around the active photo so large
+  // galleries don't mount every thumbnail (PERF-25). Computed from props during
+  // render (pure — no effect, React-Compiler safe). onSelect still emits the
+  // asset id, so the consumer maps it back to the correct global index.
+  const activeIndex = assets.findIndex((a) => a.id === activeId);
+  const center = activeIndex < 0 ? 0 : activeIndex;
+  const windowStart = Math.max(0, center - FILMSTRIP_WINDOW);
+  const windowEnd = Math.min(assets.length, center + FILMSTRIP_WINDOW + 1);
+  const windowed = assets.slice(windowStart, windowEnd);
 
   // Scroll the active thumb into view whenever it changes. `behavior: smooth`
   // matches Apple Photos' centering animation; `inline: center` keeps the
@@ -101,7 +116,7 @@ export function Filmstrip({ assets, activeId, onSelect }: Props) {
       role="tablist"
       aria-label="Photo filmstrip"
     >
-      {assets.map((a) => {
+      {windowed.map((a) => {
         const active = a.id === activeId;
         return (
           <FilmstripThumb

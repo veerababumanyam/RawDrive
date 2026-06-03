@@ -72,6 +72,30 @@ describe("Filmstrip", () => {
     expect(mocks.useDecryptedAssetUrl.mock.calls[0]?.[1]?.[0]).toBe("thumb_sm_webp");
   });
 
+  it("PERF-25: renders only a bounded window of thumbs around the active photo, not the full strip", () => {
+    // A 500+ photo gallery must not mount (and decrypt) every thumbnail at once
+    // — AGENTS.md mandates windowing large filmstrips.
+    const assets = Array.from({ length: 200 }, (_, i) =>
+      asset(`asset-${i}`, `DSC_${i}.JPG`),
+    );
+
+    render(<Filmstrip assets={assets} activeId="asset-100" onSelect={vi.fn()} />);
+
+    const tabs = screen.getAllByRole("tab");
+    // The rendered window is bounded and far smaller than the 200-photo total.
+    expect(tabs.length).toBeGreaterThan(0);
+    expect(tabs.length).toBeLessThanOrEqual(31);
+    // Decrypt fired once per rendered thumb, not 200 times.
+    expect(mocks.useDecryptedAssetUrl.mock.calls.length).toBeLessThanOrEqual(31);
+    // The active photo is within the window and selected.
+    expect(
+      screen.getByRole("tab", { name: "DSC_100.JPG" }),
+    ).toHaveAttribute("aria-selected", "true");
+    // Thumbs far outside the window are not mounted at all.
+    expect(screen.queryByRole("tab", { name: "DSC_0.JPG" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "DSC_199.JPG" })).toBeNull();
+  });
+
   it("falls back to display WebP when a thumbnail derivative decodes as a broken image", async () => {
     render(
       <Filmstrip
