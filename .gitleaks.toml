@@ -30,7 +30,7 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Known historical secret-leak paths — see header for rotation status"
 
 paths = [
@@ -54,24 +54,26 @@ paths = [
   # Already removed from the working tree and gitignored, but present in
   # history. The secret MUST be rotated in Google Cloud Console; this entry
   # only stops the history scan from blocking CI. Tracked for history purge.
-  '''(^|/)gen-lang-client-[0-9a-f-]+\.json$''',
+  # Scoped to the EXACT leaked filename (not a glob), so a re-leak under any
+  # other name still fails the build. Rotate the secret: docs/runbooks/secret-rotation.md
+  '''(^|/)gen-lang-client-0225070656-9e42fd6f0ba8\.json$''',
 
-  # Test fixtures — dummy private keys, fake JWTs, and SSE-C test vectors
-  # used to exercise crypto/parsing paths. Not production credentials.
-  '''.*_test\.go$''',
-  '''.*\.test\.tsx?$''',
-  '''.*\.spec\.tsx?$''',
+  # Test fixtures — dummy private keys, fake JWTs, and SSE-C test vectors used
+  # to exercise crypto/parsing paths. Scoped to the SPECIFIC known files (not a
+  # `*_test` glob) so a NEW test file with a real secret still fails the build.
+  '''^frontend/src/app/\(dashboard\)/messages/page\.test\.ts$''',
+  '''^backend/internal/storage/sse_test\.go$''',
+  '''^backend/internal/auth/jwt_key_persistence_test\.go$''',
+  '''^backend/internal/config/config_test\.go$''',
 ]
 
 # False positives: the Backblaze B2 settings code references config KEY NAMES
 # and env var NAMES as string literals ("b2_application_key",
 # "B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"). These are identifiers, not
 # secret values — actual values resolve at runtime from platform_settings/env.
-regexes = [
-  '''b2_application_key''',
-  '''B2_APPLICATION_KEY''',
-  '''B2_SECRET_ACCESS_KEY''',
-]
+# (These B2 key-name false positives are now scoped to their two source files
+#  via the [[allowlists]] block at the end of this file — NOT a repo-wide regex,
+#  so the same strings appearing anywhere else still fail the build.)
 
 # Future-proofing: when the files above are cleaned up, move their
 # offending commits here so history still passes but NEW commits to
@@ -79,3 +81,23 @@ regexes = [
 #   gitleaks detect --report-format json --report-path .gitleaks-report.json
 #   jq -r '.[].Commit' .gitleaks-report.json | sort -u
 commits = []
+
+# ── File-scoped false positives ────────────────────────────────────────────
+# The Backblaze B2 settings code references config KEY NAMES and env var NAMES
+# as string literals ("b2_application_key", "B2_APPLICATION_KEY",
+# "B2_SECRET_ACCESS_KEY") — identifiers, not secret values (actual values
+# resolve at runtime from platform_settings/env). condition = "AND" restricts
+# this allowlist to ONLY the two storage-settings source files, so the same
+# substrings appearing anywhere else in the repo still fail the build.
+[[allowlists]]
+description = "B2 config key-name identifiers in the storage settings source"
+condition = "AND"
+paths = [
+  '''^backend/cmd/api/main\.go$''',
+  '''^backend/cmd/sync-platform-settings-from-env/main\.go$''',
+]
+regexes = [
+  '''b2_application_key''',
+  '''B2_APPLICATION_KEY''',
+  '''B2_SECRET_ACCESS_KEY''',
+]
