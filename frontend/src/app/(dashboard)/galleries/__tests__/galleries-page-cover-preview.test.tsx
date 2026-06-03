@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createGallery: vi.fn(),
   createGalleryShareLink: vi.fn(),
   getAsset: vi.fn(),
+  updateGallery: vi.fn(),
   useDecryptedAssetUrl: vi.fn(),
 }));
 
@@ -55,7 +56,7 @@ vi.mock("@/lib/api/galleries", () => ({
   createGallery: mocks.createGallery,
   createGalleryShareLink: mocks.createGalleryShareLink,
   deleteGallery: vi.fn(),
-  updateGallery: vi.fn(),
+  updateGallery: mocks.updateGallery,
   galleryPublicUrl: vi.fn((gallery: { slug: string }) => `https://app.rawdrive.test/g/${gallery.slug}`),
 }));
 
@@ -93,6 +94,7 @@ describe("GalleriesPage cover previews", () => {
     mocks.createGallery.mockReset();
     mocks.createGalleryShareLink.mockReset();
     mocks.getAsset.mockReset();
+    mocks.updateGallery.mockReset();
     mocks.useDecryptedAssetUrl.mockReset();
     mocks.useDecryptedAssetUrl.mockReturnValue({ src: "", loading: false, error: null });
     Object.defineProperty(navigator, "clipboard", {
@@ -200,5 +202,42 @@ describe("GalleriesPage cover previews", () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       "https://app.rawdrive.test/g/uat-test-gallery?share=share-token",
     );
+    expect(mocks.updateGallery).not.toHaveBeenCalled();
+  });
+
+  it("shows a friendly manual-copy fallback when the browser blocks clipboard writes", async () => {
+    mocks.authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ galleries: [{ ...galleryWithDesignCover(), is_published: true }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    mocks.createGalleryShareLink.mockResolvedValue({
+      id: "share-1",
+      gallery_id: "gallery-1",
+      token: "share-token",
+      permissions: { access_mode: "public" },
+      download_allowed: true,
+      access_count: 0,
+      created_at: "2026-06-03T00:00:00Z",
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockRejectedValue(new DOMException("blocked", "NotAllowedError")),
+      },
+    });
+
+    render(<GalleriesPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Share UAT Test Gallery" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy link" }));
+
+    expect(await screen.findByText("Copy blocked by this browser")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Share link" })).toHaveValue(
+      "https://app.rawdrive.test/g/uat-test-gallery?share=share-token",
+    );
+    expect(screen.queryByText(/Copy this link:/i)).not.toBeInTheDocument();
+    expect(mocks.updateGallery).not.toHaveBeenCalled();
   });
 });

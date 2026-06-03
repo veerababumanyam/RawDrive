@@ -142,6 +142,92 @@ function buildGalleryWhatsAppHref(gallery: Gallery, url: string): string {
   return `https://wa.me/?text=${encodeURIComponent(buildGalleryShareText(gallery, url))}`;
 }
 
+type ShareCopyFallback = {
+  galleryId: string;
+  galleryTitle: string;
+  url: string;
+};
+
+type ShareActionResult = "copied" | "manual" | void;
+
+async function writeClipboardText(text: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function friendlyShareUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
+function ShareCopyFallbackNotice({
+  fallback,
+  onRetry,
+  onOpen,
+  onDismiss,
+}: {
+  fallback: ShareCopyFallback;
+  onRetry: () => void;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border-default bg-surface-raised p-4 shadow-elevation-1" role="status">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-text-primary">Copy blocked by this browser</p>
+          <p className="text-sm text-text-secondary">
+            Select the link below or try copying again. This link opens {fallback.galleryTitle}.
+          </p>
+          <p className="truncate text-xs text-text-tertiary" title={fallback.url}>
+            {friendlyShareUrl(fallback.url)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="self-start rounded-full px-3 py-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+        >
+          Dismiss
+        </button>
+      </div>
+      <textarea
+        aria-label="Share link"
+        readOnly
+        value={fallback.url}
+        rows={2}
+        onFocus={(event) => event.currentTarget.select()}
+        className="mt-3 w-full resize-none rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+      />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="min-h-[44px] rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-primary/90 focus:outline-none focus:ring-2 focus:ring-border-focus"
+        >
+          Try copy again
+        </button>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="min-h-[44px] rounded-xl border border-border-default px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+        >
+          Open link
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function GalleryShareMenu({
   gallery,
   shareUrl,
@@ -207,7 +293,7 @@ function GalleryShareMenu({
         <div
           role="menu"
           aria-label={`Share ${gallery.title}`}
-          className="absolute right-0 top-full z-popover mt-2 w-56 rounded-2xl border border-border-default bg-surface-overlay p-2 shadow-xl backdrop-blur-md"
+          className="absolute right-0 top-full z-[var(--z-popover)] mt-2 w-56 rounded-2xl border border-border-default bg-surface-overlay p-2 shadow-xl backdrop-blur-md"
         >
           {canShare ? (
             <div className="space-y-1">
@@ -381,6 +467,7 @@ export default function GalleriesPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(null);
   const [sharingGalleryId, setSharingGalleryId] = useState<string | null>(null);
+  const [shareCopyFallback, setShareCopyFallback] = useState<ShareCopyFallback | null>(null);
   const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
   // Gallery ID currently being published/unpublished — prevents double-clicks.
   // Backs the GalleryPublishSwitch `busy` state via toggleGalleryPublish.
@@ -392,12 +479,14 @@ export default function GalleriesPage() {
 
   const openCreateForm = useCallback(() => {
     setError(null);
+    setShareCopyFallback(null);
     setTitleError("");
     setShowCreate(true);
   }, []);
 
   const resetCreateForm = useCallback(() => {
     setError(null);
+    setShareCopyFallback(null);
     setShowCreate(false);
     setNewTitle("");
     setTitleError("");
@@ -478,15 +567,16 @@ export default function GalleriesPage() {
   const runShareAction = async (
     gallery: Gallery,
     channel: "copy" | "email" | "whatsapp",
-    action: (url: string) => Promise<void> | void,
+    action: (url: string) => Promise<ShareActionResult> | ShareActionResult,
   ) => {
     if (sharingGalleryId === gallery.id) return;
     setSharingGalleryId(gallery.id);
     setError(null);
+    setShareCopyFallback(null);
     try {
       const url = await createWorkingShareUrl(gallery, channel);
-      await action(url);
-      if (channel === "copy") {
+      const result = await action(url);
+      if (channel === "copy" && result !== "manual") {
         setCopiedId(gallery.id);
         setTimeout(() => setCopiedId(null), 1500);
       }
@@ -500,12 +590,39 @@ export default function GalleriesPage() {
 
   const copyShareLink = (gallery: Gallery) => {
     void runShareAction(gallery, "copy", async (url) => {
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch {
-        throw new Error(`Copy this link: ${url}`);
-      }
+      const copied = await writeClipboardText(url);
+      if (copied) return "copied";
+      setShareCopyFallback({
+        galleryId: gallery.id,
+        galleryTitle: gallery.title || "this gallery",
+        url,
+      });
+      return "manual";
     });
+  };
+
+  const retryShareFallbackCopy = async () => {
+    if (!shareCopyFallback) return;
+    setError(null);
+    const copied = await writeClipboardText(shareCopyFallback.url);
+    if (!copied) {
+      setError("This browser is still blocking clipboard access. Select the link field and copy it manually.");
+      return;
+    }
+    const galleryId = shareCopyFallback.galleryId;
+    setShareCopyFallback(null);
+    setCopiedId(galleryId);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const openShareFallbackLink = () => {
+    if (!shareCopyFallback) return;
+    window.open(shareCopyFallback.url, "_blank", "noopener,noreferrer");
+  };
+
+  const dismissShareFallback = () => {
+    setShareCopyFallback(null);
+    setError(null);
   };
 
   const emailShareLink = (gallery: Gallery) => {
@@ -761,6 +878,14 @@ export default function GalleriesPage() {
         <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
           {error}
         </div>
+      )}
+      {shareCopyFallback && (
+        <ShareCopyFallbackNotice
+          fallback={shareCopyFallback}
+          onRetry={() => { void retryShareFallbackCopy(); }}
+          onOpen={openShareFallbackLink}
+          onDismiss={dismissShareFallback}
+        />
       )}
       {/* Header — stacks vertically on mobile, side-by-side on sm+.
           Before 2026-05-18 this was a single horizontal row that
@@ -1027,44 +1152,60 @@ export default function GalleriesPage() {
             const coverAsset = coverAssetId ? coverAssets[coverAssetId] : undefined;
             const shareUrl = buildGalleryCardShareUrl(g, workspaceProfile);
 
+            const galleryHref = `/galleries/${g.id}`;
+
             return (
-              <Link
+              <article
                 key={g.id}
-                href={`/galleries/${g.id}`}
                 className={cn(
-                  "group relative block rounded-xl border border-border-default bg-surface-raised",
+                  "group relative rounded-xl border border-border-default bg-surface-raised",
                   "hover:border-accent/30 hover:shadow-elevation-1 transition-all duration-200",
                   viewMode === "list" && "flex items-center gap-4",
                 )}
               >
                 {/* Cover thumbnail (grid view) */}
                 {viewMode === "grid" && (
-                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-t-xl bg-surface-sunken">
+                  <Link
+                    href={galleryHref}
+                    aria-label={`Open ${g.title}`}
+                    className="relative block aspect-[16/10] w-full overflow-hidden rounded-t-xl bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  >
                     <GalleryCoverPreview
                       gallery={g}
                       coverAsset={coverAsset}
                       token={token}
                       alt={`${g.title} cover`}
                     />
-                  </div>
+                  </Link>
                 )}
 
                 {/* List view thumbnail */}
                 {viewMode === "list" && (
-                  <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-sunken ml-4">
+                  <Link
+                    href={galleryHref}
+                    aria-label={`Open ${g.title}`}
+                    className="relative ml-4 block h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  >
                     <GalleryCoverPreview
                       gallery={g}
                       coverAsset={coverAsset}
                       token={token}
                       alt=""
                     />
-                  </div>
+                  </Link>
                 )}
 
                 <div className={viewMode === "grid" ? "p-4 space-y-3" : "flex-1 min-w-0 py-4"}>
                   {viewMode === "grid" ? (
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="min-w-0 flex-1 font-medium text-text-primary truncate">{g.title}</h3>
+                      <h3 className="min-w-0 flex-1 truncate font-medium text-text-primary">
+                        <Link
+                          href={galleryHref}
+                          className="rounded-md focus:outline-none focus:ring-2 focus:ring-border-focus"
+                        >
+                          {g.title}
+                        </Link>
+                      </h3>
                       <GalleryCardActions
                         gallery={g}
                         shareUrl={shareUrl}
@@ -1096,7 +1237,14 @@ export default function GalleriesPage() {
                       />
                     </div>
                   ) : (
-                    <h3 className="font-medium text-text-primary truncate">{g.title}</h3>
+                    <h3 className="truncate font-medium text-text-primary">
+                      <Link
+                        href={galleryHref}
+                        className="rounded-md focus:outline-none focus:ring-2 focus:ring-border-focus"
+                      >
+                        {g.title}
+                      </Link>
+                    </h3>
                   )}
                   {/* Gallery description, rendered between title and
                       status badge. Two-line clamp keeps the card height
@@ -1168,7 +1316,7 @@ export default function GalleriesPage() {
                     />
                   )}
                 </div>
-              </Link>
+              </article>
             );
           })}
         </div>

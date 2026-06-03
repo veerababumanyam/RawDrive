@@ -97,11 +97,9 @@ export interface WorkspaceShareIdentity {
  * workspace profile loads), and for galleries created in workspaces that
  * pre-date the migration 121 backfill (should be zero in practice).
  *
- * Subdomain URLs are always built from the canonical brand domain
- * (`rawdrive.in`) regardless of where the dashboard is being viewed —
- * a photographer reviewing on staging/localhost still gets a shareable
- * production URL to copy. The legacy path uses `window.location.origin`
- * for backward compatibility with existing dev workflows.
+ * Local dashboards must stay same-origin. A localhost gallery/share token
+ * only exists in the local API, so pointing the copied link at production
+ * rawdrive.in makes UAT links look broken.
  */
 export function galleryPublicUrl(
   gallery: Pick<Gallery, "slug">,
@@ -110,24 +108,36 @@ export function galleryPublicUrl(
 ): string {
   const bizSlug = workspace?.business_profile_slug || "";
   const bizCode = workspace?.business_unique_code || "";
+  const browserOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin = originOverride || browserOrigin;
 
   // Rawdrive.in is stable enough to inline — if the brand domain ever
   // changes, the design-tokens.json sync process catches it and the build
   // would fail loudly.
   const BASE_DOMAIN = "rawdrive.in";
 
+  if (origin && isLocalShareOrigin(origin)) {
+    return `${origin}/g/${gallery.slug}`;
+  }
+
   if (bizSlug && bizCode && gallery.slug) {
     return `https://${bizSlug}-${bizCode}.${BASE_DOMAIN}/${gallery.slug}`;
   }
 
   // Legacy fallback — /g/{slug} on whichever origin the user is viewing.
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/g/${gallery.slug}`;
-  }
-  if (originOverride) {
-    return `${originOverride}/g/${gallery.slug}`;
+  if (origin) {
+    return `${origin}/g/${gallery.slug}`;
   }
   return `/g/${gallery.slug}`;
+}
+
+function isLocalShareOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  } catch {
+    return false;
+  }
 }
 
 export interface GalleryWorkspaceContact {
