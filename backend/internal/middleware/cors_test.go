@@ -48,6 +48,57 @@ func TestCORSProductionAllowsConfiguredFrontendURL(t *testing.T) {
 	assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
 }
 
+func TestCORSProductionAllowsRawDriveFirstPartyOrigins(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("GO_ENV", "")
+	t.Setenv("FRONTEND_URL", "https://app.rawdrive.in")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, origin := range []string{
+		"https://rawdrive.in",
+		"https://studio-test-9e8a5927.rawdrive.in",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/storage/thumbnails/asset/thumb_md_webp.webp", nil)
+		req.Header.Set("Origin", origin)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		assert.Equal(t, origin, rec.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
+	}
+}
+
+func TestCORSProductionRejectsRawDriveLookalikeOrigins(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("GO_ENV", "")
+	t.Setenv("FRONTEND_URL", "https://app.rawdrive.in")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, origin := range []string{
+		"http://rawdrive.in",
+		"https://rawdrive.in.evil.test",
+		"https://evilrawdrive.in",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/storage/thumbnails/asset/thumb_md_webp.webp", nil)
+		req.Header.Set("Origin", origin)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+		assert.Empty(t, rec.Header().Get("Access-Control-Allow-Credentials"))
+	}
+}
+
 func TestCORSNonProductionAllowsLoopbackOrigins(t *testing.T) {
 	t.Setenv("APP_ENV", "uat")
 	t.Setenv("GO_ENV", "")

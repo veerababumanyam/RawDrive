@@ -8,7 +8,8 @@ import (
 )
 
 // CORS adds Cross-Origin Resource Sharing headers.
-// In development, it allows all origins; in production, it restricts to FRONTEND_URL.
+// In development, it allows loopback origins; in production, it allows the
+// configured FRONTEND_URL and RawDrive first-party HTTPS origins.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		frontendURL := os.Getenv("FRONTEND_URL")
@@ -31,6 +32,9 @@ func CORS(next http.Handler) http.Handler {
 			}
 			// Also allow the configured frontend URL
 			if frontendURL != "" && strings.TrimRight(origin, "/") == strings.TrimRight(frontendURL, "/") {
+				allowedOrigin = origin
+			}
+			if isProduction && isRawDriveFirstPartyOrigin(origin) {
 				allowedOrigin = origin
 			}
 		}
@@ -63,6 +67,18 @@ func CORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isRawDriveFirstPartyOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "https" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "rawdrive.in" || strings.HasSuffix(host, ".rawdrive.in")
 }
 
 func isLoopbackOrigin(origin string) bool {

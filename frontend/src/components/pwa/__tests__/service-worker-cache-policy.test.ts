@@ -12,9 +12,18 @@ describe("service worker cache policy", () => {
     expect(source).toContain('cache: "no-store"');
   });
 
-  it("returns a fallback response when gallery asset fetches fail uncached", () => {
+  it("does not intercept cross-origin gallery storage requests", () => {
+    expect(source).toContain("url.origin !== self.location.origin");
+  });
+
+  it("returns a fallback response when same-origin gallery asset fetches fail uncached", () => {
     expect(source).toContain('cached || new Response("", { status: 504');
-    expect(source).toContain('response.ok || response.type === "opaque"');
+  });
+
+  it("does not cache opaque image responses for CORS fetches", () => {
+    expect(source).toContain('cached?.type === "opaque" && request.mode !== "no-cors"');
+    expect(source).toContain('response.ok && response.type !== "opaque"');
+    expect(source).not.toContain('response.ok || response.type === "opaque"');
   });
 
   it("does not let one failed precache URL reject service worker install", () => {

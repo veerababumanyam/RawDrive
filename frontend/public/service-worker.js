@@ -14,10 +14,10 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v6";
+const VERSION = "m15-v7";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
-const GALLERY_CACHE_PREFIX = `rawdrive-gallery-`;
+const GALLERY_CACHE_PREFIX = `rawdrive-gallery-${VERSION}-`;
 const GALLERY_CACHE_QUOTA_BYTES = 50 * 1024 * 1024; // 50MB per gallery
 const GALLERY_CACHE_MAX_ENTRIES = 500;
 const API_TIMEOUT_MS = 3000;
@@ -65,6 +65,16 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
+  // Do not intercept cross-origin API/storage requests. In particular,
+  // api.rawdrive.in image responses may be requested both as no-cors <img>
+  // loads and as normal CORS fetches for encrypted/public gallery views. A
+  // cached opaque no-cors image response cannot legally satisfy a later CORS
+  // fetch and Chromium reports "opaque response was used for a request whose
+  // type is not no-cors". Let the browser/network CORS layer handle these.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // Upload/security workers must never be served from an old shell cache.
   // They contain the client-side screening/encryption policy; stale code can
   // reject valid camera files or weaken current security checks.
@@ -110,12 +120,16 @@ async function handleGalleryAsset(request, url) {
   const cacheName = `${GALLERY_CACHE_PREFIX}${galleryID || "default"}`;
   const cache = await caches.open(cacheName);
 
-  const cached = await cache.match(request);
+  let cached = await cache.match(request);
+  if (cached?.type === "opaque" && request.mode !== "no-cors") {
+    await cache.delete(request);
+    cached = undefined;
+  }
 
   // Background refresh — fire and forget
   const refresh = fetch(request)
     .then(async (response) => {
-      if (response.ok || response.type === "opaque") {
+      if (response.ok && response.type !== "opaque") {
         await cache.put(request, response.clone());
         await enforceLRUQuota(cacheName);
       }
@@ -263,7 +277,7 @@ async function safePrecache(cache, urls) {
     urls.map(async (url) => {
       try {
         const response = await fetch(new Request(url, { cache: "reload" }));
-        if (response.ok || response.type === "opaque") {
+        if (response.ok) {
           await cache.put(url, response.clone());
         }
       } catch (error) {
