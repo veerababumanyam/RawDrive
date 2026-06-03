@@ -207,7 +207,7 @@ function GalleryShareMenu({
         <div
           role="menu"
           aria-label={`Share ${gallery.title}`}
-          className="fixed left-4 right-4 top-20 z-popover mx-auto max-w-sm rounded-2xl border border-border-default bg-surface-overlay p-2 shadow-xl backdrop-blur-md sm:left-auto sm:right-6 sm:mx-0"
+          className="absolute right-0 top-full z-popover mt-2 w-56 rounded-2xl border border-border-default bg-surface-overlay p-2 shadow-xl backdrop-blur-md"
         >
           {canShare ? (
             <div className="space-y-1">
@@ -248,6 +248,95 @@ function GalleryShareMenu({
             </p>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function GalleryCardActions({
+  gallery,
+  shareUrl,
+  shareOpen,
+  copied,
+  sharing,
+  confirmingDelete,
+  onToggleShare,
+  onCopyShare,
+  onEmailShare,
+  onWhatsAppShare,
+  onArmDelete,
+  onCancelDelete,
+  onConfirmDelete,
+  className,
+}: {
+  gallery: Gallery;
+  shareUrl: string;
+  shareOpen: boolean;
+  copied: boolean;
+  sharing: boolean;
+  confirmingDelete: boolean;
+  onToggleShare: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onCopyShare: () => void;
+  onEmailShare: () => void;
+  onWhatsAppShare: () => void;
+  onArmDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onCancelDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onConfirmDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("flex items-center justify-end gap-1.5", className)}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      <GalleryShareMenu
+        gallery={gallery}
+        shareUrl={shareUrl}
+        open={shareOpen}
+        copied={copied}
+        busy={sharing}
+        onToggle={onToggleShare}
+        onCopy={onCopyShare}
+        onEmail={onEmailShare}
+        onWhatsApp={onWhatsAppShare}
+      />
+      {confirmingDelete ? (
+        <div
+          role="alertdialog"
+          aria-label="Confirm gallery deletion"
+          className="flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
+        >
+          <span className="px-1.5 text-[11px] font-medium text-text-primary">Delete?</span>
+          <button
+            type="button"
+            onClick={onCancelDelete}
+            className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            autoFocus
+            onClick={onConfirmDelete}
+            className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
+          >
+            Confirm
+          </button>
+        </div>
+      ) : (
+        <GlassIconButton
+          type="button"
+          size="md"
+          variant="danger"
+          label={`Delete ${gallery.title}`}
+          onClick={onArmDelete}
+          className="bg-feedback-error text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:bg-feedback-error/90 focus-visible:ring-feedback-error/50"
+        >
+          <Trash />
+        </GlassIconButton>
       )}
     </div>
   );
@@ -952,81 +1041,6 @@ export default function GalleriesPage() {
                       token={token}
                       alt={`${g.title} cover`}
                     />
-
-                    {/* Corner Delete affordance — always visible. Replaces
-                        the older full-cover scrim that hosted Open /
-                        Design / Duplicate / Delete buttons (2026-05-18,
-                        commit 86093a7).
-
-                        2026-05-18 follow-up: button was previously
-                        hover-reveal + translucent glass-danger styling
-                        ("variant=danger" → bg-feedback-error/[0.15]),
-                        which disappeared on touch and was hard to spot
-                        against busy wedding cover photos. Now: always
-                        visible, solid bg-feedback-error fill, white
-                        icon, surface-raised ring for separation from
-                        the photo, shadow-elevation-1 for lift. Reads
-                        as "destructive" from across the screen.
-
-                        When armed, the corner swaps to an inline
-                        confirm bar instead of firing window.confirm. */}
-                    <div
-                      className="absolute top-2 right-2 z-10 flex items-center gap-1.5"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    >
-                      <GalleryShareMenu
-                        gallery={g}
-                        shareUrl={shareUrl}
-                        open={shareMenuGalleryId === g.id}
-                        copied={copiedId === g.id}
-                        busy={sharingGalleryId === g.id}
-                        onToggle={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setConfirmDeleteId(null);
-                          setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
-                        }}
-                        onCopy={() => copyShareLink(g)}
-                        onEmail={() => emailShareLink(g)}
-                        onWhatsApp={() => whatsAppShareLink(g)}
-                      />
-                      {confirmDeleteId === g.id ? (
-                        <div
-                          role="alertdialog"
-                          aria-label="Confirm gallery deletion"
-                          className="flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
-                        >
-                          <span className="px-1.5 text-[11px] font-medium text-text-primary">
-                            Delete?
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }}
-                            className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            autoFocus
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
-                            className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
-                          >
-                            Confirm
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          aria-label="Delete gallery"
-                          title="Delete gallery"
-                          onClick={(e) => armDelete(e, g.id)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-error text-white shadow-elevation-1 ring-2 ring-surface-raised/60 transition-all hover:bg-feedback-error/90 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-error/50"
-                        >
-                          <Trash className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
                   </div>
                 )}
 
@@ -1043,7 +1057,42 @@ export default function GalleriesPage() {
                 )}
 
                 <div className={viewMode === "grid" ? "p-4 space-y-3" : "flex-1 min-w-0 py-4"}>
-                  <h3 className="font-medium text-text-primary truncate">{g.title}</h3>
+                  {viewMode === "grid" ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="min-w-0 flex-1 font-medium text-text-primary truncate">{g.title}</h3>
+                      <GalleryCardActions
+                        gallery={g}
+                        shareUrl={shareUrl}
+                        shareOpen={shareMenuGalleryId === g.id}
+                        copied={copiedId === g.id}
+                        sharing={sharingGalleryId === g.id}
+                        confirmingDelete={confirmDeleteId === g.id}
+                        onToggleShare={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setConfirmDeleteId(null);
+                          setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
+                        }}
+                        onCopyShare={() => copyShareLink(g)}
+                        onEmailShare={() => emailShareLink(g)}
+                        onWhatsAppShare={() => whatsAppShareLink(g)}
+                        onArmDelete={(event) => armDelete(event, g.id)}
+                        onCancelDelete={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setConfirmDeleteId(null);
+                        }}
+                        onConfirmDelete={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void confirmDelete(g.id);
+                        }}
+                        className="shrink-0"
+                      />
+                    </div>
+                  ) : (
+                    <h3 className="font-medium text-text-primary truncate">{g.title}</h3>
+                  )}
                   {/* Gallery description, rendered between title and
                       status badge. Two-line clamp keeps the card height
                       bounded — long descriptions (paragraph-length
@@ -1083,63 +1132,35 @@ export default function GalleriesPage() {
                     {new Date(g.created_at).toLocaleDateString("en-IN")}
                   </span>
                   {viewMode === "list" && (
-                    <div
-                      className="ml-2 flex items-center gap-1.5"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    >
-                      {/* Share — copies the public gallery link */}
-                      <GalleryShareMenu
-                        gallery={g}
-                        shareUrl={shareUrl}
-                        open={shareMenuGalleryId === g.id}
-                        copied={copiedId === g.id}
-                        busy={sharingGalleryId === g.id}
-                        onToggle={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setConfirmDeleteId(null);
-                          setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
-                        }}
-                        onCopy={() => copyShareLink(g)}
-                        onEmail={() => emailShareLink(g)}
-                        onWhatsApp={() => whatsAppShareLink(g)}
-                      />
-                      {confirmDeleteId === g.id ? (
-                        <div
-                          role="alertdialog"
-                          aria-label="Confirm gallery deletion"
-                          className="flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                        >
-                          <span className="px-1.5 text-[11px] font-medium text-text-primary">Delete?</span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }}
-                            className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            autoFocus
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void confirmDelete(g.id); }}
-                            className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
-                          >
-                            Confirm
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          aria-label="Delete gallery"
-                          title="Delete gallery"
-                          onClick={(e) => armDelete(e, g.id)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-feedback-error text-white shadow-elevation-1 transition-all hover:bg-feedback-error/90 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-feedback-error/50"
-                        >
-                          <Trash className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
+                    <GalleryCardActions
+                      gallery={g}
+                      shareUrl={shareUrl}
+                      shareOpen={shareMenuGalleryId === g.id}
+                      copied={copiedId === g.id}
+                      sharing={sharingGalleryId === g.id}
+                      confirmingDelete={confirmDeleteId === g.id}
+                      onToggleShare={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setConfirmDeleteId(null);
+                        setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
+                      }}
+                      onCopyShare={() => copyShareLink(g)}
+                      onEmailShare={() => emailShareLink(g)}
+                      onWhatsAppShare={() => whatsAppShareLink(g)}
+                      onArmDelete={(event) => armDelete(event, g.id)}
+                      onCancelDelete={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setConfirmDeleteId(null);
+                      }}
+                      onConfirmDelete={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void confirmDelete(g.id);
+                      }}
+                      className="ml-2"
+                    />
                   )}
                 </div>
               </Link>

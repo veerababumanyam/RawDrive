@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -43,6 +44,34 @@ func generateToken() string {
 	return hex.EncodeToString(b)
 }
 
+func shareLinkPermissionsJSONB(value map[string]interface{}) (string, error) {
+	if value == nil {
+		value = map[string]interface{}{}
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func shareLinkPermissionsFromJSONB(value []byte) (map[string]interface{}, error) {
+	if len(value) == 0 || string(value) == "null" {
+		return map[string]interface{}{}, nil
+	}
+	if !json.Valid(value) {
+		return nil, fmt.Errorf("invalid json")
+	}
+	var permissions map[string]interface{}
+	if err := json.Unmarshal(value, &permissions); err != nil {
+		return nil, err
+	}
+	if permissions == nil {
+		permissions = map[string]interface{}{}
+	}
+	return permissions, nil
+}
+
 // Create inserts a new share link.
 func (r *ShareLinkRepo) Create(ctx context.Context, sl *ShareLink) error {
 	if sl.ID == uuid.Nil {
@@ -52,11 +81,15 @@ func (r *ShareLinkRepo) Create(ctx context.Context, sl *ShareLink) error {
 		sl.Token = generateToken()
 	}
 	sl.CreatedAt = time.Now()
+	permissionsJSON, err := shareLinkPermissionsJSONB(sl.Permissions)
+	if err != nil {
+		return fmt.Errorf("share link permissions: %w", err)
+	}
 
-	_, err := r.pool.Exec(ctx,
+	_, err = r.pool.Exec(ctx,
 		`INSERT INTO share_links (id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed, max_access_count, access_count, created_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		sl.ID, sl.GalleryID, sl.Token, sl.PinHash, sl.ExpiresAt, sl.Permissions, sl.DownloadAllowed, sl.MaxAccessCount, sl.AccessCount, sl.CreatedAt,
+		 VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`,
+		sl.ID, sl.GalleryID, sl.Token, sl.PinHash, sl.ExpiresAt, permissionsJSON, sl.DownloadAllowed, sl.MaxAccessCount, sl.AccessCount, sl.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("share link create: %w", err)
@@ -67,11 +100,12 @@ func (r *ShareLinkRepo) Create(ctx context.Context, sl *ShareLink) error {
 // GetByToken retrieves an active share link by token.
 func (r *ShareLinkRepo) GetByToken(ctx context.Context, token string) (*ShareLink, error) {
 	sl := &ShareLink{}
+	var permissionsJSON []byte
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, gallery_id, token, pin_hash, expires_at, permissions, download_allowed,
 		        max_access_count, access_count, created_at, revoked_at
 		 FROM share_links WHERE token = $1 AND revoked_at IS NULL`, token,
-	).Scan(&sl.ID, &sl.GalleryID, &sl.Token, &sl.PinHash, &sl.ExpiresAt, &sl.Permissions,
+	).Scan(&sl.ID, &sl.GalleryID, &sl.Token, &sl.PinHash, &sl.ExpiresAt, &permissionsJSON,
 		&sl.DownloadAllowed, &sl.MaxAccessCount, &sl.AccessCount, &sl.CreatedAt, &sl.RevokedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -79,6 +113,10 @@ func (r *ShareLinkRepo) GetByToken(ctx context.Context, token string) (*ShareLin
 	}
 	if err != nil {
 		return nil, fmt.Errorf("share link get: %w", err)
+	}
+	sl.Permissions, err = shareLinkPermissionsFromJSONB(permissionsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("share link permissions: %w", err)
 	}
 	return sl, nil
 }
@@ -99,11 +137,17 @@ func (r *ShareLinkRepo) ListByGallery(ctx context.Context, galleryID uuid.UUID) 
 	var links []ShareLink
 	for rows.Next() {
 		var sl ShareLink
+		var permissionsJSON []byte
 		if err := rows.Scan(&sl.ID, &sl.GalleryID, &sl.Token, &sl.PinHash, &sl.ExpiresAt,
-			&sl.Permissions, &sl.DownloadAllowed, &sl.MaxAccessCount, &sl.AccessCount,
+			&permissionsJSON, &sl.DownloadAllowed, &sl.MaxAccessCount, &sl.AccessCount,
 			&sl.CreatedAt, &sl.RevokedAt); err != nil {
 			return nil, fmt.Errorf("share link scan: %w", err)
 		}
+		permissions, err := shareLinkPermissionsFromJSONB(permissionsJSON)
+		if err != nil {
+			return nil, fmt.Errorf("share link permissions: %w", err)
+		}
+		sl.Permissions = permissions
 		links = append(links, sl)
 	}
 	return links, rows.Err()

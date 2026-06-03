@@ -49,6 +49,40 @@ func TestShareLink_AllFieldsSet(t *testing.T) {
 	assert.NotNil(t, sl.ExpiresAt)
 }
 
+func TestShareLinkPermissionsJSONB(t *testing.T) {
+	encoded, err := shareLinkPermissionsJSONB(map[string]interface{}{
+		"access_mode":      "public",
+		"download_allowed": true,
+	})
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"access_mode":"public","download_allowed":true}`, encoded)
+
+	encoded, err = shareLinkPermissionsJSONB(nil)
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{}`, encoded)
+
+	_, err = shareLinkPermissionsJSONB(map[string]interface{}{"bad": func() {}})
+	assert.Error(t, err)
+}
+
+func TestShareLinkPermissionsFromJSONB(t *testing.T) {
+	decoded, err := shareLinkPermissionsFromJSONB([]byte(`{"access_mode":"email","allowed_emails":["client@example.com"]}`))
+	assert.NoError(t, err)
+	assert.Equal(t, "email", decoded["access_mode"])
+	assert.Equal(t, []interface{}{"client@example.com"}, decoded["allowed_emails"])
+
+	decoded, err = shareLinkPermissionsFromJSONB(nil)
+	assert.NoError(t, err)
+	assert.Empty(t, decoded)
+
+	decoded, err = shareLinkPermissionsFromJSONB([]byte(`null`))
+	assert.NoError(t, err)
+	assert.Empty(t, decoded)
+
+	_, err = shareLinkPermissionsFromJSONB([]byte(`not-json`))
+	assert.Error(t, err)
+}
+
 // ──────────────────────── Token Generation ────────────────────────
 
 func TestGenerateToken_Unique(t *testing.T) {

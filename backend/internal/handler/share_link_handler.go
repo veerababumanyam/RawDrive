@@ -138,6 +138,7 @@ func (h *ShareLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	link, err := h.shareSvc.Create(r.Context(), createInput)
 	if err != nil {
+		log.Printf("gallery share link create failed gallery=%s err=%v", galleryID, err)
 		http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
 		return
 	}
