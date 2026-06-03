@@ -1,0 +1,7 @@
+# Revisions to ignore in `git blame` (bulk reformatting — not real authorship).
+#
+# Enable locally:  git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub applies this file automatically in its blame view.
+
+# style(backend): gofmt + goimports format-the-world (#10)
+550b31f45900ffea44a5a4b8421a21e6b7ca2f2e
