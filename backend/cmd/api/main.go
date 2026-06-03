@@ -1145,6 +1145,14 @@ func main() {
 	poolCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 	poolCfg.MaxConns = 25
 	poolCfg.MinConns = 5
+	// Recycle pooled connections so a connection whose server-side session has
+	// drifted (stale prepared-statement state after a pgbouncer/rolling restart,
+	// a silently-dead TCP socket) is retired rather than reused for the whole
+	// process lifetime. Without these the pool would never proactively replace a
+	// connection (PERF-17).
+	poolCfg.MaxConnLifetime = 30 * time.Minute
+	poolCfg.MaxConnIdleTime = 5 * time.Minute
+	poolCfg.HealthCheckPeriod = 1 * time.Minute
 
 	dbPool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
 	if err != nil {
@@ -3142,6 +3150,17 @@ func main() {
 		Addr:              ":" + port,
 		Handler:           r,
 		ReadHeaderTimeout: 15 * time.Second, // mitigates Slowloris (CVE-2016-1000218 family)
+		// Bound idle keep-alive connections and request header size. These are
+		// safe server-wide because IdleTimeout only fires BETWEEN requests (it
+		// never truncates an in-flight SSE stream, ZIP download, or /storage/*
+		// byte proxy) and MaxHeaderBytes caps headers, not bodies. ReadTimeout
+		// and WriteTimeout are deliberately NOT set here: a global ReadTimeout
+		// would truncate large/slow multipart uploads and a global WriteTimeout
+		// would cut off the long-lived streaming responses on this same router.
+		// Those need per-route deadlines (http.ResponseController) — deferred as
+		// the RISKY half of PERF-16.
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MiB
 	}
 
 	if certPath != "" && keyPath != "" {
