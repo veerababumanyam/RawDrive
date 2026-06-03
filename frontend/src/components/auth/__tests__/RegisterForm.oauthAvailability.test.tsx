@@ -114,6 +114,10 @@ describe("RegisterForm OAuth availability", () => {
     await waitFor(() => {
       expect(getByRole("alert").textContent).toContain("email already registered");
     });
+    expect(getByRole("link", { name: /activate account/i })).toHaveAttribute(
+      "href",
+      "/activate?email=duplicate%40example.test",
+    );
     expect(nav.push).not.toHaveBeenCalled();
   });
 

@@ -106,6 +106,7 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [duplicateActivationEmail, setDuplicateActivationEmail] = useState("");
   const [webviewNotice, setWebviewNotice] = useState(false);
   const { enabled: oauthEnabled, loading: oauthAvailabilityLoading } =
     useOAuthAvailability(API_BASE);
@@ -142,6 +143,7 @@ export function RegisterForm() {
 
     setLoading(true);
     setError("");
+    setDuplicateActivationEmail("");
 
     try {
       const response = await fetch(`${API_BASE}/auth/register`, {
@@ -162,7 +164,11 @@ export function RegisterForm() {
       });
 
       if (!response.ok) {
-        setError(await readRegisterError(response));
+        const message = await readRegisterError(response);
+        setError(message);
+        if (response.status === 409 && message.toLowerCase().includes("email already registered")) {
+          setDuplicateActivationEmail(email.trim());
+        }
         return;
       }
 
@@ -211,6 +217,15 @@ export function RegisterForm() {
         >
           {error}
         </div>
+      ) : null}
+
+      {duplicateActivationEmail ? (
+        <Link
+          href={`/activate?email=${encodeURIComponent(duplicateActivationEmail)}`}
+          className="surface-button w-full text-sm font-semibold"
+        >
+          Activate account
+        </Link>
       ) : null}
 
       {/* ── Plan selection ─────────────────────────────────────────── */}
