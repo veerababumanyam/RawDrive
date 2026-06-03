@@ -82,6 +82,7 @@ import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 // FaceID gate (GAL-FR-107/108). If the dashboard ever needs the chip
 // strip back, re-add the import + the JSX render block.
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
@@ -808,10 +809,12 @@ export default function GalleryDetailPage({
         throw new Error("Share link unavailable: gallery URL is missing.");
       }
 
+      const expiryDays = galleryShareExpiryDays(gallery);
       const created = await createGalleryShareLink(token, gallery.id, {
         access_mode: "public",
         download_allowed: gallery.download_enabled !== false,
         channel,
+        ...(expiryDays !== undefined ? { expiry_days: expiryDays } : {}),
       });
       return setUrlSearchParamBeforeFragment(
         baseUrl,

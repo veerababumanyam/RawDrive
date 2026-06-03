@@ -205,6 +205,55 @@ describe("GalleriesPage cover previews", () => {
     expect(mocks.updateGallery).not.toHaveBeenCalled();
   });
 
+  it("carries the gallery access window onto copied gallery card share links", async () => {
+    const expiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    mocks.authFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          galleries: [
+            {
+              ...galleryWithDesignCover(),
+              is_published: true,
+              expires_at: expiresAt,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    mocks.createGalleryShareLink.mockResolvedValue({
+      id: "share-1",
+      gallery_id: "gallery-1",
+      token: "share-token",
+      permissions: { access_mode: "public" },
+      download_allowed: true,
+      access_count: 0,
+      created_at: "2026-06-03T00:00:00Z",
+    });
+
+    render(<GalleriesPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Share UAT Test Gallery" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy link" }));
+
+    await waitFor(() => {
+      expect(mocks.createGalleryShareLink).toHaveBeenCalledWith("token-1", "gallery-1", {
+        access_mode: "public",
+        download_allowed: true,
+        channel: "copy",
+        expiry_days: 30,
+      });
+    });
+    expect(mocks.updateGallery).not.toHaveBeenCalled();
+  });
+
   it("shows a friendly manual-copy fallback when the browser blocks clipboard writes", async () => {
     mocks.authFetch.mockResolvedValue(
       new Response(JSON.stringify({ galleries: [{ ...galleryWithDesignCover(), is_published: true }] }), {

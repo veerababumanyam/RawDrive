@@ -21,6 +21,7 @@ import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/a
 import { appendStoredGalleryKeyFragment, setUrlSearchParamBeforeFragment } from "@/lib/media-encryption/share-url";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
+import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Camera, ClipboardList, Envelope, Grid, ListBullet, Phone, Trash, Share, XMark } from "@/components/icons";
 
@@ -556,10 +557,12 @@ export default function GalleriesPage() {
       throw new Error("Share link unavailable: gallery URL is missing.");
     }
 
+    const expiryDays = galleryShareExpiryDays(gallery);
     const link = await createGalleryShareLink(token, gallery.id, {
       access_mode: "public",
       download_allowed: gallery.download_enabled !== false,
       channel,
+      ...(expiryDays !== undefined ? { expiry_days: expiryDays } : {}),
     });
     return setUrlSearchParamBeforeFragment(baseUrl, "share", link.token);
   };

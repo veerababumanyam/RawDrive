@@ -90,6 +90,7 @@ describe("gallery route contracts", () => {
 
     expect(source).toContain("createGalleryShareLink");
     expect(source).toContain("createWorkingShareUrl");
+    expect(source).toContain("galleryShareExpiryDays");
     expect(source).toContain("setUrlSearchParamBeforeFragment");
     expect(source).toContain('access_mode: "public"');
     expect(source).toContain('channel,');
