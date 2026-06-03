@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -111,12 +112,12 @@ func NewDealerAnalyticsService(analyticsRepo *repository.DealerAnalyticsRepo, de
 
 // RevenueCalendarResponse wraps per-day revenue shares for a calendar month.
 type RevenueCalendarResponse struct {
-	Year              int                              `json:"year"`
-	Month             int                              `json:"month"`
-	CommissionRatePct float64                          `json:"commission_rate_pct"`
-	TotalRevenuePaisa int64                            `json:"total_revenue_paisa"`
-	TotalSharePaisa   int64                            `json:"total_share_paisa"`
-	Days              []repository.DailyRevenueShare   `json:"days"`
+	Year              int                            `json:"year"`
+	Month             int                            `json:"month"`
+	CommissionRatePct float64                        `json:"commission_rate_pct"`
+	TotalRevenuePaisa int64                          `json:"total_revenue_paisa"`
+	TotalSharePaisa   int64                          `json:"total_share_paisa"`
+	Days              []repository.DailyRevenueShare `json:"days"`
 }
 
 // GetStatePhotographers returns all photographers registered in the same state as the dealer.

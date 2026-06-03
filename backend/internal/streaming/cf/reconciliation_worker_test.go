@@ -25,13 +25,13 @@ func (f *fakeSource) ListActive(ctx context.Context) ([]ActiveStream, error) {
 }
 
 type fakeCF struct {
-	mu      sync.Mutex
-	byUID   map[string]*LiveInput
-	getErr  error
+	mu       sync.Mutex
+	byUID    map[string]*LiveInput
+	getErr   error
 	getCalls int
 }
 
-func (c *fakeCF) Create(context.Context, map[string]string) (*LiveInput, error)    { return nil, nil }
+func (c *fakeCF) Create(context.Context, map[string]string) (*LiveInput, error)      { return nil, nil }
 func (c *fakeCF) Update(context.Context, string, LiveInputPatch) (*LiveInput, error) { return nil, nil }
 func (c *fakeCF) Disable(context.Context, string) error                              { return nil }
 func (c *fakeCF) Delete(context.Context, string) error                               { return nil }
@@ -46,9 +46,9 @@ func (c *fakeCF) Get(_ context.Context, uid string) (*LiveInput, error) {
 }
 
 type fakeApplier struct {
-	mu     sync.Mutex
-	calls  []struct{ streamID, state string }
-	err    error
+	mu    sync.Mutex
+	calls []struct{ streamID, state string }
+	err   error
 }
 
 func (a *fakeApplier) Apply(_ context.Context, id, state string) error {
@@ -62,7 +62,7 @@ func (a *fakeApplier) Apply(_ context.Context, id, state string) error {
 }
 
 type fakeMetric struct {
-	mu       sync.Mutex
+	mu         sync.Mutex
 	increments []struct{ from, to string }
 }
 

@@ -66,10 +66,10 @@ func NewChatRepo(pool *pgxpool.Pool) *ChatRepo {
 
 // Errors.
 var (
-	ErrEmptyBody        = errors.New("chat: body must not be empty")
-	ErrBodyTooLong      = errors.New("chat: body exceeds 2000 characters")
-	ErrInvalidReaction  = errors.New("chat: reaction kind is not valid")
-	ErrNoAuthor         = errors.New("chat: message needs either viewer_session_id or author_user_id")
+	ErrEmptyBody       = errors.New("chat: body must not be empty")
+	ErrBodyTooLong     = errors.New("chat: body exceeds 2000 characters")
+	ErrInvalidReaction = errors.New("chat: reaction kind is not valid")
+	ErrNoAuthor        = errors.New("chat: message needs either viewer_session_id or author_user_id")
 )
 
 const maxBodyLen = 2000

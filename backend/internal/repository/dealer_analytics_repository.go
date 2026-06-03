@@ -19,7 +19,7 @@ type StatePhotographer struct {
 
 // DailyRevenueShare holds one calendar day's subscription revenue and the dealer's share.
 type DailyRevenueShare struct {
-	Date                   string  `json:"date"`                    // "YYYY-MM-DD"
+	Date                   string  `json:"date"` // "YYYY-MM-DD"
 	TotalSubscriptionPaisa int64   `json:"total_subscription_paisa"`
 	CommissionRatePct      float64 `json:"commission_rate_pct"`
 	RevenueSharePaisa      int64   `json:"revenue_share_paisa"`

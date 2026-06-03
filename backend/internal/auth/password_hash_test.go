@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // Regression for F-001 (audit 2026-05-30): ResetPassword previously passed the

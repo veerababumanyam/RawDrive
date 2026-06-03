@@ -143,11 +143,11 @@ func TestBucketConversionSrc_Known(t *testing.T) {
 
 func TestBucketConversionSrc_UnknownFallsThroughToDirect(t *testing.T) {
 	buckets := analytics.BucketConversionSrc(map[string]int{
-		"qr":        1,
-		"tiktok":    7, // unknown
-		"":          3, // empty
-		"direct":    2,
-		"facebook":  5, // unknown
+		"qr":       1,
+		"tiktok":   7, // unknown
+		"":         3, // empty
+		"direct":   2,
+		"facebook": 5, // unknown
 	})
 	assert.Equal(t, 1, buckets.QR)
 	// Unknown sources collapse into Direct (2 known + 7 + 3 + 5 unknown = 17).

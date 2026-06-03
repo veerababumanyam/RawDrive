@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 )
 
 var (

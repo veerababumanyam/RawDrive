@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rawdrive/backend/internal/handler"
-	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/handler"
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 func TestRegisterM5Routes_MarketplaceEndpoints(t *testing.T) {

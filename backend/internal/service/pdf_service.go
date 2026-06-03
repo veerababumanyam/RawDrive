@@ -42,14 +42,14 @@ type Receipt struct {
 // Invoice captures the fields rendered on an invoice PDF. The renderer
 // produces a professional multi-section layout:
 //
-//   1. Studio header block (name, address, GSTIN, phone, email, website)
-//   2. "TAX INVOICE" title + invoice meta (number, date, due)
-//   3. Bill-to block (client name, address, GSTIN, place of supply)
-//   4. Itemized table (S.No / Description / HSN / Qty / Rate / Amount)
-//   5. GST breakup (Subtotal / CGST / SGST / IGST / Total)
-//   6. Amount in words
-//   7. Bank details (name / account holder / account / IFSC / branch)
-//   8. Terms + footer + signature line
+//  1. Studio header block (name, address, GSTIN, phone, email, website)
+//  2. "TAX INVOICE" title + invoice meta (number, date, due)
+//  3. Bill-to block (client name, address, GSTIN, place of supply)
+//  4. Itemized table (S.No / Description / HSN / Qty / Rate / Amount)
+//  5. GST breakup (Subtotal / CGST / SGST / IGST / Total)
+//  6. Amount in words
+//  7. Bank details (name / account holder / account / IFSC / branch)
+//  8. Terms + footer + signature line
 //
 // All studio-branding fields are optional — callers should pass what they
 // have, empty strings collapse gracefully. The legacy two-field signature
@@ -61,25 +61,25 @@ type Invoice struct {
 	DueDate       string
 
 	// Studio branding block (from workspaces table).
-	StudioName        string
-	StudioAddressL1   string
-	StudioAddressL2   string
-	StudioCity        string
-	StudioPostalCode  string
-	StudioGSTIN       string
-	StudioPhone       string
-	StudioEmail       string
-	StudioWebsite     string
+	StudioName       string
+	StudioAddressL1  string
+	StudioAddressL2  string
+	StudioCity       string
+	StudioPostalCode string
+	StudioGSTIN      string
+	StudioPhone      string
+	StudioEmail      string
+	StudioWebsite    string
 
 	// Bill-to block.
-	ClientName        string
-	ClientAddressL1   string
-	ClientAddressL2   string
-	ClientCity        string
-	ClientPostalCode  string
-	ClientGSTIN       string
-	ClientPhone       string
-	PlaceOfSupply     string
+	ClientName       string
+	ClientAddressL1  string
+	ClientAddressL2  string
+	ClientCity       string
+	ClientPostalCode string
+	ClientGSTIN      string
+	ClientPhone      string
+	PlaceOfSupply    string
 
 	// Itemized table + totals.
 	Lines         []InvoiceLine
@@ -487,13 +487,13 @@ func (s *PDFService) RenderContract(c Contract) ([]byte, error) {
 // We reserve 72pt margins and use 12pt font, giving ~56 lines/page.
 
 const (
-	pdfPageWidth  = 612
-	pdfPageHeight = 792
-	pdfMarginX    = 72
-	pdfMarginTop  = 72
-	pdfFontSize   = 12
-	pdfLineHeight = 14
-	pdfLinesPerPage = 48
+	pdfPageWidth       = 612
+	pdfPageHeight      = 792
+	pdfMarginX         = 72
+	pdfMarginTop       = 72
+	pdfFontSize        = 12
+	pdfLineHeight      = 14
+	pdfLinesPerPage    = 48
 	pdfMaxCharsPerLine = 80
 )
 

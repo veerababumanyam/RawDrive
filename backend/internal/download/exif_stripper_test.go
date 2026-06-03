@@ -9,8 +9,10 @@ import (
 )
 
 // buildMinimalJPEG constructs a tiny valid JPEG byte stream with:
-//   SOI, APP0 (JFIF), APP1 (EXIF with bogus payload), APP2 (ICC profile chunk),
-//   a fake SOS, 2 bytes of scan data, EOI.
+//
+//	SOI, APP0 (JFIF), APP1 (EXIF with bogus payload), APP2 (ICC profile chunk),
+//	a fake SOS, 2 bytes of scan data, EOI.
+//
 // This lets us exercise the stripper without needing a real image fixture for unit tests.
 func buildMinimalJPEG(t *testing.T) []byte {
 	t.Helper()
@@ -42,8 +44,8 @@ func buildMinimalJPEG(t *testing.T) []byte {
 	// SOS (minimal, 2 scan bytes)
 	buf.Write([]byte{0xFF, 0xDA})
 	binary.Write(&buf, binary.BigEndian, uint16(2+1+2*1+3))
-	buf.WriteByte(0x01)            // num components
-	buf.Write([]byte{0x01, 0x00})  // component 1 spec
+	buf.WriteByte(0x01)                 // num components
+	buf.Write([]byte{0x01, 0x00})       // component 1 spec
 	buf.Write([]byte{0x00, 0x3F, 0x00}) // Ss, Se, Ah/Al
 	// 2 bytes of scan data
 	buf.Write([]byte{0xAA, 0xBB})

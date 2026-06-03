@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // mockOAuthProvider simulates a Google OAuth provider for testing.

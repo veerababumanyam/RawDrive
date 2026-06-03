@@ -253,9 +253,9 @@ func (r *GearRepo) ListByOwner(ctx context.Context, userID uuid.UUID) ([]GearLis
 // GearBooking represents a gear rental booking.
 type GearBooking struct {
 	ID            uuid.UUID       `json:"id"`
-	GearListingID uuid.UUID      `json:"gear_listing_id"`
-	RenterID      uuid.UUID      `json:"renter_id"`
-	OwnerID       uuid.UUID      `json:"owner_id"`
+	GearListingID uuid.UUID       `json:"gear_listing_id"`
+	RenterID      uuid.UUID       `json:"renter_id"`
+	OwnerID       uuid.UUID       `json:"owner_id"`
 	StartDate     time.Time       `json:"start_date"`
 	EndDate       time.Time       `json:"end_date"`
 	TotalPaisa    int64           `json:"total_paisa"`

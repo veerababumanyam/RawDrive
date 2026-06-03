@@ -62,11 +62,11 @@ func mailpitResponsive(timeout time.Duration) bool {
 // GET /api/v1/messages. Mailpit exposes more fields than we need; the
 // ones below are what this test asserts on.
 type mailpitMessageSummary struct {
-	ID      string              `json:"ID"`
-	From    mailpitAddress      `json:"From"`
-	To      []mailpitAddress    `json:"To"`
-	Subject string              `json:"Subject"`
-	Snippet string              `json:"Snippet"`
+	ID      string           `json:"ID"`
+	From    mailpitAddress   `json:"From"`
+	To      []mailpitAddress `json:"To"`
+	Subject string           `json:"Subject"`
+	Snippet string           `json:"Snippet"`
 }
 
 type mailpitAddress struct {

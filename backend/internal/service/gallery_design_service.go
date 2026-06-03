@@ -6,18 +6,19 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
 // GalleryDesignConfig holds the full design configuration for a gallery.
 type GalleryDesignConfig struct {
-	Theme       ThemeConfig       `json:"theme"`
-	Cover       CoverConfig       `json:"cover"`
-	Typography  TypographyConfig  `json:"typography"`
-	Grid        GridConfig        `json:"grid"`
-	Template    *TemplateRef      `json:"template,omitempty"`
-	CustomCSS   string            `json:"custom_css,omitempty"`
-	Version     int               `json:"version"`
+	Theme      ThemeConfig      `json:"theme"`
+	Cover      CoverConfig      `json:"cover"`
+	Typography TypographyConfig `json:"typography"`
+	Grid       GridConfig       `json:"grid"`
+	Template   *TemplateRef     `json:"template,omitempty"`
+	CustomCSS  string           `json:"custom_css,omitempty"`
+	Version    int              `json:"version"`
 }
 
 // ThemeConfig holds theme selection.

@@ -79,11 +79,11 @@ func mailpitReachable(t *testing.T) bool {
 // mailpitMessage is a partial shape of the Mailpit /api/v1/messages
 // response. Only the fields the smoke test asserts on are modeled.
 type mailpitMessage struct {
-	ID      string `json:"ID"`
-	From    struct{ Address string } `json:"From"`
+	ID      string                     `json:"ID"`
+	From    struct{ Address string }   `json:"From"`
 	To      []struct{ Address string } `json:"To"`
-	Subject string `json:"Subject"`
-	Snippet string `json:"Snippet"`
+	Subject string                     `json:"Subject"`
+	Snippet string                     `json:"Snippet"`
 }
 
 type mailpitListResponse struct {

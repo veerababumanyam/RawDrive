@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rawdrive/backend/internal/service"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rawdrive/backend/internal/service"
 )
 
 // ──────────────────────── Route Registration ────────────────────────

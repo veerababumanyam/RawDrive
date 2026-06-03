@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rwcarlsen/goexif/exif"
+
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
-	"github.com/rwcarlsen/goexif/exif"
 )
 
 // ExifService extracts EXIF metadata from images.

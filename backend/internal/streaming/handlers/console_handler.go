@@ -5,14 +5,14 @@
 // (Overview, Setup, Live, Replay, Audit).
 //
 // Security invariants (from impl-spec, packet):
-//   * Owner-scoped: caller's workspace_id claim must equal stream.workspace_id.
+//   - Owner-scoped: caller's workspace_id claim must equal stream.workspace_id.
 //     Cross-workspace returns 404 (anti-enumeration), not 403.
-//   * Feature-flag gated: flag off → 404 (never 403, same anti-enum reason).
-//   * Ingest credentials are nil unless within T-30 window AND caller has a
+//   - Feature-flag gated: flag off → 404 (never 403, same anti-enum reason).
+//   - Ingest credentials are nil unless within T-30 window AND caller has a
 //     prior reveal-audit row. (This handler currently checks window + audit
 //     count; the "reveal-audit by THIS user" persistence layer lands alongside
 //     story 34-4; the interface is already shaped that way.)
-//   * No local context-key types — we use middleware.JWTClaimsFromContext.
+//   - No local context-key types — we use middleware.JWTClaimsFromContext.
 package handlers
 
 import (
@@ -37,20 +37,20 @@ var ErrStreamNotFound = errors.New("console: stream not found")
 // real persistence layer (backend/internal/streaming/repository) will return
 // the same shape; tests supply an in-memory fake.
 type ConsoleStream struct {
-	ID                   uuid.UUID
-	WorkspaceID          uuid.UUID
-	Title                string
-	Status               string
-	StartAt              time.Time
-	EndAt                time.Time
-	PackageID            uuid.UUID
-	AccessPolicy         string
-	ChatPolicy           string
-	ReplayEnabled        bool
-	RTMPSURL             string
-	StreamKey            string // SECRET — only serialised within T-30 window
-	SRTURL               string
-	SRTPasskey           string // SECRET
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Title         string
+	Status        string
+	StartAt       time.Time
+	EndAt         time.Time
+	PackageID     uuid.UUID
+	AccessPolicy  string
+	ChatPolicy    string
+	ReplayEnabled bool
+	RTMPSURL      string
+	StreamKey     string // SECRET — only serialised within T-30 window
+	SRTURL        string
+	SRTPasskey    string // SECRET
 }
 
 // ConsoleStore is the read surface the handler needs. Kept handler-local so

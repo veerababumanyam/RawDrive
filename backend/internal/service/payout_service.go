@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
 var (
-	ErrPayoutAlreadyExists  = errors.New("payout already exists for this period")
-	ErrBelowThreshold       = errors.New("net payable below minimum threshold")
+	ErrPayoutAlreadyExists     = errors.New("payout already exists for this period")
+	ErrBelowThreshold          = errors.New("net payable below minimum threshold")
 	ErrInvalidPayoutTransition = errors.New("invalid payout status transition")
 )
 

@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // setupSecurityRouter creates a Chi router with the SecurityHeaders middleware

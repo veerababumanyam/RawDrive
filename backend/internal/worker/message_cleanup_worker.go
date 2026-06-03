@@ -22,7 +22,7 @@ func NewMessageCleanupWorker(repo *repository.MessagingRepo) *MessageCleanupWork
 	return &MessageCleanupWorker{
 		repo:         repo,
 		retention:    30 * 24 * time.Hour, // 30 days
-		pollInterval: 24 * time.Hour,       // run once daily
+		pollInterval: 24 * time.Hour,      // run once daily
 		stopCh:       make(chan struct{}),
 	}
 }

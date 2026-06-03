@@ -107,4 +107,3 @@ func TestAdminUsers_Activity_InvalidID(t *testing.T) {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
-

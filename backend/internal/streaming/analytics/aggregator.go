@@ -29,11 +29,11 @@ var knownConversionSources = map[string]struct{}{
 
 // ConversionBuckets counts shortlink hits per src tag.
 type ConversionBuckets struct {
-	QR      int `json:"qr"`
-	WA      int `json:"wa"`
-	Email   int `json:"email"`
-	Invite  int `json:"invite"`
-	Direct  int `json:"direct"`
+	QR     int `json:"qr"`
+	WA     int `json:"wa"`
+	Email  int `json:"email"`
+	Invite int `json:"invite"`
+	Direct int `json:"direct"`
 }
 
 // StreamMetrics mirrors `GET /api/v1/streaming/streams/{id}/analytics`.

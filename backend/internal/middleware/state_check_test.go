@@ -5,8 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 func TestStateCheck_WithState(t *testing.T) {

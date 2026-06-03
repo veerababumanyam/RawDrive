@@ -52,8 +52,8 @@ func setupAdminRouterWithPolicy() *chi.Mux {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-	testWorkspaceID = "11111111-1111-1111-1111-111111111111"
-	uploadPolicyPath = "/api/v1/admin/workspaces/" + testWorkspaceID + "/upload-policy"
+	testWorkspaceID   = "11111111-1111-1111-1111-111111111111"
+	uploadPolicyPath  = "/api/v1/admin/workspaces/" + testWorkspaceID + "/upload-policy"
 	platformAdminRole = "admin"
 	platformPhotoRole = "photographer"
 	// M16-BUG-04 follow-up: sub claims must be real UUIDs because the

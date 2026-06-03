@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 func TestGearRepo_CreateAndGetByID(t *testing.T) {

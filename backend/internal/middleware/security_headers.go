@@ -16,7 +16,7 @@ import "net/http"
 //   - default-src 'self'            — same-origin fallback for anything not covered
 //   - script-src 'self'             — scripts only from our origin; rejects inline
 //   - style-src 'self' 'unsafe-inline' — inline styles allowed (needed for some
-//                                        error pages rendered by Chi)
+//     error pages rendered by Chi)
 //   - img-src 'self' data: blob: https: — WebP derivatives + data URIs for tiny icons
 //   - connect-src 'self' https:     — WebSocket/XHR to our origin + HTTPS upstreams
 //   - font-src 'self' data:         — self-hosted fonts + data: for inline glyphs

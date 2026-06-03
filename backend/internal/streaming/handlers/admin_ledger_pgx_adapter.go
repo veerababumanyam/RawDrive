@@ -23,7 +23,7 @@ func (p *pgxpoolQuerier) QueryIter(ctx context.Context, sql string, args ...any)
 
 type pgxRowsIter struct{ rows pgx.Rows }
 
-func (p *pgxRowsIter) Next() bool              { return p.rows.Next() }
-func (p *pgxRowsIter) Scan(dest ...any) error  { return p.rows.Scan(dest...) }
-func (p *pgxRowsIter) Err() error              { return p.rows.Err() }
-func (p *pgxRowsIter) Close()                  { p.rows.Close() }
+func (p *pgxRowsIter) Next() bool             { return p.rows.Next() }
+func (p *pgxRowsIter) Scan(dest ...any) error { return p.rows.Scan(dest...) }
+func (p *pgxRowsIter) Err() error             { return p.rows.Err() }
+func (p *pgxRowsIter) Close()                 { p.rows.Close() }

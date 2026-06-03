@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // adminClaims returns JWT claims for a super_admin user.
@@ -127,9 +128,9 @@ func TestContract_RevenueEndpoint(t *testing.T) {
 		ChurnRate      float64 `json:"churn_rate"`
 		TotalSubs      int     `json:"total_subscribers"`
 		StateBreakdown []struct {
-			StateName  string `json:"state_name"`
-			Revenue    int    `json:"revenue_paisa"`
-			Subscribers int   `json:"subscriber_count"`
+			StateName   string `json:"state_name"`
+			Revenue     int    `json:"revenue_paisa"`
+			Subscribers int    `json:"subscriber_count"`
 		} `json:"state_breakdown"`
 	}
 	err := json.NewDecoder(rr.Body).Decode(&body)
@@ -144,12 +145,12 @@ func TestContract_EngagementEndpoint(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var body struct {
-		DAU             int     `json:"dau"`
-		WAU             int     `json:"wau"`
-		MAU             int     `json:"mau"`
-		UploadsToday    int     `json:"uploads_today"`
-		GalleriesCreated int    `json:"galleries_created"`
-		AvgSession      float64 `json:"avg_session_minutes"`
+		DAU              int     `json:"dau"`
+		WAU              int     `json:"wau"`
+		MAU              int     `json:"mau"`
+		UploadsToday     int     `json:"uploads_today"`
+		GalleriesCreated int     `json:"galleries_created"`
+		AvgSession       float64 `json:"avg_session_minutes"`
 	}
 	err := json.NewDecoder(rr.Body).Decode(&body)
 	require.NoError(t, err)

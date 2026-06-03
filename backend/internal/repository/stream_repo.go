@@ -11,34 +11,34 @@ import (
 
 // Stream represents a live stream event.
 type Stream struct {
-	ID                uuid.UUID  `json:"id"`
-	WorkspaceID       uuid.UUID  `json:"workspace_id"`
-	GalleryID         *uuid.UUID `json:"gallery_id"`
-	CreatedBy         uuid.UUID  `json:"created_by"`
-	Title             string     `json:"title"`
-	Description       *string    `json:"description"`
-	Status            string     `json:"status"`
-	ScheduledAt       *time.Time `json:"scheduled_at"`
-	StartedAt         *time.Time `json:"started_at"`
-	EndedAt           *time.Time `json:"ended_at"`
-	CFStreamUID       *string    `json:"cf_stream_uid"`
-	CFRtmpsURL        *string    `json:"cf_rtmps_url"`
-	CFRtmpsKey        *string    `json:"cf_rtmps_key"`
-	CFPlaybackURL     *string    `json:"cf_playback_url"`
-	CFVodUID          *string    `json:"cf_vod_uid"`
+	ID            uuid.UUID  `json:"id"`
+	WorkspaceID   uuid.UUID  `json:"workspace_id"`
+	GalleryID     *uuid.UUID `json:"gallery_id"`
+	CreatedBy     uuid.UUID  `json:"created_by"`
+	Title         string     `json:"title"`
+	Description   *string    `json:"description"`
+	Status        string     `json:"status"`
+	ScheduledAt   *time.Time `json:"scheduled_at"`
+	StartedAt     *time.Time `json:"started_at"`
+	EndedAt       *time.Time `json:"ended_at"`
+	CFStreamUID   *string    `json:"cf_stream_uid"`
+	CFRtmpsURL    *string    `json:"cf_rtmps_url"`
+	CFRtmpsKey    *string    `json:"cf_rtmps_key"`
+	CFPlaybackURL *string    `json:"cf_playback_url"`
+	CFVodUID      *string    `json:"cf_vod_uid"`
 	// PinHash is the argon2id PHC string for the stream's PIN gate
 	// (replaces the plaintext pin_code column dropped in migration 093).
 	// Never returned to unauthenticated viewers — GetPublic strips it via
 	// the explicit map projection and only exposes `pin_required` boolean.
-	PinHash           *string    `json:"-"`
-	MaxQuality        string     `json:"max_quality"`
-	ChatEnabled       bool       `json:"chat_enabled"`
-	ChatSlowModeSecs  int        `json:"chat_slow_mode_seconds"`
-	PeakViewers       int        `json:"peak_viewers"`
-	TotalViews        int        `json:"total_views"`
-	DurationSeconds   int        `json:"duration_seconds"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	PinHash          *string   `json:"-"`
+	MaxQuality       string    `json:"max_quality"`
+	ChatEnabled      bool      `json:"chat_enabled"`
+	ChatSlowModeSecs int       `json:"chat_slow_mode_seconds"`
+	PeakViewers      int       `json:"peak_viewers"`
+	TotalViews       int       `json:"total_views"`
+	DurationSeconds  int       `json:"duration_seconds"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // StreamFilter defines list filtering options.

@@ -65,9 +65,9 @@ type WorkspacePolicyReader interface {
 
 // uploadManifestValidationImpl is the production implementation.
 type uploadManifestValidationImpl struct {
-	catalog        PolicyCatalog
+	catalog         PolicyCatalog
 	workspacePolicy WorkspacePolicyReader
-	auditLog       *AuditLogService // may be nil in unit tests
+	auditLog        *AuditLogService // may be nil in unit tests
 	// enforceMode controls whether the validator returns errors (enforced)
 	// or only logs violations (telemetry-only). Phase 1 of the rollout
 	// uses telemetry-only so operators can observe the real-world reject

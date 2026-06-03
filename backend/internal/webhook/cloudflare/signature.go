@@ -15,15 +15,17 @@ import (
 var ErrBadSignature = errors.New("webhook: bad signature")
 
 // SignatureVerifier enforces Cloudflare's Webhooks v1 signing protocol:
-//   Webhook-Signature: time=<unix>,sig1=<hex(hmac_sha256(secret, time + "." + body))>
+//
+//	Webhook-Signature: time=<unix>,sig1=<hex(hmac_sha256(secret, time + "." + body))>
+//
 // Secret NEVER hardcoded — passed in via NewHMACVerifier from *Config.
 type SignatureVerifier interface {
 	Verify(body []byte, header string, now time.Time) error
 }
 
 type hmacVerifier struct {
-	secret       []byte
-	maxSkew      time.Duration
+	secret  []byte
+	maxSkew time.Duration
 }
 
 // NewHMACVerifier returns a verifier with the given HMAC secret.

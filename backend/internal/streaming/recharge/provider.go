@@ -4,11 +4,11 @@
 //
 // Each provider implements:
 //   - InitiateOrder: create a hosted-checkout session, return checkout URL
-//                    and the provider's order id.
+//     and the provider's order id.
 //   - VerifyWebhookSignature: verify the inbound webhook (X-VERIFY for
-//                              PhonePe, x-razorpay-signature for Razorpay).
+//     PhonePe, x-razorpay-signature for Razorpay).
 //   - ParseCallback: extract a normalised CallbackPayload from a verified
-//                    webhook body.
+//     webhook body.
 //
 // The recharge handler stays provider-agnostic — it picks a provider via
 // platform_settings and delegates everything to the Provider interface.
@@ -47,14 +47,14 @@ const (
 
 // InitiateInput is the per-order input passed to a Provider.
 type InitiateInput struct {
-	WorkspaceID    string  // free-form; providers may surface it as their merchant-user-id
-	AmountPaise    int64
-	OrderID        string  // our internal recharge_order id (uuid string)
-	CallbackURL    string  // public URL the provider POSTs the webhook to
-	RedirectURL    string  // user-facing redirect after payment
-	CustomerPhone  string  // optional, populated for PhonePe Standard Checkout
-	BuyerName      string  // optional, populated for Razorpay prefill
-	BuyerEmail     string
+	WorkspaceID   string // free-form; providers may surface it as their merchant-user-id
+	AmountPaise   int64
+	OrderID       string // our internal recharge_order id (uuid string)
+	CallbackURL   string // public URL the provider POSTs the webhook to
+	RedirectURL   string // user-facing redirect after payment
+	CustomerPhone string // optional, populated for PhonePe Standard Checkout
+	BuyerName     string // optional, populated for Razorpay prefill
+	BuyerEmail    string
 }
 
 // InitiateResult is the per-order result returned by a Provider.

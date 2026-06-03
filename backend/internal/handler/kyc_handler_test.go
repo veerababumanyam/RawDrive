@@ -10,9 +10,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
-	"github.com/stretchr/testify/assert"
 )
 
 // These tests exercise the KYC handler without touching the database.

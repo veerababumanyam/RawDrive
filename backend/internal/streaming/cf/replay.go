@@ -17,12 +17,12 @@ type ReplayRepo interface {
 
 // ReplayStream is the minimal record the service needs.
 type ReplayStream struct {
-	ID               string
-	CFUID            string
-	PlanTier         string // "standard" | "professional" | "enterprise"
-	ReplayVideoID    string
-	ReplayExpiresAt  *time.Time
-	ReplayState      string
+	ID              string
+	CFUID           string
+	PlanTier        string // "standard" | "professional" | "enterprise"
+	ReplayVideoID   string
+	ReplayExpiresAt *time.Time
+	ReplayState     string
 }
 
 // PlanResolver maps plan tier to retention window.

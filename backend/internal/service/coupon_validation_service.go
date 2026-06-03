@@ -7,18 +7,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
 var (
-	ErrCouponNotFound          = errors.New("coupon not found")
-	ErrCouponExpired           = errors.New("coupon has expired")
-	ErrCouponExhausted         = errors.New("coupon redemption limit reached")
-	ErrCouponInactive          = errors.New("coupon is inactive")
-	ErrCouponNotApplicablePlan = errors.New("coupon not valid for this plan")
+	ErrCouponNotFound           = errors.New("coupon not found")
+	ErrCouponExpired            = errors.New("coupon has expired")
+	ErrCouponExhausted          = errors.New("coupon redemption limit reached")
+	ErrCouponInactive           = errors.New("coupon is inactive")
+	ErrCouponNotApplicablePlan  = errors.New("coupon not valid for this plan")
 	ErrCouponNotApplicableState = errors.New("coupon not valid for this state")
-	ErrCouponAlreadyUsedByUser = errors.New("coupon already used by this user")
-	ErrCouponNotStackable      = errors.New("coupon cannot be combined with other coupons")
+	ErrCouponAlreadyUsedByUser  = errors.New("coupon already used by this user")
+	ErrCouponNotStackable       = errors.New("coupon cannot be combined with other coupons")
 )
 
 type CouponValidationResponse struct {

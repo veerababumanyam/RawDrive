@@ -6,17 +6,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
 type RevenueDashboard struct {
-	MRRPaisa         int64                      `json:"mrr_paisa"`
-	ARRPaisa         int64                      `json:"arr_paisa"`
-	ChurnRate        float64                    `json:"churn_rate"`
-	LTVPaisa         int64                      `json:"ltv_paisa"`
-	ARPUPaisa        int64                      `json:"arpu_paisa"`
-	TotalSubscribers int64                      `json:"total_subscribers"`
-	StateBreakdown   []repository.StateRevenue  `json:"state_breakdown"`
+	MRRPaisa         int64                     `json:"mrr_paisa"`
+	ARRPaisa         int64                     `json:"arr_paisa"`
+	ChurnRate        float64                   `json:"churn_rate"`
+	LTVPaisa         int64                     `json:"ltv_paisa"`
+	ARPUPaisa        int64                     `json:"arpu_paisa"`
+	TotalSubscribers int64                     `json:"total_subscribers"`
+	StateBreakdown   []repository.StateRevenue `json:"state_breakdown"`
 }
 
 type AdminRevenueService struct {

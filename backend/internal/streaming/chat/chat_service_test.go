@@ -72,12 +72,12 @@ func (m *mockLiveness) GetSlowModeSeconds(ctx context.Context, streamID uuid.UUI
 }
 
 type stubGate struct {
-	allow       bool
-	retryAfter  time.Duration
-	reactAllow  bool
-	reactRetry  time.Duration
-	allowCalls  int
-	reactCalls  int
+	allow      bool
+	retryAfter time.Duration
+	reactAllow bool
+	reactRetry time.Duration
+	allowCalls int
+	reactCalls int
 }
 
 func (s *stubGate) Allow(ctx context.Context, streamID, sess uuid.UUID, window int) (bool, time.Duration, error) {

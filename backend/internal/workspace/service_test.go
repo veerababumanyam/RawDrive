@@ -6,9 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/workspace"
 )
 
 // mockWorkspaceRepo simulates workspace persistence.

@@ -52,7 +52,9 @@ type refundResponse struct {
 // 401 — no JWT (upstream RequireAuth)
 // 400 — malformed URL param or body, missing workspace/actor claim
 // 404 — purchase not found OR workspace mismatch (handled as ErrPurchaseNotFound
-//       to avoid leaking cross-workspace presence)
+//
+//	to avoid leaking cross-workspace presence)
+//
 // 422 REFUND_WINDOW_EXPIRED — purchase older than 7 days
 // 422 CREDITS_PARTIALLY_CONSUMED — credits from this purchase already reserved/consumed
 // 500 — service or DB error

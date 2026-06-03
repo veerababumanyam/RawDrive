@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
 )

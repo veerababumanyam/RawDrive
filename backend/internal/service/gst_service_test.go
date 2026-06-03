@@ -15,10 +15,10 @@ func TestDetermineGSTType(t *testing.T) {
 	svc := NewGSTService()
 
 	tests := []struct {
-		name               string
-		supplierStateCode  string
-		placeOfSupplyCode  string
-		expected           string
+		name              string
+		supplierStateCode string
+		placeOfSupplyCode string
+		expected          string
 	}{
 		{"same state intra - Maharashtra", "27", "27", "intra"},
 		{"same state intra - Karnataka", "29", "29", "intra"},

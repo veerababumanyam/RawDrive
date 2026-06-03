@@ -11,9 +11,9 @@ import (
 
 // SearchWorker polls for assets needing AI tagging and processes them.
 type SearchWorker struct {
-	pool      *pgxpool.Pool
-	searchSvc *SearchService
-	configRepo *ConfigRepo
+	pool         *pgxpool.Pool
+	searchSvc    *SearchService
+	configRepo   *ConfigRepo
 	pollInterval time.Duration
 	batchSize    int
 	stopCh       chan struct{}

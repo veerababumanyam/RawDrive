@@ -123,13 +123,13 @@ func TestCouponCRUDIntegration(t *testing.T) {
 
 	// Duplicate code should fail
 	dup := &repository.Coupon{
-		Code:       "test50", // lowercase — should conflict with TEST50
-		CreatedBy:  testUserID,
-		OwnerType:  "admin",
-		CouponType: "fixed_amount",
+		Code:          "test50", // lowercase — should conflict with TEST50
+		CreatedBy:     testUserID,
+		OwnerType:     "admin",
+		CouponType:    "fixed_amount",
 		DiscountValue: 10000,
-		IsActive:   true,
-		PerUserLimit: 1,
+		IsActive:      true,
+		PerUserLimit:  1,
 	}
 	err = couponRepo.Create(ctx, dup)
 	assert.Error(t, err, "duplicate code should fail")

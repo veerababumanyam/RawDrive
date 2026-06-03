@@ -12,7 +12,7 @@ import (
 // Webhook represents a webhook subscription.
 type Webhook struct {
 	ID          uuid.UUID  `json:"id"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
+	WorkspaceID uuid.UUID  `json:"workspace_id"`
 	URL         string     `json:"url"`
 	Secret      string     `json:"secret,omitempty"`
 	Events      []string   `json:"events"`

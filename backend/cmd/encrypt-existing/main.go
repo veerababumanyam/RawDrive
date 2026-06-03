@@ -309,15 +309,15 @@ const (
 //
 //  1. HEAD without any SSE-C key headers.
 //     - 200 + SSE-C marker on the object → can't happen on this path
-//       (B2/S3 returns 400 if the object is SSE-C and we don't send
-//       the customer key, so this branch sees only SSE-B2 / plaintext).
+//     (B2/S3 returns 400 if the object is SSE-C and we don't send
+//     the customer key, so this branch sees only SSE-B2 / plaintext).
 //     - 200 + ServerSideEncryption: AES256 → source is SSE-B2.
 //     - 200 + no SSE → source is plaintext.
 //     - 400 (InvalidRequest) → object is SSE-C; re-try with our key.
 //
 //  2. If we re-try with our key:
 //     - 200 → source is SSE-C with OUR key (idempotent skip target,
-//       or copy with CopySource-SSE-C-* headers).
+//     or copy with CopySource-SSE-C-* headers).
 //     - 403 → source is SSE-C with a DIFFERENT key (unrecoverable).
 //
 // Returns the classified state PLUS a sentinel state flag for "this

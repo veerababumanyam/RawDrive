@@ -112,8 +112,8 @@ func TestPurchase_PostsLedgerAndIdempotent(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, credit.EntryPurchase, entry1.EntryType)
-	assert.Equal(t, int64(49900), entry1.AmountPaise)   // basic price
-	assert.Equal(t, 60, entry1.MinutesDelta)            // basic minutes
+	assert.Equal(t, int64(49900), entry1.AmountPaise) // basic price
+	assert.Equal(t, 60, entry1.MinutesDelta)          // basic minutes
 
 	// Idempotent replay returns the same entry, no new row.
 	entry2, err := svc.Purchase(context.Background(), credit.PurchaseInput{

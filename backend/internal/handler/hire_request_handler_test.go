@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -49,8 +50,8 @@ func TestHireStatusTransitions_Valid(t *testing.T) {
 		{"confirmed", "cancelled", true},
 
 		// Rejected transitions
-		{"sent", "confirmed", false},   // must go through accepted
-		{"sent", "completed", false},   // must go through accepted → confirmed
+		{"sent", "confirmed", false},    // must go through accepted
+		{"sent", "completed", false},    // must go through accepted → confirmed
 		{"declined", "accepted", false}, // terminal
 		{"completed", "cancelled", false},
 		{"cancelled", "sent", false},

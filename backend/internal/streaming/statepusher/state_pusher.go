@@ -71,9 +71,9 @@ type subscriber struct {
 // ringBuffer is a fixed-size FIFO of recent events used to honour
 // Last-Event-ID replays after reconnect.
 type ringBuffer struct {
-	mu     sync.Mutex
-	buf    []StateEvent
-	size   int
+	mu   sync.Mutex
+	buf  []StateEvent
+	size int
 }
 
 func newRingBuffer(size int) *ringBuffer {

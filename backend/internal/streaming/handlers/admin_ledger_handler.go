@@ -26,9 +26,9 @@ import (
 // `X-Audit-Action: streaming.ledger.export_csv` header + best-effort
 // admin_audit row per export.
 type AdminLedgerHandler struct {
-	db       *pgxpool.Pool
-	querier  ledger.Querier      // test injection; nil ⇒ built from db
-	csvOpts  ledger.StreamCSVOptions
+	db      *pgxpool.Pool
+	querier ledger.Querier // test injection; nil ⇒ built from db
+	csvOpts ledger.StreamCSVOptions
 }
 
 // NewAdminLedgerHandler wires the handler. Signature preserved for main.go.

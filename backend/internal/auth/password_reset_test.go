@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // Tests for F-001 (audit 2026-04-10): password reset must enforce exact,

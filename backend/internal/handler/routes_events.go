@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rawdrive/backend/internal/auth"
 )
 

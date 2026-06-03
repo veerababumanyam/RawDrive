@@ -56,14 +56,14 @@ func (f *fakeCFClient) Create(_ context.Context, _ map[string]string) (*cf.LiveI
 func (f *fakeCFClient) Update(_ context.Context, _ string, _ cf.LiveInputPatch) (*cf.LiveInput, error) {
 	return f.liveInput, nil
 }
-func (f *fakeCFClient) Disable(_ context.Context, _ string) error    { return nil }
-func (f *fakeCFClient) Delete(_ context.Context, _ string) error     { return nil }
+func (f *fakeCFClient) Disable(_ context.Context, _ string) error { return nil }
+func (f *fakeCFClient) Delete(_ context.Context, _ string) error  { return nil }
 func (f *fakeCFClient) Get(_ context.Context, _ string) (*cf.LiveInput, error) {
 	return f.liveInput, nil
 }
 
 type fakeStreamWriter struct {
-	inserted *StreamCreateInput
+	inserted  *StreamCreateInput
 	insertErr error
 }
 

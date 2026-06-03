@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -22,15 +23,15 @@ func NewAlbumApprovalService(ar *repository.AlbumApprovalRepo) *AlbumApprovalSer
 
 // SubmitApprovalInput holds parameters for creating an album approval.
 type SubmitApprovalInput struct {
-	GalleryID       uuid.UUID
-	SessionID       *uuid.UUID
-	ApprovedByName  string
-	ApprovedByEmail string
+	GalleryID        uuid.UUID
+	SessionID        *uuid.UUID
+	ApprovedByName   string
+	ApprovedByEmail  string
 	ApprovedByUserID *uuid.UUID
-	ConfigSnapshot  map[string]any
-	IPAddress       string
-	UserAgent       string
-	Notes           string
+	ConfigSnapshot   map[string]any
+	IPAddress        string
+	UserAgent        string
+	Notes            string
 }
 
 // SubmitApproval creates an immutable album approval record with a version hash.

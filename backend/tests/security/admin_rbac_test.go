@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // setupAdminRouter creates a minimal admin router with platform-role RBAC middleware.

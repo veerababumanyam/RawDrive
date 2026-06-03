@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/rbac"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/rbac"
 )
 
 // mockPermissionStore simulates RBAC persistence.
@@ -19,10 +20,10 @@ func newMockPermissionStore() *mockPermissionStore {
 	return &mockPermissionStore{
 		roles: map[string]map[string]rbac.Role{
 			"ws-1": {
-				"owner-user":   rbac.RoleOwner,
-				"admin-user":   rbac.RoleAdmin,
-				"editor-user":  rbac.RoleEditor,
-				"viewer-user":  rbac.RoleViewer,
+				"owner-user":  rbac.RoleOwner,
+				"admin-user":  rbac.RoleAdmin,
+				"editor-user": rbac.RoleEditor,
+				"viewer-user": rbac.RoleViewer,
 			},
 			"ws-2": {
 				"owner-user": rbac.RoleViewer, // different role in different workspace

@@ -10,11 +10,12 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/rawdrive/backend/internal/auth"
 	"github.com/rawdrive/backend/internal/logging"
 	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // AdminInviteSender delivers a platform-role invitation email to a

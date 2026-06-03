@@ -11,7 +11,8 @@ import (
 
 // AuthAdapter adapts user.Service to the auth.UserService interface.
 // auth.UserService expects: Create(ctx, email) (string, error)
-//                           FindByEmail(ctx, email) (string, bool, error)
+//
+//	FindByEmail(ctx, email) (string, bool, error)
 type AuthAdapter struct {
 	svc Service
 }
@@ -62,7 +63,7 @@ func (a *AuthAdapter) VerifyPassword(ctx context.Context, email, password string
 	if u.PasswordHash == nil {
 		return "", false, false, errors.New("user has no password set")
 	}
-	
+
 	err = bcrypt.CompareHashAndPassword([]byte(*u.PasswordHash), []byte(password))
 	if err != nil {
 		return "", false, false, nil // password mismatch is not an error, just means no match

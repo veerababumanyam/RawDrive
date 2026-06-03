@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 func newTestJWTService(t *testing.T) auth.JWTService {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
 )

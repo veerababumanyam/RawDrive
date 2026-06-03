@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 // fakeReasoner records the last prompt passed to GenerateText and returns a

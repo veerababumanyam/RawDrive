@@ -139,4 +139,3 @@ func TestPDFService_RenderTemplate_InvalidTemplateReturnsError(t *testing.T) {
 		t.Fatal("expected error for invalid template, got nil")
 	}
 }
-

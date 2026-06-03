@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 func setupTestWorkspaceAndUser(t *testing.T) (wsID, userID uuid.UUID, stateID int) {

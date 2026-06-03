@@ -23,11 +23,11 @@ type GalleryFavorite struct {
 // GalleryFavoritesSummary is the owner-facing aggregation used by the
 // gallery dashboard tile and the upcoming "favorites breakdown" view.
 type GalleryFavoritesSummary struct {
-	GalleryID         uuid.UUID                 `json:"gallery_id"`
-	TotalFavorites    int                       `json:"total_favorites"`     // every heart, all sessions
-	UniqueAssetsCount int                       `json:"unique_assets_count"` // photos that got at least one heart
-	UniqueSessions    int                       `json:"unique_sessions"`     // distinct guest sessions
-	ByAsset           []GalleryFavoriteByAsset  `json:"by_asset"`            // per-asset breakdown, newest interest first
+	GalleryID         uuid.UUID                `json:"gallery_id"`
+	TotalFavorites    int                      `json:"total_favorites"`     // every heart, all sessions
+	UniqueAssetsCount int                      `json:"unique_assets_count"` // photos that got at least one heart
+	UniqueSessions    int                      `json:"unique_sessions"`     // distinct guest sessions
+	ByAsset           []GalleryFavoriteByAsset `json:"by_asset"`            // per-asset breakdown, newest interest first
 }
 
 // GalleryFavoriteByAsset is one row of the per-asset aggregation. The

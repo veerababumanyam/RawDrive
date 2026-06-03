@@ -21,9 +21,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 // fakeBulkAssetRepo captures the arguments of the last call to each

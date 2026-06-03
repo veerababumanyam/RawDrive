@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // Cluster F — OAuth identity hardening regression suite.

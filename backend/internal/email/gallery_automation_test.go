@@ -23,11 +23,11 @@ func TestComposeGalleryAutomation_ReadyCarriesBrandingAndLink(t *testing.T) {
 		t.Errorf("ready subject missing: %s", firstLineWithSubject(msg))
 	}
 	for _, want := range []string{
-		"Lens &amp; Light Studio",                                  // studio name (HTML-escaped)
-		"#aa3322",                                                  // accent applied to the CTA
-		"https://studio.rawdrive.in/g/asha-veer",                   // gallery link
-		"branding/logo",                                            // logo image
-		"Content-Type: text/html",                                  // branded HTML email
+		"Lens &amp; Light Studio",                // studio name (HTML-escaped)
+		"#aa3322",                                // accent applied to the CTA
+		"https://studio.rawdrive.in/g/asha-veer", // gallery link
+		"branding/logo",                          // logo image
+		"Content-Type: text/html",                // branded HTML email
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("ready email missing %q", want)

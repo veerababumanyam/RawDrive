@@ -118,7 +118,11 @@ func (r *ProofingCommentRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *ProofingCommentRepo) scanComments(rows interface{ Next() bool; Scan(...interface{}) error; Err() error }) ([]ProofingComment, error) {
+func (r *ProofingCommentRepo) scanComments(rows interface {
+	Next() bool
+	Scan(...interface{}) error
+	Err() error
+}) ([]ProofingComment, error) {
 	var comments []ProofingComment
 	for rows.Next() {
 		var c ProofingComment

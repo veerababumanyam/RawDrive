@@ -21,11 +21,11 @@ type fakeClock struct {
 }
 
 type fakeTicker struct {
-	c        chan time.Time
-	d        time.Duration
-	last     time.Time
-	stopped  bool
-	parent   *fakeClock
+	c       chan time.Time
+	d       time.Duration
+	last    time.Time
+	stopped bool
+	parent  *fakeClock
 }
 
 func newFakeClock(start time.Time) *fakeClock { return &fakeClock{now: start} }

@@ -24,9 +24,9 @@ var ErrStreamingDisabled = errors.New("cf: streaming is disabled; no CF_STREAM_A
 
 // Config is the Cloudflare Stream runtime configuration.
 type Config struct {
-	AccountID      string
-	APIToken       string
-	SigningKey     string
+	AccountID  string
+	APIToken   string
+	SigningKey string
 	// SigningKeyID (kid) identifies the signing-key generation so we can
 	// rotate keys without invalidating in-flight tokens. Sourced from
 	// platform_settings.streaming.cf_signing_key_id; signed_url.go falls

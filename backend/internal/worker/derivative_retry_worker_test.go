@@ -14,13 +14,13 @@ import (
 // for retry and (b) park exhausted ones in the dead-letter state.
 
 type stubDerivStore struct {
-	mu              sync.Mutex
-	requeueCalls    []retryArgs
-	markCalls       []int
-	requeueN        int64
-	markN           int64
-	requeueErr      error
-	markErr         error
+	mu           sync.Mutex
+	requeueCalls []retryArgs
+	markCalls    []int
+	requeueN     int64
+	markN        int64
+	requeueErr   error
+	markErr      error
 }
 
 type retryArgs struct {

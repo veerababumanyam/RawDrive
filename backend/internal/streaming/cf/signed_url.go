@@ -33,7 +33,7 @@ func NewSignedURLService(cfg *Config) *SignedURLService {
 
 // PlaybackClaims is the JWT body for a signed playback URL.
 type PlaybackClaims struct {
-	Sub           string   `json:"sub"`           // videoID or liveInputUID
+	Sub           string   `json:"sub"` // videoID or liveInputUID
 	AllowedOrigin []string `json:"ao,omitempty"`
 	jwt.RegisteredClaims
 }
@@ -53,9 +53,9 @@ type PlaybackURLResponse struct {
 }
 
 var (
-	ErrNoSigningKey      = errors.New("signed-url: signing key not configured")
-	ErrOriginNotAllowed  = errors.New("signed-url: origin not in allow-list")
-	ErrMissingVideoID    = errors.New("signed-url: video id required")
+	ErrNoSigningKey     = errors.New("signed-url: signing key not configured")
+	ErrOriginNotAllowed = errors.New("signed-url: origin not in allow-list")
+	ErrMissingVideoID   = errors.New("signed-url: video id required")
 )
 
 // Sign mints a signed playback URL. It performs no I/O.

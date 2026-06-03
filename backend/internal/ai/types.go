@@ -145,12 +145,12 @@ type DuplicateGroup struct {
 
 // DuplicateGroupMember is one member of a duplicate group.
 type DuplicateGroupMember struct {
-	ID              uuid.UUID     `json:"id"`
-	GroupID         uuid.UUID     `json:"group_id"`
-	AssetID         uuid.UUID     `json:"asset_id"`
-	SimilarityScore float64       `json:"similarity_score"`
-	IsRepresentative bool         `json:"is_representative"`
-	Quality         *QualityScore `json:"quality,omitempty"`
+	ID               uuid.UUID     `json:"id"`
+	GroupID          uuid.UUID     `json:"group_id"`
+	AssetID          uuid.UUID     `json:"asset_id"`
+	SimilarityScore  float64       `json:"similarity_score"`
+	IsRepresentative bool          `json:"is_representative"`
+	Quality          *QualityScore `json:"quality,omitempty"`
 }
 
 // SpendSummary is the aggregate AI spend for a workspace in a period.

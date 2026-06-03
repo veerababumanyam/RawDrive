@@ -26,9 +26,9 @@ type SettingsLookup interface {
 }
 
 type flagValue struct {
-	Enabled            bool        `json:"enabled"`
-	Rollout            *int        `json:"rollout,omitempty"`
-	EnabledWorkspaces  []uuid.UUID `json:"enabledWorkspaces,omitempty"`
+	Enabled           bool        `json:"enabled"`
+	Rollout           *int        `json:"rollout,omitempty"`
+	EnabledWorkspaces []uuid.UUID `json:"enabledWorkspaces,omitempty"`
 }
 
 // StreamingCommercialFlag evaluates the F-014 rollout flag per workspace.

@@ -82,12 +82,12 @@ var ErrBusinessProfileSlugInvalid = errors.New("business profile slug is not a v
 // sanitizeBusinessProfileSlug takes a workspace name and produces a DNS-safe
 // label. Rules mirror migration 121's backfill SQL exactly:
 //
-//   1. lowercase
-//   2. keep [a-z0-9], coerce spaces and hyphens to single hyphen separator
-//   3. drop everything else
-//   4. collapse runs of hyphens
-//   5. trim hyphens from both ends
-//   6. truncate to maxLen, then trim trailing hyphens if cutoff hit one
+//  1. lowercase
+//  2. keep [a-z0-9], coerce spaces and hyphens to single hyphen separator
+//  3. drop everything else
+//  4. collapse runs of hyphens
+//  5. trim hyphens from both ends
+//  6. truncate to maxLen, then trim trailing hyphens if cutoff hit one
 //
 // Returns "" when the input has no usable characters (caller should fall
 // back to "studio").

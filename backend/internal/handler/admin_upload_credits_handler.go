@@ -182,9 +182,10 @@ type adminBalanceResponse struct {
 // 400 — malformed workspace id (not a UUID)
 // 503 — balance reader not wired (test/bootstrap safety)
 // 500 — provider error; admins must see errors truthfully instead of the
-//       user-pill fallback-to-zero, otherwise they could grant credits on
-//       the assumption the workspace has none when the lookup actually
-//       failed.
+//
+//	user-pill fallback-to-zero, otherwise they could grant credits on
+//	the assumption the workspace has none when the lookup actually
+//	failed.
 func (h *AdminUploadCreditsHandler) Balance(w http.ResponseWriter, r *http.Request) {
 	if h.BalanceReader == nil {
 		http.Error(w, `{"error":"balance_reader_unavailable"}`, http.StatusServiceUnavailable)

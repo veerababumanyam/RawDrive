@@ -77,7 +77,7 @@ type phonePePayResponse struct {
 		MerchantID            string `json:"merchantId"`
 		MerchantTransactionID string `json:"merchantTransactionId"`
 		InstrumentResponse    struct {
-			Type        string `json:"type"`
+			Type         string `json:"type"`
 			RedirectInfo struct {
 				URL    string `json:"url"`
 				Method string `json:"method"`
@@ -148,7 +148,8 @@ func (p *PhonePeProvider) InitiateOrder(ctx context.Context, in InitiateInput) (
 }
 
 // VerifyWebhookSignature checks the X-VERIFY header.
-//   X-VERIFY = SHA256(base64(rawBody) + saltKey) + "###" + saltIndex
+//
+//	X-VERIFY = SHA256(base64(rawBody) + saltKey) + "###" + saltIndex
 func (p *PhonePeProvider) VerifyWebhookSignature(rawBody []byte, headers map[string]string) error {
 	xVerify := strings.TrimSpace(getHeaderInsensitive(headers, "X-VERIFY"))
 	if xVerify == "" {

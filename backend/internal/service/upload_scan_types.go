@@ -69,10 +69,10 @@ const (
 // by a local scanner. Findings are passed to the client for display and
 // persisted on the asset for later audit.
 type UploadScanFinding struct {
-	Category string `json:"category"`           // e.g. "appended_payload", "metadata_budget", "polyglot_signature"
-	Severity string `json:"severity"`           // "low" | "medium" | "high"
-	Offset   *int64 `json:"offset,omitempty"`   // optional byte offset where the violation was detected
-	Message  string `json:"message"`            // human-readable explanation
+	Category string `json:"category"`         // e.g. "appended_payload", "metadata_budget", "polyglot_signature"
+	Severity string `json:"severity"`         // "low" | "medium" | "high"
+	Offset   *int64 `json:"offset,omitempty"` // optional byte offset where the violation was detected
+	Message  string `json:"message"`          // human-readable explanation
 }
 
 // UploadScanDimensions is an optional image dimensions block included when
@@ -90,18 +90,18 @@ type UploadScanDimensions struct {
 // Field order matches the JSON schema defined in feature-architecture-delta.md
 // §4.2 so canonical JSON (sorted keys) signing stays stable across clients.
 type UploadScanManifest struct {
-	PolicyVersion  string                 `json:"policy_version"`
-	Engine         ScanEngine             `json:"engine"`
-	EngineVersion  string                 `json:"engine_version"`
-	FileName       string                 `json:"file_name"`
-	DeclaredType   string                 `json:"declared_type"`
-	DetectedFormat string                 `json:"detected_format"`
-	SHA256         string                 `json:"sha256"`
-	SizeBytes      int64                  `json:"size_bytes"`
-	Decision       string                 `json:"decision"` // "pass" | "block" | "needs_desktop_scan"
-	RiskScore      float64                `json:"risk_score"`
-	Findings       []UploadScanFinding    `json:"findings"`
-	Dimensions     *UploadScanDimensions  `json:"dimensions,omitempty"`
+	PolicyVersion  string                `json:"policy_version"`
+	Engine         ScanEngine            `json:"engine"`
+	EngineVersion  string                `json:"engine_version"`
+	FileName       string                `json:"file_name"`
+	DeclaredType   string                `json:"declared_type"`
+	DetectedFormat string                `json:"detected_format"`
+	SHA256         string                `json:"sha256"`
+	SizeBytes      int64                 `json:"size_bytes"`
+	Decision       string                `json:"decision"` // "pass" | "block" | "needs_desktop_scan"
+	RiskScore      float64               `json:"risk_score"`
+	Findings       []UploadScanFinding   `json:"findings"`
+	Dimensions     *UploadScanDimensions `json:"dimensions,omitempty"`
 
 	// Desktop-only fields (absent for browser-worker manifests).
 	DeviceID *uuid.UUID `json:"device_id,omitempty"`

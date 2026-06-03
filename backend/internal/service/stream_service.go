@@ -232,7 +232,7 @@ type cfRecordingConfig struct {
 type cfLiveInputResponse struct {
 	Success bool `json:"success"`
 	Result  struct {
-		UID  string `json:"uid"`
+		UID   string `json:"uid"`
 		RTMPS struct {
 			URL       string `json:"url"`
 			StreamKey string `json:"streamKey"`

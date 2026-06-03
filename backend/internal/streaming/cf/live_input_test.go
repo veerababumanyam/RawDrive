@@ -18,8 +18,8 @@ import (
 func newTestClient(t *testing.T, srv *httptest.Server) (*cfLiveInputClient, *int32) {
 	t.Helper()
 	cfg := &Config{
-		AccountID: "test-account",
-		APIToken:  "test-token-from-config",
+		AccountID:      "test-account",
+		APIToken:       "test-token-from-config",
 		AllowedOrigins: []string{"https://studio.example"},
 	}
 	hc := NewHTTPClient(cfg, srv.URL)

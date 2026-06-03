@@ -27,12 +27,12 @@ func TestStreamLifecycle_TransitionTable(t *testing.T) {
 	rejected := []struct {
 		from, to lifecycle.State
 	}{
-		{lifecycle.StateScheduled, lifecycle.StateLive},     // skips waiting
-		{lifecycle.StateLive, lifecycle.StateScheduled},     // cannot rewind
-		{lifecycle.StateEnded, lifecycle.StateLive},         // cannot re-live
-		{lifecycle.StateReplay, lifecycle.StateLive},        // cannot re-live
-		{lifecycle.StateWaiting, lifecycle.StateScheduled},  // cannot rewind
-		{lifecycle.StateLive, lifecycle.StateLive},          // no self
+		{lifecycle.StateScheduled, lifecycle.StateLive},    // skips waiting
+		{lifecycle.StateLive, lifecycle.StateScheduled},    // cannot rewind
+		{lifecycle.StateEnded, lifecycle.StateLive},        // cannot re-live
+		{lifecycle.StateReplay, lifecycle.StateLive},       // cannot re-live
+		{lifecycle.StateWaiting, lifecycle.StateScheduled}, // cannot rewind
+		{lifecycle.StateLive, lifecycle.StateLive},         // no self
 	}
 	for _, tc := range rejected {
 		if err := lifecycle.Transition(tc.from, tc.to); err == nil {

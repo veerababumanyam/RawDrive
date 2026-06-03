@@ -13,11 +13,11 @@ import (
 // ---- fakes ------------------------------------------------------------------
 
 type fakeChatRepo struct {
-	mu       sync.Mutex
-	remaining int            // rows that match the cutoff
-	lastCut  time.Time
-	calls    int
-	err      error
+	mu        sync.Mutex
+	remaining int // rows that match the cutoff
+	lastCut   time.Time
+	calls     int
+	err       error
 }
 
 func (r *fakeChatRepo) PurgeChatBefore(_ context.Context, cutoff time.Time, batch int, dryRun bool) (int, error) {

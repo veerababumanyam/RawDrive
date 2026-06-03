@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 func TestDashboardHandler_GetGalleryActivity_Unauthorized(t *testing.T) {

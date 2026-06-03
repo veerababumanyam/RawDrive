@@ -123,9 +123,10 @@ func (r *AdminAnalyticsRepo) CountUsersCreatedSince(ctx context.Context, since t
 // honest about what the platform actually offers today.
 //
 // Column sources:
-//   galleries.created_by → distinct user count for "Client Galleries"
-//   gear_listings.user_id → distinct user count for "Gear Marketplace"
-//   messages.sender_id → distinct user count for "Messaging"
+//
+//	galleries.created_by → distinct user count for "Client Galleries"
+//	gear_listings.user_id → distinct user count for "Gear Marketplace"
+//	messages.sender_id → distinct user count for "Messaging"
 func (r *AdminAnalyticsRepo) GetFeatureAdoption(ctx context.Context) ([]AnalyticsFeatureAdoption, error) {
 	rows, err := r.pool.Query(ctx, `
 		WITH total_users AS (

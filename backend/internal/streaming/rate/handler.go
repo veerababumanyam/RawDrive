@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/middleware"
 )
 
@@ -29,12 +30,12 @@ func RegisterAdminStreamingRoutes(r chi.Router, h *Handler) {
 		sr.Use(middleware.RequireAuth)
 		sr.Use(middleware.RequirePlatformRole("super_admin"))
 
-		sr.Get("/packages",                h.ListPackages)
-		sr.Post("/packages",               h.CreatePackage)
-		sr.Get("/packages/{id}",           h.GetPackage)
-		sr.Patch("/packages/{id}",         h.PatchPackage)
-		sr.Get("/packages/{id}/rates",     h.ListRateCards)
-		sr.Post("/packages/{id}/rate",     h.CreateRateCard)
+		sr.Get("/packages", h.ListPackages)
+		sr.Post("/packages", h.CreatePackage)
+		sr.Get("/packages/{id}", h.GetPackage)
+		sr.Patch("/packages/{id}", h.PatchPackage)
+		sr.Get("/packages/{id}/rates", h.ListRateCards)
+		sr.Post("/packages/{id}/rate", h.CreateRateCard)
 	})
 }
 

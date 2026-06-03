@@ -31,13 +31,13 @@ var EntryTypeWhitelist = map[string]struct{}{
 
 // Errors surfaced by Parse. Handlers map these to 400 codes.
 var (
-	ErrInvalidWorkspace  = errors.New("ledger: invalid_workspace_id")
-	ErrInvalidActor      = errors.New("ledger: invalid_actor_id")
-	ErrInvalidEntryType  = errors.New("ledger: invalid_entry_type")
-	ErrInvalidDateRange  = errors.New("ledger: invalid_date_range")
-	ErrInvalidCursor     = errors.New("ledger: invalid_cursor")
-	ErrInvalidLimit      = errors.New("ledger: invalid_limit")
-	ErrSearchTooLong     = errors.New("ledger: search_too_long")
+	ErrInvalidWorkspace = errors.New("ledger: invalid_workspace_id")
+	ErrInvalidActor     = errors.New("ledger: invalid_actor_id")
+	ErrInvalidEntryType = errors.New("ledger: invalid_entry_type")
+	ErrInvalidDateRange = errors.New("ledger: invalid_date_range")
+	ErrInvalidCursor    = errors.New("ledger: invalid_cursor")
+	ErrInvalidLimit     = errors.New("ledger: invalid_limit")
+	ErrSearchTooLong    = errors.New("ledger: search_too_long")
 )
 
 // Filter is the parsed, validated query surface. All fields are optional

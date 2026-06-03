@@ -13,9 +13,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // GalleryAccessService handles gallery access control: passwords, PINs, access modes, and audit logging.

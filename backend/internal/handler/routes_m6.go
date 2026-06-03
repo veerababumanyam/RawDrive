@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -13,16 +14,16 @@ import (
 // AuditLogSvc and CredentialsSender are optional (nil-safe). When provided,
 // admin mutations emit audit rows and dealer approval sends credentials email.
 type M6Dependencies struct {
-	DB              *pgxpool.Pool
-	DealerRepo      *repository.DealerRepo
-	AdminUserRepo   *repository.AdminUserRepo  // for dealer user account creation
-	CouponRepo      *repository.CouponRepo
-	MarginRepo      *repository.MarginRepo
-	PayoutRepo      *repository.PayoutRepo
-	KycDocumentRepo *repository.KycDocumentRepo
-	SubDealerRepo   *repository.SubDealerRepo
-	DealerAnalytics *service.DealerAnalyticsService
-	AuditLogSvc     *service.AuditLogService
+	DB                *pgxpool.Pool
+	DealerRepo        *repository.DealerRepo
+	AdminUserRepo     *repository.AdminUserRepo // for dealer user account creation
+	CouponRepo        *repository.CouponRepo
+	MarginRepo        *repository.MarginRepo
+	PayoutRepo        *repository.PayoutRepo
+	KycDocumentRepo   *repository.KycDocumentRepo
+	SubDealerRepo     *repository.SubDealerRepo
+	DealerAnalytics   *service.DealerAnalyticsService
+	AuditLogSvc       *service.AuditLogService
 	CredentialsSender service.DealerCredentialsSender // optional email sender
 	FrontendURL       string
 }

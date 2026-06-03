@@ -10,8 +10,8 @@ import (
 )
 
 type CouponHandler struct {
-	repo      *repository.CouponRepo
-	svc       *service.CouponService
+	repo       *repository.CouponRepo
+	svc        *service.CouponService
 	dealerRepo *repository.DealerRepo
 }
 

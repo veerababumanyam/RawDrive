@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // F-007 (M17 hardening wave 1): mfa_verified JWT claim round-trip tests.

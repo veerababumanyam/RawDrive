@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/repository"
 )

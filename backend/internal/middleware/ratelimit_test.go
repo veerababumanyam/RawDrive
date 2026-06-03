@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rawdrive/backend/internal/middleware"
 )
 
 func TestRateLimit_UnderLimit(t *testing.T) {

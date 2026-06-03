@@ -27,11 +27,11 @@ type AnalyticsEngagement struct {
 // timeseries is a list of daily buckets with cumulative rollup; total
 // users and new-users windows are scalar headline cards.
 type AnalyticsGrowth struct {
-	TotalUsers     int64                                `json:"total_users"`
-	NewUsersToday  int64                                `json:"new_users_today"`
-	NewUsersWeek   int64                                `json:"new_users_week"`
-	NewUsersMonth  int64                                `json:"new_users_month"`
-	Timeseries     []repository.GrowthTimeSeriesPoint   `json:"timeseries"`
+	TotalUsers    int64                              `json:"total_users"`
+	NewUsersToday int64                              `json:"new_users_today"`
+	NewUsersWeek  int64                              `json:"new_users_week"`
+	NewUsersMonth int64                              `json:"new_users_month"`
+	Timeseries    []repository.GrowthTimeSeriesPoint `json:"timeseries"`
 }
 
 type AdminAnalyticsService struct {

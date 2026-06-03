@@ -15,14 +15,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
 // Banner validation errors.
 var (
-	ErrBannerTitleRequired  = errors.New("banner: title required")
-	ErrBannerInvalidWindow  = errors.New("banner: active_until must be after active_from")
-	ErrBannerNotFound       = errors.New("banner: not found")
+	ErrBannerTitleRequired = errors.New("banner: title required")
+	ErrBannerInvalidWindow = errors.New("banner: active_until must be after active_from")
+	ErrBannerNotFound      = errors.New("banner: not found")
 )
 
 // BannerService owns gallery banner CRUD.

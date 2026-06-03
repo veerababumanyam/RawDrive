@@ -78,7 +78,7 @@ func TestLoadConfig_ParsesAllowedOrigins(t *testing.T) {
 	t.Setenv("CF_STREAM_API_TOKEN", "t")
 
 	store := newStore(map[string]string{
-		"streaming:cf_api_token":   "t",
+		"streaming:cf_api_token":    "t",
 		"streaming:allowed_origins": "https://a.example, https://b.example,https://c.example",
 	})
 

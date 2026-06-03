@@ -88,7 +88,7 @@ func (r *PgRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
 }
 
 // nilStrVal dereferences a *string for SQL params; returns "" when nil so
-// NULLIF($n, '') coerces it to SQL NULL.
+// NULLIF($n, ”) coerces it to SQL NULL.
 func nilStrVal(s *string) string {
 	if s == nil {
 		return ""

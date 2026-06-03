@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
 )
 
 // S5-G1 (audit HIGH): impersonation JWT claim round-trip tests.

@@ -11,21 +11,21 @@ import (
 
 // VideoAsset represents a video asset with transcoding metadata.
 type VideoAsset struct {
-	ID              uuid.UUID  `json:"id"`
-	AssetID         uuid.UUID  `json:"asset_id"`
-	WorkspaceID     uuid.UUID  `json:"workspace_id"`
-	Status          string     `json:"status"`
-	DurationSeconds *int       `json:"duration_seconds"`
-	Codec           *string    `json:"codec"`
-	Resolution      *string    `json:"resolution"`
-	FileSizeBytes   *int64     `json:"file_size_bytes"`
-	Qualities       string     `json:"qualities"`
-	ThumbnailURLs   string     `json:"thumbnail_urls"`
-	CFVideoUID      *string    `json:"cf_video_uid"`
-	CFPlaybackURL   *string    `json:"cf_playback_url"`
-	ErrorMessage    *string    `json:"error_message"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	AssetID         uuid.UUID `json:"asset_id"`
+	WorkspaceID     uuid.UUID `json:"workspace_id"`
+	Status          string    `json:"status"`
+	DurationSeconds *int      `json:"duration_seconds"`
+	Codec           *string   `json:"codec"`
+	Resolution      *string   `json:"resolution"`
+	FileSizeBytes   *int64    `json:"file_size_bytes"`
+	Qualities       string    `json:"qualities"`
+	ThumbnailURLs   string    `json:"thumbnail_urls"`
+	CFVideoUID      *string   `json:"cf_video_uid"`
+	CFPlaybackURL   *string   `json:"cf_playback_url"`
+	ErrorMessage    *string   `json:"error_message"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // VideoRepo handles video asset database operations.

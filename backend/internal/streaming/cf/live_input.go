@@ -8,11 +8,11 @@ import (
 // LiveInput represents a Cloudflare Stream live input record.
 type LiveInput struct {
 	UID        string            `json:"uid"`
-	StreamKey  string            `json:"streamKey"`  // RTMPS key — SECRET, never log
+	StreamKey  string            `json:"streamKey"` // RTMPS key — SECRET, never log
 	RTMPSURL   string            `json:"rtmpsUrl"`
 	SRTURL     string            `json:"srtUrl"`
 	SRTPasskey string            `json:"srtPasskey"` // SECRET
-	Status     string            `json:"status"` // "idle" | "connected" | "disconnected"
+	Status     string            `json:"status"`     // "idle" | "connected" | "disconnected"
 	Created    time.Time         `json:"created"`
 	Modified   time.Time         `json:"modified"`
 	Meta       map[string]string `json:"meta,omitempty"`
@@ -38,10 +38,10 @@ type createBody struct {
 }
 
 type RecordingConfig struct {
-	Mode                string   `json:"mode,omitempty"` // "automatic" | "off"
-	RequireSignedURLs   *bool    `json:"requireSignedURLs,omitempty"`
-	AllowedOrigins      []string `json:"allowedOrigins,omitempty"`
-	TimeoutSeconds      int      `json:"timeoutSeconds,omitempty"`
+	Mode              string   `json:"mode,omitempty"` // "automatic" | "off"
+	RequireSignedURLs *bool    `json:"requireSignedURLs,omitempty"`
+	AllowedOrigins    []string `json:"allowedOrigins,omitempty"`
+	TimeoutSeconds    int      `json:"timeoutSeconds,omitempty"`
 }
 
 // LiveInputClient is the contract consumed by stream_service and the

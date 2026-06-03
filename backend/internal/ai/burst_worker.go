@@ -9,8 +9,8 @@ import (
 )
 
 type BurstWorker struct {
-	jobRepo  *JobRepo
-	burstSvc *BurstService
+	jobRepo      *JobRepo
+	burstSvc     *BurstService
 	pollInterval time.Duration
 	stopCh       chan struct{}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -45,14 +46,14 @@ func NewMarketplaceService(
 // ──────────────────────── Sentinel Errors ────────────────────────
 
 var (
-	ErrMarketplaceRepoNotWired   = errors.New("marketplace repository not wired")
-	ErrHireRequestInvalidInput   = errors.New("invalid hire request input")
-	ErrHireRequestNotFound       = errors.New("hire request not found")
+	ErrMarketplaceRepoNotWired    = errors.New("marketplace repository not wired")
+	ErrHireRequestInvalidInput    = errors.New("invalid hire request input")
+	ErrHireRequestNotFound        = errors.New("hire request not found")
 	ErrHireStatusTransitionDenied = errors.New("hire request status transition not allowed")
-	ErrReviewInvalidRating       = errors.New("review rating must be between 1 and 5")
-	ErrReviewInvalidInput        = errors.New("invalid review input")
-	ErrBookingDateConflict       = errors.New("booking date range conflicts with an existing booking")
-	ErrBookingInvalidRange       = errors.New("booking end date must be on or after start date")
+	ErrReviewInvalidRating        = errors.New("review rating must be between 1 and 5")
+	ErrReviewInvalidInput         = errors.New("invalid review input")
+	ErrBookingDateConflict        = errors.New("booking date range conflicts with an existing booking")
+	ErrBookingInvalidRange        = errors.New("booking end date must be on or after start date")
 )
 
 // ──────────────────────── Hire Requests ────────────────────────

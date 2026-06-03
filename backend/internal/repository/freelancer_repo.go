@@ -212,23 +212,23 @@ func (r *FreelancerRepo) List(ctx context.Context, filter FreelancerFilter) ([]F
 
 // MarketplaceInquiry represents an inquiry sent to a freelancer or gear owner.
 type MarketplaceInquiry struct {
-	ID              uuid.UUID  `json:"id"`
-	InquiryType     string     `json:"type"`
-	ListingID       uuid.UUID  `json:"listing_id"`
-	FromUserID      uuid.UUID  `json:"from_user_id"`
-	ToUserID        uuid.UUID  `json:"to_user_id"`
-	Message         string     `json:"message"`
-	EventDate       *time.Time `json:"event_date"`
-	DurationDays    *int       `json:"duration_days"`
-	Status          string     `json:"status"`
-	ReplyMessage    *string    `json:"reply_message,omitempty"`
+	ID           uuid.UUID  `json:"id"`
+	InquiryType  string     `json:"type"`
+	ListingID    uuid.UUID  `json:"listing_id"`
+	FromUserID   uuid.UUID  `json:"from_user_id"`
+	ToUserID     uuid.UUID  `json:"to_user_id"`
+	Message      string     `json:"message"`
+	EventDate    *time.Time `json:"event_date"`
+	DurationDays *int       `json:"duration_days"`
+	Status       string     `json:"status"`
+	ReplyMessage *string    `json:"reply_message,omitempty"`
 	// Populated by ListInquiries JOIN — not stored in the inquiries table.
-	FromUserName  *string `json:"from_user_name,omitempty"`
-	FromUserEmail *string `json:"from_user_email,omitempty"`
-	ToUserName    *string `json:"to_user_name,omitempty"`
-	ToUserEmail   *string `json:"to_user_email,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	FromUserName  *string   `json:"from_user_name,omitempty"`
+	FromUserEmail *string   `json:"from_user_email,omitempty"`
+	ToUserName    *string   `json:"to_user_name,omitempty"`
+	ToUserEmail   *string   `json:"to_user_email,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (r *FreelancerRepo) CreateInquiry(ctx context.Context, inq *MarketplaceInquiry) error {
@@ -453,13 +453,13 @@ func (r *FreelancerRepo) ListHireRequestsByFreelancer(ctx context.Context, freel
 
 // FreelancerReview represents a review for a freelancer.
 type FreelancerReview struct {
-	ID         uuid.UUID `json:"id"`
-	ListingID  uuid.UUID `json:"listing_id"`
-	ReviewerID uuid.UUID `json:"reviewer_id"`
+	ID         uuid.UUID  `json:"id"`
+	ListingID  uuid.UUID  `json:"listing_id"`
+	ReviewerID uuid.UUID  `json:"reviewer_id"`
 	BookingID  *uuid.UUID `json:"booking_id"`
-	Rating     int       `json:"rating"`
-	ReviewText *string   `json:"review_text"`
-	CreatedAt  time.Time `json:"created_at"`
+	Rating     int        `json:"rating"`
+	ReviewText *string    `json:"review_text"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 func (r *FreelancerRepo) CreateReview(ctx context.Context, rev *FreelancerReview) error {

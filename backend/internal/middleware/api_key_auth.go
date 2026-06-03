@@ -162,4 +162,3 @@ func extractBearerOrAPIKey(header string) (string, bool) {
 	}
 	return token, true
 }
-

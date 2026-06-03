@@ -8,9 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/handler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/handler"
 )
 
 // stubStatesRepo is an in-memory StatesRepo that returns whatever rows were
@@ -18,7 +19,7 @@ import (
 // that the repo returns already-sorted rows, so the test supplies pre-sorted
 // fixtures to exercise that path.
 type stubStatesRepo struct {
-	rows   []handler.State
+	rows     []handler.State
 	failWith error
 }
 

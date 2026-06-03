@@ -15,9 +15,9 @@ import (
 // refunded back to the balance instead of permanently double-charging.
 
 type stubExpiry struct {
-	mu       sync.Mutex
-	calls    []time.Duration
-	returnN  int
+	mu        sync.Mutex
+	calls     []time.Duration
+	returnN   int
 	returnErr error
 }
 

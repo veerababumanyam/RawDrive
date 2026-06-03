@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"github.com/rawdrive/backend/internal/repository"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ShareLinkService handles share link business logic.

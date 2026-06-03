@@ -36,9 +36,9 @@ import (
 //     aggressively inlines factory calls, which attributes the
 //     returned closure to the call site. Observed runtime names for
 //     JWTAuth closures include:
-//       ".../middleware.JWTAuth.func1"                          (un-inlined)
-//       "main.main.JWTAuth.func4"                               (inlined into main)
-//       ".../middleware.TestXxx.JWTAuth.func1"                  (inlined into a test)
+//     ".../middleware.JWTAuth.func1"                          (un-inlined)
+//     "main.main.JWTAuth.func4"                               (inlined into main)
+//     ".../middleware.TestXxx.JWTAuth.func1"                  (inlined into a test)
 //     All three share the substring "JWTAuth.func", which is a
 //     Go-specific naming convention for closures returned from a
 //     function called JWTAuth. Matching on that substring catches

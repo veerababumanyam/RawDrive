@@ -420,4 +420,3 @@ func (r *ModerationRepo) ScreenContent(ctx context.Context, contentType, text st
 	}
 	return false, nil
 }
-

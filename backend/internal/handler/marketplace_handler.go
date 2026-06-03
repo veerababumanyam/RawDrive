@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 )
@@ -203,9 +204,9 @@ func (h *MarketplaceHandler) UpdateFreelancerListing(w http.ResponseWriter, r *h
 }
 
 type createInquiryRequest struct {
-	Type       string `json:"type"`
-	ListingID  string `json:"listing_id"`
-	Message    string `json:"message"`
+	Type      string `json:"type"`
+	ListingID string `json:"listing_id"`
+	Message   string `json:"message"`
 }
 
 // ─── Freelancer availability ──────────────────────────────────────────────

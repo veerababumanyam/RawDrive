@@ -7,10 +7,11 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/rawdrive/backend/internal/auth"
-	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/auth"
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 // ──────────────────────── Constructor ────────────────────────

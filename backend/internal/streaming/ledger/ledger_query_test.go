@@ -19,14 +19,14 @@ import (
 // --- fake iterator / querier ---------------------------------------------
 
 type fakeRow struct {
-	id, ws                         uuid.UUID
-	entryType                      string
-	amount                         int64
-	minutes                        int32
+	id, ws                        uuid.UUID
+	entryType                     string
+	amount                        int64
+	minutes                       int32
 	purchase, reservation, stream *uuid.UUID
-	idem                           string
-	createdBy                      *uuid.UUID
-	createdAt                      time.Time
+	idem                          string
+	createdBy                     *uuid.UUID
+	createdAt                     time.Time
 }
 
 type fakeIter struct {

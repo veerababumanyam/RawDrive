@@ -76,14 +76,14 @@ type CreateRateCardInput struct {
 
 // Errors.
 var (
-	ErrInvalidTier           = errors.New("rate: tier must be basic, pro, or enterprise")
-	ErrNonPositiveMinutes    = errors.New("rate: minutes must be > 0")
-	ErrNonPositiveViewers    = errors.New("rate: max_concurrent_viewers must be > 0")
-	ErrNonPositiveTTL        = errors.New("rate: replay_ttl_days must be > 0")
-	ErrNonPositivePrice      = errors.New("rate: price_paise must be >= 0")
-	ErrNonPositiveRate       = errors.New("rate: base/overage rate must be > 0")
-	ErrEffectiveFromPast     = errors.New("rate: effective_from must be in the future")
-	ErrPackageNotFound       = errors.New("rate: package not found")
+	ErrInvalidTier            = errors.New("rate: tier must be basic, pro, or enterprise")
+	ErrNonPositiveMinutes     = errors.New("rate: minutes must be > 0")
+	ErrNonPositiveViewers     = errors.New("rate: max_concurrent_viewers must be > 0")
+	ErrNonPositiveTTL         = errors.New("rate: replay_ttl_days must be > 0")
+	ErrNonPositivePrice       = errors.New("rate: price_paise must be >= 0")
+	ErrNonPositiveRate        = errors.New("rate: base/overage rate must be > 0")
+	ErrEffectiveFromPast      = errors.New("rate: effective_from must be in the future")
+	ErrPackageNotFound        = errors.New("rate: package not found")
 	ErrDuplicateEffectiveFrom = errors.New("rate: a rate card already exists at this effective_from")
 )
 

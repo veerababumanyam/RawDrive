@@ -98,7 +98,11 @@ func (r *GalleryAssetAnalyticsRepo) TopDownloaded(ctx context.Context, galleryID
 	return scanAssetAnalytics(rows)
 }
 
-func scanAssetAnalytics(rows interface{ Next() bool; Scan(...any) error; Err() error }) ([]AssetAnalytics, error) {
+func scanAssetAnalytics(rows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}) ([]AssetAnalytics, error) {
 	var results []AssetAnalytics
 	for rows.Next() {
 		var a AssetAnalytics

@@ -141,12 +141,12 @@ func (h *PhonePeUploadWebhookHandler) Handle(w http.ResponseWriter, r *http.Requ
 	}
 
 	resp := map[string]any{
-		"accepted":         true,
-		"ledger_entry_id":  result.LedgerEntry.ID.String(),
-		"workspace_id":     wsID.String(),
-		"package_code":     packageCode,
-		"credits":          result.Credits,
-		"was_replay":       result.WasReplay,
+		"accepted":        true,
+		"ledger_entry_id": result.LedgerEntry.ID.String(),
+		"workspace_id":    wsID.String(),
+		"package_code":    packageCode,
+		"credits":         result.Credits,
+		"was_replay":      result.WasReplay,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)

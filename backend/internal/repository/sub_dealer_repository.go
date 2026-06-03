@@ -9,17 +9,17 @@ import (
 )
 
 type SubDealer struct {
-	ID           uuid.UUID  `json:"id"`
-	DealerID     uuid.UUID  `json:"dealer_id"`
-	StateID      int        `json:"state_id"`
-	Name         string     `json:"name"`
-	Email        string     `json:"email"`
-	Phone        string     `json:"phone"`
-	CityDistrict string     `json:"city_district"`
-	Status       string     `json:"status"`
-	Notes        string     `json:"notes"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID           uuid.UUID `json:"id"`
+	DealerID     uuid.UUID `json:"dealer_id"`
+	StateID      int       `json:"state_id"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	Phone        string    `json:"phone"`
+	CityDistrict string    `json:"city_district"`
+	Status       string    `json:"status"`
+	Notes        string    `json:"notes"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type CreateSubDealerInput struct {

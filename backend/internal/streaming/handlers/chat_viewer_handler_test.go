@@ -24,9 +24,9 @@ import (
 type fakeChatService struct {
 	mu sync.Mutex
 
-	postErr     error
-	postMsg     *repository.ChatMessage
-	postCalls   int
+	postErr   error
+	postMsg   *repository.ChatMessage
+	postCalls int
 
 	reactErr   error
 	reactCalls int

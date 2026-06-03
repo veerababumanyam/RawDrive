@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -56,13 +57,13 @@ var ValidScopes = map[string]bool{
 
 // Errors surfaced to handlers for HTTP status mapping.
 var (
-	ErrAPIKeyInvalidName    = errors.New("api_key: name required")
-	ErrAPIKeyInvalidScope   = errors.New("api_key: invalid scope")
-	ErrAPIKeyMalformed      = errors.New("api_key: malformed")
-	ErrAPIKeyNotFound       = errors.New("api_key: not found")
-	ErrAPIKeyExpired        = errors.New("api_key: expired")
-	ErrAPIKeyRevoked        = errors.New("api_key: revoked")
-	ErrAPIKeyInsufficient   = errors.New("api_key: insufficient scope")
+	ErrAPIKeyInvalidName  = errors.New("api_key: name required")
+	ErrAPIKeyInvalidScope = errors.New("api_key: invalid scope")
+	ErrAPIKeyMalformed    = errors.New("api_key: malformed")
+	ErrAPIKeyNotFound     = errors.New("api_key: not found")
+	ErrAPIKeyExpired      = errors.New("api_key: expired")
+	ErrAPIKeyRevoked      = errors.New("api_key: revoked")
+	ErrAPIKeyInsufficient = errors.New("api_key: insufficient scope")
 )
 
 // APIKeyService handles API key creation, verification, and management.

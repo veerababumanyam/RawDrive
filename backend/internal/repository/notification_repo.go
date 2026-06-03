@@ -27,18 +27,18 @@ type Notification struct {
 
 // NotificationPreference represents per-category notification settings.
 type NotificationPreference struct {
-	ID              uuid.UUID  `json:"id"`
-	UserID          uuid.UUID  `json:"user_id"`
-	Category        string     `json:"category"`
-	EmailEnabled    bool       `json:"email_enabled"`
-	PushEnabled     bool       `json:"push_enabled"`
-	InAppEnabled    bool       `json:"in_app_enabled"`
-	WhatsappEnabled bool       `json:"whatsapp_enabled"`
-	DigestMode      string     `json:"digest_mode"`
-	QuietHoursStart *string    `json:"quiet_hours_start"`
-	QuietHoursEnd   *string    `json:"quiet_hours_end"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	UserID          uuid.UUID `json:"user_id"`
+	Category        string    `json:"category"`
+	EmailEnabled    bool      `json:"email_enabled"`
+	PushEnabled     bool      `json:"push_enabled"`
+	InAppEnabled    bool      `json:"in_app_enabled"`
+	WhatsappEnabled bool      `json:"whatsapp_enabled"`
+	DigestMode      string    `json:"digest_mode"`
+	QuietHoursStart *string   `json:"quiet_hours_start"`
+	QuietHoursEnd   *string   `json:"quiet_hours_end"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type NotificationRepo struct {

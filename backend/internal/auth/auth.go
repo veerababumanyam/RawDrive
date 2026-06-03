@@ -19,9 +19,10 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/rawdrive/backend/internal/passwordpolicy"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
+
+	"github.com/rawdrive/backend/internal/passwordpolicy"
 )
 
 // F-103 (audit 2026-05-30): jwtIssuer / jwtAudience bind every access token this

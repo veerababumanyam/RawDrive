@@ -6,13 +6,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/service"
 )
 
 // ProofingSessionHandler handles proofing session HTTP requests.
 type ProofingSessionHandler struct {
-	sessionSvc *service.ProofingSessionService
-	commentSvc *service.ProofingCommentService
+	sessionSvc  *service.ProofingSessionService
+	commentSvc  *service.ProofingCommentService
 	approvalSvc *service.AlbumApprovalService
 	// galleryResolver enforces tenant ownership on gallery-scoped routes via
 	// guardGalleryWorkspace. Nil-safe: when unwired the guard fails closed.
@@ -261,13 +262,13 @@ func (h *ProofingSessionHandler) CreateComment(w http.ResponseWriter, r *http.Re
 	}
 
 	var input struct {
-		AssetID    string   `json:"asset_id"`
-		ParentID   *string  `json:"parent_id,omitempty"`
-		AuthorName string   `json:"author_name"`
-		AuthorEmail string  `json:"author_email"`
-		Body       string   `json:"body"`
-		PinX       *float64 `json:"pin_x,omitempty"`
-		PinY       *float64 `json:"pin_y,omitempty"`
+		AssetID     string   `json:"asset_id"`
+		ParentID    *string  `json:"parent_id,omitempty"`
+		AuthorName  string   `json:"author_name"`
+		AuthorEmail string   `json:"author_email"`
+		Body        string   `json:"body"`
+		PinX        *float64 `json:"pin_x,omitempty"`
+		PinY        *float64 `json:"pin_y,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)

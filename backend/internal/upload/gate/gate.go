@@ -125,11 +125,11 @@ func NewLiveGate(svc UploadCreditService) *LiveGate {
 // verbatim so the handler can emit the 400 INSUFFICIENT_CREDITS body.
 func (g *LiveGate) ReserveForSession(ctx context.Context, req ReserveRequest) (*ReservationHandle, error) {
 	res, err := g.svc.Reserve(ctx, credit.ReserveInput{
-		WorkspaceID:         req.WorkspaceID,
-		UploadSessionID:     req.UploadSessionID,
-		AmountCredits:       req.Cost,
-		IdempotencyKey:      req.IdempotencyKey,
-		CreatedBy:           req.CreatedBy,
+		WorkspaceID:     req.WorkspaceID,
+		UploadSessionID: req.UploadSessionID,
+		AmountCredits:   req.Cost,
+		IdempotencyKey:  req.IdempotencyKey,
+		CreatedBy:       req.CreatedBy,
 		// M41 FR-UCRT-08: forward plan tier + enterprise-unlimited toggle
 		// to the credit service. The service routes EnterpriseUnlimited=true
 		// to an unlimited_passthrough ledger entry (amount_credits=0) and

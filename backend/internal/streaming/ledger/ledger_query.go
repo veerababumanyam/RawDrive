@@ -14,17 +14,17 @@ import (
 // Row is the canonical projection returned by Query and streamed by StreamCSV.
 // Pointer fields are NULL-safe; callers format to JSON/CSV as needed.
 type Row struct {
-	ID            uuid.UUID
-	WorkspaceID   uuid.UUID
-	EntryType     string
-	AmountPaise   int64
-	MinutesDelta  int32
-	PurchaseID    *uuid.UUID
-	ReservationID *uuid.UUID
-	StreamID      *uuid.UUID
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	EntryType      string
+	AmountPaise    int64
+	MinutesDelta   int32
+	PurchaseID     *uuid.UUID
+	ReservationID  *uuid.UUID
+	StreamID       *uuid.UUID
 	IdempotencyKey string
-	CreatedBy     *uuid.UUID
-	CreatedAt     time.Time
+	CreatedBy      *uuid.UUID
+	CreatedAt      time.Time
 }
 
 // CSVHeader is the exact header row written by StreamCSV. Kept stable so

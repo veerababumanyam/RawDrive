@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rawdrive/backend/internal/team"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/team"
 )
 
 // mockInvitationRepo simulates invitation persistence.

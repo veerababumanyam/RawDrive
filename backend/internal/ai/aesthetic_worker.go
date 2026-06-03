@@ -7,16 +7,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/rawdrive/backend/internal/storage"
 )
 
 type AestheticWorker struct {
-	pool       *pgxpool.Pool
-	jobRepo    *JobRepo
-	configRepo *ConfigRepo
-	spendRepo  *SpendRepo
-	gemini     *GeminiClient
-	store      storage.Provider
+	pool         *pgxpool.Pool
+	jobRepo      *JobRepo
+	configRepo   *ConfigRepo
+	spendRepo    *SpendRepo
+	gemini       *GeminiClient
+	store        storage.Provider
 	pollInterval time.Duration
 	stopCh       chan struct{}
 }

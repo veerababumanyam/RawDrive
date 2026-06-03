@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/google/uuid"
+
 	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/storage"
 )

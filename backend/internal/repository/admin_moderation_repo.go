@@ -33,10 +33,11 @@ type ModerationFilter struct {
 // with "relation does not exist".
 //
 // Field mapping (struct field → moderation_items column):
-//   ContentID   → resource_id   (aliased in SELECT)
-//   ReviewedBy  → actioned_by   (aliased in SELECT)
-//   ReviewedAt  → actioned_at   (aliased in SELECT)
-//   Notes       → action_reason (aliased in SELECT)
+//
+//	ContentID   → resource_id   (aliased in SELECT)
+//	ReviewedBy  → actioned_by   (aliased in SELECT)
+//	ReviewedAt  → actioned_at   (aliased in SELECT)
+//	Notes       → action_reason (aliased in SELECT)
 type AdminModerationItem struct {
 	ID          uuid.UUID  `db:"id" json:"id"`
 	ContentType string     `db:"content_type" json:"content_type"`

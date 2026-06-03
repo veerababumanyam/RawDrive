@@ -22,21 +22,21 @@ import (
 // ---- fixtures ---------------------------------------------------------------
 
 type fakeRepo struct {
-	mu            sync.Mutex
-	byUID         map[string]*Stream
-	liveState     map[string]string
-	replayState   map[string]string
-	replayURL     map[string]string
-	notFoundUIDs  map[string]bool
-	writeErr      error
+	mu           sync.Mutex
+	byUID        map[string]*Stream
+	liveState    map[string]string
+	replayState  map[string]string
+	replayURL    map[string]string
+	notFoundUIDs map[string]bool
+	writeErr     error
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		byUID:       map[string]*Stream{},
-		liveState:   map[string]string{},
-		replayState: map[string]string{},
-		replayURL:   map[string]string{},
+		byUID:        map[string]*Stream{},
+		liveState:    map[string]string{},
+		replayState:  map[string]string{},
+		replayURL:    map[string]string{},
 		notFoundUIDs: map[string]bool{},
 	}
 }
@@ -253,9 +253,9 @@ func TestWebhook_DBWriteFailure_500(t *testing.T) {
 // T-S3-09 Each event type → correct transition
 func TestWebhook_EachEventType_CorrectTransition(t *testing.T) {
 	cases := []struct {
-		typ       EventType
-		wantLive  string
-		wantReplay string
+		typ         EventType
+		wantLive    string
+		wantReplay  string
 		checkReplay bool
 	}{
 		{EvtLiveInputConnected, "live", "", false},

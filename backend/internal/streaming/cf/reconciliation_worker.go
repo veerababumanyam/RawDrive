@@ -40,16 +40,16 @@ type DriftMetric interface {
 // ReconciliationWorker periodically polls CF for every active stream and
 // reconciles drift.
 type ReconciliationWorker struct {
-	cf         LiveInputClient
-	streams    ActiveStreamSource
-	applier    StateApplier
-	metric     DriftMetric
-	clock      func() time.Time
-	interval   time.Duration
-	jitter     float64 // ±fraction of interval
+	cf          LiveInputClient
+	streams     ActiveStreamSource
+	applier     StateApplier
+	metric      DriftMetric
+	clock       func() time.Time
+	interval    time.Duration
+	jitter      float64 // ±fraction of interval
 	concurrency int
-	logger     *slog.Logger
-	rng        func() float64 // injectable for deterministic jitter tests
+	logger      *slog.Logger
+	rng         func() float64 // injectable for deterministic jitter tests
 }
 
 // NewReconciliationWorker constructs a worker with sensible defaults.

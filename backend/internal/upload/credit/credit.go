@@ -651,12 +651,12 @@ type PurchaseInput struct {
 // ledger entry and the resolved package credits so the caller can surface
 // a clean confirmation to the user without a second SELECT.
 type PurchaseResult struct {
-	LedgerEntry   *LedgerEntry `json:"ledger_entry"`
-	PackageCode   string       `json:"package_code"`
-	Credits       int64        `json:"credits"`
-	PricePaise    int64        `json:"price_paise"`
-	Currency      string       `json:"currency"`
-	WasReplay     bool         `json:"was_replay"` // true if idempotent short-circuit
+	LedgerEntry *LedgerEntry `json:"ledger_entry"`
+	PackageCode string       `json:"package_code"`
+	Credits     int64        `json:"credits"`
+	PricePaise  int64        `json:"price_paise"`
+	Currency    string       `json:"currency"`
+	WasReplay   bool         `json:"was_replay"` // true if idempotent short-circuit
 }
 
 // GrantAdminInput parameters for GrantAdmin.

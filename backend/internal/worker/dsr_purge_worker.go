@@ -50,11 +50,11 @@ type DSREraseFunc func(ctx context.Context, email string, userID *uuid.UUID) err
 
 // DSRPurgeWorker polls dsr_requests and processes pending entries.
 type DSRPurgeWorker struct {
-	pool         *pgxpool.Pool
+	pool          *pgxpool.Pool
 	processAccess DSRAccessFunc
-	eraser       DSREraseFunc
-	pollInterval time.Duration
-	stopCh       chan struct{}
+	eraser        DSREraseFunc
+	pollInterval  time.Duration
+	stopCh        chan struct{}
 }
 
 // NewDSRPurgeWorker constructs the worker. processAccess is REQUIRED;

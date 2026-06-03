@@ -42,14 +42,14 @@ type PrintPreflightRequest struct {
 
 // PrintPreflightResult holds the computed DPI and a recommendation.
 type PrintPreflightResult struct {
-	WidthDPI        int               `json:"width_dpi"`
-	HeightDPI       int               `json:"height_dpi"`
-	EffectiveDPI    int               `json:"effective_dpi"`
-	Quality         PrintQualityLevel `json:"quality"`
-	Message         string            `json:"message"`
-	RequiredWidth   int               `json:"required_width_px"`
-	RequiredHeight  int               `json:"required_height_px"`
-	Shortfall       bool              `json:"shortfall"`
+	WidthDPI       int               `json:"width_dpi"`
+	HeightDPI      int               `json:"height_dpi"`
+	EffectiveDPI   int               `json:"effective_dpi"`
+	Quality        PrintQualityLevel `json:"quality"`
+	Message        string            `json:"message"`
+	RequiredWidth  int               `json:"required_width_px"`
+	RequiredHeight int               `json:"required_height_px"`
+	Shortfall      bool              `json:"shortfall"`
 }
 
 // EvaluatePrintPreflight runs the DPI check and classifies the result.

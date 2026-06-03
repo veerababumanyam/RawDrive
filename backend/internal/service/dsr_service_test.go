@@ -13,8 +13,8 @@ import (
 
 // fakeDSRStore is an in-memory DSRPersister for tests.
 type fakeDSRStore struct {
-	mu       sync.Mutex
-	rows     map[uuid.UUID]*DSRRequest
+	mu        sync.Mutex
+	rows      map[uuid.UUID]*DSRRequest
 	createErr error
 }
 

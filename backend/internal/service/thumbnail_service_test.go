@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rawdrive/backend/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/image/tiff"
+
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 func TestWebPStorageKey_SplitsThumbnailsVsDerivatives(t *testing.T) {
