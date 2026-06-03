@@ -95,6 +95,23 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('decoding="async"');
   });
 
+  // PERF-24: the ~1090-line PhotoLightbox is an interaction-only modal, so it
+  // must NOT sit in the route's first-load JS (measured 822 KB). It loads in an
+  // async chunk via next/dynamic, mapping the named export.
+  it("PERF-24: PhotoLightbox is dynamically imported, not statically bundled into the route", () => {
+    const source = readDetailPage();
+
+    // No static `import { PhotoLightbox } from ".../photo-lightbox"`.
+    expect(source).not.toMatch(
+      /import\s*{[^}]*\bPhotoLightbox\b[^}]*}\s*from\s*"@\/components\/gallery\/photo-lightbox"/,
+    );
+
+    // It must be loaded lazily via next/dynamic, resolving the named export.
+    expect(source).toMatch(
+      /dynamic\(\s*\(\)\s*=>\s*import\(\s*"@\/components\/gallery\/photo-lightbox"\s*\)\s*\.then\(/,
+    );
+  });
+
   it("keeps per-tile quick actions visible, named, and directly accessible", () => {
     const source = readDetailPage();
 

@@ -73,7 +73,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { getTermsStatus } from "@/lib/api/legal";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
-import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
+import dynamic from "next/dynamic";
 // FaceFilter import removed 2026-05-18 — the chip strip was unmounted
 // from the gallery page because it rendered as a row of "Unknown"
 // pills. The window-event listener below (rawdrive:face-filter +
@@ -83,6 +83,16 @@ import { PhotoLightbox } from "@/components/gallery/photo-lightbox";
 // strip back, re-add the import + the JSX render block.
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
+
+// PhotoLightbox (~1090 lines) only mounts when a tile is opened, so load it in
+// an async chunk instead of the gallery-detail route's first-load JS (PERF-24,
+// measured 822 KB). ssr:false is safe — this is a client route and the lightbox
+// is an interaction-only modal that never renders on the server.
+const PhotoLightbox = dynamic(
+  () =>
+    import("@/components/gallery/photo-lightbox").then((m) => m.PhotoLightbox),
+  { ssr: false },
+);
 
 type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
