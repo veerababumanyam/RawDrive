@@ -106,7 +106,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('`Share ${entry.asset.filename}`');
     expect(source).toContain('`Delete ${entry.asset.filename}`');
     expect(source).toContain("void handleShareAsset(e, entry.asset!.id)");
-    expect(source).toContain("setDeleteConfirm({ assetId: entry.asset!.id");
+    expect(source).toContain("setDeleteConfirm({");
+    expect(source).toContain("assetId: entry.asset!.id");
     expect(source).toContain('className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"');
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
@@ -127,7 +128,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('aria-modal="true"');
     expect(source).toContain("Upload photos to gallery");
     expect(source).toContain("Camera JPEG/JFIF");
-    expect(source).toContain("RAW, TIFF, HEIC and AVIF use RawDrive Desktop");
+    expect(source).toContain("RAW, TIFF");
+    expect(source).toContain("HEIC and AVIF use RawDrive Desktop");
     expect(source).toContain("Details");
     expect(source).toContain("Processing");
     expect(source).toContain("Visibility");
@@ -143,7 +145,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false)");
     expect(source).toContain("const [termsModalOpen, setTermsModalOpen] = useState(false)");
     expect(source).toContain("const termsNeedsAcceptanceRef = useRef(false)");
-    expect(source).toContain("const pendingUploadRef = useRef<{ files: File[]; options?: { source?: \"manual\" | \"tethered\" } } | null>(null)");
+    expect(source).toContain("const pendingUploadRef = useRef<{");
+    expect(source).toContain("files: File[];");
+    expect(source).toContain('options?: { source?: "manual" | "tethered" };');
     expect(source).toContain("getTermsStatus(token)");
     expect(source).toContain("onTermsRequired: openTermsModal");
     expect(source).toContain("if (termsNeedsAcceptanceRef.current) {");
@@ -236,12 +240,14 @@ describe("gallery detail page — perf & a11y contracts", () => {
   it("auto-opens tethered uploads after backend completion without leaving the upload dialog on top", () => {
     const source = readDetailPage();
 
-    expect(source).toContain("const isTetheredUpload = tetheredUploadSignaturesRef.current.has(uploadSignature)");
+    expect(source).toContain("const isTetheredUpload =");
+    expect(source).toContain("tetheredUploadSignaturesRef.current.has(uploadSignature)");
     expect(source).toContain("if (isTetheredUpload) {");
     expect(source).toContain("newlyAddedTetheredAssetIds.push(item.assetId)");
     expect(source).toContain("setShowUploadDialog(false);");
     expect(source).toContain("setLightboxIndex(targetIndex)");
-    expect(source).toContain("tetheredAutoOpenRef.current && newlyAddedTetheredAssetIds.length > 0");
+    expect(source).toContain("tetheredAutoOpenRef.current &&");
+    expect(source).toContain("newlyAddedTetheredAssetIds.length > 0");
   });
 
   it("uses one accessible publish-state switch instead of a separate status badge and action button", () => {
@@ -345,7 +351,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Enable tethered capture");
     expect(source).toContain("Disable tethered capture");
     expect(source).toContain("startTetheredFolder");
-    expect(source).toContain("const tetheredControlsEnabled = tetheredEnabled && Boolean(tetheredFolderName);");
+    expect(source).toContain("const tetheredControlsEnabled =");
+    expect(source).toContain("tetheredEnabled && Boolean(tetheredFolderName);");
     expect(source).toContain("const tetheredControlsVisible = tetheredControlsEnabled;");
     expect(enableToggleBody).toContain("void startTetheredFolder();");
   });

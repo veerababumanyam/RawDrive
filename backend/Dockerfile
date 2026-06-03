@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------- build stage ----------
-# Pinned to the minor-patch of go.mod (1.26.3). Floating tag
+# Pinned to the minor-patch of go.mod (1.26.4). Floating tag
 # 'golang:1.26-alpine' would silently drift on every patch release and
 # produce compiler-mismatched builds across machines. Bump in lockstep
 # with go.mod when we upgrade Go.
-FROM golang:1.26.3-alpine AS build
+FROM golang:1.26.4-alpine AS build
 
 # git + ca-certs needed for go mod download of pinned deps over https
 RUN apk add --no-cache git ca-certificates
