@@ -544,8 +544,12 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 			r.Post("/galleries/{slug}/consent", consentHandler.RecordConsent)
 			// M15 enterprise 8-toggle bundle endpoint
 			r.Post("/galleries/{slug}/consent/bundle", consentHandler.RecordBundle)
-			// Status lookup for the banner (returns latest grant state per purpose)
-			r.Get("/consent/status", consentHandler.GetStatus)
+			// Status lookup for the banner (latest grant state per purpose),
+			// scoped to the gallery the visitor already holds. Security audit
+			// V11: the former global GET /consent/status?email= was an
+			// unauthenticated cross-gallery PII / membership oracle and has been
+			// removed in favour of this (gallery_id, email)-bound lookup.
+			r.Get("/galleries/{slug}/consent/status", consentHandler.GetStatusBySlug)
 			// Withdrawal: prefer the slug-scoped path; legacy kept unscoped
 			r.Post("/galleries/{slug}/consent/withdraw", consentHandler.WithdrawConsent)
 			r.Post("/consent/withdraw", consentHandler.WithdrawConsent)

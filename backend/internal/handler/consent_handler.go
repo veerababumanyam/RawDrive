@@ -128,15 +128,30 @@ func (h *ConsentHandler) WithdrawConsent(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetStatus handles GET /public/consent/status?email=...
-// Returns the latest consent state per purpose for a visitor.
-func (h *ConsentHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+// GetStatusBySlug handles GET /public/galleries/{slug}/consent/status?email=...
+// Returns the latest consent state per purpose for a visitor WITHIN this gallery.
+//
+// Security audit 2026-05-30 V11: this replaces the former global
+// GET /public/consent/status?email=, which was an unauthenticated, platform-wide
+// PII / membership oracle (probe any email, learn whether it is a visitor
+// anywhere and its consent choices). The lookup is now bound to
+// (gallery_id, email): the {slug} path segment is the gallery UUID the visitor
+// already holds — the same value the consent POST endpoints parse — so a caller
+// can only read consent state for a gallery they can already address. A
+// missing/invalid gallery id or a missing email is a 400; there is no global
+// fallback.
+func (h *ConsentHandler) GetStatusBySlug(w http.ResponseWriter, r *http.Request) {
+	galleryID, err := uuid.Parse(chi.URLParam(r, "slug"))
+	if err != nil || galleryID == uuid.Nil {
+		http.Error(w, `{"error":"invalid gallery"}`, http.StatusBadRequest)
+		return
+	}
 	email := r.URL.Query().Get("email")
 	if email == "" {
 		http.Error(w, `{"error":"email required"}`, http.StatusBadRequest)
 		return
 	}
-	status, err := h.consentSvc.GetConsentStatus(r.Context(), email)
+	status, err := h.consentSvc.GetConsentStatusForGallery(r.Context(), galleryID, email)
 	if err != nil {
 		http.Error(w, `{"error":"status lookup failed"}`, http.StatusInternalServerError)
 		return

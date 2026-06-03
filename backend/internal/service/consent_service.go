@@ -266,24 +266,51 @@ func (s *ConsentService) WithdrawConsent(ctx context.Context, galleryID *uuid.UU
 	return nil
 }
 
-// GetConsentStatus returns the LATEST consent decision per purpose for a visitor.
-// Multiple rows per purpose are reduced to the most recent row.
-func (s *ConsentService) GetConsentStatus(ctx context.Context, email string) (map[string]bool, error) {
-	records, err := s.consentRepo.ListByEmail(ctx, strings.ToLower(strings.TrimSpace(email)))
-	if err != nil {
-		return nil, err
-	}
-	// Records come back ordered by created_at DESC, so the first seen = latest.
+// reduceLatestPerPurpose collapses a created_at-DESC ordered slice of consent
+// records to the latest decision per purpose. The first row seen for a purpose
+// is the most recent; a withdrawn record (WithdrawnAt != nil) reads as not
+// granted.
+func reduceLatestPerPurpose(records []repository.ConsentRecord) map[string]bool {
 	status := make(map[string]bool, len(AllowedConsentTypes))
 	for _, r := range records {
 		ct := normalizeConsentType(r.ConsentType)
 		if _, seen := status[ct]; seen {
 			continue
 		}
-		// Withdrawn record trumps grant
 		status[ct] = r.Granted && r.WithdrawnAt == nil
 	}
-	return status, nil
+	return status
+}
+
+// GetConsentStatus returns the LATEST consent decision per purpose for a visitor
+// across ALL galleries. Multiple rows per purpose are reduced to the most recent.
+//
+// SECURITY (2026-05-30 audit, V11): this is a GLOBAL, cross-gallery lookup. It
+// must NEVER be exposed on the unauthenticated public surface — doing so turns
+// it into a platform-wide PII / membership oracle (probe any email, learn
+// whether it is a visitor anywhere and its consent choices). Public callers must
+// use GetConsentStatusForGallery, which binds the query to the gallery whose
+// slug the visitor already legitimately holds. Kept for authenticated/internal
+// use only (e.g. HasGranted).
+func (s *ConsentService) GetConsentStatus(ctx context.Context, email string) (map[string]bool, error) {
+	records, err := s.consentRepo.ListByEmail(ctx, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return nil, err
+	}
+	return reduceLatestPerPurpose(records), nil
+}
+
+// GetConsentStatusForGallery returns the latest consent decision per purpose for
+// a visitor WITHIN a single gallery. Because the lookup is bound to
+// (gallery_id, email), it only reveals consent state for the gallery the caller
+// already holds the slug for — this is the public-surface-safe replacement for
+// GetConsentStatus (security audit 2026-05-30, V11).
+func (s *ConsentService) GetConsentStatusForGallery(ctx context.Context, galleryID uuid.UUID, email string) (map[string]bool, error) {
+	records, err := s.consentRepo.ListByGalleryAndEmail(ctx, galleryID, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return nil, err
+	}
+	return reduceLatestPerPurpose(records), nil
 }
 
 // HasGranted is a quick check: did the visitor grant a specific purpose?

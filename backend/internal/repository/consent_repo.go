@@ -109,6 +109,42 @@ func (r *ConsentRepo) ListByEmail(ctx context.Context, email string) ([]ConsentR
 	return records, nil
 }
 
+// ListByGalleryAndEmail returns all consent records for a visitor WITHIN a
+// single gallery, newest first. Binding the lookup to (gallery_id,
+// visitor_email) means a public caller can only read the consent state for the
+// gallery whose slug they already legitimately hold — it cannot be used as the
+// platform-wide PII / membership oracle that the unscoped ListByEmail would be
+// if exposed on the public surface (security audit 2026-05-30, V11).
+func (r *ConsentRepo) ListByGalleryAndEmail(ctx context.Context, galleryID uuid.UUID, email string) ([]ConsentRecord, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, gallery_id, visitor_email, COALESCE(visitor_ip, ''), COALESCE(user_agent, ''),
+		        consent_type, granted, language,
+		        COALESCE(consent_version_hash, ''), COALESCE(legal_basis, 'consent'),
+		        withdrawn_at, created_at
+		 FROM consent_records WHERE gallery_id = $1 AND visitor_email = $2
+		 ORDER BY created_at DESC`, galleryID, email,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("consent list by gallery+email: %w", err)
+	}
+	defer rows.Close()
+
+	var records []ConsentRecord
+	for rows.Next() {
+		var c ConsentRecord
+		if err := rows.Scan(
+			&c.ID, &c.GalleryID, &c.VisitorEmail, &c.VisitorIP, &c.UserAgent,
+			&c.ConsentType, &c.Granted, &c.Language,
+			&c.ConsentVersionHash, &c.LegalBasis,
+			&c.WithdrawnAt, &c.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("consent scan: %w", err)
+		}
+		records = append(records, c)
+	}
+	return records, nil
+}
+
 // CountByGalleryAndType returns a count matrix of grants per purpose for a gallery.
 // Useful for the studio dashboard showing how many clients granted each purpose.
 func (r *ConsentRepo) CountByGalleryAndType(ctx context.Context, galleryID uuid.UUID) (map[string]int, error) {
