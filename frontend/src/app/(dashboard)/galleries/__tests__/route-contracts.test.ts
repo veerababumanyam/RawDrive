@@ -82,6 +82,20 @@ describe("gallery route contracts", () => {
     expect(source).toContain("appendStoredGalleryKeyFragment(base, gallery.id)");
   });
 
+  it("creates durable share links before copying gallery-detail public URLs", () => {
+    const source = fs.readFileSync(
+      path.join(dashboardRoot, "galleries/[id]/page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("createGalleryShareLink");
+    expect(source).toContain("createWorkingShareUrl");
+    expect(source).toContain("setUrlSearchParamBeforeFragment");
+    expect(source).toContain('access_mode: "public"');
+    expect(source).toContain('channel,');
+    expect(source).toContain("Sign in again to create a share link.");
+  });
+
   it("keeps owner preview actions inside the dashboard preview route", () => {
     const coverSource = fs.readFileSync(
       path.join(dashboardRoot, "galleries/[id]/cover/page.tsx"),

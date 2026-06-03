@@ -12,6 +12,7 @@ import {
 import {
   addAlbumAssets,
   createGalleryAlbum,
+  createGalleryShareLink,
   deleteGalleryAlbum,
   galleryPublicUrl,
   getGallery,
@@ -39,7 +40,10 @@ import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel"
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import { assetIsProcessing } from "@/lib/dashboard-ui";
 import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
-import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
+import {
+  appendStoredGalleryKeyFragment,
+  setUrlSearchParamBeforeFragment,
+} from "@/lib/media-encryption/share-url";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
@@ -790,39 +794,68 @@ export default function GalleryDetailPage({
     [gallery, id, workspaceProfile],
   );
 
+  const createWorkingShareUrl = useCallback(
+    async (albumId: string | undefined, channel: "copy" | "email") => {
+      if (!gallery?.is_published) {
+        throw new Error(SHARE_UNAVAILABLE_MESSAGE);
+      }
+      const token = getStoredAccessToken();
+      if (!token) {
+        throw new Error("Sign in again to create a share link.");
+      }
+      const baseUrl = buildShareUrl(albumId);
+      if (!baseUrl) {
+        throw new Error("Share link unavailable: gallery URL is missing.");
+      }
+
+      const created = await createGalleryShareLink(token, gallery.id, {
+        access_mode: "public",
+        download_allowed: gallery.download_enabled !== false,
+        channel,
+      });
+      return setUrlSearchParamBeforeFragment(
+        baseUrl,
+        "share",
+        created.token,
+      );
+    },
+    [buildShareUrl, gallery],
+  );
+
   const copyShareUrl = useCallback(
     async (albumId?: string) => {
-      if (!gallery?.is_published) {
-        setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
-        return;
-      }
-      const url = buildShareUrl(albumId);
-      if (!url) return;
       try {
+        const url = await createWorkingShareUrl(albumId, "copy");
         await navigator.clipboard.writeText(url);
         setShareMessage(
           albumId ? "Sub-gallery link copied." : "Gallery link copied.",
         );
-      } catch {
-        setShareMessage(url);
+      } catch (err) {
+        setShareMessage(
+          err instanceof Error ? err.message : "Failed to create share link",
+        );
       }
     },
-    [buildShareUrl, gallery?.is_published],
+    [createWorkingShareUrl],
   );
 
   const openShareLink = useCallback(
-    (albumId: string | undefined, label: string) => {
-      if (!gallery?.is_published) {
-        setShareMessage(SHARE_UNAVAILABLE_MESSAGE);
+    async (albumId: string | undefined, label: string) => {
+      if (!gallery) return;
+      let url: string;
+      try {
+        url = await createWorkingShareUrl(albumId, "email");
+      } catch (err) {
+        setShareMessage(
+          err instanceof Error ? err.message : "Failed to create share link",
+        );
         return;
       }
-      const url = buildShareUrl(albumId);
-      if (!url) return;
       const href = buildShareEmailHref(gallery, label, url);
       window.location.href = href;
       setShareMessage("Email share link opened.");
     },
-    [buildShareUrl, gallery],
+    [createWorkingShareUrl, gallery],
   );
 
   const togglePublishState = useCallback(async () => {
