@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createGallery,
   createGalleryShareLink,
@@ -343,6 +343,7 @@ function GalleryCardActions({
 }
 
 export default function GalleriesPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const createRequested = searchParams?.get("create") === "true";
   const clientParam = searchParams?.get("client") ?? "";
@@ -686,7 +687,7 @@ export default function GalleriesPage() {
     setError(null);
     try {
       const token = getStoredAccessToken();
-      await createGallery(token, {
+      const created = await createGallery(token, {
         title: newTitle.trim(),
         gallery_type: newType,
         primary_contact_id: linkedContactId || undefined,
@@ -701,7 +702,14 @@ export default function GalleriesPage() {
       setLinkedProjectId("");
       setTetheringMode(false);
       setTetherDir("");
-      refresh();
+      // Open the new gallery immediately rather than leaving the user to hunt
+      // for it in the list (fixes the "new gallery inaccessible after creation"
+      // UX gap). Fall back to a list refresh if the id is somehow absent.
+      if (created?.id) {
+        router.push(`/galleries/${created.id}`);
+      } else {
+        refresh();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create gallery");
     } finally {
