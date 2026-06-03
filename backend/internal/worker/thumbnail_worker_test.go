@@ -161,16 +161,38 @@ func (fakeThumbnailGenerator) GenerateAll(context.Context, string, io.Reader) (*
 }
 
 type fakeExifExtractor struct {
-	called     bool
-	assetID    uuid.UUID
-	storageKey string
+	called  bool
+	assetID uuid.UUID
+	data    []byte
 }
 
-func (f *fakeExifExtractor) ExtractAndStore(_ context.Context, assetID uuid.UUID, storageKey string) error {
+func (f *fakeExifExtractor) ExtractFromBytes(_ context.Context, assetID uuid.UUID, data []byte) error {
 	f.called = true
 	f.assetID = assetID
-	f.storageKey = storageKey
+	f.data = data
 	return nil
+}
+
+// countingThumbStore records how many times each storage key is fetched, so a
+// test can prove the worker downloads the original exactly once (PERF-10).
+type countingThumbStore struct {
+	getCalls map[string]int
+}
+
+func (s *countingThumbStore) Put(context.Context, string, io.Reader, int64, string) error { return nil }
+func (s *countingThumbStore) Delete(context.Context, string) error                        { return nil }
+func (s *countingThumbStore) PresignURL(context.Context, string, storage.PresignOptions) (string, error) {
+	return "", nil
+}
+func (s *countingThumbStore) HealthCheck() storage.HealthStatus {
+	return storage.HealthStatus{Status: "ok", Driver: "fake"}
+}
+func (s *countingThumbStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
+	if s.getCalls == nil {
+		s.getCalls = map[string]int{}
+	}
+	s.getCalls[key]++
+	return io.NopCloser(bytes.NewReader([]byte("image-bytes"))), nil
 }
 
 func TestThumbnailWorker_ProcessFailurePersistsReason(t *testing.T) {
@@ -207,11 +229,39 @@ func TestThumbnailWorker_SuccessExtractsExifBeforeReady(t *testing.T) {
 	if err := w.processOne(context.Background(), asset); err != nil {
 		t.Fatalf("processOne returned error: %v", err)
 	}
-	if !exif.called || exif.assetID != assetID || exif.storageKey != asset.StorageKey {
-		t.Fatalf("EXIF extractor not called with asset/storage key")
+	if !exif.called || exif.assetID != assetID || string(exif.data) != "image-bytes" {
+		t.Fatalf("EXIF extractor not called with asset id and buffered original bytes")
 	}
 	if repo.status[assetID] != "ready" {
 		t.Fatalf("status = %q, want ready", repo.status[assetID])
+	}
+}
+
+func TestThumbnailWorker_DownloadsOriginalOnce(t *testing.T) {
+	// PERF-10: the worker must fetch the original from storage exactly once and
+	// reuse the buffered bytes for EXIF, rather than re-downloading for EXIF.
+	assetID := uuid.New()
+	repo := &fakeThumbAssetRepo{}
+	exif := &fakeExifExtractor{}
+	store := &countingThumbStore{}
+	w := NewThumbnailWorker(repo, fakeThumbnailGenerator{}, store).WithExifService(exif)
+	asset := &repository.Asset{
+		ID:          assetID,
+		WorkspaceID: uuid.New(),
+		StorageKey:  "originals/photo.jpg",
+		ContentType: "image/jpeg",
+	}
+
+	if err := w.processOne(context.Background(), asset); err != nil {
+		t.Fatalf("processOne returned error: %v", err)
+	}
+
+	if got := store.getCalls["originals/photo.jpg"]; got != 1 {
+		t.Fatalf("original fetched %d times, want exactly 1 (decode-once)", got)
+	}
+	if !exif.called || string(exif.data) != "image-bytes" {
+		t.Fatalf("EXIF must receive the buffered original bytes; called=%v data=%q",
+			exif.called, string(exif.data))
 	}
 }
 

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -44,6 +45,26 @@ func (s *ExifService) ExtractAndStore(ctx context.Context, assetID uuid.UUID, st
 	meta, err := s.Extract(reader)
 	if err != nil {
 		// EXIF extraction failure is non-fatal — some files don't have EXIF
+		return nil
+	}
+
+	if s.assetRepo != nil {
+		return s.assetRepo.UpdateExif(ctx, assetID, meta.ToMap())
+	}
+	return nil
+}
+
+// ExtractFromBytes extracts EXIF metadata from already-in-memory original
+// bytes and updates the asset record. The thumbnail worker downloads the
+// original once (for derivative generation) and reuses that buffer here, so the
+// file is fetched from storage a single time instead of twice (PERF-10). EXIF
+// lives in the original's metadata segments, so the same compressed bytes that
+// feed the decoder also feed the EXIF parse. A missing/undecodable EXIF block is
+// non-fatal, mirroring ExtractAndStore.
+func (s *ExifService) ExtractFromBytes(ctx context.Context, assetID uuid.UUID, data []byte) error {
+	meta, err := s.Extract(bytes.NewReader(data))
+	if err != nil {
+		// EXIF extraction failure is non-fatal — some files don't have EXIF.
 		return nil
 	}
 

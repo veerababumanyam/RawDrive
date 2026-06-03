@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -80,8 +81,12 @@ type decodeFailure struct{ err error }
 func (d *decodeFailure) Error() string { return d.err.Error() }
 func (d *decodeFailure) Unwrap() error { return d.err }
 
+// exifExtractor consumes the already-downloaded original bytes rather than a
+// storage key, so the worker never triggers a second full-file fetch for EXIF
+// (PERF-10). The production *service.ExifService satisfies this via
+// ExtractFromBytes while keeping ExtractAndStore for other callers.
 type exifExtractor interface {
-	ExtractAndStore(ctx context.Context, assetID uuid.UUID, storageKey string) error
+	ExtractFromBytes(ctx context.Context, assetID uuid.UUID, data []byte) error
 }
 
 // ThumbnailWorker processes assets that need thumbnails generated.
@@ -335,12 +340,21 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 		return nil
 	}
 
-	// Download the original file
+	// Download the original file ONCE and buffer it, then reuse the same bytes
+	// for both derivative generation and EXIF extraction (PERF-10). Previously
+	// the original was fetched twice — here for derivatives and again inside
+	// exifSvc.ExtractAndStore — doubling B2 egress and full-file reads on every
+	// upload. The decoder buffers the full image internally anyway, and EXIF
+	// lives in the original's metadata, so a single in-memory copy serves both.
 	reader, err := w.store.Get(ctx, asset.StorageKey)
 	if err != nil {
 		return fmt.Errorf("download original: %w", err)
 	}
-	defer reader.Close()
+	original, err := io.ReadAll(reader)
+	reader.Close()
+	if err != nil {
+		return fmt.Errorf("read original: %w", err)
+	}
 
 	// Generate thumbnails. Thread the server-sniffed decode_format token
 	// (populated by SniffImageFormat at upload finalize, hydrated by
@@ -355,7 +369,7 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	if asset.DecodeFormat != nil {
 		format = *asset.DecodeFormat
 	}
-	result, err := w.generateAll(ctx, asset.ID.String(), format, reader)
+	result, err := w.generateAll(ctx, asset.ID.String(), format, bytes.NewReader(original))
 	if err != nil {
 		return &decodeFailure{err: fmt.Errorf("generate thumbnails: %w", err)}
 	}
@@ -438,7 +452,7 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	}
 
 	if w.exifSvc != nil {
-		if err := w.exifSvc.ExtractAndStore(ctx, asset.ID, asset.StorageKey); err != nil {
+		if err := w.exifSvc.ExtractFromBytes(ctx, asset.ID, original); err != nil {
 			log.Printf("thumbnail worker: exif extraction %s failed (non-fatal): %v", asset.ID, err)
 		}
 	}
