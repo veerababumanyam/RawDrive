@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { authFetch } from "@/lib/api/authFetch";
 
 // TermsCurrent is the active Terms-of-Service / Privacy version returned by
 // GET /api/v1/legal/terms/current. The `text` is the exact operative text the
@@ -26,9 +26,8 @@ export interface TermsStatus {
  * Throws on failure so the modal can show a retry state.
  */
 export async function getCurrentTerms(token: string): Promise<TermsCurrent> {
-  const res = await fetch(`${API_BASE}/api/v1/legal/terms/current`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  void token;
+  const res = await authFetch("/api/v1/legal/terms/current");
   if (!res.ok) {
     throw new Error(`Failed to load terms: ${res.status}`);
   }
@@ -43,10 +42,9 @@ export async function getCurrentTerms(token: string): Promise<TermsCurrent> {
  */
 export async function getTermsStatus(token: string | null): Promise<TermsStatus | null> {
   if (!token) return null;
+  void token;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/legal/terms/status`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await authFetch("/api/v1/legal/terms/status");
     if (!res.ok) return null;
     return (await res.json()) as TermsStatus;
   } catch {
@@ -61,11 +59,11 @@ export async function getTermsStatus(token: string | null): Promise<TermsStatus 
  * message on failure.
  */
 export async function acceptTerms(token: string, version?: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/legal/terms/accept`, {
+  void token;
+  const res = await authFetch("/api/v1/legal/terms/accept", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(version ? { version } : {}),
   });
