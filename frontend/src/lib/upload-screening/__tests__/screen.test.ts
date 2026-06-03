@@ -315,49 +315,200 @@ describe("screen() format dispatcher", () => {
     expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
   });
 
-  it("sets needs_desktop_scan for TIFF files", () => {
-    const tiff = new Uint8Array([
-      0x49, 0x49, 0x2a, 0x00, // TIFF little-endian
-      0x08, 0x00, 0x00, 0x00, // offset to first IFD
+  // ───────────────────────────────────────────────────────────────────────
+  // CD5 — browser-decodable HEIC / HEIF / AVIF + camera RAW now `pass`.
+  //
+  // After CD4 unblocked the format gates, the screener must vouch for the
+  // now-browser-decodable formats (HEIC, HEIF, AVIF, CR2, NEF, ARW, DNG,
+  // ORF, RAF, RW2) with decision:"pass" so the E2EE upload's scan manifest
+  // lets them finalize. CR3 + exotic RAW + ambiguous/multi-page TIFF stay
+  // needs_desktop_scan; non-image stays block.
+  // ───────────────────────────────────────────────────────────────────────
+
+  function isoBmffFtyp(brand: string): Uint8Array {
+    const head = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]; // size + "ftyp"
+    const brandBytes = [...brand].map((c) => c.charCodeAt(0));
+    return new Uint8Array([...head, ...brandBytes, 0x00, 0x00, 0x00, 0x00]);
+  }
+
+  function tiffLE(...trailing: number[]): Uint8Array {
+    return new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, ...trailing]);
+  }
+
+  it("passes a HEIC file (ftyp heic) as detected_format heic", () => {
+    const result = screen(isoBmffFtyp("heic"), { declaredType: "image/heic" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("heic");
+    expect(result.findings.some((f) => f.severity === "high")).toBe(false);
+  });
+
+  it("passes a HEIF file (ftyp mif1) as detected_format heic", () => {
+    const result = screen(isoBmffFtyp("mif1"), { declaredType: "image/heif" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("heic");
+  });
+
+  it("passes an AVIF file (ftyp avif) as detected_format avif", () => {
+    const result = screen(isoBmffFtyp("avif"), { declaredType: "image/avif" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("avif");
+    expect(result.findings.some((f) => f.severity === "high")).toBe(false);
+  });
+
+  it("passes a Canon CR2 file (TIFF + 'CR' brand) as detected_format cr2", () => {
+    const cr2 = new Uint8Array([
+      0x49, 0x49, 0x2a, 0x00,
+      0x10, 0x00, 0x00, 0x00,
+      0x43, 0x52, // "CR"
     ]);
-    const result = screen(tiff, { declaredType: "image/tiff" });
+    const result = screen(cr2, { declaredType: "image/x-canon-cr2" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("cr2");
+  });
+
+  it("passes a Fuji RAF file (FUJIFILMCCD-RAW magic) as detected_format raf", () => {
+    const raf = new Uint8Array([...[..."FUJIFILMCCD-RAW"].map((c) => c.charCodeAt(0)), 0x00, 0x00]);
+    const result = screen(raf, { declaredType: "" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("raf");
+  });
+
+  it.each([
+    ["image/x-nikon-nef", "nef"],
+    ["image/x-sony-arw", "arw"],
+    ["image/x-adobe-dng", "dng"],
+    ["image/x-olympus-orf", "orf"],
+    ["image/x-panasonic-rw2", "rw2"],
+  ])(
+    "passes a TIFF-magic RAW with vendor MIME %s as detected_format %s",
+    (declaredType, format) => {
+      const result = screen(tiffLE(), { declaredType });
+      expect(result.decision).toBe("pass");
+      expect(result.detectedFormat).toBe(format);
+    },
+  );
+
+  it("keeps a plain TIFF (image/tiff) as needs_desktop_scan", () => {
+    const result = screen(tiffLE(), { declaredType: "image/tiff" });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
   });
 
-  it("sets needs_desktop_scan for Canon CR2 files before generic TIFF", () => {
-    const cr2 = new Uint8Array([
-      0x49, 0x49, 0x2a, 0x00,
-      0x10, 0x00, 0x00, 0x00,
-      0x43, 0x52,
-    ]);
-    const result = screen(cr2, { declaredType: "image/x-canon-cr2" });
+  it("keeps a TIFF-magic file with an unknown declaredType as needs_desktop_scan", () => {
+    // Cannot tell NEF/ARW/multi-page TIFF apart by magic alone — without a
+    // RAW vendor MIME the screener conservatively routes to the desktop agent.
+    const result = screen(tiffLE(), { declaredType: "application/octet-stream" });
     expect(result.decision).toBe("needs_desktop_scan");
-    expect(result.detectedFormat).toBe("cr2");
+    expect(result.detectedFormat).toBe("tiff");
   });
 
-  it("sets needs_desktop_scan for Canon CR3 ISO BMFF files", () => {
-    const cr3 = new Uint8Array([
-      0x00, 0x00, 0x00, 0x18,
-      0x66, 0x74, 0x79, 0x70, // ftyp
-      0x63, 0x72, 0x78, 0x20, // crx
-      0x00, 0x00, 0x00, 0x00,
+  // ───────────────────────────────────────────────────────────────────────
+  // CD5b — TIFF-based RAW disambiguated by FILENAME extension (backstop).
+  //
+  // Many browsers/OSes report `image/tiff` or "" for camera RAW, so the
+  // vendor `image/x-*` MIME branch above never resolves. The CD4 format gate
+  // unblocks these BY EXTENSION and the decoder handles them, so thread the
+  // filename through and let the extension backstop the MIME path: a NEF/ARW/
+  // DNG/ORF/RW2 TIFF header with a generic/empty MIME but a known-RAW
+  // declaredName must `pass`. A plain .tif/.tiff (or no RAW extension) stays
+  // needs_desktop_scan; CR3/exotic extensions stay desktop-only.
+  // ───────────────────────────────────────────────────────────────────────
+
+  it.each([
+    ["IMG_1234.nef", "nef"],
+    ["IMG_1234.NEF", "nef"],
+    ["DSC09876.arw", "arw"],
+    ["render.dng", "dng"],
+    ["P1000001.orf", "orf"],
+    ["P1010101.rw2", "rw2"],
+  ])(
+    "passes a TIFF-magic RAW with generic image/tiff MIME but declaredName %s as %s",
+    (declaredName, format) => {
+      const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName });
+      expect(result.decision).toBe("pass");
+      expect(result.detectedFormat).toBe(format);
+    },
+  );
+
+  it("passes a TIFF-magic RAW with empty MIME but a known-RAW declaredName", () => {
+    const result = screen(tiffLE(), { declaredType: "", declaredName: "capture.NEF" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("nef");
+  });
+
+  it("prefers the vendor MIME over the extension when both resolve", () => {
+    // MIME says ARW; the extension backstop only fires when the MIME path
+    // fails, so the MIME-derived token wins.
+    const result = screen(tiffLE(), { declaredType: "image/x-sony-arw", declaredName: "x.nef" });
+    expect(result.decision).toBe("pass");
+    expect(result.detectedFormat).toBe("arw");
+  });
+
+  it("keeps a plain photo.tiff (image/tiff) as needs_desktop_scan even with a name", () => {
+    const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName: "photo.tiff" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("tiff");
+  });
+
+  it("keeps a plain photo.tif as needs_desktop_scan", () => {
+    const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName: "photo.tif" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("tiff");
+  });
+
+  it("keeps a TIFF-magic file with a non-RAW extension as needs_desktop_scan", () => {
+    const result = screen(tiffLE(), { declaredType: "", declaredName: "scan.dat" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("tiff");
+  });
+
+  it("keeps a TIFF-magic file with no extension as needs_desktop_scan", () => {
+    const result = screen(tiffLE(), { declaredType: "", declaredName: "scanwithnoext" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("tiff");
+  });
+
+  it.each(["capture.cr3", "capture.crw", "capture.x3f", "capture.pef", "capture.nrw"])(
+    "keeps desktop-only RAW extension %s as needs_desktop_scan via the TIFF backstop",
+    (declaredName) => {
+      // These extensions are NOT in the browser-decodable RAW set, so even with
+      // TIFF magic + a declaredName they must stay desktop-only.
+      const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName });
+      expect(result.decision).toBe("needs_desktop_scan");
+      expect(result.detectedFormat).toBe("tiff");
+    },
+  );
+
+  it("keeps a big-endian TIFF (image/tiff) as needs_desktop_scan", () => {
+    const tiffBE = new Uint8Array([
+      0x4d, 0x4d, 0x00, 0x2a, // TIFF big-endian
+      0x00, 0x00, 0x00, 0x08,
     ]);
+    const result = screen(tiffBE, { declaredType: "image/tiff" });
+    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.detectedFormat).toBe("tiff");
+  });
+
+  it("keeps Canon CR3 (ftyp crx ) as needs_desktop_scan", () => {
+    const cr3 = isoBmffFtyp("crx ");
     const result = screen(cr3, { declaredType: "image/x-canon-cr3" });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("cr3");
   });
 
-  it("sets needs_desktop_scan for AVIF files", () => {
-    const avif = new Uint8Array([
-      0x00, 0x00, 0x00, 0x18,
-      0x66, 0x74, 0x79, 0x70, // ftyp
-      0x61, 0x76, 0x69, 0x66, // avif
-      0x00, 0x00, 0x00, 0x00,
-    ]);
-    const result = screen(avif, { declaredType: "image/avif" });
-    expect(result.decision).toBe("needs_desktop_scan");
-    expect(result.detectedFormat).toBe("avif");
+  it("blocks a PDF (non-image) rather than treating it as a desktop format", () => {
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]); // "%PDF-1.7"
+    const result = screen(pdf, { declaredType: "application/pdf" });
+    expect(result.decision).toBe("block");
+    expect(result.detectedFormat).toBe("unknown");
+    expect(result.findings[0].category).toBe("unsupported_format");
+  });
+
+  it("blocks a ZIP (non-image) rather than treating it as a desktop format", () => {
+    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]); // "PK\x03\x04"
+    const result = screen(zip, { declaredType: "application/zip" });
+    expect(result.decision).toBe("block");
+    expect(result.detectedFormat).toBe("unknown");
   });
 
   it("blocks a JPEG that does not start with SOI", () => {

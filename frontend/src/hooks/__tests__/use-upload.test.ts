@@ -57,4 +57,12 @@ describe("useUpload", () => {
     expect(parseUploadOffsetHeader("-1")).toBeNull();
     expect(parseUploadOffsetHeader("abc")).toBeNull();
   });
+
+  it("threads the filename into the screener's non-worker fallback (CD5b)", async () => {
+    // CD5b: the screener disambiguates TIFF-based RAW by extension, so
+    // runScreener must forward file.name as declaredName on the direct-screen
+    // fallback path (the worker path carries it on the File itself).
+    const source = await readFile(join(process.cwd(), "src/hooks/use-upload.ts"), "utf8");
+    expect(source).toContain("declaredName: file.name");
+  });
 });

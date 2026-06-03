@@ -10,7 +10,11 @@ import { activePolicyVersion } from "@/lib/upload-screening/policy";
 import { canUseScreeningWorker, runScreeningWorker } from "@/lib/upload-screening/worker-client";
 import { authFetch } from "@/lib/api/authFetch";
 import { encryptBlob } from "@/lib/media-encryption/media-crypto";
-import { createEncryptedWebPDerivativeSet, type EncryptedDerivative } from "@/lib/media-encryption/webp-derivatives";
+import {
+  createEncryptedWebPDerivativeSet,
+  NeedsDesktopDecodeError,
+  type EncryptedDerivative,
+} from "@/lib/media-encryption/webp-derivatives";
 import type { GalleryMediaKey } from "@/lib/media-encryption/media-key-store";
 import { extractSourceImageMetadata } from "@/lib/media-encryption/source-metadata";
 import { getBrowserE2EEUploadBlockReason } from "@/lib/media-encryption/browser-upload-support";
@@ -63,6 +67,9 @@ async function runScreener(
   const result = screen(bytes, {
     metadataBudgetBytes: DEFAULT_METADATA_BUDGET,
     declaredType: file.type,
+    // CD5b: mirror the worker path — the filename lets the screener backstop
+    // TIFF-based RAW by extension when the browser reports a generic/empty MIME.
+    declaredName: file.name,
   });
   const sha256 = await sha256HexChunked(file);
   return buildManifest({ file, policyVersion, sha256, result });
@@ -367,9 +374,17 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
           encryptedDerivatives = derivativeSet.derivatives;
           sourceDimensions = derivativeSet.source;
         } catch (err) {
+          // CD4: a NeedsDesktopDecodeError means the in-browser decoder could
+          // not handle this file (CR3/exotic RAW, corrupt input, unsupported
+          // engine) — surface its detail directly. Any other failure keeps the
+          // generic source-side-encryption message. Both land on needs_desktop.
+          const error =
+            err instanceof NeedsDesktopDecodeError
+              ? `RawDrive Desktop is required for this file: ${err.message}`
+              : `RawDrive Desktop is required because source-side WebP generation failed: ${(err as Error).message}`;
           updateItem(item.id, {
             status: "needs_desktop",
-            error: `RawDrive Desktop is required because source-side WebP generation failed: ${(err as Error).message}`,
+            error,
             scanManifest: manifest,
           });
           return;

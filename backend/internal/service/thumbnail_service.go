@@ -10,6 +10,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"strings"
 	"sync"
 
 	"os"
@@ -86,6 +87,83 @@ type ThumbnailService struct {
 	// at the top of generateWebPDerivative short-circuits before any resize.
 	cwebpPath string
 	cwebpErr  error
+
+	// decoder, when non-nil, replaces the bare imageops.Decode call for the
+	// out-of-process formats (HEIC/HEIF/AVIF + RAW families). It dispatches on
+	// the SERVER-sniffed format token (see SniffImageFormat) rather than the
+	// client content type. The default is nil, in which case decodeSource falls
+	// back to the exact legacy imageops.Decode path so behavior for
+	// jpeg/png/gif/webp/tiff is byte-identical to before this change. main.go
+	// wires the CompositeDecoder via WithDecoder.
+	decoder ImageDecoder
+}
+
+// WithDecoder wires the CGO-free ImageDecoder (CompositeDecoder) used to turn a
+// stored object's bytes into a decoded image for the out-of-process formats
+// (HEIC/RAW), dispatching on the server-sniffed format token rather than
+// imageops.Decode's content sniff. Returns the service for fluent chaining. A
+// nil decoder is allowed and preserves the legacy imageops.Decode path so
+// existing callers and tests stay byte-identical. main.go passes
+// NewCompositeDecoder() here.
+func (s *ThumbnailService) WithDecoder(d ImageDecoder) *ThumbnailService {
+	s.decoder = d
+	return s
+}
+
+// headWindow returns the leading byte window SniffImageFormat inspects. It caps
+// the slice at 512 bytes (the size http.DetectContentType reads) so we hand the
+// sniffer a bounded head rather than a multi-megabyte original.
+func headWindow(raw []byte) []byte {
+	const sniffLen = 512
+	if len(raw) > sniffLen {
+		return raw[:sniffLen]
+	}
+	return raw
+}
+
+// decodeSource turns the source bytes into an oriented image.Image.
+//
+//   - When NO decoder is wired, OR the format token is a web/legacy format that
+//     imageops can already read (jpeg/png/gif/webp/tiff), it uses the EXISTING
+//     imageops.Decode(src, true) path so EXIF auto-orientation is applied and
+//     behavior is byte-identical to main. This is the load-bearing legacy path:
+//     a nil decoder OR a non-HEIC/RAW format yields exactly the previous result.
+//   - Only when a decoder IS wired AND the format is an out-of-process token
+//     (heic/heif/avif or a RAW family) does it route through the decoder, which
+//     shells out to libheif / exiftool. Those produce an already-upright image
+//     (the converted output / embedded camera preview), so no extra orientation
+//     pass is needed.
+//
+// The decoder returns a classified *DecodeError on failure so the worker can
+// decide between transient retry and terminal dead-letter.
+func (s *ThumbnailService) decodeSource(ctx context.Context, format string, raw []byte) (image.Image, error) {
+	f := NormalizeImageFormat(format)
+
+	// Out-of-process formats only go through the wired decoder. Everything else
+	// (including the empty token and all web/legacy formats) takes the exact
+	// legacy imageops.Decode path so nil-decoder behavior is unchanged. The
+	// decoder's *DecodeError is returned through %w so ClassifyDecodeError can
+	// read the explicit transient/terminal verdict.
+	if s.decoder != nil && isOutOfProcessFormat(f) {
+		return s.decoder.Decode(ctx, f, bytes.NewReader(raw))
+	}
+
+	// Legacy path — same decode call main always used (EXIF auto-orient).
+	return imageops.Decode(bytes.NewReader(raw), true)
+}
+
+// isOutOfProcessFormat reports whether a normalized format token must be handled
+// by the external CompositeDecoder (libheif / exiftool) rather than the in-
+// process imageops/stdlib decoders. Only HEIC/HEIF/AVIF and the RAW families
+// qualify; jpeg/png/gif/webp/tiff stay on the legacy path.
+func isOutOfProcessFormat(f string) bool {
+	switch f {
+	case "heic", "heif", "avif",
+		"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
+		return true
+	default:
+		return false
+	}
 }
 
 // NewThumbnailService creates a new ThumbnailService.
@@ -149,12 +227,64 @@ type ThumbnailResult struct {
 // Originals remain preserved on R2 for download per the WebP hardcode
 // law ("Originals are preserved for download only").
 func (s *ThumbnailService) GenerateAll(ctx context.Context, assetID string, src io.Reader) (*ThumbnailResult, error) {
-	// Decode the source image with auto-orientation from EXIF
-	srcImg, err := imageops.Decode(src, true)
+	// Backward-compatible entry point: no format token. With a nil decoder this
+	// is byte-identical to the prior imageops.Decode(src, true) path.
+	return s.GenerateAllWithFormat(ctx, assetID, "", src)
+}
+
+// GenerateAllWithFormat is GenerateAll with the SERVER-sniffed format token
+// threaded through to the wired decoder. The token comes from the asset's
+// decode_format column (populated by SniffImageFormat at upload finalize). When
+// a decoder is wired and no token is supplied, the format is sniffed from the
+// source bytes so the decoder still dispatches correctly. With no decoder wired
+// the token is ignored entirely and decode falls back to imageops.Decode, so
+// the result is byte-identical to GenerateAll on main.
+func (s *ThumbnailService) GenerateAllWithFormat(ctx context.Context, assetID, format string, src io.Reader) (*ThumbnailResult, error) {
+	srcImg, err := s.decodeFromSource(ctx, format, src)
 	if err != nil {
 		return nil, fmt.Errorf("thumbnail decode: %w", err)
 	}
+	return s.generateAllFromImage(ctx, assetID, srcImg)
+}
 
+// decodeFromSource resolves the format token (sniffing from the bytes only when
+// a decoder is wired and the token is empty) and decodes via decodeSource. It
+// returns the bare decode error WITHOUT a caller-specific prefix so each entry
+// point can attach its historical message ("thumbnail decode" /
+// "derivative decode") and stay byte-identical to main's prior errors. The
+// underlying *DecodeError (if any) is preserved through %w-wrapping for the
+// worker's ClassifyDecodeError.
+//
+// When no decoder is wired we MUST NOT buffer-and-sniff: we stream straight
+// through imageops.Decode exactly as main always did, so the nil-decoder path
+// stays byte-identical and avoids reading the whole original into memory when
+// it isn't needed.
+func (s *ThumbnailService) decodeFromSource(ctx context.Context, format string, src io.Reader) (image.Image, error) {
+	if s.decoder == nil {
+		// Legacy path — identical decode call to main's prior behavior.
+		return imageops.Decode(src, true)
+	}
+
+	// Decoder wired: buffer once so we can sniff the head when the token is
+	// absent and replay the bytes into the chosen decoder.
+	raw, err := io.ReadAll(src)
+	if err != nil {
+		return nil, fmt.Errorf("read source: %w", err)
+	}
+	if strings.TrimSpace(format) == "" {
+		if sniffed, ok := SniffImageFormat(headWindow(raw)); ok {
+			format = sniffed
+		}
+	}
+	return s.decodeSource(ctx, format, raw)
+}
+
+// generateAllFromImage is the shared post-decode tail for GenerateAll /
+// GenerateAllWithFormat. It is the UNCHANGED cwebp fan-out + blurhash logic;
+// only the decode step in front of it differs between the two entry points, so
+// the derivative set, storage keys, and encoding are identical regardless of
+// how srcImg was produced.
+func (s *ThumbnailService) generateAllFromImage(ctx context.Context, assetID string, srcImg image.Image) (*ThumbnailResult, error) {
 	bounds := srcImg.Bounds()
 	result := &ThumbnailResult{
 		URLs:   make(map[string]string),
@@ -262,11 +392,29 @@ type FullDerivativeResult struct {
 
 // GenerateAllDerivatives produces thumbnails, cover variants, OG image, and LQIP from a source image.
 func (s *ThumbnailService) GenerateAllDerivatives(ctx context.Context, assetID string, src io.Reader) (*FullDerivativeResult, error) {
-	srcImg, err := imageops.Decode(src, true)
+	// Backward-compatible entry point: no format token. With a nil decoder this
+	// is byte-identical to the prior imageops.Decode(src, true) path.
+	return s.GenerateAllDerivativesWithFormat(ctx, assetID, "", src)
+}
+
+// GenerateAllDerivativesWithFormat is GenerateAllDerivatives with the
+// server-sniffed format token threaded to the wired decoder. Mirrors
+// GenerateAllWithFormat's token resolution and backward-compat semantics: with
+// no decoder wired the token is ignored and decode falls back to imageops.Decode.
+func (s *ThumbnailService) GenerateAllDerivativesWithFormat(ctx context.Context, assetID, format string, src io.Reader) (*FullDerivativeResult, error) {
+	srcImg, err := s.decodeFromSource(ctx, format, src)
 	if err != nil {
+		// Preserve the historical "derivative decode" error prefix so existing
+		// callers/log scrapers are stable; the inner *DecodeError survives %w.
 		return nil, fmt.Errorf("derivative decode: %w", err)
 	}
+	return s.generateAllDerivativesFromImage(ctx, assetID, srcImg)
+}
 
+// generateAllDerivativesFromImage is the shared post-decode tail for
+// GenerateAllDerivatives / GenerateAllDerivativesWithFormat — the UNCHANGED
+// JPEG + WebP + LQIP + watermark fan-out. Only the decode step in front differs.
+func (s *ThumbnailService) generateAllDerivativesFromImage(ctx context.Context, assetID string, srcImg image.Image) (*FullDerivativeResult, error) {
 	bounds := srcImg.Bounds()
 	result := &FullDerivativeResult{
 		Width:  bounds.Dx(),

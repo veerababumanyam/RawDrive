@@ -1,4 +1,20 @@
+import { decodeToImageSource } from "./decode-to-image-source";
 import { encryptBlob, type MediaEncryptionManifest } from "./media-crypto";
+import { encodeCanvasToWebP } from "./webp-encoder";
+
+/**
+ * Thrown by `decodeImage` when a file cannot be decoded in-browser (HEIC/RAW
+ * engine failure, CR3/exotic RAW, corrupt input, or an unsupported browser).
+ * `createEncryptedWebPDerivativeSet` rejects with it, and `use-upload`'s catch
+ * routes the file to the existing `needs_desktop` status. Carries the router's
+ * `detail` so operators see WHY a specific file fell back.
+ */
+export class NeedsDesktopDecodeError extends Error {
+  constructor(detail: string) {
+    super(detail);
+    this.name = "NeedsDesktopDecodeError";
+  }
+}
 
 export type EncryptedDerivative = {
   variant: "thumb_sm_webp" | "thumb_md_webp" | "thumb_lg_webp" | "display_webp";
@@ -82,26 +98,42 @@ export async function createEncryptedWebPDerivativeSet(
 }
 
 async function decodeImage(file: File): Promise<DecodedImage> {
-  if (typeof createImageBitmap === "function") {
-    const bitmap = await createImageBitmap(file);
+  // CD4: route by format. jpeg/png/gif/webp resolve through the router's native
+  // path — the SAME `createImageBitmap(file)` call (and same `{source,width,
+  // height,close}` shape) used before; HEIC/HEIF/AVIF/RAW go through their
+  // dedicated decoders. Anything the browser cannot decode collapses to an
+  // `{ok:false}` result, which we surface to callers as a typed
+  // NeedsDesktopDecodeError so `use-upload` flags the file "needs desktop".
+  const decoded = await decodeToImageSource(file);
+  if (decoded.ok) {
     return {
-      source: bitmap,
-      width: bitmap.width,
-      height: bitmap.height,
-      close: () => bitmap.close(),
+      source: decoded.source,
+      width: decoded.width,
+      height: decoded.height,
+      close: decoded.close,
     };
   }
 
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.decoding = "async";
-    img.src = url;
-    await img.decode();
-    return { source: img, width: img.naturalWidth, height: img.naturalHeight };
-  } finally {
-    URL.revokeObjectURL(url);
+  // Legacy non-`createImageBitmap` environments (older SSR/prerender) kept a
+  // <img>-based fallback for the native path. Preserve it ONLY when the router
+  // bailed because `createImageBitmap` is missing — never for unsupported
+  // formats, which must throw to reach the needs-desktop path.
+  if (typeof createImageBitmap !== "function" && typeof URL?.createObjectURL === "function") {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = url;
+      await img.decode();
+      return { source: img, width: img.naturalWidth, height: img.naturalHeight };
+    } catch {
+      // fall through to the typed error below
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
+
+  throw new NeedsDesktopDecodeError(decoded.detail);
 }
 
 function fitWithin(width: number, height: number, maxWidth: number, maxHeight: number): { width: number; height: number } {
@@ -124,13 +156,8 @@ async function renderWebP(
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) throw new Error("Canvas rendering unavailable");
   ctx.drawImage(source, 0, 0, width, height);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("WebP derivative generation failed"));
-        return;
-      }
-      resolve(blob);
-    }, "image/webp", quality);
-  });
+  // Encode through encodeCanvasToWebP: native canvas.toBlob fast path on
+  // Chromium/Firefox, lazy @jsquash/webp WASM fallback on Safari/iOS where
+  // canvas.toBlob ignores the "image/webp" type.
+  return encodeCanvasToWebP(canvas, quality);
 }

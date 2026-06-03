@@ -44,7 +44,15 @@ FROM alpine:3.20.10 AS runtime
 # - ffmpeg: used by processing_pipeline.go:tryVideoThumbnail for video poster
 #   frame extraction. Graceful-degrade in code, but we ship it for feature
 #   parity with the pre-existing Dockerfile (commit c481200).
-RUN apk add --no-cache ca-certificates tzdata curl libwebp-tools ffmpeg
+# - perl-image-exiftool→exiftool, libheif-tools→heif-convert
+#   (used by the HEIC/RAW decoder to decode camera HEIC + RAW originals into a
+#   format cwebp can read). CGO stays disabled — these are runtime CLIs the Go
+#   binary shells out to, not linked libraries.
+#   NOTE: `dcraw` is NOT packaged for Alpine 3.20 (dropped upstream), so it is
+#   not installed. The RAW decoder uses exiftool's embedded-preview extraction
+#   as its primary path; the dcraw fallback in image_decoder_external.go is
+#   LookPath-gated and simply skipped when the binary is absent.
+RUN apk add --no-cache ca-certificates tzdata curl libwebp-tools ffmpeg perl-image-exiftool libheif-tools
 
 # Non-root user — drops privileges even if the binary is exploited
 RUN addgroup -S rawdrive && adduser -S -G rawdrive rawdrive

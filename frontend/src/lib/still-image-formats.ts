@@ -7,6 +7,15 @@ export const BROWSER_DECODE_STILL_IMAGE_MIME_TYPES = [
   "image/x-png",
   "image/webp",
   "image/gif",
+  // CD4: now decoded in-browser. HEIC/HEIF via the libheif WASM decoder, AVIF
+  // natively (gated on feature-detect), camera RAW via embedded-JPEG-preview
+  // extraction. The raw `image/x-*` MIME aliases for these families are matched
+  // by extension (the `image/x-*` block in browser-upload-support narrows
+  // around the BROWSER_DECODE extension check), so they are not listed here.
+  "image/heic",
+  "image/heif",
+  "image/hif",
+  "image/avif",
 ] as const;
 
 export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
@@ -18,40 +27,48 @@ export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
   "png",
   "webp",
   "gif",
+  // CD4: HEIC/HEIF/AVIF + TIFF-based camera RAW whose embedded preview the
+  // browser decoders can extract (cr2/nef/arw/dng/orf/raf/rw2). CR3 + exotic
+  // RAW deliberately stay desktop-only below.
+  "heic",
+  "heif",
+  "hif",
+  "avif",
+  "cr2",
+  "nef",
+  "arw",
+  "dng",
+  "orf",
+  "raf",
+  "rw2",
 ] as const;
 
 export const DESKTOP_REQUIRED_STILL_IMAGE_MIME_TYPES = [
   "image/tiff",
   "image/tif",
   "image/x-tiff",
-  "image/heic",
-  "image/heif",
-  "image/hif",
-  "image/avif",
 ] as const;
 
+// CD4: cr2/nef/arw/dng/orf/raf/rw2 + heic/heif/hif/avif moved to the
+// BROWSER_DECODE sets above. Everything below stays desktop-only: CR3 (ISO-BMFF,
+// no sliceable TIFF preview), exotic / proprietary RAW the browser decoders
+// cannot parse, and multi-page / non-baseline TIFF.
 export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "3fr",
   "ari",
   "arq",
-  "arw",
   "bay",
   "bmq",
   "cap",
   "cine",
-  "cr2",
   "cr3",
   "crw",
   "cs1",
   "dcr",
   "dc2",
-  "dng",
   "erf",
   "fff",
   "gpr",
-  "hif",
-  "heic",
-  "heif",
   "ia",
   "iiq",
   "k25",
@@ -61,20 +78,16 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "mef",
   "mos",
   "mrw",
-  "nef",
   "nrw",
-  "orf",
   "ori",
   "pef",
   "pxn",
   "qtk",
   "r3d",
-  "raf",
   "raw",
   "rdc",
   "rw1",
   "rwl",
-  "rw2",
   "rwz",
   "sr2",
   "srf",
@@ -83,13 +96,20 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "tif",
   "tiff",
   "x3f",
-  "avif",
 ] as const;
 
-export const FILE_PICKER_STILL_IMAGE_ACCEPT = [
-  "image/*",
-  ...DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS.map((ext) => `.${ext}`),
-].join(",");
+// CD4: the OS file picker must still surface browser-decodable RAW/HEIC files.
+// `image/*` covers the HEIC/HEIF/AVIF MIME types, but camera RAW reports an
+// empty or `image/x-*` MIME the picker's `image/*` glob won't match — so the
+// now-browser-decodable RAW extensions are listed explicitly alongside the
+// desktop-only ones. Duplicates between the two sets are de-duped.
+export const FILE_PICKER_STILL_IMAGE_ACCEPT = Array.from(
+  new Set<string>([
+    "image/*",
+    ...BROWSER_DECODE_STILL_IMAGE_EXTENSIONS.map((ext) => `.${ext}`),
+    ...DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS.map((ext) => `.${ext}`),
+  ]),
+).join(",");
 
 export const STILL_IMAGE_DROPZONE_ACCEPT: Record<string, string[]> = {
   "image/jpeg": [".jpg", ".jpeg", ".jpe", ".jfif", ".jfi"],

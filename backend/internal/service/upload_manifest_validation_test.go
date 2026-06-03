@@ -160,41 +160,61 @@ func TestValidateForSessionCreate_BlockDecision_Rejected(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FR-UPS-033 / AC-UPS-004: strict_client_scan needs desktop for TIFF/HEIC/RAW
-// Since M16 has no desktop, these return ErrScanDesktopRequired (not a generic
-// engine-not-allowed) so the UI can show a "RawDrive Desktop coming in M17" message.
+// FR-UPS-033 / AC-UPS-004 + FMT-1 / H5: strict_client_scan and the
+// server-decodable families.
+//
+// Originally (M16) TIFF/HEIC/RAW all returned ErrScanDesktopRequired because
+// the server could not decode them. FMT-1 / H5 added a server-side
+// CompositeDecoder, so the families it can decode now pass session-create
+// (accepted, server processes them). Only families OUTSIDE the decoder's
+// capability still require a desktop scanner.
 // ─────────────────────────────────────────────────────────────────────────────
 
-func TestValidateForSessionCreate_StrictClientScan_Tiff_DesktopRequired(t *testing.T) {
+func TestValidateForSessionCreate_StrictClientScan_Tiff_Accepted(t *testing.T) {
 	v := newValidatorEnforced(&stubCatalog{})
 	m := validManifest()
 	m.DetectedFormat = "tiff"
 	m.FileName = "scan.tiff"
 	err := v.ValidateForSessionCreate(context.Background(), PolicyModeStrictClientScan, m)
-	if !errors.Is(err, ErrScanDesktopRequired) {
-		t.Fatalf("expected ErrScanDesktopRequired for TIFF in strict mode, got %v", err)
+	if err != nil {
+		t.Fatalf("expected TIFF to be accepted in strict mode (server-decodable, FMT-1/H5), got %v", err)
 	}
 }
 
-func TestValidateForSessionCreate_StrictClientScan_Heic_DesktopRequired(t *testing.T) {
+func TestValidateForSessionCreate_StrictClientScan_Heic_Accepted(t *testing.T) {
 	v := newValidatorEnforced(&stubCatalog{})
 	m := validManifest()
 	m.DetectedFormat = "heic"
 	err := v.ValidateForSessionCreate(context.Background(), PolicyModeStrictClientScan, m)
-	if !errors.Is(err, ErrScanDesktopRequired) {
-		t.Fatalf("expected ErrScanDesktopRequired for HEIC in strict mode, got %v", err)
+	if err != nil {
+		t.Fatalf("expected HEIC to be accepted in strict mode (server-decodable, FMT-1/H5), got %v", err)
 	}
 }
 
-func TestValidateForSessionCreate_StrictClientScan_Raw_DesktopRequired(t *testing.T) {
-	for _, format := range []string{"cr2", "cr3", "crw", "nef", "nrw", "arw", "arq", "gpr", "dng", "rw2", "rwl"} {
+func TestValidateForSessionCreate_StrictClientScan_DecodableRaw_Accepted(t *testing.T) {
+	for _, format := range []string{"cr2", "cr3", "nef", "arw", "dng", "rw2", "raf", "orf", "avif"} {
+		t.Run(format, func(t *testing.T) {
+			v := newValidatorEnforced(&stubCatalog{})
+			m := validManifest()
+			m.DetectedFormat = format
+			err := v.ValidateForSessionCreate(context.Background(), PolicyModeStrictClientScan, m)
+			if err != nil {
+				t.Fatalf("expected server-decodable %s to be accepted in strict mode, got %v", format, err)
+			}
+		})
+	}
+}
+
+func TestValidateForSessionCreate_StrictClientScan_NonDecodableRaw_DesktopRequired(t *testing.T) {
+	// Families the CompositeDecoder cannot handle still require a desktop agent.
+	for _, format := range []string{"crw", "nrw", "arq", "gpr", "rwl"} {
 		t.Run(format, func(t *testing.T) {
 			v := newValidatorEnforced(&stubCatalog{})
 			m := validManifest()
 			m.DetectedFormat = format
 			err := v.ValidateForSessionCreate(context.Background(), PolicyModeStrictClientScan, m)
 			if !errors.Is(err, ErrScanDesktopRequired) {
-				t.Fatalf("expected ErrScanDesktopRequired for %s in strict mode, got %v", format, err)
+				t.Fatalf("expected ErrScanDesktopRequired for non-decodable %s in strict mode, got %v", format, err)
 			}
 		})
 	}
@@ -263,25 +283,24 @@ func TestIsEngineAllowedForFormat_StrictClientScan_BrowserWorkerJpegAllowed(t *t
 	}
 }
 
-func TestIsEngineAllowedForFormat_StrictClientScan_BrowserWorkerTiffRejected(t *testing.T) {
-	// TIFF needs desktop in strict mode; desktop doesn't exist in M16 → rejected.
-	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "tiff", PolicyModeStrictClientScan) {
-		t.Error("strict_client_scan should REJECT browser-worker TIFF in M16 (no desktop yet)")
+// FMT-1 / H5: server-side decode (CompositeDecoder) now handles the
+// HEIC/RAW/TIFF/AVIF families, so strict_client_scan ACCEPTS the
+// server-decodable set instead of demanding a (still-unshipped) desktop agent.
+// Only formats outside the decoder's capability (e.g. Sony ARQ, GoPro GPR,
+// CRW) stay rejected. The non-image security boundary is unchanged — it lives
+// in SniffImageFormat at finalize, not in this allowlist.
+func TestIsEngineAllowedForFormat_StrictClientScan_ServerDecodableAllowed(t *testing.T) {
+	for _, f := range []string{"tiff", "heic", "heif", "avif", "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2"} {
+		if !IsEngineAllowedForFormat(ScanEngineBrowserWorker, f, PolicyModeStrictClientScan) {
+			t.Errorf("strict_client_scan should ACCEPT server-decodable %s (FMT-1/H5)", f)
+		}
 	}
-	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "heic", PolicyModeStrictClientScan) {
-		t.Error("strict_client_scan should REJECT browser-worker HEIC in M16")
-	}
-	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "avif", PolicyModeStrictClientScan) {
-		t.Error("strict_client_scan should REJECT browser-worker AVIF in M16")
-	}
-	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "cr2", PolicyModeStrictClientScan) {
-		t.Error("strict_client_scan should REJECT browser-worker CR2 in M16")
-	}
-	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "arq", PolicyModeStrictClientScan) {
-		t.Error("strict_client_scan should REJECT browser-worker Sony ARQ in M16")
-	}
-	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "gpr", PolicyModeStrictClientScan) {
-		t.Error("strict_client_scan should REJECT browser-worker GoPro GPR in M16")
+	// These RAW families are NOT in the CompositeDecoder's dispatch set, so the
+	// relaxation must NOT accept them — they still need a desktop scanner.
+	for _, f := range []string{"arq", "gpr", "crw", "nrw", "rwl", "pef", "srw", "x3f"} {
+		if IsEngineAllowedForFormat(ScanEngineBrowserWorker, f, PolicyModeStrictClientScan) {
+			t.Errorf("strict_client_scan must still REJECT non-server-decodable %s", f)
+		}
 	}
 }
 
@@ -298,6 +317,32 @@ func TestIsEngineAllowedForFormat_StrictOriginalPreservation_RejectsBrowserWorke
 func TestIsEngineAllowedForFormat_UnknownMode_FailsClosed(t *testing.T) {
 	if IsEngineAllowedForFormat(ScanEngineBrowserWorker, "jpeg", PolicyMode("bogus")) {
 		t.Error("unknown policy mode must fail closed")
+	}
+}
+
+// FMT-1 / H5: IsServerDecodableFormat is the single source of truth for the
+// relaxation paths and MUST stay in lock-step with CompositeDecoder.Decode.
+func TestIsServerDecodableFormat(t *testing.T) {
+	decodable := []string{
+		"jpeg", "png", "gif", "tiff", "webp",
+		"heic", "heif", "avif",
+		"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2",
+		// alias normalization
+		"jpg", "tif",
+	}
+	for _, f := range decodable {
+		if !IsServerDecodableFormat(f) {
+			t.Errorf("expected %q to be server-decodable", f)
+		}
+	}
+	notDecodable := []string{
+		"", "crw", "nrw", "arq", "gpr", "rwl", "pef", "srw", "x3f",
+		"pdf", "zip", "svg", "html", "bmp", "unknown",
+	}
+	for _, f := range notDecodable {
+		if IsServerDecodableFormat(f) {
+			t.Errorf("expected %q to NOT be server-decodable", f)
+		}
 	}
 }
 

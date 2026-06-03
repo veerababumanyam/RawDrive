@@ -69,10 +69,20 @@ var desktopRequiredFormats = map[string]struct{}{
 //
 // Truth table (M16 — no desktop shipped yet):
 //   standard                     │ any engine OK for any format
-//   strict_client_scan           │ browser-worker OK for jpeg/png/webp/gif ONLY
-//                                │ TIFF/HEIC/AVIF/RAW → ErrScanDesktopRequired
+//   strict_client_scan           │ browser-worker OK for jpeg/png/webp/gif
+//                                │ PLUS the server-decodable HEIC/RAW/TIFF/AVIF
+//                                │ family (FMT-1 / H5 — server-side decode now
+//                                │ handles these without a desktop scanner)
 //   strict_original_preservation │ browser-worker rejected for everything
 //                                │ (needs signed desktop/cli — not in M16)
+//
+// FMT-1 / H5 update: now that the server has a CGO-free CompositeDecoder
+// (heif-convert for HEIC/HEIF/AVIF, exiftool/dcraw embedded-preview for RAW,
+// pure-Go for TIFF/WebP) the strict_client_scan mode no longer needs a desktop
+// agent for those families — the browser worker's manifest is corroborating
+// telemetry and the server decodes the bytes itself at processing time. The
+// non-image security boundary is unchanged: SniffImageFormat still hard-rejects
+// PDF/ZIP/ELF/PE/Mach-O/SVG/HTML/XML at finalize regardless of this allowlist.
 //
 // Spec: feature-prd.md §4.4 (FR-UPS-023, FR-UPS-024)
 // Spec: feature-architecture-delta.md §4.2 (engine allowlist matrix)
@@ -89,9 +99,15 @@ func IsEngineAllowedForFormat(engine ScanEngine, format string, mode PolicyMode)
 		return true
 
 	case PolicyModeStrictClientScan:
-		// Browser worker is OK for common web formats only.
+		// Browser worker is OK for the common web formats it can scan
+		// in-page, PLUS the HEIC/RAW/TIFF/AVIF families the server now
+		// decodes itself (FMT-1 / H5). The browser worker cannot fully scan
+		// those families, but the server-side decode makes them safe to
+		// accept here — the manifest is corroborating telemetry, and the
+		// non-image hard rejections still run from the actual stored bytes at
+		// finalize via SniffImageFormat.
 		if engine == ScanEngineBrowserWorker {
-			return isBrowserWorkerFormat(format)
+			return isBrowserWorkerFormat(format) || IsServerDecodableFormat(format)
 		}
 		// Desktop / CLI would be OK if they existed, but they don't in M16.
 		return false
@@ -110,6 +126,27 @@ func IsEngineAllowedForFormat(engine ScanEngine, format string, mode PolicyMode)
 func isBrowserWorkerFormat(format string) bool {
 	switch format {
 	case "jpeg", "jpg", "png", "webp", "gif":
+		return true
+	}
+	return false
+}
+
+// IsServerDecodableFormat reports whether the server-side CompositeDecoder
+// (see image_decoder.go) can turn a stored object of this format into a
+// decodable image without a client/desktop scanner. This is the FMT-1 / H5
+// single source of truth for "the server can process this itself": the set
+// MUST stay in lock-step with CompositeDecoder.Decode's dispatch switch.
+//
+// Token form follows NormalizeImageFormat (jpg→jpeg, tif→tiff), so callers may
+// pass raw sniffer/manifest tokens. An empty or unknown token returns false
+// (fail closed) — it is NOT a non-image gate (SniffImageFormat owns that) but a
+// positive capability check the relaxation paths layer on top of the security
+// boundary.
+func IsServerDecodableFormat(format string) bool {
+	switch NormalizeImageFormat(format) {
+	case "jpeg", "png", "gif", "tiff", "webp",
+		"heic", "heif", "avif",
+		"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
 		return true
 	}
 	return false

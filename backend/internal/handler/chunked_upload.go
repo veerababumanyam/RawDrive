@@ -1185,6 +1185,15 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		return nil, err
 	}
 	sourceMetadata := decodeSourceMetadata(row.SourceMetadata)
+
+	// FMT-1 / H5: the server-detected decode format, persisted onto the asset
+	// so the derivative worker dispatches the right decoder without re-reading
+	// and re-sniffing the original. Computed only for plaintext image uploads:
+	// client-side-encrypted media stores ciphertext (no recoverable image
+	// header) and is not fed through the server decode pipeline, so it stays
+	// nil. nil also means "unknown" — the worker falls back to its own sniff.
+	var decodeFormat *string
+
 	if mediaEncrypted {
 		if err := verifyClientSideMediaDigest(mediaManifest, fullHashHex, row.TotalSize); err != nil {
 			_ = h.store.Delete(ctx, storageKey)
@@ -1196,6 +1205,17 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 			_ = h.store.Delete(ctx, storageKey)
 			releaseReservation("verify-failure")
 			return nil, err
+		}
+		// Sniff the composed object's head for the server decode format. This
+		// reuses the same head window the verify step already validated, so it
+		// adds no extra storage read. The sniffer is the non-image security
+		// boundary too — a token only lands here if it positively recognized
+		// an image. An unrecognized/empty result leaves decodeFormat nil so
+		// the worker re-sniffs (preserving legacy behavior for any edge the
+		// content-type path accepted but the byte-sniff did not classify).
+		if sniffed, ok := service.SniffImageFormat(head); ok {
+			normalized := service.NormalizeImageFormat(sniffed)
+			decodeFormat = &normalized
 		}
 	}
 
@@ -1231,6 +1251,10 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		EncryptionAlgo:    assetEncryptionAlgo,
 		EncryptionVersion: assetEncryptionVersion,
 		MediaEncryption:   mediaManifest,
+		// FMT-1 / H5: server-sniffed decode format (nil = unknown/encrypted →
+		// worker re-sniffs). Lets the derivative worker pick the HEIC/RAW/TIFF
+		// decoder without re-reading the original to classify it.
+		DecodeFormat: decodeFormat,
 	}
 	applyScanMetadata(asset, manifest)
 	assetPersisted := false
@@ -1432,10 +1456,23 @@ func (h *ChunkedUploadHandler) verifyUploadBytesAtFinalize(
 	case "jpeg", "png", "webp", "gif":
 		return service.VerifyHeaderTrailerBytes(head, tail, format)
 	default:
-		// RAW/HEIC/TIFF/AVIF require the desktop/source-side scanner before
-		// server fallback decoding ships. The API accepts their session only
-		// when a scanner manifest is present; without one, fail closed.
-		return service.ErrScanManifestRequired
+		// FMT-1 / H5: RAW/HEIC/TIFF/AVIF used to fail closed here
+		// (ErrScanManifestRequired) because the server could not decode them
+		// without a desktop/source-side scanner manifest. Server-side decode
+		// now exists (CompositeDecoder), so a manifest-less upload of a
+		// server-decodable family is accepted — BUT only after the actual
+		// stored bytes clear the non-image security boundary. We re-sniff the
+		// composed object's head: SniffImageFormat hard-rejects every
+		// polyglot/non-image container (PDF/ZIP/ELF/PE/Mach-O/SVG/HTML/XML)
+		// and returns ("", false) for anything it does not positively
+		// recognize as an image, so a content_type of "image/heic" wrapping a
+		// PDF cannot slip through. The sniffed token must ALSO be one the
+		// server can actually decode; otherwise fail closed exactly as before.
+		sniffed, recognized := service.SniffImageFormat(head)
+		if !recognized || !service.IsServerDecodableFormat(sniffed) {
+			return service.ErrScanManifestRequired
+		}
+		return nil
 	}
 }
 

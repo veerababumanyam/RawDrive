@@ -47,6 +47,49 @@ type Asset struct {
 	UploadScanRiskScore     *float64                 `json:"upload_scan_risk_score,omitempty"`
 	UploadScanFindings      []map[string]interface{} `json:"upload_scan_findings,omitempty"`
 	UploadScanManifestHash  *string                  `json:"upload_scan_manifest_hash,omitempty"`
+
+	// Retry/failure state-machine tracking (migration 152). The ThumbnailWorker
+	// classifies decode failures as transient (retryable) vs terminal; these
+	// columns let the poller schedule bounded exponential backoff and dead-letter
+	// poison messages. RetryCount counts attempts so far; NextRetryAt is the
+	// earliest time the asset is eligible for another attempt (NULL = not
+	// scheduled / never attempted); DecodeFormat is the server-sniffed format
+	// token the last attempt decoded against. Populated by ListRetryable; kept
+	// out of the generic List/GetByID scans (no read-path caller yet) for the
+	// same reason as the upload-scan columns above.
+	RetryCount   int        `json:"retry_count"`
+	NextRetryAt  *time.Time `json:"next_retry_at,omitempty"`
+	DecodeFormat *string    `json:"decode_format,omitempty"`
+}
+
+// MaxDecodeRetries is the hard cap on transient-failure retries for a single
+// asset before the worker dead-letters it as terminal. ~5 attempts with
+// exponential backoff spans roughly a minute of transient-fault tolerance,
+// which is enough to ride out an object-store hiccup or a freshly-installed CLI
+// without retry-looping a genuinely poison upload forever.
+const MaxDecodeRetries = 5
+
+// retryBackoff returns the delay before the next retry attempt given how many
+// attempts have already been made. Bounded exponential backoff: 2^attempt
+// seconds, capped so a long-lived transient fault does not push next_retry_at
+// absurdly far into the future. attempt 0 → 1s, 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s.
+func retryBackoff(retryCount int) time.Duration {
+	const (
+		base   = 1 * time.Second
+		maxDur = 5 * time.Minute
+	)
+	if retryCount < 0 {
+		retryCount = 0
+	}
+	// Shift guard: cap the exponent so 1<<retryCount cannot overflow.
+	if retryCount > 20 {
+		return maxDur
+	}
+	d := base << uint(retryCount)
+	if d > maxDur || d <= 0 {
+		return maxDur
+	}
+	return d
 }
 
 // AssetFilter contains composable filters for listing assets.
@@ -98,13 +141,13 @@ func (r *AssetRepo) Create(ctx context.Context, a *Asset) error {
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by, status,
 		 created_at, updated_at, is_encrypted, encryption_algo, encryption_version,
 		 media_encryption, upload_scan_status, upload_scan_engine, upload_scan_policy_version,
-		 upload_scan_risk_score, upload_scan_findings, upload_scan_manifest_hash)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24,$25::jsonb,$26)`,
+		 upload_scan_risk_score, upload_scan_findings, upload_scan_manifest_hash, decode_format)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24,$25::jsonb,$26,$27)`,
 		a.ID, a.WorkspaceID, a.Filename, a.ContentType, a.SizeBytes, a.StorageKey,
 		a.StorageDriver, a.Width, a.Height, a.Blurhash, jsonMapString(a.ExifData), jsonStringMap(a.ThumbnailURLs),
 		a.UploadedBy, a.Status, a.CreatedAt, a.UpdatedAt, a.IsEncrypted, a.EncryptionAlgo, a.EncryptionVersion,
 		jsonMapString(jsonMapOrEmpty(a.MediaEncryption)), a.UploadScanStatus, a.UploadScanEngine, a.UploadScanPolicyVersion,
-		a.UploadScanRiskScore, nullableJSON(a.UploadScanFindings), a.UploadScanManifestHash,
+		a.UploadScanRiskScore, nullableJSON(a.UploadScanFindings), a.UploadScanManifestHash, a.DecodeFormat,
 	)
 	if err != nil {
 		return fmt.Errorf("asset repo create: %w", err)
@@ -503,6 +546,133 @@ func (r *AssetRepo) RetryFailedByGallery(ctx context.Context, galleryID, workspa
 		return 0, fmt.Errorf("asset repo retry failed by gallery: %w", err)
 	}
 	return tag.RowsAffected(), nil
+}
+
+// ListRetryable returns assets the ThumbnailWorker poller should attempt to
+// (re)decode. A row is retryable when it is a non-deleted, status='processing'
+// asset that is EITHER:
+//
+//   - never attempted (next_retry_at IS NULL — the fresh-upload case), OR
+//   - due for another attempt (next_retry_at <= now()) AND still within the
+//     retry budget (retry_count < MaxDecodeRetries).
+//
+// Terminal 'failed' rows are excluded (re-decoding is pointless), as are rows
+// still inside their backoff window or that have exhausted the retry cap. The
+// predicate is served by the idx_assets_retryable partial index (migration 152):
+// (status='processing' AND deleted_at IS NULL) keyed on next_retry_at.
+//
+// This is the backoff-aware retry source for the decode pipeline: it folds the
+// never-attempted set and the backoff-aware retry set into one query so a
+// transiently-failed asset is not re-picked before its backoff elapses.
+func (r *AssetRepo) ListRetryable(ctx context.Context, limit int) ([]Asset, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
+		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
+		 status, created_at, updated_at, deleted_at, retry_count, next_retry_at, decode_format
+		 FROM assets
+		 WHERE status = 'processing' AND deleted_at IS NULL
+		   AND (
+		         next_retry_at IS NULL
+		         OR (next_retry_at <= now() AND retry_count < $1)
+		       )
+		 ORDER BY created_at ASC
+		 LIMIT $2`,
+		MaxDecodeRetries, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo list retryable: %w", err)
+	}
+	defer rows.Close()
+
+	var assets []Asset
+	for rows.Next() {
+		var a Asset
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.RetryCount, &a.NextRetryAt, &a.DecodeFormat,
+		); err != nil {
+			return nil, fmt.Errorf("asset repo list retryable scan: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
+}
+
+// GetRetryCount returns the current retry_count for an asset. Used by the worker
+// to make the dead-letter (max-retries) decision against committed DB state
+// rather than a possibly-stale in-memory struct. Returns an error if the asset
+// does not exist.
+func (r *AssetRepo) GetRetryCount(ctx context.Context, id uuid.UUID) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT retry_count FROM assets WHERE id = $1`, id).Scan(&count)
+	if err == pgx.ErrNoRows {
+		return 0, fmt.Errorf("asset repo get retry count: asset %s not found", id)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("asset repo get retry count: %w", err)
+	}
+	return count, nil
+}
+
+// MarkTransientFailure records a retryable decode failure: it increments
+// retry_count, schedules next_retry_at = now() + exponential backoff (computed
+// from the PRE-increment retry_count so the first failure waits the base delay),
+// stamps processing_error with the reason, and leaves status at 'processing' so
+// the asset stays in the ListRetryable set. The backoff is computed in Go and
+// passed as an interval so the schedule is testable and independent of DB clock
+// skew between callers.
+func (r *AssetRepo) MarkTransientFailure(ctx context.Context, id uuid.UUID, reason string) error {
+	// Read the current retry_count so the backoff grows with prior attempts.
+	var current int
+	err := r.pool.QueryRow(ctx,
+		`SELECT retry_count FROM assets WHERE id = $1`, id,
+	).Scan(&current)
+	if err == pgx.ErrNoRows {
+		return fmt.Errorf("asset repo mark transient failure: asset %s not found", id)
+	}
+	if err != nil {
+		return fmt.Errorf("asset repo mark transient failure read: %w", err)
+	}
+
+	backoff := retryBackoff(current)
+	_, err = r.pool.Exec(ctx,
+		`UPDATE assets
+		    SET retry_count = retry_count + 1,
+		        next_retry_at = now() + ($2 * interval '1 second'),
+		        processing_error = $3,
+		        status = 'processing',
+		        updated_at = now()
+		  WHERE id = $1`,
+		id, backoff.Seconds(), reason,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo mark transient failure: %w", err)
+	}
+	return nil
+}
+
+// MarkTerminalFailure dead-letters an asset: status='failed', processing_error
+// set to the reason, and next_retry_at cleared so it drops out of the retryable
+// set permanently. Used for poison-message decode failures (corrupt bytes,
+// unsupported format) and when an asset exhausts MaxDecodeRetries.
+func (r *AssetRepo) MarkTerminalFailure(ctx context.Context, id uuid.UUID, reason string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE assets
+		    SET status = 'failed',
+		        processing_error = $2,
+		        next_retry_at = NULL,
+		        updated_at = now()
+		  WHERE id = $1`,
+		id, reason,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo mark terminal failure: %w", err)
+	}
+	return nil
 }
 
 // Restore clears the deleted_at timestamp and sets status back to active.

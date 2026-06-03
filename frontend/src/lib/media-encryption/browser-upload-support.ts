@@ -24,6 +24,11 @@ export function getBrowserE2EEUploadBlockReason(file: File): string | null {
   }
 
   const type = file.type.trim().toLowerCase();
+  // CD4 — browser-decodable check FIRST (and by name, so it wins over the
+  // `image/x-*` blanket reject below). HEIC/HEIF/AVIF + the cr2/nef/arw/dng/
+  // orf/raf/rw2 RAW families now decode in-browser; many of those RAW files
+  // carry an `image/x-<vendor>` MIME, so a name-based allow must run before the
+  // `image/x-*` block or they'd be falsely routed to desktop.
   if (
     BROWSER_DECODE_MIME_TYPES.has(type) ||
     isBrowserDecodableStillImageName(file.name)
@@ -31,6 +36,10 @@ export function getBrowserE2EEUploadBlockReason(file: File): string | null {
     return null;
   }
 
+  // CR3, exotic/proprietary RAW, TIFF, and any other `image/x-*` still image
+  // remain desktop-only. The `image/x-*` glob is now reached ONLY for formats
+  // the in-browser decoders cannot handle, because every browser-decodable
+  // family returned null above.
   if (
     DESKTOP_REQUIRED_MIME_TYPES.has(type) ||
     type.startsWith("image/x-") ||

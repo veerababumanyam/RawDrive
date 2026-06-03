@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FILE_PICKER_STILL_IMAGE_ACCEPT,
   isAcceptedStillImageFile,
+  isBrowserDecodableStillImageName,
   isDesktopRequiredStillImageName,
 } from "../still-image-formats";
 
@@ -13,25 +14,43 @@ describe("still image format registry", () => {
     },
   );
 
-  it.each(["IMG_0001.CR2", "IMG_0001.CR3", "IMG_0001.CRW", "DSC_0001.NEF", "DSC_0001.NRW"])(
-    "accepts Canon/Nikon RAW extension %s",
+  // CD4: cr2/nef/arw/dng/orf/raf/rw2 + heic/heif/hif/avif now decode in-browser.
+  it.each([
+    "IMG_0001.CR2",
+    "DSC_0001.NEF",
+    "sony.ARW",
+    "adobe.DNG",
+    "olympus.ORF",
+    "fuji.RAF",
+    "panasonic.RW2",
+    "iphone.HEIC",
+    "clip.HEIF",
+    "apple.HIF",
+    "hero.AVIF",
+  ])("treats now-browser-decodable %s as browser-decodable (not desktop-only)", (name) => {
+    expect(isAcceptedStillImageFile(new File(["raw"], name, { type: "" }))).toBe(true);
+    expect(isBrowserDecodableStillImageName(name)).toBe(true);
+    expect(isDesktopRequiredStillImageName(name)).toBe(false);
+  });
+
+  // CR3 + exotic RAW + multi-page TIFF stay desktop-only.
+  it.each(["IMG_0001.CR3", "IMG_0001.CRW", "DSC_0001.NRW", "sony.ARQ", "gopro.GPR", "leica.RWL", "sigma.X3F", "scan.TIFF"])(
+    "keeps desktop-only RAW/exotic extension %s on the desktop path",
     (name) => {
       expect(isAcceptedStillImageFile(new File(["raw"], name, { type: "" }))).toBe(true);
       expect(isDesktopRequiredStillImageName(name)).toBe(true);
+      expect(isBrowserDecodableStillImageName(name)).toBe(false);
     },
   );
 
-  it.each(["sony.ARW", "sony.ARQ", "sony.SR2", "sony.SRF", "gopro.GPR", "leica.RWL"])(
-    "accepts Sony/GoPro/Leica RAW extension %s",
-    (name) => {
-      expect(isAcceptedStillImageFile(new File(["raw"], name, { type: "" }))).toBe(true);
-      expect(isDesktopRequiredStillImageName(name)).toBe(true);
-    },
-  );
-
-  it("keeps the file picker accept list in sync with desktop-only still formats", () => {
+  it("keeps the file picker accept list inclusive of browser-decodable and desktop-only formats", () => {
     expect(FILE_PICKER_STILL_IMAGE_ACCEPT).toContain("image/*");
-    for (const ext of [".crw", ".arq", ".gpr", ".hif", ".rwz"]) {
+    // browser-decodable RAW/HEIC must still be pickable (RAW reports image/x-* MIME)
+    for (const ext of [".cr2", ".nef", ".raf", ".heic", ".avif"]) {
+      expect(FILE_PICKER_STILL_IMAGE_ACCEPT).toContain(ext);
+    }
+    // desktop-only formats remain pickable too
+    for (const ext of [".crw", ".arq", ".gpr", ".rwz", ".cr3"]) {
       expect(FILE_PICKER_STILL_IMAGE_ACCEPT).toContain(ext);
     }
   });

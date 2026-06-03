@@ -79,6 +79,27 @@ describe("runScreeningWorker", () => {
     expect(worker.terminated).toBe(true);
   });
 
+  it("forwards the File (including its name) so the worker can screen by extension (CD5b)", () => {
+    // CD5b: the screener disambiguates TIFF-based RAW (NEF/ARW/DNG/ORF/RW2) by
+    // filename extension. The client posts the whole File — File.name survives
+    // the structured clone across postMessage — so no separate name string is
+    // needed; the worker reads file.name and passes it as declaredName.
+    const file = new File([new Uint8Array([0x49, 0x49, 0x2a, 0x00])], "IMG_1234.nef", {
+      type: "image/tiff",
+    });
+    const worker = new FakeWorker();
+    void runScreeningWorker(
+      file,
+      "test-policy",
+      512,
+      "raw-1",
+      () => worker as unknown as Worker,
+    );
+
+    expect(worker.posted?.file).toBe(file);
+    expect(worker.posted?.file.name).toBe("IMG_1234.nef");
+  });
+
   it("rejects worker errors with the worker message", async () => {
     const file = new File(["bad"], "bad.jpg", { type: "image/jpeg" });
     const worker = new FakeWorker();

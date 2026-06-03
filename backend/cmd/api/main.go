@@ -1760,7 +1760,8 @@ func main() {
 	assetSvc := service.NewAssetService(assetRepo, storageProvider).
 		WithStorageAccounting(storageAccountingSvc).
 		WithDerivativeRepo(assetDerivativeRepo)
-	thumbnailSvc := service.NewThumbnailService(storageProvider)
+	thumbnailSvc := service.NewThumbnailService(storageProvider).
+		WithDecoder(service.NewCompositeDecoder())
 	coverSvc := service.NewGalleryCoverService(galleryRepo, galleryAssetRepo)
 	gallerySvc := service.NewGalleryService(galleryRepo, galleryAssetRepo, coverSvc).
 		WithAssetRepo(assetRepo).

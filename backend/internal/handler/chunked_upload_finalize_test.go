@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -112,6 +113,91 @@ func TestVerifyManifestAtFinalize_FormatSpotCheckDetectsCorruption(t *testing.T)
 	require.Error(t, err, "corrupt JPEG must fail the header/trailer spot-check")
 	assert.ErrorIs(t, err, service.ErrScanHashMismatch,
 		"spot-check failure currently surfaces as ErrScanHashMismatch by design")
+}
+
+// ─── FMT-1 / H5: HEIC/RAW accepted at finalize; polyglots still rejected ──────
+
+// newHandlerNoValidator builds a handler with NO validation service wired, so
+// verifyUploadBytesAtFinalize takes the content-type-driven byte-check default
+// branch (the path H5 relaxed) rather than the manifest path.
+func newHandlerNoValidator() *handler.ChunkedUploadHandler {
+	return handler.NewChunkedUploadHandler(nil, nil, nil, nil)
+}
+
+// heicHead is a minimal valid ISO-BMFF "ftyp" box with the "heic" major brand:
+// [size=0x18][ftyp][heic][minor][compat...]. SniffImageFormat recognizes this
+// as "heic" (a server-decodable family).
+var heicHead = []byte{
+	0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c',
+	0x00, 0x00, 0x00, 0x00, 'm', 'i', 'f', '1', 'h', 'e', 'i', 'c',
+}
+
+// cr2Head is a Canon CR2 header: TIFF little-endian (II 2A 00 ...) with "CR" at
+// offset 8. SniffImageFormat returns "cr2".
+var cr2Head = []byte{
+	'I', 'I', 0x2A, 0x00, 0x10, 0x00, 0x00, 0x00, 'C', 'R', 0x02, 0x00,
+}
+
+// tiffHead is a plain little-endian TIFF (DNG and several RAW families share
+// this container). SniffImageFormat returns the generic "tiff" token.
+var tiffHead = []byte{'I', 'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00}
+
+// pdfPolyglot is a PDF declared as image/heic — the classic polyglot attack the
+// security boundary must reject regardless of the relaxed format gate.
+var pdfPolyglot = append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte{0x20}, 32)...)
+
+func TestVerifyUploadBytesAtFinalize_Heic_NoManifest_Accepted(t *testing.T) {
+	h := newHandlerNoValidator()
+	err := handler.VerifyUploadBytesAtFinalizeForTest(h, context.Background(), "image/heic", heicHead, heicHead)
+	assert.NoError(t, err, "HEIC must finalize without a manifest now that server decode exists (FMT-1/H5)")
+	assert.NotErrorIs(t, err, service.ErrScanManifestRequired,
+		"HEIC must NOT fail closed with ErrScanManifestRequired anymore")
+}
+
+func TestVerifyUploadBytesAtFinalize_RawCR2_NoManifest_Accepted(t *testing.T) {
+	h := newHandlerNoValidator()
+	err := handler.VerifyUploadBytesAtFinalizeForTest(h, context.Background(), "image/x-canon-cr2", cr2Head, cr2Head)
+	assert.NoError(t, err, "Canon CR2 RAW must finalize without a manifest (FMT-1/H5)")
+}
+
+func TestVerifyUploadBytesAtFinalize_Dng_NoManifest_Accepted(t *testing.T) {
+	h := newHandlerNoValidator()
+	// DNG is declared via its content type but sniffs to the generic tiff family.
+	err := handler.VerifyUploadBytesAtFinalizeForTest(h, context.Background(), "image/x-adobe-dng", tiffHead, tiffHead)
+	assert.NoError(t, err, "DNG (tiff-family) RAW must finalize without a manifest (FMT-1/H5)")
+}
+
+func TestVerifyUploadBytesAtFinalize_Jpeg_Unchanged(t *testing.T) {
+	h := newHandlerNoValidator()
+	// Valid JPEG: SOI FFD8FF in head, EOI FFD9 in tail. Behavior unchanged.
+	head := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'}
+	tail := []byte{0x00, 0x00, 0xFF, 0xD9}
+	err := handler.VerifyUploadBytesAtFinalizeForTest(h, context.Background(), "image/jpeg", head, tail)
+	assert.NoError(t, err, "well-formed JPEG must still finalize (legacy path unchanged)")
+}
+
+func TestVerifyUploadBytesAtFinalize_PdfPolyglot_StillRejected(t *testing.T) {
+	h := newHandlerNoValidator()
+	// A PDF masquerading as image/heic must STILL be rejected: the sniffer's
+	// non-image hard-reject runs from the actual stored bytes, not the
+	// client-declared content type. This is the security-boundary guard.
+	err := handler.VerifyUploadBytesAtFinalizeForTest(h, context.Background(), "image/heic", pdfPolyglot, pdfPolyglot)
+	require.Error(t, err, "a PDF declared as HEIC must be rejected at finalize")
+	assert.ErrorIs(t, err, service.ErrScanManifestRequired,
+		"polyglot must fail closed (sniffer rejects non-image; gate stays ErrScanManifestRequired)")
+}
+
+func TestVerifyUploadBytesAtFinalize_NonDecodableImage_StillRejected(t *testing.T) {
+	h := newHandlerNoValidator()
+	// Sony ARQ (declared) carrying TIFF-family bytes: the byte-sniff yields the
+	// generic "tiff" token which IS decodable, so this would actually be
+	// accepted. To prove the decodable-gate, feed a recognized-but-NOT-decodable
+	// payload by claiming a server-decodable content type while the bytes are an
+	// unrecognized container — the sniffer returns ("", false) → reject.
+	garbage := bytes.Repeat([]byte{0xAB, 0xCD, 0xEF, 0x01}, 16)
+	err := handler.VerifyUploadBytesAtFinalizeForTest(h, context.Background(), "image/heic", garbage, garbage)
+	require.Error(t, err, "unrecognized bytes must be rejected even under a decodable content type")
+	assert.ErrorIs(t, err, service.ErrScanManifestRequired)
 }
 
 // ─── F-004: scan metadata persistence ────────────────────────────────────────

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -43,9 +44,41 @@ type assetRepository interface {
 	UpdateDimensions(ctx context.Context, id uuid.UUID, width, height int) error
 }
 
+// retryableAssetRepository is the optional, additive surface the worker uses for
+// the transient/terminal decode-retry loop. It is a SEPARATE interface from
+// assetRepository so the existing constructor and existing fakes (which do not
+// implement these methods) keep compiling unchanged; the worker only exercises
+// this path when the underlying repo also satisfies this interface (checked via
+// a type assertion at construction). *repository.AssetRepo satisfies both.
+type retryableAssetRepository interface {
+	ListRetryable(ctx context.Context, limit int) ([]repository.Asset, error)
+	GetRetryCount(ctx context.Context, id uuid.UUID) (int, error)
+	MarkTransientFailure(ctx context.Context, id uuid.UUID, reason string) error
+	MarkTerminalFailure(ctx context.Context, id uuid.UUID, reason string) error
+}
+
 type thumbnailGenerator interface {
 	GenerateAll(ctx context.Context, assetID string, src io.Reader) (*service.ThumbnailResult, error)
 }
+
+// formatAwareGenerator is the optional decode-format-aware surface. When the
+// wired ThumbnailService implements it (it does), the worker threads the
+// server-sniffed decode_format token so the CompositeDecoder dispatches on the
+// SERVER token, never the client content_type. Older/fake generators that only
+// implement thumbnailGenerator fall back to the legacy GenerateAll path.
+type formatAwareGenerator interface {
+	GenerateAllWithFormat(ctx context.Context, assetID, format string, src io.Reader) (*service.ThumbnailResult, error)
+}
+
+// decodeFailure marks an error that originated from the image-decode step (vs a
+// storage download, DB write, or other infrastructure failure). Only decode
+// failures flow through the transient/terminal classify-and-retry machinery;
+// every OTHER processOne error keeps main's existing UpdateProcessingError +
+// status='error' path so behavior for non-decode faults is unchanged.
+type decodeFailure struct{ err error }
+
+func (d *decodeFailure) Error() string { return d.err.Error() }
+func (d *decodeFailure) Unwrap() error { return d.err }
 
 type exifExtractor interface {
 	ExtractAndStore(ctx context.Context, assetID uuid.UUID, storageKey string) error
@@ -53,7 +86,13 @@ type exifExtractor interface {
 
 // ThumbnailWorker processes assets that need thumbnails generated.
 type ThumbnailWorker struct {
-	assetRepo         assetRepository
+	assetRepo assetRepository
+	// retryRepo is non-nil only when assetRepo also satisfies
+	// retryableAssetRepository (the production *repository.AssetRepo does). When
+	// set, the worker polls ListRetryable in addition to ListByStatus and routes
+	// decode failures through the transient/terminal classify-and-retry loop.
+	// When nil (e.g. unit-test fakes), the worker behaves exactly as main did.
+	retryRepo         retryableAssetRepository
 	thumbnailSvc      thumbnailGenerator
 	store             storage.Provider
 	exifSvc           exifExtractor
@@ -125,7 +164,7 @@ func NewThumbnailWorker(
 	thumbnailSvc thumbnailGenerator,
 	store storage.Provider,
 ) *ThumbnailWorker {
-	return &ThumbnailWorker{
+	w := &ThumbnailWorker{
 		assetRepo:    assetRepo,
 		thumbnailSvc: thumbnailSvc,
 		store:        store,
@@ -140,6 +179,13 @@ func NewThumbnailWorker(
 		pollInterval: 1 * time.Second,
 		stopCh:       make(chan struct{}),
 	}
+	// Opt into the retry/backoff loop only when the underlying repo supports it.
+	// Production wires *repository.AssetRepo (satisfies both interfaces); unit-
+	// test fakes that implement only assetRepository keep the legacy behavior.
+	if rr, ok := assetRepo.(retryableAssetRepository); ok {
+		w.retryRepo = rr
+	}
+	return w
 }
 
 // Start begins the polling loop that processes "processing" assets.
@@ -176,21 +222,105 @@ func (w *ThumbnailWorker) Stop() {
 	})
 }
 
-// processNextBatch finds assets with status "processing" and generates thumbnails.
+// processNextBatch finds assets that need derivative processing and runs them.
+//
+// Poll source:
+//   - When the repo supports the retry surface (production *repository.AssetRepo),
+//     the batch is drawn from ListRetryable. That folds the never-attempted
+//     'processing' set (fresh uploads) AND the backoff-aware retry set (assets a
+//     prior tick failed transiently and rescheduled) into one query, so a
+//     transiently-failed HEIC/RAW asset is automatically re-attempted once its
+//     backoff elapses — without re-picking it before. This is purely additive to
+//     main's NATS-trigger / status-poll model: the same 'processing' rows are
+//     still picked up on the very next tick (next_retry_at IS NULL for fresh
+//     uploads), so the existing upload→thumbnail latency is unchanged.
+//   - Without the retry surface (unit-test fakes), it falls back to main's
+//     ListByStatus("processing") exactly as before.
+//
+// Failure routing:
+//   - A DECODE failure (wrapped as *decodeFailure) goes through classifyAndRecord,
+//     which schedules a transient retry with backoff or dead-letters a terminal
+//     poison message — but only when the retry surface is wired.
+//   - Every OTHER failure (storage download, DB write, etc.) keeps main's exact
+//     UpdateProcessingError + status='error' path, so non-decode behavior is
+//     unchanged.
 func (w *ThumbnailWorker) processNextBatch(ctx context.Context) {
-	assets, err := w.assetRepo.ListByStatus(ctx, "processing", 10)
+	var (
+		assets []repository.Asset
+		err    error
+	)
+	if w.retryRepo != nil {
+		assets, err = w.retryRepo.ListRetryable(ctx, 10)
+	} else {
+		assets, err = w.assetRepo.ListByStatus(ctx, "processing", 10)
+	}
 	if err != nil {
 		log.Printf("thumbnail worker: list error: %v", err)
 		return
 	}
 
-	for _, asset := range assets {
+	for i := range assets {
+		asset := assets[i]
 		if err := w.processOne(ctx, &asset); err != nil {
 			log.Printf("thumbnail worker: process %s failed: %v", asset.ID, err)
-			_ = w.assetRepo.UpdateProcessingError(ctx, asset.ID, err.Error())
-			_ = w.assetRepo.UpdateStatus(ctx, asset.ID, "error")
+			w.recordFailure(ctx, &asset, err)
 			continue
 		}
+	}
+}
+
+// recordFailure dispatches a processOne error to the right persistence path.
+// Decode failures (with the retry surface wired) get the transient/terminal
+// classify-and-retry treatment; everything else — and the no-retry-surface
+// case — keeps main's UpdateProcessingError + status='error' behavior.
+func (w *ThumbnailWorker) recordFailure(ctx context.Context, asset *repository.Asset, err error) {
+	var df *decodeFailure
+	if w.retryRepo != nil && errors.As(err, &df) {
+		w.classifyAndRecord(ctx, asset, err)
+		return
+	}
+	_ = w.assetRepo.UpdateProcessingError(ctx, asset.ID, err.Error())
+	_ = w.assetRepo.UpdateStatus(ctx, asset.ID, "error")
+}
+
+// classifyAndRecord turns a decode failure into the right retry/failure state
+// transition. It classifies err via service.ClassifyDecodeError (the single
+// source of transient-vs-terminal truth, which honors an explicit
+// *service.DecodeError bubbled up from the decoder). Transient failures within
+// the retry budget reschedule with bounded exponential backoff and increment
+// retry_count (status stays 'processing'). Terminal failures — and any failure
+// once the asset has reached MaxDecodeRetries — dead-letter the asset to
+// 'failed' with the reason recorded, so the poller stops re-picking it.
+func (w *ThumbnailWorker) classifyAndRecord(ctx context.Context, asset *repository.Asset, err error) {
+	reason := err.Error()
+	de := service.ClassifyDecodeError(err)
+
+	// Read the committed retry_count rather than trusting asset.RetryCount: the
+	// dead-letter decision must be authoritative. ListRetryable populates the
+	// in-memory value, so this is one cheap extra round-trip only on the failure
+	// path. On read error, fall back to the in-memory value so we still make a
+	// bounded decision rather than looping.
+	retryCount := asset.RetryCount
+	if live, rcErr := w.retryRepo.GetRetryCount(ctx, asset.ID); rcErr == nil {
+		retryCount = live
+	} else {
+		log.Printf("thumbnail worker: read retry_count for %s failed (using in-memory %d): %v",
+			asset.ID, retryCount, rcErr)
+	}
+
+	// Exhausted budget OR a terminal (poison-message) failure → dead-letter.
+	exhausted := retryCount >= repository.MaxDecodeRetries
+	terminal := de == nil || !de.Transient
+	if exhausted || terminal {
+		if markErr := w.retryRepo.MarkTerminalFailure(ctx, asset.ID, reason); markErr != nil {
+			log.Printf("thumbnail worker: mark terminal %s failed: %v", asset.ID, markErr)
+		}
+		return
+	}
+
+	// Transient + within budget → reschedule with backoff, keep processing.
+	if markErr := w.retryRepo.MarkTransientFailure(ctx, asset.ID, reason); markErr != nil {
+		log.Printf("thumbnail worker: mark transient %s failed: %v", asset.ID, markErr)
 	}
 }
 
@@ -212,10 +342,22 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	}
 	defer reader.Close()
 
-	// Generate thumbnails
-	result, err := w.thumbnailSvc.GenerateAll(ctx, asset.ID.String(), reader)
+	// Generate thumbnails. Thread the server-sniffed decode_format token
+	// (populated by SniffImageFormat at upload finalize, hydrated by
+	// ListRetryable) so the wired CompositeDecoder dispatches on the SERVER
+	// token — never the client content_type. When the token is empty (legacy
+	// rows, or ListByStatus-fetched rows that don't hydrate it) the service
+	// sniffs from the fetched bytes itself, and with no decoder wired the token
+	// is ignored entirely (legacy imageops.Decode path). A decode failure is
+	// wrapped as *decodeFailure so processNextBatch routes it through the
+	// transient/terminal retry loop; non-decode failures keep main's path.
+	format := ""
+	if asset.DecodeFormat != nil {
+		format = *asset.DecodeFormat
+	}
+	result, err := w.generateAll(ctx, asset.ID.String(), format, reader)
 	if err != nil {
-		return fmt.Errorf("generate thumbnails: %w", err)
+		return &decodeFailure{err: fmt.Errorf("generate thumbnails: %w", err)}
 	}
 
 	// Persist bare storage keys (no host, no scheme). The frontend's
@@ -329,6 +471,18 @@ func (w *ThumbnailWorker) processOne(ctx context.Context, asset *repository.Asse
 	log.Printf("thumbnail worker: processed %s (%dx%d, %d thumbnails)",
 		asset.ID, result.Width, result.Height, len(result.URLs))
 	return nil
+}
+
+// generateAll runs derivative generation, preferring the format-aware entry
+// point when the wired generator supports it (production ThumbnailService) so
+// the server-sniffed decode_format token reaches the CompositeDecoder. Falls
+// back to the legacy GenerateAll for generators that implement only the older
+// interface (unit-test fakes), preserving main's behavior there.
+func (w *ThumbnailWorker) generateAll(ctx context.Context, assetID, format string, src io.Reader) (*service.ThumbnailResult, error) {
+	if fa, ok := w.thumbnailSvc.(formatAwareGenerator); ok {
+		return fa.GenerateAllWithFormat(ctx, assetID, format, src)
+	}
+	return w.thumbnailSvc.GenerateAll(ctx, assetID, src)
 }
 
 // isImageContentType is a narrow helper so we don't add face-detection jobs

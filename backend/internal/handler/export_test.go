@@ -46,6 +46,24 @@ func ApplyScanMetadataForTest(asset *repository.Asset, manifest *service.UploadS
 	applyScanMetadata(asset, manifest)
 }
 
+// VerifyUploadBytesAtFinalizeForTest is a test-only seam over the unexported
+// verifyUploadBytesAtFinalize method. FMT-1 / H5 regression coverage: it
+// exercises the no-manifest finalize byte-check default branch directly so a
+// test can assert that a HEIC/RAW upload now finalizes (no
+// ErrScanManifestRequired) while a polyglot/non-image payload is still
+// rejected — without booting the full TUS pipeline. The validator is left nil
+// and manifest nil so the method takes the content-type-driven byte-check path.
+func VerifyUploadBytesAtFinalizeForTest(
+	h *ChunkedUploadHandler,
+	ctx context.Context,
+	contentType string,
+	head, tail []byte,
+) error {
+	sum := sha256.Sum256(head)
+	hashHex := hex.EncodeToString(sum[:])
+	return h.verifyUploadBytesAtFinalize(ctx, contentType, hashHex, head, tail, nil)
+}
+
 // DeriveKeyAndUploadIDForTest is a test-only seam over the unexported
 // deriveKeyAndUploadID helper. Regression coverage for the key-consistency
 // bug discovered during UAT on 2026-04-12: finalize was building the R2

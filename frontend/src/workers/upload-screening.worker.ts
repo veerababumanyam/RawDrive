@@ -47,6 +47,11 @@ ctx.addEventListener("message", async (event: MessageEvent<WorkerInput>) => {
     const result = screen(bytes, {
       metadataBudgetBytes,
       declaredType: file.type,
+      // CD5b: forward the filename so the screener can backstop TIFF-based RAW
+      // (NEF/ARW/DNG/ORF/RW2) by extension when the browser/OS reports a
+      // generic `image/tiff` or empty MIME. File.name survives the structured
+      // clone of the File across postMessage, so no separate string is needed.
+      declaredName: file.name,
     });
 
     // Compute the manifest hash. This is the canonical hash of the full
