@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   getGallery,
@@ -10,6 +10,15 @@ import {
   clearGalleryMusic,
   type Gallery,
 } from "@/lib/api/galleries";
+import { getTermsStatus } from "@/lib/api/legal";
+import {
+  getWorkspaceProfile,
+  updateWorkspaceProfile,
+  uploadWorkspaceLogo,
+  type WorkspaceProfile,
+} from "@/lib/api/workspace-profile";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 
 const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
@@ -90,6 +99,32 @@ function withPasswordState(gallery: Gallery, hasPassword: boolean): Gallery {
   };
 }
 
+function isTermsUploadError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return msg.includes("TERMS_NOT_ACCEPTED") || msg.toLowerCase().includes("terms of service");
+}
+
+function studioBrandName(profile: WorkspaceProfile | null, fallback: string): string {
+  return profile?.brand_name?.trim() || profile?.name?.trim() || fallback.trim() || "Studio";
+}
+
+function workspaceSubdomain(profile: WorkspaceProfile | null): string {
+  const slug = profile?.business_profile_slug?.trim();
+  const code = profile?.business_unique_code?.trim();
+  return slug && code ? `${slug}-${code}` : "";
+}
+
+function logoWatermarkURL(gallery: Gallery, profile: WorkspaceProfile | null): string {
+  const base = `/api/v1/public/galleries/${encodeURIComponent(gallery.slug)}/branding/logo`;
+  const ws = workspaceSubdomain(profile);
+  return ws ? `${base}?ws=${encodeURIComponent(ws)}` : base;
+}
+
+function logoPreviewURL(profile: WorkspaceProfile | null, token: string | null): string {
+  const source = profile?.logo_url || profile?.logo_metadata?.storage_key || "";
+  return source ? getStorageBackedUrl(source, token) : "";
+}
+
 export default function GallerySettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
@@ -105,6 +140,14 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   // Slideshow music state
   const [musicUploading, setMusicUploading] = useState(false);
   const [musicError, setMusicError] = useState("");
+  const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [pendingMusicFile, setPendingMusicFile] = useState<File | null>(null);
+
+  // Studio logo / watermark state
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -131,6 +174,23 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
     return () => { cancelled = true; };
   }, [id]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    void getTermsStatus(token).then((status) => {
+      if (!cancelled && status) setTermsNeedsAcceptance(status.needs_acceptance);
+    });
+    void getWorkspaceProfile(token)
+      .then((profile) => {
+        if (!cancelled) setWorkspaceProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaceProfile(null);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleToggle = async (field: string, value: boolean) => {
     const token = getStoredAccessToken();
@@ -190,9 +250,15 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     void handleExpiry(new Date(Date.now() + days * DAY_MS).toISOString());
   };
 
-  const handleMusicUpload = async (file: File) => {
+  const handleMusicUpload = async (file: File, options?: { skipTermsPrecheck?: boolean }) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
+    if (termsNeedsAcceptance && !options?.skipTermsPrecheck) {
+      setPendingMusicFile(file);
+      setMusicError("");
+      setTermsModalOpen(true);
+      return;
+    }
     setMusicUploading(true);
     setMusicError("");
     try {
@@ -201,10 +267,24 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       setSaveMsg("Music uploaded");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
+      if (isTermsUploadError(err)) {
+        setPendingMusicFile(file);
+        setTermsNeedsAcceptance(true);
+        setTermsModalOpen(true);
+        return;
+      }
       setMusicError(err instanceof Error ? err.message : "Failed to upload music");
     } finally {
       setMusicUploading(false);
     }
+  };
+
+  const handleTermsAccepted = () => {
+    setTermsNeedsAcceptance(false);
+    setTermsModalOpen(false);
+    const file = pendingMusicFile;
+    setPendingMusicFile(null);
+    if (file) void handleMusicUpload(file, { skipTermsPrecheck: true });
   };
 
   const handleMusicRemove = async () => {
@@ -222,6 +302,65 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     } finally {
       setMusicUploading(false);
     }
+  };
+
+  const applyLogoWatermark = async (logoAssetId: string, profile: WorkspaceProfile | null) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+
+    const current = (gallery.watermark_config as Record<string, unknown>) || {};
+    const config = {
+      ...current,
+      enabled: true,
+      mode: "logo",
+      logo_asset_id: logoAssetId,
+      logo_url: logoWatermarkURL(gallery, profile),
+      text: studioBrandName(profile, gallery.title),
+      position: typeof current.position === "string" ? current.position : "bottom-right",
+      opacity: typeof current.opacity === "number" ? current.opacity : 40,
+    };
+
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const updated = await updateGallerySettings(token, id, { watermark_config: config });
+      setGallery(updated);
+      setSaveMsg("Studio logo watermark enabled");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update watermark logo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    setLogoUploading(true);
+    setError("");
+    setSaveMsg("");
+    try {
+      const asset = await uploadWorkspaceLogo(token, file);
+      await updateWorkspaceProfile(token, { logo_asset_id: asset.id });
+      const profile = await getWorkspaceProfile(token);
+      setWorkspaceProfile(profile);
+      await applyLogoWatermark(asset.id, profile);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload studio logo");
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  const handleUseStudioLogo = () => {
+    const logoAssetId = workspaceProfile?.logo_asset_id;
+    if (!logoAssetId) {
+      setError("Upload a studio logo before using it as a watermark.");
+      return;
+    }
+    void applyLogoWatermark(logoAssetId, workspaceProfile);
   };
 
   const handleSetPassword = async (overridePassword?: string | null) => {
@@ -275,6 +414,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
   const hasGalleryPassword = galleryHasPassword(gallery);
   const selectedDownloadQuality = normalizedDownloadQuality(gallery.download_quality);
+  const studioLogoPreviewUrl = logoPreviewURL(workspaceProfile, getStoredAccessToken());
+  const studioLogoName = workspaceProfile?.logo_metadata?.filename || (workspaceProfile?.logo_asset_id ? "Uploaded logo" : "");
+  const currentWatermark = (gallery.watermark_config as Record<string, unknown>) || {};
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
@@ -483,11 +625,10 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         <ToggleRow
           label="Enable watermark"
           description="Overlay a text watermark on images displayed in the public gallery."
-          checked={((gallery.watermark_config as Record<string, unknown>)?.enabled === true)}
+          checked={currentWatermark.enabled === true}
           disabled={saving}
           onChange={async (v) => {
-            const current = (gallery.watermark_config as Record<string, unknown>) || {};
-            const config = { ...current, enabled: v };
+            const config = { ...currentWatermark, enabled: v };
             const token = getStoredAccessToken();
             if (!token || !gallery) return;
             try {
@@ -498,17 +639,68 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
             }
           }}
         />
-        {((gallery.watermark_config as Record<string, unknown>)?.enabled === true) && (
+        <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border-default bg-surface-raised">
+                {studioLogoPreviewUrl ? (
+                  <img
+                    src={studioLogoPreviewUrl}
+                    alt={`${studioBrandName(workspaceProfile, gallery.title)} logo preview`}
+                    className="h-full w-full object-contain p-2"
+                  />
+                ) : (
+                  <span className="text-xl font-semibold text-text-tertiary" aria-hidden="true">
+                    {studioBrandName(workspaceProfile, gallery.title).slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">Studio logo watermark</p>
+                <p className="truncate text-xs text-text-secondary">
+                  {studioLogoName || "No studio logo uploaded for this workspace."}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className="btn-tertiary cursor-pointer px-4 py-2 text-sm">
+                {logoUploading ? "Uploading..." : "Upload logo"}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  disabled={logoUploading || saving}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void handleLogoUpload(file);
+                  }}
+                  className="sr-only"
+                  aria-label="Upload studio logo for watermark"
+                />
+              </label>
+              {workspaceProfile?.logo_asset_id && (
+                <button
+                  type="button"
+                  disabled={logoUploading || saving}
+                  onClick={handleUseStudioLogo}
+                  className="btn-tertiary px-4 py-2 text-sm"
+                >
+                  Use as watermark
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        {currentWatermark.enabled === true && (
           <div className="space-y-4 pl-1">
             <div className="space-y-1">
               <label className="text-sm font-medium text-text-primary">Watermark text</label>
               <input
                 type="text"
                 placeholder="Studio Name"
-                value={String((gallery.watermark_config as Record<string, unknown>)?.text || "")}
+                value={String(currentWatermark.text || "")}
                 onBlur={async (e) => {
-                  const current = (gallery.watermark_config as Record<string, unknown>) || {};
-                  const config = { ...current, text: e.target.value };
+                  const config = { ...currentWatermark, text: e.target.value };
                   const token = getStoredAccessToken();
                   if (!token || !gallery) return;
                   try {
@@ -519,21 +711,20 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                   }
                 }}
                 onChange={(e) => {
-                  setGallery({ ...gallery, watermark_config: { ...(gallery.watermark_config as Record<string, unknown> || {}), text: e.target.value } });
+                  setGallery({ ...gallery, watermark_config: { ...currentWatermark, text: e.target.value } });
                 }}
                 className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
               />
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-text-primary">
-                Opacity — {Number((gallery.watermark_config as Record<string, unknown>)?.opacity) || 40}%
+                Opacity — {Number(currentWatermark.opacity) || 40}%
               </label>
               <input
                 type="range" min={10} max={90} step={5}
-                value={Number((gallery.watermark_config as Record<string, unknown>)?.opacity) || 40}
+                value={Number(currentWatermark.opacity) || 40}
                 onChange={async (e) => {
-                  const current = (gallery.watermark_config as Record<string, unknown>) || {};
-                  const config = { ...current, opacity: Number(e.target.value) };
+                  const config = { ...currentWatermark, opacity: Number(e.target.value) };
                   const token = getStoredAccessToken();
                   if (!token || !gallery) return;
                   try {
@@ -550,8 +741,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                 {(["center", "bottom-right", "bottom-left", "diagonal"] as const).map((pos) => (
                   <button key={pos} type="button"
                     onClick={async () => {
-                      const current = (gallery.watermark_config as Record<string, unknown>) || {};
-                      const config = { ...current, position: pos };
+                      const config = { ...currentWatermark, position: pos };
                       const token = getStoredAccessToken();
                       if (!token || !gallery) return;
                       try {
@@ -560,7 +750,7 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                       } catch { /* non-critical */ }
                     }}
                     className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                      (gallery.watermark_config as Record<string, unknown>)?.position === pos
+                      currentWatermark.position === pos
                         ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                         : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
                     }`}
@@ -703,6 +893,12 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
           </div>
         )}
       </section>
+      <TermsAcceptanceModal
+        open={termsModalOpen}
+        token={getStoredAccessToken()}
+        onAccepted={handleTermsAccepted}
+        onCancel={() => setTermsModalOpen(false)}
+      />
     </div>
   );
 }

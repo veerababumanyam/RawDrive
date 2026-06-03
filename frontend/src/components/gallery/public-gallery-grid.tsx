@@ -50,6 +50,20 @@ import { submitPublicProofing } from "@/lib/api/proofing";
 // so we always need an absolute URL for the download <a href>.
 const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+function absoluteApiUrl(url?: string | null) {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  return `${PUBLIC_API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+type WatermarkDisplay = {
+  text: string;
+  opacity: number;
+  position: string;
+  mode: "text" | "logo";
+  logoUrl: string;
+};
+
 // Stable per-browser guest session id. One UUID per browser, shared across
 // every gallery this browser visits. Used as the partition key for the
 // gallery_favorites table so the photographer's "favorited by N guests"
@@ -143,7 +157,7 @@ function PublicLightboxImage({
 }: {
   photo: PublicAsset;
   zoom: number;
-  watermarkOverlay: { text: string; opacity: number; position: string } | null;
+  watermarkOverlay: WatermarkDisplay | null;
   // Gated-gallery byte-auth token (origin/main security control).
   assetAccessToken?: string | null;
 }) {
@@ -172,6 +186,8 @@ function PublicLightboxImage({
             text={watermarkOverlay.text}
             opacity={watermarkOverlay.opacity}
             position={watermarkOverlay.position}
+            mode={watermarkOverlay.mode}
+            logoUrl={watermarkOverlay.logoUrl}
           />
         </div>
       )}
@@ -607,10 +623,14 @@ function WatermarkOverlay({
   text,
   opacity,
   position,
+  mode,
+  logoUrl,
 }: {
   text: string;
   opacity: number;
   position: string;
+  mode?: "text" | "logo";
+  logoUrl?: string;
 }) {
   const shared = "pointer-events-none absolute select-none font-semibold tracking-widest uppercase text-white";
   // text-shadow on both axes survives both bright and dark photos
@@ -619,6 +639,15 @@ function WatermarkOverlay({
     opacity,
     textShadow: "0 1px 4px rgba(0,0,0,0.6), 0 -1px 4px rgba(0,0,0,0.4)",
   };
+
+  if (mode === "logo" && logoUrl) {
+    const corner = position === "bottom-left" ? "bottom-3 left-3" : position === "center" ? "inset-0 flex items-center justify-center" : "bottom-3 right-3";
+    return (
+      <div aria-hidden style={{ opacity }} className={`pointer-events-none absolute ${corner} select-none`}>
+        <img src={logoUrl} alt="" className="h-14 w-14 object-contain drop-shadow-lg sm:h-16 sm:w-16" />
+      </div>
+    );
+  }
 
   if (position === "center") {
     return (
@@ -673,17 +702,19 @@ export function PublicGalleryGrid({
   // disabled / misconfigured so the render path can short-circuit to
   // a plain <img>. Keeping the derivation in one place means the
   // grid and lightbox both read the same canonical values.
-  const watermarkOverlay = (() => {
+  const watermarkOverlay: WatermarkDisplay | null = (() => {
     if (!watermark || watermark.enabled !== true) return null;
     const rawText = typeof watermark.text === "string" ? watermark.text.trim() : "";
-    if (rawText.length === 0) return null;
+    const mode: WatermarkDisplay["mode"] = watermark.mode === "logo" ? "logo" : "text";
+    const logoUrl = mode === "logo" && typeof watermark.logo_url === "string" ? absoluteApiUrl(watermark.logo_url) : "";
+    if (rawText.length === 0 && !logoUrl) return null;
     const rawOpacity = typeof watermark.opacity === "number" ? watermark.opacity : 40;
     // Settings UI stores opacity as 10..90 (integer percent); clamp +
     // convert to a CSS 0..1 number. Caps at 0.9 because a fully-
     // opaque overlay defeats the point of seeing the photo.
     const opacity = Math.max(0.1, Math.min(0.9, rawOpacity / 100));
     const position = typeof watermark.position === "string" ? watermark.position : "bottom-right";
-    return { text: rawText, opacity, position };
+    return { text: rawText, opacity, position, mode, logoUrl };
   })();
   // viewMode + the Grid/Map toggle were removed 2026-05-19. The grid is
   // now the only render path; see the file header for context.
@@ -1186,6 +1217,8 @@ export function PublicGalleryGrid({
                       text={watermarkOverlay.text}
                       opacity={watermarkOverlay.opacity}
                       position={watermarkOverlay.position}
+                      mode={watermarkOverlay.mode}
+                      logoUrl={watermarkOverlay.logoUrl}
                     />
                   )}
                 </div>

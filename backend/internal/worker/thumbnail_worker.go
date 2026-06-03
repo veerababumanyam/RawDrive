@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,6 +66,7 @@ type ThumbnailWorker struct {
 	encryptionVersion int
 	pollInterval      time.Duration
 	stopCh            chan struct{}
+	stopOnce          sync.Once
 }
 
 // WithPublisher wires an event publisher for asset.ready notifications.
@@ -163,15 +165,15 @@ func (w *ThumbnailWorker) Start(ctx context.Context) {
 // Stop signals the worker to stop. Idempotent: a second or concurrent
 // call is a no-op rather than panicking with "close of closed channel".
 // During graceful shutdown both context cancellation and an explicit
-// StopAll() can fire, so the select guard (mirroring DownloadWorker.Stop)
-// is required to keep teardown from crashing the process.
+// StopAll() can fire, so sync.Once serializes the close operation and keeps
+// teardown from crashing the process.
 func (w *ThumbnailWorker) Stop() {
-	select {
-	case <-w.stopCh:
-		// already closed
-	default:
-		close(w.stopCh)
+	if w.stopCh == nil {
+		return
 	}
+	w.stopOnce.Do(func() {
+		close(w.stopCh)
+	})
 }
 
 // processNextBatch finds assets with status "processing" and generates thumbnails.

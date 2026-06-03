@@ -23,12 +23,46 @@ interface Props {
   config?: Gallery["watermark_config"];
 }
 
-export function WatermarkOverlay({ config }: Props) {
-  if (!config || !config.text) return null;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-  const opacity = Math.max(0, Math.min(1, config.opacity ?? 0.3));
-  const text = config.text;
+function absoluteApiUrl(url?: string | null) {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+export function WatermarkOverlay({ config }: Props) {
+  if (!config) return null;
+
+  const rawOpacity = config.opacity ?? 30;
+  const opacity = Math.max(0, Math.min(1, rawOpacity > 1 ? rawOpacity / 100 : rawOpacity));
+  const text = config.text ?? "";
   const position = config.position ?? "center";
+  const logoUrl = absoluteApiUrl(config.logo_url);
+
+  if (config.mode === "logo" && logoUrl) {
+    const corner =
+      position === "bottom-left"
+        ? "bottom-4 left-4"
+        : position === "center"
+          ? "inset-0 flex items-center justify-center"
+          : "bottom-4 right-4";
+    return (
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute ${corner} select-none`}
+        style={{ opacity }}
+      >
+        <img
+          src={logoUrl}
+          alt=""
+          className="h-16 w-16 object-contain drop-shadow-lg"
+        />
+      </div>
+    );
+  }
+
+  if (!text) return null;
 
   if (position === "tiled") {
     // Diagonal tiled pattern — uses a CSS repeating background of SVG text so

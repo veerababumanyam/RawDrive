@@ -115,4 +115,17 @@ describe("Gallery settings — access window / expiry", () => {
       }),
     );
   });
+
+  it("sets a custom public access expiry date at the end of the selected day", async () => {
+    await renderPage();
+    await waitFor(() => screen.getByRole("heading", { name: "Access window" }));
+
+    fireEvent.change(screen.getByLabelText("Custom date"), {
+      target: { value: "2026-06-15" },
+    });
+
+    await waitFor(() => expect(mocks.updateGallerySettings).toHaveBeenCalled());
+    const payload = mocks.updateGallerySettings.mock.calls[0][2] as { expires_at?: string };
+    expect(payload.expires_at).toBe(new Date("2026-06-15T23:59:59").toISOString());
+  });
 });

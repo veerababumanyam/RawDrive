@@ -34,6 +34,7 @@ describe("public gallery URL/session wiring", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8080/api/v1/public/galleries/wedding/branding?ws=kaveri-a1",
+      { cache: "no-store" },
     );
   });
 
@@ -56,12 +57,12 @@ describe("public gallery URL/session wiring", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "http://localhost:8080/api/v1/public/galleries/wedding?ws=kaveri-a1",
-      { headers: { "X-Gallery-Session": "session-token" } },
+      { cache: "no-store", headers: { "X-Gallery-Session": "session-token" } },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "http://localhost:8080/api/v1/public/galleries/wedding/assets?ws=kaveri-a1",
-      { headers: { "X-Gallery-Session": "session-token" } },
+      { cache: "no-store", headers: { "X-Gallery-Session": "session-token" } },
     );
   });
 });

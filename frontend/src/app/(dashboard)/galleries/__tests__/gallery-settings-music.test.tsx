@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   updateGallerySettings: vi.fn(),
   uploadGalleryMusic: vi.fn(),
   clearGalleryMusic: vi.fn(),
+  getTermsStatus: vi.fn(),
+  getWorkspaceProfile: vi.fn(),
+  updateWorkspaceProfile: vi.fn(),
+  uploadWorkspaceLogo: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -32,6 +36,37 @@ vi.mock("@/lib/api/galleries", () => ({
   clearGalleryMusic: mocks.clearGalleryMusic,
 }));
 
+vi.mock("@/lib/api/legal", () => ({
+  getTermsStatus: mocks.getTermsStatus,
+}));
+
+vi.mock("@/components/legal/terms-acceptance-modal", () => ({
+  TermsAcceptanceModal: ({
+    open,
+    onAccepted,
+  }: {
+    open: boolean;
+    onAccepted: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Accept the Terms of Service">
+        <button type="button" onClick={onAccepted}>
+          Accept mocked terms
+        </button>
+      </div>
+    ) : null,
+}));
+
+vi.mock("@/lib/api/workspace-profile", () => ({
+  getWorkspaceProfile: mocks.getWorkspaceProfile,
+  updateWorkspaceProfile: mocks.updateWorkspaceProfile,
+  uploadWorkspaceLogo: mocks.uploadWorkspaceLogo,
+}));
+
+vi.mock("@/lib/dashboard-ui", () => ({
+  getStorageBackedUrl: (key: string) => `/storage/${key}`,
+}));
+
 function gallery(overrides: Record<string, unknown> = {}) {
   return {
     id: "gallery-1",
@@ -46,6 +81,20 @@ function gallery(overrides: Record<string, unknown> = {}) {
     settings: {},
     created_at: "2026-06-02T00:00:00Z",
     updated_at: "2026-06-02T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function workspaceProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "Kaveri Stories",
+    brand_name: "Kaveri Stories",
+    logo_url: "",
+    logo_asset_id: "",
+    logo_metadata: {},
+    public_branding_enabled: true,
+    business_profile_slug: "kaveri",
+    business_unique_code: "a1b2c3d4",
     ...overrides,
   };
 }
@@ -66,6 +115,12 @@ describe("Gallery settings — slideshow music", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getGallery.mockResolvedValue(gallery());
+    mocks.getTermsStatus.mockResolvedValue({
+      needs_acceptance: false,
+      current_version: "tos-privacy/2026-04",
+    });
+    mocks.getWorkspaceProfile.mockResolvedValue(workspaceProfile());
+    mocks.updateWorkspaceProfile.mockResolvedValue({ updated: 1 });
   });
 
   it("renders the Slideshow music section", async () => {
@@ -104,6 +159,73 @@ describe("Gallery settings — slideshow music", () => {
     });
 
     expect(await screen.findByText("storage quota exceeded")).toBeInTheDocument();
+  });
+
+  it("opens the terms modal and replays music upload after acceptance", async () => {
+    mocks.uploadGalleryMusic
+      .mockRejectedValueOnce(new Error("You must accept the Terms of Service before uploading."))
+      .mockResolvedValueOnce(gallery({ music_asset_id: "asset-9" }));
+    await renderPage();
+    await waitFor(() => screen.getByRole("heading", { name: "Slideshow music" }));
+
+    const file = new File([new Uint8Array([7])], "first-dance.mp3", { type: "audio/mpeg" });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Upload track"), { target: { files: [file] } });
+    });
+
+    expect(await screen.findByRole("dialog", { name: "Accept the Terms of Service" })).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Accept mocked terms" }));
+    });
+
+    await waitFor(() => expect(mocks.uploadGalleryMusic).toHaveBeenCalledTimes(2));
+    expect(mocks.uploadGalleryMusic).toHaveBeenLastCalledWith("token-1", "gallery-1", file);
+    expect(await screen.findByText("A music track is attached to this gallery.")).toBeInTheDocument();
+  });
+
+  it("uploads a studio logo from Gallery Settings and uses it for watermarking", async () => {
+    mocks.getWorkspaceProfile
+      .mockResolvedValueOnce(workspaceProfile())
+      .mockResolvedValueOnce(workspaceProfile({
+        logo_asset_id: "logo-asset-1",
+        logo_url: "workspaces/logo.webp",
+        logo_metadata: { filename: "studio-logo.webp", storage_key: "workspaces/logo.webp" },
+      }));
+    mocks.uploadWorkspaceLogo.mockResolvedValue({ id: "logo-asset-1" });
+    mocks.updateGallerySettings.mockImplementation(async (_token, _id, payload) =>
+      gallery(payload as Record<string, unknown>),
+    );
+    await renderPage();
+    await waitFor(() => screen.getByRole("heading", { name: "Watermark" }));
+
+    const file = new File([new Uint8Array([1, 2])], "studio-logo.webp", { type: "image/webp" });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Upload studio logo for watermark"), {
+        target: { files: [file] },
+      });
+    });
+
+    await waitFor(() =>
+      expect(mocks.uploadWorkspaceLogo).toHaveBeenCalledWith("token-1", file),
+    );
+    expect(mocks.updateWorkspaceProfile).toHaveBeenCalledWith("token-1", {
+      logo_asset_id: "logo-asset-1",
+    });
+    await waitFor(() =>
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        expect.objectContaining({
+          watermark_config: expect.objectContaining({
+            enabled: true,
+            mode: "logo",
+            logo_asset_id: "logo-asset-1",
+            logo_url: "/api/v1/public/galleries/uat-test-gallery/branding/logo?ws=kaveri-a1b2c3d4",
+            text: "Kaveri Stories",
+          }),
+        }),
+      ),
+    );
   });
 
   it("toggles automated client emails off", async () => {

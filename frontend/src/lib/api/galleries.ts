@@ -26,9 +26,13 @@ export interface Gallery {
   archived_at?: string;
   // M13 deferred-FR fields (optional)
   watermark_config?: {
+    enabled?: boolean;
+    mode?: "text" | "logo" | string;
     text?: string;
-    position?: "center" | "tiled" | "bottom-right" | "bottom-left";
+    position?: "center" | "tiled" | "bottom-right" | "bottom-left" | "diagonal";
     opacity?: number; // 0.0–1.0
+    logo_asset_id?: string;
+    logo_url?: string;
   };
   // Face-recognition toggles — both top-level columns on galleries.
   // faceid_enabled (mig 041): clients can use a selfie to find their photos.
@@ -237,7 +241,9 @@ export async function getPublicStudioLanding(subdomain: string): Promise<PublicS
 }
 
 export async function getPublicGalleryBranding(slug: string, ws?: string | null): Promise<GalleryBranding> {
-  const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)));
+  const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)), {
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error(`Failed to get branding: ${res.status}`);
   return res.json();
 }
@@ -250,11 +256,11 @@ export async function getPublicGalleryBranding(slug: string, ws?: string | null)
 // quota error). The created asset is then referenced on the gallery via
 // music_asset_id (validated server-side to be an audio asset in the workspace).
 export async function uploadGalleryMusic(token: string, galleryId: string, file: File): Promise<Gallery> {
+  void token;
   const form = new FormData();
   form.append("file", file);
-  const uploadRes = await fetch(apiUrl(`/api/v1/assets`), {
+  const uploadRes = await authFetch(`/api/v1/assets`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
   if (!uploadRes.ok) {
@@ -690,6 +696,7 @@ export async function getPublicGallery(slug: string, ws?: string | null, session
   // locked shell ({ access_gated: true, ... }). Sent as the X-Gallery-Session
   // header — this is a server-side fetch so CORS exposure rules don't apply.
   const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)), {
+    cache: "no-store",
     headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
   });
   if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
@@ -766,6 +773,7 @@ export interface PublicGalleryAlbum {
 export async function getPublicGalleryAlbums(slug: string, ws?: string | null, sessionToken?: string | null): Promise<PublicGalleryAlbum[]> {
   try {
     const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)), {
+      cache: "no-store",
       headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
     });
     if (!res.ok) return [];
@@ -786,6 +794,7 @@ export async function getPublicGalleryAssets(slug: string, albumId?: string, ws?
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
     : `/api/v1/public/galleries/${slug}/assets`;
   const res = await fetch(apiUrl(withWorkspaceScope(path, ws)), {
+    cache: "no-store",
     headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
   });
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);

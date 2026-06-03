@@ -1,4 +1,5 @@
 import type { Asset } from "./assets";
+import { authFetch } from "./authFetch";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -99,12 +100,12 @@ export async function updateWorkspaceProfile(
 }
 
 export async function uploadWorkspaceLogo(token: string, file: File): Promise<Asset> {
+  void token;
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${API_BASE}/api/v1/assets`, {
+  const res = await authFetch("/api/v1/assets", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
   if (!res.ok) throw new Error(`Failed to upload studio logo: ${res.status}`);

@@ -28,6 +28,8 @@ interface Props {
   searchParams?: Promise<{ album?: string; ws?: string; share?: string }>;
 }
 
+export const dynamic = "force-dynamic";
+
 function PublicGalleryUnavailable({
   title,
   body,
