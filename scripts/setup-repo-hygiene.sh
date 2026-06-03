@@ -93,6 +93,7 @@ RULESET_JSON="$(cat <<'JSON'
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
           { "context": "backend" },
+          { "context": "backend-lint" },
           { "context": "frontend" },
           { "context": "openapi" },
           { "context": "security" },

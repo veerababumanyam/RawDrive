@@ -27,36 +27,42 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
 
   # ──────────────────────────────────────────────────────────────────────
-  # backend-lint: golangci-lint gate.
+  # backend-lint: golangci-lint gate (golangci-lint v2).
   #
-  # .golangci.yml (govet, errcheck, staticcheck, ineffassign, unused, gofmt,
-  # goimports, misspell) existed in the repo but was never enforced in CI —
-  # only `go test` + govulncheck ran. This makes the documented lint config
-  # an actual gate, matching the pre-commit gofmt check developers see locally.
+  # .golangci.yml (errcheck, govet, ineffassign, staticcheck, unused [v2
+  # defaults] + misspell + gofmt/goimports formatters) existed in the repo but
+  # was never enforced in CI — only `go test` + govulncheck ran.
+  #
+  # ENFORCING on NEW issues only (only-new-issues: true). The backend carries
+  # ~520 pre-existing lint issues (mostly goimports/gofmt formatting + errcheck);
+  # fixing all of them is a separate cleanup. only-new-issues grandfathers that
+  # legacy debt and BLOCKS any PR that ADDS a new lint issue, so the codebase
+  # cannot get worse and the debt is paid down as files are touched.
+  #
+  # golangci-lint v2 is REQUIRED: v1.x binaries are built with Go 1.24 and refuse
+  # this repo's go1.25 target. v2.12.2 is built with go1.26. Config migrated to
+  # the v2 schema via `golangci-lint migrate`.
   # ──────────────────────────────────────────────────────────────────────
   backend-lint:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4.3.1
+        with:
+          # only-new-issues needs history to diff new code against the base.
+          fetch-depth: 0
       - uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26.4"
           cache-dependency-path: backend/go.sum
       - name: golangci-lint
-        # ADVISORY (continue-on-error) during rollout — mirrors the semgrep
-        # treatment below. golangci-lint v1.x is built with Go 1.24 and refuses
-        # to run against this repo's go1.25/1.26 target ("the Go language version
-        # used to build golangci-lint is lower than the targeted Go version").
-        # The proper fix is migrating .golangci.yml to the golangci-lint v2
-        # schema (v2 binaries are built with newer Go) — tracked as a follow-up.
-        # Until then this job reports but does not block. Removed from the
-        # required status checks in scripts/setup-repo-hygiene.sh accordingly.
-        continue-on-error: true
-        uses: golangci/golangci-lint-action@v6.5.2
+        uses: golangci/golangci-lint-action@v9.2.1
         with:
-          version: v1.64.8
+          version: v2.12.2
           working-directory: backend
           args: --timeout 5m
+          # Block only issues introduced by the change set; grandfather the
+          # ~520 pre-existing issues (tracked for incremental cleanup).
+          only-new-issues: true
 
   # ──────────────────────────────────────────────────────────────────────
   # known-hosts-guard: prevent SSH host-key pin drift.
