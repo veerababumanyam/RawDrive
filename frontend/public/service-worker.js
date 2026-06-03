@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v5";
+const VERSION = "m15-v6";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-`;
@@ -33,7 +33,7 @@ const PRECACHE_URLS = [
 // ─── Install ──────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(SHELL_CACHE).then((cache) => safePrecache(cache, PRECACHE_URLS))
       .then(() => self.skipWaiting())
   );
 });
@@ -258,6 +258,21 @@ async function handleFreshStatic(request) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+async function safePrecache(cache, urls) {
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const response = await fetch(new Request(url, { cache: "reload" }));
+        if (response.ok || response.type === "opaque") {
+          await cache.put(url, response.clone());
+        }
+      } catch (error) {
+        console.warn("SW precache skipped:", url, error);
+      }
+    })
+  );
+}
+
 function isSecurityCriticalWorker(url) {
   if (url.origin !== self.location.origin) return false;
   const path = url.pathname;

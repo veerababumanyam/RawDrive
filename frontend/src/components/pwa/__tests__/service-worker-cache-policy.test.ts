@@ -16,4 +16,10 @@ describe("service worker cache policy", () => {
     expect(source).toContain('cached || new Response("", { status: 504');
     expect(source).toContain('response.ok || response.type === "opaque"');
   });
+
+  it("does not let one failed precache URL reject service worker install", () => {
+    expect(source).not.toContain("cache.addAll(PRECACHE_URLS)");
+    expect(source).toContain("safePrecache(cache, PRECACHE_URLS)");
+    expect(source).toContain("SW precache skipped:");
+  });
 });
