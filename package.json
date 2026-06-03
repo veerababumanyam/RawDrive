@@ -7,7 +7,7 @@
   "license": "PROPRIETARY",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/merupuai/RawDrive.git"
+    "url": "git+https://github.com/manyamprasad/RawDrive.git"
   },
   "scripts": {
     "dev": "cd frontend && pnpm dev",

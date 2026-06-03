@@ -113,6 +113,14 @@ Every PR must pass: `backend` (go test + govulncheck), `backend-lint`
 Squash-merge only · auto-delete merged branches · auto-merge enabled · a `main`
 ruleset requiring PR + passing checks + linear history + no force-push/deletion.
 
+> **Note:** the `main` ruleset (branch protection) requires **GitHub Pro** on a
+> *private* repo owned by a *personal* account — GitHub blocks it on the free plan
+> (`"Upgrade to GitHub Pro or make this repository public"`). The script applies the
+> merge policy + labels regardless and skips the ruleset gracefully if it's
+> unavailable. Without the ruleset, the git hooks + CI-on-PR + manual merge still
+> enforce the workflow; auto-merge-on-green needs the ruleset (so, Pro). Org repos
+> may have branch protection without per-user Pro.
+
 ### Branch cleanup (`.github/workflows/branch-hygiene.yml`)
 
 Weekly, deletes only branches already merged into `main`, older than 30 days, with

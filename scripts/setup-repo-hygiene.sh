@@ -107,26 +107,47 @@ RULESET_JSON="$(cat <<'JSON'
 JSON
 )"
 
-# Update in place if a ruleset of this name already exists, else create.
-EXISTING_ID="$(gh api "repos/$SLUG/rulesets" -q '.[] | select(.name=="main protection") | .id' 2>/dev/null | head -n1 || true)"
-if [ -n "${EXISTING_ID:-}" ]; then
-  printf '%s' "$RULESET_JSON" | gh api -X PUT "repos/$SLUG/rulesets/$EXISTING_ID" --input - >/dev/null
-  ok "Updated existing ruleset #$EXISTING_ID."
+# Rulesets / branch protection require GitHub Pro on PRIVATE repos owned by a
+# personal account (or the repo must be public). Probe availability first so an
+# unavailable-plan response degrades gracefully instead of erroring.
+if ! gh api "repos/$SLUG/rulesets" >/dev/null 2>&1; then
+  RULESET_APPLIED=false
+  warn "Branch-protection rulesets are NOT available on $SLUG."
+  warn "Private repos on a personal free plan require GitHub Pro (or the repo must"
+  warn "be public — not an option for proprietary code). Merge policy + labels were"
+  warn "applied; git hooks + CI + auto-merge still enforce the workflow in practice."
+  warn "To enable the main ruleset later: upgrade to GitHub Pro, then re-run this script."
 else
-  printf '%s' "$RULESET_JSON" | gh api -X POST "repos/$SLUG/rulesets" --input - >/dev/null
-  ok "Created 'main protection' ruleset."
+  RULESET_APPLIED=true
+  # Update in place if a ruleset of this name already exists, else create.
+  EXISTING_ID="$(gh api "repos/$SLUG/rulesets" -q '.[] | select(.name=="main protection") | .id' 2>/dev/null | head -n1 || true)"
+  if [ -n "${EXISTING_ID:-}" ] && [ "$EXISTING_ID" != "null" ]; then
+    printf '%s' "$RULESET_JSON" | gh api -X PUT "repos/$SLUG/rulesets/$EXISTING_ID" --input - >/dev/null
+    ok "Updated existing ruleset #$EXISTING_ID."
+  else
+    printf '%s' "$RULESET_JSON" | gh api -X POST "repos/$SLUG/rulesets" --input - >/dev/null
+    ok "Created 'main protection' ruleset."
+  fi
 fi
 
-cat <<EOF
-
-${GRN}Done.${NC} Summary:
-  • main now requires a PR + passing CI; force-push and deletion are blocked.
-  • PRs squash-merge and auto-delete their branch.
-  • '${CYN}npm run ship${NC}' can arm auto-merge so green PRs merge themselves.
-
-Notes:
-  • Required reviews are 0 (solo owner — CI gates are the review). To require a
-    human approver later, set required_approving_review_count to 1 and add a
-    reviewer, or edit the ruleset in: Settings → Rules → Rulesets.
-  • Repo admins keep an 'always' bypass, so you can never be locked out of main.
-EOF
+echo
+printf '%sDone.%s Summary:\n' "$GRN" "$NC"
+echo "  • PRs squash-merge and auto-delete their branch (applied)."
+echo "  • Type labels for 'npm run ship' (applied)."
+if [ "${RULESET_APPLIED:-false}" = true ]; then
+  echo "  • main requires a PR + passing CI; force-push and deletion are blocked."
+  echo "  • '${CYN}npm run ship${NC}' can arm auto-merge so green PRs merge themselves."
+  echo
+  echo "Notes:"
+  echo "  • Required reviews are 0 (solo owner — CI gates are the review). To require a"
+  echo "    human approver later, set required_approving_review_count to 1, or edit the"
+  echo "    ruleset in: Settings → Rules → Rulesets."
+  echo "  • Repo admins keep an 'always' bypass, so you can never be locked out of main."
+else
+  echo "  • ${YEL}main branch protection NOT applied${NC} (ruleset needs GitHub Pro on a private repo)."
+  echo
+  echo "Enforcement WITHOUT the ruleset (still solid for a solo owner):"
+  echo "  • git hooks block direct commits/force-push to main + enforce Conventional Commits."
+  echo "  • CI gates run on every PR; merge only after they pass (merge manually, or"
+  echo "    upgrade to GitHub Pro + re-run this script to get auto-merge-on-green)."
+fi

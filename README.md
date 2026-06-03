@@ -170,7 +170,7 @@ Launch the RawDrive ecosystem on your local machine globally.
 
 ```bash
 # 1. Clone the master repository
-git clone git@github.com:merupuai/RawDrive.git
+git clone https://github.com/manyamprasad/RawDrive.git
 cd RawDrive
 
 # 2. Install frontend ecosystem dependencies

@@ -859,7 +859,7 @@
     "sha256": "6ce0f62c5c28aecb93ab4748265e8394484b6573bd7fbd6aa669b8a697e81042",
     "verifiedAt": "2026-04-15T10:23:50.671Z"
   },
-  "gitRemote": "git@github.com:merupuai/RawDrive.git",
+  "gitRemote": "https://github.com/manyamprasad/RawDrive.git",
   "planningProgress": {
     "cobolt_create_story": {
       "completedAt": "2026-04-15T11:13:27.882Z",
