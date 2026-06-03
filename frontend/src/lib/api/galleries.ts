@@ -223,27 +223,81 @@ export interface PublicStudioLanding {
   };
 }
 
-// withWorkspaceScope appends `?ws=<sub>` to a public-gallery API URL when the
-// caller supplies a workspace subdomain (set by Next.js middleware on requests
-// arriving via `<biz>-<code>.rawdrive.in/...`). The backend reads `?ws=` and
-// scopes the gallery slug lookup to that workspace. Empty `ws` leaves the
-// URL unchanged so legacy `/g/<slug>` requests still hit the unscoped path.
-function withWorkspaceScope(path: string, ws?: string | null): string {
-  if (!ws) return path;
+function appendQueryParam(
+  path: string,
+  key: string,
+  value?: string | null,
+): string {
+  if (!value) return path;
   const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}ws=${encodeURIComponent(ws)}`;
+  return `${path}${sep}${key}=${encodeURIComponent(value)}`;
 }
 
-export async function getPublicStudioLanding(subdomain: string): Promise<PublicStudioLanding> {
-  const res = await fetch(apiUrl(`/api/v1/public/studios/${encodeURIComponent(subdomain)}`));
+// withPublicGalleryScope appends public-gallery lookup scope to API URLs.
+// `ws` keeps per-business subdomain requests strictly workspace-scoped. `share`
+// is only forwarded on first-touch share landings so the backend can recover a
+// gallery from a stale copied `ws` and mint a durable gallery session.
+function withPublicGalleryScope(
+  path: string,
+  ws?: string | null,
+  shareToken?: string | null,
+): string {
+  return appendQueryParam(
+    appendQueryParam(path, "ws", ws),
+    "share",
+    shareToken,
+  );
+}
+
+function gallerySessionHeaders(
+  sessionToken?: string | null,
+): HeadersInit | undefined {
+  return sessionToken ? { "X-Gallery-Session": sessionToken } : undefined;
+}
+
+function fetchWithGallerySession(
+  url: string,
+  sessionToken?: string | null,
+  init?: RequestInit,
+): Promise<Response> {
+  const headers = gallerySessionHeaders(sessionToken);
+  if (!headers) return init ? fetch(url, init) : fetch(url);
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...(init?.headers as Record<string, string> | undefined),
+      ...headers,
+    },
+  });
+}
+
+export async function getPublicStudioLanding(
+  subdomain: string,
+): Promise<PublicStudioLanding> {
+  const res = await fetch(
+    apiUrl(`/api/v1/public/studios/${encodeURIComponent(subdomain)}`),
+  );
   if (!res.ok) throw new Error(`Studio not found: ${res.status}`);
   return res.json();
 }
 
-export async function getPublicGalleryBranding(slug: string, ws?: string | null): Promise<GalleryBranding> {
-  const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/branding`, ws)), {
-    cache: "no-store",
-  });
+export async function getPublicGalleryBranding(
+  slug: string,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
+): Promise<GalleryBranding> {
+  const res = await fetchWithGallerySession(
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}/branding`,
+        ws,
+        shareToken,
+      ),
+    ),
+    sessionToken,
+    { cache: "no-store" },
+  );
   if (!res.ok) throw new Error(`Failed to get branding: ${res.status}`);
   return res.json();
 }
@@ -255,7 +309,11 @@ export async function getPublicGalleryBranding(slug: string, ws?: string | null)
 // bytes are counted against the workspace storage quota (a 403 surfaces the
 // quota error). The created asset is then referenced on the gallery via
 // music_asset_id (validated server-side to be an audio asset in the workspace).
-export async function uploadGalleryMusic(token: string, galleryId: string, file: File): Promise<Gallery> {
+export async function uploadGalleryMusic(
+  token: string,
+  galleryId: string,
+  file: File,
+): Promise<Gallery> {
   void token;
   const form = new FormData();
   form.append("file", file);
@@ -264,9 +322,13 @@ export async function uploadGalleryMusic(token: string, galleryId: string, file:
     body: form,
   });
   if (!uploadRes.ok) {
-    const err = await uploadRes.json().catch(() => ({}) as Record<string, unknown>);
+    const err = await uploadRes
+      .json()
+      .catch(() => ({}) as Record<string, unknown>);
     throw new Error(
-      (err.message as string) || (err.error as string) || `Failed to upload music: ${uploadRes.status}`,
+      (err.message as string) ||
+        (err.error as string) ||
+        `Failed to upload music: ${uploadRes.status}`,
     );
   }
   const uploadBody = await uploadRes.json();
@@ -276,7 +338,10 @@ export async function uploadGalleryMusic(token: string, galleryId: string, file:
 
 // Clears the gallery's slideshow music reference. The underlying audio asset is
 // left in place (freed by the normal asset-delete/quota path if removed).
-export async function clearGalleryMusic(token: string, galleryId: string): Promise<Gallery> {
+export async function clearGalleryMusic(
+  token: string,
+  galleryId: string,
+): Promise<Gallery> {
   return updateGallerySettings(token, galleryId, { music_asset_id: null });
 }
 
@@ -285,8 +350,17 @@ export async function clearGalleryMusic(token: string, galleryId: string): Promi
 // lookup, and `?at=` carries the short-lived, gallery-scoped asset-access token
 // for gated galleries (SEC-1: an <audio> element cannot send the
 // X-Gallery-Session header, and the durable session must never go in a URL).
-export function publicGalleryMusicUrl(slug: string, ws?: string | null, assetAccessToken?: string | null): string {
-  let path = withWorkspaceScope(`/api/v1/public/galleries/${slug}/music`, ws);
+export function publicGalleryMusicUrl(
+  slug: string,
+  ws?: string | null,
+  assetAccessToken?: string | null,
+  shareToken?: string | null,
+): string {
+  let path = withPublicGalleryScope(
+    `/api/v1/public/galleries/${slug}/music`,
+    ws,
+    shareToken,
+  );
   if (assetAccessToken) {
     const sep = path.includes("?") ? "&" : "?";
     path = `${path}${sep}at=${encodeURIComponent(assetAccessToken)}`;
@@ -309,11 +383,18 @@ export async function postFaceMatch(
   consentGiven: boolean,
   threshold?: number,
 ): Promise<FaceMatchResult> {
-  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/face-match`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embedding, consent_given: consentGiven, threshold }),
-  });
+  const res = await fetch(
+    apiUrl(`/api/v1/public/galleries/${slug}/face-match`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        embedding,
+        consent_given: consentGiven,
+        threshold,
+      }),
+    },
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "face match failed" }));
     throw new Error(err.error || `face match ${res.status}`);
@@ -374,9 +455,13 @@ export interface CreateGalleryShareLinkInput {
   channel?: "copy" | "whatsapp" | "email" | string;
 }
 
-export async function listGalleryShareLinks(_token: string, galleryId: string): Promise<GalleryShareLink[]> {
+export async function listGalleryShareLinks(
+  _token: string,
+  galleryId: string,
+): Promise<GalleryShareLink[]> {
   const res = await authFetch(`/api/v1/galleries/${galleryId}/share`);
-  if (!res.ok) throw new Error(`Failed to list gallery share links: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to list gallery share links: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.links)) return body.links;
@@ -393,7 +478,8 @@ export async function createGalleryShareLink(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Failed to create gallery share link: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to create gallery share link: ${res.status}`);
   return res.json();
 }
 
@@ -402,8 +488,12 @@ export async function revokeGalleryShareLink(
   galleryId: string,
   linkId: string,
 ): Promise<void> {
-  const res = await authFetch(`/api/v1/galleries/${galleryId}/share/${linkId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`Failed to revoke gallery share link: ${res.status}`);
+  const res = await authFetch(
+    `/api/v1/galleries/${galleryId}/share/${linkId}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok)
+    throw new Error(`Failed to revoke gallery share link: ${res.status}`);
 }
 
 export interface GalleryAsset {
@@ -439,8 +529,13 @@ export interface AlbumAsset {
   added_at: string;
 }
 
-export async function listGalleries(_token: string, params?: { status?: string; type?: string; search?: string }): Promise<Gallery[]> {
-  const query = new URLSearchParams(params as Record<string, string>).toString();
+export async function listGalleries(
+  _token: string,
+  params?: { status?: string; type?: string; search?: string },
+): Promise<Gallery[]> {
+  const query = new URLSearchParams(
+    params as Record<string, string>,
+  ).toString();
   const res = await authFetch(`/api/v1/galleries?${query}`);
   if (!res.ok) throw new Error(`Failed to list galleries: ${res.status}`);
   const body = await res.json();
@@ -470,11 +565,17 @@ export async function createGallery(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await galleryApiErrorMessage(res, "Failed to create gallery"));
+  if (!res.ok)
+    throw new Error(
+      await galleryApiErrorMessage(res, "Failed to create gallery"),
+    );
   return res.json();
 }
 
-async function galleryApiErrorMessage(res: Response, fallback: string): Promise<string> {
+async function galleryApiErrorMessage(
+  res: Response,
+  fallback: string,
+): Promise<string> {
   let detail = "";
   try {
     const body = await res.clone().json();
@@ -494,7 +595,11 @@ async function galleryApiErrorMessage(res: Response, fallback: string): Promise<
   return `${fallback}: ${detail} (${res.status})`;
 }
 
-export async function updateGallery(_token: string, id: string, data: Partial<Gallery>): Promise<Gallery> {
+export async function updateGallery(
+  _token: string,
+  id: string,
+  data: Partial<Gallery>,
+): Promise<Gallery> {
   const res = await authFetch(`/api/v1/galleries/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -514,27 +619,42 @@ export async function linkGalleryRelationships(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Failed to link gallery relationships: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to link gallery relationships: ${res.status}`);
   return res.json();
 }
 
-export async function getGalleryWorkspaceSummary(_token: string, id: string): Promise<GalleryWorkspaceSummary> {
+export async function getGalleryWorkspaceSummary(
+  _token: string,
+  id: string,
+): Promise<GalleryWorkspaceSummary> {
   const res = await authFetch(`/api/v1/galleries/${id}/workspace-summary`);
-  if (!res.ok) throw new Error(`Failed to get gallery workspace: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to get gallery workspace: ${res.status}`);
   return res.json();
 }
 
-export async function duplicateGallery(token: string, id: string, title?: string): Promise<Gallery> {
+export async function duplicateGallery(
+  token: string,
+  id: string,
+  title?: string,
+): Promise<Gallery> {
   const res = await fetch(apiUrl(`/api/v1/galleries/${id}/duplicate`), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ title }),
   });
   if (!res.ok) throw new Error(`Failed to duplicate gallery: ${res.status}`);
   return res.json();
 }
 
-export async function duplicateGalleryAuth(id: string, title?: string): Promise<Gallery> {
+export async function duplicateGalleryAuth(
+  id: string,
+  title?: string,
+): Promise<Gallery> {
   const res = await authFetch(`/api/v1/galleries/${id}/duplicate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -581,7 +701,8 @@ export async function updateGalleryDesign(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`Failed to update gallery design: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to update gallery design: ${res.status}`);
 }
 
 export async function deleteGallery(_token: string, id: string): Promise<void> {
@@ -589,7 +710,12 @@ export async function deleteGallery(_token: string, id: string): Promise<void> {
   if (!res.ok) throw new Error(`Failed to delete gallery: ${res.status}`);
 }
 
-export async function addAssetToGallery(_token: string, galleryId: string, assetId: string, sortOrder: number): Promise<void> {
+export async function addAssetToGallery(
+  _token: string,
+  galleryId: string,
+  assetId: string,
+  sortOrder: number,
+): Promise<void> {
   const res = await authFetch(`/api/v1/galleries/${galleryId}/assets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -598,7 +724,10 @@ export async function addAssetToGallery(_token: string, galleryId: string, asset
   if (!res.ok) throw new Error(`Failed to add asset: ${res.status}`);
 }
 
-export async function listGalleryAssets(_token: string, galleryId: string): Promise<GalleryAsset[]> {
+export async function listGalleryAssets(
+  _token: string,
+  galleryId: string,
+): Promise<GalleryAsset[]> {
   const res = await authFetch(`/api/v1/galleries/${galleryId}/assets`);
   if (!res.ok) throw new Error(`Failed to list gallery assets: ${res.status}`);
   const body = await res.json();
@@ -662,12 +791,20 @@ export async function updateGalleryAlbum(
   return body.data ?? body;
 }
 
-export async function deleteGalleryAlbum(_token: string, albumId: string): Promise<void> {
-  const res = await authFetch(`/api/v1/albums/${albumId}`, { method: "DELETE" });
+export async function deleteGalleryAlbum(
+  _token: string,
+  albumId: string,
+): Promise<void> {
+  const res = await authFetch(`/api/v1/albums/${albumId}`, {
+    method: "DELETE",
+  });
   if (!res.ok) throw new Error(`Failed to delete album: ${res.status}`);
 }
 
-export async function listAlbumAssets(_token: string, albumId: string): Promise<AlbumAsset[]> {
+export async function listAlbumAssets(
+  _token: string,
+  albumId: string,
+): Promise<AlbumAsset[]> {
   const res = await authFetch(`/api/v1/albums/${albumId}/assets`);
   if (!res.ok) throw new Error(`Failed to list album assets: ${res.status}`);
   const body = await res.json();
@@ -676,7 +813,11 @@ export async function listAlbumAssets(_token: string, albumId: string): Promise<
   return [];
 }
 
-export async function addAlbumAssets(_token: string, albumId: string, assetIds: string[]): Promise<void> {
+export async function addAlbumAssets(
+  _token: string,
+  albumId: string,
+  assetIds: string[],
+): Promise<void> {
   const res = await authFetch(`/api/v1/albums/${albumId}/assets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -685,22 +826,66 @@ export async function addAlbumAssets(_token: string, albumId: string, assetIds: 
   if (!res.ok) throw new Error(`Failed to add album assets: ${res.status}`);
 }
 
-export async function deleteAlbum(_token: string, albumId: string): Promise<void> {
-  const res = await authFetch(`/api/v1/albums/${albumId}`, { method: "DELETE" });
+export async function deleteAlbum(
+  _token: string,
+  albumId: string,
+): Promise<void> {
+  const res = await authFetch(`/api/v1/albums/${albumId}`, {
+    method: "DELETE",
+  });
   if (!res.ok) throw new Error(`Failed to delete album: ${res.status}`);
 }
 
-export async function getPublicGallery(slug: string, ws?: string | null, sessionToken?: string | null): Promise<Gallery> {
+export interface PublicGalleryFetchResult {
+  gallery: Gallery;
+  gallerySessionToken: string | null;
+}
+
+export async function getPublicGalleryWithSession(
+  slug: string,
+  ws?: string | null,
+  sessionToken?: string | null,
+  shareToken?: string | null,
+): Promise<PublicGalleryFetchResult> {
   // Forward the gallery-session token (when present) so a private/invite-only
   // gallery returns its FULL payload to a session-holder instead of the S4-G3
   // locked shell ({ access_gated: true, ... }). Sent as the X-Gallery-Session
   // header — this is a server-side fetch so CORS exposure rules don't apply.
-  const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}`, ws)), {
-    cache: "no-store",
-    headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
-  });
+  const res = await fetchWithGallerySession(
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}`,
+        ws,
+        shareToken,
+      ),
+    ),
+    sessionToken,
+    { cache: "no-store" },
+  );
   if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
-  return res.json();
+  const mintedSessionToken =
+    typeof res.headers?.get === "function"
+      ? res.headers.get("X-Gallery-Session")
+      : null;
+  return {
+    gallery: await res.json(),
+    gallerySessionToken: mintedSessionToken,
+  };
+}
+
+export async function getPublicGallery(
+  slug: string,
+  ws?: string | null,
+  sessionToken?: string | null,
+  shareToken?: string | null,
+): Promise<Gallery> {
+  const result = await getPublicGalleryWithSession(
+    slug,
+    ws,
+    sessionToken,
+    shareToken,
+  );
+  return result.gallery;
 }
 
 export interface PublicAsset {
@@ -727,7 +912,8 @@ export async function updateGallerySettings(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
-  if (!res.ok) throw new Error(`Failed to update gallery settings: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to update gallery settings: ${res.status}`);
   return res.json();
 }
 
@@ -736,10 +922,13 @@ export async function triggerFaceScan(
   token: string,
   galleryId: string,
 ): Promise<{ job_id: string }> {
-  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-faces`), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(
+    apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-faces`),
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   if (!res.ok) throw new Error(`Failed to trigger face scan: ${res.status}`);
   return res.json();
 }
@@ -747,10 +936,18 @@ export async function triggerFaceScan(
 export async function getFaceScanStatus(
   token: string,
   galleryId: string,
-): Promise<{ status: string; processed: number; total: number; faces_found: number }> {
-  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-status`), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+): Promise<{
+  status: string;
+  processed: number;
+  total: number;
+  faces_found: number;
+}> {
+  const res = await fetch(
+    apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-status`),
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   if (!res.ok) throw new Error(`Failed to get scan status: ${res.status}`);
   return res.json();
 }
@@ -770,12 +967,24 @@ export interface PublicGalleryAlbum {
 // the filter chip strip between the hero and the asset grid. Returns an
 // empty array on any failure (404 / 5xx / network) so the public page
 // degrades gracefully to the All-Photos-only view rather than blowing up.
-export async function getPublicGalleryAlbums(slug: string, ws?: string | null, sessionToken?: string | null): Promise<PublicGalleryAlbum[]> {
+export async function getPublicGalleryAlbums(
+  slug: string,
+  ws?: string | null,
+  sessionToken?: string | null,
+  shareToken?: string | null,
+): Promise<PublicGalleryAlbum[]> {
   try {
-    const res = await fetch(apiUrl(withWorkspaceScope(`/api/v1/public/galleries/${slug}/albums`, ws)), {
-      cache: "no-store",
-      headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
-    });
+    const res = await fetchWithGallerySession(
+      apiUrl(
+        withPublicGalleryScope(
+          `/api/v1/public/galleries/${slug}/albums`,
+          ws,
+          shareToken,
+        ),
+      ),
+      sessionToken,
+      { cache: "no-store" },
+    );
     if (!res.ok) return [];
     const body = await res.json();
     const raw: PublicGalleryAlbum[] = Array.isArray(body) ? body : [];
@@ -789,14 +998,21 @@ export async function getPublicGalleryAlbums(slug: string, ws?: string | null, s
   }
 }
 
-export async function getPublicGalleryAssets(slug: string, albumId?: string, ws?: string | null, sessionToken?: string | null): Promise<PublicAsset[]> {
+export async function getPublicGalleryAssets(
+  slug: string,
+  albumId?: string,
+  ws?: string | null,
+  sessionToken?: string | null,
+  shareToken?: string | null,
+): Promise<PublicAsset[]> {
   const path = albumId
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
     : `/api/v1/public/galleries/${slug}/assets`;
-  const res = await fetch(apiUrl(withWorkspaceScope(path, ws)), {
-    cache: "no-store",
-    headers: sessionToken ? { "X-Gallery-Session": sessionToken } : undefined,
-  });
+  const res = await fetchWithGallerySession(
+    apiUrl(withPublicGalleryScope(path, ws, shareToken)),
+    sessionToken,
+    { cache: "no-store" },
+  );
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;

@@ -62,6 +62,7 @@ type PublicGalleryHandler struct {
 }
 
 type publicGalleryResolver interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*repository.Gallery, error)
 	GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error)
 	GetByBusinessSubdomainAndSlug(ctx context.Context, subdomain, slug string) (*repository.Gallery, error)
 	ListAssets(ctx context.Context, galleryID uuid.UUID) ([]repository.GalleryAsset, error)
@@ -433,11 +434,87 @@ func (h *PublicGalleryHandler) resolveGalleryForRequest(r *http.Request, slug st
 		// Strict scoping — a miss is a miss. Returning nil here causes the
 		// caller to send 404 to the client, which is the only correct answer
 		// when the requested workspace doesn't own the requested slug.
-		return h.gallerySvc.GetByBusinessSubdomainAndSlug(r.Context(), sub, slug)
+		gallery, err := h.gallerySvc.GetByBusinessSubdomainAndSlug(r.Context(), sub, slug)
+		if err != nil || gallery != nil {
+			return gallery, err
+		}
+		// Share links and gallery sessions are explicit gallery capabilities.
+		// Let them recover from stale copied workspace subdomains, but only when
+		// the bound gallery still has the exact requested slug. Ordinary
+		// wrong-subdomain URLs continue to 404 and cross-workspace slug fallback
+		// stays closed.
+		if recovered, err := h.resolveGalleryFromShareToken(r, slug); err != nil || recovered != nil {
+			return recovered, err
+		}
+		if recovered, err := h.resolveGalleryFromSession(r, slug); err != nil || recovered != nil {
+			return recovered, err
+		}
+		return h.resolveGalleryFromAssetToken(r, slug)
 	}
 	// No workspace context (apex `/g/<slug>` path) — fall through to the
 	// legacy unscoped lookup chain.
 	return h.gallerySvc.GetBySlug(r.Context(), slug)
+}
+
+func (h *PublicGalleryHandler) resolveGalleryFromShareToken(r *http.Request, slug string) (*repository.Gallery, error) {
+	if h.gallerySvc == nil || h.shareSession == nil {
+		return nil, nil
+	}
+	token := r.URL.Query().Get("share")
+	if token == "" {
+		token = r.Header.Get("X-Share-Token")
+	}
+	if token == "" {
+		return nil, nil
+	}
+	galleryID, err := h.shareSession.GalleryIDForToken(r.Context(), token)
+	if err != nil || galleryID == uuid.Nil {
+		return nil, nil
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil || gallery == nil {
+		return gallery, err
+	}
+	if gallery.Slug != slug {
+		return nil, nil
+	}
+	return gallery, nil
+}
+
+func (h *PublicGalleryHandler) resolveGalleryFromSession(r *http.Request, slug string) (*repository.Gallery, error) {
+	if h.gallerySvc == nil || h.accessSvc == nil {
+		return nil, nil
+	}
+	galleryID, ok := h.accessSvc.GalleryIDFromSession(r.Context(), gallerySessionToken(r))
+	if !ok || galleryID == uuid.Nil {
+		return nil, nil
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil || gallery == nil {
+		return gallery, err
+	}
+	if gallery.Slug != slug {
+		return nil, nil
+	}
+	return gallery, nil
+}
+
+func (h *PublicGalleryHandler) resolveGalleryFromAssetToken(r *http.Request, slug string) (*repository.Gallery, error) {
+	if h.gallerySvc == nil || h.accessSvc == nil {
+		return nil, nil
+	}
+	galleryID, ok := h.accessSvc.GalleryIDFromAssetToken(r.Context(), r.URL.Query().Get("at"))
+	if !ok || galleryID == uuid.Nil {
+		return nil, nil
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil || gallery == nil {
+		return gallery, err
+	}
+	if gallery.Slug != slug {
+		return nil, nil
+	}
+	return gallery, nil
 }
 
 type publicStudioProfileResponse struct {

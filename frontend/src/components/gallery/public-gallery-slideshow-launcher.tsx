@@ -25,7 +25,12 @@ function SlideshowSlide({
   position: number;
   total: number;
 }) {
-  const media = useDecryptedAssetUrl(asset, LIGHTBOX_VARIANTS, null, assetAccessToken);
+  const media = useDecryptedAssetUrl(
+    asset,
+    LIGHTBOX_VARIANTS,
+    null,
+    assetAccessToken,
+  );
   return (
     <img
       src={media.src}
@@ -41,6 +46,7 @@ interface PublicGallerySlideshowLauncherProps {
   assets: PublicAsset[];
   hasMusic: boolean;
   assetAccessToken?: string | null;
+  shareToken?: string | null;
 }
 
 /**
@@ -55,16 +61,24 @@ export function PublicGallerySlideshowLauncher({
   assets,
   hasMusic,
   assetAccessToken,
+  shareToken,
 }: PublicGallerySlideshowLauncherProps) {
   const [open, setOpen] = useState(false);
 
   if (assets.length === 0) return null;
 
-  const musicUrl = hasMusic ? publicGalleryMusicUrl(slug, ws, assetAccessToken) : null;
+  const musicUrl = hasMusic
+    ? publicGalleryMusicUrl(slug, ws, assetAccessToken, shareToken)
+    : null;
 
   return (
     <>
-      <GlassIconButton label="Play slideshow" onClick={() => setOpen(true)} size="md" variant="glass">
+      <GlassIconButton
+        label="Play slideshow"
+        onClick={() => setOpen(true)}
+        size="md"
+        variant="glass"
+      >
         <Play />
       </GlassIconButton>
       {open ? (

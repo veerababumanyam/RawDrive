@@ -12,6 +12,46 @@ import { getApiBaseUrl } from "@/lib/api/base-url";
 
 const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
+function appendQueryParam(
+  path: string,
+  key: string,
+  value?: string | null,
+): string {
+  if (!value) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}${key}=${encodeURIComponent(value)}`;
+}
+
+function withPublicGalleryScope(
+  path: string,
+  ws?: string | null,
+  shareToken?: string | null,
+): string {
+  return appendQueryParam(
+    appendQueryParam(path, "ws", ws),
+    "share",
+    shareToken,
+  );
+}
+
+function withGallerySessionHeader(
+  headers: Record<string, string>,
+  sessionToken?: string | null,
+): Record<string, string> {
+  return sessionToken
+    ? { ...headers, "X-Gallery-Session": sessionToken }
+    : headers;
+}
+
+function fetchWithGallerySession(
+  url: string,
+  sessionToken?: string | null,
+): Promise<Response> {
+  return sessionToken
+    ? fetch(url, { headers: { "X-Gallery-Session": sessionToken } })
+    : fetch(url);
+}
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 export type ProductType = "digital" | "print" | "album" | "bundle";
@@ -93,7 +133,10 @@ export interface GalleryBanner {
 
 // ─── Studio (JWT) routes ─────────────────────────────────────────────
 
-export async function listProducts(token: string, galleryId: string): Promise<GalleryProduct[]> {
+export async function listProducts(
+  token: string,
+  galleryId: string,
+): Promise<GalleryProduct[]> {
   const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products`), {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -111,7 +154,10 @@ export async function createProduct(
 ): Promise<GalleryProduct> {
   const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products`), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(input),
   });
   if (!res.ok) throw new Error(`create product: ${res.status}`);
@@ -124,11 +170,17 @@ export async function updateProduct(
   productId: string,
   input: Partial<GalleryProduct>,
 ): Promise<GalleryProduct> {
-  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products/${productId}`), {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  const res = await fetch(
+    apiUrl(`/api/v1/galleries/${galleryId}/products/${productId}`),
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+    },
+  );
   if (!res.ok) throw new Error(`update product: ${res.status}`);
   return res.json();
 }
@@ -138,10 +190,13 @@ export async function deleteProduct(
   galleryId: string,
   productId: string,
 ): Promise<void> {
-  const res = await fetch(apiUrl(`/api/v1/galleries/${galleryId}/products/${productId}`), {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(
+    apiUrl(`/api/v1/galleries/${galleryId}/products/${productId}`),
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   if (!res.ok) throw new Error(`delete product: ${res.status}`);
 }
 
@@ -152,23 +207,51 @@ export async function upsertPublicCart(
   clientEmail: string,
   items: CartItemInput[],
   couponCode?: string,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
 ): Promise<GalleryCart> {
-  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/cart`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_email: clientEmail,
-      items,
-      coupon_code: couponCode,
-    }),
-  });
+  const res = await fetch(
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}/cart`,
+        ws,
+        shareToken,
+      ),
+    ),
+    {
+      method: "POST",
+      headers: withGallerySessionHeader(
+        { "Content-Type": "application/json" },
+        sessionToken,
+      ),
+      body: JSON.stringify({
+        client_email: clientEmail,
+        items,
+        coupon_code: couponCode,
+      }),
+    },
+  );
   if (!res.ok) throw new Error(`upsert cart: ${res.status}`);
   return res.json();
 }
 
-export async function getPublicCart(slug: string, clientEmail: string): Promise<GalleryCart | null> {
-  const res = await fetch(
-    apiUrl(`/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`),
+export async function getPublicCart(
+  slug: string,
+  clientEmail: string,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
+): Promise<GalleryCart | null> {
+  const res = await fetchWithGallerySession(
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`,
+        ws,
+        shareToken,
+      ),
+    ),
+    sessionToken,
   );
   if (!res.ok) return null;
   const cart = await res.json();
@@ -177,15 +260,41 @@ export async function getPublicCart(slug: string, clientEmail: string): Promise<
   return cart;
 }
 
-export async function clearPublicCart(slug: string, clientEmail: string): Promise<void> {
+export async function clearPublicCart(
+  slug: string,
+  clientEmail: string,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
+): Promise<void> {
   await fetch(
-    apiUrl(`/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`),
-    { method: "DELETE" },
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}/cart?email=${encodeURIComponent(clientEmail)}`,
+        ws,
+        shareToken,
+      ),
+    ),
+    { method: "DELETE", headers: withGallerySessionHeader({}, sessionToken) },
   );
 }
 
-export async function listPublicBanners(slug: string): Promise<GalleryBanner[]> {
-  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/banners`));
+export async function listPublicBanners(
+  slug: string,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
+): Promise<GalleryBanner[]> {
+  const res = await fetchWithGallerySession(
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}/banners`,
+        ws,
+        shareToken,
+      ),
+    ),
+    sessionToken,
+  );
   if (!res.ok) return [];
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -196,8 +305,22 @@ export async function listPublicBanners(slug: string): Promise<GalleryBanner[]> 
 // listPublicProducts returns the active product catalog for a public
 // gallery slug. Empty array on 404/error so the public page can render
 // without products gracefully (many galleries don't sell anything).
-export async function listPublicProducts(slug: string): Promise<GalleryProduct[]> {
-  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/products`));
+export async function listPublicProducts(
+  slug: string,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
+): Promise<GalleryProduct[]> {
+  const res = await fetchWithGallerySession(
+    apiUrl(
+      withPublicGalleryScope(
+        `/api/v1/public/galleries/${slug}/products`,
+        ws,
+        shareToken,
+      ),
+    ),
+    sessionToken,
+  );
   if (!res.ok) return [];
   const products = (await res.json()) as GalleryProduct[] | null;
   return Array.isArray(products) ? products.filter((p) => p.is_active) : [];
@@ -207,22 +330,40 @@ export async function listPublicProducts(slug: string): Promise<GalleryProduct[]
 // gallery. Fire-and-forget — the promise resolves to a boolean so
 // callers can log failures in dev, but a rejection here must never
 // break the surrounding render (analytics is best-effort).
-export type PublicGalleryEventType = "banner_impression" | "banner_click" | "product_view";
+export type PublicGalleryEventType =
+  | "banner_impression"
+  | "banner_click"
+  | "product_view";
 
 export async function trackGalleryEvent(
   slug: string,
   eventType: PublicGalleryEventType,
   metadata?: Record<string, unknown>,
+  ws?: string | null,
+  shareToken?: string | null,
+  sessionToken?: string | null,
 ): Promise<boolean> {
   try {
-    const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/events`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_type: eventType, metadata }),
-      // `keepalive` lets the request survive a page unload — important
-      // for banner_click events that fire immediately before navigation.
-      keepalive: true,
-    });
+    const res = await fetch(
+      apiUrl(
+        withPublicGalleryScope(
+          `/api/v1/public/galleries/${slug}/events`,
+          ws,
+          shareToken,
+        ),
+      ),
+      {
+        method: "POST",
+        headers: withGallerySessionHeader(
+          { "Content-Type": "application/json" },
+          sessionToken,
+        ),
+        body: JSON.stringify({ event_type: eventType, metadata }),
+        // `keepalive` lets the request survive a page unload — important
+        // for banner_click events that fire immediately before navigation.
+        keepalive: true,
+      },
+    );
     return res.ok;
   } catch {
     return false;

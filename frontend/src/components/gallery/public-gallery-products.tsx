@@ -16,10 +16,19 @@ import type { GalleryProduct } from "@/lib/api/commerce";
 
 interface PublicGalleryProductsProps {
   slug: string;
+  workspaceScope?: string | null;
+  shareToken?: string | null;
+  gallerySessionToken?: string | null;
   products: GalleryProduct[];
 }
 
-export function PublicGalleryProducts({ slug, products }: PublicGalleryProductsProps) {
+export function PublicGalleryProducts({
+  slug,
+  workspaceScope,
+  shareToken,
+  gallerySessionToken,
+  products,
+}: PublicGalleryProductsProps) {
   const [clientEmail, setClientEmail] = useState("");
 
   if (products.length === 0) {
@@ -27,14 +36,20 @@ export function PublicGalleryProducts({ slug, products }: PublicGalleryProductsP
   }
 
   return (
-    <section className="max-w-6xl mx-auto px-4 pb-16 space-y-6" aria-labelledby="products-heading">
+    <section
+      className="max-w-6xl mx-auto px-4 pb-16 space-y-6"
+      aria-labelledby="products-heading"
+    >
       <header className="space-y-2">
-        <h2 id="products-heading" className="text-2xl font-semibold text-text-primary">
+        <h2
+          id="products-heading"
+          className="text-2xl font-semibold text-text-primary"
+        >
           Available products
         </h2>
         <p className="text-sm text-text-secondary max-w-2xl">
-          Digital downloads, prints, and albums from this gallery. Add items to your cart
-          and check out when you&apos;re ready.
+          Digital downloads, prints, and albums from this gallery. Add items to
+          your cart and check out when you&apos;re ready.
         </p>
       </header>
 
@@ -60,6 +75,9 @@ export function PublicGalleryProducts({ slug, products }: PublicGalleryProductsP
             key={product.id}
             product={product}
             slug={slug}
+            workspaceScope={workspaceScope}
+            shareToken={shareToken}
+            gallerySessionToken={gallerySessionToken}
             clientEmail={clientEmail || undefined}
           />
         ))}

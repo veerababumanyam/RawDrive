@@ -13,6 +13,28 @@ import (
 	"github.com/rawdrive/backend/internal/service"
 )
 
+type staleWorkspaceShareResolver struct {
+	byID       map[uuid.UUID]*repository.Gallery
+	scopedHits int
+}
+
+func (f *staleWorkspaceShareResolver) GetByID(_ context.Context, id uuid.UUID) (*repository.Gallery, error) {
+	return f.byID[id], nil
+}
+
+func (f *staleWorkspaceShareResolver) GetBySlug(context.Context, string) (*repository.Gallery, error) {
+	return nil, nil
+}
+
+func (f *staleWorkspaceShareResolver) GetByBusinessSubdomainAndSlug(context.Context, string, string) (*repository.Gallery, error) {
+	f.scopedHits++
+	return nil, nil
+}
+
+func (f *staleWorkspaceShareResolver) ListAssets(context.Context, uuid.UUID) ([]repository.GalleryAsset, error) {
+	return nil, nil
+}
+
 // fakeShareSource is an in-memory shareSessionSource for the S4-G2 tests. It
 // models the authoritative ShareLinkService.ValidateAccess outcome (expired /
 // wrong-PIN / exhausted -> deny) and records whether TrackAccess committed.
@@ -61,6 +83,114 @@ func newShareGatedHandler(t *testing.T, src shareSessionSource) (*PublicGalleryH
 
 func privateGallery() *repository.Gallery {
 	return &repository.Gallery{ID: uuid.New(), Title: "Private Gallery", IsPublished: true, AccessMode: "private"}
+}
+
+func TestResolveGalleryForRequest_ShareTokenRecoversFromStaleWorkspaceScope(t *testing.T) {
+	g := publishedPublicGallery()
+	g.Slug = "test-c0b2fe2a"
+	resolver := &staleWorkspaceShareResolver{byID: map[uuid.UUID]*repository.Gallery{g.ID: g}}
+	src := &fakeShareSource{galleryID: g.ID, valid: true}
+	h := NewPublicGalleryHandler(resolver, nil, nil).WithShareSessionSource(src)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/public/galleries/test-c0b2fe2a?ws=missing-studio-deadbeef&share=share-token",
+		nil,
+	)
+
+	got, err := h.resolveGalleryForRequest(req, "test-c0b2fe2a")
+	if err != nil {
+		t.Fatalf("resolve gallery: %v", err)
+	}
+	if got == nil || got.ID != g.ID {
+		t.Fatalf("valid share token should recover its bound gallery on stale ws miss, got %#v", got)
+	}
+	if resolver.scopedHits != 1 {
+		t.Fatalf("expected strict workspace lookup first, got %d scoped hits", resolver.scopedHits)
+	}
+}
+
+func TestResolveGalleryForRequest_ShareTokenCannotRecoverDifferentSlug(t *testing.T) {
+	g := publishedPublicGallery()
+	g.Slug = "other-gallery-aaaaaaaa"
+	resolver := &staleWorkspaceShareResolver{byID: map[uuid.UUID]*repository.Gallery{g.ID: g}}
+	src := &fakeShareSource{galleryID: g.ID, valid: true}
+	h := NewPublicGalleryHandler(resolver, nil, nil).WithShareSessionSource(src)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/public/galleries/test-c0b2fe2a?ws=missing-studio-deadbeef&share=share-token",
+		nil,
+	)
+
+	got, err := h.resolveGalleryForRequest(req, "test-c0b2fe2a")
+	if err != nil {
+		t.Fatalf("resolve gallery: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("share token for a different slug must not recover gallery, got %#v", got)
+	}
+}
+
+func TestResolveGalleryForRequest_SessionRecoversFromStaleWorkspaceScope(t *testing.T) {
+	g := publishedPublicGallery()
+	g.Slug = "test-c0b2fe2a"
+	resolver := &staleWorkspaceShareResolver{byID: map[uuid.UUID]*repository.Gallery{g.ID: g}}
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(0x51 + i)
+	}
+	accessSvc := service.NewGalleryAccessService(nil, nil).WithSessionSigningKey(key)
+	sessionToken, err := accessSvc.IssueShareSession(g.ID, "share-token")
+	if err != nil {
+		t.Fatalf("issue share session: %v", err)
+	}
+	h := NewPublicGalleryHandler(resolver, nil, nil).WithGalleryAccessService(accessSvc)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/public/galleries/test-c0b2fe2a?ws=missing-studio-deadbeef",
+		nil,
+	)
+	req.Header.Set("X-Gallery-Session", sessionToken)
+
+	got, err := h.resolveGalleryForRequest(req, "test-c0b2fe2a")
+	if err != nil {
+		t.Fatalf("resolve gallery: %v", err)
+	}
+	if got == nil || got.ID != g.ID {
+		t.Fatalf("valid gallery session should recover its bound gallery on stale ws miss, got %#v", got)
+	}
+}
+
+func TestResolveGalleryForRequest_AssetTokenRecoversFromStaleWorkspaceScope(t *testing.T) {
+	g := publishedPublicGallery()
+	g.Slug = "test-c0b2fe2a"
+	resolver := &staleWorkspaceShareResolver{byID: map[uuid.UUID]*repository.Gallery{g.ID: g}}
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(0x61 + i)
+	}
+	accessSvc := service.NewGalleryAccessService(nil, nil).WithSessionSigningKey(key)
+	assetToken, err := accessSvc.IssueAssetAccessToken(g.ID)
+	if err != nil {
+		t.Fatalf("issue asset access token: %v", err)
+	}
+	h := NewPublicGalleryHandler(resolver, nil, nil).WithGalleryAccessService(accessSvc)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/public/galleries/test-c0b2fe2a/music?ws=missing-studio-deadbeef&at="+assetToken,
+		nil,
+	)
+
+	got, err := h.resolveGalleryForRequest(req, "test-c0b2fe2a")
+	if err != nil {
+		t.Fatalf("resolve gallery: %v", err)
+	}
+	if got == nil || got.ID != g.ID {
+		t.Fatalf("valid asset token should recover its bound gallery on stale ws miss, got %#v", got)
+	}
 }
 
 // TestShare_ValidLink_BindsSessionAndAllows (S4-G2) — a valid share link for

@@ -19,6 +19,9 @@ import {
 
 interface PublicGalleryBannersProps {
   slug: string;
+  ws?: string | null;
+  shareToken?: string | null;
+  gallerySessionToken?: string | null;
   /** Optional server-fetched banners so SSR skips the client round trip. */
   initialBanners?: GalleryBanner[];
 }
@@ -50,7 +53,13 @@ function isSafeUrl(raw: string): boolean {
   }
 }
 
-export function PublicGalleryBanners({ slug, initialBanners }: PublicGalleryBannersProps) {
+export function PublicGalleryBanners({
+  slug,
+  ws,
+  shareToken,
+  gallerySessionToken,
+  initialBanners,
+}: PublicGalleryBannersProps) {
   const [banners, setBanners] = useState<GalleryBanner[]>(initialBanners ?? []);
   const [loaded, setLoaded] = useState<boolean>(Boolean(initialBanners));
 
@@ -58,7 +67,11 @@ export function PublicGalleryBanners({ slug, initialBanners }: PublicGalleryBann
   useEffect(() => {
     if (loaded) return;
     let cancelled = false;
-    listPublicBanners(slug)
+    const request =
+      ws || shareToken || gallerySessionToken
+        ? listPublicBanners(slug, ws, shareToken, gallerySessionToken)
+        : listPublicBanners(slug);
+    request
       .then((result) => {
         if (!cancelled) {
           setBanners(result);
@@ -71,14 +84,21 @@ export function PublicGalleryBanners({ slug, initialBanners }: PublicGalleryBann
     return () => {
       cancelled = true;
     };
-  }, [slug, loaded]);
+  }, [slug, ws, shareToken, gallerySessionToken, loaded]);
 
   if (banners.length === 0) return null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 pt-4 space-y-3">
       {banners.map((banner) => (
-        <BannerCard key={banner.id} slug={slug} banner={banner} />
+        <BannerCard
+          key={banner.id}
+          slug={slug}
+          ws={ws}
+          shareToken={shareToken}
+          gallerySessionToken={gallerySessionToken}
+          banner={banner}
+        />
       ))}
     </div>
   );
@@ -89,18 +109,54 @@ export function PublicGalleryBanners({ slug, initialBanners }: PublicGalleryBann
 // list component is what gives each banner its own `useEffect` — if we
 // tracked inside the parent, impression events would double-fire on
 // re-renders where only one banner changed.
-function BannerCard({ slug, banner }: { slug: string; banner: GalleryBanner }) {
+function BannerCard({
+  slug,
+  ws,
+  shareToken,
+  gallerySessionToken,
+  banner,
+}: {
+  slug: string;
+  ws?: string | null;
+  shareToken?: string | null;
+  gallerySessionToken?: string | null;
+  banner: GalleryBanner;
+}) {
   useEffect(() => {
     // Fire-and-forget impression. We intentionally don't await; a
     // failed tracking POST cannot block the render, and React's
     // strict mode double-invocation in dev is acceptable here since
     // a handful of duplicate impressions in dev doesn't affect
     // production metrics.
-    void trackGalleryEvent(slug, "banner_impression", { banner_id: banner.id });
-  }, [slug, banner.id]);
+    if (ws || shareToken || gallerySessionToken) {
+      void trackGalleryEvent(
+        slug,
+        "banner_impression",
+        { banner_id: banner.id },
+        ws,
+        shareToken,
+        gallerySessionToken,
+      );
+    } else {
+      void trackGalleryEvent(slug, "banner_impression", {
+        banner_id: banner.id,
+      });
+    }
+  }, [slug, ws, shareToken, gallerySessionToken, banner.id]);
 
   const handleClick = () => {
-    void trackGalleryEvent(slug, "banner_click", { banner_id: banner.id });
+    if (ws || shareToken || gallerySessionToken) {
+      void trackGalleryEvent(
+        slug,
+        "banner_click",
+        { banner_id: banner.id },
+        ws,
+        shareToken,
+        gallerySessionToken,
+      );
+    } else {
+      void trackGalleryEvent(slug, "banner_click", { banner_id: banner.id });
+    }
   };
 
   const style: React.CSSProperties = {};
@@ -121,7 +177,10 @@ function BannerCard({ slug, banner }: { slug: string; banner: GalleryBanner }) {
         ) : null}
         {banner.coupon_code ? (
           <p className="text-xs uppercase tracking-wide mt-2 opacity-80">
-            Use code <span className="font-mono font-semibold">{banner.coupon_code}</span>
+            Use code{" "}
+            <span className="font-mono font-semibold">
+              {banner.coupon_code}
+            </span>
           </p>
         ) : null}
       </div>

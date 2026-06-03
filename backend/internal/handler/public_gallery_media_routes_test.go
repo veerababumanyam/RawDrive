@@ -16,6 +16,10 @@ type fakePublicGalleryResolver struct {
 	gallery *repository.Gallery
 }
 
+func (f *fakePublicGalleryResolver) GetByID(context.Context, uuid.UUID) (*repository.Gallery, error) {
+	return f.gallery, nil
+}
+
 func (f *fakePublicGalleryResolver) GetBySlug(context.Context, string) (*repository.Gallery, error) {
 	return f.gallery, nil
 }

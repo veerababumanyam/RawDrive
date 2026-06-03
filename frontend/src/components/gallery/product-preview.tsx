@@ -45,6 +45,12 @@ interface ProductPreviewProps {
   product: GalleryProduct;
   /** Public gallery slug for the cart API call. */
   slug: string;
+  /** Optional workspace subdomain scope for business-subdomain public URLs. */
+  workspaceScope?: string | null;
+  /** Optional first-touch share token for stale workspace-scope recovery. */
+  shareToken?: string | null;
+  /** Optional durable gallery session minted by password/share access. */
+  gallerySessionToken?: string | null;
   /** Source image dimensions so DPI preflight can classify print quality. */
   sourceWidthPx?: number;
   sourceHeightPx?: number;
@@ -59,6 +65,9 @@ interface ProductPreviewProps {
 export function ProductPreview({
   product,
   slug,
+  workspaceScope,
+  shareToken,
+  gallerySessionToken,
   sourceWidthPx,
   sourceHeightPx,
   clientEmail,
@@ -73,9 +82,14 @@ export function ProductPreview({
   const [addSuccess, setAddSuccess] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const isPrintProduct = product.product_type === "print" || product.product_type === "album";
+  const isPrintProduct =
+    product.product_type === "print" || product.product_type === "album";
   const canPreflight =
-    isPrintProduct && sourceWidthPx && sourceHeightPx && sourceWidthPx > 0 && sourceHeightPx > 0;
+    isPrintProduct &&
+    sourceWidthPx &&
+    sourceHeightPx &&
+    sourceWidthPx > 0 &&
+    sourceHeightPx > 0;
 
   // Signature of the inputs that drive a preflight call. When it changes we
   // either need a fresh preflight (canPreflight) or must drop any stale one
@@ -118,7 +132,9 @@ export function ProductPreview({
       })
       .catch((err) => {
         if (!cancelled) {
-          setPreflightError(err instanceof Error ? err.message : "preflight failed");
+          setPreflightError(
+            err instanceof Error ? err.message : "preflight failed",
+          );
           setPreflight(null);
         }
       });
@@ -142,9 +158,20 @@ export function ProductPreview({
         customization.print_width_in = selectedSize.widthIn;
         customization.print_height_in = selectedSize.heightIn;
       }
-      await upsertPublicCart(slug, clientEmail, [
-        { product_id: product.id, quantity, customization },
-      ]);
+      const items = [{ product_id: product.id, quantity, customization }];
+      if (workspaceScope || shareToken || gallerySessionToken) {
+        await upsertPublicCart(
+          slug,
+          clientEmail,
+          items,
+          undefined,
+          workspaceScope,
+          shareToken,
+          gallerySessionToken,
+        );
+      } else {
+        await upsertPublicCart(slug, clientEmail, items);
+      }
       setAddSuccess(true);
       onAddedToCart?.();
       // Auto-dismiss the success state after a few seconds so the user
@@ -155,7 +182,18 @@ export function ProductPreview({
     } finally {
       setAddingToCart(false);
     }
-  }, [clientEmail, isPrintProduct, onAddedToCart, product.id, quantity, selectedSize, slug]);
+  }, [
+    clientEmail,
+    gallerySessionToken,
+    isPrintProduct,
+    onAddedToCart,
+    product.id,
+    quantity,
+    selectedSize,
+    shareToken,
+    slug,
+    workspaceScope,
+  ]);
 
   const totalPrice = product.price_amount * quantity;
 
@@ -178,7 +216,11 @@ export function ProductPreview({
           <label className="block text-xs font-medium uppercase tracking-wide text-text-secondary">
             Print size
           </label>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Print size">
+          <div
+            className="flex flex-wrap gap-2"
+            role="radiogroup"
+            aria-label="Print size"
+          >
             {sizes.map((size) => {
               const active = size.label === selectedSize.label;
               return (
@@ -215,7 +257,11 @@ export function ProductPreview({
         <label className="text-xs font-medium uppercase tracking-wide text-text-secondary">
           Quantity
         </label>
-        <div className="flex items-center gap-2" role="group" aria-label="Quantity">
+        <div
+          className="flex items-center gap-2"
+          role="group"
+          aria-label="Quantity"
+        >
           <GlassIconButton
             size="sm"
             variant="glass"
@@ -245,7 +291,9 @@ export function ProductPreview({
       {/* Price + add to cart */}
       <footer className="flex items-center justify-between border-t border-white/10 pt-4">
         <div>
-          <div className="text-xs uppercase tracking-wide text-text-secondary">Total</div>
+          <div className="text-xs uppercase tracking-wide text-text-secondary">
+            Total
+          </div>
           <div className="text-2xl font-semibold tabular-nums">
             {formatPaisa(totalPrice, product.price_currency)}
           </div>
@@ -253,7 +301,9 @@ export function ProductPreview({
         <button
           type="button"
           onClick={handleAddToCart}
-          disabled={addingToCart || (preflight?.quality === "fail" && isPrintProduct)}
+          disabled={
+            addingToCart || (preflight?.quality === "fail" && isPrintProduct)
+          }
           className={[
             "min-h-[44px] rounded-xl px-5 py-2 text-sm font-semibold",
             "bg-accent text-text-inverse shadow-md transition-all duration-200",
@@ -287,7 +337,10 @@ function DPIQualityBadge({
 }) {
   if (error) {
     return (
-      <div className="flex items-start gap-2 text-xs text-feedback-warning" role="status">
+      <div
+        className="flex items-start gap-2 text-xs text-feedback-warning"
+        role="status"
+      >
         <InfoCircle />
         <span>Print quality check unavailable: {error}</span>
       </div>
@@ -295,7 +348,10 @@ function DPIQualityBadge({
   }
   if (!result) {
     return (
-      <div className="flex items-center gap-2 text-xs text-text-secondary" role="status">
+      <div
+        className="flex items-center gap-2 text-xs text-text-secondary"
+        role="status"
+      >
         <InfoCircle />
         <span>Checking print quality…</span>
       </div>
@@ -326,7 +382,8 @@ function DPIQualityBadge({
           <p className="text-xs text-text-secondary">{result.message}</p>
           {result.shortfall ? (
             <p className="text-xs text-text-secondary">
-              Recommended source: {result.required_width_px}×{result.required_height_px}px
+              Recommended source: {result.required_width_px}×
+              {result.required_height_px}px
             </p>
           ) : null}
         </div>

@@ -5,6 +5,7 @@ import {
   getPublicGalleryAlbums,
   getPublicGalleryAssets,
   getPublicGalleryBranding,
+  getPublicGalleryWithSession,
 } from "@/lib/api/galleries";
 import { PublicGalleryAlbumChips } from "@/components/gallery/public-gallery-album-chips";
 import { listPublicBanners, listPublicProducts } from "@/lib/api/commerce";
@@ -18,8 +19,14 @@ import { SharePinGate } from "@/components/gallery/share-pin-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
 import { GalleryExpiryBanner } from "@/components/gallery/gallery-expiry-banner";
 import { PublicGallerySlideshowLauncher } from "@/components/gallery/public-gallery-slideshow-launcher";
-import { galleryAccentCssVars, resolveGalleryAccent } from "@/lib/gallery-accent";
-import { readPublicDesignConfig, readPublicCoverThumbnails } from "@/lib/gallery-design-config";
+import {
+  galleryAccentCssVars,
+  resolveGalleryAccent,
+} from "@/lib/gallery-accent";
+import {
+  readPublicDesignConfig,
+  readPublicCoverThumbnails,
+} from "@/lib/gallery-design-config";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
 
@@ -44,12 +51,32 @@ function PublicGalleryUnavailable({
       <div className="max-w-md px-4 text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-sunken">
           {icon === "clock" ? (
-            <svg className="h-8 w-8 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="h-8 w-8 text-text-tertiary"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
           ) : (
-            <svg className="h-8 w-8 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+            <svg
+              className="h-8 w-8 text-text-tertiary"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+              />
             </svg>
           )}
         </div>
@@ -60,10 +87,14 @@ function PublicGalleryUnavailable({
   );
 }
 
-export default async function PublicGalleryPage({ params, searchParams }: Props) {
+export default async function PublicGalleryPage({
+  params,
+  searchParams,
+}: Props) {
   const { slug } = await params;
   const query = searchParams ? await searchParams : {};
-  const albumId = typeof query.album === "string" && query.album ? query.album : undefined;
+  const albumId =
+    typeof query.album === "string" && query.album ? query.album : undefined;
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("gallery_session")?.value;
   // `ws` is set by middleware.ts when the request arrived via the per-business
@@ -75,11 +106,21 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // S4-G2: a share-link landing arrives as /g/{slug}?share=<token>. When the
   // link is PIN-gated and no session cookie exists yet, we render the PIN gate
   // (which mints the session and reloads). The bare token alone never unlocks.
-  const shareToken = typeof query.share === "string" && query.share ? query.share : undefined;
+  const shareToken =
+    typeof query.share === "string" && query.share ? query.share : undefined;
 
   let gallery;
+  let effectiveSessionToken = sessionToken;
   try {
-    gallery = await getPublicGallery(slug, ws, sessionToken);
+    const result = await getPublicGalleryWithSession(
+      slug,
+      ws,
+      sessionToken,
+      shareToken,
+    );
+    gallery = result.gallery;
+    effectiveSessionToken =
+      sessionToken ?? result.gallerySessionToken ?? undefined;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
@@ -109,7 +150,9 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // through to an empty grid. If the visitor arrived via a PIN-gated share
   // link (?share=<token>), offer the PIN gate so they can unlock in place.
   if (gallery.access_gated === true) {
-    const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
+    const branding = await getPublicGalleryBranding(slug, ws, shareToken).catch(
+      () => null,
+    );
     const brandName = branding?.can_customize ? branding.brand_name : undefined;
     const logoUrl = branding?.can_customize ? branding.logo_url : undefined;
     if (shareToken) {
@@ -135,9 +178,12 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   }
 
   const hasPassword = gallery.settings?.has_password === true;
+  const followupShareToken = effectiveSessionToken ? undefined : shareToken;
 
-  if (hasPassword && !sessionToken) {
-    const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
+  if (hasPassword && !effectiveSessionToken) {
+    const branding = await getPublicGalleryBranding(slug, ws, shareToken).catch(
+      () => null,
+    );
     return (
       <GalleryPasswordGate
         slug={slug}
@@ -151,10 +197,20 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
 
   let assets;
   try {
-    assets = await getPublicGalleryAssets(slug, albumId, ws, sessionToken);
+    assets = await getPublicGalleryAssets(
+      slug,
+      albumId,
+      ws,
+      effectiveSessionToken,
+      followupShareToken,
+    );
   } catch (err) {
     if (hasPassword) {
-      const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
+      const branding = await getPublicGalleryBranding(
+        slug,
+        ws,
+        shareToken,
+      ).catch(() => null);
       return (
         <GalleryPasswordGate
           slug={slug}
@@ -173,10 +229,15 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // errors and returns [] so an album-service outage doesn't blow up
   // the whole public page; the chip strip simply hides itself.
   const [products, banners, branding, albums] = await Promise.all([
-    listPublicProducts(slug),
-    listPublicBanners(slug),
-    getPublicGalleryBranding(slug, ws).catch(() => null),
-    getPublicGalleryAlbums(slug, ws, sessionToken),
+    listPublicProducts(slug, ws, followupShareToken, effectiveSessionToken),
+    listPublicBanners(slug, ws, followupShareToken, effectiveSessionToken),
+    getPublicGalleryBranding(
+      slug,
+      ws,
+      followupShareToken,
+      effectiveSessionToken,
+    ).catch(() => null),
+    getPublicGalleryAlbums(slug, ws, effectiveSessionToken, followupShareToken),
   ]);
 
   // For the "All Photos" chip count we need the gallery-wide asset
@@ -184,11 +245,16 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // Re-fetch only when an album filter is active; otherwise reuse the
   // already-loaded `assets` length to avoid a second round-trip.
   const totalAssetCount = albumId
-    ? (await getPublicGalleryAssets(slug, undefined, ws, sessionToken).catch(() => [])).length
+    ? (
+        await getPublicGalleryAssets(
+          slug,
+          undefined,
+          ws,
+          effectiveSessionToken,
+          followupShareToken,
+        ).catch(() => [])
+      ).length
     : assets.length;
-
-  const resolvedStudioBrandName = branding?.can_customize ? branding.brand_name : undefined;
-  const resolvedStudioLogoUrl = branding?.can_customize ? branding.logo_url : undefined;
 
   // Design config saved by the Gallery Design Studio. The public viewer
   // needs this so the share link renders with the cover image, cover
@@ -204,12 +270,16 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // session forwarded on this server-side fetch). Header-less <img>/<audio>
   // byte loads carry it as ?at= — the durable session is never put in a URL.
   const assetAccessToken =
-    gallery.settings && typeof (gallery.settings as Record<string, unknown>).asset_access_token === "string"
-      ? ((gallery.settings as Record<string, unknown>).asset_access_token as string)
+    gallery.settings &&
+    typeof (gallery.settings as Record<string, unknown>).asset_access_token ===
+      "string"
+      ? ((gallery.settings as Record<string, unknown>)
+          .asset_access_token as string)
       : null;
-  const designCoverAssetId = designConfig?.cover?.assetId || gallery.cover_asset_id;
+  const designCoverAssetId =
+    designConfig?.cover?.assetId || gallery.cover_asset_id;
   const designCoverAsset = designCoverAssetId
-    ? assets.find((asset) => asset.id === designCoverAssetId) ?? null
+    ? (assets.find((asset) => asset.id === designCoverAssetId) ?? null)
     : null;
   // 2026-05-18: embedded YouTube/Vimeo videos. Same shape the dashboard
   // editor writes — see frontend/src/lib/embedded-videos.ts. Empty list
@@ -222,10 +292,16 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // active theme by overriding the accent token custom properties for this
   // subtree. All `accent-*` token classes (grid selection, buttons, links) and
   // their color-mix derivations adopt it automatically. Null → theme default.
-  const galleryAccent = resolveGalleryAccent({ design: designConfig, branding });
+  const galleryAccent = resolveGalleryAccent({
+    design: designConfig,
+    branding,
+  });
 
   const galleryContent = (
-    <div className="min-h-screen bg-surface" style={galleryAccentCssVars(galleryAccent)}>
+    <div
+      className="min-h-screen bg-surface"
+      style={galleryAccentCssVars(galleryAccent)}
+    >
       <PublicGalleryHero
         gallery={gallery}
         assets={assets}
@@ -237,7 +313,13 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
 
       <GalleryExpiryBanner expiresAt={gallery.expires_at} />
 
-      <PublicGalleryBanners slug={slug} initialBanners={banners} />
+      <PublicGalleryBanners
+        slug={slug}
+        ws={ws}
+        shareToken={followupShareToken}
+        gallerySessionToken={effectiveSessionToken}
+        initialBanners={banners}
+      />
 
       <PublicGalleryAlbumChips
         slug={slug}
@@ -255,6 +337,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
               assets={assets}
               hasMusic={Boolean(gallery.music_asset_id)}
               assetAccessToken={assetAccessToken}
+              shareToken={assetAccessToken ? undefined : followupShareToken}
             />
           </div>
         )}
@@ -282,13 +365,19 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
           // proofing submit. assetAccessToken (SEC-1) is the byte-only ?at=
           // token for protected image/download URLs — kept separate so the
           // durable session never lands in a URL.
-          gallerySessionToken={sessionToken ?? null}
+          gallerySessionToken={effectiveSessionToken ?? null}
           assetAccessToken={assetAccessToken}
           workspaceScope={ws ?? null}
         />
       </div>
 
-      <PublicGalleryProducts slug={slug} products={products} />
+      <PublicGalleryProducts
+        slug={slug}
+        workspaceScope={ws}
+        shareToken={followupShareToken}
+        gallerySessionToken={effectiveSessionToken}
+        products={products}
+      />
 
       <PublicGalleryEnhancements
         slug={slug}
@@ -300,14 +389,6 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
       />
     </div>
   );
-
-  if (hasPassword) {
-    return (
-      <GalleryPasswordGate slug={slug} brandName={resolvedStudioBrandName} logoUrl={resolvedStudioLogoUrl}>
-        {galleryContent}
-      </GalleryPasswordGate>
-    );
-  }
 
   return galleryContent;
 }
@@ -325,8 +406,11 @@ export async function generateMetadata({ params, searchParams }: Props) {
       getPublicGallery(slug, ws),
       getPublicGalleryBranding(slug, ws).catch(() => null),
     ]);
-    const brandName = branding?.can_customize ? branding.brand_name : "RawDrive";
-    const description = gallery.description || `View ${gallery.title} by ${brandName}`;
+    const brandName = branding?.can_customize
+      ? branding.brand_name
+      : "RawDrive";
+    const description =
+      gallery.description || `View ${gallery.title} by ${brandName}`;
     return {
       title: `${gallery.title} | ${brandName}`,
       description,
