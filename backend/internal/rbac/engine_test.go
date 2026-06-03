@@ -166,6 +166,54 @@ func TestAssignRole_OwnerCanAssignAdmin(t *testing.T) {
 	assert.NoError(t, err, "Owner should be able to assign Admin role")
 }
 
+// TestAssignRole_DemotionInvalidatesTargetCacheImmediately pins the security
+// contract: a role change must take effect at once, not after the cache TTL.
+// Demotion is the security-critical direction — a stale cache lets a demoted
+// (or revoked) user keep elevated privileges for up to cacheTTL.
+func TestAssignRole_DemotionInvalidatesTargetCacheImmediately(t *testing.T) {
+	engine, _ := newTestEngine()
+	ctx := context.Background()
+
+	// admin-user is Admin in ws-1 and can manage the team. This evaluation also
+	// warms the cache with role=Admin for admin-user:ws-1, modelling a user with
+	// an active session whose permissions were just checked.
+	allowed, err := engine.Evaluate(ctx, "admin-user", "ws-1", "team", "manage")
+	require.NoError(t, err)
+	require.True(t, allowed, "precondition: admin-user manages team before demotion")
+
+	// owner-user demotes admin-user to Viewer (e.g. revoking access after an incident).
+	err = engine.AssignRole(ctx, "owner-user", "admin-user", "ws-1", rbac.RoleViewer)
+	require.NoError(t, err)
+
+	// The demotion must take effect immediately, not after the 5m cache TTL.
+	allowed, err = engine.Evaluate(ctx, "admin-user", "ws-1", "team", "manage")
+	require.NoError(t, err)
+	assert.False(t, allowed,
+		"demoted user must lose privileges immediately; a stale RBAC cache leaves a privilege-lag window")
+}
+
+// TestAssignRole_PromotionInvalidatesTargetCacheImmediately pins the correctness
+// direction: a freshly promoted user must gain their new privileges at once.
+func TestAssignRole_PromotionInvalidatesTargetCacheImmediately(t *testing.T) {
+	engine, _ := newTestEngine()
+	ctx := context.Background()
+
+	// viewer-user is Viewer in ws-1 and cannot write files. Warms cache with Viewer.
+	allowed, err := engine.Evaluate(ctx, "viewer-user", "ws-1", "files", "write")
+	require.NoError(t, err)
+	require.False(t, allowed, "precondition: viewer-user cannot write before promotion")
+
+	// owner-user promotes viewer-user to Editor.
+	err = engine.AssignRole(ctx, "owner-user", "viewer-user", "ws-1", rbac.RoleEditor)
+	require.NoError(t, err)
+
+	// The promotion must take effect immediately, not after the 5m cache TTL.
+	allowed, err = engine.Evaluate(ctx, "viewer-user", "ws-1", "files", "write")
+	require.NoError(t, err)
+	assert.True(t, allowed,
+		"promoted user must gain privileges immediately; a stale RBAC cache delays them up to the TTL")
+}
+
 func TestPermissionMatrix_AllEndpoints(t *testing.T) {
 	matrix := rbac.GetPermissionMatrix()
 	require.NotEmpty(t, matrix, "permission matrix should not be empty")

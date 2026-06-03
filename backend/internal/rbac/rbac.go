@@ -169,6 +169,18 @@ func (e *engine) getRole(ctx context.Context, userID, workspaceID string) (Role,
 	return role, nil
 }
 
+// invalidate drops the cached role for a single (userID, workspaceID) key so the
+// next getRole re-reads the source of truth. Any code path that mutates the
+// underlying store for a user MUST invalidate that user's entry to keep this
+// read-through cache coherent — otherwise a role change is masked for up to
+// cacheTTL.
+func (e *engine) invalidate(userID, workspaceID string) {
+	key := userID + ":" + workspaceID
+	e.mu.Lock()
+	delete(e.cache, key)
+	e.mu.Unlock()
+}
+
 func (e *engine) Evaluate(ctx context.Context, userID, workspaceID, resource, action string) (bool, error) {
 	role, err := e.getRole(ctx, userID, workspaceID)
 	if err != nil {
@@ -208,5 +220,14 @@ func (e *engine) AssignRole(ctx context.Context, assignerID, targetUserID, works
 		return errors.New("privilege escalation: cannot assign role at or above your own level")
 	}
 
-	return e.store.SetRole(ctx, targetUserID, workspaceID, role)
+	if err := e.store.SetRole(ctx, targetUserID, workspaceID, role); err != nil {
+		return err
+	}
+
+	// The source of truth just changed for this user — drop any cached projection
+	// so the next Evaluate re-reads the new role instead of serving the stale one
+	// for up to cacheTTL. Without this, a demotion/revocation leaves a
+	// privilege-lag window in which the user keeps their old (elevated) access.
+	e.invalidate(targetUserID, workspaceID)
+	return nil
 }
