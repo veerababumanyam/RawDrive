@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decodeRaw,
   endsWithJpegEoi,
+  extractCr3Preview,
   extractRafPreview,
   extractRawPreview,
   extractTiffRawPreview,
@@ -145,6 +146,92 @@ function buildRaf(jpeg: Uint8Array): ArrayBuffer {
   view.setUint32(0x58, jpeg.length, false); // big-endian length
   u8.set(jpeg, jpegOffset);
   return buffer;
+}
+
+// ---------------------------------------------------------------------------
+// CR3 (ISO-BMFF) fixture builder. We hand-write a real box tree so the actual
+// `extractCr3Preview` walker traverses it end to end:
+//   ftyp("crx ") + mdat(full-res JPEG) + moov( trak→…→stbl(stco/stsz) + uuid(PRVW) )
+// `mdat` is placed right after `ftyp` so the absolute chunk offset we wire into
+// `stco` is exact. moov is emitted last so it can reference that offset.
+// ---------------------------------------------------------------------------
+
+function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const p of parts) {
+    out.set(p, pos);
+    pos += p.length;
+  }
+  return out;
+}
+
+/** A big-endian ISO-BMFF box: [size:4 BE][type:4 ASCII][payload]. */
+function beBox(type: string, payload: Uint8Array): Uint8Array {
+  const out = new Uint8Array(8 + payload.length);
+  new DataView(out.buffer).setUint32(0, out.length, false);
+  for (let i = 0; i < 4; i += 1) out[4 + i] = type.charCodeAt(i);
+  out.set(payload, 8);
+  return out;
+}
+
+/** A `uuid` box: 16-byte user UUID (zeros here) + payload. */
+function beUuidBox(payload: Uint8Array): Uint8Array {
+  return beBox("uuid", concatBytes(new Uint8Array(16), payload));
+}
+
+/** ftyp with major + compatible brand "crx " (Canon CR3). */
+function ftypCrx(): Uint8Array {
+  const payload = new Uint8Array(12);
+  payload.set([0x63, 0x72, 0x78, 0x20], 0); // major brand "crx "
+  payload.set([0x63, 0x72, 0x78, 0x20], 8); // compatible brand "crx "
+  return beBox("ftyp", payload);
+}
+
+function stcoBox(chunkOffset: number): Uint8Array {
+  const payload = new Uint8Array(12);
+  const view = new DataView(payload.buffer);
+  view.setUint32(4, 1, false); // entry_count
+  view.setUint32(8, chunkOffset, false); // chunk[0] absolute offset
+  return beBox("stco", payload);
+}
+
+function stszBox(sampleSize: number): Uint8Array {
+  const payload = new Uint8Array(12);
+  const view = new DataView(payload.buffer);
+  view.setUint32(4, sampleSize, false); // uniform sample_size
+  view.setUint32(8, 1, false); // sample_count
+  return beBox("stsz", payload);
+}
+
+function prvwBox(jpeg: Uint8Array): Uint8Array {
+  // PRVW wraps the JPEG behind a small fixed header (16 zero bytes here); the
+  // extractor scans the payload for the SOI marker.
+  return beBox("PRVW", concatBytes(new Uint8Array(16), jpeg));
+}
+
+function buildCr3(opts: { fullRes?: Uint8Array; prvw?: Uint8Array }): ArrayBuffer {
+  const ftyp = ftypCrx();
+  const parts: Uint8Array[] = [ftyp];
+
+  let trak: Uint8Array | null = null;
+  if (opts.fullRes) {
+    const mdatJpegOffset = ftyp.length + 8; // ftyp, then mdat header (8 bytes)
+    const stbl = beBox(
+      "stbl",
+      concatBytes(stcoBox(mdatJpegOffset), stszBox(opts.fullRes.length)),
+    );
+    trak = beBox("trak", beBox("mdia", beBox("minf", stbl)));
+    parts.push(beBox("mdat", opts.fullRes));
+  }
+
+  const moovChildren: Uint8Array[] = [];
+  if (trak) moovChildren.push(trak);
+  if (opts.prvw) moovChildren.push(beUuidBox(prvwBox(opts.prvw)));
+  parts.push(beBox("moov", concatBytes(...moovChildren)));
+
+  return concatBytes(...parts).buffer as ArrayBuffer;
 }
 
 function blobFrom(buffer: ArrayBuffer, type: string): Blob {
@@ -346,6 +433,60 @@ describe("extractRafPreview", () => {
 });
 
 // ---------------------------------------------------------------------------
+// extractCr3Preview — hand-built Canon CR3 (ISO-BMFF) box tree.
+// ---------------------------------------------------------------------------
+
+describe("extractCr3Preview", () => {
+  it("returns the full-resolution mdat JPEG (largest) over the PRVW preview", () => {
+    const fullRes = jpegBytes(1024); // full-res sample in mdat
+    const prvw = jpegBytes(256); // smaller PRVW preview
+    const blob = extractCr3Preview(buildCr3({ fullRes, prvw }));
+
+    expect(blob).not.toBeNull();
+    expect(blob!.type).toBe("image/jpeg");
+    expect(blob!.size).toBe(fullRes.length);
+  });
+
+  it("falls back to the PRVW preview when no track sample table is present", () => {
+    const prvw = jpegBytes(300);
+    const blob = extractCr3Preview(buildCr3({ prvw }));
+
+    expect(blob).not.toBeNull();
+    expect(blob!.size).toBe(prvw.length);
+  });
+
+  it("rejects a non-JPEG track sample (e.g. HEVC CRAW) and uses PRVW instead", () => {
+    // A track whose sample bytes are NOT a JPEG (no SOI) must be discarded; the
+    // PRVW preview is the only usable candidate.
+    const notJpeg = new Uint8Array(2048).fill(0x11); // no FF D8 anywhere
+    const prvw = jpegBytes(256);
+    const blob = extractCr3Preview(buildCr3({ fullRes: notJpeg, prvw }));
+
+    expect(blob).not.toBeNull();
+    expect(blob!.size).toBe(prvw.length);
+  });
+
+  it("returns null for a CR3 with no extractable preview (bare ftyp)", () => {
+    const blob = extractCr3Preview(ftypCrx().buffer as ArrayBuffer);
+    expect(blob).toBeNull();
+  });
+
+  it("returns null for a non-ISO-BMFF buffer without throwing", () => {
+    expect(extractCr3Preview(new Uint8Array([1, 2, 3, 4, 5, 6]).buffer)).toBeNull();
+  });
+
+  it("returns null on malformed boxes (oversized child) without throwing", () => {
+    // ftyp("crx ") + a moov whose declared size overruns the buffer.
+    const ftyp = ftypCrx();
+    const broken = concatBytes(
+      ftyp,
+      new Uint8Array([0x7f, 0xff, 0xff, 0xff, 0x6d, 0x6f, 0x6f, 0x76]), // size huge, "moov"
+    );
+    expect(extractCr3Preview(broken.buffer as ArrayBuffer)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // extractRawPreview — detection routing + graceful null contract.
 // ---------------------------------------------------------------------------
 
@@ -381,14 +522,40 @@ describe("extractRawPreview", () => {
     expect(blob!.size).toBe(jpeg.length);
   });
 
-  it("returns null for CR3 / ISO-BMFF (ftyp) → Desktop fallback", async () => {
-    // ....ftyp crx ... — an ISO-BMFF container like CR3.
+  it("routes a CR3 (crx brand) through the CR3 box-walker by extension", async () => {
+    const fullRes = jpegBytes(800);
+    const file = blobFrom(buildCr3({ fullRes, prvw: jpegBytes(200) }), "image/x-canon-cr3");
+    const blob = await extractRawPreview(file, "cr3");
+    expect(blob).not.toBeNull();
+    expect(blob!.size).toBe(fullRes.length);
+  });
+
+  it("routes a CR3 by its crx brand even when the extension is absent", async () => {
+    const prvw = jpegBytes(260);
+    const file = blobFrom(buildCr3({ prvw }), "application/octet-stream");
+    const blob = await extractRawPreview(file); // no ext provided
+    expect(blob).not.toBeNull();
+    expect(blob!.size).toBe(prvw.length);
+  });
+
+  it("returns null for a CR3 with no extractable preview → Desktop fallback", async () => {
+    // Bare ISO-BMFF ftyp "crx " with no moov/preview.
     const bytes = new Uint8Array(32);
     bytes.set([0x00, 0x00, 0x00, 0x18], 0); // box size
     bytes.set([0x66, 0x74, 0x79, 0x70], 4); // "ftyp"
     bytes.set([0x63, 0x72, 0x78, 0x20], 8); // "crx "
     const file = blobFrom(bytes.buffer, "image/x-canon-cr3");
     await expect(extractRawPreview(file, "cr3")).resolves.toBeNull();
+  });
+
+  it("returns null for non-CR3 ISO-BMFF (e.g. HEIC) → handled by its own decoder", async () => {
+    // ....ftyp heic ... — must NOT be sliced here.
+    const bytes = new Uint8Array(32);
+    bytes.set([0x00, 0x00, 0x00, 0x18], 0);
+    bytes.set([0x66, 0x74, 0x79, 0x70], 4); // "ftyp"
+    bytes.set([0x68, 0x65, 0x69, 0x63], 8); // "heic"
+    const file = blobFrom(bytes.buffer, "image/heic");
+    await expect(extractRawPreview(file, "heic")).resolves.toBeNull();
   });
 
   it("returns null for a plain TIFF with a non-RAW extension", async () => {

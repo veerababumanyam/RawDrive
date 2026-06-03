@@ -163,11 +163,12 @@ describe("decodeToImageSource routing", () => {
     if (!result.ok) expect(result.reason).toBe("needs-desktop");
   });
 
-  it("routes CR3 to needs-desktop without calling decodeRaw", async () => {
-    const result = await decodeToImageSource(fileWith("IMG_0001.CR3", HEADS.cr3));
-    expect(decodeRawMock).not.toHaveBeenCalled();
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toBe("needs-desktop");
+  it("routes CR3 (crx brand) through decodeRaw and wraps the bitmap", async () => {
+    decodeRawMock.mockResolvedValueOnce(bitmap(6000, 4000));
+    const result = await decodeToImageSource(fileWith("IMG_0001.CR3", HEADS.cr3, "image/x-canon-cr3"));
+    expect(decodeRawMock).toHaveBeenCalledTimes(1);
+    expect(decodeRawMock.mock.calls[0][1]).toBe("cr3"); // file + lowercased extension
+    expect(result).toMatchObject({ ok: true, width: 6000, height: 4000 });
   });
 
   it("routes unknown/exotic formats to needs-desktop", async () => {

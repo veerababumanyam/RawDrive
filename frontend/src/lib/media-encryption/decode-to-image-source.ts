@@ -8,10 +8,11 @@
 // throws for HEIC/HEIF and camera RAW (a <canvas> cannot decode them). This
 // router keeps jpeg/png/gif/webp on the byte-identical native path and routes
 // HEIC/HEIF/AVIF/RAW through the dedicated decoders built earlier on this
-// branch. Anything we cannot decode in-browser (CR3, exotic RAW, corrupt
-// input, or an unsupported engine) collapses to a `needs-desktop` result so
-// `decodeImage` can throw a typed error and `use-upload` flags the file
-// "needs RawDrive Desktop" per file.
+// branch (camera RAW now includes Canon CR3 via the ISO-BMFF box parser).
+// Anything we cannot decode in-browser (exotic RAW, corrupt input, or an
+// unsupported engine) collapses to a `needs-desktop` result so `decodeImage`
+// can throw a typed error and `use-upload` flags the file "needs RawDrive
+// Desktop" per file.
 //
 // CONTRACT — `decodeToImageSource` NEVER throws. Every failure, including a
 // thrown decoder or a missing browser API, is caught and surfaced as
@@ -29,9 +30,10 @@ export type DecodeResult =
 
 // Camera-RAW extensions whose embedded JPEG preview the RAW decoder can slice
 // out. Kept in lock-step with the BROWSER_DECODE side of still-image-formats.ts
-// and the TIFF-based set in decoders/raw-preview.ts. CR3 + exotic RAW are
-// intentionally absent — they fall through to the needs-desktop default.
-const BROWSER_RAW_EXTENSIONS = new Set(["cr2", "nef", "arw", "dng", "orf", "raf", "rw2"]);
+// and the parsers in decoders/raw-preview.ts (TIFF-based families + the RAF and
+// CR3 box parsers). Exotic / proprietary RAW stays absent — those fall through
+// to the needs-desktop default.
+const BROWSER_RAW_EXTENSIONS = new Set(["cr2", "cr3", "nef", "arw", "dng", "orf", "raf", "rw2"]);
 
 // How many leading bytes we read to brand-sniff the container.
 const MAGIC_HEAD_BYTES = 16;
@@ -85,12 +87,12 @@ function detectFamily(ext: string | null, head: Uint8Array): Family {
   if (isIsoBmff(head)) {
     const brand = isoBmffMajorBrand(head);
     if (isAvifBrand(brand)) return "avif";
-    if (isCr3Brand(brand)) return "unsupported"; // CR3 → RawDrive Desktop
+    if (isCr3Brand(brand)) return "raw"; // CR3 → in-browser embedded-JPEG decode
     if (isHeicBrand(brand)) return "heic";
     // Unknown ISO-BMFF brand — fall back to extension below, else unsupported.
     if (ext === "avif") return "avif";
     if (ext === "heic" || ext === "heif" || ext === "hif") return "heic";
-    if (ext === "cr3") return "unsupported";
+    if (ext === "cr3") return "raw";
     return "unsupported";
   }
 

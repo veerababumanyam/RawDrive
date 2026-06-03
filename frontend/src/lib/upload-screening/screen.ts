@@ -39,10 +39,10 @@ const DEFAULT_METADATA_BUDGET = 512 * 1024; // 512 KB
  * the matching format screener. Returns a ScanResult.
  *
  * CD5: HEIC / HEIF / AVIF and the now-browser-decodable camera RAW families
- * (CR2, NEF, ARW, DNG, ORF, RAF, RW2) return decision = "pass" with the
+ * (CR2, CR3, NEF, ARW, DNG, ORF, RAF, RW2) return decision = "pass" with the
  * canonical detected_format, so the source-side encrypted upload's scan
  * manifest lets them finalize. Formats that still need the desktop companion
- * (CR3, exotic / proprietary RAW, ambiguous or multi-page TIFF) return
+ * (exotic / proprietary RAW, ambiguous or multi-page TIFF) return
  * decision = "needs_desktop_scan". Anything unrecognized is blocked.
  */
 export function screen(
@@ -124,7 +124,7 @@ export function screen(
         category: "unsupported_format",
         severity: "high",
         message:
-          "file format not recognized by the browser screener (browser-decodable: jpeg, png, webp, gif, heic, heif, avif, and TIFF-based RAW; CR3/exotic RAW/multi-page TIFF require RawDrive Desktop)",
+          "file format not recognized by the browser screener (browser-decodable: jpeg, png, webp, gif, heic, heif, avif, CR3, and TIFF-based RAW; exotic RAW/multi-page TIFF require RawDrive Desktop)",
       },
     ],
   };
@@ -159,10 +159,10 @@ const TIFF_RAW_MIME_TO_FORMAT: Record<string, string> = {
 };
 
 /**
- * Browser-decodable camera RAW tokens (CD4). CR2 and RAF are detected by
- * their own magic; the rest disambiguate via declaredType above.
+ * Browser-decodable camera RAW tokens (CD4). CR2, RAF, and CR3 are detected by
+ * their own magic/brand; the TIFF-based rest disambiguate via declaredType above.
  */
-const BROWSER_DECODABLE_RAW = new Set(["cr2", "nef", "arw", "dng", "orf", "raf", "rw2"]);
+const BROWSER_DECODABLE_RAW = new Set(["cr2", "cr3", "nef", "arw", "dng", "orf", "raf", "rw2"]);
 
 /**
  * CD5b: the TIFF-based, browser-decodable RAW extensions used by the
@@ -227,7 +227,8 @@ function classifyContainerFormat(
   if (bytes.length >= 12 && matchAt(bytes, 4, [0x66, 0x74, 0x79, 0x70])) {
     const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
     if (brand === "crx ") {
-      return { format: "cr3", browserDecodable: false };
+      // Canon CR3 — decoded in-browser via the ISO-BMFF embedded-JPEG parser.
+      return { format: "cr3", browserDecodable: true };
     }
     if (["heic", "heix", "mif1", "heim", "heis", "hevc"].includes(brand)) {
       return { format: "heic", browserDecodable: true };

@@ -319,9 +319,9 @@ describe("screen() format dispatcher", () => {
   // CD5 — browser-decodable HEIC / HEIF / AVIF + camera RAW now `pass`.
   //
   // After CD4 unblocked the format gates, the screener must vouch for the
-  // now-browser-decodable formats (HEIC, HEIF, AVIF, CR2, NEF, ARW, DNG,
+  // now-browser-decodable formats (HEIC, HEIF, AVIF, CR2, CR3, NEF, ARW, DNG,
   // ORF, RAF, RW2) with decision:"pass" so the E2EE upload's scan manifest
-  // lets them finalize. CR3 + exotic RAW + ambiguous/multi-page TIFF stay
+  // lets them finalize. Exotic RAW + ambiguous/multi-page TIFF stay
   // needs_desktop_scan; non-image stays block.
   // ───────────────────────────────────────────────────────────────────────
 
@@ -411,7 +411,8 @@ describe("screen() format dispatcher", () => {
   // filename through and let the extension backstop the MIME path: a NEF/ARW/
   // DNG/ORF/RW2 TIFF header with a generic/empty MIME but a known-RAW
   // declaredName must `pass`. A plain .tif/.tiff (or no RAW extension) stays
-  // needs_desktop_scan; CR3/exotic extensions stay desktop-only.
+  // needs_desktop_scan; exotic extensions stay desktop-only. (CR3 is ISO-BMFF,
+  // detected by its `crx ` brand, not this TIFF backstop.)
   // ───────────────────────────────────────────────────────────────────────
 
   it.each([
@@ -468,7 +469,7 @@ describe("screen() format dispatcher", () => {
     expect(result.detectedFormat).toBe("tiff");
   });
 
-  it.each(["capture.cr3", "capture.crw", "capture.x3f", "capture.pef", "capture.nrw"])(
+  it.each(["capture.crw", "capture.x3f", "capture.pef", "capture.nrw"])(
     "keeps desktop-only RAW extension %s as needs_desktop_scan via the TIFF backstop",
     (declaredName) => {
       // These extensions are NOT in the browser-decodable RAW set, so even with
@@ -489,10 +490,10 @@ describe("screen() format dispatcher", () => {
     expect(result.detectedFormat).toBe("tiff");
   });
 
-  it("keeps Canon CR3 (ftyp crx ) as needs_desktop_scan", () => {
+  it("passes Canon CR3 (ftyp crx ) for in-browser decode", () => {
     const cr3 = isoBmffFtyp("crx ");
     const result = screen(cr3, { declaredType: "image/x-canon-cr3" });
-    expect(result.decision).toBe("needs_desktop_scan");
+    expect(result.decision).toBe("pass");
     expect(result.detectedFormat).toBe("cr3");
   });
 

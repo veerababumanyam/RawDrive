@@ -27,14 +27,15 @@ export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
   "png",
   "webp",
   "gif",
-  // CD4: HEIC/HEIF/AVIF + TIFF-based camera RAW whose embedded preview the
-  // browser decoders can extract (cr2/nef/arw/dng/orf/raf/rw2). CR3 + exotic
-  // RAW deliberately stay desktop-only below.
+  // CD4: HEIC/HEIF/AVIF + camera RAW whose embedded preview the browser
+  // decoders can extract — TIFF-based (cr2/nef/arw/dng/orf/rw2), RAF (Fuji), and
+  // CR3 (Canon, via the ISO-BMFF box parser). Exotic RAW stays desktop-only below.
   "heic",
   "heif",
   "hif",
   "avif",
   "cr2",
+  "cr3",
   "nef",
   "arw",
   "dng",
@@ -49,10 +50,10 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_MIME_TYPES = [
   "image/x-tiff",
 ] as const;
 
-// CD4: cr2/nef/arw/dng/orf/raf/rw2 + heic/heif/hif/avif moved to the
-// BROWSER_DECODE sets above. Everything below stays desktop-only: CR3 (ISO-BMFF,
-// no sliceable TIFF preview), exotic / proprietary RAW the browser decoders
-// cannot parse, and multi-page / non-baseline TIFF.
+// CD4: cr2/cr3/nef/arw/dng/orf/raf/rw2 + heic/heif/hif/avif moved to the
+// BROWSER_DECODE sets above. Everything below stays desktop-only: exotic /
+// proprietary RAW the browser decoders cannot parse, and multi-page /
+// non-baseline TIFF.
 export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "3fr",
   "ari",
@@ -61,7 +62,6 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "bmq",
   "cap",
   "cine",
-  "cr3",
   "crw",
   "cs1",
   "dcr",

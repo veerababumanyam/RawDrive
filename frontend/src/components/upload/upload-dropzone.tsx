@@ -167,10 +167,9 @@ export function UploadDropzone({
               </p>
               <p className="text-xs text-text-secondary">
                 JPEG, PNG, WebP, GIF, HEIC/HEIF, AVIF, and common camera RAW
-                (CR2, NEF, ARW, DNG, ORF, RAF, RW2) upload directly in your
-                browser. CR3, TIFF, and less common RAW formats still need
-                RawDrive Desktop. Up to {Math.round(maxSize / 1024 / 1024)}MB
-                per file
+                (CR2, CR3, NEF, ARW, DNG, ORF, RAF, RW2) upload directly in your
+                browser. TIFF and less common RAW formats still need RawDrive
+                Desktop. Up to {Math.round(maxSize / 1024 / 1024)}MB per file
               </p>
               <button
                 type="button"

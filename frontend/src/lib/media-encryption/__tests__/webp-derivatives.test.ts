@@ -78,15 +78,15 @@ describe("createEncryptedWebPDerivativeSet decodeImage seam", () => {
     decodeToImageSourceMock.mockResolvedValue({
       ok: false,
       reason: "needs-desktop",
-      detail: "CR3 requires RawDrive Desktop",
+      detail: "X3F requires RawDrive Desktop",
     });
-    const file = new File([new Uint8Array([0, 0, 0, 0])], "IMG.CR3", { type: "" });
+    const file = new File([new Uint8Array([0, 0, 0, 0])], "scan.x3f", { type: "" });
 
     await expect(createEncryptedWebPDerivativeSet(file, key, "key-1")).rejects.toBeInstanceOf(
       NeedsDesktopDecodeError,
     );
     await expect(
       createEncryptedWebPDerivativeSet(file, key, "key-1"),
-    ).rejects.toThrow(/CR3 requires RawDrive Desktop/);
+    ).rejects.toThrow(/X3F requires RawDrive Desktop/);
   });
 });

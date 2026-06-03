@@ -55,21 +55,22 @@ describe("UploadDropzone", () => {
   it("says HEIC, AVIF, and common RAW now upload directly in the browser", () => {
     render(<UploadDropzone onFilesAccepted={vi.fn()} />);
 
-    // CD4 moved HEIC/HEIF/AVIF + cr2/nef/arw/dng/orf/raf/rw2 into the
+    // CD4 + CR3 moved HEIC/HEIF/AVIF + cr2/cr3/nef/arw/dng/orf/raf/rw2 into the
     // BROWSER_DECODE set — the copy must no longer claim they need Desktop.
     const hint = screen.getByText(/upload directly/i);
+    expect(hint).toHaveTextContent(/CR3/i);
     expect(hint).toHaveTextContent(/ARW/i);
     expect(hint).toHaveTextContent(/DNG/i);
     expect(hint).toHaveTextContent(/ORF/i);
     expect(hint).toHaveTextContent(/RAF/i);
   });
 
-  it("reserves RawDrive Desktop for CR3 and the remaining RAW formats", () => {
+  it("reserves RawDrive Desktop for TIFF and the remaining exotic RAW formats", () => {
     render(<UploadDropzone onFilesAccepted={vi.fn()} />);
 
-    // DESKTOP_REQUIRED still covers CR3 + exotic RAW + multi-page TIFF.
+    // DESKTOP_REQUIRED now covers TIFF + exotic RAW (CR3 moved to the browser).
     const hint = screen.getByText(/RawDrive Desktop/i);
-    expect(hint).toHaveTextContent(/CR3/i);
+    expect(hint).toHaveTextContent(/TIFF/i);
   });
 
   it("accepts HEIC and camera RAW drops, including empty-MIME RAW", async () => {

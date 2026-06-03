@@ -33,7 +33,7 @@ describe("browser E2EE upload support", () => {
     expect(getBrowserE2EEUploadBlockReason(new File(["bytes"], name, { type }))).toBeNull();
   });
 
-  it.each(["Wedding (42).CR3", "canon-legacy.CRW", "sony-pixel-shift.ARQ", "gopro.GPR", "sigma.X3F", "kodak.KDC"])(
+  it.each(["canon-legacy.CRW", "sony-pixel-shift.ARQ", "gopro.GPR", "sigma.X3F", "kodak.KDC"])(
     "routes desktop-only %s to desktop before attempting source-side encryption",
     (filename) => {
       const file = new File(["raw"], filename, { type: "" });
@@ -41,9 +41,9 @@ describe("browser E2EE upload support", () => {
     },
   );
 
-  it("keeps CR3 with an image/x-* MIME on the desktop path", () => {
+  it("allows CR3 (even with an image/x-* MIME) on the in-browser decode path", () => {
     const file = new File(["raw"], "IMG.CR3", { type: "image/x-canon-cr3" });
-    expect(getBrowserE2EEUploadBlockReason(file)).toContain("RawDrive Desktop");
+    expect(getBrowserE2EEUploadBlockReason(file)).toBeNull();
   });
 
   it("routes raw MIME aliases to desktop when the extension is not browser-decodable", () => {

@@ -18,10 +18,15 @@
 //
 // COVERAGE: TIFF-based RAW (CR2, NEF, ARW, DNG, ORF) extract well; RW2 is
 // best-effort (Panasonic stores its preview in a maker-note IFD that varies).
-// RAF (Fuji) is parsed via its dedicated fixed-header layout. CR3 (ISO-BMFF)
-// and any exotic / unparseable RAW return null so the caller routes the file to
-// RawDrive Desktop. NOTHING in this module throws — every failure path is
-// caught internally and surfaced as null.
+// RAF (Fuji) is parsed via its dedicated fixed-header layout. CR3 (Canon,
+// ISO-BMFF "crx " brand) is parsed via a dedicated box walker — see
+// `extractCr3Preview` — that pulls the full-resolution embedded JPEG out of the
+// `mdat` image track (offset/size from the track sample table) and falls back
+// to the `PRVW`/`THMB` boxes. Any other ISO-BMFF still (HEIC/AVIF) is handled
+// by its own decoder upstream and returns null here. Exotic / unparseable RAW
+// returns null so the caller routes the file to RawDrive Desktop. NOTHING in
+// this module throws — every failure path is caught internally and surfaced as
+// null.
 
 /** TIFF-based RAW extensions whose embedded JPEG preview utif2 can locate. */
 const TIFF_BASED_RAW_EXTENSIONS = new Set([
@@ -65,7 +70,8 @@ const JPEG_EOI_1 = 0xd9;
  *
  * Detection routes by magic bytes + extension (it does NOT trust `file.type`):
  *   - RAF (Fuji) by its `FUJIFILMCCD-RAW` magic → dedicated header parser.
- *   - CR3 / ISO-BMFF (`....ftyp`) → null (Desktop; no TIFF preview to slice).
+ *   - CR3 (Canon, ISO-BMFF `crx ` brand) → dedicated box-walker parser.
+ *   - Any other ISO-BMFF (`....ftyp`) → null (HEIC/AVIF decode upstream).
  *   - TIFF magic (`II*\0` / `MM\0*`) with a RAW extension → utif2 IFD walk.
  */
 export async function extractRawPreview(
@@ -81,9 +87,15 @@ export async function extractRawPreview(
       return extractRafPreview(buffer);
     }
 
-    // CR3 and any other ISO Base Media File Format container ("ftyp" box) hold
-    // no sliceable TIFF preview here → Desktop fallback.
     if (isIsoBmff(bytes)) {
+      // CR3 (Canon) embeds full-resolution + PRVW JPEGs we can slice without
+      // demosaicing. Detect it by the ISO-BMFF major brand "crx " (and honor a
+      // `.cr3` extension when a truncated head hid the brand). Every other
+      // ISO-BMFF still (HEIC/AVIF) is decoded by its own decoder upstream and
+      // must not reach here, so it routes to the Desktop fallback (null).
+      if (isoBmffMajorBrand(bytes) === "crx " || extension === "cr3") {
+        return extractCr3Preview(buffer);
+      }
       return null;
     }
 
@@ -264,6 +276,258 @@ export function extractRafPreview(buffer: ArrayBuffer): Blob | null {
   } catch {
     return null;
   }
+}
+
+// ---- CR3 / ISO-BMFF embedded-JPEG extraction ------------------------------
+//
+// CR3 is an ISO Base Media File Format ("MP4-like") container — NOT TIFF — so
+// utif2 cannot walk it. We hand-parse the box tree (mirroring how RAF is hand-
+// parsed above) to recover the camera's own embedded JPEGs without demosaicing:
+//   1. The full-resolution JPEG lives as a sample in `mdat`. Its absolute
+//      offset (chunk[0] from `stco`/`co64`) and byte length (`stsz`) come from
+//      the first track's sample table under moov/trak/mdia/minf/stbl. The HEVC
+//      "CRAW" tracks are samples too, but they do NOT start with the JPEG SOI
+//      marker, so `selectLargestJpegCandidate` discards them automatically.
+//   2. The `PRVW` box (~1620px) and `THMB` box are JPEG previews wrapped in a
+//      small fixed header inside the moov `uuid` boxes — a reliable fallback
+//      when the track table cannot be read.
+// We collect every candidate, keep only those that begin with `FF D8` and lie
+// within the buffer, and return the LARGEST. Any malformed box / missing
+// preview yields null → the caller routes the file to RawDrive Desktop.
+
+/** ISO-BMFF box types whose payload is itself a sequence of child boxes. */
+const ISO_BMFF_CONTAINER_TYPES = new Set([
+  "moov",
+  "trak",
+  "mdia",
+  "minf",
+  "stbl",
+  "dinf",
+  "edts",
+  "udta",
+]);
+
+/** Recursion guard for the (shallow) ISO-BMFF box tree. */
+const ISO_BMFF_MAX_DEPTH = 8;
+
+type BoxRange = { type: string; payloadStart: number; boxEnd: number };
+
+/**
+ * Extracts the largest embedded JPEG preview from a Canon CR3 (ISO-BMFF)
+ * buffer. Returns a `Blob('image/jpeg')`, or `null` when no usable preview is
+ * present or the container does not parse. NEVER throws.
+ */
+export function extractCr3Preview(buffer: ArrayBuffer): Blob | null {
+  try {
+    const bytes = new Uint8Array(buffer);
+    if (!isIsoBmff(bytes)) {
+      return null;
+    }
+
+    const candidates: JpegCandidate[] = [];
+    let moov: BoxRange | null = null;
+    forEachBox(bytes, 0, bytes.length, (box) => {
+      if (moov === null && box.type === "moov") {
+        moov = box;
+      }
+    });
+
+    if (moov !== null) {
+      // Full-resolution JPEG via the track sample tables (largest, preferred).
+      collectCr3TrakCandidates(bytes, moov, candidates);
+      // PRVW / THMB preview boxes (reliable fallback).
+      collectCr3PreviewBoxCandidates(bytes, moov, candidates);
+    }
+
+    const best = selectLargestJpegCandidate(candidates, bytes);
+    if (best === null) {
+      return null;
+    }
+    return sliceJpegBlob(buffer, best);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * For each track in `moov`, reads the first sample's absolute offset
+ * (`stco`/`co64` chunk[0]) and byte length (`stsz`) and appends it as a JPEG
+ * candidate. Best-effort: any track whose sample table we cannot read is
+ * skipped, and non-JPEG samples (HEVC CRAW) are rejected later by the SOI check.
+ */
+function collectCr3TrakCandidates(
+  bytes: Uint8Array,
+  moov: BoxRange,
+  candidates: JpegCandidate[],
+): void {
+  forEachBox(bytes, moov.payloadStart, moov.boxEnd, (box) => {
+    if (box.type !== "trak") {
+      return;
+    }
+    const stbl = descend(bytes, box, ["mdia", "minf", "stbl"]);
+    if (stbl === null) {
+      return;
+    }
+
+    let offset = -1;
+    let length = -1;
+    forEachBox(bytes, stbl.payloadStart, stbl.boxEnd, (child) => {
+      if (child.type === "stco") {
+        // [ver+flags:4][entry_count:4][offset0:4 …] — chunk[0] is absolute.
+        if (child.payloadStart + 12 <= child.boxEnd) {
+          offset = readUint32BE(bytes, child.payloadStart + 8);
+        }
+      } else if (child.type === "co64") {
+        // [ver+flags:4][entry_count:4][offset0:8 …] — 64-bit chunk offset.
+        if (child.payloadStart + 16 <= child.boxEnd) {
+          offset = readUint64BE(bytes, child.payloadStart + 8);
+        }
+      } else if (child.type === "stsz") {
+        // [ver+flags:4][sample_size:4][sample_count:4][table…]. A nonzero
+        // sample_size is the uniform size; otherwise sample[0] is in the table.
+        if (child.payloadStart + 8 <= child.boxEnd) {
+          const uniform = readUint32BE(bytes, child.payloadStart + 4);
+          if (uniform > 0) {
+            length = uniform;
+          } else if (child.payloadStart + 16 <= child.boxEnd) {
+            length = readUint32BE(bytes, child.payloadStart + 12);
+          }
+        }
+      }
+    });
+
+    if (offset > 0 && length > 0) {
+      candidates.push({ offset, length });
+    }
+  });
+}
+
+/**
+ * Collects JPEG candidates from the `PRVW` / `THMB` preview boxes nested in the
+ * moov `uuid` boxes. Each box wraps its JPEG behind a small fixed header, so we
+ * scan the payload for the JPEG SOI marker and take from there to the box end
+ * (trailing pad bytes after the EOI are ignored by every JPEG decoder).
+ */
+function collectCr3PreviewBoxCandidates(
+  bytes: Uint8Array,
+  moov: BoxRange,
+  candidates: JpegCandidate[],
+): void {
+  const boxes: BoxRange[] = [];
+  collectBoxesDeep(bytes, moov.payloadStart, moov.boxEnd, new Set(["PRVW", "THMB"]), boxes, 0);
+  for (const box of boxes) {
+    const soi = findJpegSoi(bytes, box.payloadStart, box.boxEnd);
+    if (soi >= 0) {
+      candidates.push({ offset: soi, length: box.boxEnd - soi });
+    }
+  }
+}
+
+/**
+ * Iterates the ISO-BMFF boxes directly contained in `[start, end)`, invoking
+ * `visit` with each box's type, payload start, and exclusive end. Handles the
+ * 32-bit size, the 64-bit `largesize` escape (size == 1), the to-EOF escape
+ * (size == 0), and the 16-byte UUID prefix of `uuid` boxes. Stops on any
+ * malformed / zero-progress size so it can never loop. NEVER throws.
+ */
+function forEachBox(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  visit: (box: BoxRange) => void,
+): void {
+  let pos = start;
+  while (pos + 8 <= end) {
+    let size = readUint32BE(bytes, pos);
+    const type = boxType(bytes, pos + 4);
+    let headerSize = 8;
+    if (size === 1) {
+      if (pos + 16 > end) return;
+      size = readUint64BE(bytes, pos + 8);
+      headerSize = 16;
+    } else if (size === 0) {
+      size = end - pos;
+    }
+    if (size < headerSize) return;
+    const boxEnd = pos + size;
+    if (boxEnd > end || boxEnd <= pos) return;
+
+    let payloadStart = pos + headerSize;
+    if (type === "uuid") {
+      payloadStart += 16; // skip the 16-byte user-type UUID
+    }
+    if (payloadStart <= boxEnd) {
+      visit({ type, payloadStart, boxEnd });
+    }
+    pos = boxEnd;
+  }
+}
+
+/**
+ * Recursively collects every box whose type is in `wanted` within `[start,
+ * end)`, descending only into known container boxes (and `uuid`, which in CR3
+ * wraps the Canon metadata + preview). Depth-bounded; never throws.
+ */
+function collectBoxesDeep(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  wanted: Set<string>,
+  out: BoxRange[],
+  depth: number,
+): void {
+  if (depth > ISO_BMFF_MAX_DEPTH) return;
+  forEachBox(bytes, start, end, (box) => {
+    if (wanted.has(box.type)) {
+      out.push(box);
+    }
+    if (ISO_BMFF_CONTAINER_TYPES.has(box.type) || box.type === "uuid") {
+      collectBoxesDeep(bytes, box.payloadStart, box.boxEnd, wanted, out, depth + 1);
+    }
+  });
+}
+
+/** Descends a fixed child-box `path` from `box`; returns the leaf box or null. */
+function descend(bytes: Uint8Array, box: BoxRange, path: readonly string[]): BoxRange | null {
+  let current: BoxRange | null = box;
+  for (const want of path) {
+    if (current === null) return null;
+    let next: BoxRange | null = null;
+    forEachBox(bytes, current.payloadStart, current.boxEnd, (child) => {
+      if (next === null && child.type === want) next = child;
+    });
+    current = next;
+  }
+  return current;
+}
+
+/** First index in `[start, end)` where the JPEG SOI marker (`FF D8`) begins, or -1. */
+function findJpegSoi(bytes: Uint8Array, start: number, end: number): number {
+  const limit = Math.min(end, bytes.length) - 1;
+  for (let i = Math.max(0, start); i < limit; i += 1) {
+    if (bytes[i] === JPEG_SOI_0 && bytes[i + 1] === JPEG_SOI_1) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** Lowercased 4-char ISO-BMFF major brand at offset 8 (e.g. "crx "), or "". */
+function isoBmffMajorBrand(bytes: Uint8Array): string {
+  if (bytes.length < 12) return "";
+  return String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+}
+
+/** Four ASCII chars of the box type at `offset`. */
+function boxType(bytes: Uint8Array, offset: number): string {
+  return String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+}
+
+/** Reads a big-endian uint64 as a JS number (exact for file offsets < 2^53). */
+function readUint64BE(bytes: Uint8Array, offset: number): number {
+  const hi = readUint32BE(bytes, offset);
+  const lo = readUint32BE(bytes, offset + 4);
+  return hi * 0x1_0000_0000 + lo;
 }
 
 /** Slices the candidate byte-range out of the buffer as an image/jpeg Blob. */
