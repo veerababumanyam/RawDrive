@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v7";
+const VERSION = "m15-v10";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-${VERSION}-`;
@@ -24,10 +24,14 @@ const API_TIMEOUT_MS = 3000;
 
 // Static shell to precache. Keep this list small — everything here is downloaded
 // on first visit. Actual page routes come in via navigate handler.
+// NOTE: /offline-gallery.html does not exist yet (created in a later task).
+// safePrecache() tolerates missing URLs (catches fetch errors and logs a warning),
+// so including it here is safe — install will not fail if the file is absent.
 const PRECACHE_URLS = [
   "/",
   "/manifest.json",
   "/offline.html",
+  "/offline-gallery.html",
 ];
 
 // ─── Install ──────────────────────────────────────────────────────────
@@ -48,6 +52,9 @@ self.addEventListener("activate", (event) => {
           .filter((k) => {
             if (k === SHELL_CACHE || k === API_CACHE) return false;
             if (k.startsWith(GALLERY_CACHE_PREFIX)) return false;
+            // Stable per-gallery offline buckets survive version bumps so saved
+            // galleries remain available after a deploy.
+            if (k.startsWith("rawdrive-offline-")) return false;
             return true; // kill every other previous-version cache
           })
           .map((k) => caches.delete(k))
@@ -114,15 +121,48 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(handleStatic(request));
 });
 
+// ─── Offline helpers (inlined from public/service-worker-helpers.js) ───────
+// INTENTIONAL DUPLICATION: Classic service workers cannot `import` ES modules.
+// These functions are byte-identical to the exports in service-worker-helpers.js
+// so that unit tests can import and verify the contract against one source of
+// truth. If you change either copy, update both files.
+
+const AUTH_QUERY_PARAMS = ["at", "gs", "gallery_session", "token", "access_token"];
+
+/**
+ * Strip rotating auth query params so the cache key is stable across token refreshes.
+ * @param {string} rawUrl - Must be an absolute URL.
+ * @returns {string} The URL with auth query params removed.
+ */
+function normalizeGalleryCacheKey(rawUrl) {
+  const url = new URL(rawUrl);
+  for (const p of AUTH_QUERY_PARAMS) url.searchParams.delete(p);
+  return url.toString();
+}
+
+/**
+ * Return the stable, version-independent Cache Storage bucket name for a gallery.
+ * @param {string} galleryId - Gallery slug or ID.
+ * @returns {string} Cache bucket name of the form `rawdrive-offline-<galleryId>`.
+ */
+function offlineBucketName(galleryId) {
+  return `rawdrive-offline-${galleryId || "default"}`;
+}
+
 // ─── Strategy: per-gallery LRU stale-while-revalidate ──────────────────
+// Uses a stable, version-independent bucket (`rawdrive-offline-<galleryId>`)
+// so cached assets survive SW version bumps / deploys. Auth query params
+// (rotating SEC-1 `?at=` tokens, etc.) are stripped from cache keys so a
+// new token does not fragment the cache.
 async function handleGalleryAsset(request, url) {
   const galleryID = extractGalleryID(url);
-  const cacheName = `${GALLERY_CACHE_PREFIX}${galleryID || "default"}`;
+  const cacheName = offlineBucketName(galleryID);
   const cache = await caches.open(cacheName);
+  const cacheKey = new Request(normalizeGalleryCacheKey(request.url), { method: "GET" });
 
-  let cached = await cache.match(request);
+  let cached = await cache.match(cacheKey);
   if (cached?.type === "opaque" && request.mode !== "no-cors") {
-    await cache.delete(request);
+    await cache.delete(cacheKey);
     cached = undefined;
   }
 
@@ -130,7 +170,7 @@ async function handleGalleryAsset(request, url) {
   const refresh = fetch(request)
     .then(async (response) => {
       if (response.ok && response.type !== "opaque") {
-        await cache.put(request, response.clone());
+        await cache.put(cacheKey, response.clone());
         await enforceLRUQuota(cacheName);
       }
       return response;
@@ -214,6 +254,7 @@ async function handleAPI(request) {
 
 // ─── Strategy: navigation with offline shell ──────────────────────────
 async function handleNavigation(request) {
+  const url = new URL(request.url);
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -222,10 +263,28 @@ async function handleNavigation(request) {
     }
     return response;
   } catch {
+    // Offline /g/ precedence (supersedes the earlier "Fix A" reorder):
+    // 1) Prefer the cached Next app document. It boots the React app, which
+    //    renders <OfflineGalleryView/> from the IndexedDB catalog + Cache Storage
+    //    and DECRYPTS encrypted (E2EE) galleries cache-first via
+    //    useDecryptedAssetUrl, using the localStorage-persisted gallery media key.
+    //    This is the deterministic decrypt-on-view path for saved galleries.
+    // 2) Only if the app document was never cached (cold boot) do we fall back to
+    //    the vanilla offline gallery shell (served below) — it has no crypto
+    //    pipeline and shows an "open online" message for encrypted galleries.
     const cached = await caches.match(request);
     if (cached) return cached;
 
-    const offline = await caches.match("/offline.html");
+    // Cold-boot fallback for /g/ navigations when the app document is absent.
+    // Look up only the current SHELL_CACHE (not globally) to avoid serving a stale-versioned offline page.
+    if (url.pathname.startsWith("/g/")) {
+      const shellCache = await caches.open(SHELL_CACHE);
+      const galleryShell = await shellCache.match("/offline-gallery.html");
+      if (galleryShell) return galleryShell;
+    }
+
+    const shellCache = await caches.open(SHELL_CACHE);
+    const offline = await shellCache.match("/offline.html");
     if (offline) return offline;
 
     return new Response(
@@ -341,18 +400,28 @@ async function fetchWithTimeout(request, ms) {
 }
 
 // ─── Cache admin: allow the app to purge a specific gallery ───────────
-// Handles `{type: "PURGE_GALLERY", galleryID: "..."}` messages from the client.
-// Used when a consent withdrawal demands immediate eviction of cached content.
-self.addEventListener("message", async (event) => {
-  const data = event.data;
-  if (!data || typeof data !== "object") return;
+// Handles the following message types from the client:
+//   {type: "PURGE_GALLERY", galleryID: "..."}  — purge versioned gallery cache bucket
+//   {type: "PURGE_ALL"}                         — purge all versioned gallery buckets
+//   {type: "offline:deleteBucket", galleryId: "..."} — delete the stable offline bucket
+//     (used when a user removes a saved gallery or consent is withdrawn)
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (typeof data !== "object") return;
 
   if (data.type === "PURGE_GALLERY" && data.galleryID) {
-    await caches.delete(`${GALLERY_CACHE_PREFIX}${data.galleryID}`);
-    event.ports[0]?.postMessage({ ok: true });
+    event.waitUntil(
+      caches.delete(`${GALLERY_CACHE_PREFIX}${data.galleryID}`)
+        .then(() => { event.ports[0]?.postMessage({ ok: true }); })
+    );
   } else if (data.type === "PURGE_ALL") {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith(GALLERY_CACHE_PREFIX)).map((k) => caches.delete(k)));
-    event.ports[0]?.postMessage({ ok: true });
+    event.waitUntil(
+      caches.keys()
+        .then((keys) => Promise.all(keys.filter((k) => k.startsWith(GALLERY_CACHE_PREFIX)).map((k) => caches.delete(k))))
+        .then(() => { event.ports[0]?.postMessage({ ok: true }); })
+    );
+  } else if (data.type === "offline:deleteBucket" && data.galleryId) {
+    // fire-and-forget: no reply port expected
+    event.waitUntil(caches.delete(offlineBucketName(data.galleryId)));
   }
 });

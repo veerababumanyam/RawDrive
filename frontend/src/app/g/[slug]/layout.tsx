@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { createNoIndexMetadata } from "@/lib/seo";
+import { OfflineRevalidator } from "@/components/offline/offline-revalidator";
 
 // Service worker registration is handled globally by AppShell
 // (frontend/src/components/layout/AppShell.tsx) which mounts
@@ -44,5 +45,10 @@ export default function GalleryLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <>
+      <OfflineRevalidator />
+      {children}
+    </>
+  );
 }

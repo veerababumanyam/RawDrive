@@ -29,6 +29,9 @@ import {
 } from "@/lib/gallery-design-config";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
+import { OfflineCacher } from "@/components/offline/offline-cacher";
+import { OfflineStorageLauncher } from "@/components/offline/offline-storage-launcher";
+import { PublicGalleryOfflineGate } from "@/components/gallery/public-gallery-offline-gate";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -297,11 +300,24 @@ export default async function PublicGalleryPage({
     branding,
   });
 
-  const galleryContent = (
+  // Offline gate: when the visitor is offline AND this gallery has a saved local
+  // copy, render the decrypt-capable React renderer (<OfflineGalleryView/>, which
+  // reuses PublicGalleryGrid → useDecryptedAssetUrl so E2EE galleries decrypt
+  // cache-first from Cache Storage) instead of the online content below. When
+  // online, the gate returns `galleryBody` untouched — the online path is
+  // byte-for-byte unchanged. The OfflineCacher still runs inside `galleryBody`
+  // online so the local copy stays warm. See public-gallery-offline-gate.tsx.
+  const galleryBody = (
     <div
       className="min-h-screen bg-surface"
       style={galleryAccentCssVars(galleryAccent)}
     >
+      <OfflineCacher
+        gallery={gallery}
+        assets={assets}
+        ws={ws ?? null}
+        assetAccessToken={assetAccessToken}
+      />
       <PublicGalleryHero
         gallery={gallery}
         assets={assets}
@@ -387,7 +403,22 @@ export default async function PublicGalleryPage({
         // hides the Photo Search FAB.
         faceDetectionEnabled={gallery.face_detection_enabled !== false}
       />
+
+      {/* Reachable entry point for the offline manage/remove surface
+          (DPDP/GDPR erasure of locally-cached gallery bytes). Client-only —
+          it probes navigator.storage / Cache Storage and self-hides where
+          offline saving is unsupported. */}
+      <OfflineStorageLauncher />
     </div>
+  );
+
+  // Wrap the online body in the offline gate. When the visitor is offline and a
+  // local copy exists, the gate swaps in <OfflineGalleryView/>; otherwise it
+  // renders `galleryBody` untouched. Password gating already happened up-front
+  // (see the `hasPassword && !effectiveSessionToken` short-circuit above), so by
+  // the time we reach here access is proven and no second gate is needed.
+  const galleryContent = (
+    <PublicGalleryOfflineGate slug={slug}>{galleryBody}</PublicGalleryOfflineGate>
   );
 
   return galleryContent;

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Gallery – RawDrive (Offline)</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f4ef;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --accent: #d4af37;
+      --card: rgba(255,255,255,0.6);
+      --border: rgba(0,0,0,0.08);
+      --chip-bg: rgba(0,0,0,0.06);
+      --chip-fg: #555;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --fg: #f5f5f5;
+        --muted: #a0a0a0;
+        --card: rgba(255,255,255,0.03);
+        --border: rgba(255,255,255,0.08);
+        --chip-bg: rgba(255,255,255,0.07);
+        --chip-fg: #aaa;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    #root { max-width: 1280px; margin: 0 auto; padding: 1rem; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--chip-bg);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--chip-fg);
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin: 0 0 1.5rem;
+    }
+    .grid {
+      columns: 1;
+      column-gap: 1rem;
+    }
+    @media (min-width: 640px)  { .grid { columns: 2; } }
+    @media (min-width: 1024px) { .grid { columns: 3; } }
+    .tile {
+      break-inside: avoid;
+      margin-bottom: 1rem;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    .tile img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .tile-placeholder {
+      aspect-ratio: 4/3;
+      width: 100%;
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    #status {
+      padding: 3rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9375rem;
+    }
+    .empty-state {
+      max-width: 28rem;
+      margin: 4rem auto;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .empty-state h2 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+    .empty-state p  { color: var(--muted); line-height: 1.6; margin: 0.5rem 0; }
+    .try-again {
+      margin-top: 1.5rem;
+      padding: 0.875rem 2rem;
+      font-size: 1rem;
+      font-weight: 500;
+      background: var(--accent);
+      color: #1a1a1a;
+      border: none;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .try-again:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="status">Loading saved gallery&hellip;</div>
+  </div>
+  <script>
+    (async function () {
+      const DB_NAME = "rawdrive-offline";
+      const DB_VERSION = 1;
+      const STORE = "galleries";
+      const AUTH_QUERY_PARAMS = ["at", "gs", "gallery_session", "token", "access_token"];
+
+      /* ── helpers ─────────────────────────────────────────────── */
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(STORE)) {
+              const s = db.createObjectStore(STORE, { keyPath: "slug" });
+              s.createIndex("byLastViewed", "lastViewedAt");
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror  = () => reject(req.error);
+        });
+      }
+
+      async function getGalleryMeta(slug) {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const t = db.transaction(STORE, "readonly");
+          const req = t.objectStore(STORE).get(slug);
+          req.onsuccess = () => { db.close(); resolve(req.result ?? null); };
+          req.onerror  = () => { db.close(); reject(req.error); };
+        });
+      }
+
+      async function touchViewed(slug, at) {
+        const db = await openDB();
+        const meta = await new Promise((resolve, reject) => {
+          const t = db.transaction(STORE, "readonly");
+          const req = t.objectStore(STORE).get(slug);
+          req.onsuccess = () => resolve(req.result ?? null);
+          req.onerror  = () => reject(req.error);
+        });
+        if (!meta) { db.close(); return; }
+        const t2 = db.transaction(STORE, "readwrite");
+        await new Promise((resolve, reject) => {
+          const req = t2.objectStore(STORE).put({ ...meta, lastViewedAt: at });
+          req.onerror  = reject;
+          // M3: resolve once, on transaction complete (not on req.onsuccess),
+          // to avoid calling resolve() twice.
+          t2.oncomplete = () => { db.close(); resolve(undefined); };
+          t2.onerror    = () => { db.close(); reject(t2.error); };
+        });
+      }
+
+      function normalizeGalleryCacheKey(rawUrl) {
+        try {
+          const url = new URL(rawUrl);
+          for (const p of AUTH_QUERY_PARAMS) url.searchParams.delete(p);
+          return url.toString();
+        } catch {
+          return rawUrl;
+        }
+      }
+
+      /**
+       * Resolve a storage key to a blob URL using Cache Storage.
+       *
+       * Cache keys are stored as normalizeGalleryCacheKey(getStorageBackedUrl(...)),
+       * which includes the API hostname (e.g. https://api.rawdrive.in/storage/...).
+       * Since this static HTML page doesn't know the API base at runtime, we iterate
+       * all rawdrive-offline-* caches and match by path suffix.
+       */
+      async function blobUrlFromCacheOrKey(key) {
+        if (!key) return null;
+        if (typeof caches === "undefined") return null;
+        // Normalize the key to a path suffix (strip leading slash) for matching.
+        const storagePath = key.startsWith("/storage/") ? key : `/storage/${key.replace(/^\/+/, "")}`;
+        // Strip auth params from the path if any.
+        let cleanPath = storagePath;
+        try {
+          const u = new URL(storagePath, "https://example.com");
+          for (const p of AUTH_QUERY_PARAMS) u.searchParams.delete(p);
+          cleanPath = u.pathname + (u.search ? u.search : "");
+        } catch { /* keep cleanPath as-is */ }
+
+        try {
+          const cacheNames = await caches.keys();
+          // Only search offline gallery buckets to avoid touching shell caches.
+          const offlineNames = cacheNames.filter((n) => n.startsWith("rawdrive-offline-"));
+          for (const name of offlineNames) {
+            const c = await caches.open(name);
+            const keys = await c.keys();
+            for (const req of keys) {
+              const url = new URL(req.url);
+              if (url.pathname === cleanPath || req.url.includes(cleanPath)) {
+                const res = await c.match(req);
+                if (res) {
+                  const blob = await res.blob();
+                  return URL.createObjectURL(blob);
+                }
+              }
+            }
+          }
+        } catch { /* fall through */ }
+        return null;
+      }
+
+      /* ── slug extraction ─────────────────────────────────────── */
+      const pathMatch = window.location.pathname.match(/^\/g\/([^/?#]+)/);
+      const slug = pathMatch ? decodeURIComponent(pathMatch[1]) : null;
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      const root = document.getElementById("root");
+
+      function showEmpty(notSaved) {
+        root.innerHTML = `
+          <div class="empty-state">
+            <h2>${notSaved ? "Gallery Not Available Offline" : "Error"}</h2>
+            <p>${
+              notSaved
+                ? "This gallery isn&#39;t saved for offline viewing. Reconnect to load it."
+                : "Could not load this gallery."
+            }</p>
+            <button class="try-again" onclick="location.reload()">Try again</button>
+          </div>`;
+      }
+
+      if (!slug) { showEmpty(false); return; }
+
+      let meta;
+      try {
+        meta = await getGalleryMeta(slug);
+      } catch {
+        showEmpty(false);
+        return;
+      }
+
+      if (!meta) { showEmpty(true); return; }
+
+      // Update the page title.
+      document.title = `${meta.title} – RawDrive (Offline)`;
+
+      // I3: The vanilla boot-shell cannot perform AES-GCM decryption, so
+      // encrypted galleries must not attempt to render ciphertext as images.
+      if (meta.isEncrypted) {
+        root.innerHTML = `
+          <div class="empty-state">
+            <h2>${escapeHtml(meta.title)}</h2>
+            <p>This gallery is encrypted. Open it from the RawDrive app (online once) to view offline.</p>
+          </div>`;
+        return;
+      }
+
+      // Render the shell immediately; load images asynchronously.
+      root.innerHTML = `
+        <span class="chip">&#x2022; Offline &middot; saved copy</span>
+        <h1>${escapeHtml(meta.title)}</h1>
+        <div class="grid" id="photo-grid"></div>`;
+
+      const grid = document.getElementById("photo-grid");
+
+      // Render tiles; load blob URLs from Cache Storage.
+      for (const asset of meta.assets || []) {
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        tile.innerHTML = `<div class="tile-placeholder" id="ph-${asset.id}">Loading&hellip;</div>`;
+        grid.appendChild(tile);
+
+        // Determine the best key to look up in Cache Storage.
+        const candidateKeys = [];
+        if (asset.thumbnailUrls) {
+          const pref = ["thumb_md_webp", "thumb_sm_webp", "thumb_lg_webp", "display_webp"];
+          for (const v of pref) {
+            if (asset.thumbnailUrls[v]) candidateKeys.push(asset.thumbnailUrls[v]);
+          }
+        }
+        if (asset.displayKey) candidateKeys.push(asset.displayKey);
+
+        // Async: try each candidate key until we get a hit.
+        (async () => {
+          for (const key of candidateKeys) {
+            const blobUrl = await blobUrlFromCacheOrKey(key);
+            const ph = document.getElementById(`ph-${asset.id}`);
+            if (!ph) return; // tile removed
+            if (blobUrl) {
+              const img = document.createElement("img");
+              img.src = blobUrl;
+              img.alt = asset.filename || "";
+              img.loading = "lazy";
+              img.decoding = "async";
+              ph.replaceWith(img);
+              return;
+            }
+          }
+          // No cache hit for any variant.
+          const ph = document.getElementById(`ph-${asset.id}`);
+          if (ph) ph.textContent = "Image unavailable offline";
+        })();
+      }
+
+      // Fire-and-forget: touch viewed.
+      void touchViewed(slug, Date.now());
+    })();
+  </script>
+</body>
+</html>

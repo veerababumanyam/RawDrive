@@ -895,6 +895,17 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Offline-gallery revalidation (Task 10): set a stable ETag derived from
+	// fields that are CONSTANT across requests for the same unchanged gallery.
+	// gallery.ID and gallery.UpdatedAt (a DB-managed timestamp, bumped on every
+	// write) are both stable per-request and change only when the gallery is
+	// modified — so this ETag correctly tracks "gallery changed" events.
+	//
+	// The per-request asset_access_token (minted just above) is intentionally
+	// EXCLUDED: including it would produce a different ETag on every request,
+	// defeating the cheap revalidation the offline viewer needs.
+	w.Header().Set("ETag", fmt.Sprintf(`"g-%s-%d"`, gallery.ID, gallery.UpdatedAt.Unix()))
+
 	respondJSON(w, http.StatusOK, gallery)
 }
 

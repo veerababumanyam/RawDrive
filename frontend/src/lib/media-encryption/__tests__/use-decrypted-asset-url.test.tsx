@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { useDecryptedAssetUrl } from "../use-decrypted-asset-url";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import {
   encryptBlob,
   exportRawMediaKey,
@@ -8,6 +9,17 @@ import {
   type MediaEncryptionManifest,
 } from "../media-crypto";
 import type { EncryptedAssetLike } from "../asset-media";
+
+// Non-encrypted asset used by the non-encrypted-branch tests below: it must paint
+// the network storage URL synchronously on first commit, then upgrade to the
+// offline Cache Storage blob when one is present.
+const PLAIN_ASSET: EncryptedAssetLike = {
+  id: "asset-plain",
+  filename: "photo.webp",
+  is_encrypted: false,
+  thumbnail_urls: { thumb_md_webp: "gallery/asset-plain/thumb_md.webp" },
+  media_encryption: undefined,
+};
 
 const TEST_VARIANTS = ["thumb_md_webp"] as const;
 
@@ -169,5 +181,87 @@ describe("useDecryptedAssetUrl", () => {
       "http://localhost:8080/storage/gallery/asset-1/thumb_md.webp.enc?at=gallery-session",
       { credentials: "include" },
     );
+  });
+});
+
+// ── Non-encrypted branch: sync first paint + offline cache upgrade ─────────────
+//
+// The non-encrypted <img> branch MUST paint the network storage URL
+// synchronously on the first commit (single setState, loading:false) so RTL's
+// synchronous `getByAltText` in the grid tests and the online grid see a real
+// src on first render — the T7 regression this guards against (no empty-string
+// {src:"",loading:true} intermediate).
+//
+// It MUST THEN asynchronously upgrade to the cached blob from Cache Storage when
+// one is present. Storage byte URLs are CROSS-ORIGIN and the Service Worker does
+// NOT intercept cross-origin requests (service-worker.js: url.origin !==
+// self.location.origin -> return). So offline serving of these assets is
+// client-managed by this hook reading the `rawdrive-offline-<galleryId>` bucket.
+
+describe("useDecryptedAssetUrl — non-encrypted sync paint + offline upgrade", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/g/wedding");
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:should-not-be-used");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("synchronous network-URL first paint (cache miss)", () => {
+    // Cache miss: the async upgrade is a no-op, so first-paint stays stable.
+    const matchSpy = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("caches", { match: matchSpy });
+
+    const expectedUrl = getStorageBackedUrl(
+      PLAIN_ASSET.thumbnail_urls?.thumb_md_webp,
+      undefined,
+      undefined,
+    );
+
+    const { result } = renderHook(() => useDecryptedAssetUrl(PLAIN_ASSET, TEST_VARIANTS));
+
+    // First settled render: network URL painted synchronously inside the effect.
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.src).toBe(expectedUrl);
+    expect(result.current.src).not.toBe("");
+    expect(result.current.src).not.toMatch(/^blob:/);
+  });
+
+  it("upgrades to cached blob when offline (cache hit)", async () => {
+    // Offline: Cache Storage holds the asset bytes. The hook must swap the
+    // network URL for an object URL built from the cached blob.
+    const cachedBlob = new Blob(["cached-bytes"], { type: "image/webp" });
+    const matchSpy = vi.fn().mockResolvedValue({
+      blob: () => Promise.resolve(cachedBlob),
+    });
+    vi.stubGlobal("caches", { match: matchSpy });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:offline-upgrade");
+
+    const { result } = renderHook(() => useDecryptedAssetUrl(PLAIN_ASSET, TEST_VARIANTS));
+
+    await waitFor(() => {
+      expect(result.current.src).toBe("blob:offline-upgrade");
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(matchSpy).toHaveBeenCalled();
+  });
+
+  it("renders the <img>-ready URL synchronously without an empty-string flash (T7 regression)", () => {
+    render(<Probe asset={PLAIN_ASSET} />);
+
+    // No waitFor: the value is available on the first synchronous render.
+    const expectedUrl = getStorageBackedUrl(
+      PLAIN_ASSET.thumbnail_urls?.thumb_md_webp,
+      undefined,
+      undefined,
+    );
+    expect(screen.getByTestId("loading")).toHaveTextContent("false");
+    expect(screen.getByTestId("src")).toHaveTextContent(expectedUrl);
+    expect(screen.getByTestId("error")).toBeEmptyDOMElement();
   });
 });

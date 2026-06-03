@@ -1,4 +1,5 @@
 import type { MediaEncryptionManifest } from "./media-crypto";
+export type { MediaEncryptionManifest };
 
 export type EncryptedAssetLike = {
   id?: string;
