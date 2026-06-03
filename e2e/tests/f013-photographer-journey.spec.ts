@@ -4,7 +4,7 @@
 // each milestone's user-facing feature. Runs serially against a live dev stack.
 import { test, expect, type Page, type ConsoleMessage } from "@playwright/test";
 
-const FRONTEND = process.env.E2E_FRONTEND_URL || "http://localhost:8229";
+const FRONTEND = process.env.E2E_FRONTEND_URL || "http://localhost:3000";
 const EMAIL = process.env.E2E_TEST_EMAIL || "";
 const PASSWORD = process.env.E2E_TEST_PASSWORD || "";
 const GALLERY_ID = process.env.E2E_TEST_GALLERY_ID || "";

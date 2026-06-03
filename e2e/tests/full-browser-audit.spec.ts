@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const FRONTEND_URL = 'http://host.docker.internal:3000'
-const API_URL = 'http://host.docker.internal:8229'
+const API_URL = 'http://host.docker.internal:8080'
 
 // Seeded test user from migration 036
 const SUPER_ADMIN = {
@@ -249,7 +249,7 @@ test.describe('Dealer Role — Sidebar Filtering', () => {
     await navigateAuth(page, `${FRONTEND_URL}/dealer`)
     const body = await page.textContent('body')
     // The page either shows the dealer dashboard (if API is reachable from browser)
-    // or "Not a Registered Dealer" (if localhost:8229 is not reachable from Docker).
+    // or "Not a Registered Dealer" (if the backend at host.docker.internal:8080 is not reachable from Docker).
     // Both states prove the component renders and handles API errors gracefully.
     const rendersContent = body?.includes('Dealer') || body?.includes('Not a Registered')
     expect(rendersContent).toBeTruthy()

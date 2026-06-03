@@ -11,7 +11,7 @@ async function loginViaUI(page: Page) {
   if (!TEST_EMAIL || !TEST_PASSWORD || !GALLERY_ID) {
     test.skip(true, "E2E_TEST_EMAIL / E2E_TEST_PASSWORD / E2E_TEST_GALLERY_ID must be set");
   }
-  await page.goto("http://localhost:8229/login");
+  await page.goto("/login");
   await page.locator("#login-email").fill(TEST_EMAIL);
   await page.locator("#login-password").fill(TEST_PASSWORD);
   await page.locator('button[type="submit"]').click();
@@ -30,7 +30,7 @@ test.describe("M38 gallery continuity panels", () => {
     });
     page.on("pageerror", (err) => consoleErrors.push(err.message));
 
-    await page.goto(`http://localhost:8229/galleries/${GALLERY_ID}`);
+    await page.goto(`/galleries/${GALLERY_ID}`);
     await page.waitForLoadState("networkidle");
 
     // Delivery continuity panel
@@ -73,7 +73,7 @@ test.describe("M38 gallery continuity panels", () => {
       req.url().includes(`/api/v1/galleries/${GALLERY_ID}/analytics/summary`),
     );
 
-    await page.goto(`http://localhost:8229/galleries/${GALLERY_ID}`);
+    await page.goto(`/galleries/${GALLERY_ID}`);
     const req = await analyticsCall;
     expect(req.method()).toBe("GET");
     expect(req.headers()["authorization"]).toMatch(/^Bearer /);

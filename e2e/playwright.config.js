@@ -11,7 +11,7 @@ module.exports = defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8229',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     ...(secureDevOrigin
       ? { launchOptions: { args: [`--unsafely-treat-insecure-origin-as-secure=${secureDevOrigin}`] } }
