@@ -19,7 +19,7 @@ export function useDecryptedAssetUrl(
   asset: EncryptedAssetLike | null | undefined,
   variants: readonly string[],
   token?: string | null,
-  gallerySessionToken?: string | null,
+  assetAccessToken?: string | null,
 ): DecryptedAssetUrlState {
   const candidates = useMemo(() => pickAssetMediaCandidates(asset, variants), [asset, variants]);
   const [state, setState] = useState<DecryptedAssetUrlState>({
@@ -39,7 +39,7 @@ export function useDecryptedAssetUrl(
       }
 
       if (!assetUsesClientMediaEncryption(asset)) {
-        setState({ src: getStorageBackedUrl(candidates[0].key, token, gallerySessionToken), loading: false, error: null });
+        setState({ src: getStorageBackedUrl(candidates[0].key, token, assetAccessToken), loading: false, error: null });
         return;
       }
 
@@ -52,7 +52,7 @@ export function useDecryptedAssetUrl(
             continue;
           }
           try {
-            const storageUrl = getStorageBackedUrl(picked.key, token, gallerySessionToken);
+            const storageUrl = getStorageBackedUrl(picked.key, token, assetAccessToken);
             const fetchInit: RequestInit = { credentials: "include" };
             if (token) {
               fetchInit.headers = { Authorization: `Bearer ${token}` };
@@ -91,7 +91,7 @@ export function useDecryptedAssetUrl(
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [asset, candidates, token, gallerySessionToken]);
+  }, [asset, candidates, token, assetAccessToken]);
 
   return state;
 }

@@ -98,14 +98,16 @@ export function assetIsProcessing(
  * access-token cookie for browser subresource requests, while fetch callers can
  * still use Authorization. Do not append bearer access tokens to storage URLs.
  *
- * Public protected-gallery bytes may still carry `gallerySessionToken` as
- * `?gs=`; that is a gallery-session credential, not the dashboard bearer JWT
- * this helper's `token` argument used to leak into URLs.
+ * Public protected-gallery bytes carry the short-lived, gallery-scoped
+ * `assetAccessToken` as `?at=` (SEC-1, security audit 2026-05-30). This is NOT
+ * the durable gallery session (which is header/cookie-only and must never be put
+ * in a URL); it is a byte-read-only token with a distinct JWT audience that
+ * cannot unlock the gallery or be replayed as a session.
  */
 export function getStorageBackedUrl(
   url: string | undefined | null,
   token?: string | null,
-  gallerySessionToken?: string | null,
+  assetAccessToken?: string | null,
 ): string {
   void token;
   if (!url) return "";
@@ -140,9 +142,9 @@ export function getStorageBackedUrl(
     // Keep the best-effort storage URL if URL parsing is unavailable.
   }
 
-  if (gallerySessionToken && !absoluteUrl.includes("gs=")) {
+  if (assetAccessToken && !absoluteUrl.includes("at=")) {
     const sep = absoluteUrl.includes("?") ? "&" : "?";
-    absoluteUrl = `${absoluteUrl}${sep}gs=${encodeURIComponent(gallerySessionToken)}`;
+    absoluteUrl = `${absoluteUrl}${sep}at=${encodeURIComponent(assetAccessToken)}`;
   }
 
   return absoluteUrl;

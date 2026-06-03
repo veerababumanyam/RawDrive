@@ -190,8 +190,14 @@ func (h *PublicGalleryHandler) WithGalleryAccessService(accessSvc *service.Galle
 	return h
 }
 
-// gallerySessionToken pulls the gallery-session token off the request from the
-// header (fetch callers) or the cookie (browser). Empty when neither present.
+// gallerySessionToken pulls the DURABLE gallery-session token off the request
+// from the header (fetch callers) or the cookie (browser). It deliberately does
+// NOT read the token from the URL query string: the durable session is a
+// long-lived, multi-purpose credential and putting it in a URL leaks it into
+// access logs, browser history, and the Referer header (SEC-1, security audit
+// 2026-05-30). Header-less byte/media loads use the short-lived ?at=
+// asset-access token instead (see hasValidGallerySession). Empty when neither
+// header nor cookie is present.
 func gallerySessionToken(r *http.Request) string {
 	if t := r.Header.Get("X-Gallery-Session"); t != "" {
 		return t
@@ -199,22 +205,34 @@ func gallerySessionToken(r *http.Request) string {
 	if c, err := r.Cookie("gallery_session"); err == nil {
 		return c.Value
 	}
-	if t := r.URL.Query().Get("gallery_session"); t != "" {
-		return t
-	}
-	if t := r.URL.Query().Get("gs"); t != "" {
-		return t
-	}
 	return ""
 }
 
-// hasValidGallerySession reports whether the request carries a gallery-session
-// token (password- or share-scoped) valid for this gallery on ANY node (S4-G4/E).
+// hasValidGallerySession reports whether the request is authorized for this
+// gallery (password- or share-scoped) on ANY node (S4-G4/E). It accepts either:
+//
+//   - the DURABLE session from the X-Gallery-Session header or the
+//     SameSite=Strict gallery_session cookie (JSON fetch / same-origin), or
+//   - a short-lived, gallery-scoped, HMAC-signed asset-access token in ?at= for
+//     header-less <img>/<audio> media URLs that, in a split-origin deploy, can
+//     carry neither header nor cookie. The ?at= token uses a DISTINCT JWT
+//     audience so it can never be replayed as a session, and is only ever minted
+//     for a client that already proved access (see GetBySlug) — so it cannot
+//     bypass the gate (SEC-1).
 func (h *PublicGalleryHandler) hasValidGallerySession(r *http.Request, gallery *repository.Gallery) bool {
 	if h.accessSvc == nil || gallery == nil {
 		return false
 	}
-	return h.accessSvc.ValidateSession(r.Context(), gallery.ID, gallerySessionToken(r))
+	if tok := gallerySessionToken(r); tok != "" &&
+		h.accessSvc.ValidateSession(r.Context(), gallery.ID, tok) {
+		return true
+	}
+	if at := r.URL.Query().Get("at"); at != "" {
+		if gid, ok := h.accessSvc.GalleryIDFromAssetToken(r.Context(), at); ok && gid == gallery.ID {
+			return true
+		}
+	}
+	return false
 }
 
 // tryBindShareSession handles the share-link first-touch (S4-G2). When the
@@ -783,6 +801,20 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 				gallery.Settings["cover_thumbnails"] = coverAsset.ThumbnailURLs
 				gallery.Settings["cover_asset_resolved_id"] = coverAsset.ID.String()
 			}
+		}
+	}
+
+	// SEC-1 (security audit 2026-05-30): mint a short-lived, gallery-scoped,
+	// signed asset-access token so header-less <img>/<audio> byte loads
+	// (split-origin) can authenticate via ?at= instead of carrying the durable
+	// session token in the URL. Only minted once access is PROVEN (hasSession),
+	// never for a password/private gallery viewed without a valid session, so
+	// the token can't bypass the gate. Open galleries serve bytes anonymously
+	// and need no token. Best-effort: only available on the stateless HMAC path
+	// (prod signing key wired); gallery.Settings is already non-nil here.
+	if h.accessSvc != nil && hasSession {
+		if at, err := h.accessSvc.IssueAssetAccessToken(gallery.ID); err == nil {
+			gallery.Settings["asset_access_token"] = at
 		}
 	}
 

@@ -16,16 +16,16 @@ import { Play } from "@/components/icons";
  */
 function SlideshowSlide({
   asset,
-  sessionToken,
+  assetAccessToken,
   position,
   total,
 }: {
   asset: PublicAsset;
-  sessionToken: string | null;
+  assetAccessToken: string | null;
   position: number;
   total: number;
 }) {
-  const media = useDecryptedAssetUrl(asset, LIGHTBOX_VARIANTS, null, sessionToken);
+  const media = useDecryptedAssetUrl(asset, LIGHTBOX_VARIANTS, null, assetAccessToken);
   return (
     <img
       src={media.src}
@@ -40,7 +40,7 @@ interface PublicGallerySlideshowLauncherProps {
   ws?: string | null;
   assets: PublicAsset[];
   hasMusic: boolean;
-  gallerySessionToken?: string | null;
+  assetAccessToken?: string | null;
 }
 
 /**
@@ -54,13 +54,13 @@ export function PublicGallerySlideshowLauncher({
   ws,
   assets,
   hasMusic,
-  gallerySessionToken,
+  assetAccessToken,
 }: PublicGallerySlideshowLauncherProps) {
   const [open, setOpen] = useState(false);
 
   if (assets.length === 0) return null;
 
-  const musicUrl = hasMusic ? publicGalleryMusicUrl(slug, ws, gallerySessionToken) : null;
+  const musicUrl = hasMusic ? publicGalleryMusicUrl(slug, ws, assetAccessToken) : null;
 
   return (
     <>
@@ -73,7 +73,7 @@ export function PublicGallerySlideshowLauncher({
           renderSlide={(i) => (
             <SlideshowSlide
               asset={assets[i]}
-              sessionToken={gallerySessionToken ?? null}
+              assetAccessToken={assetAccessToken ?? null}
               position={i + 1}
               total={assets.length}
             />

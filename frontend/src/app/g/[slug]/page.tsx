@@ -197,6 +197,14 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
   // otherwise hide it from the asset list.
   const designConfig = readPublicDesignConfig(gallery.settings);
   const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
+  // SEC-1: the backend mints a short-lived, gallery-scoped asset-access token
+  // into gallery.settings.asset_access_token once access is proven (valid
+  // session forwarded on this server-side fetch). Header-less <img>/<audio>
+  // byte loads carry it as ?at= — the durable session is never put in a URL.
+  const assetAccessToken =
+    gallery.settings && typeof (gallery.settings as Record<string, unknown>).asset_access_token === "string"
+      ? ((gallery.settings as Record<string, unknown>).asset_access_token as string)
+      : null;
   const designCoverAssetId = designConfig?.cover?.assetId || gallery.cover_asset_id;
   const designCoverAsset = designCoverAssetId
     ? assets.find((asset) => asset.id === designCoverAssetId) ?? null
@@ -244,7 +252,7 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
               ws={ws}
               assets={assets}
               hasMusic={Boolean(gallery.music_asset_id)}
-              gallerySessionToken={sessionToken ?? null}
+              assetAccessToken={assetAccessToken}
             />
           </div>
         )}
@@ -267,10 +275,13 @@ export default async function PublicGalleryPage({ params, searchParams }: Props)
           downloadQuality={gallery.download_quality}
           design={designConfig}
           watermark={gallery.watermark_config as Record<string, unknown> | null}
-          // S4-G1: when a session exists (password- or share-PIN-scoped), pass
-          // it so protected image bytes carry ?gs=<token> for cross-origin
-          // <img> requests. Undefined for open galleries (anonymous bytes).
+          // gallerySessionToken (durable session, from the SameSite=Strict
+          // cookie) authenticates the header-based JSON APIs: favorites and
+          // proofing submit. assetAccessToken (SEC-1) is the byte-only ?at=
+          // token for protected image/download URLs — kept separate so the
+          // durable session never lands in a URL.
           gallerySessionToken={sessionToken ?? null}
+          assetAccessToken={assetAccessToken}
           workspaceScope={ws ?? null}
         />
       </div>

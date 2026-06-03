@@ -114,14 +114,14 @@ function encryptedDownloadManifest(asset: PublicAsset, format: PublicDownloadFor
 function PublicAssetTileImage({
   asset,
   className,
-  gallerySessionToken = null,
+  assetAccessToken = null,
 }: {
   asset: PublicAsset;
   className?: string;
   // Gated-gallery byte-auth token (origin/main security control).
-  gallerySessionToken?: string | null;
+  assetAccessToken?: string | null;
 }) {
-  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, null, gallerySessionToken);
+  const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, null, assetAccessToken);
   if (media.loading) {
     return <div className="aspect-[4/3] w-full animate-pulse bg-surface-sunken" />;
   }
@@ -139,15 +139,15 @@ function PublicLightboxImage({
   photo,
   zoom,
   watermarkOverlay,
-  gallerySessionToken = null,
+  assetAccessToken = null,
 }: {
   photo: PublicAsset;
   zoom: number;
   watermarkOverlay: { text: string; opacity: number; position: string } | null;
   // Gated-gallery byte-auth token (origin/main security control).
-  gallerySessionToken?: string | null;
+  assetAccessToken?: string | null;
 }) {
-  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS, null, gallerySessionToken);
+  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS, null, assetAccessToken);
   if (media.loading) {
     return <p className="text-sm text-white/40">Decrypting photo...</p>;
   }
@@ -182,7 +182,7 @@ function PublicLightboxImage({
 function PublicFilmstripThumb({
   asset,
   active,
-  gallerySessionToken = null,
+  assetAccessToken = null,
   onClick,
 }: {
   asset: PublicAsset;
@@ -190,13 +190,13 @@ function PublicFilmstripThumb({
   // Gated-gallery byte-auth token (origin/main security control). Threaded
   // into the media hook so protected thumbnail bytes authenticate for
   // password/private/share-gated galleries.
-  gallerySessionToken?: string | null;
+  assetAccessToken?: string | null;
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const [useDisplayFallback, setUseDisplayFallback] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const variants = useDisplayFallback ? LIGHTBOX_VARIANTS : FILMSTRIP_VARIANTS;
-  const media = useDecryptedAssetUrl(asset, variants, null, gallerySessionToken);
+  const media = useDecryptedAssetUrl(asset, variants, null, assetAccessToken);
 
   const handleImageError = () => {
     if (!useDisplayFallback) {
@@ -240,7 +240,7 @@ async function downloadPublicAsset(
   slug: string,
   asset: PublicAsset,
   format: PublicDownloadFormat,
-  gallerySessionToken?: string | null,
+  assetAccessToken?: string | null,
   workspaceScope?: string | null,
 ): Promise<void> {
   const url = new URL(`${PUBLIC_API_BASE}/api/v1/public/galleries/${slug}/assets/${asset.id}/download`);
@@ -248,8 +248,8 @@ async function downloadPublicAsset(
   if (workspaceScope) {
     url.searchParams.set("ws", workspaceScope);
   }
-  if (gallerySessionToken) {
-    url.searchParams.set("gs", gallerySessionToken);
+  if (assetAccessToken) {
+    url.searchParams.set("at", assetAccessToken);
   }
   if (!assetUsesClientMediaEncryption(asset)) {
     window.open(url.toString(), "_blank");
@@ -501,6 +501,12 @@ interface Props {
   // (public/unlisted, non-password) galleries, where the bytes serve
   // anonymously and no token is needed.
   gallerySessionToken?: string | null;
+  // SEC-1: the short-lived, gallery-scoped asset-access token
+  // (gallery.settings.asset_access_token) appended as `?at=` to protected
+  // image/byte/download URLs. Distinct from gallerySessionToken (the durable
+  // session, used for the header-authenticated JSON APIs: favorites, proofing
+  // submit) — a byte token in a URL cannot be replayed as a session.
+  assetAccessToken?: string | null;
   // Optional workspace subdomain scope (`?ws=`) from per-business public URLs.
   // Public proofing, favorites, and downloads must preserve it so every
   // follow-up API call targets the same workspace-scoped gallery as the page.
@@ -660,6 +666,7 @@ export function PublicGalleryGrid({
   design = null,
   watermark = null,
   gallerySessionToken = null,
+  assetAccessToken = null,
   workspaceScope = null,
 }: Props) {
   // Memoize the resolved watermark display state. Returns null when
@@ -1150,7 +1157,7 @@ export function PublicGalleryGrid({
                               role="menuitem"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void downloadPublicAsset(slug, asset, format, gallerySessionToken, workspaceScope);
+                                void downloadPublicAsset(slug, asset, format, assetAccessToken, workspaceScope);
                                 setTileMenuOpenId(null);
                               }}
                               className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
@@ -1167,7 +1174,7 @@ export function PublicGalleryGrid({
                 <div className={design?.grid?.layout === "grid" ? "absolute inset-0" : ""}>
                   <PublicAssetTileImage
                     asset={asset}
-                    gallerySessionToken={gallerySessionToken}
+                    assetAccessToken={assetAccessToken}
                     className={
                       design?.grid?.layout === "grid"
                         ? "absolute inset-0 h-full w-full object-cover"
@@ -1376,7 +1383,7 @@ export function PublicGalleryGrid({
                     size="sm"
                     label={publicDownloadLabel(format)}
                     onClick={() => {
-                      void downloadPublicAsset(slug, photo, format, gallerySessionToken, workspaceScope);
+                      void downloadPublicAsset(slug, photo, format, assetAccessToken, workspaceScope);
                     }}
                   >
                     <Download />
@@ -1430,7 +1437,7 @@ export function PublicGalleryGrid({
                 photo={photo}
                 zoom={zoom}
                 watermarkOverlay={watermarkOverlay}
-                gallerySessionToken={gallerySessionToken}
+                assetAccessToken={assetAccessToken}
               />
 
               {lightboxIdx < visibleAssets.length - 1 && (
@@ -1461,7 +1468,7 @@ export function PublicGalleryGrid({
                     key={a.id}
                     asset={a}
                     active={i === lightboxIdx}
-                    gallerySessionToken={gallerySessionToken}
+                    assetAccessToken={assetAccessToken}
                     onClick={(e) => { e.stopPropagation(); goToPhoto(i); }}
                   />
                 ))}

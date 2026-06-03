@@ -276,13 +276,14 @@ export async function clearGalleryMusic(token: string, galleryId: string): Promi
 
 // Public URL that streams the gallery's background-music asset through the API.
 // Mirrors the image-bytes pattern: `?ws=` scopes the per-business subdomain
-// lookup, and `?gs=` carries the gallery session token for gated galleries
-// (an <audio> element cannot send the X-Gallery-Session header).
-export function publicGalleryMusicUrl(slug: string, ws?: string | null, sessionToken?: string | null): string {
+// lookup, and `?at=` carries the short-lived, gallery-scoped asset-access token
+// for gated galleries (SEC-1: an <audio> element cannot send the
+// X-Gallery-Session header, and the durable session must never go in a URL).
+export function publicGalleryMusicUrl(slug: string, ws?: string | null, assetAccessToken?: string | null): string {
   let path = withWorkspaceScope(`/api/v1/public/galleries/${slug}/music`, ws);
-  if (sessionToken) {
+  if (assetAccessToken) {
     const sep = path.includes("?") ? "&" : "?";
-    path = `${path}${sep}gs=${encodeURIComponent(sessionToken)}`;
+    path = `${path}${sep}at=${encodeURIComponent(assetAccessToken)}`;
   }
   return apiUrl(path);
 }

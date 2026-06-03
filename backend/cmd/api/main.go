@@ -541,29 +541,34 @@ func authorizeThumbnailByte(
 		}
 	}
 
-	// Protected: require a session bound to a gallery that (a) contains this
-	// asset and (b) is published + non-expired. The token is read from the
-	// header, the gallery_session cookie, or a ?gallery_session=/?gs= query
-	// param so <img src> tags can authenticate without a custom header.
+	// Protected: require a token bound to a gallery that (a) contains this
+	// asset and (b) is published + non-expired.
+	//
+	// SEC-1 (security audit 2026-05-30): the DURABLE gallery session is read only
+	// from the header (X-Gallery-Session) or the SameSite=Strict gallery_session
+	// cookie — never from the URL, where it would leak into access logs / browser
+	// history / Referer. For header-less <img>/<audio> byte loads (which, in a
+	// split-origin deploy, can't carry either) the client uses a short-lived,
+	// gallery-scoped, HMAC-signed asset-access token in ?at= that cannot be
+	// replayed as a session (distinct JWT audience).
 	if accessSvc == nil {
 		return false
 	}
-	token := r.Header.Get("X-Gallery-Session")
-	if token == "" {
-		if c, err := r.Cookie("gallery_session"); err == nil {
-			token = c.Value
+	var boundGallery uuid.UUID
+	var ok bool
+	if token := r.Header.Get("X-Gallery-Session"); token != "" {
+		boundGallery, ok = accessSvc.GalleryIDFromSession(ctx, token)
+	}
+	if !ok {
+		if c, err := r.Cookie("gallery_session"); err == nil && c.Value != "" {
+			boundGallery, ok = accessSvc.GalleryIDFromSession(ctx, c.Value)
 		}
 	}
-	if token == "" {
-		token = r.URL.Query().Get("gallery_session")
+	if !ok {
+		if at := r.URL.Query().Get("at"); at != "" {
+			boundGallery, ok = accessSvc.GalleryIDFromAssetToken(ctx, at)
+		}
 	}
-	if token == "" {
-		token = r.URL.Query().Get("gs")
-	}
-	if token == "" {
-		return false
-	}
-	boundGallery, ok := accessSvc.GalleryIDFromSession(ctx, token)
 	if !ok {
 		return false
 	}

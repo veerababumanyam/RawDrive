@@ -58,9 +58,18 @@ type gallerySessionScope string
 const (
 	gallerySessionScopePassword gallerySessionScope = "password"
 	gallerySessionScopeShare    gallerySessionScope = "share"
+	// gallerySessionScopeAsset marks a short-lived, byte-read-only asset-access
+	// token (?at=) that authorizes reading a gallery's derivatives without being
+	// a durable session — it cannot unlock the gallery or be replayed as a
+	// session because it carries a DISTINCT audience (galleryAssetAudience).
+	gallerySessionScopeAsset gallerySessionScope = "asset"
 
 	gallerySessionIssuer   = "rawdrive-gallery"
 	gallerySessionAudience = "gallery-session"
+	// galleryAssetAudience is a DISTINCT JWT audience from gallerySessionAudience
+	// so a durable session token can never be accepted as an asset-access token
+	// or vice-versa (security audit 2026-05-30, SEC-1).
+	galleryAssetAudience = "gallery-asset"
 )
 
 // gallerySessionClaims is the decoded body of a signed gallery-session token.
@@ -283,6 +292,79 @@ func (s *GalleryAccessService) parseSession(tokenStr string) (*gallerySessionCla
 		return nil, errors.New("gallery access: gallery_id claim required")
 	}
 	return claims, nil
+}
+
+// IssueAssetAccessToken mints a short-lived, byte-read-only token bound to one
+// gallery (security audit 2026-05-30, SEC-1). It is the safe value to embed in
+// image src URLs (?at=): an <img>/<video> request cannot send the
+// X-Gallery-Session header, so the durable session token must NOT be put in the
+// query string (it would leak into browser history, Referer headers, proxy and
+// access logs and could be replayed to unlock the gallery). This token carries a
+// DISTINCT audience (galleryAssetAudience) so it can never be accepted as a
+// session, and it grants nothing beyond reading this gallery's derivatives.
+func (s *GalleryAccessService) IssueAssetAccessToken(galleryID uuid.UUID) (string, error) {
+	if len(s.signingKey) < 32 {
+		return "", errors.New("gallery access: asset token requires a signing key")
+	}
+	ttl := s.sessionTTL
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	now := time.Now().UTC()
+	claims := &gallerySessionClaims{
+		GalleryID: galleryID.String(),
+		Scope:     gallerySessionScopeAsset,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    gallerySessionIssuer,
+			Subject:   galleryID.String(),
+			Audience:  jwt.ClaimStrings{galleryAssetAudience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+			ID:        uuid.NewString(),
+		},
+	}
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.signingKey)
+	if err != nil {
+		return "", fmt.Errorf("gallery access: sign asset token: %w", err)
+	}
+	return signed, nil
+}
+
+// GalleryIDFromAssetToken validates a ?at= asset-access token and returns the
+// gallery it is bound to. Rejects empty/malformed/expired tokens and — via the
+// DISTINCT galleryAssetAudience — any durable session token presented in its
+// place, so a leaked ?at= value can only read this gallery's bytes, never act as
+// a session (security audit 2026-05-30, SEC-1).
+func (s *GalleryAccessService) GalleryIDFromAssetToken(ctx context.Context, token string) (uuid.UUID, bool) {
+	_ = ctx
+	if token == "" || len(s.signingKey) < 32 {
+		return uuid.Nil, false
+	}
+	claims := &gallerySessionClaims{}
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuer(gallerySessionIssuer),
+		jwt.WithAudience(galleryAssetAudience),
+	)
+	parsed, err := parser.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("gallery access: unexpected signing alg %q", t.Method.Alg())
+		}
+		return s.signingKey, nil
+	})
+	if err != nil || !parsed.Valid {
+		return uuid.Nil, false
+	}
+	if claims.Scope != gallerySessionScopeAsset {
+		return uuid.Nil, false
+	}
+	gid, err := uuid.Parse(claims.GalleryID)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return gid, true
 }
 
 // SetAccessMode updates the gallery's access mode.

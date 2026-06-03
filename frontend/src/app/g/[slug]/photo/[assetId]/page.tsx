@@ -92,13 +92,21 @@ export default async function PublicSinglePhotoPage({ params, searchParams }: Pr
 
   const branding = await getPublicGalleryBranding(slug, ws).catch(() => null);
 
+  // SEC-1: byte-only ?at= asset-access token minted by the backend into
+  // gallery.settings once access is proven; the durable session is never
+  // placed in an image URL.
+  const assetAccessToken =
+    gallery.settings && typeof (gallery.settings as Record<string, unknown>).asset_access_token === "string"
+      ? ((gallery.settings as Record<string, unknown>).asset_access_token as string)
+      : null;
+
   return (
     <SinglePhotoView
       slug={slug}
       photo={photo}
       gallery={gallery}
       branding={branding}
-      gallerySessionToken={sessionToken}
+      assetAccessToken={assetAccessToken}
       workspaceScope={ws ?? null}
     />
   );
