@@ -2344,7 +2344,13 @@ func main() {
 		if geminiModelID == "" {
 			geminiModelID = "gemini-2.0-flash"
 		}
-		geminiClient := ai.NewGeminiClient(geminiModelID)
+		// Embedding model resolves platform_settings(ai.embedding_model) →
+		// env(AI_EMBEDDING_MODEL) → default "text-embedding-004". An unset
+		// config keeps the legacy default, so existing deployments are
+		// unaffected.
+		embeddingModel := platformSettingValueDefault(context.Background(), platformSettingsRepo,
+			"ai", "embedding_model", ai.DefaultEmbeddingModel, "AI_EMBEDDING_MODEL")
+		geminiClient := ai.NewGeminiClient(geminiModelID).WithEmbeddingModel(embeddingModel)
 
 		// AI services
 		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)

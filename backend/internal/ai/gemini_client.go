@@ -8,14 +8,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
+
+// DefaultEmbeddingModel is the Gemini text embedding model used when no
+// override is configured via platform_settings(ai.embedding_model) or the
+// AI_EMBEDDING_MODEL environment variable. Keeping this as the fallback
+// preserves backward compatibility for existing deployments.
+const DefaultEmbeddingModel = "text-embedding-004"
 
 // GeminiClient wraps the Google Gemini REST API.
 type GeminiClient struct {
 	httpClient *http.Client
 	baseURL    string
 	modelID    string
+	// embeddingModel is the model used by GenerateEmbedding. It defaults to
+	// DefaultEmbeddingModel and may be overridden via WithEmbeddingModel with
+	// a value resolved from platform_settings → env → default at construction.
+	embeddingModel string
 }
 
 // NewGeminiClient creates a Gemini API client.
@@ -24,10 +35,37 @@ func NewGeminiClient(modelID string) *GeminiClient {
 		modelID = "gemini-2.0-flash"
 	}
 	return &GeminiClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		baseURL:    "https://generativelanguage.googleapis.com/v1beta",
-		modelID:    modelID,
+		httpClient:     &http.Client{Timeout: 30 * time.Second},
+		baseURL:        "https://generativelanguage.googleapis.com/v1beta",
+		modelID:        modelID,
+		embeddingModel: DefaultEmbeddingModel,
 	}
+}
+
+// ResolveEmbeddingModel applies the configured embedding-model value, falling
+// back to DefaultEmbeddingModel when the caller passes an empty/whitespace
+// value. Callers thread the result of the platform_settings(ai.embedding_model)
+// → env(AI_EMBEDDING_MODEL) → default lookup through here so that an unset
+// config resolves to exactly DefaultEmbeddingModel (no behaviour change).
+func ResolveEmbeddingModel(configured string) string {
+	if strings.TrimSpace(configured) == "" {
+		return DefaultEmbeddingModel
+	}
+	return strings.TrimSpace(configured)
+}
+
+// WithEmbeddingModel returns the client with its embedding model set to the
+// resolved value. An empty/whitespace value keeps DefaultEmbeddingModel so
+// existing callers and tests that never call this method are unaffected.
+func (c *GeminiClient) WithEmbeddingModel(model string) *GeminiClient {
+	c.embeddingModel = ResolveEmbeddingModel(model)
+	return c
+}
+
+// EmbeddingModel reports the embedding model the client will use. Exposed so
+// services can attribute cost/usage to the same model the request targets.
+func (c *GeminiClient) EmbeddingModel() string {
+	return ResolveEmbeddingModel(c.embeddingModel)
 }
 
 // geminiRequest is the Gemini API request envelope.
@@ -200,7 +238,7 @@ Categories: scene, mood, object, color, composition. Generate 5-15 tags. Caption
 // GenerateEmbedding calls the Gemini text embedding model.
 // Returns a 768-dim float32 vector and tokens used.
 func (c *GeminiClient) GenerateEmbedding(ctx context.Context, apiKey, text string) ([]float32, int, error) {
-	model := "text-embedding-004"
+	model := c.EmbeddingModel()
 
 	reqBody := map[string]any{
 		"model": "models/" + model,

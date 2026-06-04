@@ -105,10 +105,13 @@ func (s *SearchService) IndexAsset(ctx context.Context, assetID, workspaceID uui
 		return err
 	}
 
-	// Log spend
-	cost := EstimateCost("text-embedding-004", int64(tokensUsed), 0)
+	// Log spend against the configured embedding model so cost attribution
+	// stays correct when ai.embedding_model / AI_EMBEDDING_MODEL overrides the
+	// default. EstimateCost falls back to defaultPrice for unknown models.
+	embeddingModel := s.gemini.EmbeddingModel()
+	cost := EstimateCost(embeddingModel, int64(tokensUsed), 0)
 	if err := s.spendRepo.LogUsage(ctx, &AIUsageLog{
-		WorkspaceID: workspaceID, Operation: "search", Model: "text-embedding-004",
+		WorkspaceID: workspaceID, Operation: "search", Model: embeddingModel,
 		InputTokens: int64(tokensUsed), CostEstimatePaisa: cost, AssetID: &assetID,
 	}); err != nil {
 		log.Printf("search service: log embed spend failed: %v", err)
