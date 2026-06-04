@@ -129,8 +129,15 @@ beforeEach(() => {
     match: vi.fn((request: Request | string) => {
       const url = typeof request === "string" ? request : request.url;
       if (url.includes(ENC_STORAGE_KEY_PATH)) {
+        // Realm-agnostic byte body — do NOT wrap a Blob here. undici's Response
+        // extracts a Blob body via Blob.prototype.stream(), which throws
+        // "object.stream is not a function" in CI's vitest+jsdom+undici realm;
+        // matchCacheStorage() swallows that as a cache miss → network fallback →
+        // the 5s decrypt-on-view timeout this test was quarantined for.
         return Promise.resolve(
-          new Response(new Blob(["ciphertext"], { type: "application/octet-stream" })),
+          new Response(new TextEncoder().encode("ciphertext"), {
+            headers: { "content-type": "application/octet-stream" },
+          }),
         );
       }
       return Promise.resolve(undefined);
@@ -191,6 +198,16 @@ describe("OfflineGalleryView — encrypted decrypt-on-view", () => {
   //   • src/components/gallery/__tests__/offline-gallery-view.test.tsx (render)
   // and by the manual cross-browser smoke gate documented in PR #13. Re-enable
   // once the chain is moved off the render-blocking path or driven by fake timers.
+  //
+  // UPDATE (#111, 2026-06-04): a likely root cause was found and fixed — the
+  // caches.match stub above wrapped a Blob in a Response, which undici extracts
+  // via Blob.prototype.stream() (absent in CI's vitest+jsdom+undici realm). That
+  // throw was swallowed by matchCacheStorage() as a cache miss → network
+  // fallback → the 5s timeout described above. The stub now uses a realm-agnostic
+  // byte body; with it, this test passes locally under a deliberately stream-less
+  // Blob realm AND within the full parallel-fork suite. Kept skipped pending a
+  // real CI forks-pool run (Actions minutes were quota-blocked); strong re-enable
+  // candidate — flip it.skip → it once that run is confirmed green.
   it.skip("decrypts the cached .enc display bytes and paints a blob: <img> via the grid", async () => {
     mockedGetGalleryMeta.mockResolvedValue(makeEncryptedMeta());
 
