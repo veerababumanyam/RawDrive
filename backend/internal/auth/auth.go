@@ -569,6 +569,11 @@ func (s *jwtService) generateRefreshTokenString() (string, error) {
 	return fmt.Sprintf("%x", b), nil
 }
 
+// ErrMaxConcurrentSessions is returned by enforceSessionLimit when a new login
+// would exceed the per-user MaxSessions cap. It is a client-actionable
+// condition (sign out elsewhere), so handlers map it to HTTP 429, not 500.
+var ErrMaxConcurrentSessions = errors.New("max concurrent sessions exceeded")
+
 // enforceSessionLimit checks whether creating a new session for the
 // given (user, family) pair would exceed MaxSessions. A rotate within
 // an existing family does not count as a new session. Returns an error
@@ -586,7 +591,7 @@ func (s *jwtService) enforceSessionLimit(ctx context.Context, userID, familyID s
 		return fmt.Errorf("refresh store: count active families: %w", err)
 	}
 	if active >= s.config.MaxSessions {
-		return errors.New("max concurrent sessions exceeded")
+		return ErrMaxConcurrentSessions
 	}
 	return nil
 }

@@ -584,6 +584,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
 	if err != nil {
+		if errors.Is(err, ErrMaxConcurrentSessions) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many active sessions — sign out from another device and try again"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
 	}
@@ -662,6 +666,10 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
 	if err != nil {
+		if errors.Is(err, ErrMaxConcurrentSessions) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many active sessions — sign out from another device and try again"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
 	}
@@ -917,6 +925,10 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+uuid.New().String(), oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
 	if err != nil {
+		if errors.Is(err, ErrMaxConcurrentSessions) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many active sessions — sign out from another device and try again"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
 		return
 	}
