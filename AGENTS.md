@@ -69,6 +69,15 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   `rawdrive-add-feature` skill automates this (its Phase-4 size gate decides when to slice, and routes
   true multi-feature milestones to `cobolt-build` instead); the *rule* — small units, no mega-branch,
   flag-gate incremental delivery — holds however you build.
+- **Complex bugs: reproduce first, then fix one root cause at a time.** Never fix on a guess. A bug that
+  won't reproduce on demand (intermittent / flaky / race / regression of unknown origin) is made
+  **deterministic first** — systematic debugging: a hypothesis log, `git bisect`, `go test -race`,
+  removable instrumentation — because you can't root-cause what you can't observe. A bug with several /
+  cross-cutting / class root causes is fixed as a **dependency-ordered set of one-unit fixes** (a
+  campaign), never one mega-diff; and one root cause spanning many sites is fixed **once** (root + guard +
+  regression test) then applied to every site (grep the anti-pattern to zero), not re-patched N times. The
+  `rawdrive-fix` skill automates this (its complexity gate decides); the *rule* — repro before fix,
+  root-cause not symptom, one unit per fix — holds however you debug.
 - **Auth model:** OTP is **registration-only**. All subsequent logins are password-only.
   Do not add OTP paths to login flows.
 - **Upload UX:** Upload lives **inside a gallery / sub-gallery**. There is no standalone
