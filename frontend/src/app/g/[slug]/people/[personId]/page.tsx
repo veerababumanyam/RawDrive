@@ -13,8 +13,8 @@ import {
   listPublicPersonPhotos,
   type PublicPersonSummary,
 } from "@/lib/api/ai";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import type { PublicAsset } from "@/lib/api/galleries";
+import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
 
 export default function PublicPersonPhotosPage({
   params,
@@ -24,6 +24,9 @@ export default function PublicPersonPhotosPage({
   const { slug, personId } = use(params);
   const [person, setPerson] = useState<PublicPersonSummary | null>(null);
   const [assetIds, setAssetIds] = useState<string[] | null>(null);
+  // Decryptable asset records (parallel to assetIds) used to render decrypted
+  // thumbnails on E2EE galleries.
+  const [assets, setAssets] = useState<PublicAsset[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function PublicPersonPhotosPage({
         if (cancelled) return;
         setPerson(list.find((p) => p.id === personId) ?? null);
         setAssetIds(photos.asset_ids);
+        setAssets(photos.assets ?? null);
       } catch (err) {
         if (!cancelled)
           setError(
@@ -105,22 +109,18 @@ export default function PublicPersonPhotosPage({
           className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
           role="list"
         >
-          {assetIds.map((id) => (
+          {(assets ?? []).map((asset) => (
             <Link
-              key={id}
-              href={`/g/${slug}/photo/${id}`}
+              key={asset.id}
+              href={`/g/${slug}/photo/${asset.id}`}
               className="group block aspect-square overflow-hidden rounded-xl border border-border-subtle bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-accent"
               role="listitem"
-              aria-label={`Photo ${id}`}
+              aria-label={`Photo ${asset.id}`}
             >
-              <img
-                src={`${API_BASE}/storage/thumbnails/${id}/thumb_md_webp.webp`}
+              <DecryptedThumb
+                asset={asset}
                 alt=""
-                loading="lazy"
                 className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                }}
               />
             </Link>
           ))}

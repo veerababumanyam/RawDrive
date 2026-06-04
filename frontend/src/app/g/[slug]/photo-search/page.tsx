@@ -22,8 +22,7 @@ import {
   searchPublicFaceInGallery,
   type PublicFaceSearchResponse,
 } from "@/lib/api/ai";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
 
 type Stage =
   | "idle"
@@ -553,23 +552,18 @@ export default function PublicPhotoSearchPage({
               role="list"
               aria-label="Photos matching this face"
             >
-              {searchResult.asset_ids.map((id) => (
+              {(searchResult.assets ?? []).map((asset) => (
                 <Link
-                  key={id}
-                  href={`/g/${slug}/photo/${id}`}
+                  key={asset.id}
+                  href={`/g/${slug}/photo/${asset.id}`}
                   className="group block aspect-square overflow-hidden rounded-xl border border-border-subtle bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-accent"
                   role="listitem"
-                  aria-label={`Photo ${id}`}
+                  aria-label={`Photo ${asset.id}`}
                 >
-                  <img
-                    src={`${API_BASE}/storage/thumbnails/${id}/thumb_md_webp.webp`}
+                  <DecryptedThumb
+                    asset={asset}
                     alt=""
-                    loading="lazy"
                     className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display =
-                        "none";
-                    }}
                   />
                 </Link>
               ))}

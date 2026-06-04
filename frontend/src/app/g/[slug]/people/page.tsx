@@ -11,8 +11,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, UserRound } from "lucide-react";
 import { listPublicPeople, type PublicPersonSummary } from "@/lib/api/ai";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
 
 export default function PublicPeoplePage({
   params,
@@ -122,18 +121,10 @@ function PublicPersonTile({
   slug: string;
   person: PublicPersonSummary;
 }) {
-  // Public asset thumbnails are served by the storage proxy at /storage/*.
-  // For the cover we use the same path the studio People tab uses — the
-  // thumbnails are public-readable (no token required because the storage
-  // path for thumbnails is not auth-gated; see lib/dashboard-ui.ts and
-  // the /storage/* proxy in cmd/api/main.go).
-  //
-  // The cover_asset_id resolves to a thumbnail URL we don't have until
-  // we fetch the asset's thumbnail_urls. To avoid an extra N round-trips
-  // we use a deterministic fallback URL pattern that points to the
-  // medium webp thumbnail — same key the upload pipeline writes
-  // (service.webpStorageKey: "thumbnails/{assetID}/thumb_md_webp.webp").
-  const previewUrl = `${API_BASE}/storage/thumbnails/${person.cover_asset_id}/thumb_md_webp.webp`;
+  // The cover renders through the client-side decryption path (DecryptedThumb)
+  // so it shows a real thumbnail on E2EE galleries — the raw /storage bytes are
+  // ciphertext. The decryptable cover_asset record comes from the People
+  // endpoint; the gallery key is read globally from localStorage / #rd_key.
   const displayName = person.name?.trim() || "Unnamed person";
 
   return (
@@ -144,17 +135,10 @@ function PublicPersonTile({
       role="listitem"
     >
       <div className="relative aspect-square overflow-hidden rounded-2xl border border-border-subtle bg-surface-container-high transition-transform group-hover:scale-[1.02] group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2">
-        <img
-          src={previewUrl}
+        <DecryptedThumb
+          asset={person.cover_asset}
           alt=""
-          loading="lazy"
           className="absolute inset-0 h-full w-full object-cover"
-          // If the thumbnail isn't available (e.g. wrong content-type, video,
-          // or storage path mismatch), fall back to the placeholder icon by
-          // hiding the image with a small inline style trick.
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
         />
         <span className="absolute right-2 top-2 rounded-full bg-surface-scrim-strong/55 px-2 py-0.5 text-[11px] font-semibold text-text-media glass-blur-soft">
           {person.asset_count}

@@ -1,5 +1,6 @@
 import { authFetch } from "@/lib/api/authFetch";
 import { getApiBaseUrl } from "@/lib/api/base-url";
+import type { PublicAsset } from "@/lib/api/galleries";
 
 const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
@@ -239,10 +240,17 @@ export interface PublicPersonSummary {
   face_count: number;
   asset_count: number;
   cover_asset_id: string;
+  // Decryptable cover asset record (with media_encryption manifest) so the
+  // People tile renders a decrypted thumbnail on E2EE galleries. Absent when
+  // the cover asset is missing or the backend predates slice 3.
+  cover_asset?: PublicAsset;
 }
 
 export interface PublicPersonPhotos {
   asset_ids: string[];
+  // Decryptable asset records (parallel to asset_ids) for client-side
+  // thumbnail decryption on E2EE galleries.
+  assets?: PublicAsset[];
   count: number;
 }
 
@@ -300,6 +308,9 @@ export interface PublicFaceSearchResponse {
   cluster_name?: string;
   similarity?: number;
   asset_ids: string[];
+  // Decryptable asset records (parallel to asset_ids) so the result grid
+  // renders decrypted thumbnails on E2EE galleries.
+  assets?: PublicAsset[];
   count: number;
 }
 

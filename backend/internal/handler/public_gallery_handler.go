@@ -1282,6 +1282,44 @@ func (h *PublicGalleryHandler) resolveAssetsByID(ctx context.Context, ids []uuid
 	return byID
 }
 
+// assetToPublicResponse projects a repository.Asset into the public-safe shape,
+// carrying the media_encryption manifest the client needs to decrypt thumbnails
+// on E2EE galleries.
+func assetToPublicResponse(a *repository.Asset, sortOrder int) publicAssetResponse {
+	return publicAssetResponse{
+		ID:              a.ID.String(),
+		Filename:        a.Filename,
+		ContentType:     a.ContentType,
+		Width:           a.Width,
+		Height:          a.Height,
+		Blurhash:        a.Blurhash,
+		ThumbnailURLs:   a.ThumbnailURLs,
+		IsEncrypted:     a.IsEncrypted,
+		MediaEncryption: a.MediaEncryption,
+		SortOrder:       sortOrder,
+	}
+}
+
+// buildPublicAssetResponses resolves asset IDs to public-safe records (with the
+// media_encryption manifest) preserving the input order and skipping
+// missing/soft-deleted assets. The face surfaces (People, person photos, Photo
+// Search) use it so guests render DECRYPTED thumbnails the same way the main
+// gallery grid does — on an E2EE gallery the raw /storage thumbnail is
+// ciphertext, so the client must decrypt via the manifest. One bulk lookup, no
+// per-asset N+1.
+func (h *PublicGalleryHandler) buildPublicAssetResponses(ctx context.Context, ids []uuid.UUID) []publicAssetResponse {
+	byID := h.resolveAssetsByID(ctx, ids)
+	out := make([]publicAssetResponse, 0, len(ids))
+	for i, id := range ids {
+		asset, ok := byID[id]
+		if !ok {
+			continue
+		}
+		out = append(out, assetToPublicResponse(asset, i))
+	}
+	return out
+}
+
 // ListAssets handles GET /api/v1/public/galleries/{slug}/assets
 func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
@@ -1963,6 +2001,11 @@ type publicPersonResponse struct {
 	FaceCount  int    `json:"face_count"`
 	AssetCount int    `json:"asset_count"`
 	CoverAsset string `json:"cover_asset_id"`
+	// CoverAssetRecord carries the decryptable cover asset (with its
+	// media_encryption manifest) so the People tile renders a decrypted
+	// thumbnail on E2EE galleries instead of a raw ciphertext /storage <img>.
+	// Nil when the cover asset is missing/soft-deleted.
+	CoverAssetRecord *publicAssetResponse `json:"cover_asset,omitempty"`
 }
 
 // isFaceRecognitionEnabledForGallery checks both gates that must pass before
@@ -2035,15 +2078,28 @@ func (h *PublicGalleryHandler) ListPeople(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"failed to list people"}`, http.StatusInternalServerError)
 		return
 	}
+	// Bulk-resolve the cover assets so each tile can render a DECRYPTED
+	// thumbnail on E2EE galleries (one lookup for all covers, no N+1).
+	coverIDs := make([]uuid.UUID, 0, len(clusters))
+	for _, c := range clusters {
+		coverIDs = append(coverIDs, c.SampleAssetID)
+	}
+	coversByID := h.resolveAssetsByID(r.Context(), coverIDs)
+
 	out := make([]publicPersonResponse, 0, len(clusters))
 	for _, c := range clusters {
-		out = append(out, publicPersonResponse{
+		resp := publicPersonResponse{
 			ID:         c.ClusterLabel.String(),
 			Name:       c.ClusterName,
 			FaceCount:  c.FaceCount,
 			AssetCount: c.AssetCount,
 			CoverAsset: c.SampleAssetID.String(),
-		})
+		}
+		if a, ok := coversByID[c.SampleAssetID]; ok {
+			rec := assetToPublicResponse(a, 0)
+			resp.CoverAssetRecord = &rec
+		}
+		out = append(out, resp)
 	}
 	respondJSON(w, http.StatusOK, out)
 }
@@ -2099,7 +2155,10 @@ func (h *PublicGalleryHandler) ListPersonPhotos(w http.ResponseWriter, r *http.R
 	}
 	respondJSON(w, http.StatusOK, map[string]any{
 		"asset_ids": stringIDs,
-		"count":     len(stringIDs),
+		// Decryptable asset records (with media_encryption manifests) so the
+		// per-person grid renders decrypted thumbnails on E2EE galleries.
+		"assets": h.buildPublicAssetResponses(r.Context(), ids),
+		"count":  len(stringIDs),
 	})
 }
 
@@ -2296,7 +2355,10 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		"cluster_name":   winner.name,
 		"similarity":     winner.bestSim,
 		"asset_ids":      stringIDs,
-		"count":          len(stringIDs),
+		// Decryptable asset records so the result grid renders decrypted
+		// thumbnails on E2EE galleries.
+		"assets": h.buildPublicAssetResponses(r.Context(), assetIDs),
+		"count":  len(stringIDs),
 	})
 }
 
