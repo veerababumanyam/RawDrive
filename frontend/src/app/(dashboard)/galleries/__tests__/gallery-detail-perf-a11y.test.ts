@@ -326,31 +326,36 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
   });
 
-  it("routes the published View-as-client action to the owner-scoped preview route, never the anonymous public URL", () => {
+  it("routes the View-as-client action to the owner-scoped preview route, available before publishing", () => {
     // GAL-CORE-009 / PHO-GAL-009: "View as client" must render the exact client
-    // experience for the OWNER. The public /g/[slug] route is anonymous, so for a
-    // private gallery (the access_mode default — migration 041) it returns the
-    // locked "This gallery is private" shell. Owner preview therefore goes through
-    // the authenticated /galleries/[id]/preview route, matching the cover page and
-    // share center (see route-contracts.test.ts). It stays publish-gated.
+    // experience for the OWNER *before the gallery is shared*, so it is available
+    // irrespective of publish/share state (a photographer adjusts the client view
+    // BEFORE going live). It routes through the authenticated
+    // /galleries/[id]/preview route (owner-scoped, works for unpublished/private
+    // galleries), never the anonymous public /g/[slug] URL — which returns the
+    // locked "This gallery is private" shell for a private gallery (the access_mode
+    // default — migration 041). Matches the cover page and share center (see
+    // route-contracts.test.ts).
     const source = readDetailPage();
-    const viewAsClientIndex = source.indexOf("View as client");
-    const viewAsClientBlock = source.slice(
-      Math.max(0, viewAsClientIndex - 400),
-      viewAsClientIndex + 120,
-    );
+    // The button label (JSX text node) is the LAST occurrence — the doc comment
+    // above the Link also mentions "View as client". Anchor on the actual <Link>
+    // element so we assert on the markup, not the comment.
+    const labelIndex = source.lastIndexOf("View as client");
+    expect(labelIndex).toBeGreaterThan(-1);
+    const linkStart = source.lastIndexOf("<Link", labelIndex);
+    expect(linkStart).toBeGreaterThan(-1);
+    const linkBlock = source.slice(linkStart, labelIndex + "View as client".length);
 
-    expect(viewAsClientIndex).toBeGreaterThan(-1);
     expect(source).toContain("View as client");
-    // Still only shown after publishing.
-    expect(viewAsClientBlock).toContain("{gallery.is_published && (");
-    // Owner-scoped preview route, not the anonymous public gallery URL.
-    expect(viewAsClientBlock).toContain(
-      "href={`/galleries/${gallery.id}/preview`}",
-    );
-    expect(viewAsClientBlock).not.toContain("mode=client");
-    // Never regress to the un-publish-gated form.
-    expect(viewAsClientBlock).not.toContain("{gallery.slug && (");
+    // Owner-scoped preview route opened in a new tab, not the anonymous public URL.
+    expect(linkBlock).toContain("href={`/galleries/${gallery.id}/preview`}");
+    expect(linkBlock).toContain('target="_blank"');
+    expect(linkBlock).not.toContain("mode=client");
+    // Available before publishing — the Link must NOT be wrapped in a publish
+    // gate (that hid it for unpublished galleries, contradicting GAL-CORE-009).
+    const gateWindow = source.slice(Math.max(0, linkStart - 48), linkStart);
+    expect(gateWindow).not.toContain("{gallery.is_published && (");
+    expect(gateWindow).not.toContain("{gallery.slug && (");
   });
 
   it("omits the sub-gallery management toggle while keeping delete actions reachable", () => {

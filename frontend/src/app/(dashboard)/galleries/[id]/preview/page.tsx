@@ -116,6 +116,13 @@ export default function GalleryPreviewPage({
   const [branding, setBranding] = useState<GalleryBranding | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Owner access token, threaded into the shared public Hero + Grid as their
+  // decrypt bearer `token`. Without it those components fetch the encrypted
+  // /storage bytes anonymously and 401/403 — leaving the photographer's own
+  // preview with blank tiles for an unpublished/private E2EE gallery. Same
+  // pattern as the dashboard detail page's GalleryAssetTileImage. Captured once
+  // on mount (the page already requires this token in the loader below).
+  const [viewerToken] = useState(() => getStoredAccessToken());
 
   useEffect(() => {
     let cancelled = false;
@@ -319,6 +326,7 @@ export default function GalleryPreviewPage({
         design={designConfig}
         designCoverAsset={resolvedCoverAsset}
         designCoverThumbnails={designCoverThumbnails}
+        viewerToken={viewerToken}
       />
 
       <div id="gallery-grid" className="mx-auto max-w-6xl px-4 pb-16">
@@ -332,6 +340,7 @@ export default function GalleryPreviewPage({
           favoritesDisabledReason="Favorites are disabled in owner preview and will not affect client counts."
           design={designConfig}
           watermark={gallery.watermark_config as Record<string, unknown> | null}
+          viewerToken={viewerToken}
         />
       </div>
     </div>

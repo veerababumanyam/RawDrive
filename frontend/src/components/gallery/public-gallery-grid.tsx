@@ -204,16 +204,19 @@ function PublicAssetTileImage({
   asset,
   className,
   assetAccessToken = null,
+  viewerToken = null,
 }: {
   asset: PublicAsset;
   className?: string;
   // Gated-gallery byte-auth token (origin/main security control).
   assetAccessToken?: string | null;
+  // Owner-preview bearer token (View as client). Null on the public route.
+  viewerToken?: string | null;
 }) {
   const media = useDecryptedAssetUrl(
     asset,
     GRID_VARIANTS,
-    null,
+    viewerToken,
     assetAccessToken,
   );
   // Responsive ladder (200/600/1200/2400w) so phones fetch thumb_md instead
@@ -251,17 +254,20 @@ function PublicLightboxImage({
   zoom,
   watermarkOverlay,
   assetAccessToken = null,
+  viewerToken = null,
 }: {
   photo: PublicAsset;
   zoom: number;
   watermarkOverlay: WatermarkDisplay | null;
   // Gated-gallery byte-auth token (origin/main security control).
   assetAccessToken?: string | null;
+  // Owner-preview bearer token (View as client). Null on the public route.
+  viewerToken?: string | null;
 }) {
   const media = useDecryptedAssetUrl(
     photo,
     LIGHTBOX_VARIANTS,
-    null,
+    viewerToken,
     assetAccessToken,
   );
   if (media.loading) {
@@ -305,6 +311,7 @@ function PublicFilmstripThumb({
   asset,
   active,
   assetAccessToken = null,
+  viewerToken = null,
   index,
   onSelect,
 }: {
@@ -314,13 +321,20 @@ function PublicFilmstripThumb({
   // into the media hook so protected thumbnail bytes authenticate for
   // password/private/share-gated galleries.
   assetAccessToken?: string | null;
+  // Owner-preview bearer token (View as client). Null on the public route.
+  viewerToken?: string | null;
   index: number;
   onSelect: (index: number) => void;
 }) {
   const [useDisplayFallback, setUseDisplayFallback] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const variants = useDisplayFallback ? LIGHTBOX_VARIANTS : FILMSTRIP_VARIANTS;
-  const media = useDecryptedAssetUrl(asset, variants, null, assetAccessToken);
+  const media = useDecryptedAssetUrl(
+    asset,
+    variants,
+    viewerToken,
+    assetAccessToken,
+  );
 
   const handleImageError = () => {
     if (!useDisplayFallback) {
@@ -698,6 +712,14 @@ interface Props {
   // Public proofing, favorites, and downloads must preserve it so every
   // follow-up API call targets the same workspace-scoped gallery as the page.
   workspaceScope?: string | null;
+  // Owner "View as client" preview only. The authenticated photographer's
+  // access token (getStoredAccessToken), threaded into useDecryptedAssetUrl as
+  // its bearer `token` so protected/encrypted /storage byte fetches carry
+  // `Authorization: Bearer` and decrypt for unpublished/private galleries —
+  // mirroring the working dashboard detail tile (GalleryAssetTileImage). The
+  // public /g/[slug] route never sets this (anonymous viewers have no bearer),
+  // so it defaults to null and that path is unchanged.
+  viewerToken?: string | null;
 }
 
 // Bound the studio's columns value into the responsive scale the public
@@ -899,6 +921,7 @@ export function PublicGalleryGrid({
   gallerySessionToken = null,
   assetAccessToken = null,
   workspaceScope = null,
+  viewerToken = null,
 }: Props) {
   // Memoize the resolved watermark display state. Returns null when
   // disabled / misconfigured so the render path can short-circuit to
@@ -1612,6 +1635,7 @@ export function PublicGalleryGrid({
               <PublicAssetTileImage
                 asset={asset}
                 assetAccessToken={assetAccessToken}
+                viewerToken={viewerToken}
                 className={
                   design?.grid?.layout === "grid"
                     ? "absolute inset-0 h-full w-full object-cover"
@@ -1938,6 +1962,7 @@ export function PublicGalleryGrid({
                   zoom={zoom}
                   watermarkOverlay={watermarkOverlay}
                   assetAccessToken={assetAccessToken}
+                  viewerToken={viewerToken}
                 />
 
                 {lightboxIdx < visibleAssets.length - 1 && (
@@ -1969,6 +1994,7 @@ export function PublicGalleryGrid({
                       asset={a}
                       active={i === lightboxIdx}
                       assetAccessToken={assetAccessToken}
+                      viewerToken={viewerToken}
                       index={i}
                       onSelect={goToPhoto}
                     />

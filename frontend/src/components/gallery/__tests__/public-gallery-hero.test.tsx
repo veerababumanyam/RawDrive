@@ -111,6 +111,9 @@ describe("PublicGalleryHero", () => {
     expect(mocks.useDecryptedAssetUrl).toHaveBeenCalledWith(
       expect.objectContaining({ id: "asset-cover" }),
       expect.arrayContaining(["thumb_lg_webp", "display_webp"]),
+      // Owner "View as client" bearer token (3rd arg). null on the public
+      // route — anonymous visitors have no bearer (see viewerToken prop).
+      null,
     );
   });
 

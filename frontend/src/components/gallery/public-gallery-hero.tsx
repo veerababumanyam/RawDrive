@@ -176,6 +176,12 @@ interface PublicGalleryHeroProps {
   // opts the gallery in — the FAB it replaced lived in
   // PublicGalleryEnhancements before this CTA-row consolidation.
   faceDetectionEnabled?: boolean;
+  // Owner "View as client" preview only. The authenticated photographer's
+  // access token, threaded into useDecryptedAssetUrl as its bearer `token` so
+  // the encrypted cover's /storage bytes carry `Authorization: Bearer` and
+  // decrypt for unpublished/private galleries. The public /g/[slug] route
+  // leaves it unset (anonymous), so the cover path there is unchanged.
+  viewerToken?: string | null;
 }
 
 // Maps the studio's overlay/scrim variant to a CSS color string. `light`
@@ -443,6 +449,7 @@ export function PublicGalleryHero({
   assetAccessToken,
   shareToken,
   faceDetectionEnabled = false,
+  viewerToken = null,
 }: PublicGalleryHeroProps) {
   const mobileViewport = useIsMobileViewport();
   // Whether to surface the public slideshow at all: it needs a slug to build
@@ -541,6 +548,7 @@ export function PublicGalleryHero({
   const coverMedia = useDecryptedAssetUrl(
     resolvedDesignCoverAsset || legacyCoverAsset,
     HERO_VARIANTS,
+    viewerToken,
   );
 
   if (design && designStyle) {

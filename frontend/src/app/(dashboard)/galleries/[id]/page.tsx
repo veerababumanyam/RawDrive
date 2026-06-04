@@ -2537,24 +2537,25 @@ export default function GalleryDetailPage({
           >
             Preview
           </Link>
-          {/* GAL-FR-118 / GAL-CORE-009 / PHO-GAL-009: view-as-client renders the
-              exact client experience for the OWNER. It opens the authenticated,
-              owner-scoped /galleries/[id]/preview route (in a new tab) — NOT the
-              anonymous public /g/[slug] route, which has no gallery session and so
-              returns the locked "private gallery" shell for a private gallery (the
-              access_mode default — migration 041). Real clients still reach the
-              live gallery via their ?share=<token> link, which mints a session.
-              Mirrors the cover page + share center (route-contracts.test.ts). */}
-          {gallery.is_published && (
-            <Link
-              href={`/galleries/${gallery.id}/preview`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-tertiary px-4 py-2.5 text-sm"
-            >
-              View as client
-            </Link>
-          )}
+          {/* GAL-FR-118 / GAL-CORE-009 / PHO-GAL-009: "View as client" renders the
+              exact client experience for the OWNER *before the gallery is shared*,
+              so it is available irrespective of publish/share state (a photographer
+              must be able to preview-as-client and adjust BEFORE going live). Opens
+              the authenticated, owner-scoped /galleries/[id]/preview route in a new
+              tab (so the editing tab stays open) — NOT the anonymous public
+              /g/[slug] route, which has no gallery session and returns the locked
+              "This gallery is private" shell for a private gallery (the access_mode
+              default — migration 041). Real clients still reach the live gallery via
+              their ?share=<token> link, which mints a session. Mirrors the cover page
+              + share center (route-contracts.test.ts). */}
+          <Link
+            href={`/galleries/${gallery.id}/preview`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tertiary px-4 py-2.5 text-sm"
+          >
+            View as client
+          </Link>
           <span className="status-badge status-badge--accent">
             Created {new Date(gallery.created_at).toLocaleDateString("en-IN")}
           </span>

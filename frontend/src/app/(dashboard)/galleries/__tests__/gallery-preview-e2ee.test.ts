@@ -20,4 +20,17 @@ describe("gallery owner preview E2EE contracts", () => {
     expect(source).toContain("resolvedCoverAsset");
     expect(source).toContain("designCoverAsset={resolvedCoverAsset}");
   });
+
+  it("threads the owner access token into the public Hero + Grid so E2EE photos decrypt in the preview", () => {
+    const source = readPreviewPage();
+
+    // The owner token must be captured at render and forwarded as the decrypt
+    // bearer to BOTH shared public components. Without it, the components fetch
+    // the encrypted /storage bytes anonymously (no Authorization, no ?at=) and
+    // the byte serve 401/403s — leaving the photographer's own preview with
+    // blank "Image unavailable" tiles for an unpublished/private E2EE gallery.
+    expect(source).toContain("getStoredAccessToken()");
+    const viewerTokenProps = source.match(/viewerToken=\{viewerToken\}/g) ?? [];
+    expect(viewerTokenProps.length).toBeGreaterThanOrEqual(2);
+  });
 });
