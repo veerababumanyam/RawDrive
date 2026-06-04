@@ -36,6 +36,31 @@ func assertIndexExists(t *testing.T, table, index, migration string) {
 	assert.Equal(t, index, got)
 }
 
+// assertIndexDefContains fails the (sub)test if the migrated index's definition
+// (pg_indexes.indexdef) does not contain every required substring. It asserts the
+// *shape* of the index, not merely its name — two indexes can share a name across
+// migrations while having divergent predicates, and only the indexdef reveals
+// which definition actually landed.
+func assertIndexDefContains(t *testing.T, table, index, migration string, wants ...string) {
+	t.Helper()
+	pool := testPool(t)
+	ctx := context.Background()
+
+	var indexDef string
+	err := pool.QueryRow(ctx,
+		`SELECT indexdef FROM pg_indexes
+		 WHERE schemaname = 'public' AND tablename = $1 AND indexname = $2`,
+		table, index).Scan(&indexDef)
+	require.NoErrorf(t, err,
+		"index %q on table %q (created by migration %s) should exist after all migrations apply",
+		index, table, migration)
+	for _, want := range wants {
+		assert.Containsf(t, indexDef, want,
+			"index %q on %q (migration %s) must contain %q in its definition; got: %s",
+			index, table, migration, want, indexDef)
+	}
+}
+
 // assertHNSWIndex additionally asserts the index is a pgvector HNSW index by
 // checking that its definition (pg_indexes.indexdef) uses the hnsw access
 // method. A B-tree index by the same name would not serve approximate nearest
@@ -124,6 +149,36 @@ func TestIndexContract_GalleryAlbumHotPath(t *testing.T) {
 			assertIndexExists(t, tc.table, tc.index, tc.migration)
 		})
 	}
+}
+
+// TestIndexContract_AssetsAITagsPartial asserts the assets ai_tags GIN index
+// lands as the INTENDED stricter partial — gated on `ai_tags <> '[]'::jsonb`
+// (skip empty-tag rows) AND `deleted_at IS NULL` (skip soft-deleted rows).
+//
+// Q-6: two migrations create `idx_assets_ai_tags` with the SAME name but
+// DIVERGENT predicates. 019_assets_ai_columns creates the looser
+// `WHERE deleted_at IS NULL`; 044_m11_deferred_features intends the stricter
+// `WHERE ai_tags != '[]'::jsonb AND deleted_at IS NULL`, but its CREATE INDEX
+// IF NOT EXISTS is a silent no-op because 019 already claimed the name. So the
+// looser, larger index runs in production and the stricter one never lands.
+// Migration 164 drops the name and recreates it with the stricter predicate;
+// this contract pins the actual indexdef so the no-op can never recur.
+//
+// PostgreSQL canonicalises `!=` to `<>` in pg_indexes.indexdef, so the assertion
+// matches the canonical operator form.
+func TestIndexContract_AssetsAITagsPartial(t *testing.T) {
+	migrator := newMigrator(t)
+	require.NoError(t, migrator.Up(), "all migrations should apply before asserting the ai_tags index shape")
+
+	// The index must be the stricter partial: GIN over ai_tags, gated on both
+	// non-empty tags and not-soft-deleted. The presence of the `ai_tags <> '[]'`
+	// clause is what distinguishes the intended 044/164 definition from the
+	// looser 019 one that previously won the name collision.
+	assertIndexDefContains(t, "assets", "idx_assets_ai_tags", "164_fix_ai_tags_index",
+		"USING gin (ai_tags)",
+		"ai_tags <> '[]'::jsonb",
+		"deleted_at IS NULL",
+	)
 }
 
 // TestIndexContract_QueueClaim asserts the partial indexes that back each
