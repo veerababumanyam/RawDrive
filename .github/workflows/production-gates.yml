@@ -15,6 +15,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6.0.3
+      # Fast, DB-free file-name scan: fail the build if a NEW migration reuses
+      # an existing numeric prefix. The four historical duplicates
+      # (006/133/160/164) are grandfathered (already merged + applied; never
+      # renumbered); any new collision — including a THIRD file piled onto a
+      # grandfathered number — fails. Runs before the Go work so it fails fast.
+      # The same invariant is also asserted by the hermetic Go contract test
+      # backend/internal/database/migrations/migration_number_uniqueness_test.go.
+      - name: Guard against duplicate migration numbers
+        run: node scripts/check-migration-numbers.mjs
       - uses: actions/setup-go@v6.4.0
         with:
           go-version: "1.26.4"

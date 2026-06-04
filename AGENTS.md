@@ -274,9 +274,27 @@ constraints for gallery, upload, storage, and worker changes.
 - Index hot media paths by the actual predicate and ordering used by code
   (`gallery_id, sort_order, asset_id`, album position, derivative `storage_key`, etc.).
 - Add migration contract tests for new performance indexes.
-- Before assigning a migration number, fetch/check `origin/main`; if main claimed
-  the number while your branch was open, renumber your unmerged migration instead
-  of editing committed migrations.
+- **Migration numbers are append-only and unique.** Each migration is a paired
+  `NNN_feature_name.up.sql` / `.down.sql` and the `NNN` prefix must be unique.
+  Before assigning a number, fetch/check `origin/main`; if main claimed the number
+  while your branch was open, renumber your **unmerged** migration — never edit or
+  renumber a committed/merged migration (the migrator keys on the version, so
+  renumbering an applied migration re-runs/errors in migrated DBs).
+- **CI guard:** `scripts/check-migration-numbers.mjs` (wired into the `backend`
+  job of `.github/workflows/production-gates.yml`, and mirrored by the hermetic Go
+  contract test `backend/internal/database/migrations/migration_number_uniqueness_test.go`)
+  **fails the build on any NEW duplicate numeric prefix.**
+- **Grandfathered historical duplicates:** four numbers reached `main` with two
+  migrations each before the guard existed and are already applied everywhere, so
+  they are frozen and explicitly allowed (never renumber them):
+  - `006` — `006_add_password_to_users`, `006_create_profiles`
+  - `133` — `133_gallery_tethering`, `133_user_auth_methods_unique`
+  - `160` — `160_ai_jobs_claimed_at`, `160_role_session_timeouts`
+  - `164` — `164_fix_ai_tags_index`, `164_gallery_default_cover_backfill`
+  The guard pins the **exact filename set** per grandfathered number, so piling a
+  **third** file onto any of them (e.g. a new `164_*`) also fails. If you add a new
+  grandfather entry, update both the `.mjs` `GRANDFATHERED` map and the Go test's
+  `grandfatheredDups` map (they must stay in sync).
 
 ## MCP Tools — MANDATORY FOR ALL AGENTS
 
