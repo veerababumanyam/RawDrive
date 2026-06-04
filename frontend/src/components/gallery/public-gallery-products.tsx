@@ -11,8 +11,29 @@
 // instantiated inside the asset viewer lightbox (tracked separately).
 
 import { useState } from "react";
-import { ProductPreview } from "@/components/gallery/product-preview";
+import dynamic from "next/dynamic";
 import type { GalleryProduct } from "@/lib/api/commerce";
+
+// PERF-SPLIT: the product catalog only renders when a gallery actually has
+// products (the section early-returns null otherwise). ProductPreview is a
+// ~430-line commerce card (cart state, Razorpay checkout, DPI preflight), so
+// load it in an async chunk instead of the public gallery's first-load JS.
+// ssr:false is safe — it is a "use client" interactive card that keys the
+// cart by client email and never renders on the server.
+const ProductPreview = dynamic(
+  () =>
+    import("@/components/gallery/product-preview").then((m) => m.ProductPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="aspect-[4/3] w-full animate-pulse rounded-2xl border border-border-subtle bg-surface-sunken"
+        aria-busy="true"
+        aria-label="Loading product"
+      />
+    ),
+  },
+);
 
 interface PublicGalleryProductsProps {
   slug: string;

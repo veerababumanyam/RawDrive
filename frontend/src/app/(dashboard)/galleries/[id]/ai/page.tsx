@@ -1,11 +1,33 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
-import { GalleryAIPanel } from "@/components/gallery/gallery-ai-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
+
+// PERF-SPLIT: the GalleryAIPanel only mounts once a session token resolves
+// ({token && <GalleryAIPanel/>}), and it carries the face-scan polling +
+// API surface. Load it in an async chunk instead of the AI route's
+// first-load JS. ssr:false is safe — this is a "use client" panel that
+// reads localStorage for the token and never renders on the server.
+const GalleryAIPanel = dynamic(
+  () =>
+    import("@/components/gallery/gallery-ai-panel").then(
+      (m) => m.GalleryAIPanel,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-40 w-full animate-pulse rounded-2xl border border-border-subtle bg-surface-sunken"
+        aria-busy="true"
+        aria-label="Loading gallery AI tools"
+      />
+    ),
+  },
+);
 
 export default function GalleryAIPage({
   params,

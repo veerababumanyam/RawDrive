@@ -35,7 +35,6 @@ import {
   getGalleryFavoritesSummary,
   type GalleryFavoritesSummary,
 } from "@/lib/api/favorites";
-import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import { assetIsProcessing } from "@/lib/dashboard-ui";
 import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
@@ -96,6 +95,29 @@ const PhotoLightbox = dynamic(
   () =>
     import("@/components/gallery/photo-lightbox").then((m) => m.PhotoLightbox),
   { ssr: false },
+);
+
+// PERF-SPLIT: the embedded-videos manager is a self-contained panel that
+// only renders once the gallery has loaded and sits below the grid. It
+// pulls in the YouTube/Vimeo URL parser + iframe grid, so load it in an
+// async chunk instead of the gallery-detail route's first-load JS. ssr:false
+// is safe — this is a "use client" editor panel that never renders on the
+// server.
+const EmbeddedVideosPanel = dynamic(
+  () =>
+    import("@/components/gallery/embedded-videos-panel").then(
+      (m) => m.EmbeddedVideosPanel,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-32 w-full animate-pulse rounded-2xl border border-border-subtle bg-surface-sunken"
+        aria-busy="true"
+        aria-label="Loading embedded videos"
+      />
+    ),
+  },
 );
 
 type GalleryAssetRecord = GalleryAsset & {
