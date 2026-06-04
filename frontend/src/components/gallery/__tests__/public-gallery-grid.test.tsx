@@ -217,6 +217,23 @@ describe("PublicGalleryGrid", () => {
     );
   });
 
+  it("moves focus into the modal lightbox when a photo is opened (focus trap)", () => {
+    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+
+    const gridButton = screen
+      .getByAltText("Wedding (42).jpg")
+      .closest('[role="button"]');
+    fireEvent.click(gridButton as Element);
+
+    const dialog = screen.getByRole("dialog", {
+      name: /photo: wedding \(42\)\.jpg/i,
+    });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // Opening the lightbox must move keyboard focus into the modal; otherwise
+    // aria-modal="true" lies and Tab walks the grid behind the overlay.
+    expect(document.activeElement).toBe(dialog);
+  });
+
   describe("lightbox client actions", () => {
     const FAV_KEY = "rawdrive-favorites-wedding-gallery";
 

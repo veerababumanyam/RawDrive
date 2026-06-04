@@ -29,6 +29,7 @@ import type { PublicAsset } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest, variantManifest } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
 import {
@@ -744,6 +745,10 @@ export function PublicGalleryGrid({
 
   // Fullscreen mode for lightbox
   const lightboxRef = useRef<HTMLDivElement>(null);
+  // a11y: the inline lightbox is a modal dialog (aria-modal) — move focus in
+  // when it opens, trap Tab within it, and restore focus to the trigger tile
+  // on close. Engaged only while a photo is open (lightboxIdx !== null).
+  useFocusTrap(lightboxRef, lightboxIdx !== null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1457,6 +1462,7 @@ export function PublicGalleryGrid({
             role="dialog"
             aria-modal="true"
             aria-label={`Photo: ${photo.filename}`}
+            tabIndex={-1}
           >
             {/* Toolbar — auto-hides in fullscreen after 3s idle */}
             <div

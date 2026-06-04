@@ -57,6 +57,7 @@ import { Filmstrip } from "./filmstrip";
 import { CompareMode } from "./compare-mode";
 import { useTouchGestures } from "@/hooks/use-touch-gestures";
 import { useScrollRestore } from "@/hooks/use-scroll-restore";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   FILMSTRIP_VARIANTS,
   LIGHTBOX_VARIANTS,
@@ -231,6 +232,11 @@ export function PhotoLightbox({
     return () => restoreScroll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // a11y: the lightbox is a modal dialog (aria-modal) — move focus in on open,
+  // trap Tab within it, and restore focus to the trigger on close. Active for
+  // the whole mounted lifetime since the lightbox unmounts when it closes.
+  useFocusTrap(containerRef, true);
 
   // GAL-FR-097: touch gestures — swipe next/prev/close + pinch zoom.
   const touchHandlers = useTouchGestures({
@@ -592,6 +598,7 @@ export function PhotoLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={`Photo: ${asset.filename}`}
+      tabIndex={-1}
       {...lightboxPointerHandlers}
     >
       {/* ─── Top Toolbar ─── */}

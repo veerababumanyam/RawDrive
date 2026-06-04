@@ -79,4 +79,13 @@ describe("GallerySlideshow", () => {
     expect(screen.queryByTestId("slideshow-audio")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mute music/i })).not.toBeInTheDocument();
   });
+
+  it("moves focus into the modal dialog on open so aria-modal isn't lying", () => {
+    setup();
+    const dialog = screen.getByRole("dialog", { name: "Gallery slideshow" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // Without the focus trap, keyboard focus would stay on the launch button
+    // behind this fullscreen overlay.
+    expect(document.activeElement).toBe(dialog);
+  });
 });

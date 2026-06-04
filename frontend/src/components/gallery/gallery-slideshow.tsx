@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   ChevronLeft,
   ChevronRight,
@@ -57,6 +58,11 @@ export function GallerySlideshow({
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // a11y: fullscreen modal dialog (aria-modal) — move focus in on open, trap
+  // Tab within it, restore focus to the launcher on close. Mounted == open, so
+  // the trap is engaged for the whole lifetime.
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, true);
 
   const next = useCallback(() => setIndex((i) => (count ? (i + 1) % count : 0)), [count]);
   const prev = useCallback(() => setIndex((i) => (count ? (i - 1 + count) % count : 0)), [count]);
@@ -107,9 +113,11 @@ export function GallerySlideshow({
 
   return (
     <div
+      ref={containerRef}
       role="dialog"
       aria-modal="true"
       aria-label="Gallery slideshow"
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
     >
       {renderSlide ? (

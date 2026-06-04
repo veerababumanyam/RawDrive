@@ -68,6 +68,23 @@ describe("PhotoLightbox", () => {
     );
   });
 
+  it("moves focus into the modal dialog on open so aria-modal isn't lying", () => {
+    render(
+      <PhotoLightbox
+        asset={photo()}
+        onClose={vi.fn()}
+        hasPrev={false}
+        hasNext={false}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // The focus trap moves focus into the dialog shell on open; without it,
+    // keyboard focus stays on the page behind the modal.
+    expect(document.activeElement).toBe(dialog);
+  });
+
   it("does not render the low-contrast keyboard shortcut footer", () => {
     render(
       <PhotoLightbox
