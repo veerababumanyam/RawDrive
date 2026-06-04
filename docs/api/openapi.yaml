@@ -1279,6 +1279,84 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/v1/public/galleries/{slug}/face-match:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Public gallery slug.
+    post:
+      operationId: publicGalleryFaceMatch
+      tags: [gallery]
+      summary: Match a guest's face against a gallery's face index
+      description: |
+        Guest "Find Me" path (GAL-FR-107/108/109). The client posts a pre-computed
+        512-d insightface buffalo_l face embedding; the server returns the gallery
+        asset IDs whose indexed faces match, strictly scoped to this gallery. The
+        embedding MUST be 512-dimensional (the `face_clusters` column is vector(512),
+        migration 149); a wrong-dimension vector is rejected with 400
+        `embedding_dim_invalid` before the pgvector query, rather than failing as an
+        opaque 500. Retained for the Phase-B client-side parity path — the accurate
+        server-side selfie path is `/photo-search`. Requires explicit biometric
+        consent and the per-gallery `faceid_enabled` opt-in. Access is gated by the
+        gallery session/share/password, not a bearer token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [embedding, consent_given]
+              properties:
+                embedding:
+                  type: array
+                  description: 512-d insightface buffalo_l embedding (L2-normalized).
+                  minItems: 512
+                  maxItems: 512
+                  items:
+                    type: number
+                consent_given:
+                  type: boolean
+                  description: Explicit biometric consent (GAL-FR-107). Must be true.
+                threshold:
+                  type: number
+                  description: Optional cosine acceptance threshold, clamped 0.3–0.95 (default 0.6).
+      responses:
+        '200':
+          description: Gallery-scoped matches; `fallback_available` is always true (GAL-FR-109).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gallery_id:
+                    type: string
+                    format: uuid
+                  asset_ids:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  match_count:
+                    type: integer
+                  threshold:
+                    type: number
+                  fallback_available:
+                    type: boolean
+        '400':
+          description: |
+            Invalid request — missing embedding (`embedding required`), an embedding
+            that is not 512-dimensional (`embedding_dim_invalid`), or malformed JSON.
+        '403':
+          description: Biometric consent was not given (`biometric_consent_required`).
+        '404':
+          description: Gallery not found, or FaceID is disabled for this gallery.
+        '503':
+          description: Face-match service is unavailable (`faceid_service_unavailable`).
+
   /api/v1/assets/{id}/download:
     parameters:
       - $ref: '#/components/parameters/AssetIdPath'

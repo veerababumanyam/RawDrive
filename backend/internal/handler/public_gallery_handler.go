@@ -1928,6 +1928,16 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"embedding required"}`, http.StatusBadRequest)
 		return
 	}
+	// Dimension guard (F-1). The face_clusters column is vector(512) (migration
+	// 149), so a wrong-dimension embedding — a face-api.js 128-d descriptor or a
+	// 512-bin pixel histogram from a non-parity client — otherwise reaches
+	// FindSimilarFacesInGallery and fails as an opaque 500 (or returns garbage).
+	// Reject it early with a clear 400. The endpoint stays available for the
+	// Phase-B client-side buffalo_l parity path, which posts genuine 512-d vectors.
+	if len(req.Embedding) != faceEmbeddingDim {
+		http.Error(w, `{"error":"embedding_dim_invalid"}`, http.StatusBadRequest)
+		return
+	}
 
 	gallery, err := h.resolveGalleryForRequest(r, slug)
 	if err != nil || gallery == nil || !gallery.IsPublished {
