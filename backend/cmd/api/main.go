@@ -3261,7 +3261,21 @@ func main() {
 	// reports "disabled" without failing the overall status.
 	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, valkeyClient)
 	r.Get("/health/deep", deepHealth.Deep)
-	mountMetricsRoute(r, dbPool)
+
+	// PERF-RUM: Prometheus /metrics scrape (pgx pool + Core Web Vitals). The
+	// returned histogram is shared with the public RUM ingest handler below so
+	// browser-reported LCP/INP/CLS/FCP/TTFB land on the same /metrics endpoint.
+	webVitalsMetrics := mountMetricsRoute(r, dbPool)
+
+	// PERF-RUM: public, unauthenticated Core Web Vitals beacon ingest. It must
+	// capture field telemetry from anonymous public-gallery visitors as well as
+	// signed-in users, so it is mounted OUTSIDE the JWTAuth group. It carries no
+	// PII (metric name + route template + value only). The global per-IP limiter
+	// already applies via r.Use(globalLimiter); a tighter dedicated limiter
+	// blunts beacon flooding (a normal page emits ≈5 samples).
+	webVitalsHandler := handler.NewWebVitalsHandler(webVitalsMetrics)
+	rumLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "rum", 60, time.Minute)
+	r.With(rumLimiter).Post("/api/v1/rum", webVitalsHandler.Ingest)
 
 	// ──────────────────────── ISSUE-006 MFA Mount Gate ────────────────────────
 	//

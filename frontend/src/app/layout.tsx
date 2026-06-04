@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { WebVitalsReporter } from "@/components/observability/WebVitalsReporter";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import {
@@ -118,6 +119,10 @@ export default async function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col bg-surface font-sans text-text-primary">
+        {/* PERF-RUM: renders nothing; reports Core Web Vitals per route to
+            POST /api/v1/rum so field LCP/INP/CLS land on the Prometheus
+            /metrics scrape. */}
+        <WebVitalsReporter />
         <ThemeProvider>
           <AppShell>{children}</AppShell>
         </ThemeProvider>

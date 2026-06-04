@@ -25,11 +25,20 @@ import (
 // /health/deep and the Prometheus scrape convention. It MUST be network-
 // restricted at ingress (firewall / private network / scrape-only ACL) so the
 // pool internals are not exposed publicly.
-func mountMetricsRoute(r chi.Router, dbPool *pgxpool.Pool) {
+//
+// PERF-RUM: the same registry also holds the Core Web Vitals RUM histogram so
+// browser-reported LCP/INP/CLS/FCP/TTFB samples surface on this scrape. The
+// histogram is returned so the (public, rate-limited) /api/v1/rum ingest handler
+// can record into the very collector that /metrics exposes.
+func mountMetricsRoute(r chi.Router, dbPool *pgxpool.Pool) *observability.WebVitalsMetrics {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(observability.NewPoolCollector(func() observability.PoolStats {
 		return observability.PoolStatsFrom(dbPool.Stat())
 	}))
 
+	webVitals := observability.NewWebVitalsMetrics()
+	reg.MustRegister(webVitals)
+
 	r.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	return webVitals
 }
