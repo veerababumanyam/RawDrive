@@ -89,6 +89,81 @@ func ValkeyRateLimit(client ValkeyClient, keyFunc func(r *http.Request) string, 
 	}
 }
 
+// RateLimitWithValkey returns chi middleware that enforces a per-client-IP
+// sliding-window budget, preferring the cluster-wide Valkey backend and falling
+// back to a per-node in-memory limiter when Valkey is unavailable.
+//
+// Unlike ValkeyRateLimit (which fails OPEN — a nil or erroring client lets every
+// request through), this is FAIL-CLOSED: when client is nil (VALKEY_URL unset) or
+// IncrementSlidingWindow errors (a Valkey outage), the request is still enforced
+// by the in-memory limiter, so brute-force protection on auth surfaces is never
+// silently disabled. It is the intended replacement for the three in-memory
+// RateLimit limiters (credential 5/min, MFA-verify 10/min, global 600/min): when
+// Valkey is up the limit is cluster-wide and survives restarts; when it is down
+// each node still enforces locally.
+//
+// scope namespaces the Valkey key so the three buckets stay independent under the
+// shared "rl:" prefix. IP keying reuses clientIPForRateLimit, so the F-008
+// anti-spoofing policy (trust X-Forwarded-For only from configured proxy CIDRs)
+// applies on both the Valkey and the in-memory path.
+//
+// The returned reset func clears the in-memory fallback's counters; it is wired to
+// the dev-only test-reset endpoint. The test suite runs without VALKEY_URL, so it
+// exercises the in-memory path and the reset drains it.
+func RateLimitWithValkey(client ValkeyClient, scope string, maxRequests int, window time.Duration) (func(http.Handler) http.Handler, func()) {
+	memHandler, reset := RateLimitWithReset(maxRequests, window)
+	trusted := parseTrustedProxyCIDRs()
+
+	handler := func(next http.Handler) http.Handler {
+		// Build the in-memory fallback chain once per wrapped handler so a
+		// Valkey-down request is enforced by exactly the same per-node limiter
+		// (and shares its counter map) as the nil-client case.
+		memChain := memHandler(next)
+
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if client == nil {
+				// No Valkey configured — enforce per-node in-memory (fail-closed).
+				memChain.ServeHTTP(w, r)
+				return
+			}
+
+			ip := clientIPForRateLimit(r, trusted)
+			if ip == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			nowMs := time.Now().UnixMilli()
+			windowMs := window.Milliseconds()
+			count, allowed, err := client.IncrementSlidingWindow(r.Context(), "rl:"+scope+":"+ip, maxRequests, windowMs, nowMs)
+			if err != nil {
+				// Valkey errored — fall back to in-memory enforcement rather than
+				// failing open, so an outage never disables brute-force protection.
+				memChain.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(maxRequests))
+			remaining := maxRequests - count
+			if remaining < 0 {
+				remaining = 0
+			}
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+
+			if !allowed {
+				w.Header().Set("Retry-After", strconv.FormatInt(window.Milliseconds()/1000, 10))
+				// Match the in-memory limiter's body so callers/tests see the same
+				// 429 response regardless of which backend enforced it.
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	return handler, reset
+}
+
 // APIKeyRateLimitKeyFunc returns the middleware key for an authenticated
 // API key request. Intended to be passed as the keyFunc argument.
 func APIKeyRateLimitKeyFunc(r *http.Request) string {

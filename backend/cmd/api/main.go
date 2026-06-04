@@ -1017,6 +1017,33 @@ func loadEnvFiles(paths ...string) {
 // envIntOrDefault reads an integer env var, returning the default on missing
 // or unparseable values. Used for tunables like RATE_LIMIT_PER_MINUTE where
 // ops should be able to override without touching code.
+// newValkeyClient builds the Valkey sliding-window backend used by the rate
+// limiters. When VALKEY_URL is set it wraps a go-redis client in
+// RedisValkeyClient; when unset (or unparseable) it returns nil, and the
+// RateLimitWithValkey limiters fall back to per-node in-memory enforcement. A
+// startup ping is attempted and logged but is not fatal.
+func newValkeyClient() middleware.ValkeyClient {
+	vurl := os.Getenv("VALKEY_URL")
+	if vurl == "" {
+		log.Println("valkey: VALKEY_URL not set — using per-node in-memory rate limiting")
+		return nil
+	}
+	opts, parseErr := redis.ParseURL(vurl)
+	if parseErr != nil {
+		log.Printf("valkey: invalid VALKEY_URL %q: %v — using per-node in-memory rate limiting", vurl, parseErr)
+		return nil
+	}
+	rdb := redis.NewClient(opts)
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	if err := rdb.Ping(pingCtx).Err(); err != nil {
+		log.Printf("valkey: ping failed: %v — rate limiter enabled but will use in-memory fallback until backend recovers", err)
+	} else {
+		log.Printf("valkey: connected, cluster-wide sliding-window rate limiter enabled")
+	}
+	pingCancel()
+	return middleware.NewRedisValkeyClient(rdb)
+}
+
 func envIntOrDefault(key string, def int) int {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -1126,7 +1153,14 @@ func main() {
 		globalRateMax = 100000 // effectively unlimited in dev/test
 	}
 	log.Printf("Rate limit: %d requests / %s per client IP", globalRateMax, globalRateWindow)
-	r.Use(middleware.RateLimit(globalRateMax, globalRateWindow))
+	// Valkey sliding-window backend for cluster-wide rate limits. Built here,
+	// before the limiters that consume it, so the global, credential, and MFA
+	// limiters all route through the same backend. It is nil when VALKEY_URL is
+	// unset, in which case RateLimitWithValkey enforces per-node in-memory
+	// (fail-closed) rather than disabling the limit.
+	valkeyClient := newValkeyClient()
+	globalLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "global", globalRateMax, globalRateWindow)
+	r.Use(globalLimiter)
 
 	// ──────────────────────── Database Connection (shared M1 + M2) ────────────────
 	dbURL := os.Getenv("DATABASE_URL")
@@ -1509,7 +1543,7 @@ func main() {
 	// both the /auth and /api/v1/auth prefixes so an attacker cannot
 	// double their budget by alternating. Same rationale as the MFA
 	// verify limiter below.
-	credLimiter, resetCredLimiter := middleware.RateLimitWithReset(5, time.Minute)
+	credLimiter, resetCredLimiter := middleware.RateLimitWithValkey(valkeyClient, "cred", 5, time.Minute)
 	r.With(credLimiter).Post("/auth/register", authHandler.Register)
 	r.With(credLimiter).Post("/auth/login", authHandler.Login)
 	r.With(credLimiter).Post("/auth/verify-otp", authHandler.VerifyOTP)
@@ -1585,7 +1619,7 @@ func main() {
 	// mounts so an attacker cannot double their budget by hitting
 	// both paths. This cuts brute-force throughput against the 10^6
 	// TOTP code space while leaving legitimate retry-on-typo UX alive.
-	mfaVerifyLimiter := middleware.RateLimit(10, time.Minute)
+	mfaVerifyLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "mfa", 10, time.Minute)
 	// FIX (cobolt-fix 2026-04-11): chi panics when Mount() is called a
 	// second time on the same path ('/auth'), and '/auth' is already
 	// mounted above via authHandler.Routes(). Register the specific
@@ -1811,32 +1845,7 @@ func main() {
 	galleryAnalyticsSvc := service.NewGalleryAnalyticsService(galleryAnalyticsRepo)
 	webhookSvc := service.NewWebhookService(webhookRepo)
 	downloadSvc := service.NewDownloadService(assetRepo, galleryAssetRepo, storageProvider).WithDownloadRepo(downloadRepo)
-	// M14 GAL-FR-197: Valkey sliding-window rate limiter. When
-	// VALKEY_URL is set, construct a go-redis client and wrap it in
-	// the RedisValkeyClient. When unset, the limiter middleware is
-	// a no-op (all requests pass) so the build still works in dev
-	// without a Valkey instance. A startup ping is attempted and
-	// logged — a failed ping is not fatal because the middleware
-	// fails open on backend errors.
-	var valkeyClient middleware.ValkeyClient
-	if vurl := os.Getenv("VALKEY_URL"); vurl != "" {
-		opts, parseErr := redis.ParseURL(vurl)
-		if parseErr != nil {
-			log.Printf("valkey: invalid VALKEY_URL %q: %v — rate limiter disabled", vurl, parseErr)
-		} else {
-			rdb := redis.NewClient(opts)
-			pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
-			if err := rdb.Ping(pingCtx).Err(); err != nil {
-				log.Printf("valkey: ping failed: %v — rate limiter enabled but will fail-open until backend recovers", err)
-			} else {
-				log.Printf("valkey: connected, sliding-window rate limiter enabled")
-			}
-			pingCancel()
-			valkeyClient = middleware.NewRedisValkeyClient(rdb)
-		}
-	} else {
-		log.Println("valkey: VALKEY_URL not set — sliding-window rate limiter disabled")
-	}
+	// (Valkey client is built earlier, before the rate limiters that use it.)
 
 	productSvc := service.NewProductService(productRepo)
 	// Cart service uses productRepo for price snapshotting. The
