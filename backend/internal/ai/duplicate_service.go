@@ -118,55 +118,23 @@ func (s *DuplicateService) DetectDuplicates(ctx context.Context, workspaceID uui
 		return nil, fmt.Errorf("duplicate service: ann self-join: %w", err)
 	}
 
-	// Transitive union-find over the index-found candidate pairs. The self-join
-	// yields each pair from both ends (a→b and b→a); the both-grouped branch makes
-	// the duplicate row a no-op.
-	grouped := make(map[uuid.UUID]*DuplicateGroup)
-	assetToGroup := make(map[uuid.UUID]uuid.UUID)
+	// Collect the index-found candidate pairs, then group them. The self-join
+	// yields each pair from both ends (a→b and b→a).
+	var pairs []dupPair
 	for rows.Next() {
-		var aID, bID uuid.UUID
-		var sim float64
-		if err := rows.Scan(&aID, &bID, &sim); err != nil {
+		var p dupPair
+		if err := rows.Scan(&p.a, &p.b, &p.sim); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		gid1, ok1 := assetToGroup[aID]
-		gid2, ok2 := assetToGroup[bID]
-		switch {
-		case ok1 && ok2:
-			continue
-		case ok1:
-			g := grouped[gid1]
-			g.Members = append(g.Members, DuplicateGroupMember{
-				ID: uuid.New(), GroupID: gid1, AssetID: bID, SimilarityScore: sim,
-			})
-			assetToGroup[bID] = gid1
-		case ok2:
-			g := grouped[gid2]
-			g.Members = append(g.Members, DuplicateGroupMember{
-				ID: uuid.New(), GroupID: gid2, AssetID: aID, SimilarityScore: sim,
-			})
-			assetToGroup[aID] = gid2
-		default:
-			gid := uuid.New()
-			grouped[gid] = &DuplicateGroup{
-				ID:          gid,
-				WorkspaceID: workspaceID,
-				GalleryID:   galleryID,
-				Status:      "pending",
-				Members: []DuplicateGroupMember{
-					{ID: uuid.New(), GroupID: gid, AssetID: aID, SimilarityScore: 1.0, IsRepresentative: true},
-					{ID: uuid.New(), GroupID: gid, AssetID: bID, SimilarityScore: sim},
-				},
-			}
-			assetToGroup[aID] = gid
-			assetToGroup[bID] = gid
-		}
+		pairs = append(pairs, p)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
+	grouped := groupDuplicatePairs(workspaceID, galleryID, pairs)
 
 	// Persist groups
 	var result []DuplicateGroup
@@ -182,6 +150,84 @@ func (s *DuplicateService) DetectDuplicates(ctx context.Context, workspaceID uui
 	}
 
 	return result, nil
+}
+
+// dupPair is one index-found near-duplicate candidate (cosine sim >= threshold).
+type dupPair struct {
+	a, b uuid.UUID
+	sim  float64
+}
+
+// groupDuplicatePairs runs a transitive union-find over the candidate pairs and
+// returns the resulting duplicate groups keyed by id. A pair that bridges two
+// already-distinct groups MERGES them (the smaller into the larger), so a
+// chain-shaped near-duplicate cluster (A~B, B~C, C~D, with A and D not directly
+// similar) stays a single group regardless of the order the pairs arrive in. The
+// earlier version dropped such bridge pairs (the both-grouped branch was a no-op),
+// over-splitting a chain into two groups.
+func groupDuplicatePairs(workspaceID uuid.UUID, galleryID *uuid.UUID, pairs []dupPair) map[uuid.UUID]*DuplicateGroup {
+	grouped := make(map[uuid.UUID]*DuplicateGroup)
+	assetToGroup := make(map[uuid.UUID]uuid.UUID)
+	for _, p := range pairs {
+		gid1, ok1 := assetToGroup[p.a]
+		gid2, ok2 := assetToGroup[p.b]
+		switch {
+		case ok1 && ok2:
+			// Both already grouped. Same group → the symmetric (b,a) row, a no-op.
+			// Different groups → this pair bridges them, so merge.
+			if gid1 != gid2 {
+				mergeDuplicateGroups(grouped, assetToGroup, gid1, gid2)
+			}
+		case ok1:
+			g := grouped[gid1]
+			g.Members = append(g.Members, DuplicateGroupMember{
+				ID: uuid.New(), GroupID: gid1, AssetID: p.b, SimilarityScore: p.sim,
+			})
+			assetToGroup[p.b] = gid1
+		case ok2:
+			g := grouped[gid2]
+			g.Members = append(g.Members, DuplicateGroupMember{
+				ID: uuid.New(), GroupID: gid2, AssetID: p.a, SimilarityScore: p.sim,
+			})
+			assetToGroup[p.a] = gid2
+		default:
+			gid := uuid.New()
+			grouped[gid] = &DuplicateGroup{
+				ID:          gid,
+				WorkspaceID: workspaceID,
+				GalleryID:   galleryID,
+				Status:      "pending",
+				Members: []DuplicateGroupMember{
+					{ID: uuid.New(), GroupID: gid, AssetID: p.a, SimilarityScore: 1.0, IsRepresentative: true},
+					{ID: uuid.New(), GroupID: gid, AssetID: p.b, SimilarityScore: p.sim},
+				},
+			}
+			assetToGroup[p.a] = gid
+			assetToGroup[p.b] = gid
+		}
+	}
+	return grouped
+}
+
+// mergeDuplicateGroups folds the smaller of two groups into the larger: it moves
+// every member over (re-pointing its GroupID and clearing its representative flag
+// so the merged group keeps exactly one representative), repoints assetToGroup,
+// and deletes the emptied group. Merging smaller-into-larger keeps the total
+// repointing work near-linear.
+func mergeDuplicateGroups(grouped map[uuid.UUID]*DuplicateGroup, assetToGroup map[uuid.UUID]uuid.UUID, gid1, gid2 uuid.UUID) {
+	from, into := gid1, gid2
+	if len(grouped[gid1].Members) >= len(grouped[gid2].Members) {
+		from, into = gid2, gid1
+	}
+	src := grouped[from]
+	dst := grouped[into]
+	for _, m := range src.Members {
+		m.GroupID = into
+		m.IsRepresentative = false
+		dst.Members = append(dst.Members, m)
+		assetToGroup[m.AssetID] = into
+	}
+	delete(grouped, from)
 }
 
 func (s *DuplicateService) createDuplicateGroup(ctx context.Context, group *DuplicateGroup) error {
