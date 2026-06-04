@@ -91,9 +91,10 @@ describe("GallerySlideshow", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("retries playback on the first user gesture when unmuted autoplay is blocked", async () => {
-    // First play() rejects (browser autoplay policy); the document gesture
-    // listener should retry play() on the first pointerdown.
+  it("plays muted then auto-unmutes on the first user gesture when unmuted autoplay is blocked", async () => {
+    // Unmuted play() is rejected by the browser autoplay policy. The effect
+    // then plays MUTED (so the track is already running) and auto-unmutes on
+    // the first interaction anywhere — the visitor never touches the control.
     const play = vi
       .fn()
       .mockRejectedValueOnce(new Error("NotAllowedError"))
@@ -101,23 +102,29 @@ describe("GallerySlideshow", () => {
     window.HTMLMediaElement.prototype.play = play;
 
     setup({ musicUrl: "/api/v1/public/galleries/x/music" });
+    const audio = screen.getByTestId("slideshow-audio") as HTMLAudioElement;
 
-    // Let the rejected play() promise settle so the listener is registered.
+    // Settle the rejected unmuted attempt: call #1 unmuted (rejected), call #2
+    // the muted retry that keeps the track running and in sync.
     await act(async () => {
       await Promise.resolve();
+      await Promise.resolve();
     });
-    expect(play).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(audio.muted).toBe(true);
 
+    // First interaction anywhere → unmute + play (call #3).
     act(() => {
       fireEvent.pointerDown(document);
     });
-    expect(play).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenCalledTimes(3);
+    expect(audio.muted).toBe(false);
 
     // The one-time listener removed itself — a second gesture does not replay.
     act(() => {
       fireEvent.pointerDown(document);
     });
-    expect(play).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenCalledTimes(3);
   });
 
   it("omits audio + mute control when there is no music", () => {

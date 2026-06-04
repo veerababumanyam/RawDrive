@@ -113,20 +113,31 @@ export function GallerySlideshow({
     return () => window.removeEventListener("keydown", onKey);
   }, [next, prev, onClose]);
 
-  // Sync the <audio> element with play/mute state (external-system sync).
-  // Music starts UNMUTED, so the initial play() can be rejected by the
-  // browser's autoplay policy until the page has seen a user gesture. On a
-  // rejection we register a ONE-TIME document gesture listener that retries
-  // play() (still unmuted) on the first interaction, then removes itself.
+  // Sync the <audio> element with play/mute state and start the music WITH
+  // SOUND as early as the browser permits.
+  //
+  // Browsers (Chrome/Safari/Firefox) block UNMUTED audio autoplay until the
+  // page has had a user gesture — a non-bypassable anti-annoyance policy, so
+  // "sound on cold load with zero interaction" is impossible on the web. We do
+  // the maximum the platform allows:
+  //   1. Try to play UNMUTED (succeeds for returning visitors / high media
+  //      engagement / once the page has had any prior gesture).
+  //   2. If blocked, immediately play MUTED — which IS allowed — so the track
+  //      is already running and in sync, then UNMUTE on the very first
+  //      interaction of ANY kind (click, key, tap — anywhere on the page), so
+  //      the visitor never has to find the unmute control.
+  // An explicit mute (the mute button → `muted` state) is always respected and
+  // suppresses the auto-unmute.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !musicUrl) return;
-    audio.muted = muted;
 
     if (!playing) {
       audio.pause?.();
       return;
     }
+
+    audio.muted = muted;
 
     const gestureEvents = ["pointerdown", "keydown", "touchstart"] as const;
     let cleanedUp = false;
@@ -137,15 +148,17 @@ export function GallerySlideshow({
         document.removeEventListener(evt, onFirstGesture);
       }
     };
+    // First real interaction → bring the sound on (unless the user chose mute).
     const onFirstGesture = () => {
       removeGestureListener();
       const el = audioRef.current;
-      if (!el) return;
+      if (!el || muted) return;
+      el.muted = false;
       try {
         const p = el.play?.();
         if (p && typeof p.catch === "function") p.catch(() => {});
       } catch {
-        /* still blocked or unsupported — non-fatal */
+        /* non-fatal */
       }
     };
 
@@ -153,10 +166,19 @@ export function GallerySlideshow({
       const p = audio.play?.();
       if (p && typeof p.catch === "function") {
         p.catch(() => {
-          // Unmuted autoplay was blocked — retry on the first user gesture.
-          // Guard against an unmount racing this pending rejection: if the
-          // effect already cleaned up, do not re-register orphaned listeners.
+          // Unmuted autoplay blocked. Play MUTED now so the track is running
+          // and in sync, then unmute on the first user gesture. Guard against
+          // an unmount racing this pending rejection.
           if (cleanedUp) return;
+          const el = audioRef.current;
+          if (!el || muted) return;
+          el.muted = true;
+          try {
+            const mp = el.play?.();
+            if (mp && typeof mp.catch === "function") mp.catch(() => {});
+          } catch {
+            /* non-fatal */
+          }
           for (const evt of gestureEvents) {
             document.addEventListener(evt, onFirstGesture, { once: false });
           }
