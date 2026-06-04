@@ -40,6 +40,12 @@ type PublicGalleryHandler struct {
 	// FACE_SVC_URL is unset — the endpoint returns 503 in that case
 	// rather than throwing the request away silently.
 
+	// faceThresholds are the PhotoSearch acceptance gates, resolved from
+	// platform_settings(ai.face_*) → env → defaults and shared with the
+	// dashboard FaceService so the two search paths cannot drift. Defaults to
+	// the historical hardcoded values for handlers built without WithFaceThresholds.
+	faceThresholds ai.FaceThresholds
+
 	// 2026-05-18: watermark baking for the public download path. Optional —
 	// when nil, PublicAssetDownload streams the raw original. When set and
 	// the gallery's watermark_config is enabled, the original is decoded,
@@ -246,13 +252,26 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 }
 
 func NewPublicGalleryHandler(gs publicGalleryResolver, as *service.AssetService, ss *service.ShareLinkService) *PublicGalleryHandler {
-	h := &PublicGalleryHandler{gallerySvc: gs, assetSvc: as, shareSvc: ss}
+	h := &PublicGalleryHandler{
+		gallerySvc:     gs,
+		assetSvc:       as,
+		shareSvc:       ss,
+		faceThresholds: ai.DefaultFaceThresholds(),
+	}
 	// Default the share-session seam to the concrete service. A nil *ShareLinkService
 	// stored in an interface is still non-nil, so tryBindShareSession guards on
 	// the underlying shareSvc being nil before invoking it.
 	if ss != nil {
 		h.shareSession = ss
 	}
+	return h
+}
+
+// WithFaceThresholds overrides the PhotoSearch acceptance gates (resolved from
+// platform_settings(ai.face_*) → env → defaults in main.go, shared with the
+// dashboard FaceService). Returns the receiver so callers can chain.
+func (h *PublicGalleryHandler) WithFaceThresholds(t ai.FaceThresholds) *PublicGalleryHandler {
+	h.faceThresholds = t
 	return h
 }
 
@@ -2277,12 +2296,13 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 	// because webcam captures vs studio photos sit in the 0.35-0.55 band
 	// of cosine similarity, and the cluster-vote step absorbs any spurious
 	// neighbours.
-	const (
-		retrievalThreshold = 0.30
-		retrievalLimit     = 20
-		minBestSimilarity  = 0.40
-		minAggregateScore  = 0.80
-	)
+	// Acceptance gates, shared with the dashboard FaceService via the injected
+	// faceThresholds (platform_settings(ai.face_*) → env → defaults). Bound to
+	// locals so the cluster-voting logic below reads unchanged.
+	retrievalThreshold := h.faceThresholds.RetrievalFloor
+	retrievalLimit := h.faceThresholds.RetrievalLimit
+	minBestSimilarity := h.faceThresholds.MinBest
+	minAggregateScore := h.faceThresholds.MinAggregate
 
 	matches, err := h.faceRepo.FindSimilarFacesInGalleryScored(r.Context(), best.Embedding, gallery.ID, retrievalThreshold, retrievalLimit)
 	if err != nil {

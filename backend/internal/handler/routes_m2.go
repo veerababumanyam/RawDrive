@@ -435,6 +435,13 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	if deps.FaceClient != nil {
 		publicHandler = publicHandler.WithFaceClient(deps.FaceClient)
 	}
+	// Configurable PhotoSearch acceptance gates (platform_settings(ai.face_*) →
+	// env → defaults), shared with the dashboard FaceService. Only override when
+	// explicitly provided; a zero value keeps the handler's built-in defaults so
+	// existing callers/tests are unaffected.
+	if deps.FaceThresholds != (ai.FaceThresholds{}) {
+		publicHandler = publicHandler.WithFaceThresholds(deps.FaceThresholds)
+	}
 	// PUB-CACHE: back the public studio-profile landing read with the shared
 	// (Valkey) cache when available so anonymous studio-profile views collapse to
 	// one DB round-trip per short TTL across app nodes.
@@ -620,6 +627,9 @@ type M2Dependencies struct {
 	FaceClient *face.Client  // optional face-svc client — when wired
 	// enables the anonymous Photo Search endpoint on the public side.
 	// Nil-safe: when unwired the handler returns 503.
+	// FaceThresholds: PhotoSearch acceptance gates (platform_settings(ai.face_*)
+	// → env → defaults). Zero value keeps the handler's built-in defaults.
+	FaceThresholds ai.FaceThresholds
 
 	// F-009: brute-force defence for the public gallery PIN gate. Optional —
 	// when nil, RequirePINRateLimit is a no-op pass-through (matches the M8

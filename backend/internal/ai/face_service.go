@@ -22,14 +22,17 @@ type FaceService struct {
 	faceRepo   *FaceRepo
 	jobRepo    *JobRepo
 	store      storage.Provider
-	faceClient *face.Client // required; the face-svc detection backend.
+	faceClient *face.Client   // required; the face-svc detection backend.
+	thresholds FaceThresholds // clustering/search acceptance gates (configurable).
 }
 
 // NewFaceService creates a FaceService. The face-svc detection backend is
-// required and is wired via WithFaceClient.
+// required and is wired via WithFaceClient. Acceptance thresholds default to
+// the historical hardcoded values; override them with WithThresholds.
 func NewFaceService(faceRepo *FaceRepo, jobRepo *JobRepo, store storage.Provider) *FaceService {
 	return &FaceService{
 		faceRepo: faceRepo, jobRepo: jobRepo, store: store,
+		thresholds: DefaultFaceThresholds(),
 	}
 }
 
@@ -37,6 +40,14 @@ func NewFaceService(faceRepo *FaceRepo, jobRepo *JobRepo, store storage.Provider
 // receiver so wiring stays chainable in main.go.
 func (s *FaceService) WithFaceClient(c *face.Client) *FaceService {
 	s.faceClient = c
+	return s
+}
+
+// WithThresholds overrides the clustering/search acceptance gates (resolved
+// from platform_settings(ai.face_*) → env → defaults in main.go). Returns the
+// receiver so wiring stays chainable.
+func (s *FaceService) WithThresholds(t FaceThresholds) *FaceService {
+	s.thresholds = t
 	return s
 }
 
@@ -186,7 +197,7 @@ func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, wo
 		// recognition operating point for buffalo_l in production setups;
 		// raise toward 0.6 if false-positive merges become a problem,
 		// lower toward 0.5 if same-person clusters still split.
-		similar, err := s.faceRepo.FindSimilarFaces(ctx, face.Embedding, workspaceID, 0.55, 1)
+		similar, err := s.faceRepo.FindSimilarFaces(ctx, face.Embedding, workspaceID, s.thresholds.ClusterMerge, 1)
 		if err != nil {
 			log.Printf("face service: find similar failed for face %s: %v", face.ID, err)
 			continue
@@ -315,12 +326,13 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 		}
 	}
 
-	const (
-		retrievalThreshold = 0.30
-		retrievalLimit     = 20
-		minBestSimilarity  = 0.40
-		minAggregateScore  = 0.80
-	)
+	// Acceptance gates (configurable via platform_settings(ai.face_*) → env →
+	// defaults; injected as s.thresholds). Bound to locals so the voting logic
+	// below reads unchanged.
+	retrievalThreshold := s.thresholds.RetrievalFloor
+	retrievalLimit := s.thresholds.RetrievalLimit
+	minBestSimilarity := s.thresholds.MinBest
+	minAggregateScore := s.thresholds.MinAggregate
 
 	matches, err := s.faceRepo.FindSimilarFacesScored(ctx, best.Embedding, workspaceID, retrievalThreshold, retrievalLimit)
 	if err != nil {

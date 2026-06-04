@@ -1469,6 +1469,19 @@ func main() {
 	googleClientSecret := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_client_secret", "GOOGLE_CLIENT_SECRET")
 	googleRedirectURL := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_redirect_url", "GOOGLE_REDIRECT_URL")
 	googleStateKey := platformSettingValue(context.Background(), platformSettingsRepo, "auth", "google_oauth_state_key", "GOOGLE_OAUTH_STATE_KEY")
+
+	// Face clustering/search acceptance gates: platform_settings(ai.face_*) →
+	// env → historical defaults (F-4). Resolved once and shared by the dashboard
+	// FaceService and the public PhotoSearch path so the two cannot drift, and so
+	// tuning no longer requires a code change — only a settings update + restart.
+	faceThresholds := ai.ResolveFaceThresholds(
+		platformSettingValue(context.Background(), platformSettingsRepo, "ai", "face_cluster_threshold", "FACE_CLUSTER_THRESHOLD"),
+		platformSettingValue(context.Background(), platformSettingsRepo, "ai", "face_retrieval_threshold", "FACE_RETRIEVAL_THRESHOLD"),
+		platformSettingValue(context.Background(), platformSettingsRepo, "ai", "face_min_best_similarity", "FACE_MIN_BEST_SIMILARITY"),
+		platformSettingValue(context.Background(), platformSettingsRepo, "ai", "face_min_aggregate_score", "FACE_MIN_AGGREGATE_SCORE"),
+		platformSettingValue(context.Background(), platformSettingsRepo, "ai", "face_retrieval_limit", "FACE_RETRIEVAL_LIMIT"),
+	)
+
 	if err := validateGoogleRedirectURLForEnv(googleRedirectURL, strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); err != nil {
 		log.Printf("Google OAuth disabled: invalid auth.google_redirect_url / GOOGLE_REDIRECT_URL %q: %v", googleRedirectURL, err)
 		googleRedirectURL = ""
@@ -2178,6 +2191,9 @@ func main() {
 			Pool:       dbPool,
 			FaceRepo:   ai.NewFaceRepo(dbPool),
 			FaceClient: earlyFaceClient, // nil when FACE_SVC_URL unset → endpoint returns 503
+			// Shared PhotoSearch acceptance gates so the public path matches the
+			// dashboard FaceService (resolved above; defaults preserve behaviour).
+			FaceThresholds: faceThresholds,
 			// Subscription upgrade payments via Razorpay/PhonePe. Credentials
 			// resolve from platform_settings first, then environment fallback.
 			SubscriptionUpgradeHandler: handler.NewSubscriptionUpgradeHandlerFromSettings(
@@ -2464,7 +2480,7 @@ func main() {
 		geminiClient := ai.NewGeminiClient(geminiModelID).WithEmbeddingModel(embeddingModel)
 
 		// AI services
-		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, storageProvider)
+		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, storageProvider).WithThresholds(faceThresholds)
 
 		// Face recognition runs on the face-svc Python sidecar (insightface,
 		// 512-d embeddings), reached on the compose network via FACE_SVC_URL
