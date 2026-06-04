@@ -29,6 +29,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rawdrive/backend/internal/dbretry"
 )
 
 // EntryType enumerates allowed upload_ledger_entries.entry_type values.
@@ -242,67 +244,68 @@ func (s *Service) reserveDB(ctx context.Context, in ReserveInput, entryType Entr
 		return existing, nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Balance gate — only when NOT in enterprise unlimited mode.
-	//
-	// M40 PERF-002: the gate now reads from upload_credit_balance_rollup
-	// (migration 101) in O(1) per workspace instead of scanning every
-	// ledger row. SELECT ... FOR UPDATE on the single rollup row still
-	// serialises concurrent reservations against the same workspace so
-	// only one can commit when balance is tight — the NFR-UCR-R2 contract
-	// is preserved. ErrNoRows means the workspace has never had a ledger
-	// entry (trigger-created row is absent), which is equivalent to
-	// available=0; the reserve below will create the row via its trigger.
-	if entryType == EntryReserve {
-		var available int64
-		err = tx.QueryRow(ctx, `
-			SELECT total_credits
-			  FROM upload_credit_balance_rollup
-			 WHERE workspace_id = $1
-			 FOR UPDATE
-		`, in.WorkspaceID).Scan(&available)
-		if errors.Is(err, pgx.ErrNoRows) {
-			available = 0
-			err = nil
-		}
-		if err != nil {
-			return nil, fmt.Errorf("upload/credit: balance query: %w", err)
-		}
-		if available < in.AmountCredits {
-			return nil, &InsufficientBalanceDetails{
-				Required:  in.AmountCredits,
-				Available: available,
-				Shortfall: in.AmountCredits - available,
+	// DB-6b: the whole transaction is retried on transient errors
+	// (serialization_failure 40001 / deadlock_detected 40P01 / pooler bounce).
+	// reservationID is generated inside the closure so each retried attempt
+	// posts a fresh row; a rolled-back attempt leaves no partial state.
+	var reservationID uuid.UUID
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		// Balance gate — only when NOT in enterprise unlimited mode.
+		//
+		// M40 PERF-002: the gate now reads from upload_credit_balance_rollup
+		// (migration 101) in O(1) per workspace instead of scanning every
+		// ledger row. SELECT ... FOR UPDATE on the single rollup row still
+		// serialises concurrent reservations against the same workspace so
+		// only one can commit when balance is tight — the NFR-UCR-R2 contract
+		// is preserved. ErrNoRows means the workspace has never had a ledger
+		// entry (trigger-created row is absent), which is equivalent to
+		// available=0; the reserve below will create the row via its trigger.
+		if entryType == EntryReserve {
+			var available int64
+			qErr := tx.QueryRow(ctx, `
+				SELECT total_credits
+				  FROM upload_credit_balance_rollup
+				 WHERE workspace_id = $1
+				 FOR UPDATE
+			`, in.WorkspaceID).Scan(&available)
+			if errors.Is(qErr, pgx.ErrNoRows) {
+				available = 0
+				qErr = nil
+			}
+			if qErr != nil {
+				return fmt.Errorf("upload/credit: balance query: %w", qErr)
+			}
+			if available < in.AmountCredits {
+				return &InsufficientBalanceDetails{
+					Required:  in.AmountCredits,
+					Available: available,
+					Shortfall: in.AmountCredits - available,
+				}
 			}
 		}
-	}
 
-	// Signed amount: reserve is negative, unlimited_passthrough is zero
-	// (it doesn't debit the balance — it's just a trace).
-	signed := -in.AmountCredits
-	if entryType == EntryUnlimitedPassthrough {
-		signed = 0
-	}
+		// Signed amount: reserve is negative, unlimited_passthrough is zero
+		// (it doesn't debit the balance — it's just a trace).
+		signed := -in.AmountCredits
+		if entryType == EntryUnlimitedPassthrough {
+			signed = 0
+		}
 
-	reservationID := uuid.New()
-	_, err = tx.Exec(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits,
-			idempotency_key, upload_session_id, created_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, reservationID, in.WorkspaceID, string(entryType), signed,
-		in.IdempotencyKey, in.UploadSessionID, in.CreatedBy)
+		reservationID = uuid.New()
+		_, execErr := tx.Exec(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits,
+				idempotency_key, upload_session_id, created_by
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, reservationID, in.WorkspaceID, string(entryType), signed,
+			in.IdempotencyKey, in.UploadSessionID, in.CreatedBy)
+		if execErr != nil {
+			return fmt.Errorf("upload/credit: insert reserve entry: %w", execErr)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert reserve entry: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit reserve: %w", err)
+		return nil, err
 	}
 
 	return &ReservationResult{
@@ -338,74 +341,80 @@ func (s *Service) Consume(ctx context.Context, in ConsumeInput) (*LedgerEntry, e
 }
 
 func (s *Service) consumeDB(ctx context.Context, in ConsumeInput) (*LedgerEntry, error) {
-	tx, err := s.pool.Begin(ctx)
+	// DB-6b: retry the whole transaction on transient errors. The result is
+	// captured into `result` only on the committed success path; a retried
+	// attempt rolls back fully and re-runs from a clean state.
+	var result *LedgerEntry
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		// Look up the reservation row to settle — with FOR UPDATE to block
+		// concurrent Consume/Refund on the same reservation.
+		var workspaceID uuid.UUID
+		var amountCredits int64
+		var entryType string
+		lookupErr := tx.QueryRow(ctx, `
+			SELECT workspace_id, amount_credits, entry_type
+			  FROM upload_ledger_entries
+			 WHERE id = $1
+			 FOR UPDATE
+		`, in.ReservationID).Scan(&workspaceID, &amountCredits, &entryType)
+		if errors.Is(lookupErr, pgx.ErrNoRows) {
+			return ErrReservationNotFound
+		}
+		if lookupErr != nil {
+			return fmt.Errorf("upload/credit: lookup reservation: %w", lookupErr)
+		}
+		if entryType != string(EntryReserve) && entryType != string(EntryUnlimitedPassthrough) {
+			return fmt.Errorf("%w: entry_type=%s", ErrAlreadySettled, entryType)
+		}
+
+		// Idempotency: return existing consume for this reservation + key.
+		// M40-CODE-004: read the existing row inside the same tx so the
+		// lookup and the decision share one visibility snapshot.
+		var existingID uuid.UUID
+		idemErr := tx.QueryRow(ctx, `
+			SELECT id FROM upload_ledger_entries
+			 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
+		`, workspaceID, in.IdempotencyKey, string(EntryConsume)).Scan(&existingID)
+		if idemErr == nil {
+			existing, readErr := s.readEntryByID(ctx, tx, existingID)
+			if readErr != nil {
+				return readErr
+			}
+			result = existing
+			return nil
+		}
+
+		// amount_credits on a reserve is negative; consume posts the same
+		// negative amount under entry_type=consume to keep the signed sum
+		// stable (reservation is settled without changing the balance).
+		consumeID := uuid.New()
+		refID := in.ReservationID
+		_, execErr := tx.Exec(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits,
+				idempotency_key, reservation_ref_id
+			) VALUES ($1, $2, $3, $4, $5, $6)
+		`, consumeID, workspaceID, string(EntryConsume), amountCredits,
+			in.IdempotencyKey, refID)
+		if execErr != nil {
+			return fmt.Errorf("upload/credit: insert consume: %w", execErr)
+		}
+
+		result = &LedgerEntry{
+			ID:               consumeID,
+			WorkspaceID:      workspaceID,
+			EntryType:        EntryConsume,
+			AmountCredits:    amountCredits,
+			IdempotencyKey:   in.IdempotencyKey,
+			ReservationRefID: &refID,
+			CreatedAt:        s.now(),
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+		return nil, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Look up the reservation row to settle — with FOR UPDATE to block
-	// concurrent Consume/Refund on the same reservation.
-	var workspaceID uuid.UUID
-	var amountCredits int64
-	var entryType string
-	err = tx.QueryRow(ctx, `
-		SELECT workspace_id, amount_credits, entry_type
-		  FROM upload_ledger_entries
-		 WHERE id = $1
-		 FOR UPDATE
-	`, in.ReservationID).Scan(&workspaceID, &amountCredits, &entryType)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrReservationNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: lookup reservation: %w", err)
-	}
-	if entryType != string(EntryReserve) && entryType != string(EntryUnlimitedPassthrough) {
-		return nil, fmt.Errorf("%w: entry_type=%s", ErrAlreadySettled, entryType)
-	}
-
-	// Idempotency: return existing consume for this reservation + key.
-	// M40-CODE-004: read the existing row inside the same tx so the
-	// lookup and the decision share one visibility snapshot.
-	var existingID uuid.UUID
-	err = tx.QueryRow(ctx, `
-		SELECT id FROM upload_ledger_entries
-		 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
-	`, workspaceID, in.IdempotencyKey, string(EntryConsume)).Scan(&existingID)
-	if err == nil {
-		return s.readEntryByID(ctx, tx, existingID)
-	}
-
-	// amount_credits on a reserve is negative; consume posts the same
-	// negative amount under entry_type=consume to keep the signed sum
-	// stable (reservation is settled without changing the balance).
-	consumeID := uuid.New()
-	refID := in.ReservationID
-	_, err = tx.Exec(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits,
-			idempotency_key, reservation_ref_id
-		) VALUES ($1, $2, $3, $4, $5, $6)
-	`, consumeID, workspaceID, string(EntryConsume), amountCredits,
-		in.IdempotencyKey, refID)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert consume: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit consume: %w", err)
-	}
-
-	return &LedgerEntry{
-		ID:               consumeID,
-		WorkspaceID:      workspaceID,
-		EntryType:        EntryConsume,
-		AmountCredits:    amountCredits,
-		IdempotencyKey:   in.IdempotencyKey,
-		ReservationRefID: &refID,
-		CreatedAt:        s.now(),
-	}, nil
+	return result, nil
 }
 
 // Refund restores the balance by posting a refund entry against a
@@ -430,73 +439,77 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*LedgerEntry, err
 }
 
 func (s *Service) refundDB(ctx context.Context, in RefundInput) (*LedgerEntry, error) {
-	tx, err := s.pool.Begin(ctx)
+	// DB-6b: retry the whole transaction on transient errors.
+	var result *LedgerEntry
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		var workspaceID uuid.UUID
+		var amountCredits int64
+		var entryType string
+		lookupErr := tx.QueryRow(ctx, `
+			SELECT workspace_id, amount_credits, entry_type
+			  FROM upload_ledger_entries
+			 WHERE id = $1
+			 FOR UPDATE
+		`, in.ReservationID).Scan(&workspaceID, &amountCredits, &entryType)
+		if errors.Is(lookupErr, pgx.ErrNoRows) {
+			return ErrReservationNotFound
+		}
+		if lookupErr != nil {
+			return fmt.Errorf("upload/credit: lookup reservation: %w", lookupErr)
+		}
+		if entryType != string(EntryReserve) {
+			return fmt.Errorf("%w: entry_type=%s", ErrAlreadySettled, entryType)
+		}
+
+		// Idempotency: same key returns the existing refund. Read the row
+		// inside tx (M40-CODE-004) so the whole idempotency-replay path
+		// observes one consistent snapshot.
+		var existingID uuid.UUID
+		idemErr := tx.QueryRow(ctx, `
+			SELECT id FROM upload_ledger_entries
+			 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
+		`, workspaceID, in.IdempotencyKey, string(EntryRefund)).Scan(&existingID)
+		if idemErr == nil {
+			existing, readErr := s.readEntryByID(ctx, tx, existingID)
+			if readErr != nil {
+				return readErr
+			}
+			result = existing
+			return nil
+		}
+
+		// refund posts the positive counterpart (-amountCredits on a reserve
+		// was negative; +amountCredits on refund restores the balance).
+		refundID := uuid.New()
+		refID := in.ReservationID
+		positive := -amountCredits
+		_, execErr := tx.Exec(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits,
+				idempotency_key, reservation_ref_id, reason
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, refundID, workspaceID, string(EntryRefund), positive,
+			in.IdempotencyKey, refID, in.Reason)
+		if execErr != nil {
+			return fmt.Errorf("upload/credit: insert refund: %w", execErr)
+		}
+
+		result = &LedgerEntry{
+			ID:               refundID,
+			WorkspaceID:      workspaceID,
+			EntryType:        EntryRefund,
+			AmountCredits:    positive,
+			IdempotencyKey:   in.IdempotencyKey,
+			ReservationRefID: &refID,
+			Reason:           in.Reason,
+			CreatedAt:        s.now(),
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+		return nil, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	var workspaceID uuid.UUID
-	var amountCredits int64
-	var entryType string
-	err = tx.QueryRow(ctx, `
-		SELECT workspace_id, amount_credits, entry_type
-		  FROM upload_ledger_entries
-		 WHERE id = $1
-		 FOR UPDATE
-	`, in.ReservationID).Scan(&workspaceID, &amountCredits, &entryType)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrReservationNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: lookup reservation: %w", err)
-	}
-	if entryType != string(EntryReserve) {
-		return nil, fmt.Errorf("%w: entry_type=%s", ErrAlreadySettled, entryType)
-	}
-
-	// Idempotency: same key returns the existing refund. Read the row
-	// inside tx (M40-CODE-004) so the whole idempotency-replay path
-	// observes one consistent snapshot.
-	var existingID uuid.UUID
-	err = tx.QueryRow(ctx, `
-		SELECT id FROM upload_ledger_entries
-		 WHERE workspace_id = $1 AND idempotency_key = $2 AND entry_type = $3
-	`, workspaceID, in.IdempotencyKey, string(EntryRefund)).Scan(&existingID)
-	if err == nil {
-		return s.readEntryByID(ctx, tx, existingID)
-	}
-
-	// refund posts the positive counterpart (-amountCredits on a reserve
-	// was negative; +amountCredits on refund restores the balance).
-	refundID := uuid.New()
-	refID := in.ReservationID
-	positive := -amountCredits
-	_, err = tx.Exec(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits,
-			idempotency_key, reservation_ref_id, reason
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, refundID, workspaceID, string(EntryRefund), positive,
-		in.IdempotencyKey, refID, in.Reason)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert refund: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit refund: %w", err)
-	}
-
-	return &LedgerEntry{
-		ID:               refundID,
-		WorkspaceID:      workspaceID,
-		EntryType:        EntryRefund,
-		AmountCredits:    positive,
-		IdempotencyKey:   in.IdempotencyKey,
-		ReservationRefID: &refID,
-		Reason:           in.Reason,
-		CreatedAt:        s.now(),
-	}, nil
+	return result, nil
 }
 
 // Balance returns the current per-workspace breakdown.
@@ -862,86 +875,87 @@ func (s *Service) purchaseDB(ctx context.Context, in PurchaseInput) (*PurchaseRe
 		return existing, nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	// DB-6b: retry the whole transaction on transient errors. All generated
+	// ids + the result are produced inside the closure so a retried attempt
+	// posts fresh rows from a clean (rolled-back) state.
+	var result *PurchaseResult
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		// Resolve package + active rate card inside the tx. The partial unique
+		// index upload_rate_cards_active_uniq guarantees at most one active row
+		// per package; the JOIN is 1:1. Schema note: upload_rate_cards stores
+		// price_paise; upload_purchases stores amount_inr_paise (same semantic,
+		// different column name — the credit.go boundary translates).
+		var credits, pricePaise int64
+		var currency string
+		lookupErr := tx.QueryRow(ctx, `
+			SELECT p.credits, r.price_paise, r.currency
+			  FROM upload_packages p
+			  JOIN upload_rate_cards r
+			    ON r.package_code = p.code AND r.effective_to IS NULL
+			 WHERE p.code = $1 AND p.active = TRUE
+		`, in.PackageCode).Scan(&credits, &pricePaise, &currency)
+		if errors.Is(lookupErr, pgx.ErrNoRows) {
+			return ErrPackageNotFound
+		}
+		if lookupErr != nil {
+			return fmt.Errorf("upload/credit: package lookup: %w", lookupErr)
+		}
+
+		// Insert the purchase row. Column names match the canonical schema:
+		// amount_inr_paise (not price_paise) and gateway_payment_id (not gateway_txn_id).
+		// UNIQUE (workspace_id, idempotency_key) on upload_purchases keeps
+		// webhook replay idempotent at the DB level even if two concurrent
+		// Purchases slip past the pre-tx check.
+		purchaseID := uuid.New()
+		_, execErr := tx.Exec(ctx, `
+			INSERT INTO upload_purchases (
+				id, workspace_id, idempotency_key, amount_credits,
+				amount_inr_paise, gateway, gateway_payment_id, status, confirmed_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', now())
+		`, purchaseID, in.WorkspaceID, in.IdempotencyKey, credits,
+			pricePaise, in.Gateway, in.GatewayTxnID)
+		if execErr != nil {
+			return fmt.Errorf("upload/credit: insert purchase: %w", execErr)
+		}
+
+		// Insert ledger entry. Positive amount_credits — the trigger on
+		// upload_ledger_entries updates upload_credit_balance_rollup automatically.
+		ledgerID := uuid.New()
+		var createdAt time.Time
+		ledgerErr := tx.QueryRow(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits,
+				idempotency_key, purchase_id
+			) VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING created_at
+		`, ledgerID, in.WorkspaceID, string(EntryPurchase), credits,
+			in.IdempotencyKey, purchaseID).Scan(&createdAt)
+		if ledgerErr != nil {
+			return fmt.Errorf("upload/credit: insert ledger: %w", ledgerErr)
+		}
+
+		result = &PurchaseResult{
+			LedgerEntry: &LedgerEntry{
+				ID:             ledgerID,
+				WorkspaceID:    in.WorkspaceID,
+				EntryType:      EntryPurchase,
+				AmountCredits:  credits,
+				IdempotencyKey: in.IdempotencyKey,
+				PurchaseID:     &purchaseID,
+				CreatedAt:      createdAt,
+			},
+			PackageCode: in.PackageCode,
+			Credits:     credits,
+			PricePaise:  pricePaise,
+			Currency:    currency,
+			WasReplay:   false,
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+		return nil, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Resolve package + active rate card inside the tx. The partial unique
-	// index upload_rate_cards_active_uniq guarantees at most one active row
-	// per package; the JOIN is 1:1. Schema note: upload_rate_cards stores
-	// price_paise; upload_purchases stores amount_inr_paise (same semantic,
-	// different column name — the credit.go boundary translates).
-	var credits, pricePaise int64
-	var currency string
-	err = tx.QueryRow(ctx, `
-		SELECT p.credits, r.price_paise, r.currency
-		  FROM upload_packages p
-		  JOIN upload_rate_cards r
-		    ON r.package_code = p.code AND r.effective_to IS NULL
-		 WHERE p.code = $1 AND p.active = TRUE
-	`, in.PackageCode).Scan(&credits, &pricePaise, &currency)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrPackageNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: package lookup: %w", err)
-	}
-
-	// Insert the purchase row. Column names match the canonical schema:
-	// amount_inr_paise (not price_paise) and gateway_payment_id (not gateway_txn_id).
-	// UNIQUE (workspace_id, idempotency_key) on upload_purchases keeps
-	// webhook replay idempotent at the DB level even if two concurrent
-	// Purchases slip past the pre-tx check.
-	purchaseID := uuid.New()
-	_, err = tx.Exec(ctx, `
-		INSERT INTO upload_purchases (
-			id, workspace_id, idempotency_key, amount_credits,
-			amount_inr_paise, gateway, gateway_payment_id, status, confirmed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', now())
-	`, purchaseID, in.WorkspaceID, in.IdempotencyKey, credits,
-		pricePaise, in.Gateway, in.GatewayTxnID)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert purchase: %w", err)
-	}
-
-	// Insert ledger entry. Positive amount_credits — the trigger on
-	// upload_ledger_entries updates upload_credit_balance_rollup automatically.
-	ledgerID := uuid.New()
-	var createdAt time.Time
-	err = tx.QueryRow(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits,
-			idempotency_key, purchase_id
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING created_at
-	`, ledgerID, in.WorkspaceID, string(EntryPurchase), credits,
-		in.IdempotencyKey, purchaseID).Scan(&createdAt)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert ledger: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit purchase: %w", err)
-	}
-
-	return &PurchaseResult{
-		LedgerEntry: &LedgerEntry{
-			ID:             ledgerID,
-			WorkspaceID:    in.WorkspaceID,
-			EntryType:      EntryPurchase,
-			AmountCredits:  credits,
-			IdempotencyKey: in.IdempotencyKey,
-			PurchaseID:     &purchaseID,
-			CreatedAt:      createdAt,
-		},
-		PackageCode: in.PackageCode,
-		Credits:     credits,
-		PricePaise:  pricePaise,
-		Currency:    currency,
-		WasReplay:   false,
-	}, nil
+	return result, nil
 }
 
 // findPurchaseLedgerByKey short-circuits a Purchase replay when a ledger
@@ -996,69 +1010,70 @@ func (s *Service) grantAdminDB(ctx context.Context, in GrantAdminInput) (*Ledger
 		return existing, nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	// DB-6b: retry the whole transaction on transient errors. The ledger row
+	// + audit_log row are both posted inside the closure, so a retried attempt
+	// re-runs the full atomic pair from a clean state.
+	var result *LedgerEntry
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		ledgerID := uuid.New()
+		var createdAt time.Time
+		insErr := tx.QueryRow(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits,
+				idempotency_key, reason, created_by
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING created_at
+		`, ledgerID, in.WorkspaceID, string(EntryGrantAdmin), in.AmountCredits,
+			in.IdempotencyKey, in.Reason, in.ActorID).Scan(&createdAt)
+		if insErr != nil {
+			return fmt.Errorf("upload/credit: insert grant_admin: %w", insErr)
+		}
 
-	ledgerID := uuid.New()
-	var createdAt time.Time
-	err = tx.QueryRow(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits,
-			idempotency_key, reason, created_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING created_at
-	`, ledgerID, in.WorkspaceID, string(EntryGrantAdmin), in.AmountCredits,
-		in.IdempotencyKey, in.Reason, in.ActorID).Scan(&createdAt)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert grant_admin: %w", err)
-	}
+		// audit_log — NFR-UCRT-O1 requires every admin grant to land in the
+		// platform audit trail. Canonical table is `audit_log` (singular) with
+		// actor_id / action / resource_type / resource_id / metadata columns.
+		// The older `audit_logs` plural table carries before/after state and
+		// ip/user-agent for request-scoped writes; we use the simpler singular
+		// table here because this is a service-layer grant, not an HTTP request.
+		//
+		// M41-CODE-001: Build the metadata JSONB via encoding/json, not
+		// fmt.Sprintf + %q. %q escapes for Go string literals and does NOT
+		// escape Unicode control characters (U+0000..U+001F) or surrogate
+		// pairs — a grant reason containing control chars would produce
+		// invalid JSON that Postgres JSONB ingest rejects, rolling back the
+		// whole grant transaction. json.Marshal is safe for all Unicode.
+		meta, metaErr := json.Marshal(map[string]any{
+			"amount_credits":  in.AmountCredits,
+			"reason":          in.Reason,
+			"ledger_entry_id": ledgerID.String(),
+		})
+		if metaErr != nil {
+			return fmt.Errorf("upload/credit: marshal audit metadata: %w", metaErr)
+		}
+		_, auditErr := tx.Exec(ctx, `
+			INSERT INTO audit_log (
+				actor_id, action, resource_type, resource_id, metadata
+			) VALUES ($1, $2, $3, $4, $5)
+		`, in.ActorID, "upload_credits.grant_admin", "workspace", in.WorkspaceID, meta)
+		if auditErr != nil {
+			return fmt.Errorf("upload/credit: insert audit log: %w", auditErr)
+		}
 
-	// audit_log — NFR-UCRT-O1 requires every admin grant to land in the
-	// platform audit trail. Canonical table is `audit_log` (singular) with
-	// actor_id / action / resource_type / resource_id / metadata columns.
-	// The older `audit_logs` plural table carries before/after state and
-	// ip/user-agent for request-scoped writes; we use the simpler singular
-	// table here because this is a service-layer grant, not an HTTP request.
-	//
-	// M41-CODE-001: Build the metadata JSONB via encoding/json, not
-	// fmt.Sprintf + %q. %q escapes for Go string literals and does NOT
-	// escape Unicode control characters (U+0000..U+001F) or surrogate
-	// pairs — a grant reason containing control chars would produce
-	// invalid JSON that Postgres JSONB ingest rejects, rolling back the
-	// whole grant transaction. json.Marshal is safe for all Unicode.
-	meta, metaErr := json.Marshal(map[string]any{
-		"amount_credits":  in.AmountCredits,
-		"reason":          in.Reason,
-		"ledger_entry_id": ledgerID.String(),
+		result = &LedgerEntry{
+			ID:             ledgerID,
+			WorkspaceID:    in.WorkspaceID,
+			EntryType:      EntryGrantAdmin,
+			AmountCredits:  in.AmountCredits,
+			IdempotencyKey: in.IdempotencyKey,
+			Reason:         in.Reason,
+			CreatedAt:      createdAt,
+		}
+		return nil
 	})
-	if metaErr != nil {
-		return nil, fmt.Errorf("upload/credit: marshal audit metadata: %w", metaErr)
-	}
-	_, err = tx.Exec(ctx, `
-		INSERT INTO audit_log (
-			actor_id, action, resource_type, resource_id, metadata
-		) VALUES ($1, $2, $3, $4, $5)
-	`, in.ActorID, "upload_credits.grant_admin", "workspace", in.WorkspaceID, meta)
 	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert audit log: %w", err)
+		return nil, err
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit grant_admin: %w", err)
-	}
-
-	return &LedgerEntry{
-		ID:             ledgerID,
-		WorkspaceID:    in.WorkspaceID,
-		EntryType:      EntryGrantAdmin,
-		AmountCredits:  in.AmountCredits,
-		IdempotencyKey: in.IdempotencyKey,
-		Reason:         in.Reason,
-		CreatedAt:      createdAt,
-	}, nil
+	return result, nil
 }
 
 // grantMonthlyDB implements the monthly worker grant flow. Idempotent on
@@ -1069,38 +1084,38 @@ func (s *Service) grantMonthlyDB(ctx context.Context, in GrantMonthlyInput, amou
 		return &GrantMonthlyResult{Status: GrantSkippedReplay, LedgerEntry: existing}, nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	// DB-6b: retry the whole transaction on transient errors.
+	var entry *LedgerEntry
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		ledgerID := uuid.New()
+		var createdAt time.Time
+		insErr := tx.QueryRow(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits, idempotency_key
+			) VALUES ($1, $2, $3, $4, $5)
+			RETURNING created_at
+		`, ledgerID, in.WorkspaceID, string(EntryGrantMonthly), amount, key).Scan(&createdAt)
+		if insErr != nil {
+			return fmt.Errorf("upload/credit: insert grant_monthly: %w", insErr)
+		}
 
-	ledgerID := uuid.New()
-	var createdAt time.Time
-	err = tx.QueryRow(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits, idempotency_key
-		) VALUES ($1, $2, $3, $4, $5)
-		RETURNING created_at
-	`, ledgerID, in.WorkspaceID, string(EntryGrantMonthly), amount, key).Scan(&createdAt)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert grant_monthly: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit grant_monthly: %w", err)
-	}
-
-	return &GrantMonthlyResult{
-		Status: GrantGranted,
-		LedgerEntry: &LedgerEntry{
+		entry = &LedgerEntry{
 			ID:             ledgerID,
 			WorkspaceID:    in.WorkspaceID,
 			EntryType:      EntryGrantMonthly,
 			AmountCredits:  amount,
 			IdempotencyKey: key,
 			CreatedAt:      createdAt,
-		},
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &GrantMonthlyResult{
+		Status:      GrantGranted,
+		LedgerEntry: entry,
 	}, nil
 }
 
@@ -1118,81 +1133,82 @@ func (s *Service) refundPurchaseDB(ctx context.Context, in RefundPurchaseInput) 
 		return existing, nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	// DB-6b: retry the whole transaction on transient errors. The eligibility
+	// checks + refund insert run inside the closure, so a retried attempt
+	// re-validates and re-posts atomically from a clean state.
+	var result *LedgerEntry
+	err := dbretry.InTx(ctx, dbretry.DefaultOptions(), s.pool, func(tx pgx.Tx) error {
+		// Resolve purchase + eligibility inside the tx.
+		var wsID uuid.UUID
+		var credits int64
+		var createdAt time.Time
+		lookupErr := tx.QueryRow(ctx, `
+			SELECT workspace_id, amount_credits, created_at
+			  FROM upload_purchases
+			 WHERE id = $1
+			 FOR UPDATE
+		`, in.PurchaseID).Scan(&wsID, &credits, &createdAt)
+		if errors.Is(lookupErr, pgx.ErrNoRows) {
+			return ErrPurchaseNotFound
+		}
+		if lookupErr != nil {
+			return fmt.Errorf("upload/credit: purchase lookup: %w", lookupErr)
+		}
+		if wsID != in.WorkspaceID {
+			return ErrPurchaseNotFound
+		}
+		if s.now().Sub(createdAt) > 7*24*time.Hour {
+			return ErrRefundWindowExpired
+		}
+
+		// Fully-unspent check — no consume / reserve entry references this
+		// purchase. This is a tight guard; any reservation that consumed from
+		// this purchase (even unreleased) blocks the refund.
+		var usedCount int64
+		checkErr := tx.QueryRow(ctx, `
+			SELECT COUNT(*)
+			  FROM upload_ledger_entries
+			 WHERE purchase_id = $1
+			   AND entry_type IN ($2, $3)
+		`, in.PurchaseID, string(EntryReserve), string(EntryConsume)).Scan(&usedCount)
+		if checkErr != nil {
+			return fmt.Errorf("upload/credit: consumption check: %w", checkErr)
+		}
+		if usedCount > 0 {
+			return ErrCreditsPartiallyConsumed
+		}
+
+		ledgerID := uuid.New()
+		var refundAt time.Time
+		insErr := tx.QueryRow(ctx, `
+			INSERT INTO upload_ledger_entries (
+				id, workspace_id, entry_type, amount_credits,
+				idempotency_key, purchase_id, created_by, reason
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING created_at
+		`, ledgerID, in.WorkspaceID, string(EntryRefund), -credits,
+			in.IdempotencyKey, in.PurchaseID, in.ActorID,
+			"refund within 7-day window",
+		).Scan(&refundAt)
+		if insErr != nil {
+			return fmt.Errorf("upload/credit: insert refund: %w", insErr)
+		}
+
+		result = &LedgerEntry{
+			ID:             ledgerID,
+			WorkspaceID:    in.WorkspaceID,
+			EntryType:      EntryRefund,
+			AmountCredits:  -credits,
+			IdempotencyKey: in.IdempotencyKey,
+			PurchaseID:     &in.PurchaseID,
+			CreatedAt:      refundAt,
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("upload/credit: begin tx: %w", err)
+		return nil, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Resolve purchase + eligibility inside the tx.
-	var wsID uuid.UUID
-	var credits int64
-	var createdAt time.Time
-	err = tx.QueryRow(ctx, `
-		SELECT workspace_id, amount_credits, created_at
-		  FROM upload_purchases
-		 WHERE id = $1
-		 FOR UPDATE
-	`, in.PurchaseID).Scan(&wsID, &credits, &createdAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrPurchaseNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: purchase lookup: %w", err)
-	}
-	if wsID != in.WorkspaceID {
-		return nil, ErrPurchaseNotFound
-	}
-	if s.now().Sub(createdAt) > 7*24*time.Hour {
-		return nil, ErrRefundWindowExpired
-	}
-
-	// Fully-unspent check — no consume / reserve entry references this
-	// purchase. This is a tight guard; any reservation that consumed from
-	// this purchase (even unreleased) blocks the refund.
-	var usedCount int64
-	err = tx.QueryRow(ctx, `
-		SELECT COUNT(*)
-		  FROM upload_ledger_entries
-		 WHERE purchase_id = $1
-		   AND entry_type IN ($2, $3)
-	`, in.PurchaseID, string(EntryReserve), string(EntryConsume)).Scan(&usedCount)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: consumption check: %w", err)
-	}
-	if usedCount > 0 {
-		return nil, ErrCreditsPartiallyConsumed
-	}
-
-	ledgerID := uuid.New()
-	var refundAt time.Time
-	err = tx.QueryRow(ctx, `
-		INSERT INTO upload_ledger_entries (
-			id, workspace_id, entry_type, amount_credits,
-			idempotency_key, purchase_id, created_by, reason
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING created_at
-	`, ledgerID, in.WorkspaceID, string(EntryRefund), -credits,
-		in.IdempotencyKey, in.PurchaseID, in.ActorID,
-		"refund within 7-day window",
-	).Scan(&refundAt)
-	if err != nil {
-		return nil, fmt.Errorf("upload/credit: insert refund: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("upload/credit: commit refund: %w", err)
-	}
-
-	return &LedgerEntry{
-		ID:             ledgerID,
-		WorkspaceID:    in.WorkspaceID,
-		EntryType:      EntryRefund,
-		AmountCredits:  -credits,
-		IdempotencyKey: in.IdempotencyKey,
-		PurchaseID:     &in.PurchaseID,
-		CreatedAt:      refundAt,
-	}, nil
+	return result, nil
 }
 
 // findLedgerEntryByKey returns an existing ledger entry for (workspace_id,

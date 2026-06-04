@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/rawdrive/backend/internal/dbretry"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -114,6 +115,31 @@ func (s *CouponValidationService) RedeemCouponTx(ctx context.Context, tx pgx.Tx,
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		uuid.New(), couponID, userID, workspaceID, stateID, discountPaisa, time.Now().UTC())
 	return err
+}
+
+// RedeemCoupon is the transaction-owning coupon ledger write path. It opens a
+// transaction, locks the coupon row FOR UPDATE to serialize concurrent
+// redemptions, and runs the atomic redeem (guarded increment + redemption
+// record) inside it via RedeemCouponTx.
+//
+// DB-6b: the WHOLE transaction is retried on transient errors (a coupon row
+// lock contending with another redemption is exactly the serialization_failure
+// / deadlock_detected class this guards against, plus pooler bounces). Because
+// dbretry.InTx begins a fresh transaction per attempt and rolls a failed
+// attempt back fully, the guarded IncrementRedemption stays correct under
+// retry — no double-increment, no orphaned coupon_redemptions row. The
+// per-coupon cap is enforced atomically by IncrementRedemption's WHERE guard,
+// which returns ErrCouponExhausted (non-retryable) when the limit is reached.
+func (s *CouponValidationService) RedeemCoupon(ctx context.Context, couponID, userID, workspaceID uuid.UUID, stateID *int, discountPaisa int64) error {
+	return dbretry.InTx(ctx, dbretry.DefaultOptions(), s.couponRepo.DB, func(tx pgx.Tx) error {
+		// Lock the coupon row so concurrent redemptions of the same coupon
+		// serialize on this row (the check-then-increment is then atomic with
+		// respect to other transactions).
+		if _, err := s.couponRepo.LockCouponForUpdate(ctx, tx, couponID); err != nil {
+			return err
+		}
+		return s.RedeemCouponTx(ctx, tx, couponID, userID, workspaceID, stateID, discountPaisa)
+	})
 }
 
 // CheckStackingEligibility verifies stacking rules.
