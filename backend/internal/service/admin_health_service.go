@@ -5,6 +5,10 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/rawdrive/backend/internal/observability"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -24,9 +28,20 @@ type ServiceStatus struct {
 // reported by GetSummary reflects actual process uptime. Using a struct
 // field rather than a package-level var keeps the service testable and
 // avoids coupling multiple processes to a single clock.
+// cachePoolStatser is the narrow interface AdminHealthService needs from the
+// Valkey client to report cache pool counters. *middleware.RedisValkeyClient
+// satisfies it; nil (or a typed-nil yielding nil stats) means Valkey isn't wired.
+type cachePoolStatser interface {
+	PoolStats() *redis.PoolStats
+}
+
 type AdminHealthService struct {
 	healthRepo  *repository.AdminHealthRepo
 	startupTime time.Time
+
+	// Optional live data-plane sources, wired via WithDataplane. Both nil-safe.
+	dbPool      *pgxpool.Pool
+	cacheSource cachePoolStatser
 }
 
 func NewAdminHealthService(healthRepo *repository.AdminHealthRepo) *AdminHealthService {
@@ -34,6 +49,20 @@ func NewAdminHealthService(healthRepo *repository.AdminHealthRepo) *AdminHealthS
 		healthRepo:  healthRepo,
 		startupTime: time.Now(),
 	}
+}
+
+// WithDataplane wires the live Postgres pool and Valkey cache so GetSummary can
+// report real connection-pool saturation and cache hit/miss counters. The
+// cache source is stored only when it actually yields stats — this guards
+// against a typed-nil interface (e.g. (*RedisValkeyClient)(nil)) so a disabled
+// Valkey produces an OMITTED cache block, not a misleading all-zero one.
+// Returns the receiver for chaining off NewAdminHealthService.
+func (s *AdminHealthService) WithDataplane(pool *pgxpool.Pool, cache cachePoolStatser) *AdminHealthService {
+	s.dbPool = pool
+	if cache != nil && cache.PoolStats() != nil {
+		s.cacheSource = cache
+	}
+	return s
 }
 
 // GetSummary assembles the flat SystemSummary the frontend expects. It
@@ -89,6 +118,17 @@ func (s *AdminHealthService) GetSummary(ctx context.Context) (*repository.System
 	runtime.ReadMemStats(&mem)
 	if mem.Sys > 0 {
 		summary.MemoryUsagePct = float64(mem.HeapInuse) / float64(mem.Sys) * 100
+	}
+
+	// Live data-plane snapshots, read fresh per request from in-memory counters.
+	// DBPool is present whenever the pool is wired; Cache only when Valkey is.
+	if s.dbPool != nil {
+		ps := observability.PoolStatsFrom(s.dbPool.Stat())
+		summary.DBPool = &ps
+	}
+	if s.cacheSource != nil {
+		cs := observability.CacheStatsFrom(s.cacheSource.PoolStats())
+		summary.Cache = &cs
 	}
 
 	return summary, nil

@@ -64,6 +64,17 @@ func NewRedisValkeyClient(rdb *redis.Client) *RedisValkeyClient {
 	}
 }
 
+// PoolStats exposes the underlying go-redis connection-pool counters
+// (hits/misses/timeouts/conns) for data-plane observability. nil-safe: returns
+// nil when the client has no backing rdb, so callers treat nil as "cache not
+// wired" rather than reporting an all-zero snapshot.
+func (c *RedisValkeyClient) PoolStats() *redis.PoolStats {
+	if c == nil || c.rdb == nil {
+		return nil
+	}
+	return c.rdb.PoolStats()
+}
+
 // Ping implements ValkeyClient.
 func (c *RedisValkeyClient) Ping(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()

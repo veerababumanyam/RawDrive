@@ -1048,6 +1048,18 @@ func newValkeyClient() middleware.ValkeyClient {
 	return middleware.NewRedisValkeyClient(rdb)
 }
 
+// valkeyCacheStatSource adapts the rate-limiter Valkey client into the
+// pool-stats source the admin metrics summary reports. Returns the concrete
+// client when Valkey is backed by a real redis connection; otherwise nil so
+// the admin summary omits the cache block (WithDataplane is also typed-nil
+// safe). It never affects the rate limiter itself.
+func valkeyCacheStatSource(vc middleware.ValkeyClient) *middleware.RedisValkeyClient {
+	if rc, ok := vc.(*middleware.RedisValkeyClient); ok {
+		return rc
+	}
+	return nil
+}
+
 func envIntOrDefault(key string, def int) int {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -2577,7 +2589,7 @@ func main() {
 			RevenueSvc:   service.NewAdminRevenueService(adminRevenueRepo),
 			AnalyticsSvc: service.NewAdminAnalyticsService(adminAnalyticsRepo),
 			ExportSvc:    service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
-			HealthSvc:    service.NewAdminHealthService(adminHealthRepo),
+			HealthSvc:    service.NewAdminHealthService(adminHealthRepo).WithDataplane(dbPool, valkeyCacheStatSource(valkeyClient)),
 			AuditLogSvc:  auditLogSvc,
 			// M16 Tier D admin surfaces
 			WorkspacePolicySvc:  workspacePolicySvc,
@@ -3120,9 +3132,11 @@ func main() {
 	})
 
 	// M14 GAL-FR-205: deep health check — probes database, storage, and
-	// Valkey. Valkey is nil for now (rate limiter is in-memory); the
-	// probe reports "disabled" for it.
-	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, nil)
+	// Valkey. The same client that backs the sliding-window rate limiter is
+	// passed here so /health/deep reports real cache reachability. It is
+	// nil-safe: when VALKEY_URL is unset the client is nil and the probe
+	// reports "disabled" without failing the overall status.
+	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, valkeyClient)
 	r.Get("/health/deep", deepHealth.Deep)
 
 	// ──────────────────────── ISSUE-006 MFA Mount Gate ────────────────────────

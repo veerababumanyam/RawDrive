@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rawdrive/backend/internal/observability"
 )
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,12 @@ type SystemSummary struct {
 	MemoryUsagePct   float64 `json:"memory_usage_pct"`
 	DiskUsagePct     float64 `json:"disk_usage_pct"`
 	UptimeSeconds    int64   `json:"uptime_seconds"`
+
+	// Live data-plane snapshots (read at request time, NOT from system_metrics).
+	// Pointers + omitempty so the existing payload is byte-for-byte unchanged
+	// when the sources aren't wired (e.g. Valkey disabled → Cache omitted).
+	DBPool *observability.PoolStats  `json:"db_pool,omitempty"`
+	Cache  *observability.CacheStats `json:"cache,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
