@@ -246,9 +246,21 @@ export interface PublicPersonPhotos {
   count: number;
 }
 
+// Public guest People / Photo-Search endpoints are gated server-side by
+// gateGalleryAccess (S4-G5): private / invite-only / password galleries
+// require a valid gallery_session. That session is a HOST-ONLY cookie on the
+// FRONTEND origin (minted by share-pin-gate.tsx via the relative /api/v1
+// rewrite, or written by the password gate). It therefore only travels on
+// SAME-ORIGIN requests. These calls MUST use the relative `/api/v1/...` path
+// (proxied to the API by the next.config.ts `/api/v1/:path*` rewrite, which
+// forwards the Cookie header) with credentials:"include" — NOT the absolute
+// cross-origin API base, which the cookie never reaches → 403
+// "gallery access requires a valid share link or invite" (issue #135). The
+// X-Gallery-Session header path is unusable here because the cross-origin
+// CORS Allow-Headers list omits it. These functions are browser-only.
 export async function listPublicPeople(slug: string): Promise<PublicPersonSummary[]> {
-  const res = await fetch(apiUrl(`/api/v1/public/galleries/${slug}/people`), {
-    credentials: "omit",
+  const res = await fetch(`/api/v1/public/galleries/${slug}/people`, {
+    credentials: "include",
   });
   if (!res.ok) throw new Error(`List public people failed: ${res.status}`);
   const body = (await res.json()) as PublicPersonSummary[];
@@ -259,9 +271,11 @@ export async function listPublicPersonPhotos(
   slug: string,
   personId: string,
 ): Promise<PublicPersonPhotos> {
+  // Same-origin + credentials so the gallery_session cookie reaches the gate
+  // (see listPublicPeople above; issue #135).
   const res = await fetch(
-    apiUrl(`/api/v1/public/galleries/${slug}/people/${personId}/photos`),
-    { credentials: "omit" },
+    `/api/v1/public/galleries/${slug}/people/${personId}/photos`,
+    { credentials: "include" },
   );
   if (!res.ok) throw new Error(`List public person photos failed: ${res.status}`);
   return res.json();
@@ -297,13 +311,16 @@ export async function searchPublicFaceInGallery(
   // Field name must match the backend handler — see
   // public_gallery_handler.PhotoSearch.
   form.append("image", imageBlob, "search.jpg");
+  // Same-origin relative path + credentials so the host-only gallery_session
+  // cookie reaches gateGalleryAccess on gated galleries — see listPublicPeople
+  // above (issue #135). The selfie itself is not gallery-encrypted; only the
+  // gallery session cookie is needed for access. The 10MB multipart body is
+  // streamed through the same /api/v1 rewrite the rest of this surface uses.
   const res = await fetch(
-    apiUrl(`/api/v1/public/galleries/${slug}/photo-search`),
+    `/api/v1/public/galleries/${slug}/photo-search`,
     {
       method: "POST",
-      // Public endpoint — no auth, no cookies. Mirrors the rest of the
-      // /api/v1/public surface (listPublicPeople, listPublicPersonPhotos).
-      credentials: "omit",
+      credentials: "include",
       body: form,
     },
   );

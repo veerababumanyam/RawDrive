@@ -15,6 +15,9 @@ import {
   getDuplicates,
   setSpendCap,
   validateAIKey,
+  listPublicPeople,
+  listPublicPersonPhotos,
+  searchPublicFaceInGallery,
 } from "../ai";
 import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
 
@@ -159,5 +162,66 @@ describe("AI API Client", () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
     await expect(getFaceClusters(token)).rejects.toThrow("500");
+  });
+});
+
+// Public Find Me / People surface — these are GUEST endpoints gated by
+// gateGalleryAccess (S4-G5). The durable gallery_session lives in a
+// host-only cookie on the FRONTEND origin (minted by SharePinGate's
+// relative /api/v1 rewrite fetch / written by the password gate). For the
+// cookie to reach the backend gate, these calls MUST go SAME-ORIGIN
+// (relative /api/v1/... via the next.config.ts rewrite) with
+// credentials:"include" — NOT the absolute cross-origin API base with
+// credentials:"omit" (which strips the cookie → 403
+// "gallery access requires a valid share link or invite"). Regression guard
+// for that 403 (issue #135).
+describe("Public face/people API client (gallery-session credential)", () => {
+  const RELATIVE_PREFIX = "/api/v1/public/galleries/";
+
+  it("listPublicPeople is same-origin relative + sends credentials", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+
+    await listPublicPeople("wedding-abcd1234");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    const calledUrl = String(url);
+    expect(calledUrl).not.toMatch(/^https?:\/\//); // not absolute cross-origin
+    expect(calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/people`)).toBe(true);
+    expect(init.credentials).toBe("include");
+  });
+
+  it("listPublicPersonPhotos is same-origin relative + sends credentials", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ asset_ids: [], count: 0 }),
+    });
+
+    await listPublicPersonPhotos("wedding-abcd1234", "person-1");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    const calledUrl = String(url);
+    expect(calledUrl).not.toMatch(/^https?:\/\//);
+    expect(
+      calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/people/person-1/photos`),
+    ).toBe(true);
+    expect(init.credentials).toBe("include");
+  });
+
+  it("searchPublicFaceInGallery POSTs same-origin relative + sends credentials + multipart body", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ found: false, faces_detected: 0, asset_ids: [], count: 0 }),
+    });
+
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+    await searchPublicFaceInGallery("wedding-abcd1234", blob);
+
+    const [url, init] = mockFetch.mock.calls[0];
+    const calledUrl = String(url);
+    expect(calledUrl).not.toMatch(/^https?:\/\//);
+    expect(calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/photo-search`)).toBe(true);
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(init.body).toBeInstanceOf(FormData);
   });
 });
