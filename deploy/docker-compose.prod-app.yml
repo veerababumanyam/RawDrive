@@ -364,6 +364,10 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
       - nginx_cache:/var/cache/nginx
+      # Expose nginx access/error logs on the host so host-level fail2ban can
+      # tail them (nginx runs in-container; without this its logs are invisible
+      # to fail2ban). JSON access log + standard error log land here.
+      - /var/log/rawdrive-nginx:/var/log/nginx
     environment:
       - PEER_NODE_IP=${PEER_NODE_IP}
     # F-116: nginx is the edge proxy/cache — cap it so a flood of buffered
