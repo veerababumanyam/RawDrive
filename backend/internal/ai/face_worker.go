@@ -92,6 +92,22 @@ func (w *FaceWorker) processNextBatch(ctx context.Context) {
 	}
 }
 
+// faceProgressBatchSize bounds how often the face worker writes job progress.
+// One write per asset is an N+1 on large galleries; reporting every N assets
+// (and always on the final asset) keeps progress fresh without a write storm.
+const faceProgressBatchSize = 10
+
+// shouldReportFaceProgress is true every faceProgressBatchSize assets and always
+// for the last asset (index == total-1), so the number of progress writes for a
+// job scales as ceil(total/faceProgressBatchSize)+O(1) rather than linearly with
+// total. Pure + deterministic so the batching contract is unit-testable.
+func shouldReportFaceProgress(index, total int) bool {
+	if index >= total-1 {
+		return true
+	}
+	return (index+1)%faceProgressBatchSize == 0
+}
+
 func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 	_ = w.jobRepo.UpdateProgress(ctx, job.ID, "running", 0)
 
@@ -139,14 +155,21 @@ func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 
 	totalFaces := 0
 	for i, assetID := range assetIDs {
-		if err := w.faceSvc.DetectAndStore(ctx, assetID, job.WorkspaceID, galleryID); err != nil {
+		// DetectAndStore now returns the per-asset face count, so we no longer
+		// issue a separate GetFacesByAsset query per asset (was an N+1).
+		count, err := w.faceSvc.DetectAndStore(ctx, assetID, job.WorkspaceID, galleryID)
+		if err != nil {
 			log.Printf("face worker: asset %s: %v", assetID, err)
-			// Continue processing remaining assets
+			// Continue processing remaining assets.
 		} else {
-			faces, _ := w.faceSvc.faceRepo.GetFacesByAsset(ctx, assetID)
-			totalFaces += len(faces)
+			totalFaces += count
 		}
-		_ = w.jobRepo.UpdateProgress(ctx, job.ID, "running", i+1)
+		// Batch progress writes: a 100-asset job used to issue 100 UpdateProgress
+		// writes. Report every faceProgressBatchSize assets and always on the
+		// last one, so progress writes scale sub-linearly with asset count.
+		if shouldReportFaceProgress(i, len(assetIDs)) {
+			_ = w.jobRepo.UpdateProgress(ctx, job.ID, "running", i+1)
+		}
 	}
 
 	return w.jobRepo.MarkDone(ctx, job.ID, map[string]any{

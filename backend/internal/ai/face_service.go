@@ -69,14 +69,17 @@ func (s *FaceService) EnqueueDetection(ctx context.Context, workspaceID uuid.UUI
 // Detection runs on the required face-svc sidecar (insightface, 512-d). The
 // legacy Gemini fallback was removed — it emitted 128-d vectors that are
 // incompatible with the vector(512) column.
-func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID) error {
+//
+// Returns the number of faces detected and stored for the asset, so the worker
+// can tally a job's faces without a separate per-asset GetFacesByAsset query.
+func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID) (int, error) {
 	enabled, err := s.isFaceRecognitionEnabled(ctx, workspaceID)
 	if err != nil {
-		return fmt.Errorf("face service: workspace gate check: %w", err)
+		return 0, fmt.Errorf("face service: workspace gate check: %w", err)
 	}
 	if !enabled {
 		log.Printf("face service: workspace %s has face_recognition_enabled=false; skipping asset %s", workspaceID, assetID)
-		return nil
+		return 0, nil
 	}
 
 	// Read image from storage. We MUST use the asset's storage_key, not
@@ -91,30 +94,30 @@ func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID u
 		`SELECT storage_key FROM assets WHERE id = $1 AND deleted_at IS NULL`,
 		assetID,
 	).Scan(&storageKey); err != nil {
-		return fmt.Errorf("face service: lookup storage_key: %w", err)
+		return 0, fmt.Errorf("face service: lookup storage_key: %w", err)
 	}
 	reader, err := s.store.Get(ctx, storageKey)
 	if err != nil {
-		return fmt.Errorf("face service: get asset: %w", err)
+		return 0, fmt.Errorf("face service: get asset: %w", err)
 	}
 	defer reader.Close()
 
 	imageData, err := readAll(reader)
 	if err != nil {
-		return fmt.Errorf("face service: read image: %w", err)
+		return 0, fmt.Errorf("face service: read image: %w", err)
 	}
 
 	if s.faceClient == nil {
-		return fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
+		return 0, fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
 	}
 	// face-svc path. insightface buffalo_l: 512-d L2-normalized embeddings,
 	// det_score ∈ [0,1], no per-request cost so spend logging is skipped.
 	resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, fmt.Sprintf("asset-%s.jpg", assetID))
 	if err != nil {
-		return fmt.Errorf("face service: face-svc detect: %w", err)
+		return 0, fmt.Errorf("face service: face-svc detect: %w", err)
 	}
 	if len(resp.Faces) == 0 {
-		return nil
+		return 0, nil
 	}
 	clusters := make([]*FaceCluster, len(resp.Faces))
 	for i, f := range resp.Faces {
@@ -136,11 +139,11 @@ func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID u
 	}
 
 	if err := s.faceRepo.StoreFaces(ctx, clusters); err != nil {
-		return fmt.Errorf("face service: store faces: %w", err)
+		return 0, fmt.Errorf("face service: store faces: %w", err)
 	}
 
 	// Auto-cluster the freshly-stored faces.
-	return s.ClusterFaces(ctx, clusters, workspaceID)
+	return len(clusters), s.ClusterFaces(ctx, clusters, workspaceID)
 }
 
 // isFaceRecognitionEnabled reads workspaces.face_recognition_enabled (migration
