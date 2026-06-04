@@ -6,7 +6,6 @@
 # published port 8080 (peer-only UFW rule permits this).
 upstream backend_upstream {
     zone backend_upstream 64k;
-    hash $remote_addr consistent;
     server backend:8080 max_fails=2 fail_timeout=10s;
     server ${PEER_NODE_IP}:8080 backup max_fails=2 fail_timeout=10s;
     keepalive 32;
