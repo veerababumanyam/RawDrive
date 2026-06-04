@@ -1,0 +1,28 @@
+# RawDrive nginx web-layer jails (app nodes .42/.44 only — the DB node has no
+# nginx). These ADD to the existing sshd jail; they do NOT touch it (sshd keeps
+# its default INPUT-based ban action, correct for host-level SSH). The nginx
+# jails use banaction=docker-user so bans land in the DOCKER-USER chain that
+# actually filters container traffic. ignoreip keeps us from banning ourselves,
+# the peer app node, or the DB node.
+
+[nginx-limit-req]
+# Bans IPs that keep tripping nginx's rate limiter (logged to error.log).
+enabled    = true
+filter     = nginx-limit-req
+logpath    = /var/log/rawdrive-nginx/error.log
+maxretry   = 20
+findtime   = 10m
+bantime    = 1h
+banaction  = docker-user
+ignoreip   = 127.0.0.1/8 ::1 187.127.142.42 187.127.142.44 187.127.142.46
+
+[rawdrive-nginx-auth]
+# Bans IPs generating repeated 401/403/429 (credential stuffing / probing).
+enabled    = true
+filter     = rawdrive-nginx-auth
+logpath    = /var/log/rawdrive-nginx/access.log
+maxretry   = 15
+findtime   = 10m
+bantime    = 1h
+banaction  = docker-user
+ignoreip   = 127.0.0.1/8 ::1 187.127.142.42 187.127.142.44 187.127.142.46
