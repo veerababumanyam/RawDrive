@@ -100,6 +100,24 @@ func (p smtpNotificationEmailProvider) Send(ctx context.Context, req service.Del
 	return p.sender.Send(ctx, req.EmailTo, req.Title, req.Body, req.ActionURL)
 }
 
+// compressionMiddleware gzip-compresses large JSON list payloads (public
+// gallery ListAssets, owner ?include_assets hydration, admin analytics) on the
+// global router. PERF-GZIP: these responses previously went out uncompressed.
+//
+// chi's Compress is content-type gated: it only compresses its allowlist
+// (text/*, application/json, image/svg+xml, …) and short-circuits when a
+// Content-Encoding is already set. The /storage/* streaming proxy and
+// encrypted-derivative handler serve image/webp, image/jpeg, image/png,
+// image/gif, and application/octet-stream — none of which are in that
+// allowlist — so those byte-streams are never (double-)compressed. SSE
+// (text/event-stream) and ZIP (application/zip) are likewise excluded, and chi
+// passes Flush/Hijack through for the non-compressible path so streaming is
+// unaffected. This is the single source of truth for that wiring; the
+// compression_test.go regression asserts the JSON-yes / byte-stream-no split.
+func compressionMiddleware() func(http.Handler) http.Handler {
+	return chimw.Compress(5)
+}
+
 func safeRequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
@@ -1180,6 +1198,10 @@ func main() {
 	r.Use(safeRequestLogger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
+	// PERF-GZIP: gzip JSON list payloads. Content-type gated so the /storage
+	// byte-stream proxy and encrypted-derivative image/octet-stream responses
+	// are never double-compressed (see compressionMiddleware).
+	r.Use(compressionMiddleware())
 	r.Use(middleware.SecurityHeaders)
 	// 2026-05-20: prod default raised from 60/min to 600/min. RawDrive is a
 	// cloud SaaS — photographers running bulk-upload sessions legitimately
