@@ -51,10 +51,17 @@ func (w *DuplicateWorker) Stop() {
 	close(w.stopCh)
 }
 
+// duplicateClaimLease bounds how long a claimed-but-unfinished duplicate-scan
+// job stays out of the claimable set; only a job stuck in 'running' past the
+// lease (a crashed worker) is re-claimed.
+const duplicateClaimLease = 10 * time.Minute
+
 func (w *DuplicateWorker) processNextBatch(ctx context.Context) {
-	jobs, err := w.jobRepo.ListPending(ctx, "duplicate_scan", 3)
+	// Atomic claim: flips pending → running + stamps claimed_at so two workers
+	// never claim — and therefore never double-scan — the same job's assets.
+	jobs, err := w.jobRepo.ClaimPending(ctx, "duplicate_scan", 3, duplicateClaimLease.Seconds())
 	if err != nil {
-		log.Printf("duplicate worker: list pending: %v", err)
+		log.Printf("duplicate worker: claim pending: %v", err)
 		return
 	}
 

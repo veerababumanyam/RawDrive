@@ -37,8 +37,19 @@ func (w *BurstWorker) Start(ctx context.Context) {
 
 func (w *BurstWorker) Stop() { close(w.stopCh) }
 
+// burstClaimLease bounds how long a claimed-but-unfinished burst job stays out
+// of the claimable set; only a job stuck in 'running' past the lease (a crashed
+// worker) is re-claimed.
+const burstClaimLease = 10 * time.Minute
+
 func (w *BurstWorker) processNextBatch(ctx context.Context) {
-	jobs, _ := w.jobRepo.ListPending(ctx, "burst_grouping", 3)
+	// Atomic claim: flips pending → running + stamps claimed_at so two workers
+	// never claim — and therefore never double-group — the same job's assets.
+	jobs, err := w.jobRepo.ClaimPending(ctx, "burst_grouping", 3, burstClaimLease.Seconds())
+	if err != nil {
+		log.Printf("burst worker: claim pending: %v", err)
+		return
+	}
 	for _, job := range jobs {
 		if err := w.processJob(ctx, job); err != nil {
 			log.Printf("burst worker: job %s failed: %v", job.ID, err)

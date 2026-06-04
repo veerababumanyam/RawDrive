@@ -44,8 +44,19 @@ func (w *AestheticWorker) Start(ctx context.Context) {
 
 func (w *AestheticWorker) Stop() { close(w.stopCh) }
 
+// aestheticClaimLease bounds how long a claimed-but-unfinished aesthetic job
+// stays out of the claimable set; only a job stuck in 'running' past the lease
+// (a crashed worker) is re-claimed.
+const aestheticClaimLease = 10 * time.Minute
+
 func (w *AestheticWorker) processNextBatch(ctx context.Context) {
-	jobs, _ := w.jobRepo.ListPending(ctx, "aesthetic_scoring", 3)
+	// Atomic claim: flips pending → running + stamps claimed_at so two workers
+	// never claim — and therefore never double-score — the same job's assets.
+	jobs, err := w.jobRepo.ClaimPending(ctx, "aesthetic_scoring", 3, aestheticClaimLease.Seconds())
+	if err != nil {
+		log.Printf("aesthetic worker: claim pending: %v", err)
+		return
+	}
 	for _, job := range jobs {
 		if err := w.processJob(ctx, job); err != nil {
 			log.Printf("aesthetic worker: job %s failed: %v", job.ID, err)
