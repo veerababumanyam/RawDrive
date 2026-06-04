@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -67,7 +68,30 @@ func (h *AssetHandler) WithTermsGate(g TermsGate) *AssetHandler {
 	return h
 }
 
-// List handles GET /api/v1/assets
+// assetListMaxLimit caps the page size a client can request. Matches the
+// OpenAPI contract (parameters.limit.maximum) so a client cannot ask for an
+// unbounded page and defeat the keyset windowing.
+const assetListMaxLimit = 200
+
+// assetListDefaultLimit is the page size when the client omits ?limit.
+const assetListDefaultLimit = 50
+
+// assetListResponse is the keyset-paginated envelope for GET /api/v1/assets.
+// Matches the OpenAPI AssetList schema { assets, next_cursor }. next_cursor is
+// nil on the final page; a non-nil value is an opaque token the client passes
+// back as ?cursor= to fetch the next page.
+type assetListResponse struct {
+	Assets     []repository.Asset `json:"assets"`
+	NextCursor *string            `json:"next_cursor"`
+}
+
+// List handles GET /api/v1/assets — keyset (seek) paginated.
+//
+// Q-4: deep pages used LIMIT/OFFSET, which re-scans every skipped row
+// (O(offset)). The grid now seeks past an opaque ?cursor= via the
+// (created_at, id) tuple over idx_assets_workspace_created, so latency is flat
+// regardless of page depth. Omitting ?cursor returns the first page; the
+// response's next_cursor drives forward paging.
 func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := getWorkspaceID(r)
 	if !ok {
@@ -75,18 +99,56 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assets, err := h.assetSvc.List(r.Context(), repository.AssetFilter{
+	limit := assetListDefaultLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			http.Error(w, `{"error":"invalid limit"}`, http.StatusBadRequest)
+			return
+		}
+		if n > assetListMaxLimit {
+			n = assetListMaxLimit
+		}
+		limit = n
+	}
+
+	filter := repository.AssetFilter{
 		WorkspaceID: workspaceID,
 		Status:      r.URL.Query().Get("status"),
 		ContentType: r.URL.Query().Get("content_type"),
-		Limit:       50,
-	})
+		Limit:       limit,
+	}
+
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		cur, err := repository.DecodeAssetCursor(raw)
+		if err != nil {
+			// Fail closed: a malformed cursor is a client error, not a silent
+			// full-list scan.
+			http.Error(w, `{"error":"invalid cursor"}`, http.StatusBadRequest)
+			return
+		}
+		filter.Cursor = cur
+	}
+
+	// Over-fetch one row so we can tell whether another page exists without a
+	// second COUNT query, then trim back to the requested limit.
+	filter.Limit = limit + 1
+
+	assets, err := h.assetSvc.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, assets)
+	var nextCursor *string
+	if len(assets) > limit {
+		assets = assets[:limit]
+		last := assets[len(assets)-1]
+		tok := repository.AssetCursor{CreatedAt: last.CreatedAt, ID: last.ID}.Encode()
+		nextCursor = &tok
+	}
+
+	respondJSON(w, http.StatusOK, assetListResponse{Assets: assets, NextCursor: nextCursor})
 }
 
 // GetByID handles GET /api/v1/assets/{id}

@@ -40,14 +40,42 @@ export interface Asset {
   gps_longitude?: number;           // GAL-FR-099 — map view
 }
 
-export async function listAssets(_token: string, params?: { status?: string; content_type?: string }): Promise<Asset[]> {
-  const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await authFetch(`/api/v1/assets?${query}`);
+// Keyset-paginated page of workspace assets. `nextCursor` is null on the final
+// page; pass it back as `cursor` to fetch the next page. Keyset (seek)
+// pagination keeps deep-page latency flat regardless of how many pages in the
+// caller is — see backend asset_repo.go buildAssetListQuery / Q-4.
+export interface AssetPage {
+  assets: Asset[];
+  nextCursor: string | null;
+}
+
+export interface ListAssetsParams {
+  status?: string;
+  content_type?: string;
+  /** Page size (server caps at 200; defaults to 50). */
+  limit?: number;
+  /** Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
+  cursor?: string;
+}
+
+export async function listAssets(_token: string, params?: ListAssetsParams): Promise<AssetPage> {
+  const search = new URLSearchParams();
+  if (params?.status) search.set("status", params.status);
+  if (params?.content_type) search.set("content_type", params.content_type);
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.cursor) search.set("cursor", params.cursor);
+
+  const res = await authFetch(`/api/v1/assets?${search.toString()}`);
   if (!res.ok) throw new Error(`Failed to list assets: ${res.status}`);
   const body = await res.json();
-  if (Array.isArray(body)) return body;
-  if (body && Array.isArray(body.assets)) return body.assets;
-  return [];
+
+  // The endpoint returns the keyset envelope { assets, next_cursor }. Tolerate
+  // a bare array for forward/backward compatibility with any unmigrated caller.
+  if (Array.isArray(body)) return { assets: body, nextCursor: null };
+  return {
+    assets: Array.isArray(body?.assets) ? body.assets : [],
+    nextCursor: typeof body?.next_cursor === "string" ? body.next_cursor : null,
+  };
 }
 
 export async function getAsset(_token: string, id: string): Promise<Asset> {

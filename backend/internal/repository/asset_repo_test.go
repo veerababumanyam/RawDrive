@@ -132,6 +132,98 @@ func TestAssetFilter_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, "ready", f.Status)
 }
 
+// ──────────────────────── Q-4: keyset pagination query shape ────────────────────────
+//
+// These guard the SQL buildAssetListQuery emits. They are DB-free proxies for
+// the runtime behaviour: a deep page must NOT use OFFSET (which re-scans every
+// skipped row, O(offset)) but instead seek past the cursor via
+// `(created_at, id) < ($ts, $id)` over idx_assets_workspace_created — flat
+// latency regardless of page depth. Each test fails against the pre-fix
+// OFFSET-only builder and passes against the keyset builder.
+
+// TestBuildAssetListQuery_NoCursorUsesOffset documents the legacy path: with no
+// cursor, List keeps LIMIT/OFFSET so existing callers (album smart filters,
+// design-AI sampling) are unaffected.
+func TestBuildAssetListQuery_NoCursorUsesOffset(t *testing.T) {
+	q, args := buildAssetListQuery(AssetFilter{
+		WorkspaceID: uuid.New(),
+		Limit:       50,
+		Offset:      500,
+	})
+	assert.Contains(t, q, "OFFSET", "no-cursor path must keep LIMIT/OFFSET for backward compatibility")
+	assert.Contains(t, q, "ORDER BY created_at DESC")
+	// offset value is bound as the last positional arg
+	assert.Equal(t, 500, args[len(args)-1], "offset must be parameterized, not interpolated")
+}
+
+// TestBuildAssetListQuery_CursorUsesKeyset is the crux of Q-4: a cursor turns
+// the query into a keyset seek with NO OFFSET, ordered by the composite
+// (created_at, id) so the result set is total-ordered and stable.
+func TestBuildAssetListQuery_CursorUsesKeyset(t *testing.T) {
+	cur := &AssetCursor{CreatedAt: time.Now().UTC().Truncate(time.Microsecond), ID: uuid.New()}
+	q, args := buildAssetListQuery(AssetFilter{
+		WorkspaceID: uuid.New(),
+		Limit:       50,
+		Offset:      9999, // must be IGNORED on the keyset path
+		Cursor:      cur,
+	})
+
+	// The seek predicate over the composite index — this is what makes deep
+	// pages O(1) instead of O(offset).
+	assert.Contains(t, q, "(created_at, id) <",
+		"keyset path must seek past the cursor via the (created_at, id) tuple")
+	// Stable total order matching idx_assets_workspace_created + PK tiebreak.
+	assert.Contains(t, q, "ORDER BY created_at DESC, id DESC")
+	// Regression guard: the OFFSET re-scan must be GONE on the keyset path.
+	assert.NotContains(t, q, "OFFSET",
+		"keyset path must NOT emit OFFSET — that is the O(offset) deep-page re-scan Q-4 fixes")
+
+	// The cursor tuple is bound as positional args (not interpolated), and the
+	// stale Offset=9999 never reaches the args list.
+	assert.Contains(t, args, cur.CreatedAt)
+	assert.Contains(t, args, cur.ID)
+	assert.NotContains(t, args, 9999, "Offset must be ignored when a cursor is supplied")
+}
+
+// TestBuildAssetListQuery_CursorIgnoredForAltSort proves keyset only engages on
+// the default created_at ordering; alternate sorts (no composite index) fall
+// back to OFFSET so they stay correct rather than silently mis-ordering.
+func TestBuildAssetListQuery_CursorIgnoredForAltSort(t *testing.T) {
+	cur := &AssetCursor{CreatedAt: time.Now().UTC(), ID: uuid.New()}
+	q, _ := buildAssetListQuery(AssetFilter{
+		WorkspaceID: uuid.New(),
+		Sort:        "filename",
+		Cursor:      cur,
+	})
+	assert.NotContains(t, q, "(created_at, id) <",
+		"keyset must not engage for non-created_at sorts (no covering index)")
+	assert.Contains(t, q, "OFFSET")
+}
+
+// TestAssetCursor_RoundTrip proves the dead Cursor field is now USED end-to-end:
+// a cursor encodes to an opaque token and decodes back to the exact
+// (created_at, id) tuple, so the API can hand it out and accept it back.
+func TestAssetCursor_RoundTrip(t *testing.T) {
+	orig := AssetCursor{CreatedAt: time.Now().UTC().Truncate(time.Microsecond), ID: uuid.New()}
+	tok := orig.Encode()
+	assert.NotEmpty(t, tok)
+	assert.NotContains(t, tok, ":", "encoded cursor must be opaque (base64), not raw")
+
+	got, err := DecodeAssetCursor(tok)
+	assert.NoError(t, err)
+	assert.True(t, orig.CreatedAt.Equal(got.CreatedAt), "created_at must round-trip exactly")
+	assert.Equal(t, orig.ID, got.ID)
+}
+
+// TestDecodeAssetCursor_FailsClosed proves a tampered/garbage cursor errors out
+// (→ 400 at the handler) instead of silently degrading to a full scan.
+func TestDecodeAssetCursor_FailsClosed(t *testing.T) {
+	for _, bad := range []string{"!!!not-base64!!!", "", "Zm9vYmFy" /* "foobar", no colon */} {
+		_, err := DecodeAssetCursor(bad)
+		assert.Error(t, err, "malformed cursor %q must error, not silently scan", bad)
+	}
+}
+
 // ──────────────────────── Bulk query shape (F-071 / F-072) ────────────────────────
 //
 // These guard the SQL the bulk methods issue. The methods build no SQL at

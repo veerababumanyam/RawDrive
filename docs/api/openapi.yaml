@@ -1033,13 +1033,23 @@ paths:
     get:
       operationId: listAssets
       tags: [asset]
-      summary: List workspace assets
+      summary: List workspace assets (keyset paginated)
+      description: |
+        Keyset (seek) pagination. Omit `cursor` for the first page; pass the
+        response's `next_cursor` back as `cursor` to fetch the next page.
+        Latency is flat regardless of page depth — the grid seeks past the
+        cursor over the (workspace_id, created_at) index instead of using an
+        OFFSET that re-scans skipped rows. `next_cursor` is null on the final
+        page.
       parameters:
-        - name: gallery_id
+        - name: status
           in: query
           schema:
             type: string
-            format: uuid
+        - name: content_type
+          in: query
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
@@ -1048,6 +1058,7 @@ paths:
             maximum: 200
         - name: cursor
           in: query
+          description: Opaque cursor from a previous response's next_cursor. Treat as a blob.
           schema:
             type: string
       responses:
@@ -1057,6 +1068,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssetList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:

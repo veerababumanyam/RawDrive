@@ -2,8 +2,11 @@ package repository
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -92,6 +95,49 @@ func retryBackoff(retryCount int) time.Duration {
 	return d
 }
 
+// AssetCursor is the opaque seek key for keyset (a.k.a. "seek") pagination of
+// the workspace asset grid. A bare row id is not enough to seek stably: the
+// grid orders by created_at, so the cursor must carry the same (created_at, id)
+// tuple the ORDER BY uses. Comparing the whole tuple keeps the result set
+// total-ordered and avoids skipping or repeating rows when two assets share a
+// created_at to the microsecond.
+type AssetCursor struct {
+	CreatedAt time.Time
+	ID        uuid.UUID
+}
+
+// Encode renders the cursor as an opaque base64url token for the API. The
+// wire form is "<created_at_unix_micros>:<uuid>" so it round-trips exactly the
+// (created_at, id) tuple the keyset ORDER BY uses. Opaque on purpose: callers
+// must treat it as a blob and pass it back verbatim, never construct one.
+func (c AssetCursor) Encode() string {
+	raw := fmt.Sprintf("%d:%s", c.CreatedAt.UnixMicro(), c.ID.String())
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+// DecodeAssetCursor parses an opaque cursor token produced by AssetCursor.Encode.
+// It fails closed on any malformed input so a tampered/garbage cursor yields a
+// clear 400 at the handler rather than a silent full-list scan.
+func DecodeAssetCursor(token string) (*AssetCursor, error) {
+	b, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, fmt.Errorf("decode asset cursor: %w", err)
+	}
+	micros, idStr, ok := strings.Cut(string(b), ":")
+	if !ok {
+		return nil, fmt.Errorf("decode asset cursor: malformed token")
+	}
+	us, err := strconv.ParseInt(micros, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("decode asset cursor timestamp: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("decode asset cursor id: %w", err)
+	}
+	return &AssetCursor{CreatedAt: time.UnixMicro(us).UTC(), ID: id}, nil
+}
+
 // AssetFilter contains composable filters for listing assets.
 type AssetFilter struct {
 	WorkspaceID    uuid.UUID
@@ -110,7 +156,13 @@ type AssetFilter struct {
 	Order          string // "asc", "desc"
 	Limit          int
 	Offset         int
-	Cursor         *uuid.UUID
+	// Cursor enables keyset/seek pagination. When non-nil AND the sort is the
+	// default created_at ordering, List seeks past the cursor with
+	// `(created_at, id) < ($ts, $id)` and omits OFFSET — a flat-latency index
+	// range scan over idx_assets_workspace_created (migration 154), tiebroken
+	// by the assets primary key. When nil, List keeps the legacy LIMIT/OFFSET
+	// behaviour so existing callers are unaffected.
+	Cursor *AssetCursor
 }
 
 // AssetRepo handles asset persistence.
@@ -225,17 +277,41 @@ func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, er
 	return assets, nil
 }
 
-// List retrieves assets matching the filter.
-func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
+// assetListSelectColumns is the projection shared by the List query. Kept as a
+// constant so the query builder and any future read-path share one column list.
+const assetListSelectColumns = `id, workspace_id, filename, content_type, size_bytes, storage_key,
+		storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
+		status, processing_error, created_at, updated_at, deleted_at,
+		is_encrypted, encryption_algo, encryption_version, media_encryption`
+
+// keysetEligible reports whether the filter can use keyset/seek pagination.
+// Keyset only applies to the default created_at ordering (the dashboard grid's
+// hot path, backed by idx_assets_workspace_created). For the alternate sorts
+// (filename/size_bytes/capture_date) there is no composite covering index and
+// no cursor representation, so those keep the legacy LIMIT/OFFSET behaviour.
+func (f AssetFilter) keysetEligible() bool {
+	return f.Cursor != nil &&
+		(f.Sort == "" || f.Sort == "created_at") &&
+		(f.Order == "" || f.Order == "desc")
+}
+
+// buildAssetListQuery assembles the parameterized SELECT for List. It is a pure
+// function (no DB access) so the SQL shape — especially the keyset-vs-OFFSET
+// branch — is unit-testable without a database, mirroring the bulk-query and
+// streaming-ledger query-builder tests in this repo.
+//
+// When the filter is keyset-eligible (default created_at DESC ordering + a
+// cursor) it emits `(created_at, id) < ($ts, $id) ORDER BY created_at DESC,
+// id DESC LIMIT $n` — a flat-latency index range scan that never re-scans
+// skipped rows. Otherwise it preserves the legacy `ORDER BY <sort> LIMIT
+// OFFSET` form so existing callers are unaffected.
+func buildAssetListQuery(f AssetFilter) (string, []interface{}) {
 	limit := f.Limit
 	if limit <= 0 {
 		limit = 50
 	}
 
-	query := `SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
-		storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
-		status, processing_error, created_at, updated_at, deleted_at,
-		is_encrypted, encryption_algo, encryption_version, media_encryption
+	query := `SELECT ` + assetListSelectColumns + `
 		FROM assets WHERE workspace_id = $1 AND deleted_at IS NULL`
 	args := []interface{}{f.WorkspaceID}
 	argIdx := 2
@@ -281,6 +357,19 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 		argIdx++
 	}
 
+	if f.keysetEligible() {
+		// Keyset/seek: skip everything at or before the cursor in
+		// (created_at, id) DESC order, then take the page. No OFFSET — the
+		// engine seeks straight to the cursor via idx_assets_workspace_created
+		// and the PK tiebreak, so latency is flat regardless of page depth.
+		query += fmt.Sprintf(" AND (created_at, id) < ($%d, $%d)", argIdx, argIdx+1)
+		args = append(args, f.Cursor.CreatedAt, f.Cursor.ID)
+		argIdx += 2
+		query += fmt.Sprintf(" ORDER BY created_at DESC, id DESC LIMIT $%d", argIdx)
+		args = append(args, limit)
+		return query, args
+	}
+
 	sortCol := "created_at"
 	if f.Sort == "filename" || f.Sort == "size_bytes" || f.Sort == "capture_date" {
 		sortCol = f.Sort
@@ -291,6 +380,12 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 	}
 	query += fmt.Sprintf(" ORDER BY %s %s LIMIT $%d OFFSET $%d", sortCol, sortOrder, argIdx, argIdx+1)
 	args = append(args, limit, f.Offset)
+	return query, args
+}
+
+// List retrieves assets matching the filter.
+func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
+	query, args := buildAssetListQuery(f)
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
