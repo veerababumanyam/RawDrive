@@ -1033,6 +1033,10 @@ func newValkeyClient() middleware.ValkeyClient {
 		log.Printf("valkey: invalid VALKEY_URL %q: %v — using per-node in-memory rate limiting", vurl, parseErr)
 		return nil
 	}
+	// Bound the rate limiter's backend round trips with explicit dial/read/write
+	// timeouts (env-tunable) instead of inheriting go-redis version defaults;
+	// TLS from a rediss:// URL is preserved.
+	middleware.ApplyValkeyTimeouts(opts, os.Getenv)
 	rdb := redis.NewClient(opts)
 	pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	if err := rdb.Ping(pingCtx).Err(); err != nil {
@@ -1187,6 +1191,11 @@ func main() {
 	poolCfg.MaxConnLifetime = 30 * time.Minute
 	poolCfg.MaxConnIdleTime = 5 * time.Minute
 	poolCfg.HealthCheckPeriod = 1 * time.Minute
+	// Desynchronize lifetime expiry: without jitter, every connection opened in
+	// the same startup burst hits MaxConnLifetime at the same instant and
+	// reconnects in lockstep — a mini thundering herd against pgbouncer. Jitter
+	// spreads those retirements across a window so the pool refreshes smoothly.
+	poolCfg.MaxConnLifetimeJitter = 5 * time.Minute
 
 	dbPool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
 	if err != nil {
