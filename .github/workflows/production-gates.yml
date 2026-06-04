@@ -42,11 +42,24 @@ jobs:
   # defaults] + misspell + gofmt/goimports formatters) existed in the repo but
   # was never enforced in CI — only `go test` + govulncheck ran.
   #
-  # ENFORCING on NEW issues only (only-new-issues: true). The backend carries
-  # ~520 pre-existing lint issues (mostly goimports/gofmt formatting + errcheck);
-  # fixing all of them is a separate cleanup. only-new-issues grandfathers that
-  # legacy debt and BLOCKS any PR that ADDS a new lint issue, so the codebase
-  # cannot get worse and the debt is paid down as files are touched.
+  # ENFORCING on NEW issues only. The backend carries ~520 pre-existing lint
+  # issues (mostly goimports/gofmt formatting + errcheck); fixing all of them is
+  # a separate cleanup. We grandfather that legacy debt and BLOCK any change that
+  # ADDS a new lint issue, so the codebase cannot get worse and the debt is paid
+  # down as files are touched.
+  #
+  # NEW-ISSUE DETECTION IS GIT-BASED, NOT API-BASED. The action's
+  # `only-new-issues: true` fetches the diff from the GitHub API, which hard-caps
+  # at 300 files. RawDrive's integration PRs and squash-merges routinely exceed
+  # that; the action then logs `diff exceeded the maximum number of files (300)
+  # ... code: too_large` and SILENTLY FALLS BACK to linting the whole repo —
+  # dumping the entire ~520-issue backlog and RED-ing every large PR and main
+  # push (see golangci/golangci-lint-action#996, #1045). Instead we install
+  # golangci-lint and run it directly with its native, git-based
+  # `--new-from-merge-base=origin/<base>`, which has no file cap and uses the
+  # full-history clone (fetch-depth: 0). golangci-lint's own git diff resolves
+  # subdirectory (backend/) paths correctly — it is the same mechanism the action
+  # uses for merge_group events.
   #
   # golangci-lint v2 is REQUIRED: v1.x binaries are built with Go 1.24 and refuse
   # this repo's go1.25 target. v2.12.2 is built with go1.26. Config migrated to
@@ -57,21 +70,30 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.3
         with:
-          # only-new-issues needs history to diff new code against the base.
+          # Full history so --new-from-merge-base can diff against origin/main.
           fetch-depth: 0
       - uses: actions/setup-go@v6.4.0
         with:
           go-version: "1.26.4"
           cache-dependency-path: backend/go.sum
-      - name: golangci-lint
+      - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v9.2.1
         with:
           version: v2.12.2
-          working-directory: backend
-          args: --timeout 5m
-          # Block only issues introduced by the change set; grandfather the
-          # ~520 pre-existing issues (tracked for incremental cleanup).
-          only-new-issues: true
+          install-mode: binary
+          install-only: true
+      - name: golangci-lint (new issues only — git diff vs merge-base)
+        working-directory: backend
+        # base_ref is the repo-controlled PR target (empty on push/workflow_call,
+        # defaulting to main). Pass it via env, never interpolated into the shell,
+        # to avoid any GitHub Actions expression → command injection.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        # Grandfather pre-existing issues, block only ones added relative to the
+        # merge-base with the PR target.
+        run: |
+          golangci-lint run --timeout 5m \
+            --new-from-merge-base="origin/${BASE_REF}"
 
   # ──────────────────────────────────────────────────────────────────────
   # known-hosts-guard: prevent SSH host-key pin drift.
