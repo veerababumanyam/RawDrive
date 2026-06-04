@@ -503,6 +503,12 @@ export default function GalleriesPage() {
   const createRequested = searchParams?.get("create") === "true";
   const clientParam = searchParams?.get("client") ?? "";
   const projectParam = searchParams?.get("project") ?? "";
+  // BUG-4 (UAT 2026-06-04): the global header search navigates here with
+  // `?q=<term>`, but the term was being dropped — the list mounted unfiltered.
+  // Seed the search filter from the URL using the same lazy-initial-state
+  // pattern as create/client/project above (no set-state-on-mount the React
+  // Compiler would flag).
+  const searchParam = searchParams?.get("q") ?? "";
   const [token] = useState(() => getStoredAccessToken());
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -527,7 +533,7 @@ export default function GalleriesPage() {
   const [titleError, setTitleError] = useState("");
   const [filterType, setFilterType] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParam);
   // ID of the gallery currently armed for delete. The single-string shape
   // means arming Delete on a different card auto-disarms the previous one,
   // so the inline confirm bar never appears on two cards simultaneously.

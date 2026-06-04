@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
-const deleteGallery = vi.fn(async () => {});
+const deleteGallery = vi.fn(async (..._args: unknown[]) => {});
 vi.mock("@/lib/api/galleries", () => ({
   deleteGallery: (...args: unknown[]) => deleteGallery(...args),
   galleryPublicUrl: (g: { slug: string }) => `https://rawdrive.in/g/${g.slug}`,
