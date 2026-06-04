@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import {
   publicGalleryMusicUrl,
   type Gallery,
@@ -13,7 +14,7 @@ import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { GallerySlideshow } from "@/components/gallery/gallery-slideshow";
 import { SlideshowSlide } from "@/components/gallery/public-gallery-slideshow-launcher";
-import { Play } from "@/components/icons";
+import { Camera, Play } from "@/components/icons";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -165,6 +166,12 @@ interface PublicGalleryHeroProps {
   hasMusic?: boolean;
   assetAccessToken?: string | null;
   shareToken?: string | null;
+  // Surfaces the "Find me" photo-search CTA in the hero CTA row, horizontally
+  // aligned with Play + View Gallery. Maps to galleries.face_detection_enabled
+  // (migration 046). Default-off so it only renders when the page explicitly
+  // opts the gallery in — the FAB it replaced lived in
+  // PublicGalleryEnhancements before this CTA-row consolidation.
+  faceDetectionEnabled?: boolean;
 }
 
 // Maps the studio's overlay/scrim variant to a CSS color string. `light`
@@ -358,6 +365,28 @@ function PlaySlideshowButton({
   );
 }
 
+// "Find me" photo-search CTA pill. Mirrors the View Gallery / Play pill styling
+// exactly (same shape, padding, glass tokens, optional accent border, `min-h-11`
+// for the ≥44px touch target) so the three controls read as one aligned group.
+// It is a real navigation control (Next <Link> → /g/{slug}/photo-search), not a
+// GlassIconButton, because it carries a visible text label like View Gallery.
+// Responsive text mirrors the FAB it replaced: full phrase on ≥sm, "Find me" on
+// mobile. Uses the local SF-Symbols Camera icon (NOT lucide).
+function FindMeButton({ slug, accent }: { slug: string; accent?: string }) {
+  return (
+    <Link
+      href={`/g/${slug}/photo-search`}
+      aria-label="Find your photos with your camera"
+      className="inline-flex min-h-11 items-center gap-2 rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
+      style={accent ? { borderColor: accent } : undefined}
+    >
+      <Camera className="h-4 w-4" aria-hidden="true" />
+      <span className="hidden sm:inline">Find me with my camera</span>
+      <span className="sm:hidden">Find me</span>
+    </Link>
+  );
+}
+
 export function PublicGalleryHero({
   gallery,
   assets,
@@ -370,6 +399,7 @@ export function PublicGalleryHero({
   hasMusic = false,
   assetAccessToken,
   shareToken,
+  faceDetectionEnabled = false,
 }: PublicGalleryHeroProps) {
   const mobileViewport = useIsMobileViewport();
   // Whether to surface the public slideshow at all: it needs a slug to build
@@ -378,6 +408,10 @@ export function PublicGalleryHero({
   // behavior of treating music as the slideshow's reason-to-exist on share
   // links).
   const slideshowEnabled = Boolean(slug) && hasMusic && assets.length > 0;
+  // "Find me" CTA needs a slug to build the photo-search URL and the gallery
+  // to have face detection enabled. It sits last in the hero CTA row, after
+  // Play and View Gallery.
+  const findMeEnabled = Boolean(slug) && faceDetectionEnabled;
   // Auto-open on mount when the gallery has music, so the music plays as soon
   // as the /g/[slug] link opens — same UX the standalone launcher gave via
   // autoStart. Initializing state lazily from props (rather than a
@@ -756,7 +790,7 @@ export function PublicGalleryHero({
                 ))}
               </div>
             )}
-            <div className="absolute bottom-6 right-6 flex items-center gap-3">
+            <div className="absolute bottom-6 right-6 flex flex-wrap items-center justify-end gap-3">
               {slideshowEnabled && (
                 <PlaySlideshowButton onClick={openSlideshow} accent={accent} />
               )}
@@ -767,6 +801,9 @@ export function PublicGalleryHero({
               >
                 View Gallery
               </a>
+              {findMeEnabled && slug && (
+                <FindMeButton slug={slug} accent={accent} />
+              )}
             </div>
           </div>
         ) : (
@@ -885,6 +922,9 @@ export function PublicGalleryHero({
               >
                 View Gallery
               </a>
+              {findMeEnabled && slug && (
+                <FindMeButton slug={slug} accent={accent} />
+              )}
             </div>
           </div>
         )}
@@ -933,9 +973,17 @@ export function PublicGalleryHero({
             {gallery.description}
           </p>
         )}
-        {slideshowEnabled && (
-          <div className="mt-6">
-            <PlaySlideshowButton onClick={openSlideshow} />
+        {(slideshowEnabled || findMeEnabled) && (
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            {slideshowEnabled && (
+              <PlaySlideshowButton
+                onClick={openSlideshow}
+                accent={accentColor || undefined}
+              />
+            )}
+            {findMeEnabled && slug && (
+              <FindMeButton slug={slug} accent={accentColor || undefined} />
+            )}
           </div>
         )}
         {slideshowOverlay}
@@ -989,6 +1037,9 @@ export function PublicGalleryHero({
           >
             View Gallery
           </a>
+          {findMeEnabled && slug && (
+            <FindMeButton slug={slug} accent={accentColor || undefined} />
+          )}
         </div>
       </div>
       {slideshowOverlay}

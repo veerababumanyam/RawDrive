@@ -320,4 +320,99 @@ describe("PublicGalleryHero", () => {
       "#gallery-grid",
     );
   });
+
+  it("renders a 'Find me' control in the hero CTA row, ordered after 'View Gallery', linking to photo-search", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        faceDetectionEnabled
+      />,
+    );
+
+    const findMe = screen.getByRole("link", {
+      name: "Find your photos with your camera",
+    });
+    // It is a text CTA pill (visible label), not an icon-only button.
+    expect(findMe).toHaveTextContent("Find me");
+    // Links to the gallery's photo-search page.
+    expect(findMe).toHaveAttribute("href", "/g/asha-ravi/photo-search");
+
+    // Find me must come AFTER View Gallery in DOM order so the row reads
+    // [View Gallery] [Find me] (and [Play] [View Gallery] [Find me] with music).
+    const viewGallery = screen.getByRole("link", { name: /view gallery/i });
+    expect(
+      viewGallery.compareDocumentPosition(findMe) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("orders the full Play → View Gallery → Find me CTA row when music and face detection are both enabled", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        hasMusic
+        faceDetectionEnabled
+      />,
+    );
+
+    const play = screen.getByRole("button", { name: "Play slideshow" });
+    const viewGallery = screen.getByRole("link", { name: /view gallery/i });
+    const findMe = screen.getByRole("link", {
+      name: "Find your photos with your camera",
+    });
+
+    // Play before View Gallery before Find me — one horizontally-aligned group.
+    expect(
+      play.compareDocumentPosition(viewGallery) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      viewGallery.compareDocumentPosition(findMe) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("renders no 'Find me' control when face detection is disabled or absent", () => {
+    const { rerender } = render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        faceDetectionEnabled={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", {
+        name: "Find your photos with your camera",
+      }),
+    ).not.toBeInTheDocument();
+
+    // Absent prop (default off) — still no Find me control.
+    rerender(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+      />,
+    );
+    expect(
+      screen.queryByRole("link", {
+        name: "Find your photos with your camera",
+      }),
+    ).not.toBeInTheDocument();
+    // View Gallery is still present and unchanged.
+    expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute(
+      "href",
+      "#gallery-grid",
+    );
+  });
 });

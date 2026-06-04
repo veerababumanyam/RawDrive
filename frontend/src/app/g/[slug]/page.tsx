@@ -345,6 +345,10 @@ export default async function PublicGalleryPage({
         hasMusic={Boolean(gallery.music_asset_id)}
         assetAccessToken={assetAccessToken}
         shareToken={assetAccessToken ? undefined : followupShareToken}
+        // "Find me" photo-search CTA in the hero CTA row (replaces the old
+        // floating FAB). face_detection_enabled defaults to true in the schema
+        // (migration 046), so only an explicit false hides the CTA.
+        faceDetectionEnabled={gallery.face_detection_enabled !== false}
       />
 
       <GalleryExpiryBanner expiresAt={gallery.expires_at} />
@@ -408,10 +412,6 @@ export default async function PublicGalleryPage({
       <PublicGalleryEnhancements
         slug={slug}
         faceIdEnabled={Boolean(gallery.faceid_enabled)}
-        // face_detection_enabled defaults to true in the schema
-        // (migration 046), so undefined → true. Only an explicit false
-        // hides the Photo Search FAB.
-        faceDetectionEnabled={gallery.face_detection_enabled !== false}
       />
 
       {/* Reachable entry point for the offline manage/remove surface
