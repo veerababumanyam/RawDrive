@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import type {
-  Gallery,
-  GalleryBranding,
-  PublicAsset,
+import {
+  publicGalleryMusicUrl,
+  type Gallery,
+  type GalleryBranding,
+  type PublicAsset,
 } from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getCoverStyleById } from "@/components/gallery/cover-styles";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { GallerySlideshow } from "@/components/gallery/gallery-slideshow";
+import { SlideshowSlide } from "@/components/gallery/public-gallery-slideshow-launcher";
+import { Play } from "@/components/icons";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -151,6 +155,16 @@ interface PublicGalleryHeroProps {
   design?: PublicDesignConfig | null;
   designCoverAsset?: PublicAsset | null;
   designCoverThumbnails?: Record<string, string> | null;
+  // Public slideshow wiring. Default-off: when these are absent the hero
+  // renders no "Play" CTA and behaves exactly as before. The page passes
+  // them so the "Play" button can sit next to "View Gallery" and (when the
+  // gallery has music) the slideshow auto-opens on mount so the music plays
+  // as soon as the share link loads.
+  slug?: string;
+  ws?: string | null;
+  hasMusic?: boolean;
+  assetAccessToken?: string | null;
+  shareToken?: string | null;
 }
 
 // Maps the studio's overlay/scrim variant to a CSS color string. `light`
@@ -318,6 +332,32 @@ function googleFontsHref(
   return `https://fonts.googleapis.com/css2?${param}&display=swap`;
 }
 
+// Text CTA pill that visually pairs with the adjacent "View Gallery" anchor.
+// It mirrors the View Gallery <a> pill (same shape, padding, glass tokens) but
+// is a real <button> because it opens the in-page slideshow rather than
+// navigating. `min-h-11` (44px) guarantees the WCAG/Apple touch target even
+// though the matched py-2.5 padding alone is shorter.
+function PlaySlideshowButton({
+  onClick,
+  accent,
+}: {
+  onClick: () => void;
+  accent?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Play slideshow"
+      className="inline-flex min-h-11 items-center gap-2 rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
+      style={accent ? { borderColor: accent } : undefined}
+    >
+      <Play className="h-4 w-4" aria-hidden="true" />
+      Play
+    </button>
+  );
+}
+
 export function PublicGalleryHero({
   gallery,
   assets,
@@ -325,8 +365,52 @@ export function PublicGalleryHero({
   design,
   designCoverAsset,
   designCoverThumbnails,
+  slug,
+  ws,
+  hasMusic = false,
+  assetAccessToken,
+  shareToken,
 }: PublicGalleryHeroProps) {
   const mobileViewport = useIsMobileViewport();
+  // Whether to surface the public slideshow at all: it needs a slug to build
+  // the music URL and at least one photo to show. The "Play" CTA only renders
+  // when the gallery has configured music (matching the prior launcher's
+  // behavior of treating music as the slideshow's reason-to-exist on share
+  // links).
+  const slideshowEnabled = Boolean(slug) && hasMusic && assets.length > 0;
+  // Auto-open on mount when the gallery has music, so the music plays as soon
+  // as the /g/[slug] link opens — same UX the standalone launcher gave via
+  // autoStart. Initializing state lazily from props (rather than a
+  // set-state-in-effect) keeps this React-Compiler-safe and avoids a flash of
+  // the closed state.
+  const [slideshowOpen, setSlideshowOpen] = useState(() => slideshowEnabled);
+  const openSlideshow = () => setSlideshowOpen(true);
+  const closeSlideshow = () => setSlideshowOpen(false);
+  const slideshowOverlay =
+    slideshowEnabled && slideshowOpen ? (
+      <GallerySlideshow
+        slideCount={assets.length}
+        renderSlide={(i) => (
+          <SlideshowSlide
+            asset={assets[i]}
+            assetAccessToken={assetAccessToken ?? null}
+            position={i + 1}
+            total={assets.length}
+          />
+        )}
+        musicUrl={
+          slug
+            ? publicGalleryMusicUrl(
+                slug,
+                ws,
+                assetAccessToken,
+                shareToken,
+              )
+            : null
+        }
+        onClose={closeSlideshow}
+      />
+    ) : null;
   const canUseStudioBrand = Boolean(
     branding?.can_customize && branding.public_branding_enabled !== false,
   );
@@ -672,13 +756,18 @@ export function PublicGalleryHero({
                 ))}
               </div>
             )}
-            <a
-              href="#gallery-grid"
-              className="absolute bottom-6 right-6 inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
-              style={accent ? { borderColor: accent } : undefined}
-            >
-              View Gallery
-            </a>
+            <div className="absolute bottom-6 right-6 flex items-center gap-3">
+              {slideshowEnabled && (
+                <PlaySlideshowButton onClick={openSlideshow} accent={accent} />
+              )}
+              <a
+                href="#gallery-grid"
+                className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
+                style={accent ? { borderColor: accent } : undefined}
+              >
+                View Gallery
+              </a>
+            </div>
           </div>
         ) : (
           // Legacy bottom-anchored layout — used when no drag positions
@@ -776,7 +865,7 @@ export function PublicGalleryHero({
               </div>
             )}
             <div
-              className="mt-8"
+              className="mt-8 flex flex-wrap items-center gap-3"
               style={{
                 alignSelf:
                   effectiveAlign === "center"
@@ -786,6 +875,9 @@ export function PublicGalleryHero({
                       : "flex-start",
               }}
             >
+              {slideshowEnabled && (
+                <PlaySlideshowButton onClick={openSlideshow} accent={accent} />
+              )}
               <a
                 href="#gallery-grid"
                 className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
@@ -796,6 +888,7 @@ export function PublicGalleryHero({
             </div>
           </div>
         )}
+        {slideshowOverlay}
       </section>
     );
   }
@@ -840,6 +933,12 @@ export function PublicGalleryHero({
             {gallery.description}
           </p>
         )}
+        {slideshowEnabled && (
+          <div className="mt-6">
+            <PlaySlideshowButton onClick={openSlideshow} />
+          </div>
+        )}
+        {slideshowOverlay}
       </header>
     );
   }
@@ -876,14 +975,23 @@ export function PublicGalleryHero({
             {gallery.description}
           </p>
         )}
-        <a
-          href="#gallery-grid"
-          className="mt-8 inline-block rounded-full border border-border-subtle bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
-          style={accentColor ? { borderColor: accentColor } : undefined}
-        >
-          View Gallery
-        </a>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {slideshowEnabled && (
+            <PlaySlideshowButton
+              onClick={openSlideshow}
+              accent={accentColor || undefined}
+            />
+          )}
+          <a
+            href="#gallery-grid"
+            className="inline-block rounded-full border border-border-subtle bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
+            style={accentColor ? { borderColor: accentColor } : undefined}
+          >
+            View Gallery
+          </a>
+        </div>
       </div>
+      {slideshowOverlay}
     </section>
   );
 }

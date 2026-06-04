@@ -12,8 +12,11 @@ import GallerySettingsPage from "../[id]/settings/page";
 const mocks = vi.hoisted(() => ({
   getGallery: vi.fn(),
   updateGallerySettings: vi.fn(),
-  uploadGalleryMusic: vi.fn(),
-  clearGalleryMusic: vi.fn(),
+  uploadMusicTrack: vi.fn(),
+  selectGalleryMusic: vi.fn(),
+  listMusicLibrary: vi.fn(),
+  deleteMusicTrack: vi.fn(),
+  fetchMusicTrackBlobUrl: vi.fn(),
   getTermsStatus: vi.fn(),
   getWorkspaceProfile: vi.fn(),
   updateWorkspaceProfile: vi.fn(),
@@ -52,8 +55,11 @@ vi.mock("@/lib/auth", () => ({ getStoredAccessToken: vi.fn(() => "token-1") }));
 vi.mock("@/lib/api/galleries", () => ({
   getGallery: mocks.getGallery,
   updateGallerySettings: mocks.updateGallerySettings,
-  uploadGalleryMusic: mocks.uploadGalleryMusic,
-  clearGalleryMusic: mocks.clearGalleryMusic,
+  uploadMusicTrack: mocks.uploadMusicTrack,
+  selectGalleryMusic: mocks.selectGalleryMusic,
+  listMusicLibrary: mocks.listMusicLibrary,
+  deleteMusicTrack: mocks.deleteMusicTrack,
+  fetchMusicTrackBlobUrl: mocks.fetchMusicTrackBlobUrl,
 }));
 
 vi.mock("@/lib/api/legal", () => ({
@@ -131,9 +137,30 @@ async function renderPage() {
   });
 }
 
+function track(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "track-1",
+    filename: "first-dance.mp3",
+    content_type: "audio/mpeg",
+    size_bytes: 2_500_000,
+    created_at: "2026-06-04T00:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("Gallery settings — slideshow music", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // jsdom has no media playback — stub so the preview <audio> is inert.
+    window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    window.HTMLMediaElement.prototype.load = vi.fn();
+    if (!URL.createObjectURL) {
+      // @ts-expect-error jsdom may not define these
+      URL.createObjectURL = vi.fn(() => "blob:preview");
+      // @ts-expect-error jsdom may not define these
+      URL.revokeObjectURL = vi.fn();
+    }
     mocks.getGallery.mockResolvedValue(gallery());
     mocks.getTermsStatus.mockResolvedValue({
       needs_acceptance: false,
@@ -141,49 +168,152 @@ describe("Gallery settings — slideshow music", () => {
     });
     mocks.getWorkspaceProfile.mockResolvedValue(workspaceProfile());
     mocks.updateWorkspaceProfile.mockResolvedValue({ updated: 1 });
+    mocks.listMusicLibrary.mockResolvedValue([]);
+    mocks.fetchMusicTrackBlobUrl.mockResolvedValue("blob:preview");
+    mocks.deleteMusicTrack.mockResolvedValue(undefined);
+    mocks.selectGalleryMusic.mockResolvedValue(gallery());
   });
 
-  it("renders the Slideshow music section", async () => {
+  it("renders the Slideshow music section with an empty library", async () => {
     await renderPage();
     await waitFor(() => {
       expect(
         screen.getByRole("heading", { name: "Slideshow music" }),
       ).toBeInTheDocument();
     });
-    expect(screen.getByText("No music attached.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "Your music library is empty. Upload a track to get started.",
+      ),
+    ).toBeInTheDocument();
+    // The "No music (None)" option is always present and selected by default.
+    const none = screen.getByRole("radio", {
+      name: "No music (None)",
+    }) as HTMLInputElement;
+    expect(none.checked).toBe(true);
   });
 
-  it("uploads an audio track and reflects the attached state", async () => {
-    mocks.uploadGalleryMusic.mockResolvedValue(
-      gallery({ music_asset_id: "asset-9" }),
+  it("renders the library tracks with size, preview and delete controls", async () => {
+    mocks.listMusicLibrary.mockResolvedValue([
+      track({ id: "track-1", filename: "first-dance.mp3" }),
+      track({ id: "track-2", filename: "entry.mp3", size_bytes: 1024 }),
+    ]);
+    await renderPage();
+    await waitFor(() =>
+      screen.getByRole("heading", { name: "Slideshow music" }),
+    );
+
+    expect(await screen.findByText("first-dance.mp3")).toBeInTheDocument();
+    expect(screen.getByText("entry.mp3")).toBeInTheDocument();
+    // Human-readable size.
+    expect(screen.getByText("1.0 KB")).toBeInTheDocument();
+    // Labelled preview + delete controls per track.
+    expect(
+      screen.getByRole("button", {
+        name: "Play preview of first-dance.mp3",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete first-dance.mp3" }),
+    ).toBeInTheDocument();
+  });
+
+  it("multi-uploads audio tracks and refreshes the library", async () => {
+    mocks.uploadMusicTrack
+      .mockResolvedValueOnce({ id: "asset-1" })
+      .mockResolvedValueOnce({ id: "asset-2" });
+    // First load empty, then after upload show two tracks.
+    mocks.listMusicLibrary
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([
+        track({ id: "asset-1", filename: "a.mp3" }),
+        track({ id: "asset-2", filename: "b.mp3" }),
+      ]);
+    await renderPage();
+    await waitFor(() =>
+      screen.getByRole("heading", { name: "Slideshow music" }),
+    );
+
+    const a = new File([new Uint8Array([1])], "a.mp3", { type: "audio/mpeg" });
+    const b = new File([new Uint8Array([2])], "b.mp3", { type: "audio/mpeg" });
+    const input = screen.getByLabelText("Upload track") as HTMLInputElement;
+    expect(input.multiple).toBe(true);
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [a, b] } });
+    });
+
+    await waitFor(() =>
+      expect(mocks.uploadMusicTrack).toHaveBeenCalledTimes(2),
+    );
+    expect(mocks.uploadMusicTrack).toHaveBeenNthCalledWith(1, "token-1", a);
+    expect(mocks.uploadMusicTrack).toHaveBeenNthCalledWith(2, "token-1", b);
+    expect(await screen.findByText("a.mp3")).toBeInTheDocument();
+    expect(screen.getByText("b.mp3")).toBeInTheDocument();
+  });
+
+  it("selects a library track for this gallery", async () => {
+    mocks.listMusicLibrary.mockResolvedValue([
+      track({ id: "track-1", filename: "first-dance.mp3" }),
+    ]);
+    mocks.selectGalleryMusic.mockResolvedValue(
+      gallery({ music_asset_id: "track-1" }),
     );
     await renderPage();
     await waitFor(() =>
       screen.getByRole("heading", { name: "Slideshow music" }),
     );
 
-    const file = new File([new Uint8Array([1, 2, 3])], "track.mp3", {
-      type: "audio/mpeg",
+    const radio = await screen.findByRole("radio", {
+      name: "Use first-dance.mp3 for this gallery",
     });
-    const input = screen.getByLabelText("Upload track") as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(input, { target: { files: [file] } });
+      fireEvent.click(radio);
     });
 
     await waitFor(() =>
-      expect(mocks.uploadGalleryMusic).toHaveBeenCalledWith(
+      expect(mocks.selectGalleryMusic).toHaveBeenCalledWith(
         "token-1",
         "gallery-1",
-        file,
+        "track-1",
       ),
     );
     expect(
-      await screen.findByText("A music track is attached to this gallery."),
+      await screen.findByText(/Selected for this gallery/),
+    ).toBeInTheDocument();
+  });
+
+  it("previews a track via authed blob bytes", async () => {
+    mocks.listMusicLibrary.mockResolvedValue([
+      track({ id: "track-1", filename: "first-dance.mp3" }),
+    ]);
+    await renderPage();
+    await waitFor(() =>
+      screen.getByRole("heading", { name: "Slideshow music" }),
+    );
+
+    const playBtn = await screen.findByRole("button", {
+      name: "Play preview of first-dance.mp3",
+    });
+    await act(async () => {
+      fireEvent.click(playBtn);
+    });
+
+    await waitFor(() =>
+      expect(mocks.fetchMusicTrackBlobUrl).toHaveBeenCalledWith(
+        "token-1",
+        "track-1",
+      ),
+    );
+    // Now offers to pause.
+    expect(
+      await screen.findByRole("button", {
+        name: "Pause preview of first-dance.mp3",
+      }),
     ).toBeInTheDocument();
   });
 
   it("surfaces a quota error from the upload", async () => {
-    mocks.uploadGalleryMusic.mockRejectedValue(
+    mocks.uploadMusicTrack.mockRejectedValue(
       new Error("storage quota exceeded"),
     );
     await renderPage();
@@ -206,11 +336,11 @@ describe("Gallery settings — slideshow music", () => {
   });
 
   it("opens the terms modal and replays music upload after acceptance", async () => {
-    mocks.uploadGalleryMusic
+    mocks.uploadMusicTrack
       .mockRejectedValueOnce(
         new Error("You must accept the Terms of Service before uploading."),
       )
-      .mockResolvedValueOnce(gallery({ music_asset_id: "asset-9" }));
+      .mockResolvedValueOnce({ id: "asset-9" });
     await renderPage();
     await waitFor(() =>
       screen.getByRole("heading", { name: "Slideshow music" }),
@@ -237,16 +367,9 @@ describe("Gallery settings — slideshow music", () => {
     });
 
     await waitFor(() =>
-      expect(mocks.uploadGalleryMusic).toHaveBeenCalledTimes(2),
+      expect(mocks.uploadMusicTrack).toHaveBeenCalledTimes(2),
     );
-    expect(mocks.uploadGalleryMusic).toHaveBeenLastCalledWith(
-      "token-1",
-      "gallery-1",
-      file,
-    );
-    expect(
-      await screen.findByText("A music track is attached to this gallery."),
-    ).toBeInTheDocument();
+    expect(mocks.uploadMusicTrack).toHaveBeenLastCalledWith("token-1", file);
   });
 
   it("uploads a studio logo from Gallery Settings and uses it for watermarking", async () => {
@@ -375,9 +498,12 @@ describe("Gallery settings — slideshow music", () => {
     );
   });
 
-  it("removes an attached track", async () => {
-    mocks.getGallery.mockResolvedValue(gallery({ music_asset_id: "asset-9" }));
-    mocks.clearGalleryMusic.mockResolvedValue(
+  it("clears the gallery track via the No music option", async () => {
+    mocks.getGallery.mockResolvedValue(gallery({ music_asset_id: "track-1" }));
+    mocks.listMusicLibrary.mockResolvedValue([
+      track({ id: "track-1", filename: "first-dance.mp3" }),
+    ]);
+    mocks.selectGalleryMusic.mockResolvedValue(
       gallery({ music_asset_id: null }),
     );
     await renderPage();
@@ -385,12 +511,50 @@ describe("Gallery settings — slideshow music", () => {
       screen.getByRole("heading", { name: "Slideshow music" }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove music" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("radio", { name: "No music (None)" }));
+    });
 
     await waitFor(() =>
-      expect(mocks.clearGalleryMusic).toHaveBeenCalledWith(
+      expect(mocks.selectGalleryMusic).toHaveBeenCalledWith(
         "token-1",
         "gallery-1",
+        null,
+      ),
+    );
+  });
+
+  it("deletes a library track and clears the selection if it was selected", async () => {
+    mocks.getGallery.mockResolvedValue(gallery({ music_asset_id: "track-1" }));
+    mocks.listMusicLibrary
+      .mockResolvedValueOnce([
+        track({ id: "track-1", filename: "first-dance.mp3" }),
+      ])
+      .mockResolvedValue([]);
+    mocks.selectGalleryMusic.mockResolvedValue(
+      gallery({ music_asset_id: null }),
+    );
+    await renderPage();
+    await waitFor(() =>
+      screen.getByRole("heading", { name: "Slideshow music" }),
+    );
+
+    const deleteBtn = await screen.findByRole("button", {
+      name: "Delete first-dance.mp3",
+    });
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+
+    await waitFor(() =>
+      expect(mocks.deleteMusicTrack).toHaveBeenCalledWith("token-1", "track-1"),
+    );
+    // Deleting the selected track clears the gallery selection.
+    await waitFor(() =>
+      expect(mocks.selectGalleryMusic).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        null,
       ),
     );
   });

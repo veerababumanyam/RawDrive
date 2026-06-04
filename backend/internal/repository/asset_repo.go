@@ -145,17 +145,23 @@ type AssetFilter struct {
 	Status         string
 	ContentType    string
 	LifecycleState string
-	Search         string
-	CameraModel    string
-	LensModel      string
-	FromDate       string // ISO 8601
-	ToDate         string // ISO 8601
-	MinRating      int
-	IsFavorite     *bool
-	Sort           string // "created_at", "filename", "size_bytes", "capture_date"
-	Order          string // "asc", "desc"
-	Limit          int
-	Offset         int
+	// ExcludeContentTypePrefix, when set, appends an `AND content_type NOT LIKE
+	// '<prefix>%'` clause. The dashboard photo grid (GET /api/v1/assets) sets
+	// this to "audio/" so workspace music-library tracks — which live in the
+	// same assets table (Option A, no separate media table) — never pollute the
+	// photo grid. Empty = no exclusion (legacy behaviour preserved).
+	ExcludeContentTypePrefix string
+	Search                   string
+	CameraModel              string
+	LensModel                string
+	FromDate                 string // ISO 8601
+	ToDate                   string // ISO 8601
+	MinRating                int
+	IsFavorite               *bool
+	Sort                     string // "created_at", "filename", "size_bytes", "capture_date"
+	Order                    string // "asc", "desc"
+	Limit                    int
+	Offset                   int
 	// Cursor enables keyset/seek pagination. When non-nil AND the sort is the
 	// default created_at ordering, List seeks past the cursor with
 	// `(created_at, id) < ($ts, $id)` and omits OFFSET — a flat-latency index
@@ -326,6 +332,14 @@ func buildAssetListQuery(f AssetFilter) (string, []interface{}) {
 		args = append(args, f.ContentType)
 		argIdx++
 	}
+	if f.ExcludeContentTypePrefix != "" {
+		// Keep the music library out of the dashboard photo grid: exclude every
+		// content_type that begins with the prefix (e.g. "audio/"). The pattern
+		// is bound as a parameter ("<prefix>%") so the value is never interpolated.
+		query += fmt.Sprintf(" AND content_type NOT LIKE $%d", argIdx)
+		args = append(args, f.ExcludeContentTypePrefix+"%")
+		argIdx++
+	}
 	if f.LifecycleState != "" {
 		query += fmt.Sprintf(" AND lifecycle_state = $%d", argIdx)
 		args = append(args, f.LifecycleState)
@@ -402,6 +416,40 @@ func (r *AssetRepo) List(ctx context.Context, f AssetFilter) ([]Asset, error) {
 			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
 		); err != nil {
 			return nil, fmt.Errorf("asset repo list scan: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
+}
+
+// ListAudioByWorkspace lists every non-deleted audio asset in a workspace,
+// newest first. It backs the workspace music library (GET /api/v1/music): audio
+// uploads share the assets table with photos (Option A — no separate media
+// table), so the library is just the audio/* slice of the workspace's assets.
+// Always scoped by workspace_id so a caller can only ever see their own tenant's
+// tracks. Uses the same projection/scan shape as List.
+func (r *AssetRepo) ListAudioByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Asset, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+assetListSelectColumns+`
+		 FROM assets
+		 WHERE workspace_id = $1 AND deleted_at IS NULL AND content_type LIKE 'audio/%'
+		 ORDER BY created_at DESC`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo list audio by workspace: %w", err)
+	}
+	defer rows.Close()
+
+	assets := make([]Asset, 0)
+	for rows.Next() {
+		var a Asset
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
+		); err != nil {
+			return nil, fmt.Errorf("asset repo list audio by workspace scan: %w", err)
 		}
 		assets = append(assets, a)
 	}

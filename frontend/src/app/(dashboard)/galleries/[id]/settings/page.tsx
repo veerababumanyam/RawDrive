@@ -6,10 +6,11 @@ import { getStoredAccessToken } from "@/lib/auth";
 import {
   getGallery,
   updateGallerySettings,
-  uploadGalleryMusic,
-  clearGalleryMusic,
+  uploadMusicTrack,
+  selectGalleryMusic,
   type Gallery,
 } from "@/lib/api/galleries";
+import { MusicLibraryManager } from "@/components/gallery/music-library-manager";
 import { getTermsStatus } from "@/lib/api/legal";
 import {
   getWorkspaceProfile,
@@ -166,12 +167,18 @@ export default function GallerySettingsPage({
   const [password, setPassword] = useState("");
   const [showPasswordField, setShowPasswordField] = useState(false);
 
-  // Slideshow music state
+  // Slideshow music state — workspace music library + per-gallery selection.
   const [musicUploading, setMusicUploading] = useState(false);
+  const [musicUploadStatus, setMusicUploadStatus] = useState("");
   const [musicError, setMusicError] = useState("");
+  const [musicSelecting, setMusicSelecting] = useState(false);
+  // Bumped after each upload/library mutation to make the library list reload.
+  const [musicReloadKey, setMusicReloadKey] = useState(0);
   const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
-  const [pendingMusicFile, setPendingMusicFile] = useState<File | null>(null);
+  const [pendingMusicFiles, setPendingMusicFiles] = useState<File[] | null>(
+    null,
+  );
 
   // Studio logo / watermark state
   const [workspaceProfile, setWorkspaceProfile] =
@@ -296,28 +303,46 @@ export default function GallerySettingsPage({
     }
   };
 
+  // Upload one or more audio files into the workspace music library. The first
+  // upload is gated on terms acceptance (precheck + post-error recovery), and
+  // the whole batch replays after the photographer accepts.
   const handleMusicUpload = async (
-    file: File,
+    files: File[],
     options?: { skipTermsPrecheck?: boolean },
   ) => {
     const token = getStoredAccessToken();
-    if (!token || !gallery) return;
+    if (!token || !gallery || files.length === 0) return;
     if (termsNeedsAcceptance && !options?.skipTermsPrecheck) {
-      setPendingMusicFile(file);
+      setPendingMusicFiles(files);
       setMusicError("");
       setTermsModalOpen(true);
       return;
     }
     setMusicUploading(true);
     setMusicError("");
+    let uploaded = 0;
     try {
-      const updated = await uploadGalleryMusic(token, id, file);
-      setGallery(updated);
-      setSaveMsg("Music uploaded");
+      for (let i = 0; i < files.length; i++) {
+        setMusicUploadStatus(
+          `Uploading ${i + 1} of ${files.length}: ${files[i].name}`,
+        );
+        await uploadMusicTrack(token, files[i]);
+        uploaded += 1;
+      }
+      setMusicUploadStatus("");
+      // Refresh the library list to show the new tracks.
+      setMusicReloadKey((k) => k + 1);
+      setSaveMsg(
+        files.length === 1 ? "Track uploaded" : `${files.length} tracks uploaded`,
+      );
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
+      setMusicUploadStatus("");
+      // Always reflect whatever made it into the library before the failure.
+      if (uploaded > 0) setMusicReloadKey((k) => k + 1);
       if (isTermsUploadError(err)) {
-        setPendingMusicFile(file);
+        // Replay the remaining (unuploaded) files after terms acceptance.
+        setPendingMusicFiles(files.slice(uploaded));
         setTermsNeedsAcceptance(true);
         setTermsModalOpen(true);
         return;
@@ -333,27 +358,29 @@ export default function GallerySettingsPage({
   const handleTermsAccepted = () => {
     setTermsNeedsAcceptance(false);
     setTermsModalOpen(false);
-    const file = pendingMusicFile;
-    setPendingMusicFile(null);
-    if (file) void handleMusicUpload(file, { skipTermsPrecheck: true });
+    const files = pendingMusicFiles;
+    setPendingMusicFiles(null);
+    if (files && files.length > 0)
+      void handleMusicUpload(files, { skipTermsPrecheck: true });
   };
 
-  const handleMusicRemove = async () => {
+  // Select (or clear, with null) the per-gallery slideshow track.
+  const handleMusicSelect = async (assetId: string | null) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
-    setMusicUploading(true);
+    setMusicSelecting(true);
     setMusicError("");
     try {
-      const updated = await clearGalleryMusic(token, id);
+      const updated = await selectGalleryMusic(token, id, assetId);
       setGallery(updated);
-      setSaveMsg("Music removed");
+      setSaveMsg(assetId ? "Gallery music set" : "Gallery music cleared");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
       setMusicError(
-        err instanceof Error ? err.message : "Failed to remove music",
+        err instanceof Error ? err.message : "Failed to update gallery music",
       );
     } finally {
-      setMusicUploading(false);
+      setMusicSelecting(false);
     }
   };
 
@@ -985,53 +1012,49 @@ export default function GallerySettingsPage({
           Slideshow music
         </h2>
         <p className="text-sm text-text-secondary">
-          Add a background track for the full-screen client slideshow. The audio
-          is stored in your gallery storage and counts toward your plan&rsquo;s
-          allocated space.
+          Build a music library for your studio, preview tracks, and pick one
+          for this gallery&rsquo;s full-screen slideshow. Audio is stored in
+          your workspace storage and counts toward your plan&rsquo;s allocated
+          space.
         </p>
-        {gallery.music_asset_id ? (
-          <div className="flex items-center justify-between gap-4 py-1">
-            <p className="text-sm text-text-primary">
-              A music track is attached to this gallery.
-            </p>
-            <button
-              type="button"
-              disabled={saving || musicUploading}
-              onClick={() => void handleMusicRemove()}
-              className="btn-tertiary px-4 py-2 text-sm"
-            >
-              Remove music
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm text-text-secondary">No music attached.</p>
-        )}
+
         <div className="space-y-1">
           <label
             htmlFor="music-upload"
             className="text-sm font-medium text-text-primary"
           >
-            {gallery.music_asset_id ? "Replace track" : "Upload track"}
+            Upload track
           </label>
           <input
             id="music-upload"
             type="file"
+            multiple
             accept="audio/mpeg,audio/mp4,audio/aac,audio/x-m4a,audio/*"
             disabled={musicUploading || saving}
             onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleMusicUpload(file);
+              const files = Array.from(e.target.files ?? []);
+              if (files.length > 0) void handleMusicUpload(files);
               e.target.value = "";
             }}
             className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-lg file:border-0 file:bg-accent-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-accent-primary disabled:opacity-50"
           />
           {musicUploading && (
-            <p className="text-xs text-text-secondary">Uploading&hellip;</p>
+            <p className="text-xs text-text-secondary" aria-live="polite">
+              {musicUploadStatus || "Uploading…"}
+            </p>
           )}
           {musicError && (
             <p className="text-xs text-feedback-error">{musicError}</p>
           )}
         </div>
+
+        <MusicLibraryManager
+          token={getStoredAccessToken() ?? ""}
+          selectedAssetId={gallery.music_asset_id ?? null}
+          reloadKey={musicReloadKey}
+          onSelect={handleMusicSelect}
+          selecting={musicSelecting}
+        />
       </section>
 
       {/* Password Protection */}

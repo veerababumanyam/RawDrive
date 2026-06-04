@@ -339,47 +339,113 @@ export async function getPublicGalleryBranding(
   return res.json();
 }
 
-// Gallery Enhancements June 2026 — slideshow background music.
+// Gallery Enhancements June 2026 — workspace music library + per-gallery
+// slideshow track.
 //
-// Upload routes the audio through the normal asset-ingest path (POST
+// A workspace owns a LIBRARY of audio tracks (GET/DELETE /api/v1/music). Each
+// track is an asset uploaded through the normal asset-ingest path (POST
 // /api/v1/assets), so it lands in the workspace's managed B2 storage and its
-// bytes are counted against the workspace storage quota (a 403 surfaces the
-// quota error). The created asset is then referenced on the gallery via
-// music_asset_id (validated server-side to be an audio asset in the workspace).
+// bytes count against the workspace storage quota (a 403 surfaces the quota
+// error). A gallery then SELECTS one library track via its music_asset_id
+// (validated server-side to be an audio asset in the workspace).
+
+// One audio track in the workspace music library.
+export interface MusicTrack {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+// Lists the workspace's audio library (newest first), as returned by
+// GET /api/v1/music → { tracks: [...] }.
+export async function listMusicLibrary(_token: string): Promise<MusicTrack[]> {
+  const res = await authFetch(`/api/v1/music`);
+  if (!res.ok) throw new Error(`Failed to list music library: ${res.status}`);
+  const body = await res.json();
+  return body?.tracks ?? [];
+}
+
+// Uploads ONE audio file into the workspace storage via the normal asset-ingest
+// path. Returns the created asset id. Does NOT bind the track to any gallery —
+// callers select it for a gallery separately via selectGalleryMusic.
+export async function uploadMusicTrack(
+  _token: string,
+  file: File,
+): Promise<{ id: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await authFetch(`/api/v1/assets`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}) as Record<string, unknown>);
+    throw new Error(
+      (err.message as string) ||
+        (err.error as string) ||
+        `Failed to upload music: ${res.status}`,
+    );
+  }
+  const body = await res.json();
+  const asset = body.asset ?? body.Asset ?? body;
+  return { id: asset.id };
+}
+
+// Fetches the authed audio bytes for a library track and returns an object URL
+// suitable for an <audio src>. An <audio> element cannot send the Bearer
+// header itself, so we fetch the bytes via authFetch, wrap them in a Blob, and
+// hand back a blob: URL. The CALLER owns the URL and MUST revoke it
+// (URL.revokeObjectURL) when the preview stops or the component unmounts.
+export async function fetchMusicTrackBlobUrl(
+  _token: string,
+  id: string,
+): Promise<string> {
+  const res = await authFetch(`/api/v1/assets/${id}/download`);
+  if (!res.ok) throw new Error(`Failed to load track: ${res.status}`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+// Soft-deletes a library track (DELETE /api/v1/music/{id} → 204). The backend
+// reclaims its quota and clears it from any gallery that selected it.
+export async function deleteMusicTrack(
+  _token: string,
+  id: string,
+): Promise<void> {
+  const res = await authFetch(`/api/v1/music/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to delete music track: ${res.status}`);
+}
+
+// Selects (or clears, when assetId is null) the per-gallery slideshow track.
+// Thin wrapper over updateGallerySettings's music_asset_id field.
+export async function selectGalleryMusic(
+  token: string,
+  galleryId: string,
+  assetId: string | null,
+): Promise<Gallery> {
+  return updateGallerySettings(token, galleryId, { music_asset_id: assetId });
+}
+
+// Back-compat wrapper: upload a file into the library AND select it for this
+// gallery in one call. New UI should prefer uploadMusicTrack + selectGalleryMusic.
 export async function uploadGalleryMusic(
   token: string,
   galleryId: string,
   file: File,
 ): Promise<Gallery> {
-  void token;
-  const form = new FormData();
-  form.append("file", file);
-  const uploadRes = await authFetch(`/api/v1/assets`, {
-    method: "POST",
-    body: form,
-  });
-  if (!uploadRes.ok) {
-    const err = await uploadRes
-      .json()
-      .catch(() => ({}) as Record<string, unknown>);
-    throw new Error(
-      (err.message as string) ||
-        (err.error as string) ||
-        `Failed to upload music: ${uploadRes.status}`,
-    );
-  }
-  const uploadBody = await uploadRes.json();
-  const asset = uploadBody.asset ?? uploadBody.Asset ?? uploadBody;
-  return updateGallerySettings(token, galleryId, { music_asset_id: asset.id });
+  const asset = await uploadMusicTrack(token, file);
+  return selectGalleryMusic(token, galleryId, asset.id);
 }
 
 // Clears the gallery's slideshow music reference. The underlying audio asset is
-// left in place (freed by the normal asset-delete/quota path if removed).
+// left in the library (removed only via deleteMusicTrack).
 export async function clearGalleryMusic(
   token: string,
   galleryId: string,
 ): Promise<Gallery> {
-  return updateGallerySettings(token, galleryId, { music_asset_id: null });
+  return selectGalleryMusic(token, galleryId, null);
 }
 
 // Public URL that streams the gallery's background-music asset through the API.

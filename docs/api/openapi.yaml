@@ -63,6 +63,8 @@ tags:
     description: Asset CRUD, download, bulk operations
   - name: gallery
     description: Gallery CRUD, gallery assets, share links
+  - name: music
+    description: Workspace music library (audio assets) for gallery slideshow background tracks
 
 security:
   - BearerAuth: []
@@ -399,6 +401,38 @@ components:
             $ref: '#/components/schemas/Asset'
         next_cursor:
           type: [string, "null"]
+
+    MusicTrack:
+      type: object
+      required: [id, filename, content_type, size_bytes, created_at]
+      description: |
+        A workspace music-library track. Audio uploads reuse the assets table
+        (no separate media table); this is the audio-only projection exposed by
+        the music endpoints. The storage key is never disclosed.
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        content_type:
+          type: string
+          description: MIME type, always audio/* (e.g. audio/mpeg)
+        size_bytes:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+
+    MusicTrackList:
+      type: object
+      required: [tracks]
+      properties:
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicTrack'
 
     BulkAssetActionRequest:
       type: object
@@ -1194,6 +1228,61 @@ paths:
                 format: binary
         '302':
           description: Redirect to a presigned R2 URL (when out-of-band)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ───────────────────────── Music library ─────────────────────────
+
+  /api/v1/music:
+    get:
+      operationId: listMusicLibrary
+      tags: [music]
+      summary: List the workspace's music-library tracks
+      description: |
+        Lists every non-deleted audio asset in the caller's workspace, newest
+        first. Workspace-scoped via the JWT. Audio uploads reuse the standard
+        single-file asset upload (`POST /api/v1/assets`) and are counted against
+        the workspace storage quota the same way photos are; this endpoint is
+        the audio-only management view used by the gallery slideshow track
+        picker. Returns an empty `tracks` array (not 404) when none exist.
+      responses:
+        '200':
+          description: Music track list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicTrackList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/music/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Music track (audio asset) UUID
+    delete:
+      operationId: deleteMusicTrack
+      tags: [music]
+      summary: Delete a music-library track
+      description: |
+        Soft-deletes the audio asset (reclaiming the workspace storage quota via
+        the shared asset-delete path) and nulls `music_asset_id` on every gallery
+        in the workspace that referenced it. Returns 404 when `id` is not a
+        non-deleted audio asset in the caller's workspace (cross-tenant safe —
+        a foreign-tenant or non-audio id is indistinguishable from a missing one).
+      responses:
+        '204':
+          description: Track deleted and gallery references cleared
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

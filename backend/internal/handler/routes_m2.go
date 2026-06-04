@@ -102,6 +102,20 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		}
 	})
 
+	// Workspace music library (Gallery Enhancements June 2026). Audio uploads
+	// reuse POST /api/v1/assets (Option A — no separate media table); this is
+	// the audio-only management surface. Mounted as a sibling of /api/v1/assets
+	// under the same auth middleware. Nil-safe: needs the asset repo+service for
+	// listing/quota-reclaiming deletes and the gallery repo to null referencing
+	// galleries' music_asset_id, so it only registers when all three are wired.
+	if deps.AssetRepo != nil && deps.AssetService != nil && deps.GalleryRepo != nil {
+		musicHandler := NewMusicLibraryHandler(deps.AssetRepo, deps.AssetService, deps.GalleryRepo)
+		r.Route("/api/v1/music", func(r chi.Router) {
+			r.Get("/", musicHandler.ListLibrary)
+			r.Delete("/{id}", musicHandler.DeleteTrack)
+		})
+	}
+
 	// Protected gallery routes
 	r.Route("/api/v1/galleries", func(r chi.Router) {
 		r.Get("/", galleryHandler.List)

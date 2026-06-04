@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { publicGalleryMusicUrl, type PublicAsset } from "@/lib/api/galleries";
+import { type PublicAsset } from "@/lib/api/galleries";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
-import { GallerySlideshow } from "./gallery-slideshow";
-import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Play } from "@/components/icons";
 
 /**
  * Renders one slideshow slide through the SAME client-side media-encryption
  * pipeline the grid/lightbox use, so encrypted galleries decrypt correctly and
  * non-encrypted ones resolve a plain storage URL. Only the current slide is
- * mounted, so a single hook per visible slide is all that is needed.
+ * mounted (GallerySlideshow renders just the active index via renderSlide), so
+ * a single hook per visible slide is all that is needed.
+ *
+ * The public slideshow itself is now hosted inside PublicGalleryHero — the
+ * "Play" CTA sits next to "View Gallery" there. This module keeps the shared
+ * per-slide renderer in one place so the hero can reuse it.
  */
-function SlideshowSlide({
+export function SlideshowSlide({
   asset,
   assetAccessToken,
   position,
@@ -37,65 +38,5 @@ function SlideshowSlide({
       alt={asset.filename || `Slide ${position} of ${total}`}
       className="max-h-full max-w-full object-contain"
     />
-  );
-}
-
-interface PublicGallerySlideshowLauncherProps {
-  slug: string;
-  ws?: string | null;
-  assets: PublicAsset[];
-  hasMusic: boolean;
-  assetAccessToken?: string | null;
-  shareToken?: string | null;
-}
-
-/**
- * "Play slideshow" launch control for the public gallery. Opens the full-screen
- * GallerySlideshow over all gallery photos, with the gallery's background music
- * when one is configured. Decoupled from the heavy grid component and mounted
- * at page level.
- */
-export function PublicGallerySlideshowLauncher({
-  slug,
-  ws,
-  assets,
-  hasMusic,
-  assetAccessToken,
-  shareToken,
-}: PublicGallerySlideshowLauncherProps) {
-  const [open, setOpen] = useState(false);
-
-  if (assets.length === 0) return null;
-
-  const musicUrl = hasMusic
-    ? publicGalleryMusicUrl(slug, ws, assetAccessToken, shareToken)
-    : null;
-
-  return (
-    <>
-      <GlassIconButton
-        label="Play slideshow"
-        onClick={() => setOpen(true)}
-        size="md"
-        variant="glass"
-      >
-        <Play />
-      </GlassIconButton>
-      {open ? (
-        <GallerySlideshow
-          slideCount={assets.length}
-          renderSlide={(i) => (
-            <SlideshowSlide
-              asset={assets[i]}
-              assetAccessToken={assetAccessToken ?? null}
-              position={i + 1}
-              total={assets.length}
-            />
-          )}
-          musicUrl={musicUrl}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </>
   );
 }

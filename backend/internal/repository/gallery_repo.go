@@ -715,6 +715,26 @@ func (r *GalleryRepo) UpdateField(ctx context.Context, galleryID uuid.UUID, fiel
 	return nil
 }
 
+// ClearMusicAsset nulls galleries.music_asset_id for every gallery in the
+// workspace that currently references assetID. It is the cascade half of
+// deleting a workspace music-library track (DELETE /api/v1/music/{id}): once
+// the audio asset is soft-deleted, any gallery still pointing at it would
+// otherwise 404 its slideshow music, so the pointer is cleared. Scoped by
+// workspace_id so a caller can only ever clear references within their own
+// tenant (cross-tenant safe). Idempotent — clearing a track no gallery
+// references simply affects zero rows.
+func (r *GalleryRepo) ClearMusicAsset(ctx context.Context, workspaceID, assetID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE galleries SET music_asset_id = NULL, updated_at = now()
+		 WHERE workspace_id = $1 AND music_asset_id = $2`,
+		workspaceID, assetID,
+	)
+	if err != nil {
+		return fmt.Errorf("gallery repo clear music asset: %w", err)
+	}
+	return nil
+}
+
 // IsFaceDetectionEnabled returns whether the gallery opts into the face
 // detection ML pipeline. Used by the face worker to skip privacy-opted-out
 // galleries. A missing gallery returns (false, error) so workers fail

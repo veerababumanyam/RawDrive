@@ -46,9 +46,13 @@ interface GallerySlideshowProps {
  * looping background music. Mounted only while active (the parent gates it), so
  * it always starts fresh — no reset-on-open effect, no hydration concerns.
  *
- * Autoplay policy: browsers block audio autoplay with sound until a user
- * gesture, so music starts muted; the client taps the volume control to enable
- * sound. Image auto-advance is unaffected.
+ * Autoplay policy: music starts UNMUTED and we attempt to play immediately.
+ * Most browsers block UNMUTED audio autoplay until the page has seen a user
+ * gesture, so when the initial play() rejects we register a one-time
+ * document-level pointer/key/touch listener that retries play() (still
+ * unmuted) on the viewer's first interaction, then removes itself. The viewer
+ * can mute at any time via the volume control. Image auto-advance is
+ * unaffected.
  */
 export function GallerySlideshow({
   images,
@@ -64,7 +68,7 @@ export function GallerySlideshow({
     Math.min(Math.max(startIndex, 0), Math.max(count - 1, 0)),
   );
   const [playing, setPlaying] = useState(true);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // a11y: fullscreen modal dialog (aria-modal) — move focus in on open, trap
   // Tab within it, restore focus to the launcher on close. Mounted == open, so
@@ -110,20 +114,59 @@ export function GallerySlideshow({
   }, [next, prev, onClose]);
 
   // Sync the <audio> element with play/mute state (external-system sync).
+  // Music starts UNMUTED, so the initial play() can be rejected by the
+  // browser's autoplay policy until the page has seen a user gesture. On a
+  // rejection we register a ONE-TIME document gesture listener that retries
+  // play() (still unmuted) on the first interaction, then removes itself.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !musicUrl) return;
     audio.muted = muted;
-    if (playing) {
+
+    if (!playing) {
+      audio.pause?.();
+      return;
+    }
+
+    const gestureEvents = ["pointerdown", "keydown", "touchstart"] as const;
+    let cleanedUp = false;
+    const removeGestureListener = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      for (const evt of gestureEvents) {
+        document.removeEventListener(evt, onFirstGesture);
+      }
+    };
+    const onFirstGesture = () => {
+      removeGestureListener();
+      const el = audioRef.current;
+      if (!el) return;
       try {
-        const p = audio.play?.();
+        const p = el.play?.();
         if (p && typeof p.catch === "function") p.catch(() => {});
       } catch {
-        /* autoplay blocked or unsupported (e.g. jsdom) — non-fatal */
+        /* still blocked or unsupported — non-fatal */
       }
-    } else {
-      audio.pause?.();
+    };
+
+    try {
+      const p = audio.play?.();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {
+          // Unmuted autoplay was blocked — retry on the first user gesture.
+          // Guard against an unmount racing this pending rejection: if the
+          // effect already cleaned up, do not re-register orphaned listeners.
+          if (cleanedUp) return;
+          for (const evt of gestureEvents) {
+            document.addEventListener(evt, onFirstGesture, { once: false });
+          }
+        });
+      }
+    } catch {
+      /* autoplay blocked or unsupported (e.g. jsdom) — non-fatal */
     }
+
+    return removeGestureListener;
   }, [playing, muted, musicUrl]);
 
   if (count === 0) return null;

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
 import type {
@@ -76,6 +76,10 @@ const branding: GalleryBranding = {
 describe("PublicGalleryHero", () => {
   beforeEach(() => {
     mocks.useDecryptedAssetUrl.mockClear();
+    // jsdom media stubs — the hosted slideshow's audio-sync effect calls
+    // play()/pause() on the <audio> element when music is wired.
+    window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    window.HTMLMediaElement.prototype.pause = vi.fn();
   });
 
   it("renders studio identity and cover photo on the public gallery hero", () => {
@@ -225,5 +229,95 @@ describe("PublicGalleryHero", () => {
       screen.getByRole("img", { name: "Haldi scene cover" }),
     ).toHaveAttribute("src", "/tests/photos/Wedding (43).jpg");
     expect(screen.queryByText("Mehendi")).not.toBeInTheDocument();
+  });
+
+  it("renders a visible 'Play' control ordered before 'View Gallery' when the gallery has music", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        hasMusic
+      />,
+    );
+
+    const play = screen.getByRole("button", { name: "Play slideshow" });
+    // The visible label is the meaningful word "Play", not an icon-only button.
+    expect(play).toHaveTextContent("Play");
+    const viewGallery = screen.getByRole("link", { name: /view gallery/i });
+    // Play must come BEFORE View Gallery in DOM order so they read as a pair.
+    expect(
+      play.compareDocumentPosition(viewGallery) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("opens the slideshow when the 'Play' control is clicked", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        hasMusic
+      />,
+    );
+
+    // Music auto-opens on mount, so close first to prove the click path opens
+    // it back up rather than relying on the initial open state.
+    fireEvent.click(screen.getByRole("button", { name: "Close slideshow" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Play slideshow" }));
+    expect(
+      screen.getByRole("dialog", { name: "Gallery slideshow" }),
+    ).toBeInTheDocument();
+  });
+
+  it("auto-opens the slideshow on mount and wires the gallery music URL when music is present", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        ws="studio-abc12345"
+        hasMusic
+      />,
+    );
+
+    // No click needed — the dialog is open immediately so the music plays as
+    // soon as the share link loads.
+    expect(
+      screen.getByRole("dialog", { name: "Gallery slideshow" }),
+    ).toBeInTheDocument();
+    const audio = screen.getByTestId("slideshow-audio");
+    expect(audio.getAttribute("src")).toContain(
+      "/api/v1/public/galleries/asha-ravi/music",
+    );
+    expect(audio.getAttribute("src")).toContain("ws=studio-abc12345");
+  });
+
+  it("renders no 'Play' control and does not auto-open when the gallery has no music", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        hasMusic={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Play slideshow" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Existing behavior unchanged: View Gallery still anchors to the grid.
+    expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute(
+      "href",
+      "#gallery-grid",
+    );
   });
 });

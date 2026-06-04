@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
 
@@ -43,6 +44,25 @@ func TestM2Routes_AssetEndpoints(t *testing.T) {
 	assert.True(t, routeExists(r, "POST", "/api/v1/assets"), "POST /api/v1/assets")
 	assert.True(t, routeExists(r, "GET", "/api/v1/assets/test-id"), "GET /api/v1/assets/{id}")
 	assert.True(t, routeExists(r, "DELETE", "/api/v1/assets/test-id"), "DELETE /api/v1/assets/{id}")
+}
+
+// TestM2Routes_MusicLibraryEndpoints asserts the workspace music-library routes
+// mount when their deps (asset repo+service + gallery repo) are wired. The
+// underlying pools are nil, so the handlers would panic if called — but
+// routeExists recovers from panics, which is fine for mount-only verification.
+func TestM2Routes_MusicLibraryEndpoints(t *testing.T) {
+	r := chi.NewRouter()
+	deps := M2Dependencies{
+		AssetRepo:      repository.NewAssetRepo(nil),
+		AssetService:   service.NewAssetService(nil, nil),
+		GalleryRepo:    repository.NewGalleryRepo(nil),
+		GalleryService: service.NewGalleryService(nil, nil, nil),
+	}
+	RegisterM2Routes(r, deps)
+	RegisterPublicGalleryRoutes(r, deps)
+
+	assert.True(t, routeExists(r, "GET", "/api/v1/music"), "GET /api/v1/music")
+	assert.True(t, routeExists(r, "DELETE", "/api/v1/music/test-id"), "DELETE /api/v1/music/{id}")
 }
 
 func TestM2Routes_GalleryEndpoints(t *testing.T) {

@@ -18,7 +18,6 @@ import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
 import { SharePinGate } from "@/components/gallery/share-pin-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
 import { GalleryExpiryBanner } from "@/components/gallery/gallery-expiry-banner";
-import { PublicGallerySlideshowLauncher } from "@/components/gallery/public-gallery-slideshow-launcher";
 import {
   galleryAccentCssVars,
   resolveGalleryAccent,
@@ -336,6 +335,16 @@ export default async function PublicGalleryPage({
         design={designConfig}
         designCoverAsset={designCoverAsset}
         designCoverThumbnails={designCoverThumbnails}
+        // Public slideshow ("Play" CTA next to "View Gallery"). When the
+        // gallery has music it auto-opens on mount so the music plays as soon
+        // as the share link loads. assetAccessToken is the byte-only ?at=
+        // token; the durable share token is only forwarded when no asset
+        // token was minted (same split the grid uses).
+        slug={slug}
+        ws={ws}
+        hasMusic={Boolean(gallery.music_asset_id)}
+        assetAccessToken={assetAccessToken}
+        shareToken={assetAccessToken ? undefined : followupShareToken}
       />
 
       <GalleryExpiryBanner expiresAt={gallery.expires_at} />
@@ -356,18 +365,8 @@ export default async function PublicGalleryPage({
       />
 
       <div id="gallery-grid" className="mx-auto max-w-6xl space-y-6 px-4 pb-16">
-        {assets.length > 0 && (
-          <div className="flex justify-end">
-            <PublicGallerySlideshowLauncher
-              slug={slug}
-              ws={ws}
-              assets={assets}
-              hasMusic={Boolean(gallery.music_asset_id)}
-              assetAccessToken={assetAccessToken}
-              shareToken={assetAccessToken ? undefined : followupShareToken}
-            />
-          </div>
-        )}
+        {/* The public slideshow launch control ("Play") now lives in the hero
+            next to "View Gallery" — see PublicGalleryHero. */}
         {/* Embedded YouTube/Vimeo videos in read-only mode. Shows the
             same iframe grid the photographer sees in the dashboard
             editor; the panel auto-hides when the gallery has none. */}

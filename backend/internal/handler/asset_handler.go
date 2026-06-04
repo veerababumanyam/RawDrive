@@ -116,7 +116,13 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID: workspaceID,
 		Status:      r.URL.Query().Get("status"),
 		ContentType: r.URL.Query().Get("content_type"),
-		Limit:       limit,
+		// Keep workspace music-library tracks out of the dashboard photo grid.
+		// Audio uploads share the assets table with photos (Option A — no
+		// separate media table), so without this exclusion an uploaded
+		// background track would show up as a broken "photo" in the grid.
+		// The music library lists them via GET /api/v1/music instead.
+		ExcludeContentTypePrefix: "audio/",
+		Limit:                    limit,
 	}
 
 	if raw := r.URL.Query().Get("cursor"); raw != "" {

@@ -77,17 +77,47 @@ describe("GallerySlideshow", () => {
 
   it("renders the audio element and a mute toggle only when music is provided", () => {
     const { onClose } = setup({ musicUrl: "/api/v1/public/galleries/x/music" });
-    expect(screen.getByTestId("slideshow-audio")).toHaveAttribute(
-      "src",
-      "/api/v1/public/galleries/x/music",
-    );
-    // starts muted (autoplay policy) → control offers to unmute
-    const muteBtn = screen.getByRole("button", { name: "Unmute music" });
+    const audio = screen.getByTestId("slideshow-audio");
+    expect(audio).toHaveAttribute("src", "/api/v1/public/galleries/x/music");
+    // starts UNMUTED and attempts autoplay → control offers to mute, and
+    // the <audio> element is not muted.
+    expect((audio as HTMLAudioElement).muted).toBe(false);
+    expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    const muteBtn = screen.getByRole("button", { name: "Mute music" });
     fireEvent.click(muteBtn);
     expect(
-      screen.getByRole("button", { name: "Mute music" }),
+      screen.getByRole("button", { name: "Unmute music" }),
     ).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("retries playback on the first user gesture when unmuted autoplay is blocked", async () => {
+    // First play() rejects (browser autoplay policy); the document gesture
+    // listener should retry play() on the first pointerdown.
+    const play = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("NotAllowedError"))
+      .mockResolvedValue(undefined);
+    window.HTMLMediaElement.prototype.play = play;
+
+    setup({ musicUrl: "/api/v1/public/galleries/x/music" });
+
+    // Let the rejected play() promise settle so the listener is registered.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(play).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fireEvent.pointerDown(document);
+    });
+    expect(play).toHaveBeenCalledTimes(2);
+
+    // The one-time listener removed itself — a second gesture does not replay.
+    act(() => {
+      fireEvent.pointerDown(document);
+    });
+    expect(play).toHaveBeenCalledTimes(2);
   });
 
   it("omits audio + mute control when there is no music", () => {
