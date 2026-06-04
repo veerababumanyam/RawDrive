@@ -56,6 +56,7 @@ import {
 } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { GalleryShareQrCard } from "@/components/gallery/gallery-share-qr-card";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   Share,
@@ -2517,6 +2518,20 @@ export default function GalleryDetailPage({
           </span>
         </div>
       </div>
+
+      {/* Once published, surface the public link as a scannable QR right here
+          on the workspace — non-technical photographers get it the moment they
+          flip the publish toggle, with print-quality PNG + vector SVG
+          downloads. The QR encodes buildShareUrl() (the durable gallery-wide
+          public URL, incl. the #rd_key E2E fragment when present) — the same
+          link the Copy/Share actions use. */}
+      {gallery.is_published && (
+        <GalleryShareQrCard
+          getShareUrl={buildShareUrl}
+          title={gallery.title}
+          slug={gallery.slug}
+        />
+      )}
 
       <div>
         <section className="space-y-4">
