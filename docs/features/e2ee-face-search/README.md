@@ -41,7 +41,8 @@ data, no plaintext image) to the server index, and keep matching/clustering serv
 |---|---|---|---|
 | **0 — access fix** | **L1**: route the 3 public face/people clients same-origin (`/api/v1/...` rewrite) + `credentials:"include"` so the `gallery_session` cookie reaches the gate. Honest empty states already present. Frontend-only. | — | **this PR (#135)** |
 | 1 — ingest endpoint | Authenticated `POST /api/v1/assets/{id}/face-embeddings` → validate 512-d → `faceRepo.StoreFaces` (`source="client"`) → `ClusterFaces`. openapi updated; no migration (the `source` column already exists). Reuses `guardAssetWorkspace` (IDOR-safe) + `face_recognition_enabled` biometric gate. Idempotent re-POST via `DeleteFacesByAssetAndSource`. | `client_face_index` | **issue #137 (this PR)** |
-| 2 — in-browser indexing | buffalo_l ONNX at upload (`onnxruntime-web`): detect+embed plaintext in-browser, POST embeddings to slice-1. Model hosting/caching, WebGPU/WASM, parity harness vs face-svc on `tests/photos/`. | `client_face_index` | TODO |
+| 2a — upload-side client | `uploadAssetFaceEmbeddings(assetId, faces, opts)` (authFetch) — typed client for the slice-1 ingest endpoint. Inert until 2b wires an embedder + the flag is on. | `client_face_index` | **issue #141 (this PR)** |
+| 2b — in-browser indexing | buffalo_l ONNX at upload (`onnxruntime-web`): detect+embed plaintext in-browser, POST via the 2a client. **BLOCKED on external resources** (see spec below). | `client_face_index` | **BLOCKED — specced** |
 | 3 — decrypt thumbnails (**L2**) | Backend enriches ListPeople/ListPersonPhotos/PhotoSearch with decryptable asset records (`publicAssetResponse` via `resolveAssetsByID`); People cover + per-person grid + Find Me result grid render via the new shared `DecryptedThumb` (`useDecryptedAssetUrl`). Gallery key is global (localStorage/`#rd_key`). | — | **issue #139 (this PR)** |
 | 3b — query parity + flag-on | Guest selfie → buffalo_l → match the now-valid index; flip `client_face_index` on end-to-end. (Depends on slice 2.) | `client_face_index` | TODO |
 
@@ -54,3 +55,48 @@ guests on an honest empty state; plaintext/legacy galleries render fine with the
 Face embeddings are **biometric data** → SOC2/GDPR/DPDP. Reuse `consent-banner.tsx`, the
 workspace `face_recognition_enabled` (mig 110/112) + gallery `face_detection_enabled` (mig 046/111)
 gates, and embedding retention/deletion. Slices 1–3 must carry the compliance pass.
+
+## Slice 2b — execution spec (BLOCKED on external resources)
+
+Slice 2b makes Find Me actually return matches on E2EE galleries by computing face
+embeddings **in the photographer's browser at upload** (where the plaintext + gallery key
+live) and POSTing them via the 2a client. It is **fully designed and unblocked in code** —
+the only blockers are infra/verification, below.
+
+### What it requires (the two hard blockers — owner/ops decision)
+1. **Host the ONNX models (~190 MB) at a public URL.** Parity with the server demands the
+   *same* `insightface buffalo_l` models: `det_10g.onnx` (~17 MB) + `w600k_r50.onnx` (~170 MB).
+   They are **not in the repo** — `services/face-svc` auto-downloads them via the Python
+   `insightface` package into its container volume (`~/.insightface`). For the browser they
+   must be served from a public URL (e.g. a public B2 bucket or CDN), fetched once and cached
+   in IndexedDB. Committing 190 MB to git is not acceptable.
+2. **Verify embedding parity.** Prove browser embeddings match face-svc within tolerance, or
+   cosine search returns garbage. Run both pipelines on every `tests/photos/` JPEG and assert
+   cosine(browser, face-svc) ≥ ~0.98 per face. Needs both pipelines running (face-svc is in
+   docker-compose; the browser/onnxruntime-node side needs the models from blocker 1).
+
+### Pre-built / ready (this epic)
+- **Ingest endpoint** — `POST /api/v1/assets/{id}/face-embeddings` (slice 1, on main).
+- **Upload-side client** — `uploadAssetFaceEmbeddings()` (slice 2a, this PR).
+- **Result rendering** — `DecryptedThumb` + enriched responses (slice 3, on main).
+- **Feature flag** — `client_face_index` (off by default).
+
+### Remaining code (drop-in once blockers clear)
+- `frontend/src/lib/face-embedding/` — onnxruntime-web session loader (fetch models from the
+  public URL → IndexedDB cache); SCRFD/RetinaFace `det_10g` detection (anchors + NMS);
+  5-landmark affine warp → 112×112; `w600k_r50` recognition → 512-d → **L2-normalize**.
+  Preprocessing MUST match insightface exactly (BGR, the insightface mean/std). Run in a Web
+  Worker (mirror `src/workers/upload-screening.worker.ts` + its `worker-client.ts`).
+- **Upload seam** — `frontend/src/hooks/use-upload.ts` post-finalize (after `finalAssetId`,
+  where `item.file` plaintext is still in scope): if `client_face_index` on **and** workspace
+  `face_recognition_enabled` (GET via `workspace_face_recognition_handler`) **and** gallery
+  `face_detection_enabled`, run the worker on the plaintext, then `uploadAssetFaceEmbeddings`.
+  Best-effort: wrap in try/catch so detection never blocks the upload.
+- **Parity harness** — `frontend` script + a `tests/` fixture comparing browser vs face-svc
+  embeddings on `tests/photos/`; gate enabling the flag on it.
+- Then flip `client_face_index` on (slice 3b) → guest selfie → match → decrypted results.
+
+### Verdict
+Everything codeable + unit-verifiable in this repo is shipped (slices 0/1/2a/3). Slice 2b
+cannot be claimed *working* without blockers (1) + (2), which are an ops/infra decision plus a
+verification run — not code. **Owner decision needed: where to host the models.**

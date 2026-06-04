@@ -15,6 +15,7 @@ import {
   getDuplicates,
   setSpendCap,
   validateAIKey,
+  uploadAssetFaceEmbeddings,
   listPublicPeople,
   listPublicPersonPhotos,
   searchPublicFaceInGallery,
@@ -223,5 +224,37 @@ describe("Public face/people API client (gallery-session credential)", () => {
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include");
     expect(init.body).toBeInstanceOf(FormData);
+  });
+});
+
+// Upload-side client for the slice-1 ingest endpoint. Authenticated owner call
+// (the photographer), so it goes through authFetch (Authorization + include).
+describe("uploadAssetFaceEmbeddings (client face-index ingest)", () => {
+  it("POSTs embeddings to the asset face-embeddings endpoint", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ stored: 2 }) });
+
+    const faces = [
+      { face_index: 0, bounding_box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, embedding: new Array(512).fill(0), det_score: 0.99 },
+      { face_index: 1, embedding: new Array(512).fill(0.01), det_score: 0.8 },
+    ];
+    const result = await uploadAssetFaceEmbeddings("asset-1", faces, { galleryId: "g-1" });
+    expect(result.stored).toBe(2);
+
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/assets/asset-1/face-embeddings");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include"); // authFetch attaches credentials
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-token");
+    const body = JSON.parse(init.body);
+    expect(body.gallery_id).toBe("g-1");
+    expect(body.faces).toHaveLength(2);
+    expect(body.faces[0].embedding).toHaveLength(512);
+  });
+
+  it("throws on a non-ok response", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403, text: () => Promise.resolve("face recognition disabled") });
+    await expect(
+      uploadAssetFaceEmbeddings("asset-1", [{ embedding: new Array(512).fill(0) }]),
+    ).rejects.toThrow(/disabled|403/);
   });
 });

@@ -342,6 +342,48 @@ export async function searchPublicFaceInGallery(
   return res.json();
 }
 
+// ---- Client-computed face-embedding ingest (E2EE face-search epic) ----
+
+export interface ClientFaceBoundingBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// One detected face computed IN THE BROWSER (slice 2b: insightface buffalo_l
+// via onnxruntime-web) on the decrypted plaintext at upload time. Only the
+// 512-d embedding + box are sent — never the plaintext image — so E2EE holds.
+export interface ClientFaceEmbeddingInput {
+  face_index?: number;
+  bounding_box?: ClientFaceBoundingBox;
+  // Exactly 512 floats (insightface buffalo_l, L2-normalized). The backend
+  // (POST /api/v1/assets/{id}/face-embeddings, slice 1) validates the length.
+  embedding: number[];
+  det_score?: number;
+}
+
+// uploadAssetFaceEmbeddings POSTs browser-computed face embeddings for an asset
+// to the slice-1 ingest endpoint. Authenticated owner call (the photographer
+// uploading), so it goes through authFetch. Inert end-to-end until the
+// client_face_index flag is enabled AND a browser embedder is wired (slice 2b).
+export async function uploadAssetFaceEmbeddings(
+  assetId: string,
+  faces: ClientFaceEmbeddingInput[],
+  opts?: { galleryId?: string },
+): Promise<{ stored: number }> {
+  const res = await authFetch(`/api/v1/assets/${assetId}/face-embeddings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gallery_id: opts?.galleryId, faces }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Face embedding upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ---- Semantic Search ----
 
 export async function searchAssets(token: string, query: string, galleryId?: string, limit?: number): Promise<{ results: SearchResult[]; total: number }> {
