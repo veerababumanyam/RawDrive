@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ValkeyClient is the narrow surface the sliding-window limiter needs.
@@ -40,6 +42,23 @@ type ValkeyClient interface {
 
 // ErrRateLimited is returned when a request exceeds the configured budget.
 var ErrRateLimited = errors.New("rate limit exceeded")
+
+// ValkeyFallbackTotal counts how often the Valkey backend is unavailable and
+// the limiter falls back to per-node in-memory enforcement (M-2 from the
+// 2026-06-05 caching audit). Register with the Prometheus registry in main.go:
+//
+//	reg.MustRegister(middleware.ValkeyFallbackTotal)
+//
+// The label "limiter" identifies the scope ("global", "cred", "mfa", "pin", …).
+var ValkeyFallbackTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Namespace: "rawdrive",
+		Subsystem: "valkey",
+		Name:      "fallback_total",
+		Help:      "Total times a rate-limiter fell back to per-node in-memory enforcement because Valkey was unavailable.",
+	},
+	[]string{"limiter"},
+)
 
 // ValkeyRateLimit returns chi middleware that enforces a per-key
 // sliding-window budget using a Valkey/Redis backend. keyFunc extracts
@@ -123,6 +142,7 @@ func RateLimitWithValkey(client ValkeyClient, scope string, maxRequests int, win
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if client == nil {
 				// No Valkey configured — enforce per-node in-memory (fail-closed).
+				ValkeyFallbackTotal.WithLabelValues(scope).Inc()
 				memChain.ServeHTTP(w, r)
 				return
 			}
@@ -139,6 +159,7 @@ func RateLimitWithValkey(client ValkeyClient, scope string, maxRequests int, win
 			if err != nil {
 				// Valkey errored — fall back to in-memory enforcement rather than
 				// failing open, so an outage never disables brute-force protection.
+				ValkeyFallbackTotal.WithLabelValues(scope).Inc()
 				memChain.ServeHTTP(w, r)
 				return
 			}

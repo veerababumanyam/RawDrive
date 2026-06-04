@@ -254,3 +254,32 @@ Three layers, fastest first:
 | `.github/workflows/branch-hygiene.yml` | Weekly merged-branch cleanup |
 | `.github/workflows/cd-production.yml` | Optional GitHub deploy button |
 | `.github/workflows/release.yml` | GitHub Release on `v*` tag |
+
+---
+
+## Multi-Node Operational Notes
+
+### After any `platform_settings` change (M-1)
+
+Admin writes to `platform_settings` (SMTP credentials, storage keys, feature flags) are
+cached per-node with a 30-second TTL (`repository/platform_settings_repo.go`). After
+making any such change — including via `go run ./backend/cmd/sync-platform-settings-from-env`
+— **wait at least 30 seconds** before running traffic verification on the second node.
+The cache expires automatically; no manual invalidation is required.
+
+### Valkey / Redis health monitoring (M-3)
+
+The `rawdrive_valkey_fallback_total{limiter="..."}` Prometheus counter at `/metrics`
+increments every time a rate-limiter falls back to per-node in-memory enforcement
+because Valkey is unavailable. A sustained non-zero rate means:
+
+- Rate limits are no longer cluster-wide — each node enforces independently
+- Brute-force protection is weakened in multi-node mode
+
+**Alert threshold:** if the counter increases at >1/min for more than 2 minutes,
+investigate Valkey connectivity (`VALKEY_URL`, UFW rules between nodes, Valkey process).
+
+Before enabling Patroni active-active (`PATRONI_ENABLED=true`), verify that:
+1. `VALKEY_URL` is set on both app nodes and the `startup ping` log line is green
+2. `rawdrive_valkey_fallback_total` is 0 on a fresh boot (no Valkey errors)
+3. The storage analytics widget shows a consistent value from both nodes

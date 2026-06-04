@@ -57,20 +57,14 @@ type TOTPService interface {
 type totpService struct {
 	config TOTPConfig
 
-	// usedCodes provides F-058 replay protection. It maps a
-	// sha256(secret + ":" + code) digest to the time the entry should be
-	// evicted. A code is recorded only AFTER it validates, so failed
-	// attempts never poison the cache, and a valid code can be verified at
-	// most once per TOTP validity window. Keying on the secret digest
-	// scopes deduplication per enrollment (every user has a distinct
-	// secret) without widening the Verify signature.
-	//
-	// In-process sync.Map mirrors the consumedChallenges pattern in
-	// mfa_handler.go: the validity window (~90s) is far shorter than any
-	// realistic restart, and brute force is already bounded by the global
-	// 60/min rate limiter. A horizontal scale-out would back this with
-	// Valkey; tracked alongside the consumedChallenges scale-out note.
+	// usedCodes is the per-process sync.Map fallback for F-058 replay
+	// protection. Active only when denylist is nil or errors.
 	usedCodes sync.Map
+
+	// denylist, when non-nil, is the cross-node used-code store (Valkey).
+	// It is preferred over usedCodes so a code consumed on one node is
+	// invisible to all peers within the replay window.
+	denylist CodeDenylist
 
 	// now is overridable in tests; defaults to time.Now.
 	now func() time.Time
@@ -78,11 +72,18 @@ type totpService struct {
 
 // NewTOTPService constructs a TOTP service. An empty Issuer defaults to
 // "RawDrive" so enrollments never produce malformed otpauth URLs.
-func NewTOTPService(config TOTPConfig) TOTPService {
+// An optional CodeDenylist may be supplied to share used-code state across
+// nodes (C-1 from the 2026-06-05 caching audit). When nil the per-process
+// sync.Map is the sole replay fence.
+func NewTOTPService(config TOTPConfig, dl ...CodeDenylist) TOTPService {
 	if config.Issuer == "" {
 		config.Issuer = defaultTOTPIssuer
 	}
-	return &totpService{config: config, now: time.Now}
+	s := &totpService{config: config, now: time.Now}
+	if len(dl) > 0 {
+		s.denylist = dl[0]
+	}
+	return s
 }
 
 // Enroll generates a fresh TOTP secret for the given account name and
@@ -127,7 +128,7 @@ func (s *totpService) Verify(ctx context.Context, secret, code string) (bool, er
 	if !totp.Validate(code, secret) {
 		return false, nil
 	}
-	if !s.markCodeUsed(secret, code) {
+	if !s.markCodeUsed(ctx, secret, code) {
 		// Cryptographically valid but already consumed within its window —
 		// treat as an invalid code so a replay yields no session.
 		return false, nil
@@ -136,26 +137,34 @@ func (s *totpService) Verify(ctx context.Context, secret, code string) (bool, er
 }
 
 // markCodeUsed atomically records a successfully-validated (secret, code)
-// pair. It returns true if this call performed the recording (the pair was
-// not previously seen) and false if the pair was already consumed within
-// its validity window.
+// pair. Returns true if this call performed the recording (the pair was not
+// previously seen) and false if the pair was already consumed within its
+// validity window.
 //
-// The key is sha256(secret + ":" + code) so neither the plaintext secret
-// nor the bare code is held verbatim in the map. Opportunistic eviction
-// sweeps up to 16 expired entries per call to keep the map bounded without
-// a background goroutine — same discipline as consumeChallengeToken.
-func (s *totpService) markCodeUsed(secret, code string) bool {
+// When a CodeDenylist is configured it is tried first — a Valkey SETNX gives
+// cross-node protection. On denylist error the method falls through to the
+// in-process sync.Map so a Valkey outage never disables replay protection.
+func (s *totpService) markCodeUsed(ctx context.Context, secret, code string) bool {
+	sum := sha256.Sum256([]byte(secret + ":" + code))
+	digestKey := "totp:used:" + hex.EncodeToString(sum[:])
+	ttl := totpReplayWindow + 10*time.Second
+
+	if s.denylist != nil {
+		recorded, err := s.denylist.MarkUsed(ctx, digestKey, ttl)
+		if err == nil {
+			return recorded
+		}
+		// Valkey error → fall through to in-process sync.Map below.
+	}
+
 	nowFn := s.now
 	if nowFn == nil {
 		nowFn = time.Now
 	}
 	now := nowFn()
-
-	sum := sha256.Sum256([]byte(secret + ":" + code))
-	key := hex.EncodeToString(sum[:])
 	evictAt := now.Add(totpReplayWindow)
 
-	if _, loaded := s.usedCodes.LoadOrStore(key, evictAt); loaded {
+	if _, loaded := s.usedCodes.LoadOrStore(digestKey, evictAt); loaded {
 		return false
 	}
 

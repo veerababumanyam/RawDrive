@@ -1152,6 +1152,18 @@ func (v valkeyAnalyticsCache) Del(ctx context.Context, key string) {
 	_ = v.rdb.Del(ctx, key).Err()
 }
 
+// valkeyCodeDenylist adapts the raw go-redis client to auth.CodeDenylist so
+// TOTP used-codes and MFA challenge tokens can be shared across nodes via
+// Valkey (C-1 and C-2 from the 2026-06-05 caching audit). SETNX with TTL
+// ensures exactly-once semantics even under concurrent verification requests.
+type valkeyCodeDenylist struct{ rdb *redis.Client }
+
+func (v valkeyCodeDenylist) MarkUsed(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	// SET key 1 NX EX — atomic: returns true (key was set) or false (already present).
+	ok, err := v.rdb.SetNX(ctx, key, 1, ttl).Result()
+	return ok, err
+}
+
 // valkeyCacheStatSource adapts the rate-limiter Valkey client into the
 // pool-stats source the admin metrics summary reports. Returns the concrete
 // client when Valkey is backed by a real redis connection; otherwise nil so
@@ -1539,7 +1551,11 @@ func main() {
 
 	mfaEnrollmentsRepo := repository.NewUserMFAEnrollmentsRepo(dbPool)
 	mfaRecoveryRepo := repository.NewUserMFARecoveryCodesRepo(dbPool)
-	totpSvc := auth.NewTOTPService(auth.TOTPConfig{Issuer: os.Getenv("MFA_ISSUER_NAME")})
+	var codeDenylist auth.CodeDenylist
+	if valkeyRaw != nil {
+		codeDenylist = valkeyCodeDenylist{rdb: valkeyRaw}
+	}
+	totpSvc := auth.NewTOTPService(auth.TOTPConfig{Issuer: os.Getenv("MFA_ISSUER_NAME")}, codeDenylist)
 	recoverySvc := auth.NewRecoveryCodeService(auth.RecoveryCodeConfig{})
 
 	mfaEnrollmentAdapter := &mfaEnrollmentStoreAdapter{repo: mfaEnrollmentsRepo}
@@ -1562,6 +1578,9 @@ func main() {
 		},
 		wsLookup,
 	)
+	if codeDenylist != nil {
+		mfaHandler = mfaHandler.WithDenylist(codeDenylist)
+	}
 
 	// Wire the authed-user-ID reader so MFA handlers can read the JWT
 	// claim subject from the middleware context without importing the
@@ -2065,7 +2084,14 @@ func main() {
 	// F-009: shared PIN brute-force limiter (5 attempts / 5 min per IP+resource),
 	// consumed by BOTH the public gallery verify-pin (M2) and the stream
 	// verify-pin (M8) so the two PIN gates share throttling state.
-	pinLimiter := middleware.NewMemoryPINRateLimiter(5, 5*time.Minute)
+	// H-2 (2026-06-05 caching audit): use Valkey-backed limiter when available
+	// so the 5-attempt budget is cluster-wide, not per-node.
+	var pinLimiter middleware.PINRateLimiter
+	if valkeyClient != nil {
+		pinLimiter = middleware.NewRedisPINRateLimiter(valkeyClient, 5, 5*time.Minute)
+	} else {
+		pinLimiter = middleware.NewMemoryPINRateLimiter(5, 5*time.Minute)
+	}
 	var m6Scheduler *scheduler.Scheduler                     // declared here so it can be started below next to workers
 	var publicLeadDispatcher *handler.NotificationDispatcher // set inside protected block, consumed by public lead embed below
 

@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/observability"
 )
 
@@ -38,6 +39,11 @@ func mountMetricsRoute(r chi.Router, dbPool *pgxpool.Pool) *observability.WebVit
 
 	webVitals := observability.NewWebVitalsMetrics()
 	reg.MustRegister(webVitals)
+
+	// M-2 (2026-06-05 caching audit): Valkey fallback counter — incremented
+	// whenever a rate limiter falls back to per-node in-memory enforcement
+	// because Valkey is unavailable. Alert on sustained non-zero values.
+	reg.MustRegister(middleware.ValkeyFallbackTotal)
 
 	r.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	return webVitals

@@ -185,7 +185,7 @@ func TestTOTPVerify_ReplayWindowExpires(t *testing.T) {
 	// Note: totp.Validate uses real wall-clock time, so this only asserts
 	// the cache state, not the RFC check. The genuine assertion here is that
 	// the stale entry no longer occupies the map after a sweep.
-	svc.markCodeUsed(enrollment.Secret, freshCode) // trigger sweep at advanced time
+	svc.markCodeUsed(context.Background(), enrollment.Secret, freshCode) // trigger sweep at advanced time
 
 	count := 0
 	svc.usedCodes.Range(func(_, _ any) bool { count++; return true })

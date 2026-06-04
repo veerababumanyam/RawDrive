@@ -113,22 +113,14 @@ type MFAHandler struct {
 	// now is injected for deterministic tests.
 	now func() time.Time
 
-	// consumedChallenges tracks MFA challenge tokens that have been used
-	// successfully, to enforce single-use semantics (S-003). The key is a
-	// hex-encoded sha256 of the raw mfa_token string; the value is the
-	// wall-clock time at which the entry becomes eligible for eviction
-	// (challenge expiry + 1 minute buffer). A failed TOTP attempt does
-	// NOT burn the token — we only consume on successful verification,
-	// just before issuing the full access/refresh tokens. That keeps
-	// retry UX alive while closing the replay-after-success window.
-	//
-	// In-process sync.Map is acceptable here because the challenge
-	// lifetime (5 minutes) is shorter than any realistic restart window,
-	// and brute-forcing a valid 6-digit code within one 5-minute JWT
-	// lifetime is already bounded by the global 60/min rate limiter. A
-	// horizontal scale-out would want a Valkey-backed denylist instead;
-	// that is tracked as a separate Tier A finding.
+	// consumedChallenges is the per-process sync.Map fallback for S-003
+	// single-use semantics. Active when challengeDenylist is nil or errors.
 	consumedChallenges sync.Map
+
+	// challengeDenylist, when non-nil, is the cross-node denylist (Valkey)
+	// so a consumed mfa_token is invisible to all app nodes within the
+	// challenge lifetime (C-2 from the 2026-06-05 caching audit).
+	challengeDenylist CodeDenylist
 }
 
 // NewMFAHandler constructs the MFA handler. The envelope may be nil in
@@ -161,6 +153,14 @@ func NewMFAHandler(
 		workspaceLookup: workspaceLookup,
 		now:             time.Now,
 	}
+}
+
+// WithDenylist wires a cross-node CodeDenylist for MFA challenge tokens.
+// Call immediately after NewMFAHandler; the handler is not safe to mutate
+// after it starts serving requests.
+func (h *MFAHandler) WithDenylist(d CodeDenylist) *MFAHandler {
+	h.challengeDenylist = d
+	return h
 }
 
 // PublicRoutes returns the chi subrouter for MFA endpoints that do NOT
@@ -455,7 +455,7 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 	// session. Intentionally placed AFTER totp.Verify so a typo'd code
 	// does not burn the challenge — users can retry with the same
 	// mfa_token until they either succeed or the token expires.
-	if !h.consumeChallengeToken(req.MFAToken) {
+	if !h.consumeChallengeToken(r.Context(), req.MFAToken) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "mfa token already used"})
 		return
 	}
@@ -595,7 +595,7 @@ func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) 
 	// Burn the mfa_token so the same challenge cannot be replayed with a
 	// different recovery code or with a TOTP code. Mirrors the S-003
 	// guard in VerifyTOTP.
-	if !h.consumeChallengeToken(req.MFAToken) {
+	if !h.consumeChallengeToken(r.Context(), req.MFAToken) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "mfa token already used"})
 		return
 	}
@@ -765,28 +765,37 @@ func (h *MFAHandler) IssueMFAChallengeToken(userID, workspaceID, role, platformR
 // stays small regardless of JWT length. Opportunistic eviction sweeps
 // up to 16 expired entries per call to keep the map bounded without
 // spawning a background goroutine.
-func (h *MFAHandler) consumeChallengeToken(tokenStr string) bool {
+//
+// When a CodeDenylist is configured it is tried first so consumed tokens
+// are shared across all app nodes (C-2 from the 2026-06-05 caching audit).
+// On denylist error the method falls through to the in-process sync.Map.
+func (h *MFAHandler) consumeChallengeToken(ctx context.Context, tokenStr string) bool {
 	if tokenStr == "" {
 		return false
 	}
 	sum := sha256.Sum256([]byte(tokenStr))
-	key := hex.EncodeToString(sum[:])
+	digestKey := "mfa:challenge:" + hex.EncodeToString(sum[:])
+	ttl := mfaChallengeExpiry + 2*time.Minute // challenge lifetime + buffer
+
+	if h.challengeDenylist != nil {
+		recorded, err := h.challengeDenylist.MarkUsed(ctx, digestKey, ttl)
+		if err == nil {
+			return recorded
+		}
+		// Valkey error → fall through to in-process sync.Map below.
+	}
 
 	nowFn := h.now
 	if nowFn == nil {
 		nowFn = time.Now
 	}
 	now := nowFn()
-	// Keep the entry around for a full challenge expiry + 1 minute
-	// buffer so a clock-skewed replay still gets caught.
 	evictAt := now.Add(mfaChallengeExpiry + time.Minute)
 
-	if _, loaded := h.consumedChallenges.LoadOrStore(key, evictAt); loaded {
+	if _, loaded := h.consumedChallenges.LoadOrStore(digestKey, evictAt); loaded {
 		return false
 	}
 
-	// Opportunistic cleanup — delete up to 16 entries whose eviction
-	// time has passed. Bounded work per call, no background goroutine.
 	swept := 0
 	h.consumedChallenges.Range(func(k, v any) bool {
 		if ts, ok := v.(time.Time); ok && now.After(ts) {
