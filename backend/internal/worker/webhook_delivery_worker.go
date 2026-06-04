@@ -8,15 +8,17 @@ package worker
 // rows, POSTs them to the subscriber URL with the X-RawDrive-Signature
 // header, and records the response.
 //
-// Retry strategy: exponential backoff via the dedicated DeliveryAttempt
-// state. Pending rows with attempt < maxAttempts and last_attempted_at
-// older than backoff(attempt) are picked up. After maxAttempts the row
-// is moved to "dead" status — operators can manually retry from the
-// dashboard once the upstream is fixed.
+// Retry strategy: failed rows (attempt < maxAttempts) are retried on a later
+// poll. The claim lease (claimed_at) spaces retries by ~webhookClaimLease so a
+// failing subscriber is not hammered every poll cycle. After maxAttempts the row
+// is moved to "dead" status — operators can manually retry from the dashboard
+// once the upstream is fixed. (A dedicated exponential next_attempt_at column is
+// a tracked follow-up; the lease provides flat spacing in the meantime.)
 //
-// Concurrency: single-instance only for simplicity. The pending poll
-// uses FOR UPDATE SKIP LOCKED so adding a second instance is safe but
-// not currently necessary at rawdrive's scale.
+// Concurrency: safe to run multiple instances. processBatch claims rows in a
+// single atomic UPDATE ... WHERE id IN (SELECT ... FOR UPDATE OF d SKIP LOCKED)
+// that stamps claimed_at, so no two workers — and no overlapping tick during a
+// slow POST — ever claim, and therefore never double-deliver, the same row.
 
 import (
 	"bytes"
@@ -109,37 +111,67 @@ func (w *WebhookDeliveryWorker) Stop() {
 	close(w.stopCh)
 }
 
-// processBatch claims pending deliveries and dispatches each one. Errors
-// from individual deliveries do not abort the batch.
-func (w *WebhookDeliveryWorker) processBatch(ctx context.Context) {
+// webhookClaimLease bounds how long a claimed-but-undelivered row stays out of
+// the claimable set. It must exceed the HTTP client timeout (30s) so a slow
+// subscriber is never re-claimed mid-POST, and it doubles as the retry spacing
+// for 'failed' rows (which keep their claim stamp until the lease lapses),
+// replacing the previous re-claim-every-poll hot loop. A crashed worker's row is
+// re-claimed once its lease goes stale.
+const webhookClaimLease = 2 * time.Minute
+
+// claimBatch atomically claims up to `limit` retryable deliveries, stamping
+// claimed_at and returning them hydrated with their webhook url + secret. The
+// claim is a single UPDATE ... WHERE id IN (SELECT ... FOR UPDATE OF d SKIP
+// LOCKED) statement (locking only the delivery rows, not the webhooks rows), so
+// no two workers — and no overlapping tick during a slow POST — ever claim, and
+// therefore never double-deliver, the same row. This replaces the previous
+// standalone SELECT ... FOR UPDATE SKIP LOCKED whose locks released the instant
+// the result set drained, leaving the row re-claimable while the HTTP POST was
+// still in flight.
+func (w *WebhookDeliveryWorker) claimBatch(ctx context.Context, limit int) ([]WebhookDelivery, error) {
 	rows, err := w.pool.Query(ctx, `
-		SELECT d.id, d.webhook_id, w.url, w.secret, d.event_type, d.payload,
-		       d.attempt, COALESCE(d.error_message, '')
-		FROM webhook_deliveries d
-		JOIN webhooks w ON w.id = d.webhook_id
-		WHERE d.status IN ('pending', 'failed')
-		  AND d.attempt < $1
-		  AND w.is_active = true
-		ORDER BY d.created_at ASC
-		LIMIT 10
-		FOR UPDATE SKIP LOCKED`, w.maxAttempts)
+		UPDATE webhook_deliveries d
+		SET claimed_at = now()
+		FROM webhooks w
+		WHERE w.id = d.webhook_id
+		  AND d.id IN (
+		      SELECT d2.id FROM webhook_deliveries d2
+		      JOIN webhooks w2 ON w2.id = d2.webhook_id
+		      WHERE d2.status IN ('pending', 'failed')
+		        AND d2.attempt < $1
+		        AND w2.is_active = true
+		        AND (d2.claimed_at IS NULL OR d2.claimed_at < now() - make_interval(secs => $2))
+		      ORDER BY d2.created_at ASC
+		      LIMIT $3
+		      FOR UPDATE OF d2 SKIP LOCKED
+		  )
+		RETURNING d.id, d.webhook_id, w.url, w.secret, d.event_type, d.payload,
+		          d.attempt, COALESCE(d.error_message, '')`,
+		w.maxAttempts, webhookClaimLease.Seconds(), limit)
 	if err != nil {
-		log.Printf("webhook worker: claim batch: %v", err)
-		return
+		return nil, err
 	}
 	defer rows.Close()
-
 	var batch []WebhookDelivery
 	for rows.Next() {
 		var d WebhookDelivery
 		if err := rows.Scan(&d.ID, &d.WebhookID, &d.URL, &d.Secret, &d.EventType,
 			&d.Payload, &d.Attempt, &d.LastError); err != nil {
-			log.Printf("webhook worker: scan: %v", err)
-			continue
+			return nil, err
 		}
 		batch = append(batch, d)
 	}
+	return batch, rows.Err()
+}
 
+// processBatch claims retryable deliveries and dispatches each one. Errors
+// from individual deliveries do not abort the batch.
+func (w *WebhookDeliveryWorker) processBatch(ctx context.Context) {
+	batch, err := w.claimBatch(ctx, 10)
+	if err != nil {
+		log.Printf("webhook worker: claim batch: %v", err)
+		return
+	}
 	for _, d := range batch {
 		w.deliverOne(ctx, d)
 	}

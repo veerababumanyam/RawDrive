@@ -104,47 +104,84 @@ func (w *DSRPurgeWorker) Stop() {
 	close(w.stopCh)
 }
 
+// dsrClaimLease bounds how long a claimed-but-unfinished DSR row stays out of
+// the claimable set. Erasure can traverse large workspaces and take minutes, so
+// the lease is generous; only a row stuck past the lease (a crashed worker) is
+// re-claimed. Parked 'rectify' rows awaiting admin review are excluded from
+// stale-reclaim entirely so the lease never re-loops them.
+const dsrClaimLease = 30 * time.Minute
+
+// claimedDSRRow is a row this worker has atomically claimed for processing.
+type claimedDSRRow struct {
+	ID           uuid.UUID
+	SubjectEmail string
+	SubjectUser  *uuid.UUID
+	RequestType  string
+}
+
+// claimBatch atomically claims up to `limit` DSR rows, flipping them
+// pending → processing and stamping claimed_at in a single UPDATE ... WHERE id
+// IN (SELECT ... FOR UPDATE SKIP LOCKED) statement. This replaces the previous
+// standalone SELECT ... FOR UPDATE SKIP LOCKED whose row locks released the
+// instant the result set drained (no enclosing transaction), which let a second
+// worker re-read the same still-'pending' row and double-process it (double
+// erasure of a subject's data). It also re-claims rows stuck in 'processing'
+// past the lease (a crashed worker) — EXCEPT 'rectify' rows, which deliberately
+// park in 'processing' for admin review and must never be re-picked.
+func (w *DSRPurgeWorker) claimBatch(ctx context.Context, limit int) ([]claimedDSRRow, error) {
+	rows, err := w.pool.Query(ctx, `
+		UPDATE dsr_requests
+		SET status = 'processing', claimed_at = now()
+		WHERE id IN (
+			SELECT id FROM dsr_requests
+			WHERE status = 'pending'
+			   OR (status = 'processing'
+			       AND request_type <> 'rectify'
+			       AND claimed_at < now() - make_interval(secs => $1))
+			ORDER BY requested_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING id, subject_email, subject_user_id, request_type`,
+		dsrClaimLease.Seconds(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var batch []claimedDSRRow
+	for rows.Next() {
+		var p claimedDSRRow
+		if err := rows.Scan(&p.ID, &p.SubjectEmail, &p.SubjectUser, &p.RequestType); err != nil {
+			return nil, err
+		}
+		batch = append(batch, p)
+	}
+	return batch, rows.Err()
+}
+
 // processBatch claims pending DSR rows and dispatches each. Failures in
 // individual rows do not abort the batch.
 func (w *DSRPurgeWorker) processBatch(ctx context.Context) {
 	if w.pool == nil || w.processAccess == nil {
 		return
 	}
-	rows, err := w.pool.Query(ctx, `
-		SELECT id, subject_email, subject_user_id, request_type
-		FROM dsr_requests
-		WHERE status = 'pending'
-		ORDER BY requested_at ASC
-		LIMIT 10
-		FOR UPDATE SKIP LOCKED`)
+	batch, err := w.claimBatch(ctx, 10)
 	if err != nil {
 		log.Printf("dsr purge worker: claim batch: %v", err)
 		return
-	}
-	defer rows.Close()
-
-	type pendingRow struct {
-		ID           uuid.UUID
-		SubjectEmail string
-		SubjectUser  *uuid.UUID
-		RequestType  string
-	}
-	var batch []pendingRow
-	for rows.Next() {
-		var p pendingRow
-		if err := rows.Scan(&p.ID, &p.SubjectEmail, &p.SubjectUser, &p.RequestType); err != nil {
-			log.Printf("dsr purge worker: scan: %v", err)
-			continue
-		}
-		batch = append(batch, p)
 	}
 
 	for _, p := range batch {
 		switch p.RequestType {
 		case "access":
+			// The row is now claimed (status='processing'); it MUST leave that
+			// state or the lease would re-claim and re-export it. Mark terminal
+			// on both success and failure.
 			if err := w.processAccess(ctx, p.ID); err != nil {
 				log.Printf("dsr purge worker: process access %s: %v", p.ID, err)
+				w.markFailed(ctx, p.ID, err.Error())
 			} else {
+				w.markCompleted(ctx, p.ID)
 				log.Printf("dsr purge worker: completed access request %s for %s", p.ID, p.SubjectEmail)
 			}
 
@@ -163,10 +200,10 @@ func (w *DSRPurgeWorker) processBatch(ctx context.Context) {
 			log.Printf("dsr purge worker: erased data for %s (request %s)", p.SubjectEmail, p.ID)
 
 		case "rectify":
-			// Rectification is human-mediated — the worker just promotes
-			// the row to 'processing' so the admin queue picks it up. We
-			// don't auto-complete because field changes need approval.
-			w.markProcessing(ctx, p.ID)
+			// Rectification is human-mediated. The atomic claim already moved
+			// the row to 'processing'; it parks there for the admin queue and is
+			// excluded from stale-reclaim (request_type <> 'rectify') so it is
+			// never re-picked. We don't auto-complete: field changes need approval.
 			log.Printf("dsr purge worker: rectify request %s queued for admin review", p.ID)
 
 		default:
@@ -181,14 +218,6 @@ func (w *DSRPurgeWorker) markCompleted(ctx context.Context, id uuid.UUID) {
 		`UPDATE dsr_requests SET status = 'completed', completed_at = now() WHERE id = $1`, id)
 	if err != nil {
 		log.Printf("dsr purge worker: mark completed %s: %v", id, err)
-	}
-}
-
-func (w *DSRPurgeWorker) markProcessing(ctx context.Context, id uuid.UUID) {
-	_, err := w.pool.Exec(ctx,
-		`UPDATE dsr_requests SET status = 'processing' WHERE id = $1`, id)
-	if err != nil {
-		log.Printf("dsr purge worker: mark processing %s: %v", id, err)
 	}
 }
 

@@ -147,55 +147,85 @@ func (w *EmailAutomationWorker) enqueue(ctx context.Context, galleryID uuid.UUID
 	}
 }
 
-// sendDue sends every pending event whose time has come, re-checking guards.
-func (w *EmailAutomationWorker) sendDue(ctx context.Context) {
+// emailClaimLease bounds how long a claimed-but-unfinished event stays out of
+// the claimable set. It must exceed the worst-case send time so a slow SMTP send
+// is never re-claimed by another instance, while still letting a crashed
+// worker's row be re-claimed reasonably soon. Sends are synchronous and quick;
+// 10m is comfortably safe and well under the 15m poll interval.
+const emailClaimLease = 10 * time.Minute
+
+// dueEmailEvent is a claimed, hydrated email event ready to send.
+type dueEmailEvent struct {
+	id             uuid.UUID
+	eventType      string
+	recipient      string
+	title          string
+	slug           string
+	expiresAt      *time.Time
+	published      bool
+	automationOn   bool
+	deletedAt      *time.Time
+	studioName     string
+	accent         string
+	brandingPublic bool
+	logoAssetID    string
+}
+
+// claimDue atomically claims up to `limit` pending, due email events and returns
+// them hydrated with their gallery + workspace branding. The claim flips
+// claimed_at = now() inside a single UPDATE ... WHERE id IN (SELECT ... FOR
+// UPDATE SKIP LOCKED) statement, so two workers (or two overlapping ticks) can
+// never claim — and therefore never double-send — the same event. Rows whose
+// claim lease has gone stale (a crashed worker) are re-claimed. This replaces
+// the previous list-then-mark scan that marked a row sent/failed only AFTER the
+// SMTP send, leaving a wide window for a duplicate send.
+func (w *EmailAutomationWorker) claimDue(ctx context.Context, limit int) ([]dueEmailEvent, error) {
 	rows, err := w.pool.Query(ctx, `
-		SELECT e.id, e.event_type, e.recipient,
-		       g.title, g.slug, g.expires_at, g.is_published, COALESCE(g.email_automation_enabled, true),
-		       g.deleted_at,
-		       COALESCE(NULLIF(w.brand_name, ''), w.name, ''),
-		       COALESCE(w.brand_accent_color, ''),
-		       COALESCE(w.public_branding_enabled, true),
-		       COALESCE(w.logo_asset_id::text, '')
-		FROM gallery_email_events e
-		JOIN galleries g ON g.id = e.gallery_id
-		JOIN workspaces w ON w.id = g.workspace_id
-		WHERE e.sent_at IS NULL AND e.status = 'pending' AND e.scheduled_for <= now()
-		ORDER BY e.scheduled_for
-		LIMIT 50`)
+		UPDATE gallery_email_events e
+		SET claimed_at = now()
+		FROM galleries g, workspaces w
+		WHERE e.gallery_id = g.id
+		  AND w.id = g.workspace_id
+		  AND e.id IN (
+		      SELECT id FROM gallery_email_events
+		      WHERE sent_at IS NULL
+		        AND status = 'pending'
+		        AND scheduled_for <= now()
+		        AND (claimed_at IS NULL OR claimed_at < now() - make_interval(secs => $1))
+		      ORDER BY scheduled_for
+		      LIMIT $2
+		      FOR UPDATE SKIP LOCKED
+		  )
+		RETURNING e.id, e.event_type, e.recipient,
+		          g.title, g.slug, g.expires_at, g.is_published,
+		          COALESCE(g.email_automation_enabled, true), g.deleted_at,
+		          COALESCE(NULLIF(w.brand_name, ''), w.name, ''),
+		          COALESCE(w.brand_accent_color, ''),
+		          COALESCE(w.public_branding_enabled, true),
+		          COALESCE(w.logo_asset_id::text, '')`,
+		emailClaimLease.Seconds(), limit)
 	if err != nil {
-		log.Printf("email automation worker: due query: %v", err)
-		return
+		return nil, err
 	}
-	type due struct {
-		id             uuid.UUID
-		eventType      string
-		recipient      string
-		title          string
-		slug           string
-		expiresAt      *time.Time
-		published      bool
-		automationOn   bool
-		deletedAt      *time.Time
-		studioName     string
-		accent         string
-		brandingPublic bool
-		logoAssetID    string
-	}
-	var items []due
+	defer rows.Close()
+	var items []dueEmailEvent
 	for rows.Next() {
-		var d due
+		var d dueEmailEvent
 		if err := rows.Scan(&d.id, &d.eventType, &d.recipient, &d.title, &d.slug, &d.expiresAt,
 			&d.published, &d.automationOn, &d.deletedAt, &d.studioName, &d.accent, &d.brandingPublic, &d.logoAssetID); err != nil {
-			rows.Close()
-			log.Printf("email automation worker: due scan: %v", err)
-			return
+			return nil, err
 		}
 		items = append(items, d)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		log.Printf("email automation worker: due rows: %v", err)
+	return items, rows.Err()
+}
+
+// sendDue claims due events and sends each, re-checking publish/expiry/
+// automation guards at send time.
+func (w *EmailAutomationWorker) sendDue(ctx context.Context) {
+	items, err := w.claimDue(ctx, 50)
+	if err != nil {
+		log.Printf("email automation worker: claim due: %v", err)
 		return
 	}
 
