@@ -44,6 +44,7 @@ describe("Calendar design-system adoption", () => {
 
     expect(calendarBlock).toContain(".calendar-month-panel");
     expect(calendarBlock).toContain(".calendar-weekdays");
+    expect(calendarBlock).toContain(".calendar-weekday");
     expect(calendarBlock).toContain(".calendar-day-cell");
     expect(calendarBlock).toContain(".calendar-event-chip.status-badge");
     expect(calendarBlock).toContain(".calendar-detail-dialog");

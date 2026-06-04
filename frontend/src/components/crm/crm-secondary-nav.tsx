@@ -31,8 +31,8 @@ export function CRMSecondaryNav() {
   const pathname = usePathname() ?? "";
 
   return (
-    <nav aria-label="Studio CRM sections" className="overflow-x-auto pb-1">
-      <div className="glass-segmented min-w-max">
+    <nav aria-label="Studio CRM sections" className="crm-secondary-nav">
+      <div className="glass-segmented crm-secondary-nav__tabs">
         {CRM_NAV_ITEMS.map((item) => {
           const active =
             item.href === "/crm"
@@ -43,7 +43,7 @@ export function CRMSecondaryNav() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className="glass-segmented-option whitespace-nowrap"
+              className="glass-segmented-option crm-secondary-nav__tab"
             >
               {item.label}
             </Link>

@@ -43,6 +43,9 @@ describe("CRMSecondaryNav project route", () => {
     expect(screen.getByRole("link", { name: "Projects" }).className).toContain(
       "glass-segmented-option",
     );
+    expect(screen.getByRole("link", { name: "Projects" }).className).toContain(
+      "crm-secondary-nav__tab",
+    );
   });
 
   it("keeps Projects active on project detail routes", () => {

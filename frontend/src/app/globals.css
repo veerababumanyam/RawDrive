@@ -1547,6 +1547,19 @@ body[data-chrome="marketing"] {
   color: var(--text-accent);
 }
 
+.crm-secondary-nav {
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+
+.crm-secondary-nav__tabs {
+  min-width: max-content;
+}
+
+.crm-secondary-nav__tab {
+  white-space: nowrap;
+}
+
 .selectable-tile {
   display: inline-flex;
   width: 100%;
@@ -2501,6 +2514,13 @@ body[data-chrome="marketing"] {
   text-align: center;
 }
 
+.calendar-weekday {
+  overflow: hidden;
+  padding-inline: var(--space-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .calendar-month-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2878,6 +2898,19 @@ body[data-chrome="marketing"] {
   box-shadow: var(--shadow-lg);
 }
 
+.cover-preview-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    var(--surface-container),
+    var(--surface-container-high)
+  );
+}
+
 .cover-font-picker {
   position: relative;
   width: 100%;
@@ -3101,16 +3134,19 @@ body[data-chrome="marketing"] {
 }
 
 .cover-photo-grid {
+  --cover-photo-tile-size: calc(var(--space-20) + var(--space-16));
+
   display: grid;
   max-height: calc(var(--space-20) * 3.5);
+  width: 100%;
   grid-template-columns: repeat(
-    auto-fit,
+    auto-fill,
     minmax(
-      min(100%, calc(var(--space-20) + var(--space-16))),
-      calc(var(--space-20) + var(--space-16))
+      min(var(--cover-photo-tile-size), 100%),
+      var(--cover-photo-tile-size)
     )
   );
-  justify-content: start;
+  align-items: stretch;
   gap: var(--space-3);
   overflow-y: auto;
   border-radius: var(--radius-lg);
@@ -3120,6 +3156,7 @@ body[data-chrome="marketing"] {
 
 .cover-photo-tile {
   min-height: auto;
+  width: 100%;
   gap: var(--space-2);
   padding: var(--space-2);
 }

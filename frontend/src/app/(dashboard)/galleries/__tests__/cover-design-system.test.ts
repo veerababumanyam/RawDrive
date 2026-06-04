@@ -66,8 +66,12 @@ describe("gallery cover page design-system contracts", () => {
     );
     expect(source).toContain('className="cover-photo-tile"');
     expect(source).toContain('fallbackMode="compact"');
+    expect(source).toContain('className="cover-preview-fallback"');
     expect(source).toContain("cover-preview-status");
     expect(source).not.toContain("media-choice-button");
+    expect(source).not.toContain(
+      "bg-gradient-to-br from-surface-container to-surface-container-high",
+    );
   });
 
   it("keeps the cover-photo picker on token-backed CSS hooks", () => {
@@ -85,6 +89,7 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).toContain(".cover-option-grid");
     expect(css).toContain(".cover-grid-preview-surface");
     expect(css).toContain(".cover-photo-tile__fallback");
+    expect(css).toContain(".cover-preview-fallback");
     expect(css).toContain(".cover-preview-status");
     expect(css).not.toContain(".cover-editor-segmented");
     expect(css).not.toContain(".media-choice-button");

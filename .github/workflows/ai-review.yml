@@ -1,0 +1,184 @@
+name: ai-review
+
+# AI-powered code review on every PR.
+#
+# Model selection:
+#   Sonnet 4.6  — standard code review on all PRs (fast, cost-effective).
+#   Opus   4.8  — deep security review when auth / middleware / storage paths
+#                  change (higher reasoning for security-critical code).
+#
+# Prerequisites (one-time repo setup):
+#   Add ANTHROPIC_API_KEY to the repo's GitHub Actions secrets.
+#   Settings → Secrets and variables → Actions → New repository secret.
+#
+# Both jobs post a PR comment. Neither is a hard gate — findings are advisory
+# so unrelated PRs are not blocked by false positives. Elevate security-review
+# to required once the baseline noise level is confirmed low.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write  # needed to post PR comments
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────
+  # detect-changes: identify whether security-sensitive paths are touched.
+  # The output gates the Opus security-review job so Opus only runs when
+  # actually needed — reducing cost and noise.
+  # ────────────────────────────────────────────────────────────────────────
+  detect-changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      security_sensitive: ${{ steps.filter.outputs.security }}
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - uses: dorny/paths-filter@v3.0.2
+        id: filter
+        with:
+          filters: |
+            security:
+              - 'backend/internal/auth/**'
+              - 'backend/internal/middleware/**'
+              - 'backend/internal/storage/**'
+              - 'backend/internal/handler/auth*.go'
+              - 'backend/internal/handler/mfa*.go'
+
+  # ────────────────────────────────────────────────────────────────────────
+  # code-review: general code review on every PR.
+  # Model: claude-sonnet-4-6 — fast, accurate, cost-effective for daily use.
+  # Covers: correctness, RawDrive invariants, performance hot paths,
+  #         design-token compliance, naming conventions.
+  # ────────────────────────────────────────────────────────────────────────
+  code-review:
+    name: Code Review (Sonnet 4.6)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Review PR diff with Claude Sonnet
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # github.base_ref is the PR merge target (e.g. "main"). It is repo-
+          # controlled, not user-supplied text. Still validated below before use
+          # in a shell command as defence-in-depth against crafted branch names.
+          BASE_REF: ${{ github.base_ref }}
+          # PR numbers are always integers — no injection risk.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Validate BASE_REF contains only safe branch-name characters before
+          # using it in a shell command. Rejects anything with shell metacharacters.
+          if ! printf '%s' "${BASE_REF}" | grep -qE '^[a-zA-Z0-9._/-]+$'; then
+            echo "::error::BASE_REF contains unexpected characters: ${BASE_REF}"
+            exit 1
+          fi
+
+          # Cap diff at 60 KB to stay within the model's input budget.
+          DIFF=$(git diff "origin/${BASE_REF}...HEAD" | head -c 61440)
+
+          if [ -z "$DIFF" ]; then
+            echo "Empty diff — nothing to review."
+            exit 0
+          fi
+
+          # Build the request body via jq to handle escaping correctly.
+          jq -n \
+            --arg diff "$DIFF" \
+            '{
+              model: "claude-sonnet-4-6",
+              max_tokens: 2048,
+              system: "You are a senior engineer reviewing a pull request for RawDrive, an India-focused photography SaaS (Go API + Next.js frontend). Be concise and actionable. Flag real bugs and invariant violations only — not style nits. Key RawDrive invariants: (1) No local file storage — S3/B2 only; STORAGE_DRIVER=local must fatal-exit. (2) No hardcoded credentials — platform_settings DB table → env var → disable. (3) JWT claims via middleware.JWTClaimsFromContext() only — never a local context-key type. (4) Email OTP is registration-only — never on login. TOTP (RFC 6238) is the login MFA step-up. (5) Design tokens only — no raw Tailwind primitives (bg-neutral-*, text-gray-*) or arbitrary values. (6) All icon buttons via GlassIconButton component. (7) Every image upload must produce WebP derivatives. (8) No N+1 asset fetches — batch hydration required. (9) Worker job claims must be atomic (SELECT ... FOR UPDATE SKIP LOCKED).",
+              messages: [{
+                role: "user",
+                content: ("Review this PR diff. Write a brief markdown review. Use these sections (omit any with no findings):\n\n## Bugs\n## Invariant Violations\n## Performance\n## Minor\n\nFor each finding: one sentence what, one sentence why it matters, one sentence suggested fix.\n\n```diff\n" + $diff + "\n```")
+              }]
+            }' > /tmp/review-request.json
+
+          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            --data-binary @/tmp/review-request.json)
+
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Review generation failed — check API key and quota."')
+
+          gh pr comment "$PR_NUMBER" --body "## Claude Code Review (Sonnet 4.6)
+
+${REVIEW}
+
+---
+*Automated review · advisory only · [Claude Sonnet 4.6](https://www.anthropic.com/claude)*"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # security-review: deep security analysis when auth / storage paths change.
+  # Model: claude-opus-4-8 — stronger reasoning for security-critical code.
+  # Applies OWASP ASVS V3 (authentication) and V4 (access control) criteria.
+  # Only runs when detect-changes flags security_sensitive = true.
+  # ────────────────────────────────────────────────────────────────────────
+  security-review:
+    name: Security Review (Opus 4.8)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.security_sensitive == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Security review with Claude Opus
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Validate BASE_REF before using in a shell command.
+          if ! printf '%s' "${BASE_REF}" | grep -qE '^[a-zA-Z0-9._/-]+$'; then
+            echo "::error::BASE_REF contains unexpected characters: ${BASE_REF}"
+            exit 1
+          fi
+
+          # Larger cap for Opus — it can handle more context.
+          DIFF=$(git diff "origin/${BASE_REF}...HEAD" | head -c 81920)
+
+          if [ -z "$DIFF" ]; then
+            exit 0
+          fi
+
+          jq -n \
+            --arg diff "$DIFF" \
+            '{
+              model: "claude-opus-4-8",
+              max_tokens: 4096,
+              system: "You are a senior security engineer performing a focused security review for RawDrive, a Go API + Next.js photography SaaS. Apply OWASP ASVS V3 (authentication) and V4 (access control). RawDrive-specific security rules: (1) Email OTP is registration-only — adding OTP to any login path is a critical bug. (2) TOTP (RFC 6238) is the only allowed login step-up MFA. If /auth/login accepts an OTP, that is CRITICAL. (3) JWT claims must come from middleware.JWTClaimsFromContext() — a local context-key type causes silent 401s on every authenticated endpoint. (4) TOTP secrets are envelope-encrypted with PLATFORM_SETTINGS_KEK; recovery codes are bcrypt-hashed. (5) The mfa_verified claim must be preserved across refresh via refresh_sessions.mfa_verified. (6) No hardcoded credentials anywhere. (7) All file storage requires JWT auth — no public URLs, no local disk fallback. (8) BYOS wizard (enterprise storage override) must never be shown to standard/pro users. (9) The managed B2 row in storage settings is read-only for all tiers.",
+              messages: [{
+                role: "user",
+                content: ("Perform a security review of this PR diff. Output a structured markdown report with these severity sections (omit empty ones):\n\n## Critical\n## High\n## Medium\n## Confirmed Safe\n\nFor each finding: what the vulnerability is, where it appears (file:line if visible), why it is exploitable, and a concrete fix. For Confirmed Safe, briefly note what you checked and why it is sound.\n\n```diff\n" + $diff + "\n```")
+              }]
+            }' > /tmp/sec-review-request.json
+
+          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            --data-binary @/tmp/sec-review-request.json)
+
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Security review generation failed — check API key and quota."')
+
+          gh pr comment "$PR_NUMBER" --body "## Claude Security Review (Opus 4.8)
+
+> This PR touches security-sensitive paths (auth / middleware / storage). Opus 4.8 was used for deeper analysis.
+
+${REVIEW}
+
+---
+*Automated security review · advisory only · [Claude Opus 4.8](https://www.anthropic.com/claude) · OWASP ASVS V3/V4*"

@@ -1213,7 +1213,7 @@ export default function CoverDesignPage() {
                 draggable={false}
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-container to-surface-container-high">
+              <div className="cover-preview-fallback">
                 {selectedAsset && (
                   <span
                     className="cover-preview-status"
