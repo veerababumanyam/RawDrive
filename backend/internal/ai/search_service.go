@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -95,10 +96,16 @@ func (s *SearchService) IndexAsset(ctx context.Context, assetID, workspaceID uui
 		return fmt.Errorf("search service: get asset tags: %w", err)
 	}
 
-	tags := decodeAITags(assetID, tagsJSON)
-
-	// Build text for embedding
-	text := buildEmbeddingText(caption, tags)
+	// Build text for embedding. When the asset has no real semantic source
+	// (no non-blank caption AND no tags) we SKIP embedding entirely rather than
+	// embedding the generic "photograph" literal: that produced near-identical
+	// vectors that clustered as false near-duplicates and polluted semantic
+	// search (VEC-7). Such assets keep embedding = NULL and are picked up later
+	// by cmd/backfill-embeddings once AutoTag has given them a real source.
+	text, ok := embeddingSourceText(assetID, caption, tagsJSON)
+	if !ok {
+		return nil
+	}
 
 	embedding, tokensUsed, err := s.gemini.GenerateEmbedding(ctx, apiKey, text)
 	if err != nil {
@@ -136,9 +143,30 @@ func decodeAITags(assetID uuid.UUID, tagsJSON []byte) []AITag {
 	return tags
 }
 
+// embeddingSourceText is the single shared seam that decides BOTH the embedding
+// input text AND whether an asset should be embedded at all. It composes the
+// source text from the asset's ai_caption and ai_tags (malformed ai_tags JSONB
+// degrades to no tags via decodeAITags) and returns ok=false when there is no
+// real semantic source — no non-blank caption AND no tags.
+//
+// Returning ok=false here is what prevents the generic "photograph" embedding
+// (VEC-7): both the live SearchService.IndexAsset path and the offline
+// cmd/backfill-embeddings path gate on this exact function, so an asset is never
+// embedded by one path and skipped by the other. Skipped assets keep
+// embedding = NULL and are re-evaluated once AutoTag gives them a real source.
+func embeddingSourceText(assetID uuid.UUID, caption *string, tagsJSON []byte) (string, bool) {
+	tags := decodeAITags(assetID, tagsJSON)
+	hasCaption := caption != nil && strings.TrimSpace(*caption) != ""
+	if !hasCaption && len(tags) == 0 {
+		return "", false
+	}
+	return buildEmbeddingText(caption, tags), true
+}
+
 // buildEmbeddingText composes the source text used to generate an embedding from
-// an optional caption and the decoded tags. It falls back to a generic term when
-// neither a caption nor any tags are available.
+// an optional caption and the decoded tags. Callers must gate on
+// embeddingSourceText first: this helper is only reached when at least one real
+// source (caption or tags) exists, so it has no generic fallback.
 func buildEmbeddingText(caption *string, tags []AITag) string {
 	text := ""
 	if caption != nil {
@@ -146,9 +174,6 @@ func buildEmbeddingText(caption *string, tags []AITag) string {
 	}
 	for _, t := range tags {
 		text += t.Tag + " "
-	}
-	if text == "" {
-		text = "photograph"
 	}
 	return text
 }

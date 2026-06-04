@@ -1,8 +1,6 @@
 package ai
 
 import (
-	"strings"
-
 	"github.com/google/uuid"
 )
 
@@ -47,25 +45,12 @@ func selectEmbeddingBackfillSQLAfter() string {
 	        LIMIT $1`
 }
 
-// deriveEmbeddingInput reproduces the LIVE embedding input-text derivation used
-// by SearchService.IndexAsset: it composes the source text from the asset's
-// ai_caption and ai_tags via buildEmbeddingText (the exact same helper the
-// running app uses). Malformed ai_tags JSONB degrades to no tags via
-// decodeAITags, identical to the live path.
-//
-// Unlike the live path — which only runs after AutoTag has populated caption
-// and tags — a backfilled asset may have neither. buildEmbeddingText would
-// otherwise fall back to the generic literal "photograph", producing a
-// meaningless, uniform vector. So this function returns ok=false when there is
-// no real text source (no non-blank caption AND no tags); the command counts
-// that as skipped_no_text rather than embedding the fallback.
+// deriveEmbeddingInput is the backfill entry point. It delegates to the shared
+// embeddingSourceText seam so cmd/backfill-embeddings derives the embedding
+// input text — and the skip decision — from the EXACT same logic as the live
+// SearchService.IndexAsset path. ok=false ⇒ skip and count as skipped_no_text.
 func deriveEmbeddingInput(assetID uuid.UUID, caption *string, tagsJSON []byte) (string, bool) {
-	tags := decodeAITags(assetID, tagsJSON)
-	hasCaption := caption != nil && strings.TrimSpace(*caption) != ""
-	if !hasCaption && len(tags) == 0 {
-		return "", false
-	}
-	return buildEmbeddingText(caption, tags), true
+	return embeddingSourceText(assetID, caption, tagsJSON)
 }
 
 // SelectEmbeddingBackfillSQL is the exported entry point for
