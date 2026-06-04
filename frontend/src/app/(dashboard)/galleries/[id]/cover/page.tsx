@@ -662,17 +662,25 @@ export default function CoverDesignPage() {
       try {
         const [g, galleryAssets] = await Promise.all([
           getGallery(token, galleryId),
-          listGalleryAssets(token, galleryId),
+          // PERF-23: ask the server to embed each asset in one bulk query so we
+          // skip the per-asset getAsset() fan-out (the gallery detail page does
+          // the same). The loop below remains the fallback for an older server
+          // or a degraded include response.
+          listGalleryAssets(token, galleryId, { includeAssets: true }),
         ]);
         if (cancelled) return;
         setGallery(g);
 
-        const hydrated = await Promise.all(
-          galleryAssets.map(async (entry) => {
-            try { return await getAsset(token, entry.asset_id); }
-            catch { return null; }
-          }),
-        );
+        const hydrated = galleryAssets.every(
+          (entry) => entry.asset !== undefined,
+        )
+          ? galleryAssets.map((entry) => entry.asset ?? null)
+          : await Promise.all(
+              galleryAssets.map(async (entry) => {
+                try { return await getAsset(token, entry.asset_id); }
+                catch { return null; }
+              }),
+            );
         if (cancelled) return;
         const realAssets = hydrated.filter((a): a is Asset => a !== null);
         setAssets(realAssets);

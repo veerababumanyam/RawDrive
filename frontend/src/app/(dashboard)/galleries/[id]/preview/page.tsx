@@ -138,20 +138,37 @@ export default function GalleryPreviewPage({
         // 2. Resolve assets. Album filter mirrors /g/[slug]?album=… so the
         //    preview matches the share link the photographer would send
         //    when they want clients to land on a sub-album.
-        const rows: Array<{ asset_id: string; sort_order: number }> = albumId
+        const rows: Array<{
+          asset_id: string;
+          sort_order: number;
+          asset?: Asset | null;
+        }> = albumId
           ? (await listAlbumAssets(token, albumId)).map((row, idx) => ({
               asset_id: row.asset_id,
               sort_order: row.position ?? idx,
             }))
-          : (await listGalleryAssets(token, id)).map((row) => ({
-              asset_id: row.asset_id,
-              sort_order: row.sort_order,
-            }));
+          : // PERF-23: embed each asset in one bulk query so the gallery path
+            // skips the per-asset getAsset() fan-out. The album path has no
+            // include_assets seam yet, so it keeps the per-asset fallback below.
+            (await listGalleryAssets(token, id, { includeAssets: true })).map(
+              (row) => ({
+                asset_id: row.asset_id,
+                sort_order: row.sort_order,
+                asset: row.asset,
+              }),
+            );
 
         const enriched = await Promise.all(
           rows.map(async (row) => {
             try {
-              const asset = await getAsset(token, row.asset_id);
+              // Use the server-embedded asset when present (gallery path);
+              // fall back to a per-asset fetch for the album path / degraded
+              // include. row.asset === undefined means "not embedded".
+              const asset =
+                row.asset !== undefined
+                  ? row.asset
+                  : await getAsset(token, row.asset_id);
+              if (!asset) return null;
               return mapAssetToPublic(
                 { asset, sort_order: row.sort_order },
                 token,
