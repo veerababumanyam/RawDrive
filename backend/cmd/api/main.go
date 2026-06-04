@@ -1859,6 +1859,14 @@ func main() {
 	m16EnforceMode := os.Getenv("TIER_D_ENFORCE_MODE") != "0"
 	uploadPolicyCatalog := service.NewUploadPolicyCatalog(sqlDB)
 	workspacePolicySvc := service.NewWorkspacePolicyService(sqlDB, nil) // audit log wired below after auditLogSvc
+	// Back the upload-policy cache with Valkey when available so it is shared
+	// across app nodes (.42/.44): a policy change (Set) or invalidation on one
+	// node is immediately visible to the other, instead of the in-process cache
+	// serving the stale mode until its 5-minute TTL expires (CACHE-5).
+	if valkeyRaw != nil {
+		workspacePolicySvc = workspacePolicySvc.WithSharedCache(valkeyAnalyticsCache{rdb: valkeyRaw})
+		log.Println("workspace: upload-policy cache backed by Valkey (cross-node shared)")
+	}
 	// UploadAllowlist: token issue/consume for FP override flow.
 	uploadAllowlistRepo := service.NewPgUploadAllowlistRepo(sqlDB)
 	uploadAllowlistSvc := service.NewUploadAllowlistService(uploadAllowlistRepo)

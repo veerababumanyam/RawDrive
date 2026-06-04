@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -174,4 +175,129 @@ func TestInvalidate_DropsCachedEntry(t *testing.T) {
 	mode, err := svc.Get(context.Background(), workspaceID)
 	require.NoError(t, err)
 	assert.Equal(t, PolicyModeStandard, mode)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHE-5: cross-node policy cache coherence (shared Valkey backing)
+//
+// The in-process cache is per-node. Without a shared backing, a policy change
+// on app node A leaves node B serving the stale mode for up to the 5-minute
+// TTL. These tests prove the shared-cache seam: when a cross-node backing is
+// wired, Set() writes through it (immediately visible to peers), Invalidate()
+// DELetes the shared key (so a peer's next read misses and re-queries), and two
+// services sharing one backing — the model for two app nodes against one Valkey
+// — observe each other's changes. Mirrors the storage-analytics shared-cache
+// pattern (StorageAccounting.WithSharedCache).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// fakeSharedPolicyCache is an in-memory stand-in for the Valkey-backed
+// cross-node policy cache. It lets us prove the shared-cache wiring and
+// cross-node invalidation without a live Valkey — matching this package's
+// no-DB test convention. The signature mirrors the production
+// sharedPolicyCache interface (Get/Set/Del over JSON bytes).
+type fakeSharedPolicyCache struct {
+	mu   sync.Mutex
+	data map[string][]byte
+	gets int
+	sets int
+	dels int
+}
+
+func newFakeSharedPolicyCache() *fakeSharedPolicyCache {
+	return &fakeSharedPolicyCache{data: make(map[string][]byte)}
+}
+
+func (f *fakeSharedPolicyCache) Get(_ context.Context, key string) ([]byte, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.gets++
+	b, ok := f.data[key]
+	return b, ok, nil
+}
+
+func (f *fakeSharedPolicyCache) Set(_ context.Context, key string, val []byte, _ time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sets++
+	cp := make([]byte, len(val))
+	copy(cp, val)
+	f.data[key] = cp
+}
+
+func (f *fakeSharedPolicyCache) Del(_ context.Context, key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dels++
+	delete(f.data, key)
+}
+
+// When a shared cache is wired, Set() must write through it (not the
+// in-process map) so a peer node reading the same backing sees the new mode.
+func TestPolicy_SharedCache_SetWritesThrough(t *testing.T) {
+	fake := newFakeSharedPolicyCache()
+	svc := newWorkspacePolicyServiceWithRecorder(nil, &fakeAuditRecorder{}).WithSharedCache(fake)
+
+	workspaceID := uuid.New()
+	require.NoError(t, svc.Set(context.Background(), workspaceID, PolicyModeStrictClientScan, uuid.New()))
+
+	assert.GreaterOrEqual(t, fake.sets, 1, "Set() must write the shared cache so peers see the change")
+
+	mode, err := svc.Get(context.Background(), workspaceID)
+	require.NoError(t, err)
+	assert.Equal(t, PolicyModeStrictClientScan, mode, "Get() must read the value back through the shared cache")
+	assert.GreaterOrEqual(t, fake.gets, 1, "Get() must consult the shared cache")
+}
+
+// The core CACHE-5 regression: a policy change on node A must be visible on
+// node B within seconds, not after the 5-minute TTL. Model two app nodes as two
+// services sharing one backing.
+func TestPolicy_SharedCache_PropagatesAcrossNodes(t *testing.T) {
+	fake := newFakeSharedPolicyCache()
+	nodeA := newWorkspacePolicyServiceWithRecorder(nil, &fakeAuditRecorder{}).WithSharedCache(fake)
+	nodeB := newWorkspacePolicyServiceWithRecorder(nil, &fakeAuditRecorder{}).WithSharedCache(fake)
+
+	workspaceID := uuid.New()
+
+	// Node A changes the policy.
+	require.NoError(t, nodeA.Set(context.Background(), workspaceID, PolicyModeStrictClientScan, uuid.New()))
+
+	// Node B — which never received the write directly — must now observe it via
+	// the shared backing, not a stale in-process entry.
+	mode, err := nodeB.Get(context.Background(), workspaceID)
+	require.NoError(t, err)
+	assert.Equal(t, PolicyModeStrictClientScan, mode,
+		"a policy change on node A must be visible on node B via the shared cache (CACHE-5)")
+}
+
+// Invalidate() must DELete the SHARED key so a peer node's next read misses and
+// re-queries the source of truth — this is what kills cross-node staleness.
+func TestPolicy_SharedCache_InvalidateDeletesSharedKey(t *testing.T) {
+	fake := newFakeSharedPolicyCache()
+	svc := newWorkspacePolicyServiceWithRecorder(nil, &fakeAuditRecorder{}).WithSharedCache(fake)
+
+	workspaceID := uuid.New()
+	require.NoError(t, svc.Set(context.Background(), workspaceID, PolicyModeStrictClientScan, uuid.New()))
+	require.NotEmpty(t, fake.data, "precondition: shared key written")
+
+	svc.Invalidate(workspaceID)
+	assert.GreaterOrEqual(t, fake.dels, 1, "Invalidate() must DEL the shared key")
+	assert.Empty(t, fake.data, "shared entry must be gone after invalidation")
+}
+
+// With no shared cache wired, behaviour must be exactly the in-process cache
+// (single-node / no Valkey): the legacy path is preserved and untouched.
+func TestPolicy_NoSharedCache_StaysInProcess(t *testing.T) {
+	svc := newWorkspacePolicyServiceWithRecorder(nil, &fakeAuditRecorder{}) // no WithSharedCache
+
+	workspaceID := uuid.New()
+	require.NoError(t, svc.Set(context.Background(), workspaceID, PolicyModeStrictOriginalPreserve, uuid.New()))
+
+	mode, err := svc.Get(context.Background(), workspaceID)
+	require.NoError(t, err)
+	assert.Equal(t, PolicyModeStrictOriginalPreserve, mode)
+
+	svc.Invalidate(workspaceID)
+	mode, err = svc.Get(context.Background(), workspaceID)
+	require.NoError(t, err)
+	assert.Equal(t, PolicyModeStandard, mode, "in-process entry must be gone after invalidation")
 }

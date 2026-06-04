@@ -36,6 +36,31 @@ type WorkspacePolicyDB interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
+// sharedPolicyCache is the optional cross-node backing for the upload-policy
+// cache. When wired (Valkey, via WorkspacePolicyService.WithSharedCache in
+// main.go) it REPLACES the in-process map as the cache source of truth, so a
+// policy change (Set) or an invalidation on one app node is immediately visible
+// to all nodes — killing the per-node staleness of the in-process cache
+// (.42 ≠ .44, up to the 5-minute TTL). nil = in-process only (single node / no
+// Valkey). All ops are best-effort: a cache error never fails the caller, it
+// just degrades to a DB read. This mirrors the storage-analytics shared-cache
+// seam (sharedAnalyticsCache).
+type sharedPolicyCache interface {
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Set(ctx context.Context, key string, val []byte, ttl time.Duration)
+	Del(ctx context.Context, key string)
+}
+
+// policySharedCacheOpTimeout bounds each shared-cache round trip so a slow or
+// unreachable Valkey can never stall a policy read/write.
+const policySharedCacheOpTimeout = 2 * time.Second
+
+// policyCacheKey is the shared-backing key for a workspace's policy mode. The
+// namespace keeps it from colliding with other shared caches on the same Valkey.
+func policyCacheKey(workspaceID uuid.UUID) string {
+	return "workspace:policy:" + workspaceID.String()
+}
+
 // auditRecorder is the narrow audit-log surface used by WorkspacePolicyService.
 // *AuditLogService satisfies this interface; tests substitute a synchronous
 // fake so they can observe emitted events without dealing with goroutine
@@ -54,6 +79,11 @@ type WorkspacePolicyService struct {
 	mu       sync.RWMutex
 	cache    map[uuid.UUID]policyCache
 	cacheTTL time.Duration
+
+	// shared is the optional cross-node backing. When non-nil every cache op
+	// routes to it instead of the in-process map, so all app nodes share one
+	// cache and a Set/Invalidate on either node is seen by the others.
+	shared sharedPolicyCache
 }
 
 type policyCache struct {
@@ -104,20 +134,32 @@ func (s *WorkspacePolicyService) WithAuditLog(auditLog *AuditLogService) *Worksp
 	return s
 }
 
+// WithSharedCache wires a cross-node (Valkey) backing for the policy cache.
+// main.go calls this during bootstrap when VALKEY_URL is set, so both app nodes
+// share one cache and a policy change (Set) or invalidation on either node is
+// seen by the other — eliminating the in-process cache's per-node staleness
+// (a policy change on .42 was invisible to .44 until the 5-minute TTL expired).
+// Passing nil keeps the in-process cache. Returns the same pointer so the call
+// chains. Mirrors StorageAccounting.WithSharedCache.
+func (s *WorkspacePolicyService) WithSharedCache(c sharedPolicyCache) *WorkspacePolicyService {
+	if c != nil {
+		s.shared = c
+	}
+	return s
+}
+
 // Get returns the workspace's configured policy mode. Falls back to
 // PolicyModeStandard if the workspace has no row in the cache AND the DB
 // is nil (unit test path) — callers that need strict behaviour should
 // construct the service with a real DB.
 func (s *WorkspacePolicyService) Get(ctx context.Context, workspaceID WorkspaceID) (PolicyMode, error) {
-	// Cache fast path
-	s.mu.RLock()
-	if entry, ok := s.cache[workspaceID]; ok {
-		if time.Now().Before(entry.expiresAt) {
-			s.mu.RUnlock()
-			return entry.mode, nil
-		}
+	// Cache fast path. When a shared (Valkey) backing is wired it is the cache
+	// source of truth so all nodes agree; otherwise fall back to the in-process
+	// map. A shared-cache hit short-circuits the DB read just like the in-proc
+	// path; a shared-cache miss/error degrades to a DB read (best-effort).
+	if mode, ok := s.cacheGet(ctx, workspaceID); ok {
+		return mode, nil
 	}
-	s.mu.RUnlock()
 
 	// Unit test path: no DB configured, return the safe default
 	if s.db == nil {
@@ -208,8 +250,49 @@ func (s *WorkspacePolicyService) DefaultForTier(tier string) PolicyMode {
 	return PolicyModeStandard
 }
 
-// cacheSet writes a fresh cache entry with the configured TTL.
+// cacheGet returns the cached policy mode for a workspace if present and live.
+// When a shared (Valkey) backing is wired it consults that — so every app node
+// reads the same value — falling back to the in-process map otherwise. A
+// shared-cache error or miss is reported as a clean miss so the caller degrades
+// to a DB read; a Valkey outage never fails a policy read.
+func (s *WorkspacePolicyService) cacheGet(ctx context.Context, workspaceID uuid.UUID) (PolicyMode, bool) {
+	if s.shared != nil {
+		opCtx, cancel := context.WithTimeout(ctx, policySharedCacheOpTimeout)
+		defer cancel()
+		raw, ok, err := s.shared.Get(opCtx, policyCacheKey(workspaceID))
+		if err != nil || !ok {
+			return "", false // best-effort: a cache error degrades to a DB read
+		}
+		var mode PolicyMode
+		if json.Unmarshal(raw, &mode) != nil || !IsValidPolicyMode(string(mode)) {
+			return "", false
+		}
+		return mode, true
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.cache[workspaceID]
+	if !ok || !time.Now().Before(entry.expiresAt) {
+		return "", false
+	}
+	return entry.mode, true
+}
+
+// cacheSet writes a fresh cache entry with the configured TTL. When a shared
+// (Valkey) backing is wired the write goes there instead of the in-process map,
+// so the new mode is immediately visible to every app node.
 func (s *WorkspacePolicyService) cacheSet(workspaceID uuid.UUID, mode PolicyMode) {
+	if s.shared != nil {
+		raw, err := json.Marshal(mode)
+		if err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), policySharedCacheOpTimeout)
+		defer cancel()
+		s.shared.Set(ctx, policyCacheKey(workspaceID), raw, s.cacheTTL)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cache[workspaceID] = policyCache{
@@ -218,9 +301,19 @@ func (s *WorkspacePolicyService) cacheSet(workspaceID uuid.UUID, mode PolicyMode
 	}
 }
 
-// Invalidate drops the cache entry for a workspace. Used by tests and by
-// an (eventual) NATS subscriber that reacts to cross-pod policy changes.
+// Invalidate drops the cache entry for a workspace. When a shared (Valkey)
+// backing is wired it DELetes the shared key, so a peer app node's next Get
+// misses and re-queries the DB — this is what makes a policy change on one node
+// visible on the others within seconds instead of after the 5-minute TTL. With
+// no shared backing it drops the local in-process entry. Called by tests and by
+// the admin policy write path (Set) to keep nodes coherent.
 func (s *WorkspacePolicyService) Invalidate(workspaceID uuid.UUID) {
+	if s.shared != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), policySharedCacheOpTimeout)
+		defer cancel()
+		s.shared.Del(ctx, policyCacheKey(workspaceID))
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.cache, workspaceID)
